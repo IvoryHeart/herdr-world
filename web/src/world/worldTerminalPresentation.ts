@@ -4,6 +4,7 @@ import type {
   WorkspaceInspectorContext,
 } from "../workspaceResource";
 import type { WorldObject, WorldObjectNode } from "./worldObject";
+import type { AgentChatStartupIntent } from "./useAgentChatStartup";
 import type { ChatFocusIntent } from "../chatFocus";
 
 /** One independently navigable Inspector backed by the shared app runtime. */
@@ -19,6 +20,7 @@ export type WorldInspectorConversation = {
   agentSessionFingerprint?: string;
   /** Per-window opening intent; an explicit view choice cancels it. */
   awaitChatSession?: boolean;
+  startupIntent?: AgentChatStartupIntent;
   label: string;
   hostLabel: string;
   spaceLabel: string;
@@ -163,10 +165,12 @@ export function reconcileWorldInspectorConversation(
     view: arrived ? "history" : keepView ? current.view : observed.view,
     ...(current.awaitChatSession !== undefined
       ? {
-          awaitChatSession:
-            samePane && !observed.agentSessionFingerprint ? waiting : undefined,
+          awaitChatSession: !observed.agentSessionFingerprint
+            ? waiting
+            : undefined,
         }
       : {}),
+    ...(current.startupIntent ? { startupIntent: current.startupIntent } : {}),
     dock: current.dock,
     expanded: current.expanded,
     size: current.size,
@@ -190,6 +194,7 @@ export function applyRequestedInspectorView(
     ? {
         ...current,
         view: observed.view,
+        startupIntent: observed.startupIntent ?? current.startupIntent,
         awaitChatSession:
           observed.awaitChatSession ??
           (current.awaitChatSession !== undefined &&
@@ -215,6 +220,7 @@ function inspectorConversationEqual(
     left.terminalId === right.terminalId &&
     left.agentSessionFingerprint === right.agentSessionFingerprint &&
     left.awaitChatSession === right.awaitChatSession &&
+    left.startupIntent === right.startupIntent &&
     left.label === right.label &&
     left.hostLabel === right.hostLabel &&
     left.spaceLabel === right.spaceLabel &&
@@ -288,7 +294,18 @@ export function worldInspectorForNode(
     context,
     availableViews,
     view: awaiting ? "terminal" : view,
-    ...(awaiting ? { awaitChatSession: true } : {}),
+    ...(awaiting && leaf
+      ? {
+          awaitChatSession: true,
+          startupIntent: {
+            connectionId: node.connectionId,
+            runtimeGeneration: node.generation,
+            paneId: leaf.nativeId,
+            terminalId: leaf.terminalId,
+            agent: leaf.pane.agent,
+          },
+        }
+      : {}),
     ...preferences,
   };
 }

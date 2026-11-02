@@ -5713,6 +5713,12 @@ async function run() {
     !reuseWindow.querySelector('[role="tab"][aria-label="Chat"]'),
     "shell window unexpectedly offers Chat before the agent appears",
   );
+  const reuseSession = {
+    source: "herdr:claude",
+    agent: "claude",
+    kind: "id",
+    value: "open-rule-session",
+  };
   const reuseAgent: Pane = {
     ...reuseShell,
     pane_id: "open-rule-agent",
@@ -5721,13 +5727,13 @@ async function run() {
     agent_name: "Open Rule Agent",
     display_agent: "Open Rule Agent",
     agent_status: "idle",
-    agent_session: { value: "open-rule-session" },
+    agent_session: reuseSession,
   };
   panes.push(reuseAgent);
   reuseTab.pane_count = 2;
   agents.push({
     ...reuseAgent,
-    agent_session: { agent: "claude", kind: "id", value: "open-rule-session" },
+    agent_session: reuseSession,
   });
   worldRevision += 1;
   await worldRuntimeStore.refresh();

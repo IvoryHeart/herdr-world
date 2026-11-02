@@ -124,3 +124,28 @@ test("a launcher receipt opens only its current runtime and then uses the startu
   expect(create().view).toBe("terminal");
   expect(create().awaitChatSession).toBe(true);
 });
+
+test("aggregate replacement permanently retires the original window intent until an explicit new open", () => {
+  const original = create();
+  const replacement = worldInspectorForNode(
+    { ...node, terminalId: "replacement-terminal" } as WorldObjectNode,
+    "history",
+    ["terminal", "history", "files"],
+    context,
+    { dock: "right", expanded: false, size: 520 },
+  )!;
+  const first = reconcileWorldInspectorConversation(original, replacement);
+  expect(first.awaitChatSession).toBe(false);
+  expect(first.startupIntent).toBe(original.startupIntent);
+  const next = reconcileWorldInspectorConversation(first, replacement);
+  expect(next.awaitChatSession).toBe(false);
+  const arrived = reconcileWorldInspectorConversation(next, {
+    ...replacement,
+    agentSessionFingerprint: "a".repeat(64),
+  });
+  expect(arrived.view).toBe("terminal");
+  const explicit = applyRequestedInspectorView(next, replacement, "history");
+  expect(explicit.awaitChatSession).toBe(true);
+  expect(explicit.startupIntent).toBe(replacement.startupIntent);
+  expect(explicit.startupIntent).not.toBe(original.startupIntent);
+});

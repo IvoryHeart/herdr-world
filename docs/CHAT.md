@@ -16,7 +16,8 @@ reply box leaves focus where you put it.
 
 A new agent without a conversation opens on **Terminal**, so startup questions
 are visible. Its window switches to **Chat** when the session arrives, unless
-you chose a view by hand. If you open Chat before then, it shows **No messages
+you chose a view by hand. Replacing the agent cancels that automatic switch;
+choose Chat or reopen its window for the new agent. If you open Chat before then, it shows **No messages
 yet**, explains that the agent is starting or waiting for you, and offers
 **Open Terminal**. Missing or unreadable named records still show their error.
 Integration advice is offered only after Herdr has shown the same terminal

@@ -9,3 +9,4 @@
 - Open agents on Terminal until their conversation arrives, then switch to Chat
   unless a view was chosen manually. Describe startup questions honestly and
   delay integration guidance until a running agent has had a grace period.
+  A replacement terminal or harness cannot inherit the old automatic switch.

@@ -1976,8 +1976,10 @@ When an agent is opened with Chat as the desired view but has not reported a
 conversation, its qualified window SHALL start on Terminal. The window MAY
 switch to Chat when its captured source admits the conversation or a current
 reported session arrives. A manual view choice SHALL cancel this automatic
-handoff for that window. Late replies, another pane/terminal, and retired
-runtime generations SHALL NOT revive the cancelled intent.
+handoff for that window. Late replies, another pane/terminal/harness, and retired
+runtime generations SHALL NOT revive the cancelled intent. Focused topology
+replacement SHALL retire the original captured intent before aggregate
+reconciliation; replacement or restoration alone SHALL NOT re-arm it.
 
 Chat opened before a conversation exists SHALL show an empty conversation,
 plain startup/waiting guidance and an Open Terminal action where available.
