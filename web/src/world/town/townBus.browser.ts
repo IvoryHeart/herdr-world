@@ -6,7 +6,7 @@ import { townBusSender } from "./useTownBus";
 /**
  * Town's bus against the real scene and a fixture bin service: an agent sent
  * to the stop goes in qualified, leaves its desk and rides; holding the bus
- * pauses every countdown; Let it go resumes; once the countdown is over the
+ * pauses every countdown; Resume resumes; once the countdown is over the
  * bus drives away and can still be held, or its rider taken off, until it
  * leaves the map. Nothing here can close anything: the fixture's bin never
  * does.
@@ -126,37 +126,42 @@ export async function checkTownBus(
     );
   };
   const go = host.querySelector<HTMLButtonElement>(
-    ".town-bus-held .town-bus-go",
+    ".town-bus-held .world-bin-resume",
   )!;
   const back = host.querySelector<HTMLButtonElement>(
     ".town-bus-held li button",
   )!;
-  check(reachable(go), "Let it go is covered or off screen");
+  check(reachable(go), "Resume is covered or off screen");
   check(reachable(back), "Put back on the held bus is covered or off screen");
   go.click();
-  await waitFor(() => resumes() === 1, "Let it go did not resume the bin");
+  await waitFor(() => resumes() === 1, "Resume did not resume the bin");
   await waitFor(
     () => host.querySelector(".town-bus-held") === null,
-    "the held controls stayed after Let it go",
+    "the held controls stayed after Resume",
   );
 
-  // The pointer path still holds on a press.
+  // A plain pointer tap opens the same held tray; no hold timer is needed.
   host
     .querySelector<HTMLElement>(".town-bus-hold")!
     .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-  await waitFor(() => pauses() === 2, "holding the bus did not pause the bin");
   host
     .querySelector<HTMLElement>(".town-bus-hold")!
     .dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+  host
+    .querySelector(".town-bus-hold")!
+    .dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+  await waitFor(() => pauses() === 2, "plain bus tap did not open held tray");
   await waitFor(
-    () => host.querySelector(".town-bus-held .town-bus-go") !== null,
-    "a held bus offers no Let it go",
+    () => host.querySelector(".town-bus-held .world-bin-resume") !== null,
+    "a held bus offers no Resume",
   );
-  // Let it go with the countdown over: the bus drives away.
+  // Resume with the countdown over: the bus drives away.
   for (const entry of bin.state.entries)
     entry.remaining_ms = BIN_DEPARTURE_MS - 300;
-  host.querySelector<HTMLButtonElement>(".town-bus-held .town-bus-go")!.click();
-  await waitFor(() => resumes() === 2, "Let it go did not resume the bin");
+  host
+    .querySelector<HTMLButtonElement>(".town-bus-held .world-bin-resume")!
+    .click();
+  await waitFor(() => resumes() === 2, "Resume did not resume the bin");
   const road = () =>
     host.querySelector<HTMLElement>('.town-bus-hold[data-leaving="true"]');
   await waitFor(() => road() !== null, "the bus did not drive away");
@@ -165,7 +170,7 @@ export async function checkTownBus(
     "the stop's sign does not say the bus is leaving",
   );
 
-  // Press and hold the moving bus (below its windows): it stops there.
+  // A plain tap on the moving bus opens the shared tray and stops it there.
   const at = (strip: HTMLElement, x: number, y: number) => {
     const box = strip.getBoundingClientRect();
     const scale = box.width / strip.offsetWidth;
@@ -181,17 +186,23 @@ export async function checkTownBus(
   road()!.dispatchEvent(
     new PointerEvent("pointerdown", { bubbles: true, ...at(road()!, 4, 38) }),
   );
+  road()!.dispatchEvent(
+    new PointerEvent("pointerup", { bubbles: true, ...at(road()!, 4, 38) }),
+  );
+  road()!.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
   await waitFor(() => pauses() === 3, "holding the moving bus did not stop it");
   await waitFor(
     () =>
-      /on its way out/.test(
+      /departure held/.test(
         host.querySelector(".town-bus-held")?.textContent ?? "",
       ),
-    "the held panel does not say the bus was stopped on its way out",
+    "the held panel does not say the bus was stopped departure held",
   );
   check(road() === null, "a held bus still drives away");
-  host.querySelector<HTMLButtonElement>(".town-bus-held .town-bus-go")!.click();
-  await waitFor(() => resumes() === 3, "Let it go did not resume the bin");
+  host
+    .querySelector<HTMLButtonElement>(".town-bus-held .world-bin-resume")!
+    .click();
+  await waitFor(() => resumes() === 3, "Resume did not resume the bin");
   await waitFor(() => road() !== null, "the bus did not drive on");
 
   // Take the rider off the moving bus: press along its upper windows, as
@@ -202,8 +213,12 @@ export async function checkTownBus(
     strip.dispatchEvent(
       new PointerEvent("pointerdown", { bubbles: true, ...point }),
     );
+    const moved = { clientX: point.clientX + 32, clientY: point.clientY + 32 };
     strip.dispatchEvent(
-      new PointerEvent("pointerup", { bubbles: true, ...point }),
+      new PointerEvent("pointermove", { bubbles: true, ...moved }),
+    );
+    strip.dispatchEvent(
+      new PointerEvent("pointerup", { bubbles: true, ...moved }),
     );
     if (bin.calls.some((call) => call.method === "world.bin.restore")) break;
   }
@@ -244,7 +259,29 @@ export async function checkTownBus(
         () => host.querySelector(".town-bus-rider") !== null,
         "a waiting rider has no button",
       );
-      host.querySelector<HTMLButtonElement>(".town-bus-rider")!.click();
+      const rider = host.querySelector<HTMLButtonElement>(".town-bus-rider")!;
+      const r = rider.getBoundingClientRect();
+      rider.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: r.x,
+          clientY: r.y,
+        }),
+      );
+      rider.dispatchEvent(
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: r.x + 32,
+          clientY: r.y + 32,
+        }),
+      );
+      rider.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: r.x + 32,
+          clientY: r.y + 32,
+        }),
+      );
       await waitFor(
         () => bin.state.entries.length === (_ === 0 ? 1 : 0),
         "a rider was not put back",

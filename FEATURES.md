@@ -194,12 +194,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     After pull-away, drops join the next bus.
     When the countdown ends the bus pulls away,
     speeding up, and the agent closes only once it has left the map by the
-    right edge. Until then press and hold a bus, coming, waiting or leaving, to
-    stop it where it is
-    with its doors open (every countdown pauses; Enter or Space on a focused bus
-    does the same), or drag a rider off, or press it, to send them back to their
-    desk. A held bus shows a panel at the top of the screen listing its riders
-    with **Put back**, and **Let it go** drives on. It shares the bin's
+    right edge. Until then tap or click a bus, coming, waiting or leaving, to
+    open the common tray and hold it with its doors open. This works on phones;
+    Enter or Space does the same. Board, Desk and Town show that same held tray
+    with Put back, Close now, Close all now and **Resume**. A view switch keeps
+    the hold visible; Resume closes the tray and continues from the held time.
+    Closing the holding browser window releases its hold. Riders can still be
+    dragged back to their desks. It shares the bin's
     countdown, refusals and sounds; under reduced motion it stays parked for the
     countdown and the departure time. When the stop is off screen or under the
     asks rail, zoom buttons or held-bus panel, the red chip brings it back into
@@ -420,7 +421,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     6 seconds Town's bus takes to drive away, and nothing reaches Herdr until
     then. Click the
     bin to pause every timer and open it: drag a card out (or **Put back**) to
-    return it to its place, or **Close now** / **Close all now**; **Close lid**
+    return it to its place, or **Close now** / **Close all now**; **Resume** (Close lid)
     resumes. A pinned tab's last pane and a host that can't be reached are
     refused. The selected card's bar has **Close agent…**, which does the same
     without dragging. Desk shows the bin while it holds anything. The close is

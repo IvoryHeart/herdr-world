@@ -68,7 +68,11 @@ The bin's countdown and six-second drive-away are reversible service state:
 neither records an intent before expiry. A drop from Board, Desk or Town before
 pull-away resets the waiting trip for every rider, without a browser join hint;
 after pull-away it starts or joins the next waiting trip. Hold and Put back
-remain effective until expiry. Original trip duration and active elapsed time
+remain effective until expiry. The common tray follows service-held state across Board, Desk and Town. Resume
+closes it without resetting the clock. A pause made by a browser belongs to that
+socket; disconnect releases its hold, while another actual holder keeps theirs.
+View switches retain the same socket and logical tray; explicit Resume clears
+all owners. These controls alter reversible staging only. Original trip duration and active elapsed time
 are service-owned samples, independent of boarding resets and excluding holds;
 new Town observers reconstruct progress from them. Qualified target reservations
 survive staging into native close, including uncertain results. A fresh native

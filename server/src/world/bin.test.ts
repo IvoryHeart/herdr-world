@@ -64,6 +64,49 @@ const agent = (pane: string, extra: Partial<BinAdd> = {}): BinAdd => ({
 
 const TOTAL = 30_000 + BIN_DEPARTURE_MS;
 
+test("closing a held browser during service shutdown cannot restart staging", async () => {
+  const { registry, advance, committed } = fixture();
+  const owner = {};
+  registry.add(agent("p1"));
+  registry.pause(owner);
+  registry.dispose();
+  registry.release(owner);
+  await advance(TOTAL + 1);
+  expect(committed).toEqual([]);
+});
+
+test("an open tray owns its socket hold; closing its last window resumes without resetting time", async () => {
+  const { registry, advance, committed } = fixture();
+  const first = {},
+    second = {},
+    unrelated = {};
+  registry.add(agent("p1"));
+  await advance(5000);
+  registry.pause(first);
+  await advance(60_000);
+  registry.pause(second);
+  registry.release(first);
+  expect(registry.list()).toMatchObject({
+    paused: true,
+    entries: [{ remaining_ms: 31_000, trip_elapsed_ms: 5000 }],
+  });
+  registry.release(unrelated);
+  expect(registry.list().paused).toBe(true);
+  registry.release(second);
+  expect(registry.list().paused).toBe(false);
+  await advance(1000);
+  expect(registry.list().entries[0]!.remaining_ms).toBe(30_000);
+  expect(committed).toEqual([]);
+  registry.pause(first);
+  registry.resume();
+  registry.release(first);
+  expect(registry.list().paused).toBe(false);
+  const id = registry.list().entries[0]!.id;
+  registry.restore(id);
+  registry.pause(first);
+  expect(registry.add(agent("p2")).paused).toBe(false);
+});
+
 test("the close commits only when the bus has left, not when the countdown ends", async () => {
   const { registry, committed, advance } = fixture();
   const state = registry.add(agent("p1"));

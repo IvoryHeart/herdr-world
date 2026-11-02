@@ -4074,7 +4074,7 @@ until fresh absence/replacement or runtime retirement, without resending it.
 Board and Desk SHALL use a plain bin that appears while a card is dragged and
 stays while it holds anything, showing the next countdown (its ring drains
 through the departure too). Clicking it SHALL
-open it with Put back, Close now, Close all now and Close lid, and dragging a
+open the common tray with Put back, Close now, Close all now and Resume (Close lid), and dragging a
 card out SHALL put the agent back. A selected tab card's bar SHALL offer Close
 agent… with the same countdown. A waiting card and its lines SHALL be hidden.
 Desk cards and directory rows SHALL offer Close agent… and Desk cards SHALL
@@ -4111,12 +4111,18 @@ carried it SHALL also accept the drop. The town SHALL hold still while a carried
 agent is over the stop. While the stop is off screen, or under the asks rail or
 the zoom controls or held-bus panel, its chip SHALL show and bring it into the
 free part of the screen. The full waiting and carry-chip touch regions SHALL
-remain clear of those panels. Pressing and holding a bus, driving in, waiting or driving away,
-SHALL stop it where it is with its doors open in every open World until one lets
-it go, and Enter or Space on a focused bus SHALL do the same. While a bus is held
-a panel at the top of the screen SHALL list its riders with Put back and offer
-Let it go. Dragging a rider off a waiting, held or moving bus (or pressing it)
-SHALL put them back at their desk. Drops, closes, returns and refusals SHALL
+remain clear of those panels. A plain tap/click on a bus with riders, approaching,
+waiting or departing, SHALL open the same tray component used by Board and Desk
+and hold the shared countdown; Enter or Space SHALL do the same. No long press
+SHALL be required, including on phones. Only the tray's anchor SHALL differ.
+A held bin/bus SHALL show held state and Resume in every view, including after
+switching views or returning one of several riders. The logical common tray
+SHALL stay open across view switches. Resume (Close lid) SHALL close it and
+continue from the held time. A browser socket owns the hold it opens; closing
+that window SHALL release its hold, and SHALL NOT release another open owner's
+hold. An explicit Resume SHALL end the shared hold in every observer. Dragging
+a rider off a waiting, held or moving bus SHALL put them back at their desk.
+Drops, closes, returns and refusals SHALL
 play World's sounds under this device's sound setting. Under reduced motion the
 bus SHALL stay parked for the countdown and the departure time, then the close
 commits.

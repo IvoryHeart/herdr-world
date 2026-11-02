@@ -40,9 +40,12 @@ function fixture() {
       : null;
   const replies: unknown[] = [];
   const errors: string[] = [];
+  const socket = {};
+  const clients = new Set([socket]);
   const rpc = (method: string, params: Record<string, unknown> = {}) =>
     handleBinRpc({
       id: "request",
+      ws: socket,
       method,
       params,
       sendReply: (reply: Record<string, unknown>) => {
@@ -53,6 +56,7 @@ function fixture() {
         errors.push(error instanceof Error ? error.message : String(error));
       },
       services: {
+        clients,
         bin: {
           registry,
           lease,
@@ -72,8 +76,22 @@ function fixture() {
       view: "town",
       ...extra,
     });
-  return { host, registry, replies, errors, rpc, add };
+  return { host, registry, replies, errors, rpc, add, socket, clients };
 }
+
+test("a tray RPC is scoped to the browser socket and its disconnect releases the hold", async () => {
+  const f = fixture();
+  await f.add();
+  await f.rpc("world.bin.pause");
+  expect(f.registry.list().paused).toBe(true);
+  f.registry.release(f.socket);
+  expect(f.registry.list().paused).toBe(false);
+  expect(f.registry.list().entries).toHaveLength(1);
+  f.clients.delete(f.socket);
+  await f.rpc("world.bin.pause");
+  expect(f.registry.list().paused).toBe(false);
+  expect(f.errors.at(-1)).toContain("window has closed");
+});
 
 test("adding stages the agent only while its pane holds the same terminal", async () => {
   const f = fixture();

@@ -17,7 +17,11 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
     if (!bin) throw new Error("The bin needs World storage");
     const { registry } = bin;
     if (method === "world.bin.list") return reply(registry.list());
-    if (method === "world.bin.pause") return reply(registry.pause());
+    if (method === "world.bin.pause") {
+      if (rpc.ws && !rpc.services.clients.has(rpc.ws))
+        throw new Error("The bin window has closed");
+      return reply(registry.pause(rpc.ws));
+    }
     if (method === "world.bin.resume") return reply(registry.resume());
     if (method === "world.bin.restore")
       return reply(registry.restore(String(p.id)));

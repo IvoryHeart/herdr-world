@@ -5,8 +5,7 @@
   top: 0;
 }
 
-.town-bus-sign,
-.town-bus-go {
+.town-bus-sign {
   position: absolute;
   transform: translate(-50%, -100%) scale(var(--iz));
   transform-origin: 50% 100%;
@@ -25,17 +24,6 @@
     ui-monospace,
     monospace;
   pointer-events: none;
-}
-
-.town-bus-go {
-  min-height: 32px;
-  padding: 4px 10px;
-  border: 1px solid #1c1722;
-  border-radius: 4px;
-  background: #fff7e0;
-  color: #1c1722;
-  pointer-events: auto;
-  cursor: pointer;
 }
 
 .town-bus-hold,
@@ -57,8 +45,7 @@
 }
 
 .town-bus-rider:focus-visible,
-.town-bus-hold:focus-visible,
-.town-bus-go:focus-visible {
+.town-bus-hold:focus-visible {
   outline: 2px solid #ffd166;
   outline-offset: 1px;
 }
@@ -113,62 +100,12 @@
   }
 }
 
-/* The held bus's controls: screen space, top right, above the asks rail. */
-.town-bus-held {
-  position: absolute;
+/* The same tray as Board/Desk, anchored beside Town's bus. */
+.world-bin-tray.town-bus-held {
   top: 56px;
+  bottom: auto;
   right: 12px;
-  z-index: 8;
-  display: grid;
-  gap: 8px;
-  width: min(300px, calc(100% - 24px));
+  left: auto;
+  width: min(320px, calc(100% - 24px));
   max-height: calc(100% - 140px);
-  overflow: auto;
-  padding: 10px 12px;
-  border: 1px solid #1c1722;
-  border-radius: 8px;
-  background: rgb(28 23 34 / 94%);
-  color: #fff7e0;
-  font:
-    13px system-ui,
-    sans-serif;
-}
-
-.town-bus-held ul {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.town-bus-held li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.town-bus-held li span {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.town-bus-held button {
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid #1c1722;
-  border-radius: 6px;
-  background: #fff7e0;
-  color: #1c1722;
-  cursor: pointer;
-}
-
-.town-bus-held .town-bus-go {
-  position: static;
-  transform: none;
-  background: #d7261e;
-  color: #fff7e0;
 }

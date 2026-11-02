@@ -9,6 +9,8 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import BoardView from "../BoardView";
+import { DeskBoard } from "../DeskView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { sharedAsksStore, type WorldAsk } from "../worldAsks";
@@ -19,6 +21,7 @@ import {
   checkTownBusRemount,
   checkTownClosingPin,
   checkHeldBusChip,
+  checkBinViewHolds,
 } from "./townBusReview.browser";
 import { townBusSender } from "./useTownBus";
 import { worldBinStore } from "../bin/binStore";
@@ -981,6 +984,16 @@ function worldFor(connections: WorldRuntimeConnection[]) {
 const phone = window.innerWidth < 640;
 
 async function run() {
+  if (params.has("width"))
+    check(
+      innerWidth === Number(params.get("width")),
+      `Town CSS viewport width ${innerWidth} must match ${params.get("width")}`,
+    );
+  if (params.has("height"))
+    check(
+      innerHeight === Number(params.get("height")),
+      `Town CSS viewport height ${innerHeight} must match ${params.get("height")}`,
+    );
   // World resolves its phone layout from the viewport, as the app does.
   initializeLayoutPreferences();
   document.body.style.margin = "0";
@@ -1041,6 +1054,7 @@ async function run() {
   /** Windows opened without focusing their pane (the docked Town master). */
   const unfocusedOpens: string[] = [];
   function Harness() {
+    const [surface, setSurface] = useState<"town" | "board" | "desk">("town");
     const [launch, setLaunch] = useState<LaunchTarget | null>(null);
     useEffect(() => {
       if (scale !== "plates") return;
@@ -1068,22 +1082,70 @@ async function run() {
         <div hidden>
           <NeedsYouCounter world={world} />
         </div>
-        <TownView
-          world={world}
-          selectedId={selectedId}
-          onSelect={(id) => {
-            selected.push(id);
-            setSelectedId(id);
-          }}
-          onOpenTerminal={async (id) => {
-            opened.push(id);
-          }}
-          floatingTerminals={[]}
-          onOpenInspectorView={(id, view, focus = true) => {
-            inspected.push([id, view]);
-            if (!focus) unfocusedOpens.push(id);
-          }}
-        />
+        {scale === "bus" && mode === "test" ? (
+          <nav
+            style={{ position: "fixed", bottom: 0, left: 0, zIndex: 10000 }}
+            aria-label="Fixture World views"
+          >
+            <button
+              data-bin-fixture-view="town"
+              onClick={() => setSurface("town")}
+            >
+              Town
+            </button>
+            <button
+              data-bin-fixture-view="board"
+              onClick={() => setSurface("board")}
+            >
+              Board
+            </button>
+            <button
+              data-bin-fixture-view="desk"
+              onClick={() => setSurface("desk")}
+            >
+              Desk
+            </button>
+          </nav>
+        ) : null}
+        {surface === "board" ? (
+          <BoardView
+            world={world}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onOpen={(id) => opened.push(id)}
+          />
+        ) : surface === "desk" ? (
+          <DeskBoard
+            world={world}
+            client={(leaf) =>
+              (
+                bridge as unknown as {
+                  connection(id: string, generation: number): ConnectionClient;
+                }
+              ).connection(leaf.connectionId, leaf.generation)
+            }
+            onOpen={async (id) => {
+              opened.push(id);
+            }}
+          />
+        ) : (
+          <TownView
+            world={world}
+            selectedId={selectedId}
+            onSelect={(id) => {
+              selected.push(id);
+              setSelectedId(id);
+            }}
+            onOpenTerminal={async (id) => {
+              opened.push(id);
+            }}
+            floatingTerminals={[]}
+            onOpenInspectorView={(id, view, focus = true) => {
+              inspected.push([id, view]);
+              if (!focus) unfocusedOpens.push(id);
+            }}
+          />
+        )}
         {launch && scale === "plates" ? (
           <AgentLauncherDialog
             world={world}
@@ -1344,6 +1406,7 @@ async function run() {
   if (scale === "bus" && mode === "test") {
     await checkTownBus(host, check, waitFor, fakeBin);
     await checkHeldBusChip(host, waitFor, check);
+    await checkBinViewHolds(host, waitFor, check);
     await checkTownBusRemount(
       host,
       fakeBin,
@@ -1383,10 +1446,33 @@ async function run() {
       const panes = native.panes.filter((pane) => pane.tab_id === tab.tab_id);
       return panes.length === 2 && panes.every((pane) => !!pane.agent);
     })!;
-    const oldStatuses = native.panes.map((pane) => pane.agent_status);
-    for (const pane of native.panes)
-      pane.agent_status = pane.tab_id === tab.tab_id ? "blocked" : "idle";
-    const pinWorld = worldFor(base.connections);
+    // Runtime observations are immutable; the World preparation cache keys
+    // the connections array. Publish a new observation instead of mutating it.
+    const pinConnections = base.connections.map((connection) =>
+      connection === source
+        ? {
+            ...connection,
+            snapshot: {
+              ...native,
+              panes: native.panes.map((pane) => ({
+                ...pane,
+                agent_status: pane.tab_id === tab.tab_id ? "blocked" : "idle",
+              })),
+            },
+          }
+        : connection,
+    );
+    const pinWorld = worldFor(pinConnections);
+    check(
+      pinWorld.leaves
+        .filter(
+          (leaf) =>
+            leaf.connectionId === source.connectionId &&
+            leaf.tabId === tab.tab_id,
+        )
+        .every((leaf) => leaf.status === "blocked"),
+      "I1/R5: publish a fresh blocked sibling observation",
+    );
     setWorld(pinWorld);
     await checkTownClosingPin(
       host,
@@ -1399,9 +1485,6 @@ async function run() {
       waitFor,
       check,
     );
-    native.panes.forEach((pane, index) => {
-      pane.agent_status = oldStatuses[index]!;
-    });
     root.unmount();
     await settle();
     return;

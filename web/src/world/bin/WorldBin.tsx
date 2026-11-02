@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { bridge } from "../../api";
 import type { BinEntry, BinOutcome } from "../../../../shared/bin";
 import { useWorldBin, worldBinStore } from "./binStore";
 import { playBinSound } from "./binSounds";
 import "./bin.css";
+import { WorldBinTray } from "./WorldBinTray";
 
 /** What the view is dragging towards the bin, if anything. */
 export type BinDrag = {
@@ -56,9 +57,8 @@ export function WorldBin({
 }) {
   const store = worldBinStore(bridge);
   const bin = useWorldBin(store);
-  const [open, setOpen] = useState(false);
-  const openRef = useRef(open);
-  openRef.current = open;
+  // The service owns the hold. Every view presents its one shared tray.
+  const open = bin.paused;
   const [toast, setToast] = useState<string | null>(null);
   const [pulse, setPulse] = useState<"gulp" | "close" | "refuse" | null>(null);
   const [, tick] = useState(0);
@@ -104,11 +104,6 @@ export function WorldBin({
     return () => window.clearTimeout(timer);
   }, [pulse]);
 
-  // Emptied, or the lid closed from another World: it closes here too.
-  useEffect(() => {
-    if (openRef.current && (!bin.entries.length || !bin.paused)) setOpen(false);
-  }, [bin.entries.length, bin.paused]);
-
   const next = bin.entries.reduce<BinEntry | null>(
     (soonest, entry) =>
       !soonest || store.remaining(entry) < store.remaining(soonest)
@@ -133,7 +128,7 @@ export function WorldBin({
           ? `Drop to close this pane · tab keeps ${drag.keeps}`
           : "Drop to close"
     : bin.paused
-      ? "Paused · drag one out"
+      ? "Held · Resume in tray"
       : bin.entries.length > 1
         ? `${bin.entries.length} agents · tap to open`
         : next
@@ -142,20 +137,10 @@ export function WorldBin({
 
   const report = (text: string) => setToast(text);
   const toggle = () => {
-    if (!holding || (!open && !bin.verified)) return;
-    if (open) {
-      setOpen(false);
-      void store
-        .resume()
-        .catch((error) => report(String(error?.message ?? error)));
-    } else {
-      setOpen(true);
-      // The timers run on until the service confirms the pause.
-      void store.pause().catch((error) => {
-        setOpen(false);
-        report(String(error?.message ?? error));
-      });
-    }
+    if (!holding || !bin.verified) return;
+    void (open ? store.resume() : store.pause()).catch((error) =>
+      report(String(error?.message ?? error)),
+    );
   };
   const putBack = (entry: BinEntry, at: { x: number; y: number } | null) => {
     playBinSound("back");
@@ -197,7 +182,7 @@ export function WorldBin({
           className="world-bin-can"
           aria-label={
             holding
-              ? `Bin: ${bin.entries.length} waiting to close${bin.paused ? ", paused" : ""}. ${open ? "Close lid" : "Open"}`
+              ? `Bin: ${bin.entries.length} waiting to close${bin.paused ? ", held" : ""}. ${open ? "Close lid" : "Open"}`
               : "Bin"
           }
           aria-expanded={holding ? open : undefined}
@@ -249,7 +234,7 @@ export function WorldBin({
         <small className="world-bin-label">{label}</small>
       </div>
       {open && holding && (
-        <BinTray
+        <WorldBinTray
           entries={bin.entries}
           paused={bin.paused}
           timeLeft={(entry) => store.remaining(entry)}
@@ -269,137 +254,5 @@ export function WorldBin({
         </div>
       )}
     </>
-  );
-}
-
-function BinTray({
-  entries,
-  paused,
-  timeLeft,
-  onShut,
-  onPutBack,
-  onCloseNow,
-  onDragOut,
-  className,
-}: {
-  entries: readonly BinEntry[];
-  /** The service's pause, not this click's wish. */
-  paused: boolean;
-  timeLeft: (entry: BinEntry) => number;
-  onShut: () => void;
-  onPutBack: (entry: BinEntry, at: { x: number; y: number } | null) => void;
-  onCloseNow: (ids: readonly string[]) => void;
-  onDragOut?: (entry: BinEntry | null) => void;
-  className?: string;
-}) {
-  const tray = useRef<HTMLDivElement>(null);
-  const [lifted, setLifted] = useState<{
-    entry: BinEntry;
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const startDrag = (entry: BinEntry, event: PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest("button")) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setLifted({ entry, x: event.clientX, y: event.clientY });
-    onDragOut?.(entry);
-  };
-  const moveDrag = (event: PointerEvent<HTMLDivElement>) => {
-    if (!lifted) return;
-    setLifted({ ...lifted, x: event.clientX, y: event.clientY });
-  };
-  const endDrag = (event: PointerEvent<HTMLDivElement>, cancelled = false) => {
-    if (!lifted) return;
-    const { entry } = lifted;
-    setLifted(null);
-    onDragOut?.(null);
-    const rect = tray.current?.getBoundingClientRect();
-    const inside =
-      !rect ||
-      (event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom);
-    if (cancelled || inside) return;
-    onPutBack(entry, { x: event.clientX, y: event.clientY });
-  };
-
-  return (
-    <div
-      ref={tray}
-      className={["world-bin-tray", className].filter(Boolean).join(" ")}
-      role="dialog"
-      aria-label="Bin contents"
-    >
-      <header>
-        <b>{paused ? "Bin · paused" : "Bin · pausing…"}</b>
-        <small>{entries.length} inside</small>
-        <button type="button" className="world-bin-button" onClick={onShut}>
-          Close lid
-        </button>
-      </header>
-      <p className="world-bin-hint">
-        Drag a card out to put it back where it was. The timers continue when
-        you close the lid.
-      </p>
-      <ul>
-        {entries.map((entry) => (
-          <li key={entry.id}>
-            <div
-              className={[
-                "world-bin-card",
-                lifted?.entry.id === entry.id ? "world-bin-card-lifting" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              data-bin-entry={entry.id}
-              onPointerDown={(event) => startDrag(entry, event)}
-              onPointerMove={moveDrag}
-              onPointerUp={(event) => endDrag(event)}
-              onPointerCancel={(event) => endDrag(event, true)}
-            >
-              <b>{entry.label}</b>
-              <code>{Math.ceil(timeLeft(entry) / 1000)}s</code>
-              <button
-                type="button"
-                className="world-bin-button"
-                onClick={() => onPutBack(entry, null)}
-              >
-                Put back
-              </button>
-              <button
-                type="button"
-                className="world-bin-button world-bin-danger"
-                onClick={() => onCloseNow([entry.id])}
-              >
-                Close now
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      {entries.length > 1 && (
-        <footer>
-          <button
-            type="button"
-            className="world-bin-button world-bin-danger"
-            onClick={() => onCloseNow(entries.map((entry) => entry.id))}
-          >
-            Close all now
-          </button>
-        </footer>
-      )}
-      {lifted && (
-        <div
-          className="world-bin-card world-bin-card-lifted"
-          style={{ left: lifted.x - 40, top: lifted.y - 16 }}
-          aria-hidden="true"
-        >
-          <b>{lifted.entry.label}</b>
-        </div>
-      )}
-    </div>
   );
 }

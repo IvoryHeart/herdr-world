@@ -10,6 +10,7 @@ import { bridge } from "../../api";
 import type { BinEntry } from "../../../../shared/bin";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { binOutcomeText } from "../bin/WorldBin";
+import { WorldBinTray } from "../bin/WorldBinTray";
 import { playBinSound } from "../bin/binSounds";
 import { useWorldBin, worldBinStore } from "../bin/binStore";
 import {
@@ -358,39 +359,19 @@ export function useTownBus({
     (edge && (holding || carrying)) || toast || held ? (
       <>
         {held ? (
-          // Screen space, at the top: never under the asks rail or past the
-          // viewport's edge, wherever the held bus is drawn.
-          <section className="town-bus-held" aria-label="Held bus">
-            <strong>
-              Bus held
-              {next
-                ? next.leaving
-                  ? " on its way out"
-                  : ` · ${clock(next.remaining)}`
-                : ""}
-            </strong>
-            <ul>
-              {bin.entries.map((entry) => (
-                <li key={entry.id}>
-                  <span title={entry.label}>{entry.label}</span>
-                  <button
-                    type="button"
-                    aria-label={`Put ${entry.label} back at its desk`}
-                    onClick={() => putBack(entry)}
-                  >
-                    Put back
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              className="town-bus-go"
-              onClick={() => void store.resume().catch(report)}
-            >
-              Let it go
-            </button>
-          </section>
+          <WorldBinTray
+            entries={bin.entries}
+            paused={bin.paused}
+            timeLeft={(entry) => store.remaining(entry)}
+            onShut={() => void store.resume().catch(report)}
+            onPutBack={(entry) => putBack(entry)}
+            onCloseNow={(ids) => {
+              if (!bin.verified)
+                return report("The bin is reconnecting; try again.");
+              void store.closeNow(ids).catch(report);
+            }}
+            className="town-bus-held"
+          />
         ) : null}
         {edge && (holding || carrying) ? (
           <button
@@ -433,7 +414,6 @@ export function useTownBus({
       paused={bin.paused}
       remaining={(entry) => store.remaining(entry)}
       onHold={() => void store.pause().catch(report)}
-      onRelease={() => void store.resume().catch(report)}
       onPutBack={putBack}
     />
   );
@@ -449,9 +429,8 @@ export function useTownBus({
 }
 
 /**
- * The bus's controls, in world space over the drawn bus: press and hold a
- * bus to stop it with its doors open, Let it go to drive on, and take any
- * rider off (drag it away, or press its button) to send it back. A bus
+ * The bus's controls in world space: a tap opens the common held tray,
+ * Resume drives on, and dragging a rider away sends it back. A bus
  * driving away can still be stopped until it leaves the map: its road ahead
  * is one target, hit-tested against the bus as drawn when pressed.
  */
@@ -462,7 +441,6 @@ function TownBusControls({
   paused,
   remaining,
   onHold,
-  onRelease,
   onPutBack,
 }: {
   scene: TownBusScene | null;
@@ -472,10 +450,8 @@ function TownBusControls({
   paused: boolean;
   remaining(entry: BinEntry): number;
   onHold(): void;
-  onRelease(): void;
   onPutBack(entry: BinEntry): void;
 }) {
-  const holdTimer = useRef<number | null>(null);
   const drag = useRef<{
     id: string;
     x: number;
@@ -487,14 +463,6 @@ function TownBusControls({
   if (!scene || !entries.length) return null;
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const soon = soonestBus(entries, remaining);
-  const startHold = () => {
-    if (paused) return;
-    holdTimer.current = window.setTimeout(onHold, 450);
-  };
-  const stopHold = () => {
-    if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
-    holdTimer.current = null;
-  };
   const riderDown = (id: string, event: ReactPointerEvent) => {
     event.stopPropagation();
     try {
@@ -514,6 +482,10 @@ function TownBusControls({
     drag.current = null;
     const entry = d && byId.get(d.id);
     dragged.current = Boolean(d?.moved);
+    if (d?.moved)
+      window.setTimeout(() => {
+        dragged.current = false;
+      }, 0);
     if (entry && d.moved) {
       event.stopPropagation();
       onPutBack(entry);
@@ -521,7 +493,7 @@ function TownBusControls({
   };
   /**
    * A press on a bus driving away: a rider under it is taken off (pressed
-   * or dragged), anywhere else press and hold stops the bus.
+   * for a drag); a simple tap opens the tray.
    */
   const roadDown = (left: number, event: ReactPointerEvent<HTMLElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -536,18 +508,20 @@ function TownBusControls({
           (event.clientY - box.top) / scale,
       );
     if (id) riderDown(id, event);
-    else startHold();
+    else drag.current = null;
   };
   const roadUp = (event: ReactPointerEvent) => {
     const d = drag.current;
-    stopHold();
-    if (!d) return;
     drag.current = null;
-    const entry = byId.get(d.id);
-    // The road's own click follows, not a rider's: leave `dragged` alone, or
-    // the next press on a rider would be swallowed.
-    event.stopPropagation();
-    if (entry) onPutBack(entry);
+    const entry = d && byId.get(d.id);
+    if (entry && d.moved) {
+      dragged.current = true;
+      window.setTimeout(() => {
+        dragged.current = false;
+      }, 0);
+      event.stopPropagation();
+      onPutBack(entry);
+    }
   };
   const riders = [
     ...scene.waiting,
@@ -594,27 +568,28 @@ function TownBusControls({
               paused
                 ? "Bus held with its doors open"
                 : coming
-                  ? "The bus is coming: press and hold to stop it"
+                  ? "The bus is coming: open bin tray"
                   : leaving
-                    ? "The bus is leaving: press and hold to stop it"
-                    : "Press and hold to stop the bus"
+                    ? "The bus is leaving: open bin tray"
+                    : "Open bin tray"
             }
             aria-pressed={paused}
             onPointerDown={(event) =>
-              moving ? roadDown(left, event) : startHold()
+              moving ? roadDown(left, event) : undefined
             }
             onPointerMove={riderMove}
-            onPointerUp={(event) => (moving ? roadUp(event) : stopHold())}
-            onPointerLeave={stopHold}
+            onPointerUp={(event) => (moving ? roadUp(event) : undefined)}
             onPointerCancel={() => {
-              stopHold();
               drag.current = null;
             }}
-            // Enter or Space (a click with no pointer) holds or lets go.
+            // A normal tap, click, Enter or Space opens the shared held tray.
             onClick={(event) => {
-              if (event.detail !== 0) return;
-              if (paused) onRelease();
-              else onHold();
+              if (dragged.current && event.detail !== 0) {
+                dragged.current = false;
+                return;
+              }
+              dragged.current = false;
+              onHold();
             }}
             onContextMenu={(event) => event.preventDefault()}
           />
@@ -636,7 +611,7 @@ function TownBusControls({
             onPointerUp={riderUp}
             onClick={() => {
               if (dragged.current) dragged.current = false;
-              else onPutBack(entry);
+              else onHold();
             }}
           />
         );

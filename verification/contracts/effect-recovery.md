@@ -142,3 +142,11 @@ ordering/authority/recovery proof remains required in full. Synthetic source
 and browser fixtures do not establish native Herdr execution or wall-clock
 smoothness; source-bound isolated Herdr evidence and independent whole-PR and
 consumer-mapping review remain separate acceptance requirements.
+
+The owner common-tray delta has direct rendered consumers in the Town bus suite:
+actual Town -> Board (running) -> open tray -> Put back one -> Town (held and
+Resume visible), then ordinary bus click -> Board -> actual Desk (same held
+tray). Both phone and laptop viewports preserve Resume/countdown assertions.
+Registry/RPC ownership tests release one browser socket without resetting time
+or another socket's hold; explicit Resume ends all holds. Native close authority,
+intent timing and the maintained M5 recovery proof remain independent.

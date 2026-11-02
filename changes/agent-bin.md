@@ -20,3 +20,5 @@
   actions to the shared bin.
 - Keep the whole bus-stop chip clear of the held-bus panel, including while
   carrying an agent on a phone.
+- Use one held tray in Town, Board and Desk with a visible Resume control after
+  switching views; a normal tap or click on the bus opens it on phones too.

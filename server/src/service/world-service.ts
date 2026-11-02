@@ -231,6 +231,7 @@ async function compose(
     closed: (socket) => {
       focusedAcquisition.release(socket);
       deskWatches.release(socket);
+      bin.registry.release(socket);
     },
     countChanged: publishConnectionsChanged,
   });

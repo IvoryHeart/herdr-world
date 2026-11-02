@@ -689,9 +689,11 @@ countdown**), plus the 6 seconds Town's bus takes to drive away. Nothing
 reaches Herdr until then, and it keeps running on the World service if you
 reload. To change your mind, click the bin:
 every timer pauses and the bin opens. Drag the card out, or choose **Put back**,
-and it returns to its place. **Close now** skips the wait; **Close lid** resumes
-the timers. On Desk, drag a card in the same way or choose **Close agent…** on
-its card or directory row. All three views share the same bin. The last pane
+and it returns to its place. **Close now** skips the wait; **Resume** closes the tray and continues
+the timers from where they stopped. On Desk, drag a card in the same way or choose **Close agent…** on
+its card or directory row. Board, Desk and Town use one common tray. A hold stays visible with **Resume**
+when you switch views; returning one rider does not hide the hold on the others.
+Closing the holding browser window releases its hold. The last pane
 of a pinned tab is refused until you unpin the tab, including while a sibling's
 close is still being completed.
 
@@ -706,9 +708,9 @@ the stop is off screen, the red chip at the screen's edge takes you there, and
 you can drop a carried agent on it. The chip stays clear of the held-bus panel
 and other Town controls. When the countdown ends the bus drives
 away, and the agent closes only when the bus has left the map. Until then,
-press and hold the bus (even while it is coming or leaving) to stop it with its doors
-open, then drag the agent off (or press it, or use **Put back** in the panel at
-the top) to return them to their desk.
+tap or click the bus (even while it is coming or leaving), on a phone or desktop,
+to open that same tray and hold the countdown. **Put back** returns a rider;
+**Resume** closes the tray and drives on. You can also drag a rider off the bus.
 
 **You are done when:** you have dropped an agent in the bin or at the bus stop
 and taken it back out before the bus left the map.

@@ -59,7 +59,28 @@ export function townPanels(host: HTMLElement): ScreenRect[] {
       ".town-rail:not(.town-rail-collapsed), .town-rail-collapsed .town-rail-head, .town-zoom, .town-bus-held",
     ),
   ]
-    .map((element) => element.getBoundingClientRect())
+    .map((element) => {
+      const rect = element.getBoundingClientRect();
+      if (!element.classList.contains("world-bin-tray")) return rect;
+      // The common tray scales in. Reserve its final layout footprint from
+      // the first frame, so a growing panel cannot cover the chip between HUD
+      // frames. Keep the actual footprint too; no animation is suppressed.
+      const style = getComputedStyle(element);
+      const matrix = new DOMMatrixReadOnly(
+        style.transform === "none" ? undefined : style.transform,
+      );
+      const [x, y] = style.transformOrigin.split(" ").map(Number.parseFloat);
+      const left = rect.left - (x ?? 0) * (1 - matrix.a) - matrix.e;
+      const top = rect.top - (y ?? 0) * (1 - matrix.d) - matrix.f;
+      return {
+        left: Math.min(rect.left, left),
+        top: Math.min(rect.top, top),
+        right: Math.max(rect.right, left + element.offsetWidth),
+        bottom: Math.max(rect.bottom, top + element.offsetHeight),
+        width: element.offsetWidth,
+        height: element.offsetHeight,
+      };
+    })
     .filter((r) => r.width > 0 && r.height > 0)
     .map((r) => ({
       left: r.left - origin.left,

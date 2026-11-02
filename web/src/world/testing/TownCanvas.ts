@@ -7,7 +7,9 @@ import { basename, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
+  withBrowserDeadline,
 } from "../../browserChrome";
+import { connectCapture } from "./connectCapture";
 import { chromeRenderingFlags } from "./chromeRendering";
 
 const chrome =
@@ -60,7 +62,11 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           return new Response("Not found", { status: 404 });
         },
       });
+      const exactViewport = group === "bus";
+      const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}${exactViewport ? `&width=${width}&height=${height}` : ""}`;
       let browser: ReturnType<typeof Bun.spawn> | undefined;
+      let capture: Awaited<ReturnType<typeof connectCapture>> | undefined;
+      let stderrDone: Promise<void> | undefined;
       try {
         const build = await Bun.build({
           entrypoints: [
@@ -73,10 +79,11 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         for (const output of build.outputs)
           assets.set(`/${basename(output.path)}`, output);
         const browserLog = join(dir, "browser.log");
-        browser = Bun.spawn(
+        const child = Bun.spawn(
           [
             chrome!,
             "--headless=new",
+            ...(exactViewport ? ["--remote-debugging-port=0"] : []),
             `--window-size=${width},${height}`,
             "--enable-webgl",
             ...(await chromeRenderingFlags(chrome!)),
@@ -84,14 +91,55 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             "--no-first-run",
             "--no-default-browser-check",
             `--user-data-dir=${join(dir, "profile")}`,
-            `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}`,
+            exactViewport ? "about:blank" : fixtureUrl,
           ],
-          { stdout: "ignore", stderr: Bun.file(browserLog) },
+          {
+            stdout: "ignore",
+            stderr: exactViewport ? "pipe" : Bun.file(browserLog),
+          },
         );
+        browser = child;
+        if (exactViewport) {
+          const port = Promise.withResolvers<string>();
+          stderrDone = (async () => {
+            let output = "",
+              found = false;
+            for await (const bytes of child.stderr as ReadableStream<Uint8Array>) {
+              output += new TextDecoder().decode(bytes);
+              const match =
+                !found &&
+                /DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//.exec(
+                  output,
+                );
+              if (match) {
+                found = true;
+                port.resolve(match[1]!);
+              }
+            }
+            await Bun.write(browserLog, output);
+            if (!found)
+              port.reject(new Error("Town browser exited before CDP startup"));
+          })();
+          capture = await connectCapture(
+            await withBrowserDeadline(
+              port.promise,
+              "Town browser CDP startup",
+              20000,
+            ),
+          );
+          await capture.command("Emulation.setDeviceMetricsOverride", {
+            width,
+            height,
+            deviceScaleFactor: 1,
+            mobile: width < 640,
+          });
+          await capture.command("Page.navigate", { url: fixtureUrl });
+        }
         const failures = await waitForBrowserFixture(
           pageRequested.promise,
           result.promise,
           browser.exited.then(async (code) => {
+            await stderrDone;
             throw new Error(
               `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
             );
@@ -102,9 +150,11 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         );
         expect(failures).toEqual([]);
       } finally {
+        capture?.close();
         if (browser) {
           browser.kill();
           await browser.exited;
+          await stderrDone;
         }
         server.stop(true);
         await rm(dir, { recursive: true, force: true });

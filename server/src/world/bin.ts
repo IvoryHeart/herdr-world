@@ -58,6 +58,9 @@ export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 export class WorldBinRegistry {
   private revision = 0;
   private paused = false;
+  private readonly holders = new Set<object>();
+  private manualHold = false;
+  private disposed = false;
   private readonly entries = new Map<string, Staged>();
   private readonly closing = new Map<string, BinEntry>();
   private readonly reservations = new Map<string, BinReservation>();
@@ -183,7 +186,10 @@ export class WorldBinRegistry {
     return this.list();
   }
 
-  pause(): BinState {
+  pause(owner?: object): BinState {
+    if (!this.entries.size) return this.list();
+    if (owner) this.holders.add(owner);
+    else this.manualHold = true;
     if (this.paused) return this.list();
     const now = this.deps.clock.monotonic();
     for (const entry of this.entries.values()) {
@@ -202,6 +208,8 @@ export class WorldBinRegistry {
   }
 
   resume(): BinState {
+    this.holders.clear();
+    this.manualHold = false;
     if (!this.paused) return this.list();
     const now = this.deps.clock.monotonic();
     for (const entry of this.entries.values()) {
@@ -211,6 +219,13 @@ export class WorldBinRegistry {
     this.paused = false;
     this.changed();
     return this.list();
+  }
+
+  /** A browser window owns its open tray, not the view it currently renders. */
+  release(owner: object): BinState {
+    if (!this.holders.delete(owner)) return this.list();
+    if (this.disposed) return this.list();
+    return !this.holders.size && !this.manualHold ? this.resume() : this.list();
   }
 
   /** Take an agent back out; nothing is closed. */
@@ -324,12 +339,17 @@ export class WorldBinRegistry {
   }
 
   dispose() {
+    this.disposed = true;
     this.timer?.cancel();
     this.timer = null;
   }
 
   private emptied() {
-    if (!this.entries.size) this.paused = false;
+    if (!this.entries.size) {
+      this.paused = false;
+      this.holders.clear();
+      this.manualHold = false;
+    }
   }
 
   private changed() {
