@@ -28,7 +28,12 @@ for (const remote of [false, true]) {
           },
         )
       : null;
-    const connection = remote ? { host: "remote-host" } : {};
+    const connection = remote
+      ? {
+          host: "remote-host",
+          runProcessWithCodeTimeout: processUtils.runProcessWithCodeTimeout,
+        }
+      : {};
     try {
       await mkdir(join(root, "project"));
       await mkdir(join(root, "project", "child"));
@@ -209,7 +214,11 @@ test("Windows SSH paths use quoted PowerShell and the remote user's home", async
     expect(
       await inspectWorkspacePath(
         "~/quote' $(throw)",
-        { host: "remote-host", remotePlatform: "windows" },
+        {
+          host: "remote-host",
+          remotePlatform: "windows",
+          runProcessWithCodeTimeout: processUtils.runProcessWithCodeTimeout,
+        },
         false,
       ),
     ).toEqual({
@@ -219,5 +228,17 @@ test("Windows SSH paths use quoted PowerShell and the remote user's home", async
     });
   } finally {
     command.mockRestore();
+  }
+});
+
+test("remote path inspection refuses a missing runtime process instead of using a global fallback", async () => {
+  const spawn = spyOn(Bun, "spawn");
+  try {
+    await expect(
+      inspectWorkspacePath("/synthetic/checkout", { host: "path.example" }),
+    ).rejects.toThrow("owning runtime process");
+    expect(spawn).not.toHaveBeenCalled();
+  } finally {
+    spawn.mockRestore();
   }
 });

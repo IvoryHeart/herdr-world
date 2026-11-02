@@ -25,6 +25,10 @@ const rpc = (
 
 /** Static reviewed inventory; never generated from a live adapter or its capabilities. */
 export const rpcVerbs = [
+  rpc("forward.list", "read", "runtime"),
+  rpc("forward.candidates", "read", "runtime"),
+  rpc("forward.open", "reconcilable", "runtime"),
+  rpc("forward.close", "reconcilable", "runtime", object({ id: text })),
   rpc("agent.list", "read", "runtime"),
   rpc("agent_checkout.get", "read", "runtime"),
   rpc(

@@ -237,6 +237,9 @@ function fixture(paneId = "w1:p1") {
     workspace: workspaces[0],
   }));
   const runtime = {
+    runProcessWithCodeTimeout: (
+      ...args: Parameters<typeof processUtils.runProcessWithCodeTimeout>
+    ) => processUtils.runProcessWithCodeTimeout(...args),
     herdr: { call },
     files: { resolveWorkspaceGitRoot },
     worktreeHooks: { readWorktreeHooks, hooksEnabled: async () => true },

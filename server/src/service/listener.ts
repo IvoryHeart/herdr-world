@@ -1,4 +1,5 @@
 import type { Server, ServerWebSocket } from "bun";
+import { runInSshLane } from "../bridge/ssh-sessions";
 import { isHtmlPath } from "../../../shared/filePreview";
 import {
   flushCoalescedMessages,
@@ -481,7 +482,7 @@ export function listen(deps: ListenerDeps) {
       message(ws, message) {
         if (!clients.has(ws) || stopping()) return;
         const text = typeof message === "string" ? message : message.toString();
-        const { id, method, connectionId, connectionGeneration } =
+        const { id, method, connectionId, connectionGeneration, lane } =
           parseRpcMeta(text);
         const startedAt = clock.monotonic();
         let responseConnectionId: string | null = null;
@@ -500,7 +501,7 @@ export function listen(deps: ListenerDeps) {
           }
         }
         void track(
-          handleRpc(ws, text)
+          runInSshLane(lane, () => handleRpc(ws, text))
             .then(() => {
               const outcome = takeRpcOutcome(ws, id);
               logRpc(

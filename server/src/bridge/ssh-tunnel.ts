@@ -1,8 +1,10 @@
 import { existsSync, rmSync } from "node:fs";
 import { type Logger, silentLogger } from "../utils/logger";
 import { ProcessExitError } from "../utils/process-utils";
-import { sshCommandArgv, sshTunnelArgv } from "./ssh-command";
+import { sshReadCommandArgv, sshTunnelArgv } from "./ssh-command";
+import { createSshMaster, type SshMaster } from "./ssh-master";
 import { createWindowsSshTunnel } from "./ssh-windows";
+import { annotateSshArgv, trackSshProcess } from "./ssh-metrics";
 
 const SSH_STDERR_MAX_BYTES = 16 * 1024;
 
@@ -150,11 +152,14 @@ export type SshTunnelConfig = {
   ownedRuntimeDirectory?: string;
   remotePlatform?: "windows";
   remoteHerdrPath?: string;
+  /** Control socket of the runtime's command master; unset disables it. */
+  masterControlPath?: string;
 };
 
 export type RunProcess = (
   argv: string[],
   input?: string,
+  options?: { timeoutMs?: number },
 ) => Promise<{ stdout: string; stderr: string }>;
 
 type TunnelProcess = {
@@ -179,6 +184,10 @@ export type SshTunnelManager = {
   cleanupAutoSshTunnel(): Promise<void>;
 };
 
+// Hard cap on the HOME probe: a stuck probe blocks the whole connection from
+// ever leaving "connecting", and nothing retries while it is pending.
+const REMOTE_HOME_PROBE_TIMEOUT_MS = 20_000;
+
 export function createSshTunnelManager(args: {
   connectionId?: string;
   formatError?: (error: unknown) => string;
@@ -198,6 +207,7 @@ export function createSshTunnelManager(args: {
     processStopTimeoutMs?: number;
     processForceKillTimeoutMs?: number;
     platform?: string;
+    createMaster?: (destination: string, controlPath: string) => SshMaster;
   };
 }): SshTunnelManager {
   if (args.config.remotePlatform === "windows") {
@@ -229,9 +239,11 @@ export function createSshTunnelManager(args: {
         stderr: "pipe",
         env: { ...process.env, LC_ALL: "C" },
       });
+      const stderr = readBoundedStderr(proc.stderr);
+      trackSshProcess(argv, proc.exited, stderr);
       return {
         exited: proc.exited,
-        stderr: readBoundedStderr(proc.stderr),
+        stderr,
         kill: (signal) => proc.kill(signal),
       };
     });
@@ -255,11 +267,32 @@ export function createSshTunnelManager(args: {
   let lifecycleGeneration = 0;
   let disposed = false;
   let cleanupTask: Promise<void> | null = null;
+  // Connection B: outlives tunnel reconnects and stops only on cleanup.
+  const master =
+    args.config.sshHost && args.config.masterControlPath
+      ? (
+          args.dependencies?.createMaster ??
+          ((destination, controlPath) =>
+            createSshMaster({
+              destination,
+              controlPath,
+              connectionId: args.connectionId,
+              logger,
+            }))
+        )(args.config.sshHost, args.config.masterControlPath)
+      : null;
 
   async function remoteHome(host: string): Promise<string> {
     if (cachedRemoteHome?.host === host) return cachedRemoteHome.home;
     const { stdout } = await args
-      .runProcess(sshCommandArgv(host, `printf %s "$HOME"`))
+      .runProcess(
+        annotateSshArgv(sshReadCommandArgv(host, `printf %s "$HOME"`), {
+          tag: "home.probe",
+          connection: args.connectionId,
+        }),
+        undefined,
+        { timeoutMs: REMOTE_HOME_PROBE_TIMEOUT_MS },
+      )
       .catch((error: unknown) => {
         if (!(error instanceof ProcessExitError) || error.exitCode !== 255) {
           throw error;
@@ -411,6 +444,9 @@ export function createSshTunnelManager(args: {
     const host = args.config.sshHost;
     if (!host) return;
     assertSshTunnelPlatformSupported(platform);
+    // Started alongside the tunnel and never awaited: until it is ready,
+    // commands (including the HOME probe below) open their own connection.
+    void master?.ensure();
     const generation = ++lifecycleGeneration;
     activeSocketWait?.cancel();
     activeSocketWait = null;
@@ -449,7 +485,10 @@ export function createSshTunnelManager(args: {
     autoSshTunnelPaths = forwards.map((forward) => forward.local);
     for (const path of autoSshTunnelPaths) remove(path);
 
-    const argv = sshTunnelArgv(host, forwards);
+    const argv = annotateSshArgv(sshTunnelArgv(host, forwards), {
+      tag: "tunnel",
+      connection: args.connectionId,
+    });
 
     logger.debug("starting SSH tunnel", {
       connection: args.connectionId ?? "startup-default",
@@ -539,7 +578,12 @@ export function createSshTunnelManager(args: {
     const paths = autoSshTunnelPaths;
     autoSshTunnelPaths = [];
     cleanupTask = (async () => {
-      await stopTunnelProcess();
+      const [tunnelStop, masterStop] = await Promise.allSettled([
+        stopTunnelProcess(),
+        master?.stop(),
+      ]);
+      if (tunnelStop.status === "rejected") throw tunnelStop.reason;
+      if (masterStop.status === "rejected") throw masterStop.reason;
       for (const path of paths) remove(path);
       if (args.config.ownedRuntimeDirectory) {
         removeDirectory(args.config.ownedRuntimeDirectory);

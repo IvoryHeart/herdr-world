@@ -1,4 +1,8 @@
 {
+  "rpc:forward.list": "allow deny deny deny deny deny",
+  "rpc:forward.candidates": "allow deny deny deny deny deny",
+  "rpc:forward.open": "allow deny deny deny deny deny",
+  "rpc:forward.close": "allow deny deny deny deny deny",
   "rpc:agent.list": "allow deny deny deny deny deny",
   "rpc:agent_checkout.get": "allow deny deny deny deny deny",
   "rpc:agent_conversation.answer": "allow deny deny deny deny deny",

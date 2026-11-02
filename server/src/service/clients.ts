@@ -24,6 +24,20 @@ export function logDetail(value: string): string {
     .slice(0, 300);
 }
 
+export function summarizeHerdrEvent(event: any): string {
+  const type = logDetail(String(event?.event ?? event?.type ?? "unknown"));
+  const data = event?.data && typeof event.data === "object" ? event.data : {};
+  const ids = ["workspace_id", "tab_id", "pane_id", "agent_id", "terminal_id"]
+    .map((key) => {
+      const value = data[key] ?? event?.[key];
+      return typeof value === "string" && value
+        ? `${key}=${logDetail(value)}`
+        : "";
+    })
+    .filter(Boolean);
+  return [`type=${type}`, ...ids].join(" ");
+}
+
 /** The browsers connected to one service: labels, sends, cleanup, RPC logs. */
 export function createBrowserClients(deps: {
   logger: Logger;

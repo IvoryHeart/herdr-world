@@ -1,3 +1,7 @@
+import {
+  runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
+} from "./process";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -69,6 +73,9 @@ test.skipIf(!chrome)(
       ),
     );
     const handlers = createFileHandlers({
+      runBinaryProcessWithTimeout,
+      bindProcess: (argv) => argv,
+      runProcessWithInputTimeout,
       herdr: {
         call: async () => ({
           workspace: { worktree: { checkout_path: workspace } },

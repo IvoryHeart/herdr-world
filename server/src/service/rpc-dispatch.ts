@@ -32,7 +32,7 @@ import { handleFilesRpc } from "../rpc/files";
 import { handleGitRpc } from "../rpc/git";
 import { handleLauncherRpc } from "../rpc/launcher";
 import { handleWorldRpc } from "../rpc/world";
-import { inspectWorkspacePath } from "../workspace/path";
+import { inspectRuntimeWorkspacePath } from "../workspace/path";
 import { readFocusedList } from "../world/focused-lists";
 import {
   FOCUSED_METHODS,
@@ -317,14 +317,39 @@ async function handleRpc(
   }
   const { sshHost, herdr, handleSettingsRpc, terminalBridge } = connection;
 
+  if (method.startsWith("forward.")) {
+    try {
+      recheck();
+      if (
+        req.connection_id === undefined ||
+        req.connection_generation === undefined
+      )
+        throw new Error(
+          "Port forwarding requires an explicit connection and runtime generation",
+        );
+      if (!connection.handleForwardRpc)
+        throw new Error("Port forwarding is unavailable");
+      return await connection.handleForwardRpc(
+        ws,
+        id,
+        method,
+        params ?? {},
+        requestIsCurrent,
+      );
+    } catch (error) {
+      sendError("forward-error", error);
+      return;
+    }
+  }
+
   if (
     method === "workspace.path" ||
     (method === "workspace.create" && params?.cwd != null && params.cwd !== "")
   ) {
     try {
-      const info = await inspectWorkspacePath(
+      const info = await inspectRuntimeWorkspacePath(
+        connection,
         method === "workspace.path" ? params?.path : params?.cwd,
-        { host: sshHost(), remotePlatform: connection.remotePlatform },
         method === "workspace.path",
       );
       if (method === "workspace.path") {
@@ -359,9 +384,9 @@ async function handleRpc(
             params?.cwd != null &&
             params.cwd !== ""
           ) {
-            const info = await inspectWorkspacePath(
+            const info = await inspectRuntimeWorkspacePath(
+              connection,
               params.cwd,
-              { host: sshHost(), remotePlatform: connection.remotePlatform },
               false,
             );
             if (info.error) throw new Error(`${info.error} ${info.path}`);
@@ -435,6 +460,7 @@ async function handleRpc(
       connection.remotePlatform !== "windows"
     ) {
       result = await enrichIntegrationVersions(result, {
+        run: connection.runProcessWithCodeTimeout,
         sshHost: sshHost(),
         ping: () => herdr.ping(),
       });

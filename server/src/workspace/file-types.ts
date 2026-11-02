@@ -85,3 +85,9 @@ export type GitDiffEntry = {
 
 export type RunProcessWithCodeTimeout =
   typeof import("../utils/process-utils").runProcessWithCodeTimeout;
+
+export type RunProcessWithInputTimeout =
+  typeof import("./process").runProcessWithInputTimeout;
+
+export type RunBinaryProcessWithTimeout =
+  typeof import("./process").runBinaryProcessWithTimeout;

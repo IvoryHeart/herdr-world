@@ -1,3 +1,5 @@
+import { TerminalEchoTimer } from "./terminal-echo";
+export { ECHO_SAMPLE_MAX_MS, isTypedCharacter } from "./terminal-echo";
 import { EventEmitter } from "node:events";
 import { EndpointClient, type EndpointSurface } from "./endpoint-client";
 import { EndpointCreationDeadline } from "./endpoint-creation";
@@ -50,6 +52,7 @@ export class EndpointTerminalSession extends EventEmitter {
   private scrollDispatched: ScrollDispatch | null = null;
   private closed = false;
   private seq = 0;
+  private echo: TerminalEchoTimer;
   private readonly linkSessionId = crypto.randomUUID();
   private linkLookupEpoch = 0;
   private linkFrame: {
@@ -79,6 +82,7 @@ export class EndpointTerminalSession extends EventEmitter {
     surfaceCodecsEnabled = true,
   ) {
     super();
+    this.echo = new TerminalEchoTimer(this.logger, this.terminalId);
     this.client = new EndpointClient(socketPath, surfaceCodecsEnabled);
     this.client.on("surface", (s) => this.onSurface(s));
     this.client.on("clipboard", (clipboard) => {
@@ -283,6 +287,7 @@ export class EndpointTerminalSession extends EventEmitter {
       this.scrollDispatched = null;
       return;
     }
+    const logEcho = this.echo.surface();
     this.fitSurface(surface, pane);
     const previousMaxOffset = this.lastScroll?.maxOffsetFromBottom;
     this.lastScroll = pane.scroll
@@ -370,6 +375,7 @@ export class EndpointTerminalSession extends EventEmitter {
         bytes,
         frame: cropped,
       });
+      logEcho();
     };
     // Wait for the requested geometry regardless of split ratio. New
     // frames replace the pending payload, never extend its deadline.
@@ -549,6 +555,7 @@ export class EndpointTerminalSession extends EventEmitter {
   input(data: Buffer) {
     this.linkFrame = null;
     if (!this.paneId || this.closed) return;
+    this.echo.input(data);
     // Typing or application input supersedes a queued history gesture.
     if (data.length > 0) {
       this.scrollTarget = null;

@@ -1,3 +1,7 @@
+import {
+  applyGitStatusPush,
+  gitStatusPushesDuringRefresh,
+} from "./store/refresh";
 import { refreshBridgeStatus } from "./store/catalogue";
 import {
   holdFocusedOwner,
@@ -816,6 +820,13 @@ function handleHerdrEvent(event: HerdrEventMsg) {
     if (event.event === "herdr-world.task_notification") {
       const notification = parseHerdrTaskNotification(event.data);
       if (notification) notifyHerdrTask(event.connection_id, notification);
+      return;
+    }
+    if (event.event === "workspace.git_status") {
+      applyGitStatusPush(
+        captureConnectionLease(event.connection_id),
+        event.data,
+      );
       return;
     }
     if (
@@ -2835,6 +2846,7 @@ export const __storeTesting = {
   replaceState(snapshot: State) {
     stopPolling();
     refreshingConnectionKeys.clear();
+    gitStatusPushesDuringRefresh.clear();
     queuedConnectionKeys.clear();
 
     taskCompletionTracker.clear();
