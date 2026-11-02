@@ -163,7 +163,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Development
 
-Use Bun 1.4.3 or newer and a running Herdr server:
+Use Bun 1.4.4 or newer and a running Herdr server:
 
 ```bash
 bun install --frozen-lockfile
