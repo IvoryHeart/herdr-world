@@ -10,3 +10,8 @@
 
 - Retired the separate completion-check browser APIs. Unresolved old receipts
   drain privately on confirmed terminal absence or 30 days after upgrade.
+
+### Fixed
+
+- Enforce legacy-review expiry at the resolving Desk write and retain a receipt
+  when sparse or duplicate metadata cannot name the exact displayed stop.

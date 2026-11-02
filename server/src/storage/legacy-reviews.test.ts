@@ -171,6 +171,7 @@ test("a proven review and its archived receipt removal share one SQLite acknowle
       sequence: 4,
       status: "done" as const,
       last_activity_at: 1000,
+      activity_matches: true,
     };
     expect(
       await storage.terminalMarks.observeLegacy(
@@ -234,6 +235,7 @@ test("unknown receipts do not resolve, drain on complete absence, and all remain
             sequence: 4,
             status: "done",
             last_activity_at: null,
+            activity_matches: true,
           },
         ],
         () => true,
@@ -396,6 +398,7 @@ test("a refused binding or capacity write rolls back both the migrated review an
                     sequence: 4,
                     status: "done",
                     last_activity_at: 1000,
+                    activity_matches: true,
                     review_changed: false,
                   },
                 },
@@ -518,6 +521,7 @@ test("real post-resolution capacity refusal restores the archived receipt and ev
         sequence: 4,
         status: "done",
         last_activity_at: 1000,
+        activity_matches: true,
         review_changed: false,
       },
     });

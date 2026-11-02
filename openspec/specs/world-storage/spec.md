@@ -315,7 +315,12 @@ ownership or changed sequence SHALL permanently disqualify the old receipt even
 if its former proof returns after restart. Current/newer review and exact Undo
 SHALL be preserved. Unresolved receipts SHALL drain on complete fresh
 original-source terminal absence or 30 days after the original migration time.
-The archive SHALL accept no new receipts; a later release removes the table.
+The archive SHALL accept no new receipts; a later release removes the table. The resolving Desk
+savepoint SHALL enforce the original deadline with its writer timestamp, even
+when the earlier proof preceded expiry. Transfer SHALL defer without consuming
+the receipt whenever strictly qualified activity proof disagrees with the actual
+World leaf's canonical activity; display metadata SHALL NOT authorize session or
+native-sequence continuity.
 
 Re-entering source recovery SHALL protect known captures again before history
 trimming, even after prior successful observation. Admitting unknown ownership

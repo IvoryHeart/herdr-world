@@ -195,3 +195,25 @@ remain required. Direct real-SQLite/finite consumers exercise these properties;
 a duplicate SQL model would not strengthen the actual transaction boundary.
 No native runtime-instance proof, null-session restart continuity, physical
 power-loss or dense composed success is claimed.
+
+## Review repair: deadline and actual World activity
+
+The original archive deadline is enforced again inside the resolving Desk
+savepoint with its injected writer timestamp. An earlier admitted proof cannot
+confer review at or after expiry; restart never extends that deadline. Expiry and
+receipt resolution remain atomic with the Desk operation.
+
+Display metadata matching and activity normalization are shared with the actual
+World leaf. Identity, status and native sequence admission keep their stricter
+unique current-session proof. If those two activity views disagree (including
+sparse-session, duplicate, missing-terminal or obsolete-session metadata),
+conversion defers and retains the receipt; a later safe matching observation can
+resolve it. Native pane activity can still establish the exact token despite
+ambiguous metadata. The canonical stop string shape stays unchanged.
+
+`world/legacy-review-boundaries.test.ts` covers just before, exactly at and after
+the deadline, with and without restart, plus actual `buildWorldObject` consumers
+for metadata disagreement and later valid transfer. Two compiled faults remove
+the resolving expiry check or falsely attest matching activity and must fail
+the named boundary regressions. Existing replacement/no-carry/sequence fences,
+real-SQLite rollback, all maintained models and native CI remain required.

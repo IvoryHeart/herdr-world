@@ -14,6 +14,7 @@ export type LegacyReviewProof = {
   sequence: number | null;
   status: "working" | "idle" | "done" | "blocked" | "unknown";
   last_activity_at: number | null;
+  activity_matches: boolean;
 };
 export type LegacyReviewOperation =
   | { type: "legacy-prune"; connection_id: string; terminals: string[] }
@@ -110,6 +111,7 @@ export function observeLegacyReviews(
         (proof.session !== null && !/^[a-f0-9]{64}$/u.test(proof.session)) ||
         (proof.sequence !== null &&
           (!Number.isSafeInteger(proof.sequence) || proof.sequence < 0)) ||
+        typeof proof.activity_matches !== "boolean" ||
         !["working", "idle", "done", "blocked", "unknown"].includes(
           proof.status,
         )
@@ -134,6 +136,7 @@ export function observeLegacyReviews(
           ).run(row.id);
         else if (
           proof.sequence !== null &&
+          proof.activity_matches &&
           ["done", "idle"].includes(proof.status)
         )
           resolvable.push(proof.terminal_id);
@@ -155,9 +158,13 @@ export function resolveLegacyReview(
   db: Database,
   input: TerminalMarkPut,
   value: MarkBody,
+  at: number,
 ): MarkBody {
   const proof = input.legacy_review;
   if (input.kind !== "desk" || !proof) return value;
+  // The earlier proof and this put are separate admitted transactions. The
+  // original deadline must still hold inside this exact resolving savepoint.
+  expireLegacyReviews(db, at);
   const terminal = input.target.evidence.terminals[0]!;
   const rows = matchingReceipts(db, input.target.instance, terminal);
   if (!rows.length) return value;
@@ -172,6 +179,7 @@ export function resolveLegacyReview(
     proof.terminal_id === terminal &&
     proof.sequence !== null &&
     proof.sequence === receipt.body.stateChangeSeq &&
+    proof.activity_matches === true &&
     value.stateChangeSeq === proof.sequence &&
     ["done", "idle"].includes(proof.status) &&
     typeof value.observed_stop_id === "string" &&

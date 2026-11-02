@@ -224,7 +224,12 @@ export function createTerminalMarkWriter(
       (existing && existing.kind !== input.kind)
     )
       throw new Error("invalid terminal mark kind");
-    const value = resolveLegacyReview(db, input, body(input.kind, input.body));
+    const value = resolveLegacyReview(
+      db,
+      input,
+      body(input.kind, input.body),
+      at,
+    );
     if (
       !existing &&
       readTerminalMarks(db).some(

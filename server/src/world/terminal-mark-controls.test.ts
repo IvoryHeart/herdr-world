@@ -15,6 +15,28 @@ const stops = resolve(import.meta.dir, "review-stop-coverage.test.ts");
 const repairs = resolve(import.meta.dir, "review-stop-review.test.ts");
 const cases = [
   {
+    name: "positive archive boundary consumers",
+    entry: resolve(import.meta.dir, "legacy-review-boundaries.test.ts"),
+  },
+  {
+    name: "archive savepoint deadline fence",
+    entry: resolve(import.meta.dir, "legacy-review-boundaries.test.ts"),
+    file: "legacy-review-archive.ts",
+    match: /expireLegacyReviews\(db, at\);\s*const terminal/,
+    replacement: "const terminal",
+    assertion:
+      "resolving Desk savepoint enforces original archive deadline at offset 0 after restart true",
+  },
+  {
+    name: "archive actual World activity fence",
+    entry: resolve(import.meta.dir, "legacy-review-boundaries.test.ts"),
+    file: "desk-observation.ts",
+    match: /activityMatchesWorld: activity === displayedActivity/,
+    replacement: "activityMatchesWorld: true",
+    assertion:
+      "activity admission preserves the receipt until sparse session agrees with the actual World leaf",
+  },
+  {
     name: "positive browser review consumers",
     entry: resolve(
       import.meta.dir,

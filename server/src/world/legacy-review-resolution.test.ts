@@ -229,6 +229,7 @@ test("archive proof disqualification survives a crash before the Desk checkpoint
         sequence: 5,
         status: "done",
         last_activity_at: 1000,
+        activity_matches: true,
       },
     ],
     () => true,

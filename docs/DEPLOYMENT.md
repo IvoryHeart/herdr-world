@@ -1168,3 +1168,10 @@ the terminal gone, or 30 days after migration, even if the source stays offline.
 Restart retains the original migration deadline. The archive accepts no new
 receipts; a later release will remove its table. Ordinary Desk history and current
 stop protection keep their existing independent bounds.
+
+An archive proof admitted before the 30-day deadline cannot transfer review if
+the resolving Desk write reaches the deadline: the writer rechecks it within
+that same SQLite savepoint. Activity must also agree with the actual World leaf.
+Sparse or duplicate agent metadata that would name a different activity token
+defers transfer and retains the receipt until a safe matching observation; it
+never substitutes that metadata for session or native-sequence authority.

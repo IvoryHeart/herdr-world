@@ -28,6 +28,7 @@ export async function legacyReviewCandidates(
               : null,
           status: agent?.status ?? "unknown",
           last_activity_at: agent?.lastActivityAt ?? null,
+          activity_matches: agent?.activityMatchesWorld ?? false,
         },
       ];
     }),
