@@ -64,6 +64,10 @@ export type TownBus = {
   doorsOpen: boolean;
   /** Which of two wheel frames, from distance travelled. */
   wheel: 0 | 1;
+  /** Its speed now, px/s (0 standing or held). */
+  speed: number;
+  /** Its trip's pull-away time, ms: an emptied bus leaves just as fast. */
+  departure: number;
   /** Time left at the stop before it drives away, ms (0 once it has started). */
   remaining: number;
   riders: TownBusRider[];
@@ -177,25 +181,28 @@ export function townBusScene(input: TownBusInput): TownBusScene {
       elapsed: trip.serviceClock ? trip.elapsed : plan.elapsed + since,
     };
     let x = slotX;
+    let speed = 0;
     let phase: TownBus["phase"] = "waiting";
     if (trip.remaining < trip.departure) {
       // The countdown is over: it pulls away and leaves the map as the
       // close commits. Reduced motion keeps it parked, doors shut.
       phase = "departing";
-      if (!input.reducedMotion)
-        x =
-          slotX +
-          moverRun(
-            BUS_CHARACTER,
-            input.width - slotX,
-            { from: "rest", to: "moving" },
-            trip.departure,
-          ).at(trip.departure - trip.remaining);
+      if (!input.reducedMotion) {
+        const away = moverRun(
+          BUS_CHARACTER,
+          input.width - slotX,
+          { from: "rest", to: "moving" },
+          trip.departure,
+        );
+        x = slotX + away.at(trip.departure - trip.remaining);
+        speed = away.speedAt(trip.departure - trip.remaining);
+      }
     } else if (!input.reducedMotion && approach.elapsed < plan.run.duration) {
       // Keep the original run, including its deceleration, across resets.
       // An early arrival simply waits longer on the reset departure clock.
       phase = "arriving";
       x = Math.min(slotX, plan.start + plan.run.at(approach.elapsed));
+      speed = plan.run.speedAt(approach.elapsed);
     }
     const riders = trip.riders.map((entry, seat) => {
       const window = BUS_SEATS[seat]!;
@@ -225,7 +232,9 @@ export function townBusScene(input: TownBusInput): TownBusScene {
       phase,
       // Held (paused), a bus stands where it is with its doors open.
       doorsOpen: phase === "waiting" || input.paused,
-      wheel: (Math.floor(Math.abs(x) / 6) % 2) as 0 | 1,
+      wheel: busWheel(x),
+      speed: input.paused ? 0 : speed,
+      departure: trip.departure,
       remaining: Math.max(0, trip.remaining - trip.departure),
       riders: phase === "arriving" ? [] : riders,
     };
@@ -260,10 +269,15 @@ export function townBusScene(input: TownBusInput): TownBusScene {
   };
 }
 
+const busWheel = (x: number) => (Math.floor(Math.abs(x) / 6) % 2) as 0 | 1;
+
 /** Each bus as last drawn, by `TownBus.key`. */
 export type TownBusSeen = ReadonlyMap<
   string,
-  { since: number; approach: TownBusApproach; phase: TownBus["phase"] }
+  Pick<
+    TownBus,
+    "since" | "approach" | "phase" | "x" | "y" | "speed" | "departure"
+  >
 >;
 
 /**
@@ -294,9 +308,79 @@ export const townBusSeen = (buses: readonly TownBus[]): TownBusSeen =>
   new Map(
     buses.map((bus) => [
       bus.key,
-      { since: bus.since, approach: bus.approach, phase: bus.phase },
+      {
+        since: bus.since,
+        approach: bus.approach,
+        phase: bus.phase,
+        x: bus.x,
+        y: bus.y,
+        speed: bus.speed,
+        departure: bus.departure,
+      },
     ]),
   );
+
+/**
+ * A bus with nobody left on it (its last rider put back, or closed early):
+ * it never vanishes in place but drives on to the map's right edge, pulling
+ * away from rest like a departure, or keeping its speed if already moving.
+ */
+export type TownBusLeaver = {
+  key: string;
+  y: number;
+  /** Where it was and when, ms on the layer's clock. */
+  from: number;
+  start: number;
+  run: MoverRun;
+};
+
+/**
+ * Buses drawn last frame that the scene no longer has and that were on the
+ * map: each becomes a leaver. Under reduced motion they just go.
+ */
+export function townBusLeavers(
+  seen: TownBusSeen,
+  buses: readonly TownBus[],
+  width: number,
+  now: number,
+  reducedMotion: boolean,
+): TownBusLeaver[] {
+  if (reducedMotion) return [];
+  const still = new Set(buses.map((bus) => bus.key));
+  const leavers: TownBusLeaver[] = [];
+  for (const [key, was] of seen) {
+    if (still.has(key) || was.x >= width || was.x + BUS_W <= 0) continue;
+    const distance = width - was.x;
+    // The pull-away it would have made from here: if it is already going
+    // at least that fast it keeps its speed, else it pulls away from rest.
+    const away = moverRun(
+      BUS_CHARACTER,
+      distance,
+      { from: "rest", to: "moving" },
+      was.departure,
+    );
+    const cruise = away.speedAt(was.departure);
+    const run =
+      was.speed >= cruise
+        ? moverRun(
+            BUS_CHARACTER,
+            distance,
+            { from: "moving", to: "moving" },
+            (distance / was.speed) * 1000,
+          )
+        : away;
+    leavers.push({ key, y: was.y, from: was.x, start: now, run });
+  }
+  return leavers;
+}
+
+/** Where a leaver is now, or null once it has left the map. */
+export function townBusLeaverAt(leaver: TownBusLeaver, now: number) {
+  const t = now - leaver.start;
+  if (t >= leaver.run.duration) return null;
+  const x = leaver.from + leaver.run.at(t);
+  return { x, wheel: busWheel(x) };
+}
 
 /**
  * The rider under a world point, searching in reverse draw order (later

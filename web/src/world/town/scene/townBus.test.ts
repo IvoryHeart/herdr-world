@@ -5,8 +5,11 @@ import { layoutTown, TOWN_TILE as T, TownGround } from "../townLayout";
 import {
   inTownBusDropZone,
   townBusAt,
+  townBusLeaverAt,
+  townBusLeavers,
   townBusRiderAt,
   townBusScene,
+  townBusSeen,
   type TownBusInput,
 } from "./townBus";
 
@@ -332,4 +335,64 @@ test("a restarted clock and an arrival are told apart; holding is neither", asyn
     restarts: new Map([[coming[0]!.key, coming[0]!.approach]]),
     arrivals: 0,
   });
+});
+
+test("a bus emptied at the stop pulls away from rest and leaves the map; it never vanishes", () => {
+  const { layout, scene: full } = scene([
+    rider("trip-e", TOTAL - 20_000).entry,
+  ]);
+  const bus = full.buses[0]!;
+  expect([bus.phase, bus.speed]).toEqual(["waiting", 0]);
+  const empty = scene([]).scene;
+  const width = layout.width * T;
+  const [leaver, ...rest] = townBusLeavers(
+    townBusSeen(full.buses),
+    empty.buses,
+    width,
+    1_000,
+    false,
+  );
+  expect(rest).toEqual([]);
+  expect(leaver!.key).toBe(bus.key);
+  // Still where it stood at the moment it emptied, then slow, then faster.
+  const at = (t: number) => townBusLeaverAt(leaver!, 1_000 + t)!;
+  expect(at(0).x).toBe(bus.x);
+  const early = at(500).x - at(0).x;
+  const later = at(1_500).x - at(1_000).x;
+  expect(early).toBeGreaterThan(0);
+  expect(later).toBeGreaterThan(early);
+  // Off the map in the trip's pull-away time, then gone for good.
+  expect(leaver!.run.duration).toBe(BIN_DEPARTURE_MS);
+  expect(townBusLeaverAt(leaver!, 1_000 + BIN_DEPARTURE_MS)).toBeNull();
+});
+
+test("a bus emptied while held or driving keeps going at its own speed", () => {
+  const { layout, scene: held } = scene(
+    [rider("trip-hd", TOTAL - 8_000).entry],
+    { paused: true },
+  );
+  const width = layout.width * T;
+  // Held: it was standing, so it pulls away from rest.
+  const fromHeld = townBusLeavers(townBusSeen(held.buses), [], width, 0, false);
+  expect(fromHeld[0]!.run.speedAt(0)).toBe(0);
+  // Already leaving fast: it never slows down to pull away again.
+  const leaving = scene([rider("trip-lv", HALF_GONE / 2).entry]).scene
+    .buses[0]!;
+  expect(leaving.speed).toBeGreaterThan(0);
+  const [on] = townBusLeavers(townBusSeen([leaving]), [], width, 0, false);
+  expect(on!.run.speedAt(0)).toBeGreaterThanOrEqual(leaving.speed - 1e-6);
+});
+
+test("buses still riding, off the map, or under reduced motion never become leavers", () => {
+  const { layout, scene: s } = scene([rider("trip-k", TOTAL - 20_000).entry]);
+  const width = layout.width * T;
+  const seen = townBusSeen(s.buses);
+  expect(townBusLeavers(seen, s.buses, width, 0, false)).toEqual([]);
+  expect(townBusLeavers(seen, [], width, 0, true)).toEqual([]);
+  const gone = scene([rider("trip-g", 0).entry]).scene.buses;
+  expect(gone[0]!.x).toBe(width);
+  expect(townBusLeavers(townBusSeen(gone), [], width, 0, false)).toEqual([]);
+  const offLeft = scene([rider("trip-o", TOTAL).entry]).scene.buses;
+  expect(offLeft[0]!.x + BUS_W).toBeLessThanOrEqual(0);
+  expect(townBusLeavers(townBusSeen(offLeft), [], width, 0, false)).toEqual([]);
 });

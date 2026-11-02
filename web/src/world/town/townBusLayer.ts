@@ -3,11 +3,14 @@ import type { BinEntry } from "../../../../shared/bin";
 import type { OfficeAgent } from "../officeProjectionTypes";
 import {
   townBusChanges,
+  townBusLeaverAt,
+  townBusLeavers,
   townBusScene,
   townBusSeen,
   type TownBusScene,
   type TownBusSeen,
   type TownBusApproach,
+  type TownBusLeaver,
 } from "./scene/townBus";
 import { createTownLookResolver } from "./townAppearance";
 import {
@@ -30,6 +33,8 @@ export type TownBusSource = {
   agent(entryId: string): OfficeAgent | undefined;
   /** A bus pulled in at the stop (its horn). */
   onArrive?(): void;
+  /** The layer's clock for emptied buses driving away, ms. */
+  now?(): number;
 };
 
 /**
@@ -45,6 +50,8 @@ export class TownBusLayer implements TownWorldOverlay {
   private seen: TownBusSeen = new Map();
   /** Set-off trajectories survive boarding resets without a new cruise speed. */
   private readonly starts = new Map<string, TownBusApproach>();
+  /** Emptied buses driving off the map; not riders' buses, not targets. */
+  private leavers: TownBusLeaver[] = [];
   /** Sprites reused frame to frame; those past `used` are hidden. */
   private readonly pool: Sprite[] = [];
   private used = 0;
@@ -87,6 +94,16 @@ export class TownBusLayer implements TownWorldOverlay {
     }
     const { arrivals } = townBusChanges(this.seen, scene.buses, paused);
     if (arrivals) this.source.onArrive?.();
+    const now = this.source.now?.() ?? performance.now();
+    this.leavers.push(
+      ...townBusLeavers(
+        this.seen,
+        scene.buses,
+        layout.width * T,
+        now,
+        reducedMotion,
+      ),
+    );
     this.seen = townBusSeen(scene.buses);
     for (const key of this.starts.keys())
       if (!this.seen.has(key)) this.starts.delete(key);
@@ -101,6 +118,11 @@ export class TownBusLayer implements TownWorldOverlay {
       const box = busBoxSprite();
       this.add(box, rider.x - box.width / 2, rider.y - body.height / 2);
     }
+    this.leavers = this.leavers.filter((leaver) => {
+      const at = townBusLeaverAt(leaver, now);
+      if (at) this.add(busSprite(false, at.wheel), at.x, leaver.y);
+      return at !== null;
+    });
     for (const bus of scene.buses) {
       const x = Math.round(bus.x);
       this.add(busSprite(bus.doorsOpen, bus.wheel), x, bus.y);
@@ -114,8 +136,11 @@ export class TownBusLayer implements TownWorldOverlay {
       }
     }
     this.hideUnused();
-    return scene.buses.some(
-      (bus) => bus.phase !== "waiting" && !this.source.paused(),
+    return (
+      this.leavers.length > 0 ||
+      scene.buses.some(
+        (bus) => bus.phase !== "waiting" && !this.source.paused(),
+      )
     );
   }
 
