@@ -447,7 +447,10 @@ export class TownInteraction {
     );
     this.carrying.target = target;
     this.ports.ghost.aim(
-      target.label,
+      // With a bus in town, the hint says it is a place to drop too.
+      target.nowhere && this.ports.busStop
+        ? `${target.label}, or on Bus stop to close`
+        : target.label,
       target.key !== null,
       target.action ?? "",
       at,

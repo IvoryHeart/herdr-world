@@ -1035,3 +1035,19 @@ test("a hold through a room card lifts the desk beneath; a tap on the card zooms
   expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
   t.interaction.up({ id: stray, at, cancel: true });
 });
+
+test("over no room, a carry's hint names the bus stop when the town has one", () => {
+  for (const stop of [undefined, { x: 600, y: 400, w: 120, h: 100 }]) {
+    const t = setup({ stop });
+    const at = t.deskCentre(t.deskCell(0));
+    const pointer = t.press(at);
+    t.moveTo(pointer, offset(at, 20));
+    t.moveTo(pointer, t.screen({ x: -4 * T, y: -4 * T }));
+    expect(last(t.ghost)?.[1]).toBe(
+      stop
+        ? `${t.ghost[0]?.[1]}: drop on a room, or on Bus stop to close`
+        : `${t.ghost[0]?.[1]}: drop on a room`,
+    );
+    t.lift(pointer, t.screen({ x: -4 * T, y: -4 * T }));
+  }
+});

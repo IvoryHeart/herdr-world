@@ -25,6 +25,8 @@ export type TownDropTarget = {
   label: string;
   /** `bin`: an agent dropped at the bus stop waits for the bus (bin). */
   action?: "move" | "reorder" | "group" | "ungroup" | "bin";
+  /** Over no room or desk at all: the hint names every place to drop. */
+  nowhere?: true;
 };
 
 /**
@@ -131,7 +133,12 @@ export function townDropTarget(
                 ? model.agents.get(hit.key)?.roomKey
                 : undefined;
     const room = roomKey ? model.rooms.get(roomKey) : undefined;
-    if (!room) return { key: null, label: `${drag.label}: drop on a room` };
+    if (!room)
+      return {
+        key: null,
+        label: `${drag.label}: drop on a room`,
+        nowhere: true,
+      };
     if (room.hostKey !== drag.hostKey)
       return { key: null, label: "Desks move only within one host" };
     if (room.key === drag.from) {
@@ -196,7 +203,8 @@ export function townDropTarget(
           ? model.agentSeats.get(hit.key)?.deskKey
           : undefined;
   const desk = deskKey ? model.desks.get(deskKey) : undefined;
-  if (!desk) return { key: null, label: `${drag.label}: drop on a desk` };
+  if (!desk)
+    return { key: null, label: `${drag.label}: drop on a desk`, nowhere: true };
   if (desk.hostKey !== drag.hostKey)
     return { key: null, label: "Agents move only within one host" };
   if (desk.key === drag.from)
