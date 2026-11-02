@@ -7,3 +7,5 @@
 - Retrying a slash command after a definite native refusal works; unreadable or older observations keep a busy command reserved and its waiting notice intact.
 
 - SSH Chat keeps ordinary text sendable after an assistant quotes terminal instructions, including when the browser supplies the delivery baseline; open menus and unreadable screens still refuse input.
+
+- Chat refuses text on partial boxed questions and blank-padded menus, checks that the terminal/state still matches its screen observation, and accepts quoted instructions with Claude's message prefix.

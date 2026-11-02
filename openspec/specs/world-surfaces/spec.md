@@ -2060,8 +2060,13 @@ message or slash command into a pane that may show a menu: Send SHALL be
 disabled while a menu card is shown, and after its last preparation await the
 service SHALL read the screen regardless of reported status and refuse with
 nothing typed when the read fails or is malformed or the screen shows a menu,
-a question or a menu-like footer or cursor. Ordinary prose quoted by the same
-session's last assistant message SHALL remain sendable, including over SSH
+a question or a menu-like footer or cursor, including boxed options in an
+incomplete capture; blank screen padding SHALL NOT conceal that evidence.
+The final native read SHALL retain the terminal, session, state sequence and
+other identity captured for the screen check, or the send SHALL refuse.
+Ordinary prose quoted by the same
+session's last assistant message SHALL remain sendable, including Claude's
+recognized message prefix and over SSH
 with a browser delivery baseline; that baseline SHALL NOT supply quote authority.
 World inputs to one pane SHALL NOT
 overlap. A slash command SHALL be reserved per pane, session and text before
@@ -2082,6 +2087,16 @@ remains a documented gap between the last check and the key.
 
 - **WHEN** a bound SSH session's last assistant reply quotes terminal footer instructions and Chat supplies a delivery baseline
 - **THEN** ordinary text may be sent after checking quote text from that session; actual menus and unknown screen reads still refuse
+
+#### Scenario: A partial question or blank padding hides menu structure
+
+- **WHEN** a question's top edge is missing, or a cut-off menu is followed by blank terminal rows
+- **THEN** Chat refuses text without sending input even when it cannot offer answer controls
+
+#### Scenario: The final observation reports a replacement terminal
+
+- **WHEN** a screen is checked under one terminal/state witness and the final native read reports a changed witness with the same session
+- **THEN** Chat refuses without sending input; an ordinary quoted footer with Claude's message prefix remains sendable when the witness is unchanged
 
 #### Scenario: Retry a command after native refusal
 

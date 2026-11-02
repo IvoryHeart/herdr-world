@@ -3,6 +3,7 @@ import { createPromptActions } from "./prompt-answer";
 import {
   createSendGuard,
   guardSource,
+  inputWitness,
   lastAgentMessage,
   readScreenText as screenText,
   sendScreenRefusal,
@@ -942,6 +943,7 @@ export function createHerdrConversationSource(args: {
       // Browser baseline IDs cannot supply authority for quoted screen text.
       shown ??= await readShown(pane_id);
       if (shown.session_fingerprint !== session_fingerprint) return changed;
+      const screenWitness = inputWitness(info);
       const unsafe = await sendScreenRefusal(args.herdrCall, pane_id, {
         agent,
         context: promptContext(info),
@@ -949,6 +951,7 @@ export function createHerdrConversationSource(args: {
       });
       if (unsafe) return unsafe;
       info = await agentInfo(pane_id);
+      if (inputWitness(info) !== screenWitness) return changed;
       if (bindingOf(info)?.fingerprint !== session_fingerprint) return changed;
       if (guard && (!info || !guard(info))) return changed;
       const startedAt = Date.now();

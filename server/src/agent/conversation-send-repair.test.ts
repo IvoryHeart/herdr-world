@@ -55,6 +55,9 @@ afterAll(async () => {
 function setup(remote = false) {
   const state = {
     status: "idle",
+    terminal: "terminal-a",
+    seq: 3,
+    afterScreen: () => {},
     screen: prompt,
     file: transcript,
     readFails: false,
@@ -71,7 +74,8 @@ function setup(remote = false) {
     pane_id: "w1:p1",
     agent: "claude",
     agent_status: state.status,
-    state_change_seq: 3,
+    state_change_seq: state.seq,
+    terminal_id: state.terminal,
     terminal_title: "claude",
     agent_session: {
       source: "herdr:claude",
@@ -96,9 +100,11 @@ function setup(remote = false) {
     }
     if (method === "pane.read") {
       if (state.readFails) throw new Error("synthetic pane read failure");
-      return state.readMalformed
+      const result = state.readMalformed
         ? { read: {} }
         : { read: { pane_id: "w1:p1", text: state.screen } };
+      state.afterScreen();
+      return result;
     }
     if (method === "agent.prompt") {
       if (state.rejectNextPrompt) {
@@ -342,3 +348,83 @@ test("an SSH baseline cannot borrow a former session's quoted footer", async () 
     source.dispose();
   }
 });
+
+for (const remote of [false, true]) {
+  test(`partial/padded menu evidence cannot authorize text (${remote ? "SSH baseline" : "local"})`, async () => {
+    const boxTail = [
+      "│ Run synthetic command │",
+      "│ Do you want to proceed? │",
+      "│ ❯ 1. Yes │",
+      "│   2. No │",
+      "╰──────────────────────╯",
+    ].join("\n");
+    const cutMenu = permissionMenu.split("\n").slice(1).join("\n");
+    for (const screen of [
+      boxTail,
+      boxTail.replace("❯", " "),
+      cutMenu + "\n".repeat(14),
+    ]) {
+      const { source, state } = setup(remote);
+      try {
+        const shown = await source.read({ pane_id: "w1:p1" });
+        state.screen = screen;
+        expect(
+          await source.send({
+            pane_id: "w1:p1",
+            text: "2 please continue",
+            session_fingerprint: shown.session_fingerprint!,
+            ...(remote ? { baseline: [] } : {}),
+          }),
+        ).toMatchObject({ status: "refused", reason: "menu" });
+        expect(state.prompts).toEqual([]);
+      } finally {
+        source.dispose();
+      }
+    }
+  });
+
+  test(`Claude's assistant prefix preserves a same-session quote (${remote ? "SSH baseline" : "local"})`, async () => {
+    const { source, state } = setup(remote);
+    try {
+      state.file = quotedTranscript;
+      const shown = await source.read({ pane_id: "w1:p1" });
+      state.screen = "● " + footerQuote + "\n❯ ";
+      expect(
+        await source.send({
+          pane_id: "w1:p1",
+          text: "Continue",
+          session_fingerprint: shown.session_fingerprint!,
+          ...(remote ? { baseline: [] } : {}),
+        }),
+      ).toMatchObject({ status: "sent" });
+      expect(state.prompts).toEqual(["Continue"]);
+    } finally {
+      source.dispose();
+    }
+  });
+
+  test(`the final read must retain the screen's terminal and sequence (${remote ? "SSH baseline" : "local"})`, async () => {
+    for (const kind of ["terminal", "sequence"]) {
+      const { source, state } = setup(remote);
+      try {
+        const shown = await source.read({ pane_id: "w1:p1" });
+        state.afterScreen = () => {
+          if (kind === "terminal") state.terminal = "terminal-b";
+          else state.seq += 1;
+          state.screen = permissionMenu;
+        };
+        expect(
+          await source.send({
+            pane_id: "w1:p1",
+            text: "Continue",
+            session_fingerprint: shown.session_fingerprint!,
+            ...(remote ? { baseline: [] } : {}),
+          }),
+        ).toMatchObject({ status: "refused", reason: "changed" });
+        expect(state.prompts).toEqual([]);
+      } finally {
+        source.dispose();
+      }
+    }
+  });
+}

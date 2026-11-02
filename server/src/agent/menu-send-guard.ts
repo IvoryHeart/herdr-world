@@ -23,7 +23,8 @@ type SendTarget = Parameters<ConversationSource["send"]>[0];
 // cursor on a numbered option).
 const MENU_FOOTER =
   /\b(esc|escape) to (cancel|close|go back|exit)\b|\benter to (confirm|select|set|continue|submit)\b|\benter select\b|\besc back\b|↑\/?↓ to (navigate|select|move)\b|\btab to (switch|cycle) (tabs|views)\b/i;
-const CURSOR_OPTION = /^\s*[❯›>]\s*\d+[.)]\s/;
+// A boxed option remains menu evidence even when its frame/cursor was cut off.
+const OPTION_SHAPE = /^\s*(?:[│┃║]\s*(?:[❯›>]\s*)?|[❯›>]\s*)\d+[.)](?:\s|$)/u;
 
 /**
  * Why typing into this pane now could be unsafe, or null when the screen was
@@ -60,14 +61,15 @@ export function screenSendRefusal({
     return refuse(
       "The agent is showing a question; answer it on its card first.",
     );
-  const bottom = screen.split("\n").slice(-14);
-  const quoted = (line: string) =>
-    said !== null && line.trim().length > 0 && said.includes(line.trim());
+  const lines = screen.split("\n").filter((line) => line.trim());
+  const quoted = (line: string) => {
+    const text =
+      agent === "claude" ? line.trim().replace(/^●\s+/u, "") : line.trim();
+    return said !== null && text.length > 0 && said.includes(text);
+  };
   if (
-    bottom.some(
-      (line) =>
-        (MENU_FOOTER.test(line) || CURSOR_OPTION.test(line)) && !quoted(line),
-    )
+    lines.some((line) => OPTION_SHAPE.test(line) && !quoted(line)) ||
+    lines.slice(-14).some((line) => MENU_FOOTER.test(line) && !quoted(line))
   )
     return refuse(
       "The terminal shows what looks like a menu Chat cannot read. Typing would go into it as keys; close it in the Terminal first.",
@@ -92,6 +94,22 @@ export async function sendScreenRefusal(
     strip_ansi: true,
   }).then(readScreenText, () => null);
   return screenSendRefusal({ ...rest, screen });
+}
+
+/** Snapshot the native identity under which a screen is checked for typing. */
+export function inputWitness(info: Record<string, unknown> | null) {
+  return JSON.stringify(
+    [
+      "agent",
+      "agent_session",
+      "terminal_id",
+      "state_change_seq",
+      "terminal_title",
+      "revision",
+      "agent_status",
+      "pane_id",
+    ].map((field) => info?.[field] ?? null),
+  );
 }
 
 /** The agent's last message text, for the quoted-footer exception. */

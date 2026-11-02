@@ -209,11 +209,15 @@ that root; stat metadata cannot redirect the read to a different transcript.
   reads the screen, whatever status Herdr reports, and refuses (`menu`) with
   nothing typed when the read fails or is malformed, when it shows a command
   menu or a question, or when its last lines show a menu-like footer or a
-  cursor on a numbered option (except a footer the agent's own last message
-  quotes). Over SSH, quote text comes from that same bound session even
+  cursor on a numbered option, including options in a partial box. Blank
+  padding cannot hide menu evidence. A footer the agent's own last message
+  quotes remains ordinary prose, including Claude's `●` message prefix.
+  Over SSH, quote text comes from that same bound session even
   when the browser supplies the delivery baseline. It then reads the agent
-  once more and prompts with no await in between. A menu that opens after
-  that read is not caught (as #4764).
+  once more and requires the same terminal, session, state sequence and other
+  captured native identity before prompting with no await in between. An
+  observed replacement refuses; a change after that final read is still not
+  caught (as #4764).
 - Answers, menu keys and sends to one pane are one World input at a time; a
   second while one is in flight is refused (`busy`).
 - A slash command is reserved for its pane, session and text before any
