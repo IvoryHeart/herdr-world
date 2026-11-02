@@ -143,14 +143,15 @@ Scheduled runs SHALL NOT publish browser navigation requests.
 ### Requirement: Explicit dynamic task membership
 
 An explicitly selected all-workspace task MAY include newly authorized workspaces
-at each new run admission. It SHALL require all-workspace permission, then capture
-and validate that run's current owners. Fixed-scope tasks SHALL retain their saved
-identity checks. Membership selection SHALL NOT authorize a stale active run to
-retarget a replacement runtime.
+at each new run admission. It SHALL remain within the current explicit workspace
+grants and SHALL NOT require the broader global all-workspace grant. It SHALL
+capture and validate that run's current owners. Fixed-scope tasks SHALL retain
+their saved identity checks. Membership selection SHALL NOT authorize a stale
+active run to retarget a replacement runtime.
 
 #### Scenario: Refresh membership for a new run only
 
-- **WHEN** a new run of an explicit all-workspace task is admitted with the required
-  all-workspace permission
+- **WHEN** a new run of an explicit all-workspace task is admitted within the current
+  explicit workspace grants
 - **THEN** that run SHALL capture the currently authorized workspace owners
 - **AND** an earlier admitted run SHALL NOT retarget a replacement runtime

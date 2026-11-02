@@ -7,6 +7,7 @@ import {
   rename,
   rm,
   symlink,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -27,6 +28,7 @@ function isolatedPayload(shell: string, projects: string) {
     /^\n?set -eu\npath=/.test(shell) ||
     shell.startsWith("f=") ||
     shell.startsWith("set -eu\ncat ") ||
+    shell.startsWith("set -eu\nhead -c ") ||
     shell === "date +%s%N";
   if (ordinary) {
     if (/\$(?:HOME\b|\{HOME\b)/.test(shell))
@@ -454,3 +456,48 @@ test("malformed lookup output is refused before reading a transcript", async () 
     expect(calls).toBe(1);
   }
 });
+
+test.each([
+  "valid",
+  "same-second",
+  "nested",
+  "malformed",
+  "ambiguous",
+] as const)(
+  "SSH continuation metadata and newline paths: %s",
+  async (variant) => {
+    if (process.platform === "win32" || !Bun.which("bash")) return;
+    const f = await fixture();
+    try {
+      const continued = join(f.directory, `${otherId}.jsonl`);
+      const record =
+        variant === "nested"
+          ? {
+              sessionId: otherId,
+              message: {
+                content: [{ type: "tool_use", input: { sessionId } }],
+              },
+            }
+          : { sessionId };
+      await writeFile(
+        continued,
+        (variant === "malformed" ? "not-json\n" : "") +
+          JSON.stringify(record) +
+          "\n",
+      );
+      await utimes(f.path, new Date(1000), new Date(1000));
+      if (variant === "same-second")
+        await utimes(continued, new Date(1500), new Date(1500));
+      if (variant === "ambiguous")
+        await writeFile(
+          join(f.directory, "22222222-2222-4222-8222-222222222222.jsonl"),
+          JSON.stringify({ sessionId }) + "\n",
+        );
+      expect(await f.files.findClaudeSuccessor(f.path, sessionId)).toBe(
+        variant === "valid" || variant === "same-second" ? continued : null,
+      );
+    } finally {
+      f.chat.dispose();
+    }
+  },
+);

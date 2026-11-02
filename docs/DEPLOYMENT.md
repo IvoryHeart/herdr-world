@@ -1067,9 +1067,10 @@ provides Ranger's qualified tools; browsers continue to use only the World origi
 Disposing that driver stops its listener. An interrupted Claude turn fails closed
 and holds queued messages for an explicit continuation.
 
-Tasks may select **All workspaces, new ones too** only with all-workspace
-permission. Membership is recomputed for each run, then that run captures current
-owners. Fixed-scope tasks retain their existing endpoint/workspace recovery checks.
+Tasks may select **All workspaces, new ones too** over their current explicitly
+allowed workspaces without enabling broader high-permission access. Membership
+is recomputed for each run, then that run captures current owners. Dynamic
+membership intent and run omission notices survive service restart. Fixed-scope tasks retain their existing endpoint/workspace recovery checks.
 Showing a workspace or session affects only the browser that asked and still
 requires its captured runtime; an unavailable target never falls back to a profile.
 

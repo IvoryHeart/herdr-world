@@ -7,6 +7,11 @@ import {
   piSessionDirectoryName,
 } from "./session-file-access";
 
+import {
+  createAgentSessionResolverContext,
+  resolveAgentSession,
+} from "./session-resolver";
+
 const remotePath = "/srv/herdr-gui-test/sessions/pi-session.jsonl";
 const metadata = `42\t1784872800\t${Buffer.from(remotePath).toString("base64")}\t1:42\t1784872800.123:1784872800.456\n`;
 
@@ -244,3 +249,64 @@ test("Pi names a directory's sessions after its path", () => {
   expect(piSessionDirectoryName('/a/"b')).toBeNull();
   expect(piSessionDirectoryName("/a/$(rm)")).toBeNull();
 });
+
+test.each(["duplicate", "substituted-path"] as const)(
+  "cached Claude UUID evidence is renewed: %s",
+  async (variant) => {
+    const id = "44444444-4444-4444-8444-444444444444";
+    const path = `/approved/projects/example/${id}.jsonl`;
+    let changed = false;
+    const files = createAgentSessionFileAccess({
+      sshHost: "synthetic.example",
+      shQuote: quote,
+      async runBinaryProcessWithTimeout(argv) {
+        const command = argv.at(-1)!;
+        if (command.includes("find -L"))
+          return {
+            code: 0,
+            stderr: "",
+            stdout: Buffer.from(
+              `/approved/projects\0${path}\0${changed && variant === "duplicate" ? `/approved/projects/other/${id}.jsonl\0` : ""}`,
+            ),
+          };
+        if (command.includes("find "))
+          return { code: 0, stderr: "", stdout: Buffer.alloc(0) };
+        const reported =
+          changed && variant === "substituted-path"
+            ? "/unapproved/private.jsonl"
+            : path;
+        return {
+          code: 0,
+          stderr: "",
+          stdout: Buffer.from(
+            `1\t1780000000\t${Buffer.from(reported).toString("base64")}\t1:2\tstamp\n`,
+          ),
+        };
+      },
+    });
+    const context = createAgentSessionResolverContext();
+    const report = async () => ({
+      agent: {
+        agent: "claude",
+        agent_session: {
+          agent: "claude",
+          source: "herdr:claude",
+          kind: "id",
+          value: id,
+        },
+      },
+    });
+    expect(
+      (await resolveAgentSession({ pane_id: "pane" }, report, files, context))
+        .path,
+    ).toBe(path);
+    changed = true;
+    await expect(
+      resolveAgentSession({ pane_id: "pane" }, report, files, context),
+    ).rejects.toThrow(
+      variant === "duplicate"
+        ? "Multiple transcripts"
+        : "Invalid Claude session lookup path",
+    );
+  },
+);

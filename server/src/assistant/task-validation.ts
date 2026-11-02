@@ -236,6 +236,9 @@ export function validSavedProposal(entry: SavedProposal) {
       prompt: proposal.prompt,
       scope: proposal.scope,
       schedule: proposal.schedule,
+      ...(proposal.all_workspaces !== undefined
+        ? { all_workspaces: proposal.all_workspaces }
+        : {}),
       ...(proposal.notification_mode !== undefined
         ? { notification_mode: proposal.notification_mode }
         : {}),

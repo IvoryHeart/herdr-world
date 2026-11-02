@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { existsSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { dirname, basename, join, resolve } from "node:path";
 import {
   describeAntigravitySessionPath,
   findAntigravitySessionById,
@@ -140,35 +140,53 @@ async function findClaudeTranscript(
   files: AgentSessionFileAccess,
   context: AgentSessionResolverContext,
 ) {
-  // Local lookups are cached by findClaudeSession; a remote one is a find
-  // over SSH, so its result is kept here.
-  const key = `claude:${files.remote ? "remote" : "local"}:${id}`;
-  let file: SessionFile | null = null;
-  if (files.remote) {
-    const cached = context.pathCache.get(key);
-    if (cached) file = await files.statFile(cached);
-    if (!file) {
-      context.pathCache.delete(key);
-      file = (await files.findClaudeSessionById?.(id)) ?? null;
-      if (file) context.pathCache.set(key, file.path);
-    }
-  } else {
-    const path = await findClaudeSession(id, context);
-    if (path) file = await files.statFile(path);
-  }
-  if (!file) return null;
-  const successorKey = `${key}:successor`;
-  const checked = context.successorChecked.get(successorKey) ?? 0;
-  if (Date.now() - checked >= CLAUDE_SUCCESSOR_CHECK_MS) {
-    context.successorChecked.set(successorKey, Date.now());
-    const successor = files.findClaudeSuccessor
-      ? await files.findClaudeSuccessor(file.path, id).catch(() => null)
+  const key = `claude:${files.remote ? "remote" : "local"}:${id}:successor`;
+  // Existence of an old path is not continuing proof of UUID uniqueness.
+  const localPath = files.remote ? null : await findClaudeSession(id, context);
+  const file = files.remote
+    ? ((await files.findClaudeSessionById?.(id)) ?? null)
+    : localPath
+      ? await files.statFile(localPath)
       : null;
-    if (successor) context.pathCache.set(successorKey, successor);
-    else context.pathCache.delete(successorKey);
+  if (!file) return null;
+  const stamp = (value: SessionFile | null) =>
+    JSON.stringify(
+      value && [
+        value.path,
+        value.identity,
+        value.changeToken,
+        value.mtimeMs,
+        value.size,
+      ],
+    );
+  const statApproved = async (path: string) => {
+    const value = await files.statFile(path);
+    if (value && value.path !== path)
+      throw new Error("Invalid Claude session lookup path.");
+    return value;
+  };
+  const cached = context.pathCache.get(key);
+  let successor = cached ? await statApproved(cached) : null;
+  const checked = context.successorChecked.get(key) ?? 0;
+  if (
+    !context.successorChecked.has(key) ||
+    Date.now() - checked >= CLAUDE_SUCCESSOR_CHECK_MS ||
+    context.pathCache.get(`${key}:source`) !== stamp(file) ||
+    context.pathCache.get(`${key}:stamp`) !== stamp(successor)
+  ) {
+    const path = files.findClaudeSuccessor
+      ? await files.findClaudeSuccessor(file.path, id)
+      : null;
+    if (path && dirname(path) !== dirname(file.path))
+      throw new Error("Invalid Claude successor path.");
+    successor = path ? await statApproved(path) : null;
+    context.successorChecked.set(key, Date.now());
+    context.pathCache.set(`${key}:source`, stamp(file));
+    context.pathCache.set(`${key}:stamp`, stamp(successor));
+    if (successor) context.pathCache.set(key, successor.path);
+    else context.pathCache.delete(key);
   }
-  const successor = context.pathCache.get(successorKey);
-  return (successor && (await files.statFile(successor))) || file;
+  return successor || file;
 }
 
 async function findCodexSession(

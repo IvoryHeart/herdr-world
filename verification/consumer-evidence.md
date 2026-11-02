@@ -845,3 +845,11 @@ current and stale-generation navigation. All-workspace task consumers select fre
 membership for each new run while retaining fixed-scope recovery controls. These
 are concrete adapter claims; they do not promote arbitrary catalogue churn,
 provider behavior, native CLI/SSH or whole-system resource acceptance.
+
+The Ranger/transcript repair adds direct Q25/Q27 consumers for structured, bounded
+Claude continuation provenance and current remote UUID/path validation, local
+process retirement/cancellation, SQLite schema migration, dynamic proposal
+confirmation, restart admission and completed-run omission notices. Existing
+manual per-workspace grants remain the permission fence. These consumers do not
+extend the abstract models to filesystem/provider semantics or establish native
+SSH, local configured-root parity, UI smoothness or final integration acceptance.

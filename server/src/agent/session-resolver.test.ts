@@ -563,7 +563,10 @@ describe("Claude transcripts", () => {
     const resumed = join(root, "b6a8466c-831a-4cf8-9659-d65d02fa7db3.jsonl");
     const other = join(root, "0e3b0c44-298f-4c14-9a3b-2c1d9e5f0a11.jsonl");
     await writeFile(reported, `{"sessionId":"${id}"}\n`);
-    await writeFile(resumed, `{"sessionId":"${id}"}\n{"sessionId":"b6a8"}\n`);
+    await writeFile(
+      resumed,
+      `{"sessionId":"${id}"}\n{"sessionId":"b6a8466c-831a-4cf8-9659-d65d02fa7db3"}\n`,
+    );
     await writeFile(other, '{"sessionId":"0e3b"}\n');
     const old = new Date(Date.now() - 60_000);
     await utimes(reported, old, old);
@@ -624,7 +627,7 @@ describe("Claude transcripts", () => {
     }
   });
 
-  test("a remote lookup is kept and its successor checked at most every 30s", async () => {
+  test("remote UUID authority is renewed while unchanged successors retain the 30s cache", async () => {
     const calls = { find: 0, successor: 0 };
     const reported = "/remote/p/old.jsonl";
     const resumed = "/remote/p/new.jsonl";
@@ -659,11 +662,11 @@ describe("Claude transcripts", () => {
     expect((await read()).path).toBe(reported);
     successor = resumed;
     expect((await read()).path).toBe(reported);
-    expect(calls).toEqual({ find: 1, successor: 1 });
+    expect(calls).toEqual({ find: 2, successor: 1 });
 
     context.successorChecked.clear();
     expect((await read()).path).toBe(resumed);
     expect((await read()).path).toBe(resumed);
-    expect(calls).toEqual({ find: 1, successor: 2 });
+    expect(calls).toEqual({ find: 4, successor: 2 });
   });
 });

@@ -123,6 +123,15 @@ export function projectClaudeTrajectory(
   records.forEach((record, index) => {
     const timestamp = messageTime(record, file.mtimeMs, index);
     const type = stringValue(record.type);
+    // Queue operations and human attachments obey the same visible-branch
+    // boundary as messages; nested/abandoned content cannot re-enter here.
+    if (
+      record.isMeta === true ||
+      record.isSidechain === true ||
+      abandoned.has(stringValue(record.uuid)) ||
+      abandoned.has(stringValue(record.parentUuid))
+    )
+      return;
     if (type === "queue-operation") {
       const content = stringValue(record.content);
       switch (stringValue(record.operation)) {
@@ -164,12 +173,6 @@ export function projectClaudeTrajectory(
     if (type !== "user" && type !== "assistant" && type !== "system") return;
     // Caveats for local commands, subagent sidechains and rewound branches
     // are not the conversation the user sees.
-    if (
-      record.isMeta === true ||
-      record.isSidechain === true ||
-      abandoned.has(stringValue(record.uuid))
-    )
-      return;
     // Claude Code reports background task updates as user turns.
     if (
       type === "user" &&

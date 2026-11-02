@@ -7360,3 +7360,52 @@ test.each([false, true])(
     }
   },
 );
+
+test("manual model-created dynamic task proposals persist and confirm creation and edits", async () => {
+  let taskId: string | undefined;
+  let receipt = "";
+  const f = setup({
+    run: async (input) => {
+      receipt = (
+        await input.task!(
+          taskId ? "update" : "create",
+          taskId
+            ? {
+                task_id: taskId,
+                prompt: "Review again",
+              }
+            : {
+                title: "Review permitted workspaces",
+                prompt: "Review",
+                scope: configured.allowed_workspaces,
+                all_workspaces: true,
+                schedule: { type: "interval", minutes: 60 },
+              },
+        )
+      ).text;
+      return [];
+    },
+  });
+  stableTaskIdentity(f.context);
+  await f.service.handle("configure", { config: configured });
+  expect(f.service.peek().config.workspace_scope).not.toBe("all");
+  for (const request_id of ["dynamic-create", "dynamic-edit"]) {
+    await f.service.handle("send", {
+      scope: browserScope,
+      request_id,
+      text: "Schedule review",
+    });
+    await until(() => !f.service.peek().running);
+    const proposal = JSON.parse(receipt);
+    expect(proposal.all_workspaces).toBe(true);
+    expect(proposal.status).toBe("pending");
+    await f.service.handle("task.confirm_proposal", {
+      proposal_id: proposal.id,
+    });
+    const task = f.service.peek().tasks![0]!;
+    expect(task.all_workspaces).toBe(true);
+    expect(task.approval_mode ?? "manual").toBe("manual");
+    taskId = task.id;
+  }
+  expect(f.service.peek().tasks![0]!.prompt).toBe("Review again");
+});

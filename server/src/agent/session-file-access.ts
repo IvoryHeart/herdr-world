@@ -5,6 +5,11 @@ import { basename, join, resolve } from "node:path";
 import { sshCommandArgv, sshReadCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
 import {
+  claudeSuccessorCandidates,
+  findClaudeSuccessor,
+  parseClaudeCandidatePaths,
+} from "./claude-session-files";
+import {
   plainTranscriptPath,
   transcriptPaths,
   transcriptPrefix,
@@ -166,25 +171,6 @@ async function localReadFile(path: string) {
 }
 
 /**
- * The newest .jsonl beside $f, newer than it, whose sessionId metadata names $id. Paths are read
- * one per line, so a folder with spaces in its name works too.
- */
-const CLAUDE_SUCCESSOR_SCRIPT = `
-find "$(dirname "$f")" -maxdepth 1 -name '*.jsonl' -newer "$f" -exec grep -l -E -- '"sessionId"[[:space:]]*:[[:space:]]*"'"$id"'"' {} + 2>/dev/null | {
-  best=""
-  best_mtime=0
-  while IFS= read -r g; do
-    m="$(stat -c %Y "$g" 2>/dev/null || stat -f %m "$g")"
-    if [ "$m" -gt "$best_mtime" ]; then
-      best="$g"
-      best_mtime="$m"
-    fi
-  done
-  printf %s "$best"
-}
-`;
-
-/**
  * The directory Pi keeps a working directory's sessions in, under its
  * sessions directory: the path with its slashes as dashes, between "--"
  * (/a/b-c becomes --a-b-c--). Null for a path that would not be safe to
@@ -201,10 +187,6 @@ function localPiDirectory() {
   if (configured === "~") return homedir();
   if (configured.startsWith("~/")) return join(homedir(), configured.slice(2));
   return resolve(configured);
-}
-
-function validClaudeSessionId(id: string): boolean {
-  return /^[0-9a-f-]{36}$/i.test(id);
 }
 
 type CompleteAgentSessionFileAccess = AgentSessionFileAccess &
@@ -252,18 +234,8 @@ export const localAgentSessionFiles: CompleteAgentSessionFileAccess = {
     return null;
   },
   async findClaudeSuccessor(path, id) {
-    // The search is a POSIX shell script; a Windows bridge keeps the
-    // transcript Herdr reports.
-    if (process.platform === "win32" || !validClaudeSessionId(id)) return null;
-    const proc = Bun.spawn(["sh", "-c", CLAUDE_SUCCESSOR_SCRIPT], {
-      env: { ...process.env, f: path, id },
-      stdout: "pipe",
-      stderr: "ignore",
-      timeout: SESSION_FILE_TIMEOUT_MS,
-    });
-    const found = (await new Response(proc.stdout).text()).trim();
-    await proc.exited;
-    return found || null;
+    if (process.platform === "win32") return null;
+    return findClaudeSuccessor(localAgentSessionFiles, path, id);
   },
   findCodexSessionById: findLocalCodexSession,
   findCodexSessionByPrefix: findLocalCodexSessionByPrefix,
@@ -291,7 +263,28 @@ export function createAgentSessionFileAccess(args: {
   /** How many bytes of remote transcripts are kept in all. */
   keptTextBytes?: number;
 }): CompleteAgentSessionFileAccess {
-  if (!args.sshHost) return localAgentSessionFiles;
+  if (!args.sshHost) {
+    // Inherit reads dynamically so each runtime keeps the existing local file
+    // port, but every continuation command goes through its own runner.
+    const local: CompleteAgentSessionFileAccess = Object.create(
+      localAgentSessionFiles,
+    );
+    local.findClaudeSuccessor = async (path, id) => {
+      if (process.platform === "win32") return null;
+      return findClaudeSuccessor(local, path, id, async () => {
+        const result = await args.runBinaryProcessWithTimeout(
+          ["sh", "-c", claudeSuccessorCandidates(path, args.shQuote)],
+          SESSION_FILE_TIMEOUT_MS,
+        );
+        if (result.code !== 0)
+          throw new Error(
+            result.stderr || "Claude successor discovery failed.",
+          );
+        return parseClaudeCandidatePaths(result.stdout);
+      });
+    };
+    return local;
+  }
   const host = args.sshHost;
   const keptBudget = args.keptTextBytes ?? KEPT_TEXT_BYTES;
 
@@ -674,15 +667,11 @@ done
       );
     },
     async findClaudeSuccessor(path, id) {
-      if (!validClaudeSessionId(id)) return null;
-      const found = (
-        await runRemote(
-          `f=${args.shQuote(path)}\nid=${args.shQuote(id)}\n${CLAUDE_SUCCESSOR_SCRIPT}`,
-        )
-      )
-        .toString("utf8")
-        .trim();
-      return found || null;
+      return findClaudeSuccessor(this, path, id, async () =>
+        parseClaudeCandidatePaths(
+          await runRemote(claudeSuccessorCandidates(path, args.shQuote)),
+        ),
+      );
     },
   };
 }

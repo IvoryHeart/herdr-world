@@ -2924,3 +2924,43 @@ test.each(["run_now", "resume"] as const)(
     expect(run.run.targets.map((ref) => ref.workspace_id)).toEqual(["new"]);
   },
 );
+
+test.each([false, true])(
+  "new admission after restart preserves dynamic intent=%s",
+  async (dynamic) => {
+    jest.useFakeTimers({ now: Date.parse("2026-10-04T00:00:00Z") });
+    const f = fixture();
+    const input = prepared();
+    if (dynamic) input.input.all_workspaces = true;
+    const task = await f.manager.create(input, randomUUID());
+    await f.manager.dispose();
+    let rescoped = 0;
+    const restored = fixture(
+      f.directory,
+      undefined,
+      undefined,
+      async (previous) => {
+        rescoped++;
+        expect(previous.input.all_workspaces).toBe(true);
+        const next = structuredClone(previous);
+        const ref = { connection_id: "local", workspace_id: "new-workspace" };
+        next.input.scope.push(ref);
+        next.config.allowed_workspaces.push(ref);
+        next.targets.push({ ...next.targets[0]!, ...ref });
+        next.workspaces.push({
+          ...next.workspaces[0]!,
+          ...ref,
+          runtime_generation: 9,
+        });
+        return next;
+      },
+    );
+    await restored.manager.resume();
+    const run = await startRun(restored, task.id);
+    expect(rescoped).toBe(dynamic ? 1 : 0);
+    expect(run.run.input.scope.map((ref) => ref.workspace_id)).toEqual(
+      dynamic ? ["workspace", "new-workspace"] : ["workspace"],
+    );
+    expect(run.run.input.all_workspaces).toBe(dynamic ? true : undefined);
+  },
+);

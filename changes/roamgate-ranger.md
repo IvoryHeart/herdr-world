@@ -9,3 +9,5 @@
 
 - Keep Ranger task recovery stable across equivalent configuration key order and
   reject navigation replies from a retired service or runtime.
+- Preserve dynamic task membership, proposals and run omission notices across
+  restart, and refuse unproven or stale Claude continuation identities.

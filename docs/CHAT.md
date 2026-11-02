@@ -658,11 +658,15 @@ failures:
 
 ## Claude continuations, Pi and Oh My Pi
 
-Claude transcript lookup uses `CLAUDE_CONFIG_DIR/projects` when configured on the
-selected host, otherwise `~/.claude/projects`. Lookup follows the project root's
-symlinks and still requires a unique matching transcript. When Claude writes a
-continuation beside the reported session, History can follow its session metadata;
-mentioning an ID in user text does not create a continuation. Queued messages are
+On SSH hosts, Claude UUID lookup uses `CLAUDE_CONFIG_DIR/projects` when
+configured, otherwise `~/.claude/projects`, and requires a unique match under that
+host's project root. Local lookup retains its existing `~/.claude/projects`
+behavior and chooses the newest matching file; local UUID discovery does not
+use `CLAUDE_CONFIG_DIR`.
+Project-directory symlinks are followed on the selected host. When Claude writes a
+continuation beside the reported session, History follows only unambiguous
+top-level session metadata within a bounded prefix. Nested tool arguments and
+malformed records do not establish a continuation. Queued messages are
 shown separately until they are consumed, alongside World's compaction and task
 notices. Remote reads retain their owning connection and never search local files.
 

@@ -64,3 +64,14 @@ These consumers establish the named queue/dispatch ownership boundary. They do
 not establish every parser or scheduler interleaving, native OpenSSH behavior,
 live forwarding, model promotion or whole-system integration acceptance. Existing
 contract models and mandatory platform consumers remain binding.
+
+## Ranger/History continuation ownership
+
+The local runtime's Claude continuation candidate enumeration uses its required
+binary process runner and retirement signal. Remote enumeration uses that
+connection's qualified SSH runner. The shared standalone local file adapter uses
+filesystem reads only; it no longer starts a process. Both adapters parse bounded
+top-level JSONL metadata in the service, preserve NUL-delimited candidate paths,
+and refuse malformed or ambiguous provenance. The maintained runtime-process
+table covers queued current, retired and independent owners; a separate control
+checks cancellation of an already running local continuation child.

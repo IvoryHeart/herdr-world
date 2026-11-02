@@ -1005,8 +1005,8 @@ configured Ranger or explicitly selected Pi credentials. Changing between these
 engines starts fresh model context; your conversation remains visible.
 
 For a scheduled task, **All workspaces, new ones too** follows the workspaces
-Ranger is permitted to use when each run starts. This choice requires all-workspace
-permission; use a fixed selection when the task should stay on named workspaces.
+Ranger is permitted to use when each run starts. It follows the current explicit
+workspace grants; high-permission all-workspace access is not required. Use a fixed selection to stay on named workspaces.
 Each run still captures current connection generations, and confirmed actions
 retain the normal permission checks.
 

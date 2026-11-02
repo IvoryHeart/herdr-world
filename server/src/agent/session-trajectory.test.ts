@@ -738,3 +738,43 @@ describe("agent session trajectory projection", () => {
     });
   });
 });
+
+test.each(["live", "rewound", "sidechain", "rewound-no-id"] as const)(
+  "Claude queued attachments retain the visible branch: %s",
+  (variant) => {
+    const user = (uuid: string, text: string) => ({
+      type: "user",
+      uuid,
+      parentUuid: "root",
+      message: { role: "user", content: text },
+    });
+    const records = [
+      user("first", "Original"),
+      {
+        type: "attachment",
+        uuid: variant === "rewound-no-id" ? undefined : "queued",
+        parentUuid: "first",
+        isSidechain: variant === "sidechain",
+        attachment: {
+          type: "queued_command",
+          origin: { kind: "human" },
+          prompt: "Follow up",
+        },
+      },
+      ...(variant.startsWith("rewound")
+        ? [user("replacement", "Replacement")]
+        : []),
+    ];
+    const entries = historyEntriesFromTrajectory(
+      sessionFile,
+      projectAgentTrajectory("claude", sessionFile, records),
+    );
+    expect(entries.map((entry) => entry.text)).toEqual(
+      variant.startsWith("rewound")
+        ? ["Replacement"]
+        : variant === "live"
+          ? ["Original", "Follow up"]
+          : ["Original"],
+    );
+  },
+);
