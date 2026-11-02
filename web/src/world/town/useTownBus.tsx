@@ -39,6 +39,10 @@ import type { TownRendererHandle } from "./townRenderer";
 import "./townBus.css";
 
 type Point = { x: number; y: number };
+/** The carrying chip's centre below the free area's top: past the 56 px edge-pan band. */
+const CHIP_DROP_TOP = 96;
+/** How far beyond its edge the chip still takes a carried agent, screen px. */
+const CHIP_REACH = 24;
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -261,6 +265,7 @@ export function useTownBus({
   const setCarrying = (next: boolean) => {
     if (shown.current.carrying === next) return;
     shown.current.carrying = next;
+    if (!next && chip.current) delete chip.current.dataset.over;
     setCarryingState(next);
   };
   const setters = useRef({ setEdge, setCarrying });
@@ -283,6 +288,16 @@ export function useTownBus({
         // Where the stop and its waiting bus can be pressed: not off screen,
         // and not under the asks rail or the zoom column.
         const free = freeScreenArea(viewArea(camera), townPanels(canvas));
+        if (carried) {
+          // Carrying, the chip is the drop target: top centre of the free
+          // town, below the edge-pan band, away from the thumb's resting
+          // place and the system's bottom gestures, wherever the stop is.
+          setEdge({
+            x: Math.round((free.left + free.right) / 2 / 4) * 4,
+            y: Math.round((free.top + CHIP_DROP_TOP) / 4) * 4,
+          });
+          return;
+        }
         const box = stopBox(camera, l);
         const padX = 72,
           padY = 32;
@@ -332,18 +347,32 @@ export function useTownBus({
     rendererRef.current?.invalidate("bus-stop");
   };
 
-  /** A carried agent at this point is over the stop, its buses or the chip. */
+  /**
+   * A carried agent at this point is over the stop, its buses or the chip.
+   * The chip catches a finger a little beyond its edge, and lights up (with
+   * a light buzz where the device has one) while it would take the drop.
+   */
   const over = (world: Point, at: Point) => {
     const scene = layerRef.current?.scene;
-    if (scene && inTownBusDropZone(scene, world.x, world.y)) return true;
-    const rect = chip.current?.getBoundingClientRect();
-    const host = chip.current?.parentElement?.getBoundingClientRect();
-    if (!rect || !host) return false;
-    const x = at.x + host.left,
-      y = at.y + host.top;
-    return (
-      x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-    );
+    const onStop = Boolean(scene && inTownBusDropZone(scene, world.x, world.y));
+    const element = chip.current;
+    const rect = element?.getBoundingClientRect();
+    const host = element?.parentElement?.getBoundingClientRect();
+    let onChip = false;
+    if (element && rect && host) {
+      const x = at.x + host.left,
+        y = at.y + host.top;
+      onChip =
+        x >= rect.left - CHIP_REACH &&
+        x <= rect.right + CHIP_REACH &&
+        y >= rect.top - CHIP_REACH &&
+        y <= rect.bottom + CHIP_REACH;
+      if (onChip !== (element.dataset.over === "true")) {
+        element.dataset.over = String(onChip);
+        if (onChip) navigator.vibrate?.(12);
+      }
+    }
+    return onStop || onChip;
   };
 
   const scene = layerRef.current?.scene ?? null;
@@ -355,6 +384,11 @@ export function useTownBus({
       .then(() => setToast(`${entry.label} is back at its desk.`), report);
   };
   const held = bin.paused && holding;
+  /** Open the common tray: it holds the countdown until it is shut. */
+  const openTray = () => {
+    if (!holding || bin.paused) return;
+    void store.pause().catch(report);
+  };
   const hudElement =
     (edge && (holding || carrying)) || toast || held ? (
       <>
@@ -380,16 +414,23 @@ export function useTownBus({
             className="town-bus-chip"
             data-carrying={String(carrying)}
             style={{ left: edge.x, top: edge.y }}
-            onClick={flyToStop}
+            onClick={() => {
+              // The same tray as tapping the bus, and the bus in view.
+              openTray();
+              flyToStop();
+            }}
             aria-label={
               carrying
                 ? "Send to the bus stop"
-                : `Bus stop: ${bin.entries.length} waiting. Show the stop`
+                : `Bus stop: ${bin.entries.length} waiting. Open the bin tray`
             }
           >
             <span aria-hidden="true">🚌</span>
             {carrying ? (
-              <span>Bus stop</span>
+              <span>
+                Bus stop
+                <small>drop to close</small>
+              </span>
             ) : next ? (
               <span>
                 {next.leaving ? "leaving" : clock(next.remaining)} ·{" "}
@@ -413,7 +454,7 @@ export function useTownBus({
       entries={bin.entries}
       paused={bin.paused}
       remaining={(entry) => store.remaining(entry)}
-      onHold={() => void store.pause().catch(report)}
+      onHold={openTray}
       onPutBack={putBack}
     />
   );
@@ -537,6 +578,18 @@ function TownBusControls({
         {entries.length}
         {paused ? " · held" : ""}
       </div>
+      {/* The stop and its sign open the same tray as the bus. */}
+      <button
+        type="button"
+        className="town-bus-stop"
+        style={{
+          left: scene.stop.x + scene.stop.w / 2,
+          top: scene.stop.y + scene.stop.h,
+          height: scene.stop.h,
+        }}
+        aria-label={`Bus stop: ${entries.length} waiting. Open the bin tray`}
+        onClick={onHold}
+      />
       {scene.buses.map((bus) => {
         // Driving in or away: the road it is on (from the map's edge to its
         // stop, or from its stop to the edge), which holds the bus

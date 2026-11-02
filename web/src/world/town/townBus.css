@@ -26,6 +26,14 @@
   pointer-events: none;
 }
 
+/* The stop and its sign: a finger-sized target at any zoom. */
+.town-bus-stop {
+  width: max(16px, calc(44px * var(--iz)));
+  min-height: calc(44px * var(--iz));
+  transform: translate(-50%, -100%);
+}
+
+.town-bus-stop,
 .town-bus-hold,
 .town-bus-rider {
   position: absolute;
@@ -45,6 +53,7 @@
 }
 
 .town-bus-rider:focus-visible,
+.town-bus-stop:focus-visible,
 .town-bus-hold:focus-visible {
   outline: 2px solid #ffd166;
   outline-offset: 1px;
@@ -73,9 +82,36 @@
   cursor: pointer;
 }
 
+.town-bus-chip small {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* Carrying: a large drop target that lights up under the finger. */
 .town-bus-chip[data-carrying="true"] {
-  min-height: 52px;
-  box-shadow: 0 0 0 4px rgb(255 209 102 / 60%);
+  min-height: 64px;
+  max-width: none;
+  padding: 0 22px;
+  gap: 10px;
+  font-size: 16px;
+  line-height: 1.15;
+  text-align: left;
+  box-shadow:
+    0 0 0 4px rgb(255 209 102 / 55%),
+    0 8px 24px rgb(0 0 0 / 35%);
+}
+.town-bus-chip[data-carrying="true"] > span:first-child {
+  font-size: 22px;
+}
+.town-bus-chip[data-carrying="true"][data-over="true"] {
+  background: #f03a2e;
+  box-shadow:
+    0 0 0 6px #ffd166,
+    0 0 0 14px rgb(255 209 102 / 30%),
+    0 10px 28px rgb(0 0 0 / 40%);
+  transform: translate(-50%, -50%) scale(1.08);
 }
 
 .town-bus-toast {
@@ -96,7 +132,11 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .town-bus-chip {
-    transition: box-shadow 0.15s ease;
+    transition:
+      box-shadow 0.15s ease,
+      transform 0.15s ease,
+      left 0.2s ease-out,
+      top 0.2s ease-out;
   }
 }
 

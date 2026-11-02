@@ -68,19 +68,60 @@ export async function checkTownBus(
     8_000,
   );
   // Real presses land on whatever is on top: when the stop is hidden (under
-  // the asks rail, the zoom column or off screen) its chip flies there, and
-  // then the bus must be the topmost thing under the finger.
+  // the asks rail, the zoom column or off screen) its chip opens the common
+  // tray and flies there; shutting the tray resumes, and then the bus must
+  // be the topmost thing under the finger.
   const onTop = (element: Element, x: number, y: number) =>
     element.contains(document.elementFromPoint(x, y));
+  const pausesAll = () =>
+    bin.calls.filter((call) => call.method === "world.bin.pause").length;
+  const resumesAll = () =>
+    bin.calls.filter((call) => call.method === "world.bin.resume").length;
   const chip = host.querySelector<HTMLButtonElement>(".town-bus-chip");
   if (chip) {
     chip.click();
     await waitFor(
-      () => host.querySelector(".town-bus-chip") === null,
+      () => host.querySelector(".town-bus-held") !== null,
+      "the stop's chip did not open the bin tray",
+      4_000,
+    );
+    host.querySelector<HTMLButtonElement>(".world-bin-resume")!.click();
+    await waitFor(
+      () =>
+        host.querySelector(".town-bus-chip") === null &&
+        host.querySelector(".town-bus-held") === null,
       "flying to the stop left it hidden",
       4_000,
     );
   }
+  // The stop itself, finger-sized at any zoom, opens the same tray.
+  const stop = host.querySelector<HTMLButtonElement>(".town-bus-stop");
+  check(stop !== null, "the bus stop is not a button");
+  if (stop) {
+    const at = stop.getBoundingClientRect();
+    check(
+      at.width >= 43 && at.height >= 43,
+      "the bus stop is smaller than a finger",
+    );
+    const opened = pausesAll();
+    stop.click();
+    await waitFor(
+      () =>
+        pausesAll() === opened + 1 &&
+        host.querySelector(".town-bus-held") !== null,
+      "tapping the bus stop did not open the bin tray",
+    );
+    host.querySelector<HTMLButtonElement>(".world-bin-resume")!.click();
+    await waitFor(
+      () => host.querySelector(".town-bus-held") === null,
+      "the tray opened from the stop did not shut",
+    );
+  }
+  // Counted from here: the chip's own tray open and shut came before.
+  const paused0 = pausesAll(),
+    resumed0 = resumesAll();
+  const pauses = () => pausesAll() - paused0;
+  const resumes = () => resumesAll() - resumed0;
   // Staged at 0:30, the bus is still driving in (due at the stop at 0:10),
   // and is already held along its road.
   check(
@@ -99,10 +140,6 @@ export async function checkTownBus(
     ),
     "the waiting bus is covered where a finger would hold it",
   );
-  const pauses = () =>
-    bin.calls.filter((call) => call.method === "world.bin.pause").length;
-  const resumes = () =>
-    bin.calls.filter((call) => call.method === "world.bin.resume").length;
   host.querySelector<HTMLButtonElement>(".town-bus-hold")!.click();
   await waitFor(() => pauses() === 1, "Enter on the bus did not hold it");
 
