@@ -1,29 +1,18 @@
+import type { Dirent } from "node:fs";
 import { existsSync, statSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import type {
-  AgentHistoryParams,
-  AgentSessionInfo,
-  AgentSessionResolved,
-  HerdrCall,
-  SessionFile,
-} from "./session-types";
-import {
-  localAgentSessionFiles,
-  codexHome,
-  type AgentSessionFileAccess,
-} from "./session-file-access";
-import {
-  describeGrokSessionPath,
-  findGrokSessionById,
-  findGrokSessionForCwd,
-} from "./grok-session";
 import {
   describeAntigravitySessionPath,
   findAntigravitySessionById,
   findAntigravitySessionForCwd,
 } from "./antigravity-session";
+import {
+  describeGrokSessionPath,
+  findGrokSessionById,
+  findGrokSessionForCwd,
+} from "./grok-session";
 import { findMuseSession, type MuseMetadataCache } from "./muse-session";
 import { normalizeAgentName, SESSION_AGENTS } from "./chat-harnesses";
 import {
@@ -35,6 +24,18 @@ import {
   createCodexDiscoveryCache,
   type CodexDiscoveryScope,
 } from "./codex-discovery-cache";
+import {
+  type AgentSessionFileAccess,
+  codexHome,
+  localAgentSessionFiles,
+} from "./session-file-access";
+import type {
+  AgentHistoryParams,
+  AgentSessionInfo,
+  AgentSessionResolved,
+  HerdrCall,
+  SessionFile,
+} from "./session-types";
 import {
   integrationInstallCommand,
   isRecord,
@@ -49,6 +50,8 @@ export type AgentSessionResolverContext = {
   /** Codex title ID (or prefix) → the one transcript it resolved to. */
   codexTitles: Map<string, { id: string; path: string }>;
   codexDiscovery: ReturnType<typeof createCodexDiscoveryCache>;
+  /** When a Claude transcript was last checked for a successor. */
+  successorChecked: Map<string, number>;
 };
 
 const DEFAULT_RESOLVER_CONTEXT = createAgentSessionResolverContext();
@@ -61,6 +64,7 @@ export function createAgentSessionResolverContext(
     museMetadata: new Map(),
     codexTitles: new Map(),
     codexDiscovery: createCodexDiscoveryCache(scope),
+    successorChecked: new Map(),
   };
 }
 
@@ -95,9 +99,14 @@ async function walkFiles(root: string, match: (path: string) => boolean) {
     }
     for (const entry of entries) {
       const path = join(dir, entry.name);
-      if (entry.isDirectory()) {
+      // Follow links: project folders may link to where sessions are kept.
+      // The depth limit ends a loop of links.
+      const target = entry.isSymbolicLink()
+        ? await stat(path).catch(() => null)
+        : entry;
+      if (target?.isDirectory()) {
         await visit(path, depth + 1);
-      } else if (entry.isFile() && match(path)) {
+      } else if (target?.isFile() && match(path)) {
         results.push(path);
       }
     }
@@ -116,6 +125,50 @@ async function resolveCachedSessionPath(
   const path = await resolvePath();
   if (path) context.pathCache.set(cacheKey, path);
   return path;
+}
+
+/** How often a Claude transcript is checked for one that went on from it. */
+const CLAUDE_SUCCESSOR_CHECK_MS = 30_000;
+
+/**
+ * A Claude session's transcript: found once by its ID (on the host it runs
+ * on), then followed to the transcript it went on in, should a resume or
+ * /clear have started one that Herdr still reports under the old ID.
+ */
+async function findClaudeTranscript(
+  id: string,
+  files: AgentSessionFileAccess,
+  context: AgentSessionResolverContext,
+) {
+  // Local lookups are cached by findClaudeSession; a remote one is a find
+  // over SSH, so its result is kept here.
+  const key = `claude:${files.remote ? "remote" : "local"}:${id}`;
+  let file: SessionFile | null = null;
+  if (files.remote) {
+    const cached = context.pathCache.get(key);
+    if (cached) file = await files.statFile(cached);
+    if (!file) {
+      context.pathCache.delete(key);
+      file = (await files.findClaudeSessionById?.(id)) ?? null;
+      if (file) context.pathCache.set(key, file.path);
+    }
+  } else {
+    const path = await findClaudeSession(id, context);
+    if (path) file = await files.statFile(path);
+  }
+  if (!file) return null;
+  const successorKey = `${key}:successor`;
+  const checked = context.successorChecked.get(successorKey) ?? 0;
+  if (Date.now() - checked >= CLAUDE_SUCCESSOR_CHECK_MS) {
+    context.successorChecked.set(successorKey, Date.now());
+    const successor = files.findClaudeSuccessor
+      ? await files.findClaudeSuccessor(file.path, id).catch(() => null)
+      : null;
+    if (successor) context.pathCache.set(successorKey, successor);
+    else context.pathCache.delete(successorKey);
+  }
+  const successor = context.pathCache.get(successorKey);
+  return (successor && (await files.statFile(successor))) || file;
 }
 
 async function findCodexSession(
@@ -315,6 +368,60 @@ async function findPiSession(id: string, context: AgentSessionResolverContext) {
     return newestFile(files);
   });
 }
+async function findOmpSession(
+  id: string,
+  context: AgentSessionResolverContext,
+) {
+  return resolveCachedSessionPath(context, `omp:${id}`, async () => {
+    const configuredRoot = process.env.PI_CONFIG_DIR || ".omp";
+    const ompRoot = join(homedir(), configuredRoot);
+    const roots = new Set([join(ompRoot, "agent", "sessions")]);
+    const xdgDataHome = process.env.XDG_DATA_HOME?.trim();
+    if (xdgDataHome) {
+      const xdgRoot = resolve(xdgDataHome, "omp");
+      roots.add(join(xdgRoot, "sessions"));
+      let xdgProfiles: Dirent[];
+      try {
+        xdgProfiles = await readdir(join(xdgRoot, "profiles"), {
+          withFileTypes: true,
+        });
+      } catch {
+        xdgProfiles = [];
+      }
+      for (const profile of xdgProfiles) {
+        if (profile.isDirectory()) {
+          roots.add(join(xdgRoot, "profiles", profile.name, "sessions"));
+        }
+      }
+    }
+    if (process.env.PI_CODING_AGENT_DIR?.trim()) {
+      roots.add(join(piAgentDirectory(), "sessions"));
+    }
+    const profileRoot = join(ompRoot, "profiles");
+    let profiles: Dirent[];
+    try {
+      profiles = await readdir(profileRoot, { withFileTypes: true });
+    } catch {
+      profiles = [];
+    }
+    for (const profile of profiles) {
+      if (profile.isDirectory()) {
+        roots.add(join(profileRoot, profile.name, "agent", "sessions"));
+      }
+    }
+    const files = (
+      await Promise.all(
+        [...roots].map((root) =>
+          walkFiles(root, (path) => {
+            const name = basename(path);
+            return name === `${id}.jsonl` || name.endsWith(`_${id}.jsonl`);
+          }),
+        ),
+      )
+    ).flat();
+    return newestFile(files);
+  });
+}
 
 function newestFile(paths: string[]) {
   return (
@@ -365,15 +472,18 @@ async function sessionFileFor(
   if (agent === "pi" && files.remote) {
     return files.findPiSessionById(session.value);
   }
-  if (agent === "claude" && files.remote) {
-    return files.findClaudeSessionById?.(session.value) ?? null;
-  }
   if (agent === "codex") return findCodexSession(session.value, files, context);
-  let path: string | null = null;
   if (agent === "claude")
-    path = await findClaudeSession(session.value, context);
+    return findClaudeTranscript(session.value, files, context);
+  let path: string | null = null;
   if (agent === "kimi") path = await findKimiSession(session.value, context);
-  if (agent === "pi") path = await findPiSession(session.value, context);
+  if (agent === "pi" || agent === "omp")
+    path =
+      agent === "omp"
+        ? files.remote
+          ? null
+          : await findOmpSession(session.value, context)
+        : await findPiSession(session.value, context);
   if (path) return files.statFile(path);
   return null;
 }
@@ -465,7 +575,7 @@ export async function resolveAgentSessionInfo(
   );
   if (!SESSION_AGENTS.has(agent)) {
     throw new Error(
-      `agent session only supports codex, claude, kimi, grok, pi, muse, and agy`,
+      `agent session only supports codex, claude, kimi, grok, pi, omp, muse, and agy`,
     );
   }
   // Native session files follow the agent process, which may have been
@@ -575,6 +685,22 @@ export async function resolveAgentSessionInfo(
         agent: "agy",
         kind: "id",
         value: descriptor.session.sessionId,
+      };
+    }
+  }
+  if (agent === "pi" && !resolvedSession && cwd) {
+    // Without Herdr's Pi integration: the newest session in its directory.
+    const found = await files.findPiSessionForCwd?.(cwd);
+    const id = found
+      ? /(?:^|_)([^_]+)\.jsonl$/.exec(basename(found.path))?.[1]
+      : undefined;
+    if (found && id) {
+      file = found;
+      resolvedSession = {
+        source: "pi-local",
+        agent: "pi",
+        kind: "id",
+        value: id,
       };
     }
   }

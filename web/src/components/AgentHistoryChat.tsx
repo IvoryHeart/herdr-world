@@ -88,6 +88,17 @@ const ChatBubble = memo(function ChatBubble({
   decorationToken?: unknown;
   onOpen: (entry: HistoryEntry) => void;
 }) {
+  // A compaction summary is long and written by Claude Code, not the user:
+  // one line, with the summary a tap away.
+  if (entry.compact_summary)
+    return (
+      <div className="agent-history-chat-compacted" data-sequence={sequence}>
+        <span>Conversation compacted</span>
+        <button type="button" onClick={() => onOpen(entry)}>
+          Show the summary
+        </button>
+      </div>
+    );
   // A user's paste shows as the words they pasted, marked as a paste.
   const shown =
     entry.role === "user"
@@ -122,6 +133,7 @@ const ChatBubble = memo(function ChatBubble({
       className={[
         "agent-history-chat-message",
         tone,
+        entry.queued && "is-queued",
         fromKind === "relayed" && "is-relayed",
         continued && "is-continued",
         highlighted && "is-minimap-target",
@@ -170,6 +182,14 @@ const ChatBubble = memo(function ChatBubble({
         ) : null}
       </div>
       <div className="agent-history-chat-meta">
+        {entry.queued ? (
+          <span
+            className="agent-history-chat-queued"
+            title="Waiting in the agent's queue: it reads it when it can"
+          >
+            Queued
+          </span>
+        ) : null}
         <time dateTime={entry.sent_at} title={entry.sent_at}>
           {formatUiDateTime(entry.sent_at)}
         </time>

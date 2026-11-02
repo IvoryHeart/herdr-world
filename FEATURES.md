@@ -1375,6 +1375,13 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
 - Ranger reads explicitly permitted workspaces across local and SSH connections,
   chats with a configured model, and proposes actions for manual confirmation.
   An explicit high-permission mode can execute supported operations automatically.
+- Ranger can use the service account's signed-in Claude Code CLI as a provider,
+  alongside the existing model providers. Its tools retain World's workspace
+  permissions, connection/runtime qualification and action confirmations.
+- Ranger can show a workspace or session in the asking browser's shared Inspector;
+  other windows stay where they are, and unavailable targets report an error.
+- Scheduled tasks can explicitly follow all authorized workspaces, including new
+  ones, with a fresh captured scope for each run.
 - While Ranger answers, **Steer** or Enter adds a message after its current step;
   **Queue** or Alt+Enter (Option+Enter on macOS) waits for the next answer. Up to
   eight waiting messages can be edited or removed. Stop, failure or a chat switch
@@ -1392,6 +1399,10 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
   a configured 15–1024-character password, with throttling for failed attempts.
 
 ## Latest upstream additions
+
+- Read local Oh My Pi transcripts, Pi directory-inferred history in read-only mode,
+  Claude continuation transcripts and queued-message state. SSH transcript reads
+  reuse cached bytes and fetch appended text while keeping World's history bounds.
 
 - Ranger workspace/agent mentions, quick model and thinking controls, task-management
   previews, guarded close actions, and clearer settings/chat history.

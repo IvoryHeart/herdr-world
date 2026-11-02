@@ -14,16 +14,15 @@ Manifest author metadata is retained here when provided.
 - `@aws-sdk/credential-provider-http@3.972.74` — AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)
 - `@aws-sdk/credential-provider-login@3.972.79` — AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)
 - `@aws-sdk/nested-clients@3.997.46` — AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)
-- `@earendil-works/chord@1.1.0` — Earendil Works
-- `@earendil-works/pi-agent-core@1.2.0` — Mario Zechner
-- `@earendil-works/pi-ai@1.1.0` — Mario Zechner
-- `@earendil-works/pi-ai@1.2.0` — Mario Zechner
+- `@earendil-works/chord@1.4.0` — Earendil Works
+- `@earendil-works/pi-agent-core@1.4.0` — Mario Zechner
+- `@earendil-works/pi-ai@1.4.0` — Mario Zechner
 - `@earendil-works/pi-codemode@1.1.0` — Earendil Works
-- `@earendil-works/pi-coding-agent@1.1.0` — Mario Zechner
-- `@earendil-works/pi-durable@1.1.0` — Earendil Works
-- `@earendil-works/pi-mcp@1.2.0` — Earendil Works
-- `@earendil-works/pi-telemetry@1.2.0` — Mario Zechner
-- `@earendil-works/pi-tui@1.2.0` — Mario Zechner
+- `@earendil-works/pi-coding-agent@1.4.0` — Mario Zechner
+- `@earendil-works/pi-durable@1.4.0` — Earendil Works
+- `@earendil-works/pi-mcp@1.4.0` — Earendil Works
+- `@earendil-works/pi-telemetry@1.4.0` — Mario Zechner
+- `@earendil-works/pi-tui@1.4.0` — Mario Zechner
 - `@lobehub/icons-static-svg@1.95.1` — LobeHub <i@lobehub.com>
 - `@pixi/colord@2.9.6` — Vlad Shilov <omgovich@ya.ru>
 - `bun-types@1.4.3`
@@ -2553,6 +2552,35 @@ Sources:
     OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
     PERFORMANCE OF THIS SOFTWARE.
 
+### 3a45055f7d965077
+
+Sources:
+
+- `marked-cjk-friendly@0.1.2` — `LICENSE`
+
+    Copyright (c) 2024 Tatsunori Uchino, and authors and contributors of original packages
+
+    Permission is hereby granted, free of charge, to any person
+    obtaining a copy of this software and associated documentation
+    files (the "Software"), to deal in the Software without
+    restriction, including without limitation the rights to use,
+    copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following
+    conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+    OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+    OTHER DEALINGS IN THE SOFTWARE.
+
 ### 3d1a950648d86f21
 
 Sources:
@@ -4245,6 +4273,7 @@ Sources:
 Sources:
 
 - `@silvia-odwyer/photon-node@0.3.4` — `LICENSE.md`
+- `@silvia-odwyer/photon@0.3.3` — `LICENSE.md`
 
                                      Apache License
                                Version 2.0, January 2004
@@ -9672,34 +9701,6 @@ Sources:
 
     Copyright (c) 2021 Pine Wu
     Copyright (c) 2023 Anthony Fu <https://github.com/antfu>
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
-
-### f2b90afb27a6bc02
-
-Sources:
-
-- `esbuild@0.28.2` — `LICENSE.md`
-
-    MIT License
-
-    Copyright (c) 2020 Evan Wallace
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal

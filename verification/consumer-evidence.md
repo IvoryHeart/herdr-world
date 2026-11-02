@@ -814,3 +814,21 @@ GatewayPorts enforcement or native agent acceptance. Those remain platform and
 isolated integration evidence in the [whole-system plan](../docs/reviews/roamgate-sync-test-plan.md).
 Full applicable CI and independent consumer review are required; this candidate
 extends evidence, not the historical promotion approval.
+
+### Ranger and transcript integration candidate (Q25–Q28)
+
+Direct transcript consumers check Claude continuation provenance, remote append and
+replacement, Pi/OMP records and Pi directory inference. World retains the 32 MiB
+text-cache budget, bounded full trajectory consumers and lazy older history; this
+is not a claim of upstream peak-memory parity. Native send/answer/session fences
+remain mandatory for inferred history.
+
+The existing Ranger recovery/authority models retain their stated run-local
+capture and recovery bounds. Driver/MCP tests exercise token/tool isolation and
+teardown; actual service consumers check captured show scope, cancellation across
+awaited reads and interrupted Claude recovery. The browser client rejects foreign,
+repeated and old-service show requests, and shared Inspector Chrome checks exercise
+current and stale-generation navigation. All-workspace task consumers select fresh
+membership for each new run while retaining fixed-scope recovery controls. These
+are concrete adapter claims; they do not promote arbitrary catalogue churn,
+provider behavior, native CLI/SSH or whole-system resource acceptance.

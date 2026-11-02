@@ -305,3 +305,14 @@ Ownership consumers are [SSH routing](../server/src/bridge/ssh-owner.test.ts),
 [inactive-host status reconciliation](../web/src/store/gitStatusPush.test.ts).
 The [integration test plan](reviews/roamgate-sync-test-plan.md) keeps whole-system
 acceptance separate from the transport part's evidence.
+
+Ranger engine dispatch lives in [ranger-driver](../server/src/assistant/ranger-driver.ts),
+[Claude CLI](../server/src/assistant/claude-driver.ts) and its
+[owned MCP listener](../server/src/assistant/claude-mcp.ts). Persisted state and task
+validation are in [assistant-state](../server/src/assistant/assistant-state.ts) and
+[task-validation](../server/src/assistant/task-validation.ts). The
+[show adapter](../web/src/world/useAssistantShow.ts) uses shared Inspector admission,
+with the Chrome consumer in [shared Inspector checks](../web/src/world/testing/sharedInspectorBrowser.tsx).
+Claude transcript projection and common ATIF construction are in
+[claude-trajectory](../server/src/agent/claude-trajectory.ts) and
+[trajectory-common](../server/src/agent/trajectory-common.ts).

@@ -717,3 +717,27 @@ once, and rechecks runtime authority before the reporting RPC. Herdr does not
 provide an atomic process-and-link operation; see [History limits](HISTORY.md#chat-and-explicit-codex-links).
 World retains React 18 callback freshness and screen/panel/navigation/popup Back
 priority, with navigation between Inspector details below transient menus.
+
+## Ranger engines and session navigation
+
+The service-owned Ranger driver selects Pi-backed providers or the service account's
+Claude Code CLI. Each driver owns its MCP listener, turn tokens and teardown;
+there is no process-global listener shared across World services. Both engines use
+the same captured workspace reads, proposed actions, approvals and task tools.
+Engine-specific checkpoints cannot be resumed by the other engine. Semantic
+configuration comparison preserves recovery across equivalent serialized key order.
+
+A show tool publishes the originating request ID, connection ID, captured runtime
+generation, workspace and optional pane. Only the browser that sent that request
+follows it through the shared Inspector admission handler. Replayed snapshots are
+deduplicated; a service-instance change retires earlier navigation requests. The
+service reports a request to show, rather than claiming the browser rendered it.
+Scheduled runs have no show handler. All-workspace task intent selects current
+permitted membership at each admission; each admitted run then uses its own stable
+identity and generation fences. Existing fixed-scope recovery is unchanged.
+
+Claude continuation/queue projection is isolated from common ATIF construction.
+Remote append caching keeps World's 32 MiB text budget and existing full bounded
+trajectory/Quest consumers, rather than adopting a larger upstream cache or
+removing their trajectory data. Native/platform and long-session resource evidence
+remain separate from protocol and synthetic consumer results.

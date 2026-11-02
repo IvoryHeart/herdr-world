@@ -655,3 +655,24 @@ failures:
 - a Codex subagent thread, which no person talks to;
 - a message queued while the agent was writing, whose timestamp is earlier than
   the message before it.
+
+## Claude continuations, Pi and Oh My Pi
+
+Claude transcript lookup uses `CLAUDE_CONFIG_DIR/projects` when configured on the
+selected host, otherwise `~/.claude/projects`. Lookup follows the project root's
+symlinks and still requires a unique matching transcript. When Claude writes a
+continuation beside the reported session, History can follow its session metadata;
+mentioning an ID in user text does not create a continuation. Queued messages are
+shown separately until they are consumed, alongside World's compaction and task
+notices. Remote reads retain their owning connection and never search local files.
+
+Pi sessions can be inferred from their working directory when native session
+metadata is absent. These are read-only guesses: they do not establish a session
+fingerprint, composer or permission to send. Local Oh My Pi (OMP) transcripts are
+also supported; this does not add SSH discovery for OMP. Replies and answers still
+require World's current native session binding.
+
+Long transcripts keep World's existing bounded projections and lazy older-history
+pages. SSH reads reuse verified cached bytes and retrieve appended text; file
+replacement, changed prefixes or compression require a fresh read. This changes
+transfer behavior without changing the browser's history/frame limits.

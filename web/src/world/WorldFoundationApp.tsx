@@ -1,3 +1,4 @@
+import { useAssistantShow } from "./useAssistantShow";
 import { useWorldAsks } from "./worldAsks";
 import "./world.css";
 import "./windows/WorldLayout.css";
@@ -131,6 +132,7 @@ export default function WorldFoundationApp() {
   const workspaceSurfaceSelectionRef = useRef<
     ((selection: WorkspaceSurfaceSelection) => Promise<boolean>) | null
   >(null);
+  useAssistantShow(workspaceSurfaceSelectionRef);
   const inspectorPaneFocusRef = useRef<
     ((windowId: string, paneId: string) => void) | null
   >(null);

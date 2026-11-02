@@ -1,6 +1,5 @@
-import { basename } from "node:path";
 import { grokReasoningText, grokUserMessageText } from "./grok-session";
-import type { AtifStep, AtifTrajectory, SessionFile } from "./session-types";
+import type { AtifStep, SessionFile } from "./session-types";
 import {
   cleanMessageText,
   isRecord,
@@ -11,131 +10,16 @@ import {
 } from "./session-utils";
 import {
   createTokenUsageReader,
-  summarizeTokenUsage,
   tokenUsageForRecord,
   tokenUsageFrom,
   tokenUsageToMetrics,
 } from "./token-usage";
-
-function modelNameFromRecord(record: Record<string, unknown>) {
-  return (
-    stringValue(record.model) ||
-    stringValue(record.model_name) ||
-    (isRecord(record.message) ? stringValue(record.message.model) : "")
-  );
-}
-
-function agentVersionFromRecords(
-  agent: string,
-  records: Record<string, unknown>[],
-) {
-  for (const record of records) {
-    const payload = isRecord(record.payload) ? record.payload : null;
-    const version =
-      stringValue(record.cli_version) ||
-      (agent === "pi" && record.type === "session"
-        ? ""
-        : stringValue(record.version)) ||
-      stringValue(record.originator) ||
-      (payload
-        ? stringValue(payload.cli_version) ||
-          stringValue(payload.version) ||
-          stringValue(payload.originator)
-        : "");
-    if (version) return version;
-  }
-  if (agent === "kimi") return "kimi-code";
-  if (agent === "agy") return "antigravity-cli";
-  return "unknown";
-}
-
-function sessionIdFromRecords(
-  file: SessionFile,
-  records: Record<string, unknown>[],
-) {
-  if (file.sessionId) return file.sessionId;
-  for (const record of records) {
-    const payload = isRecord(record.payload) ? record.payload : null;
-    const id =
-      stringValue(record.session_id) ||
-      stringValue(record.sessionId) ||
-      stringValue(record.conversation_id) ||
-      (record.type === "session" ? stringValue(record.id) : "") ||
-      (payload
-        ? stringValue(payload.session_id) ||
-          stringValue(payload.sessionId) ||
-          stringValue(payload.id)
-        : "");
-    if (id) return id;
-  }
-  return basename(file.path).replace(/\.[^.]+$/, "");
-}
-
-function createTrajectory(
-  agent: string,
-  file: SessionFile,
-  records: Record<string, unknown>[],
-  steps: Omit<AtifStep, "step_id">[],
-  options: { promptIncludesCached?: boolean } = {},
-): AtifTrajectory {
-  const tokenUsage = summarizeTokenUsage(records);
-  const metrics = tokenUsageToMetrics(tokenUsage);
-  if (
-    options.promptIncludesCached &&
-    metrics?.prompt_tokens !== undefined &&
-    metrics.cached_tokens !== undefined
-  ) {
-    metrics.prompt_tokens += metrics.cached_tokens;
-  }
-  const sessionId = sessionIdFromRecords(file, records);
-  const normalizedSteps = steps
-    .filter(
-      (step) =>
-        step.message.trim() ||
-        step.reasoning_content?.trim() ||
-        step.tool_calls?.length ||
-        step.observation?.results.length,
-    )
-    .map((step, index) => ({ ...step, step_id: index + 1 }));
-  return {
-    schema_version: "ATIF-v1.7",
-    session_id: sessionId,
-    trajectory_id:
-      file.sessionId ||
-      (agent === "pi"
-        ? sessionId
-        : basename(file.path).replace(/\.[^.]+$/, "")),
-    agent: {
-      name:
-        agent === "muse"
-          ? "muse-code"
-          : agent === "kimi"
-            ? "kimi-code"
-            : agent === "claude"
-              ? "claude-code"
-              : agent === "grok"
-                ? "grok-build"
-                : agent === "agy"
-                  ? "antigravity-cli"
-                  : agent,
-      version: file.agentVersion || agentVersionFromRecords(agent, records),
-      model_name: file.modelName || undefined,
-    },
-    steps: normalizedSteps,
-    final_metrics: {
-      total_prompt_tokens: metrics?.prompt_tokens,
-      total_completion_tokens: metrics?.completion_tokens,
-      total_cached_tokens: metrics?.cached_tokens,
-      total_steps: normalizedSteps.length,
-      extra: metrics?.extra,
-    },
-    extra: {
-      source_path: file.path,
-      source_records: records.length,
-      projection: "herdr-world-lightweight",
-    },
-  };
-}
+import {
+  createTrajectory,
+  toolOutputText,
+  toolArguments,
+} from "./trajectory-common";
+import { projectClaudeTrajectory } from "./claude-trajectory";
 
 function codexContentText(value: unknown): string {
   if (!Array.isArray(value)) return textFromContent(value);
@@ -150,12 +34,6 @@ function codexContentText(value: unknown): string {
     .join("\n");
 }
 
-function toolOutputText(value: unknown): string {
-  if (typeof value === "string") return value;
-  const text = textFromContent(value);
-  return text || (value == null ? "" : JSON.stringify(value, null, 2));
-}
-
 function toolResultExtra(value: Record<string, unknown>) {
   return {
     is_error:
@@ -165,17 +43,6 @@ function toolResultExtra(value: Record<string, unknown>) {
       value.status === "failed" ||
       undefined,
   };
-}
-
-function toolArguments(value: unknown): Record<string, unknown> {
-  if (isRecord(value)) return value;
-  if (typeof value !== "string") return {};
-  try {
-    const parsed = JSON.parse(value);
-    return isRecord(parsed) ? parsed : { value };
-  } catch {
-    return { value };
-  }
 }
 
 // Pi reports cache reads separately from uncached/cache-write input, while
@@ -347,186 +214,6 @@ function projectCodexTrajectory(
   return createTrajectory("codex", file, records, steps);
 }
 
-const CLAUDE_COMPACTED = "Conversation compacted";
-const CLAUDE_TASK_NOTIFICATION = "Background task update";
-
-function isClaudePrompt(record: Record<string, unknown>) {
-  if (record.type !== "user" || record.isMeta === true) return false;
-  const message = isRecord(record.message) ? record.message : record;
-  return !(
-    Array.isArray(message.content) &&
-    message.content.some(
-      (part) => isRecord(part) && part.type === "tool_result",
-    )
-  );
-}
-
-/**
- * Records on branches the user abandoned. Rewinding to edit a prompt writes
- * the new prompt as another child of the same parent, so every earlier
- * sibling prompt and everything after it is dead. Parallel tool calls also
- * fork the tree, but never into two prompts, so they are kept.
- */
-function abandonedClaudeRecords(records: Record<string, unknown>[]) {
-  const children = new Map<string, Record<string, unknown>[]>();
-  for (const record of records) {
-    const parent = stringValue(record.parentUuid);
-    if (!parent || !stringValue(record.uuid)) continue;
-    const list = children.get(parent);
-    if (list) list.push(record);
-    else children.set(parent, [record]);
-  }
-  const abandoned = new Set<string>();
-  for (const siblings of children.values()) {
-    const stack = siblings.filter(isClaudePrompt).slice(0, -1);
-    while (stack.length) {
-      const record = stack.pop()!;
-      const id = stringValue(record.uuid);
-      if (abandoned.has(id)) continue;
-      abandoned.add(id);
-      stack.push(...(children.get(id) ?? []));
-    }
-  }
-  return abandoned;
-}
-
-function projectClaudeTrajectory(
-  file: SessionFile,
-  records: Record<string, unknown>[],
-) {
-  const steps: Omit<AtifStep, "step_id">[] = [];
-  const abandoned = abandonedClaudeRecords(records);
-  records.forEach((record, index) => {
-    const timestamp = messageTime(record, file.mtimeMs, index);
-    const type = stringValue(record.type);
-    if (type !== "user" && type !== "assistant" && type !== "system") return;
-    // Caveats for local commands, subagent sidechains and rewound branches
-    // are not the conversation the user sees.
-    if (
-      record.isMeta === true ||
-      record.isSidechain === true ||
-      abandoned.has(stringValue(record.uuid))
-    )
-      return;
-    // Claude Code reports background task updates as user turns.
-    if (
-      type === "user" &&
-      /^\s*<task-notification>/.test(
-        textFromContent(
-          (isRecord(record.message) ? record.message : record).content,
-        ),
-      )
-    ) {
-      steps.push({
-        timestamp,
-        source: "agent",
-        message: CLAUDE_TASK_NOTIFICATION,
-        extra: { notice: "task_notification", record_type: type },
-      });
-      return;
-    }
-    if (record.isCompactSummary === true) {
-      steps.push({
-        timestamp,
-        source: "agent",
-        message: CLAUDE_COMPACTED,
-        extra: { notice: "compaction", record_type: type },
-      });
-      return;
-    }
-    const message = isRecord(record.message) ? record.message : record;
-    const role = stringValue(message.role) || type;
-    const text = cleanMessageText(
-      textFromContent(message.content ?? record.content),
-    );
-    const usage = tokenUsageForRecord(record).usage;
-    const parts = Array.isArray(message.content)
-      ? message.content.filter(isRecord)
-      : [];
-    if (
-      parts.some(
-        (part) => part.type === "tool_use" || part.type === "tool_result",
-      )
-    ) {
-      const start = steps.length;
-      for (const part of parts) {
-        if (part.type === "tool_use") {
-          const name = stringValue(part.name) || "tool";
-          steps.push({
-            timestamp,
-            source: "agent",
-            message: `Tool call: ${name}`,
-            tool_calls: [
-              {
-                tool_call_id:
-                  stringValue(part.id) || `${index}:${steps.length}`,
-                function_name: name,
-                arguments: toolArguments(part.input),
-              },
-            ],
-          });
-        } else if (part.type === "tool_result") {
-          const content = toolOutputText(part.content);
-          steps.push({
-            timestamp,
-            source: "system",
-            message: content || "Tool result",
-            observation: {
-              results: [
-                {
-                  source_call_id: stringValue(part.tool_use_id),
-                  content:
-                    content || (part.is_error ? "Tool failed" : "Tool result"),
-                  extra: { is_error: part.is_error === true || undefined },
-                },
-              ],
-            },
-          });
-        } else if (part.type === "text" && stringValue(part.text).trim()) {
-          steps.push({
-            timestamp,
-            source: role === "user" ? "user" : "agent",
-            message: stringValue(part.text),
-          });
-        } else if (
-          part.type === "thinking" &&
-          stringValue(part.thinking).trim()
-        ) {
-          steps.push({
-            timestamp,
-            source: "agent",
-            message: "Reasoning",
-            reasoning_content: stringValue(part.thinking),
-          });
-        }
-      }
-      if (steps.length > start) {
-        const lastStep = steps[steps.length - 1];
-        lastStep.metrics = tokenUsageToMetrics(usage);
-        lastStep.extra = {
-          ...lastStep.extra,
-          record_type: type,
-          model: modelNameFromRecord(record) || undefined,
-        };
-      }
-      return;
-    }
-    if (!text && !usage) return;
-    steps.push({
-      timestamp,
-      source:
-        role === "user" ? "user" : role === "assistant" ? "agent" : "system",
-      message: text || "Token usage",
-      metrics: tokenUsageToMetrics(usage),
-      extra: {
-        record_type: type,
-        model: modelNameFromRecord(record) || undefined,
-      },
-    });
-  });
-  return createTrajectory("claude", file, records, steps);
-}
-
 function projectKimiTrajectory(
   file: SessionFile,
   records: Record<string, unknown>[],
@@ -644,6 +331,7 @@ function projectKimiTrajectory(
 function projectPiTrajectory(
   file: SessionFile,
   records: Record<string, unknown>[],
+  agent = "pi",
 ) {
   const steps: Omit<AtifStep, "step_id">[] = [];
   let modelName = file.modelName || "";
@@ -652,6 +340,28 @@ function projectPiTrajectory(
     const type = stringValue(record.type);
     if (type === "model_change") {
       modelName = stringValue(record.modelId) || modelName;
+      return;
+    }
+    if (
+      agent === "omp" &&
+      type === "custom_message" &&
+      record.customType === "skill-prompt" &&
+      record.attribution === "user"
+    ) {
+      const details = isRecord(record.details) ? record.details : {};
+      const name = stringValue(details.name);
+      const args = stringValue(details.args);
+      const text =
+        stringValue(details.prompt).trim() ||
+        (name ? `/skill:${name}${args ? ` ${args}` : ""}` : "");
+      if (text) {
+        steps.push({
+          timestamp: messageTime(record, file.mtimeMs, index),
+          source: "user",
+          message: text,
+          extra: { record_type: type },
+        });
+      }
       return;
     }
     if (type !== "message" || !isRecord(record.message)) return;
@@ -692,6 +402,51 @@ function projectPiTrajectory(
           ],
         },
         extra: { record_type: type },
+      });
+      return;
+    }
+    if (role === "bashExecution" || role === "pythonExecution") {
+      const isBash = role === "bashExecution";
+      const command = stringValue(message.command);
+      const code = stringValue(message.code);
+      const output = toolOutputText(message.output);
+      const exitCode =
+        typeof message.exitCode === "number" ? message.exitCode : undefined;
+      const cancelled = message.cancelled === true;
+      const execution = isBash ? "Command" : "Execution";
+      const failed = cancelled || (exitCode !== undefined && exitCode !== 0);
+      const status = cancelled
+        ? `${execution} cancelled`
+        : exitCode !== undefined && exitCode !== 0
+          ? `${execution} exited with code ${exitCode}`
+          : "";
+      const sourceText = isBash
+        ? `Ran \`${command}\``
+        : `Ran Python:\n\`\`\`python\n${code}\n\`\`\``;
+      const outputText = output ? `Output:\n${output}` : "(no output)";
+      const content = [sourceText, outputText, status]
+        .filter(Boolean)
+        .join("\n\n");
+      steps.push({
+        timestamp,
+        source: "system",
+        message: content,
+        observation: {
+          results: [
+            {
+              content,
+              extra: {
+                tool_name: isBash ? "bash" : "python",
+                command: isBash ? command : undefined,
+                code: isBash ? undefined : code,
+                exit_code: exitCode,
+                cancelled: cancelled || undefined,
+                is_error: failed || undefined,
+              },
+            },
+          ],
+        },
+        extra: { record_type: type, role },
       });
       return;
     }
@@ -812,7 +567,7 @@ function projectPiTrajectory(
   });
 
   return createTrajectory(
-    "pi",
+    agent,
     modelName ? { ...file, modelName } : file,
     records,
     steps,
@@ -1216,7 +971,8 @@ export function projectAgentTrajectory(
   if (agent === "claude") return projectClaudeTrajectory(file, records);
   if (agent === "kimi") return projectKimiTrajectory(file, records);
   if (agent === "grok") return projectGrokTrajectory(file, records);
-  if (agent === "pi") return projectPiTrajectory(file, records);
+  if (agent === "pi" || agent === "omp")
+    return projectPiTrajectory(file, records, agent);
   if (agent === "muse") return projectMuseTrajectory(file, records);
   if (agent === "agy") return projectAntigravityTrajectory(file, records);
   return createTrajectory(agent, file, records, []);

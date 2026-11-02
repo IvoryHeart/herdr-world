@@ -1054,6 +1054,21 @@ retain endpoint, Herdr server and workspace identity; a changed identity prevent
 recovery. Interactive requests capture the current connection generation and
 cannot continue against a replacement runtime.
 
+**Claude Code** is an additional Ranger provider. The `claude` executable and its
+sign-in must belong to the account running the World service. Ranger uses the
+CLI's existing authentication rather than copying it into model-provider settings.
+Its internal MCP listener is private to the service-owned driver, binds loopback
+on an ephemeral port, and issues a separate capability token for each turn. It
+provides Ranger's qualified tools; browsers continue to use only the World origin.
+Disposing that driver stops its listener. An interrupted Claude turn fails closed
+and holds queued messages for an explicit continuation.
+
+Tasks may select **All workspaces, new ones too** only with all-workspace
+permission. Membership is recomputed for each run, then that run captures current
+owners. Fixed-scope tasks retain their existing endpoint/workspace recovery checks.
+Showing a workspace or session affects only the browser that asked and still
+requires its captured runtime; an unavailable target never falls back to a profile.
+
 Ranger state and credentials live in the World data directory's `assistant`
 subdirectory. `HERDR_WORLD_ASSISTANT_DIR` overrides that location. Keep this data
 private. Models receive the selected workspace context; choose providers and
