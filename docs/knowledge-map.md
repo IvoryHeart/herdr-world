@@ -316,3 +316,7 @@ with the Chrome consumer in [shared Inspector checks](../web/src/world/testing/s
 Claude transcript projection and common ATIF construction are in
 [claude-trajectory](../server/src/agent/claude-trajectory.ts) and
 [trajectory-common](../server/src/agent/trajectory-common.ts).
+
+The SSH transport [runner ownership audit](reviews/roamgate-runner-audit.md) maps
+required runtime process ports through file/Git/ignore, status, discovery and
+forwarding helpers to the shared retirement control.

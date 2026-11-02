@@ -593,7 +593,16 @@ Herdr's 1 MiB limit are refused before connecting; the browser frame limit remai
 
 Host commands retain at most eight SSH sessions per destination, with at most five
 held by background reads. Interactive work is admitted first; each queue is bounded
-to 64 waiters and queue/retry time counts against the caller's deadline. Browser
+to 64 waiters; queueing, recovery health checks and safe read retries spend the
+caller's deadline. Runtime retirement aborts queued commands before process dispatch
+and cancels active command/upload children without affecting another runtime.
+Workspace Files uploads, streamed file search, remote path checks and worktree base
+synchronization receive that runtime capability explicitly; remote path checks
+refuse a missing owner rather than using a global process helper.
+Ignore detection, local directory archives, launcher probes and integration-version
+enrichment also require their caller's runner; no transitive helper supplies a
+global default. The [required call-site audit](reviews/roamgate-runner-audit.md)
+records production injection sites and the shared retirement controls. Browser
 background calls run at most four per connection and share identical in-flight
 reads within their captured transport/runtime scope. Scheduled focused-list reads
 use the background lane. Git status returns cached values, refreshing stale entries
@@ -607,16 +616,20 @@ Only an OpenSSH alias or `user@host` is accepted, passed after `--` with fixed
 options. Host-key checking stays enabled; service authentication is noninteractive.
 Credentials/options remain in the service user's OpenSSH configuration. Stderr is
 bounded and sanitized. Cleanup removes owned paths only after confirmed child
-exit; unconfirmed termination preserves paths and reports failure.
+exit; a failed startup retains its unconfirmed child and prevents socket unlink
+or replacement. Unconfirmed termination preserves paths and reports failure.
 
 ### On-demand SSH port forwarding
 
 The service owns a shared, memory-only registry of at most 32 live forwards.
 `forward.list`, `forward.open`, `forward.close` and `forward.candidates` are browser
-RPCs requiring an explicit current connection ID and runtime generation and a
-loopback WebSocket peer. They never fall through to Herdr or the default profile.
+RPCs requiring login, an explicit current connection ID and runtime generation. They never fall through to Herdr or the default profile.
 List, close and runtime shutdown are scoped to the captured owner; retiring an old
 generation cannot close a replacement's forward. No forward is restored automatically.
+As upstream, the web offers forwarding controls only on a page served over loopback,
+because listeners bind on the server's machine. Authentication remains the access
+boundary; there is no additional forwarding-specific WebSocket-peer gate.
+An authenticated terminal can already run forwarding commands.
 Retiring runtimes await their forward children, escalate termination within a bounded
 deadline and report unconfirmed exits; closing children still consume the live-process
 budget. Each forward has an independent supervised OpenSSH process, so opening one never

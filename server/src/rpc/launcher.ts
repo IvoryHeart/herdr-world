@@ -53,7 +53,11 @@ async function dispatchLauncherRpc(
   // status command (agent/harness-readiness.ts). Onboarding uses it too.
   if (method === "launcher.readiness") {
     try {
-      const { readiness } = await probeLauncher(rpc, false);
+      const { readiness } = await probeLauncher(
+        rpc,
+        false,
+        rpc.connection.runProcessWithCodeTimeout,
+      );
       sendReply({ id, result: { readiness } }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
@@ -85,7 +89,11 @@ async function dispatchLauncherRpc(
   }
   if (method === "launcher.catalog") {
     try {
-      const result = await probeLauncher(rpc, true);
+      const result = await probeLauncher(
+        rpc,
+        true,
+        rpc.connection.runProcessWithCodeTimeout,
+      );
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);

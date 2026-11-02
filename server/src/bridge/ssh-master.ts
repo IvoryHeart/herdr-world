@@ -16,6 +16,7 @@ import {
 import { annotateSshArgv, trackSshProcess } from "./ssh-metrics";
 import {
   muxSessionsIdle,
+  type SshSessionWait,
   registerSshMaster,
   unregisterSshMaster,
 } from "./ssh-sessions";
@@ -51,7 +52,7 @@ export function createSshMaster(args: {
     spawn?: (argv: string[]) => SshMasterProcess;
     exists?: (path: string) => boolean;
     remove?: (path: string) => void;
-    runCheck?: (argv: string[]) => Promise<number>;
+    runCheck?: (argv: string[], wait?: SshSessionWait) => Promise<number>;
     readyTimeoutMs?: number;
     pollIntervalMs?: number;
     restartDelayMs?: number;
@@ -82,12 +83,15 @@ export function createSshMaster(args: {
     });
   const runCheck =
     deps.runCheck ??
-    ((argv: string[]) => {
+    ((argv: string[], wait: SshSessionWait = {}) => {
+      wait.signal?.throwIfAborted();
       const proc = Bun.spawn(argv, {
         stdin: "ignore",
         stdout: "ignore",
         stderr: "ignore",
-        timeout: 5_000,
+        timeout: Math.min(5_000, wait.timeoutMs ?? 5_000),
+        signal: wait.signal,
+        killSignal: "SIGKILL",
       });
       trackSshProcess(
         annotateSshArgv(argv, { tag: "master.check", connection }),
@@ -105,15 +109,18 @@ export function createSshMaster(args: {
   // that happens to reach the same destination.
   const owner = {};
   let proc: SshMasterProcess | null = null;
+  let readyProc: SshMasterProcess | null = null;
   let starting: Promise<boolean> | null = null;
   let restartTimer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   let stopTask: Promise<void> | null = null;
 
-  async function isAlive(): Promise<boolean> {
-    if (!proc || !exists(args.controlPath)) return false;
+  async function isAlive(wait: SshSessionWait = {}): Promise<boolean> {
+    wait.signal?.throwIfAborted();
+    if (stopped || !proc || !exists(args.controlPath)) return false;
     const code = await runCheck(
       sshMasterCheckArgv(args.destination, args.controlPath),
+      wait,
     );
     return code === 0;
   }
@@ -144,6 +151,7 @@ export function createSshMaster(args: {
     const exitedHandler = () => {
       if (proc !== child) return;
       proc = null;
+      readyProc = null;
       unregisterSshMaster(owner);
       if (stopped) return;
       logger.debug("SSH command master exited", { connection });
@@ -153,7 +161,11 @@ export function createSshMaster(args: {
         void ensure();
       }, restartDelayMs);
     };
-    void child.exited.then(exitedHandler, exitedHandler);
+    void child.exited.then(exitedHandler, () => {
+      if (proc !== child) return;
+      readyProc = null;
+      unregisterSshMaster(owner);
+    });
   }
 
   async function start(): Promise<boolean> {
@@ -185,14 +197,24 @@ export function createSshMaster(args: {
     ready = await waitReady(child);
     if (!ready || stopped || proc !== child) {
       if (proc === child) {
-        proc = null;
-        await stopProcess(child).catch(() => undefined);
+        try {
+          await stopProcess(child);
+          if (proc === child) proc = null;
+        } catch (error) {
+          // Retain the child so stop must retry/report cleanup, never unlink
+          // its socket or start a replacement over an unconfirmed process.
+          logger.warn("SSH command master startup cleanup failed", {
+            connection,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
       logger.debug("SSH command master unavailable; using cold logins", {
         connection,
       });
       return false;
     }
+    readyProc = child;
     registerSshMaster(owner, {
       destination: args.destination,
       controlPath: args.controlPath,
@@ -211,7 +233,7 @@ export function createSshMaster(args: {
   function ensure(): Promise<boolean> {
     if (stopped) return Promise.resolve(false);
     if (starting) return starting;
-    if (proc) return Promise.resolve(true);
+    if (proc) return Promise.resolve(readyProc === proc);
     if (restartTimer) {
       clearTimeout(restartTimer);
       restartTimer = null;
@@ -240,7 +262,7 @@ export function createSshMaster(args: {
       return await Promise.race([
         child.exited.then(
           () => true,
-          () => true,
+          () => false,
         ),
         new Promise<false>((resolve) => {
           timer = setTimeout(() => resolve(false), timeoutMs);
@@ -303,11 +325,12 @@ export function createSshMaster(args: {
     }
     unregisterSshMaster(owner);
     const child = proc;
-    proc = null;
+    readyProc = null;
     stopTask = (async () => {
       if (!child) return;
       await drain(child);
       await stopProcess(child);
+      if (proc === child) proc = null;
       try {
         remove(args.controlPath);
       } catch {

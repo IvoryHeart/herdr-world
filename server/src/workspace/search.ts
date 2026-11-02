@@ -18,7 +18,9 @@ export async function searchWorkspaceFiles({
   mode,
   showHidden,
   shQuote,
+  bindProcess,
 }: {
+  bindProcess: (argv: string[]) => string[];
   root: string;
   host?: string;
   query: string;
@@ -67,21 +69,26 @@ export async function searchWorkspaceFiles({
   let truncated = false;
   const deadline = Date.now() + SEARCH_TIMEOUT_MS;
   for (const args of commands) {
-    const argv = host
-      ? sshReadCommandArgv(
-          host,
-          `git -C ${shQuote(root)} ${args.map(shQuote).join(" ")}`,
-          [],
-          "file.search",
-        )
-      : ["git", "-C", root, ...args];
+    const argv = bindProcess(
+      host
+        ? sshReadCommandArgv(
+            host,
+            `git -C ${shQuote(root)} ${args.map(shQuote).join(" ")}`,
+            [],
+            "file.search",
+          )
+        : ["git", "-C", root, ...args],
+    );
     // Waiting for a session slot spends the search's own deadline.
     const session = await holdSshSession(argv, {
       timeoutMs: deadline - Date.now(),
     });
     let proc: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">>;
     try {
+      session.signal?.throwIfAborted();
       proc = Bun.spawn(argv, {
+        signal: session.signal,
+        killSignal: "SIGKILL",
         stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",
@@ -171,6 +178,7 @@ export async function searchWorkspaceFiles({
         if (truncated) break;
       }
       const [code, stderr] = await Promise.all([proc.exited, stderrText]);
+      session.signal?.throwIfAborted();
       if (timedOut) throw new Error("File search timed out");
       if (!truncated && code !== 0 && !(mode === "content" && code === 1)) {
         throw new Error(stderr.trim().slice(0, 1000) || "File search failed");

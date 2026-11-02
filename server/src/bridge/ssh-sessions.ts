@@ -70,6 +70,7 @@ export type SshSessionWait = {
 
 /** A held slot: release it once, and spend at most `remainingMs` running. */
 export type SshSessionHold = {
+  signal?: AbortSignal;
   release: () => void;
   /** What is left of `timeoutMs` after the wait; unset without a timeout. */
   remainingMs: number | undefined;
@@ -81,7 +82,7 @@ export type SshMasterRegistration = {
   /** Cheap per-command test: the process runs and its socket exists. */
   isListening: () => boolean;
   /** Confirms the master still serves sessions (process alive, `-O check`). */
-  isAlive: () => Promise<boolean>;
+  isAlive: (wait?: SshSessionWait) => Promise<boolean>;
 };
 
 type SshCommandRoute = {
@@ -100,6 +101,20 @@ const masters = new Map<object, SshMasterRegistration>();
 // Command argv built by sshCommandArgv, recognised by identity so callers that
 // pass the array through unchanged need no knowledge of multiplexing.
 const routes = new WeakMap<readonly string[], SshCommandRoute>();
+const runtimeSignals = new WeakMap<readonly string[], AbortSignal>();
+
+function scopedWait(
+  argv: readonly string[],
+  wait: SshSessionWait,
+): SshSessionWait {
+  const runtime = runtimeSignals.get(argv);
+  return runtime
+    ? {
+        ...wait,
+        signal: wait.signal ? AbortSignal.any([runtime, wait.signal]) : runtime,
+      }
+    : wait;
+}
 type SessionSlots = {
   active: number;
   /** Of `active`, those held by background commands. */
@@ -179,14 +194,29 @@ export function routeSshCommand(
 }
 
 /** Bind after construction, at the owning runtime's process boundary. */
-export function bindSshCommand(argv: string[], controlPath?: string): string[] {
+export function bindSshCommand(
+  argv: string[],
+  controlPath?: string,
+  signal?: AbortSignal,
+): string[] {
   const route = routes.get(argv);
-  if (!route) return argv;
+  if (!route) {
+    if (signal) runtimeSignals.set(argv, signal);
+    return argv;
+  }
   const owned = sshMasterControlPath(route.destination, controlPath);
   const bound = owned
     ? ["ssh", "-S", owned, ...route.cold.slice(1)]
     : route.cold;
   routes.set(bound, { ...route, controlPath: owned });
+  const original = runtimeSignals.get(argv);
+  if (signal || original)
+    runtimeSignals.set(
+      bound,
+      signal && original
+        ? AbortSignal.any([signal, original])
+        : (signal ?? original)!,
+    );
   copySshAnnotation(argv, bound);
   annotateSshArgv(bound, { master: !!owned });
   return bound;
@@ -303,15 +333,23 @@ export async function holdSshSession(
   argv: readonly string[],
   wait: SshSessionWait = {},
 ): Promise<SshSessionHold> {
+  wait = scopedWait(argv, wait);
   const route = routes.get(argv);
   if (!route) {
     wait.signal?.throwIfAborted();
-    return { release: noop, remainingMs: wait.timeoutMs };
+    return { release: noop, remainingMs: wait.timeoutMs, signal: wait.signal };
   }
   const startedAt = Date.now();
   const releaseSlot = await acquireSshSession(route.destination, wait);
+  try {
+    wait.signal?.throwIfAborted();
+  } catch (error) {
+    releaseSlot();
+    throw error;
+  }
   const releaseMux = holdMuxSession(route.controlPath);
   return {
+    signal: wait.signal,
     release: () => {
       releaseMux();
       releaseSlot();
@@ -330,10 +368,66 @@ function noop() {}
 const MUX_FALLBACK_STDERR =
   /Control socket connect|mux_client_request_session: session request failed/;
 
-async function masterDied(controlPath: string): Promise<boolean> {
+function withinWait<T>(
+  wait: SshSessionWait,
+  run: (wait: SshSessionWait) => Promise<T>,
+): Promise<T> {
+  wait.signal?.throwIfAborted();
+  if (wait.timeoutMs !== undefined && wait.timeoutMs <= 0)
+    return Promise.reject(new Error("ssh request deadline expired"));
+  const deadline = new AbortController();
+  const signal = wait.signal
+    ? AbortSignal.any([wait.signal, deadline.signal])
+    : deadline.signal;
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let done = false;
+    const finish = (error?: unknown, value?: T) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      if (error !== undefined) reject(error);
+      else resolve(value!);
+    };
+    const abort = () =>
+      finish(signal.reason ?? new Error("ssh request aborted"));
+    signal.addEventListener("abort", abort, { once: true });
+    if (wait.timeoutMs !== undefined)
+      timer = setTimeout(
+        () =>
+          deadline.abort(
+            new Error(`ssh request timed out after ${wait.timeoutMs}ms`),
+          ),
+        wait.timeoutMs,
+      );
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    try {
+      void run({ ...wait, signal }).then(
+        (value) => finish(undefined, value),
+        (error) => finish(error),
+      );
+    } catch (error) {
+      finish(error);
+    }
+  });
+}
+
+async function masterDied(
+  controlPath: string,
+  wait: SshSessionWait,
+): Promise<boolean> {
   for (const master of masters.values()) {
     if (master.controlPath !== controlPath) continue;
-    return !(await master.isAlive().catch(() => false));
+    return !(await withinWait(wait, (bounded) =>
+      master.isAlive(bounded).catch(() => {
+        bounded.signal?.throwIfAborted();
+        return false;
+      }),
+    ));
   }
   return true;
 }
@@ -352,12 +446,17 @@ async function masterDied(controlPath: string): Promise<boolean> {
  */
 export async function runSshCommand<T extends { code: number; stderr: string }>(
   argv: string[],
-  run: (argv: string[], remainingMs: number | undefined) => Promise<T>,
+  run: (
+    argv: string[],
+    remainingMs: number | undefined,
+    signal?: AbortSignal,
+  ) => Promise<T>,
   wait: SshSessionWait = {},
 ): Promise<T> {
+  wait = scopedWait(argv, wait);
   wait.signal?.throwIfAborted();
   const route = routes.get(argv);
-  if (!route) return run(argv, wait.timeoutMs);
+  if (!route) return run(argv, wait.timeoutMs, wait.signal);
   const startedAt = Date.now();
   const remaining = () => {
     if (wait.timeoutMs === undefined) return undefined;
@@ -369,17 +468,21 @@ export async function runSshCommand<T extends { code: number; stderr: string }>(
   const releaseMux = holdMuxSession(route.controlPath);
   try {
     wait.signal?.throwIfAborted();
-    const result = await run(argv, remaining());
+    const result = await run(argv, remaining(), wait.signal);
+    wait.signal?.throwIfAborted();
     if (
       route.retrySafe &&
       route.controlPath &&
       result.code === 255 &&
       !MUX_FALLBACK_STDERR.test(result.stderr) &&
-      (await masterDied(route.controlPath))
+      (await masterDied(route.controlPath, {
+        timeoutMs: remaining(),
+        signal: wait.signal,
+      }))
     ) {
       releaseMux();
       wait.signal?.throwIfAborted();
-      return await run(route.cold, remaining());
+      return await run(route.cold, remaining(), wait.signal);
     }
     return result;
   } finally {

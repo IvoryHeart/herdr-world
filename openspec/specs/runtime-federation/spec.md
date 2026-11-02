@@ -549,11 +549,18 @@ World SHALL bind each reused SSH command connection to its owning runtime's priv
 control path, preserve the service user's OpenSSH policy, and never substitute a
 master belonging to another connection or generation. Background command sessions
 SHALL leave capacity for interactive commands; queueing and any safe read retry
-SHALL spend the caller's deadline. Mutating commands SHALL NOT be retried after an
-ambiguous master failure.
+SHALL spend the caller's deadline, including recovery health checks. Retirement
+SHALL abort queued work before process dispatch. Runtime command helpers SHALL
+require their owning caller's runner and SHALL NOT substitute a module-global
+command runner. A failed-start master whose exit
+is unconfirmed SHALL retain child/path ownership and prevent replacement.
+Mutating commands SHALL NOT be retried after an ambiguous master failure.
 
-On-demand local and reverse forwards SHALL require an authenticated loopback browser,
-an explicit connection ID and current runtime generation. The service SHALL own
+On-demand local and reverse forwards SHALL require authentication, an explicit
+connection ID and current runtime generation. As upstream, browser forwarding
+controls SHALL be offered only on pages served over loopback, because listeners
+bind on the service host. The service SHALL NOT add a forwarding-specific
+WebSocket-peer gate. The service SHALL own
 forward state independently of views, bound live processes and discovery, refuse
 reverse exposure of its own listener/development proxy, and stop only the retiring
 runtime's forwards without automatically reopening them. Remote loopback is a
@@ -580,3 +587,11 @@ requested bind subject to the SSH server's GatewayPorts policy.
 - **WHEN** checkout status changes on a current inactive connection during a browser refresh
 - **THEN** that connection retains the newer status over the older catalogue reply,
   without changing a different connection with the same checkout path
+
+#### Scenario: A workspace file upload waits while its runtime retires
+
+- **WHEN** a Files upload has read its body and is queued for an SSH command slot
+- **AND** its owning runtime stops before a slot becomes available
+- **THEN** it SHALL abort without spawning a process or writing the remote target
+- **AND** a current sibling runtime to the same destination SHALL retain its own
+  private master and remain able to upload

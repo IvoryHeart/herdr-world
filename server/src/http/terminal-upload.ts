@@ -82,6 +82,7 @@ trap - EXIT`;
 export function createTerminalUploadHandler(args: {
   sshHost: () => string | undefined;
   sshControlPath?: string;
+  runtimeSignal?: AbortSignal;
   tempRoot?: () => string;
   platform?: NodeJS.Platform;
   maxBytes?: number;
@@ -145,14 +146,19 @@ export function createTerminalUploadHandler(args: {
           "upload.cleanup",
         ),
         args.sshControlPath,
+        args.runtimeSignal,
       );
       const session = await holdSshSession(argv, {
         timeoutMs: CLEANUP_TIMEOUT_MS,
+        signal: args.runtimeSignal,
       });
       let code: number;
       let stderr: string;
       try {
+        session.signal?.throwIfAborted();
         const proc = Bun.spawn(argv, {
+          signal: session.signal,
+          killSignal: "SIGKILL",
           stdin: "ignore",
           stdout: "ignore",
           stderr: "pipe",
@@ -226,6 +232,7 @@ export function createTerminalUploadHandler(args: {
             "upload",
           ),
           args.sshControlPath,
+          args.runtimeSignal,
         );
         const uploadTimeoutMs =
           args.uploadTimeoutMs ?? TERMINAL_UPLOAD_TIMEOUT_MS;
@@ -239,12 +246,13 @@ export function createTerminalUploadHandler(args: {
         let path: string;
         let stderr: string;
         try {
-          req.signal.throwIfAborted();
+          session.signal?.throwIfAborted();
+          if (!isCurrent()) throw new Error("connection runtime retired");
           const proc = Bun.spawn(argv, {
             stdin: Bun.file(localPath),
             stdout: "pipe",
             stderr: "pipe",
-            signal: req.signal,
+            signal: session.signal,
             timeout: session.remainingMs ?? uploadTimeoutMs,
             killSignal: "SIGKILL",
           });

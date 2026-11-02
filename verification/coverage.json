@@ -108,6 +108,8 @@
         "server/src/bridge/ssh-tunnel.test.ts",
         "server/src/bridge/ssh-windows.test.ts",
         "server/src/bridge/ssh-owner.test.ts",
+        "server/src/connections/runtime-process.test.ts",
+        "server/src/http/terminal-upload.test.ts",
         "server/src/bridge/ssh-sessions.test.ts",
         "server/src/bridge/ssh-master.test.ts",
         "server/src/bridge/ssh-openssh.test.ts",
@@ -133,6 +135,8 @@
           "server/src/bridge/ssh-tunnel.test.ts",
           "server/src/bridge/ssh-windows.test.ts",
           "server/src/bridge/ssh-owner.test.ts",
+          "server/src/connections/runtime-process.test.ts",
+          "server/src/http/terminal-upload.test.ts",
           "server/src/bridge/ssh-sessions.test.ts",
           "server/src/bridge/ssh-master.test.ts",
           "server/src/bridge/ssh-openssh.test.ts",
@@ -226,6 +230,7 @@
         "server/src/connections/protocol.test.ts",
         "server/src/connections/session-link-routing.test.ts",
         "server/src/connections/http-routing.test.ts",
+        "server/src/connections/runtime-process.test.ts",
         "server/src/bridge/forward-rpc.test.ts",
         "server/src/service/forward-dispatch.test.ts"
       ],
@@ -245,6 +250,7 @@
           "server/src/connections/protocol.test.ts",
           "server/src/connections/session-link-routing.test.ts",
           "server/src/connections/http-routing.test.ts",
+          "server/src/connections/runtime-process.test.ts",
           "server/src/bridge/forward-rpc.test.ts",
           "server/src/service/forward-dispatch.test.ts"
         ],

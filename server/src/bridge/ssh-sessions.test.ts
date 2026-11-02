@@ -531,3 +531,64 @@ describe("SSH session lanes", () => {
     }
   });
 });
+
+test.each(["deadline", "abort"])(
+  "recovery health checking honors the remaining caller %s and releases its slot",
+  async (ending) => {
+    const health = Promise.withResolvers<boolean>();
+    const checked = Promise.withResolvers<void>();
+    const controller = new AbortController();
+    const master = fakeMaster("health.example");
+    let now = 0;
+    const clock = jest.spyOn(Date, "now").mockImplementation(() => now);
+    let healthSignal: AbortSignal | undefined;
+    let healthBudget: number | undefined;
+    registerSshMaster(master.owner, {
+      destination: "health.example",
+      controlPath: master.controlPath,
+      isListening: () => true,
+      isAlive: (wait) => {
+        healthBudget = wait?.timeoutMs;
+        healthSignal = wait?.signal;
+        checked.resolve();
+        return health.promise;
+      },
+    });
+    let runs = 0;
+    const argv = bindSshCommand(
+      unboundRead("health.example", "read"),
+      master.controlPath,
+      controller.signal,
+    );
+    const command = runSshCommand(
+      argv,
+      async () => {
+        runs++;
+        now = 800;
+        return { code: 255, stderr: "" };
+      },
+      { timeoutMs: 1000 },
+    );
+    command.catch((error) => checked.reject(error));
+    try {
+      await checked.promise;
+      expect(healthBudget).toBe(200);
+      if (ending === "abort") controller.abort(new Error("runtime retired"));
+      await expect(command).rejects.toThrow(
+        ending === "abort" ? "runtime retired" : "timed out",
+      );
+      expect(healthSignal?.aborted).toBe(true);
+      expect(runs).toBe(1);
+      const available = await Promise.all(
+        Array.from({ length: SSH_SESSION_LIMIT }, () =>
+          acquireSshSession("health.example"),
+        ),
+      );
+      for (const release of available) release();
+    } finally {
+      health.resolve(false);
+      await command.catch(() => {});
+      clock.mockRestore();
+    }
+  },
+);

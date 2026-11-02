@@ -1,3 +1,7 @@
+import {
+  runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
+} from "./process";
 import { describe, expect, spyOn, test } from "bun:test";
 import { renameSync, writeFileSync } from "node:fs";
 import {
@@ -15,7 +19,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { shQuote } from "../utils/process-utils";
 import { createFileHandlers } from "./files";
-import { runBinaryProcessWithTimeout } from "./process";
 import * as atomicMove from "./atomic-file-move";
 
 for (const remote of [false, true]) {
@@ -34,6 +37,9 @@ for (const remote of [false, true]) {
       await mkdir(root);
       await mkdir(outside);
       const files = createFileHandlers({
+        runBinaryProcessWithTimeout,
+        bindProcess: (argv) => argv,
+        runProcessWithInputTimeout,
         herdr: {
           call: async () => ({
             workspace: {

@@ -67,7 +67,10 @@ import {
   type LastStepBaselineStore,
 } from "../workspace/git-diff";
 import { createLastStepTurnTracker } from "../workspace/last-step-turns";
-import { runBinaryProcessWithTimeout as runBinaryProcessWithTimeoutBase } from "../workspace/process";
+import {
+  runBinaryProcessWithTimeout as runBinaryProcessWithTimeoutBase,
+  runProcessWithInputTimeout as runProcessWithInputTimeoutBase,
+} from "../workspace/process";
 import { createStatusEnricher } from "../workspace/status";
 import { createWorktreeHookRunner } from "../worktree/worktree-hooks";
 import { createWorktreeParentStore } from "../worktree/parents";
@@ -157,11 +160,15 @@ export function createLegacyConnectionRuntime(args: {
   const socketPath = config.socketPath;
   const clientSocketPath = config.clientSocketPath;
   const sshHost = () => config.sshHost;
+  const processAbort = new AbortController();
   // Label this runtime's ssh children with its connection in the debug log.
   const forConnection = (argv: string[]) =>
-    annotateSshArgv(bindSshCommand(argv, config.masterControlPath), {
-      connection: identity.id,
-    });
+    annotateSshArgv(
+      bindSshCommand(argv, config.masterControlPath, processAbort.signal),
+      {
+        connection: identity.id,
+      },
+    );
   const runProcess: typeof runProcessBase = (argv, ...rest) =>
     runProcessBase(forConnection(argv), ...rest);
   const runProcessWithCode: typeof runProcessWithCodeBase = (argv, ...rest) =>
@@ -174,6 +181,10 @@ export function createLegacyConnectionRuntime(args: {
     argv,
     ...rest
   ) => runBinaryProcessWithTimeoutBase(forConnection(argv), ...rest);
+  const runProcessWithInputTimeout: typeof runProcessWithInputTimeoutBase = (
+    argv,
+    ...rest
+  ) => runProcessWithInputTimeoutBase(forConnection(argv), ...rest);
   const herdr = new HerdrClient(socketPath, {
     logger: logger.child("herdr"),
     connectionId: identity.id,
@@ -257,6 +268,9 @@ export function createLegacyConnectionRuntime(args: {
       herdr,
       sshHost,
       runProcessWithCodeTimeout,
+      runProcessWithInputTimeout,
+      runBinaryProcessWithTimeout,
+      bindProcess: forConnection,
       shQuote,
       lastStepBaselines,
       resolveAgentWorktreeTarget: agentWorktree.resolve,
@@ -321,7 +335,11 @@ export function createLegacyConnectionRuntime(args: {
     runProcessWithCodeTimeout,
     shQuote,
   });
-  const handleImageUpload = createImageUploadHandler({ sshHost });
+  const handleImageUpload = createImageUploadHandler({
+    sshHost,
+    sshControlPath: config.masterControlPath,
+    runtimeSignal: processAbort.signal,
+  });
   const onUploadCleanupError = (error: unknown) =>
     logger.warn("terminal upload cleanup failed", {
       connection: identity.id,
@@ -330,6 +348,7 @@ export function createLegacyConnectionRuntime(args: {
   const handleTerminalUpload = createTerminalUploadHandler({
     sshHost,
     sshControlPath: config.masterControlPath,
+    runtimeSignal: processAbort.signal,
     onCleanupError: onUploadCleanupError,
   });
   const sshTunnel = createSshTunnelManager({
@@ -807,6 +826,7 @@ export function createLegacyConnectionRuntime(args: {
     if (stopTask) return stopTask;
     if (disposed) return Promise.resolve();
     disposed = true;
+    processAbort.abort(new Error("connection runtime retired"));
     backgroundStarted = false;
     // Calls still waiting on Herdr belong to this retired runtime: fail them
     // now rather than at their timeout, so their callers can settle.
@@ -855,6 +875,7 @@ export function createLegacyConnectionRuntime(args: {
     clientSocketPath,
     remotePlatform,
     sshHost,
+    runProcessWithCodeTimeout,
     herdr,
     worktreeParents,
     handleHerdrInfo,
