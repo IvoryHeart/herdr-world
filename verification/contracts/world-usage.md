@@ -43,12 +43,28 @@ rollouts, response validation, and the exact generated SSH program under Bun
 and Node. `host.test.ts` checks qualified SSH selection, unavailable-source
 behavior, unlinked Codex and changed terminal ownership.
 
+Review repair controls additionally cover 625 bounded Codex decrease/recovery
+schedules, copied preamble files through the real collector/runtime/service,
+claims beyond 128 agents, complete revalidation conflicts and newly added
+claims. Local worker controls block metadata, read and decompression promises
+and require termination/exit without releasing the blocked source. Process
+controls exceed stdout/stderr bounds, hold streams open after nonzero exit,
+and verify cancellation cannot settle before reaping; a real noisy child and
+the SSH input lifetime channel exercise the production execution primitives.
+The generated host program also executes after minified bundling.
+
 `server/src/usage/service.test.ts` checks rollups, independent host identity,
 duplicate/unlinked claims, lost sources, replacement during collection,
 attribution invalidation, cache reuse, UTC reset, frame bounds, prices, optional
 telemetry exclusion and service close. `server/src/rpc/usage.test.ts` exercises
 the real dispatcher/verb registry, window validation, socket revocation and
 absence of default-runtime routing.
+
+Service generation-replacement and close controls propagate cancellation to
+unreleased sources; a current-generation deadline preserves stale numbers and
+failed-source health. Herdr client controls verify that an aborted one-shot
+read destroys its socket and a pre-aborted read opens none. These are direct
+resource/admission consumers, not an expansion of the runtime state models.
 
 Run the complete consumer set with:
 

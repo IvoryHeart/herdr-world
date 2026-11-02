@@ -18,12 +18,14 @@ import {
 } from "./totals";
 import { usageDigest } from "./host";
 import type { Scheduler } from "../service/ports";
+import { usageScope } from "./lifetime";
 
 type UsageRuntime = {
   usage(
     agents: Record<string, unknown>[],
     now: number,
     isCurrent: () => boolean,
+    signal: AbortSignal,
   ): Promise<RuntimeUsage>;
 };
 type Lease = {
@@ -53,6 +55,7 @@ type Options = {
   now(): number;
   scheduler: Scheduler;
   waitMs?: number;
+  collectionMs?: number;
 };
 const rowKey = (r: RuntimeUsage["rows"][number]) =>
   JSON.stringify([r.session_key, r.day, r.model]);
@@ -83,14 +86,30 @@ const unavailable = (): RuntimeUsage => ({
 
 export class WorldUsageService {
   #cache = new Map<string, Cached>();
-  #pending = new Map<string, Promise<void>>();
+  #pending = new Map<
+    string,
+    { generation: number; abort(): void; task: Promise<void> }
+  >();
+  #draining = new Set<Promise<void>>();
   #closed = false;
   constructor(private options: Options) {}
 
   async close() {
     this.#closed = true;
-    await Promise.allSettled(this.#pending.values());
+    for (const pending of this.#pending.values()) pending.abort();
+    await Promise.allSettled(this.#draining);
     this.#cache.clear();
+  }
+
+  connectionStatus(
+    status: Pick<ConnectionStatus, "id" | "generation" | "state">,
+  ) {
+    const pending = this.#pending.get(status.id);
+    if (
+      pending &&
+      (pending.generation !== status.generation || status.state !== "ready")
+    )
+      pending.abort();
   }
 
   async #host(
@@ -112,10 +131,12 @@ export class WorldUsageService {
     )
       return;
     const existing = this.#pending.get(id);
-    if (existing) {
-      await existing;
+    if (existing?.generation === lease.generation) {
+      await existing.task;
       return;
     }
+    existing?.abort();
+    const owner = usageScope(undefined, this.options.collectionMs ?? 20_000);
     const task = (async () => {
       let value: RuntimeUsage;
       try {
@@ -123,11 +144,14 @@ export class WorldUsageService {
           agents,
           now,
           () => !this.#closed && lease.isCurrent(),
+          owner.signal,
         );
       } catch {
         value = unavailable();
       }
       if (this.#closed || !lease.isCurrent()) return;
+      const failed = owner.signal.aborted;
+      if (failed) value = unavailable();
       const success = new Map(old?.success);
       for (const source of value.sources)
         if (
@@ -151,14 +175,24 @@ export class WorldUsageService {
       value.rows = value.rows.slice(0, 1024);
       const ids = new Map<string, string>();
       for (const row of value.rows) {
-        if (this.#closed || !lease.isCurrent()) return;
+        if (
+          this.#closed ||
+          (!failed && owner.signal.aborted) ||
+          !lease.isCurrent()
+        )
+          return;
         const key = rowKey(row);
         ids.set(
           key,
           old?.ids.get(key) ?? (await this.options.ids.issue("usage")),
         );
       }
-      if (this.#closed || !lease.isCurrent()) return;
+      if (
+        this.#closed ||
+        (!failed && owner.signal.aborted) ||
+        !lease.isCurrent()
+      )
+        return;
       this.#cache.set(id, {
         generation: lease.generation,
         checked: now,
@@ -169,11 +203,18 @@ export class WorldUsageService {
         stale,
       });
     })();
-    this.#pending.set(id, task);
+    this.#pending.set(id, {
+      generation: lease.generation,
+      task,
+      abort: owner.abort,
+    });
+    this.#draining.add(task);
     try {
       await task;
     } finally {
-      if (this.#pending.get(id) === task) this.#pending.delete(id);
+      if (this.#pending.get(id)?.task === task) this.#pending.delete(id);
+      this.#draining.delete(task);
+      owner.dispose();
     }
   }
 
@@ -191,7 +232,10 @@ export class WorldUsageService {
       Math.floor(now / 86_400_000) * 86_400_000 -
       (kind === "7d" ? 6 : 0) * 86_400_000;
     const statuses = this.options.connections.list();
+    for (const status of statuses) this.connectionStatus(status);
     const keep = new Set(statuses.map((s) => s.id));
+    for (const [id, pending] of this.#pending)
+      if (!keep.has(id)) pending.abort();
     for (const id of this.#cache.keys())
       if (!keep.has(id)) this.#cache.delete(id);
     const topology = await this.options.topology();

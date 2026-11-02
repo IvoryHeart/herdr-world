@@ -11,11 +11,14 @@ export type HostUsage = {
   })[];
   sources: { harness: string; state: UsageState }[];
   truncated: boolean;
+  /** Private, hashed title-prefix resolutions; never exposed by World usage. */
+  title_matches?: { prefix_key: string; session_key: string }[];
 };
 export type CollectorOptions = {
   now: number;
   /** Exact paths resolved by this runtime, never supplied by the browser. */
   files?: { harness: string; path: string }[];
+  codex_prefixes?: string[];
 };
 export type CollectorPorts = {
   fs: typeof Fs;
@@ -151,6 +154,7 @@ export async function collectHarnessUsage(
   for (const f of (options.files ?? []).slice(0, 128))
     if (states.has(f.harness)) await add(f.harness, f.path, true);
   for (const [harness, root] of roots) await walk(harness!, root!, 0);
+  const nativeSessions = new Map<string, string>();
   for (const file of [...candidates.values()].sort(
     (a, b) => b.mtime - a.mtime,
   )) {
@@ -165,16 +169,10 @@ export async function collectHarnessUsage(
     }
     const { harness, path } = file;
     if (path.endsWith(".zst") && candidates.has(path.slice(0, -4))) continue;
-    let current:
-      | {
-          harness: string;
-          reader: ReturnType<typeof project>;
-          files: Set<string>;
-        }
-      | undefined;
     let broken = false,
-      perFile = 0;
-    const feed = (record: any) => {
+      fileBytes = 0;
+    let materialized: string | undefined;
+    const identity = (record: any) => {
       const id =
         record?.sessionId ??
         (record?.type === "session_meta"
@@ -182,121 +180,150 @@ export async function collectHarnessUsage(
           : record?.type === "session"
             ? record.id
             : undefined);
-      if (!current) {
-        const key = hash(
-          `${harness}\0${typeof id === "string" && id.length <= 256 ? id : path.replace(/\.zst$/, "")}`,
-        );
-        current = sessions.get(key);
-        if (!current) {
-          current = {
-            harness,
-            reader: project(harness, options.now),
-            files: new Set(),
-          };
-          sessions.set(key, current);
-        }
-        if (current.files.size < 16)
-          current.files.add(hash(path.replace(/\.zst$/, "")));
-        else {
-          current.reader.incomplete();
-          truncated = true;
-        }
-      }
-      current.reader.accept(record);
+      return typeof id === "string" &&
+        /^[a-zA-Z0-9][a-zA-Z0-9_.:/@+-]{0,159}$/.test(id)
+        ? id
+        : null;
     };
-    const parse = (line: string) => {
-      if (!line.trim()) return;
-      if (++lines > 500_000 || line.length > 4 * 1024 * 1024) {
-        broken = true;
-        return;
-      }
+    // Resolve identity before committing a reader. Preambles retain no content;
+    // replaying the prefix into the canonical reader also dedupes copied files.
+    const read = async (consume: (record: any) => boolean) => {
+      let stop = false;
+      const parse = (line: string) => {
+        if (stop || !line.trim()) return;
+        if (++lines > 500_000 || line.length > 4 * 1024 * 1024) {
+          broken = true;
+          return;
+        }
+        try {
+          stop = !consume(JSON.parse(line));
+        } catch {
+          broken = true;
+        }
+      };
       try {
-        feed(JSON.parse(line));
+        if (path.endsWith(".json") || path.endsWith(".zst")) {
+          if (materialized === undefined) {
+            if (
+              file.size > 16 * 1024 * 1024 ||
+              bytes + file.size > 256 * 1024 * 1024
+            ) {
+              truncated = true;
+              broken = true;
+              return;
+            }
+            let raw: Uint8Array = await fs.readFile(path);
+            bytes += raw.byteLength;
+            if (path.endsWith(".zst")) {
+              if (!ports.decompress) {
+                broken = true;
+                return;
+              }
+              raw = await ports.decompress(raw);
+              bytes += Math.max(0, raw.byteLength - file.size);
+            }
+            if (
+              raw.byteLength > 64 * 1024 * 1024 ||
+              bytes > 256 * 1024 * 1024
+            ) {
+              truncated = true;
+              broken = true;
+              return;
+            }
+            materialized = Buffer.from(raw).toString("utf8");
+          }
+          const text = materialized;
+          if (path.endsWith(".json")) {
+            try {
+              consume(JSON.parse(text));
+            } catch {
+              broken = true;
+            }
+          } else
+            for (const line of text.split("\n")) {
+              parse(line);
+              if (stop) break;
+            }
+        } else {
+          const handle = await fs.open(path, "r");
+          try {
+            const buffer = Buffer.alloc(64 * 1024),
+              decoder = new TextDecoder();
+            let tail = "",
+              skipping = false;
+            while (!stop) {
+              if (
+                fileBytes >= 64 * 1024 * 1024 ||
+                bytes >= 256 * 1024 * 1024 ||
+                lines > 500_000 ||
+                performance.now() > deadline
+              ) {
+                truncated = true;
+                broken = true;
+                break;
+              }
+              const { bytesRead } = await handle.read(buffer, 0, buffer.length);
+              if (!bytesRead) break;
+              fileBytes += bytesRead;
+              bytes += bytesRead;
+              tail += decoder.decode(buffer.subarray(0, bytesRead), {
+                stream: true,
+              });
+              let end;
+              while (!stop && (end = tail.indexOf("\n")) >= 0) {
+                if (!skipping) parse(tail.slice(0, end));
+                skipping = false;
+                tail = tail.slice(end + 1);
+              }
+              if (tail.length > 4 * 1024 * 1024) {
+                tail = "";
+                skipping = true;
+                broken = true;
+              }
+            }
+            if (!stop && (tail || skipping)) broken = true;
+          } finally {
+            await handle.close();
+          }
+        }
       } catch {
         broken = true;
       }
     };
-    try {
-      if (path.endsWith(".json") || path.endsWith(".zst")) {
-        if (
-          file.size > 16 * 1024 * 1024 ||
-          bytes + file.size > 256 * 1024 * 1024
-        ) {
-          truncated = true;
-          fail(harness);
-          continue;
-        }
-        let raw: Uint8Array = await fs.readFile(path);
-        bytes += raw.byteLength;
-        if (path.endsWith(".zst")) {
-          if (!ports.decompress) {
-            fail(harness);
-            continue;
-          }
-          raw = await ports.decompress(raw);
-          bytes += Math.max(0, raw.byteLength - file.size);
-        }
-        if (raw.byteLength > 64 * 1024 * 1024) {
-          truncated = true;
-          fail(harness);
-          continue;
-        }
-        const text = Buffer.from(raw).toString("utf8");
-        if (path.endsWith(".json")) {
-          try {
-            feed(JSON.parse(text));
-          } catch {
-            broken = true;
-          }
-        } else for (const line of text.split("\n")) parse(line);
-      } else {
-        const handle = await fs.open(path, "r");
-        try {
-          const buffer = Buffer.alloc(64 * 1024);
-          const decoder = new TextDecoder();
-          let tail = "",
-            skipping = false;
-          while (true) {
-            if (
-              perFile >= 64 * 1024 * 1024 ||
-              bytes >= 256 * 1024 * 1024 ||
-              lines > 500_000 ||
-              performance.now() > deadline
-            ) {
-              truncated = true;
-              broken = true;
-              break;
-            }
-            const { bytesRead } = await handle.read(buffer, 0, buffer.length);
-            if (!bytesRead) break;
-            perFile += bytesRead;
-            bytes += bytesRead;
-            tail += decoder.decode(buffer.subarray(0, bytesRead), {
-              stream: true,
-            });
-            let end;
-            while ((end = tail.indexOf("\n")) >= 0) {
-              if (!skipping) parse(tail.slice(0, end));
-              skipping = false;
-              tail = tail.slice(end + 1);
-            }
-            if (tail.length > 4 * 1024 * 1024) {
-              tail = "";
-              skipping = true;
-              broken = true;
-            }
-          }
-          // An append-in-progress fragment is a disclosed partial read.
-          if (tail || skipping) broken = true;
-        } finally {
-          await handle.close();
-        }
-      }
-    } catch {
-      broken = true;
+    let nativeId: string | null = null;
+    await read((record) => {
+      nativeId = identity(record);
+      return nativeId === null;
+    });
+    const key = hash(`${harness}\0${nativeId ?? path.replace(/\.zst$/, "")}`);
+    let current = sessions.get(key);
+    if (!current) {
+      current = {
+        harness,
+        reader: project(harness, options.now),
+        files: new Set(),
+      };
+      sessions.set(key, current);
     }
+    if (nativeId) nativeSessions.set(key, nativeId);
+    else broken = true; // No canonical identity is explicitly partial.
+    if (current.files.size < 16)
+      current.files.add(hash(path.replace(/\.zst$/, "")));
+    else {
+      current.reader.incomplete();
+      truncated = true;
+    }
+    await read((record) => {
+      const nextId = identity(record);
+      if (nextId && nativeId && nextId !== nativeId) {
+        broken = true;
+        return false;
+      }
+      current.reader.accept(record);
+      return true;
+    });
     if (broken) {
-      current?.reader.incomplete();
+      current.reader.incomplete();
       fail(harness);
     }
   }
@@ -326,6 +353,22 @@ export async function collectHarnessUsage(
     )
       states.set(harness, "missing");
   result.sources = [...states].map(([harness, state]) => ({ harness, state }));
+  result.title_matches = [];
+  if (!result.truncated && states.get("codex") === "available") {
+    for (const prefix of (options.codex_prefixes ?? []).slice(0, 128)) {
+      if (!/^[0-9a-f-]{17,36}$/i.test(prefix)) continue;
+      const matches = [...nativeSessions].filter(
+        ([key, id]) =>
+          sessions.get(key)?.harness === "codex" &&
+          id.toLowerCase().startsWith(prefix.toLowerCase()),
+      );
+      if (matches.length === 1)
+        result.title_matches.push({
+          prefix_key: hash(prefix.toLowerCase()),
+          session_key: matches[0]![0],
+        });
+    }
+  }
   while (
     Buffer.byteLength(JSON.stringify(result)) > 512 * 1024 &&
     result.rows.length

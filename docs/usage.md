@@ -30,13 +30,16 @@ These are format references rather than a promise that arbitrary future versions
 will retain the same schema. Unsupported or invalid records disclose partial
 coverage. Other detected harnesses report `unsupported`.
 
-Local collection uses the service's Bun runtime. SSH collection sends the same
+Local collection runs in an owned worker in the service's Bun runtime. SSH collection sends the same
 numeric projection program through the owning OpenSSH destination and requires
 Bun or Node on that host. Node zstd support is optional; without a decoder,
 compressed sources report partial coverage. Remote failures never read this
 machine's files. Harness roots honor `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and
 `PI_CODING_AGENT_DIR` on the transcript host. Exact files resolved from current
-agent session evidence receive inventory capacity first.
+agent session evidence receive inventory capacity first. File identity is read
+before projection, so preambles and copied files cannot create independent
+readers for one known session. Plain prefixes are replayed within the read
+budgets; compressed/JSON materialization is reused within that file's worker.
 
 ## Read contract
 
@@ -58,9 +61,13 @@ The response is typed by `shared/usage.ts`:
   health. IDs remain stable for retained entities during one service incarnation.
 - Qualified host ownership (`connection_id`, `connection_generation`), plus
   `workspace_id`, `tab_id` and `pane_id` only for a unique current session/file
-  match. A title or cwd alone is insufficient. Unknown sessions and duplicate
+  match. A title prefix must resolve uniquely in a complete source inventory;
+  cwd alone is insufficient. Unknown sessions and duplicate
   claims remain host-level `unattributed` usage. Topology changes invalidate
-  cached pane attribution until the connector refreshes.
+  cached pane attribution until the connector refreshes. More than 128 supplied
+  agents disclose truncation and keep all usage host-level. A complete
+  post-collection agent listing must preserve the initial claim set; changed,
+  newly added or conflicting claims invalidate pane attribution for that read.
 - `total`, `unattributed` and `rollups` for host, workspace, tab and pane. Each
   level is a projection of the same entities; do not add levels together.
   Stale entities remain visible but are excluded from current totals.
@@ -134,3 +141,14 @@ most 128 entities plus their rollups, with a 768 KiB response budget below the
 1 MiB frame. Bounds set `truncated`; totals describe the returned entities.
 Fixed counts and deadlines bound work and do not promise full host history.
 Store ID reservations survive restart; numeric caches and bindings do not.
+
+One owned 20-second operation deadline covers identity discovery, collection,
+decompression and claim revalidation. Runtime retirement, replacement and
+service shutdown abort that work. Local workers terminate and report exit even
+when a filesystem promise is blocked. SSH keeps an input lifetime channel open;
+closing it ends the remote program. The service bounds stdout at 768 KiB and
+stderr at 16 KiB while reading, and kills and reaps the owned SSH process on
+overflow, cancellation or failure. A replacement generation starts independently
+of its cancelled predecessor; shutdown drains the owned resources before
+finishing. A still-current source that times out reports unavailable and retains
+its last bounded numbers as stale, outside current totals.

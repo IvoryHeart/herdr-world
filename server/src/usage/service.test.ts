@@ -5,6 +5,12 @@ import { parseUsagePrices, estimateUsage } from "./totals";
 import type { WorldSnapshotResult } from "../world/snapshot";
 import { systemScheduler } from "../service/ports";
 import { emptyOfficeObservability } from "../world/observability";
+import * as fs from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { collectHarnessUsage } from "./collector";
+import { createUsageProjection } from "./projection";
+import { createRuntimeUsage } from "./host";
 
 const at = Date.parse("2026-11-01T12:00:00Z");
 const row = (session = "session-a", day = "2026-11-01") => ({
@@ -49,7 +55,7 @@ function value(): RuntimeUsage {
   };
 }
 
-function setup(hosts = ["alpha"]) {
+function setup(hosts = ["alpha"], collectionMs = 20_000) {
   let now = at,
     generation = 1,
     ready = true,
@@ -57,11 +63,17 @@ function setup(hosts = ["alpha"]) {
   let data = value(),
     agents = [agent],
     calls = 0;
-  let read: () => Promise<RuntimeUsage> = async () => structuredClone(data);
+  let read: (signal: AbortSignal) => Promise<RuntimeUsage> = async () =>
+    structuredClone(data);
   const runtime = {
-    usage: async () => {
+    usage: async (
+      _agents: unknown,
+      _now: number,
+      _isCurrent: () => boolean,
+      signal: AbortSignal,
+    ) => {
       calls++;
-      return read();
+      return read(signal);
     },
   };
   const service = new WorldUsageService({
@@ -69,6 +81,7 @@ function setup(hosts = ["alpha"]) {
     now: () => now,
     scheduler: systemScheduler,
     waitMs: 100,
+    collectionMs,
     ids: { issue: async () => `usage_${++serial}` },
     connections: {
       list: () =>
@@ -134,6 +147,8 @@ function setup(hosts = ["alpha"]) {
     },
     replace: () => {
       generation++;
+      for (const id of hosts)
+        service.connectionStatus({ id, generation, state: "ready" });
     },
     agents: (v: typeof agents) => {
       agents = v;
@@ -347,4 +362,135 @@ test("price table validation preserves unknown cost and never bills reasoning tw
       },
     }),
   ).toBeNull();
+});
+
+test("a replacement generation cancels old work and starts without waiting for its source release", async () => {
+  const s = setup(),
+    started = Promise.withResolvers<void>();
+  let oldSignal: AbortSignal | undefined;
+  s.read((signal) => {
+    if (oldSignal) return Promise.resolve(value());
+    oldSignal = signal;
+    started.resolve();
+    return new Promise((_resolve, reject) =>
+      signal.addEventListener("abort", () => reject(new Error("cancelled")), {
+        once: true,
+      }),
+    );
+  });
+  const old = s.service.get();
+  await started.promise;
+  s.replace();
+  expect(oldSignal?.aborted).toBe(true);
+  expect((await s.service.get()).entities[0]?.connection_generation).toBe(2);
+  await old;
+  expect(s.calls()).toBe(2);
+  await s.service.close();
+});
+
+test("service shutdown actively cancels and drains an unreleased source", async () => {
+  const s = setup(),
+    started = Promise.withResolvers<void>();
+  let aborted = false;
+  s.read(
+    (signal) =>
+      new Promise((_resolve, reject) => {
+        started.resolve();
+        signal.addEventListener(
+          "abort",
+          () => {
+            aborted = true;
+            reject(new Error("cancelled"));
+          },
+          { once: true },
+        );
+      }),
+  );
+  const response = s.service.get();
+  await started.promise;
+  await s.service.close();
+  expect(aborted).toBe(true);
+  expect((await response).entities).toEqual([]);
+});
+
+test("preambles and copied files keep exact ID attribution through the collector, runtime and service", async () => {
+  const root = await fs.mkdtemp(join(tmpdir(), "usage-binding-")),
+    s = setup();
+  const directory = join(root, ".claude", "projects", "synthetic");
+  await fs.mkdir(directory, { recursive: true });
+  const records = [
+    {
+      type: "file-history-snapshot",
+      snapshot: { content: "PRIVATE_SENTINEL" },
+    },
+    {
+      type: "assistant",
+      sessionId: "session-a",
+      timestamp: new Date(at - 100).toISOString(),
+      message: {
+        id: "response-a",
+        model: "synthetic-model",
+        content: "PRIVATE_SENTINEL",
+        usage: { input_tokens: 10, output_tokens: 3 },
+      },
+    },
+  ];
+  for (const file of ["original.jsonl", "copy.jsonl"])
+    await fs.writeFile(
+      join(directory, file),
+      records.map((record) => JSON.stringify(record)).join("\n") + "\n",
+    );
+  const usage = createRuntimeUsage({
+    herdrCall: async () => ({ agents: [agent] }),
+    collect: (options) =>
+      collectHarnessUsage(options, createUsageProjection, {
+        fs,
+        home: root,
+        env: {},
+        join,
+        hash: usageDigest,
+      }),
+  });
+  s.read((signal) => usage([agent], at, () => true, signal));
+  try {
+    const result = await s.service.get();
+    expect(result.entities).toHaveLength(1);
+    expect(result.entities[0]).toMatchObject({
+      pane_id: "p1",
+      tab_id: "t1",
+      workspace_id: "w1",
+      total_tokens: 13,
+    });
+    const text = JSON.stringify(result);
+    for (const privateValue of [
+      root,
+      "session-a",
+      "response-a",
+      "PRIVATE_SENTINEL",
+    ])
+      expect(text).not.toContain(privateValue);
+  } finally {
+    await s.service.close();
+    await usage.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a source deadline retains prior numbers as stale and reports the failed refresh", async () => {
+  const s = setup(["alpha"], 5);
+  await s.service.get();
+  s.advance(31_000);
+  s.read(
+    (signal) =>
+      new Promise((_resolve, reject) =>
+        signal.addEventListener("abort", () => reject(new Error("cancelled")), {
+          once: true,
+        }),
+      ),
+  );
+  const result = await s.service.get();
+  expect(result.entities[0]?.state).toBe("stale");
+  expect(result.sources[0]?.state).toBe("unavailable");
+  expect(result.total.records).toBe(0);
+  await s.service.close();
 });

@@ -32,6 +32,7 @@ export function createUsageProjection(harness: string, now: number) {
     model = "unknown",
     partial = false;
   let previous: UsageTokens | null = null;
+  const cumulativeStates = new Set<string>();
   const object = (v: any): RecordValue =>
     v && typeof v === "object" && !Array.isArray(v) ? v : {};
   const identifier = (v: any) =>
@@ -100,13 +101,21 @@ export function createUsageProjection(harness: string, now: number) {
         };
         if (current.input < 0 || current.reasoning > current.output)
           throw new Error("invalid usage");
+        const identity = JSON.stringify(current);
+        if (cumulativeStates.has(identity)) return;
+        if (cumulativeStates.size >= 32_768) {
+          partial = true;
+          return;
+        }
+        cumulativeStates.add(identity);
         const before = previous;
-        previous = current;
-        if (before && keys.every((k) => before[k] === current[k])) return;
         if (before && keys.some((k) => current[k] < before[k])) {
           partial = true;
           return;
         }
+        // A decrease cannot lower the already covered region. A subsequent
+        // recovery contributes only above this last defensible high-water mark.
+        previous = current;
         const delta = { ...current };
         if (before) for (const k of keys) delta[k] -= before[k];
         else {
@@ -121,7 +130,7 @@ export function createUsageProjection(harness: string, now: number) {
             return;
           }
         }
-        remember(JSON.stringify(current), time(r.timestamp), model, delta);
+        remember(identity, time(r.timestamp), model, delta);
         return;
       }
       if (harness === "claude") {
@@ -176,7 +185,6 @@ export function createUsageProjection(harness: string, now: number) {
       }
     } catch {
       partial = true;
-      if (harness === "codex") previous = null;
     }
   };
   return {

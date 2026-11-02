@@ -213,7 +213,8 @@
       "existingTests": [
         "server/src/connections/protocol.test.ts",
         "server/src/connections/session-link-routing.test.ts",
-        "server/src/connections/http-routing.test.ts"
+        "server/src/connections/http-routing.test.ts",
+        "server/src/bridge/herdr-client.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "qualified-operation",
@@ -230,12 +231,13 @@
         "tests": [
           "server/src/connections/protocol.test.ts",
           "server/src/connections/session-link-routing.test.ts",
-          "server/src/connections/http-routing.test.ts"
+          "server/src/connections/http-routing.test.ts",
+          "server/src/bridge/herdr-client.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams.",
+      "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. Usage revalidation adds directly checked one-shot AbortSignal socket cancellation; no operation authority or model domain changes. The added mapping awaits the PR repair review.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1878,7 +1880,10 @@
         "server/src/usage/collector.test.ts",
         "server/src/usage/host.test.ts",
         "server/src/usage/service.test.ts",
-        "server/src/rpc/usage.test.ts"
+        "server/src/rpc/usage.test.ts",
+        "server/src/usage/process.test.ts",
+        "server/src/usage/worker.test.ts",
+        "server/src/bridge/herdr-client.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/155",
       "technique": "alternative",
@@ -1886,7 +1891,7 @@
       "status": "alternative-evidence",
       "remaining": "Metrics do not grant operation authority; provider availability and network deadlines are observed integration behavior.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. Harness-log usage adds direct parser, host-program, attribution/lease, retention/size and real RPC admission consumers under verification/contracts/world-usage.md; the new mapping awaits independent PR review and does not expand accepted model claims.",
+      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. Harness-log usage adds direct parser, host-program, attribution/lease, retention/size and real RPC admission consumers under verification/contracts/world-usage.md; the new mapping awaits independent PR review and does not expand accepted model claims. Review repair adds 625 cumulative recovery schedules, canonical preamble/copy identity, incomplete/changed claim admission, and owned worker/process/socket cancellation with streaming limits and reaping. This remains direct consumer evidence pending reviewer-642r acceptance.",
       "partialEvidence": {
         "models": [],
         "contracts": [
@@ -1900,7 +1905,10 @@
           "server/src/usage/collector.test.ts",
           "server/src/usage/host.test.ts",
           "server/src/usage/service.test.ts",
-          "server/src/rpc/usage.test.ts"
+          "server/src/rpc/usage.test.ts",
+          "server/src/usage/process.test.ts",
+          "server/src/usage/worker.test.ts",
+          "server/src/bridge/herdr-client.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

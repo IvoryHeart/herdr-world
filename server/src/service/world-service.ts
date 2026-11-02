@@ -261,6 +261,7 @@ async function compose(
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null =
     null;
+  let worldUsage: WorldUsageService | null = null;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
@@ -370,6 +371,7 @@ async function compose(
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
     (status) => {
+      worldUsage?.connectionStatus(status);
       focusedAcquisition.reconcile();
       deskWatches.reconcile();
       publishConnectionsChanged();
@@ -762,7 +764,7 @@ async function compose(
   });
   const handleWorldSources = createSourcesHttpHandler(worldSources);
 
-  const worldUsage = new WorldUsageService({
+  worldUsage = new WorldUsageService({
     incarnation: serviceIncarnation,
     ids: storage.ids,
     connections: connectionManager,
@@ -956,7 +958,7 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
-    const usageStopped = worldUsage.close();
+    const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();
     connectionProfiles.stopSupervision();

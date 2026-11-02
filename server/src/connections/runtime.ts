@@ -158,7 +158,6 @@ export function createLegacyConnectionRuntime(args: {
   });
   const usage = createRuntimeUsage({
     herdrCall: (...args) => herdr.call(...args),
-    files: agentSessionFiles,
     sshHost: config.sshHost,
   });
   // These helper groups run Unix shell commands over SSH.
@@ -758,6 +757,7 @@ export function createLegacyConnectionRuntime(args: {
     // Calls still waiting on Herdr belong to this retired runtime: fail them
     // now rather than at their timeout, so their callers can settle.
     herdr.close();
+    const usageStop = usage.close();
     handleTerminalUpload.stopCleanup();
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
@@ -776,6 +776,7 @@ export function createLegacyConnectionRuntime(args: {
     const transportStop =
       transportStart?.catch(() => undefined) ?? Promise.resolve();
     stopTask = Promise.all([
+      usageStop,
       autoSyncStop,
       subscriptionStop,
       agentStatusStop,

@@ -24,6 +24,10 @@ Usage SHALL identify its host and SHALL name pane, tab and workspace only with o
 - **WHEN** collection finishes after its runtime lease retires
 - **THEN** no collected result is published as fresh or attributed to the replacement runtime
 
+#### Scenario: Attribution inventory is incomplete or changes
+- **WHEN** the supplied agent count exceeds the attribution budget or a complete revalidation observes a changed, new or conflicting claim
+- **THEN** usage remains host-attributed and candidate-budget truncation is explicit rather than implying unique pane ownership
+
 ### Requirement: Counted-once windows and retention
 
 The read contract SHALL offer today and seven UTC calendar days including today as half-open bounded windows. Per-message/turn identity SHALL prevent repeated Claude/Pi/Gemini usage from counting twice; Codex cumulative counts SHALL contribute only known nonnegative deltas, without assigning an unknown baseline to a model or window. Daily session/model rollups SHALL retain at most seven days. Response and collection bounds SHALL be fixed and any loss of coverage SHALL be explicit, with each response below the 1 MiB frame. Time SHALL mean usage-observation span, not active or billable time.
@@ -31,6 +35,18 @@ The read contract SHALL offer today and seven UTC calendar days including today 
 #### Scenario: Repeated and mixed-model records
 - **WHEN** the same response appears twice or cumulative Codex snapshots repeat around a model switch
 - **THEN** the response counts once and only a known delta is assigned to its observed model
+
+#### Scenario: Cumulative counters recover after a decrease
+- **WHEN** a session's cumulative counters decrease or a copied prefix is replayed before recovering
+- **THEN** no already covered usage counts again and only proven increments beyond the prior high-water baseline contribute
+
+#### Scenario: A transcript starts with a preamble
+- **WHEN** a preamble precedes the canonical session identity in copied transcript files
+- **THEN** both copies feed one session reader with response deduplication and exact ID attribution
+
+#### Scenario: Cancellation or output overflow
+- **WHEN** collection is cancelled, exceeds its owned deadline, or crosses either subprocess stream bound
+- **THEN** its worker or subprocess is terminated and reaped, blocked work cannot retain replacement or shutdown progress, and no retired result becomes fresh usage
 
 #### Scenario: UTC reset
 - **WHEN** UTC midnight passes

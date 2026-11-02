@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import { createRuntimeUsage, usageDigest } from "./host";
-import type { AgentSessionFileAccess } from "../agent/session-file-access";
 
 const agent = {
   agent: "claude",
@@ -24,8 +23,8 @@ test("runtime usage remains on the exact SSH host and revalidates pane continuit
     collectedHost: string | undefined;
   const usage = createRuntimeUsage({
     sshHost: "operator@example.test",
-    files: { remote: true } as AgentSessionFileAccess,
-    herdrCall: async () => ({ agent: current }),
+
+    herdrCall: async () => ({ agents: [current] }),
     collect: async (_options, host) => {
       collectedHost = host;
       return empty();
@@ -44,7 +43,6 @@ test("runtime usage remains on the exact SSH host and revalidates pane continuit
 test("unlinked Codex remains unattributed without cwd-based session guessing", async () => {
   let reads = 0;
   const usage = createRuntimeUsage({
-    files: { remote: true } as AgentSessionFileAccess,
     herdrCall: async () => {
       reads++;
       throw new Error("must not infer");
@@ -70,7 +68,7 @@ test("an unavailable SSH collector never retries through local files", async () 
   const hosts: (string | undefined)[] = [];
   const usage = createRuntimeUsage({
     sshHost: "operator@example.test",
-    files: { remote: true } as AgentSessionFileAccess,
+
     herdrCall: async () => ({ agent }),
     collect: async (_options, host) => {
       hosts.push(host);
@@ -87,7 +85,6 @@ test("retiring a runtime during collection prevents further pane reads", async (
   let current = true,
     reads = 0;
   const usage = createRuntimeUsage({
-    files: { remote: true } as AgentSessionFileAccess,
     herdrCall: async () => {
       reads++;
       return { agent };
@@ -101,4 +98,89 @@ test("retiring a runtime during collection prevents further pane reads", async (
     "retired",
   );
   expect(reads).toBe(0);
+});
+
+test("claims after the 128-agent resolution budget cannot establish unique attribution", async () => {
+  const agents = Array.from({ length: 129 }, (_, i) => ({
+    ...agent,
+    pane_id: `p${i}`,
+    terminal_id: `term${i}`,
+    agent_session: {
+      kind: "id",
+      value: i === 128 ? "session-0" : `session-${i}`,
+    },
+  }));
+  const usage = createRuntimeUsage({
+    herdrCall: async (_method, params) => ({
+      agent: agents.find((a) => a.pane_id === params?.target),
+      agents,
+    }),
+    collect: async () => empty(),
+  });
+  const result = await usage(agents, Date.now());
+  expect(result.truncated).toBe(true);
+  expect(result.bindings).toEqual([]);
+});
+
+test("a newly conflicting session claim seen during revalidation invalidates attribution", async () => {
+  const second = {
+    ...agent,
+    pane_id: "p2",
+    terminal_id: "term2",
+    agent_session: { kind: "id", value: "other-session" },
+  };
+  const conflict = { ...second, agent_session: agent.agent_session };
+  const usage = createRuntimeUsage({
+    herdrCall: async (_method, params) => ({
+      agent: params?.target === "p1" ? agent : conflict,
+      agents: [agent, conflict],
+    }),
+    collect: async () => empty(),
+  });
+  const result = await usage([agent, second], Date.now());
+  expect(result.bindings).toEqual([]);
+});
+
+test("the connection runtime owns cancellation of its unreleased collector", async () => {
+  const started = Promise.withResolvers<void>();
+  let cancelled = false;
+  const usage = createRuntimeUsage({
+    herdrCall: async () => ({ agents: [agent] }),
+    collect: async (_options, _host, signal) =>
+      new Promise((_resolve, reject) => {
+        started.resolve();
+        signal!.addEventListener(
+          "abort",
+          () => {
+            cancelled = true;
+            reject(new Error("cancelled"));
+          },
+          { once: true },
+        );
+      }),
+  });
+  const work = usage([agent], Date.now());
+  await started.promise;
+  const closed = usage.close();
+  await expect(work).rejects.toThrow("cancelled");
+  await closed;
+  expect(cancelled).toBe(true);
+});
+
+test("newly added and previously unlinked revalidation claims cannot disappear from uniqueness", async () => {
+  const unlinked = {
+    ...agent,
+    pane_id: "p2",
+    terminal_id: "term2",
+    agent_session: null,
+  };
+  const conflicting = { ...unlinked, agent_session: agent.agent_session };
+  for (const before of [[agent], [agent, unlinked]]) {
+    const usage = createRuntimeUsage({
+      herdrCall: async () => ({ agents: [agent, conflicting] }),
+      collect: async () => empty(),
+    });
+    expect((await usage(before, Date.now())).bindings).toEqual([]);
+    await usage.close();
+  }
 });

@@ -105,7 +105,7 @@ test("Codex unknown initial baseline and counter decreases disclose partial cove
   feed(3, 3);
   expect(reader.finish()).toMatchObject({
     partial: true,
-    rows: [{ tokens: { input: 6, output: 3 } }],
+    rows: [{ tokens: { input: 5, output: 2 } }],
   });
 });
 
@@ -122,6 +122,55 @@ test("invalid and missing token values never become negative, NaN or invented ze
       },
     });
     expect(reader.finish()).toMatchObject({ partial: true, rows: [] });
+  }
+});
+
+test("Codex recovery and copied replays never bill below the cumulative high-water mark again", () => {
+  const reader = createUsageProjection("codex", now);
+  reader.accept({ type: "turn_context", payload: { model: "model-a" } });
+  for (const input of [10, 20, 5, 15, 25, 10, 20, 25])
+    reader.accept({
+      type: "event_msg",
+      timestamp: at,
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: { input_tokens: input, output_tokens: 0 },
+          last_token_usage: { input_tokens: input, output_tokens: 0 },
+        },
+      },
+    });
+  expect(reader.finish()).toMatchObject({
+    partial: true,
+    rows: [{ tokens: { input: 25 } }],
+  });
+});
+
+test("bounded Codex decrease/recovery schedules never exceed observed cumulative usage", () => {
+  for (let code = 0; code < 625; code++) {
+    const reader = createUsageProjection("codex", now);
+    reader.accept({ type: "turn_context", payload: { model: "model-a" } });
+    let schedule = code,
+      highest = 0;
+    for (let i = 0; i < 4; i++) {
+      const input = schedule % 5;
+      schedule = Math.floor(schedule / 5);
+      highest = Math.max(highest, input);
+      reader.accept({
+        type: "event_msg",
+        timestamp: at,
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: { input_tokens: input, output_tokens: 0 },
+            last_token_usage: { input_tokens: input, output_tokens: 0 },
+          },
+        },
+      });
+    }
+    expect(
+      reader.finish().rows.reduce((sum, row) => sum + row.tokens.input, 0),
+    ).toBe(highest);
   }
 });
 

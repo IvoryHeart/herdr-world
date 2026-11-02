@@ -1,7 +1,5 @@
-import * as fs from "node:fs/promises";
-import { homedir } from "node:os";
 import { createHash } from "node:crypto";
-import { join, isAbsolute } from "node:path";
+import { isAbsolute } from "node:path";
 import { createUsageProjection } from "./projection";
 import {
   collectHarnessUsage,
@@ -10,13 +8,10 @@ import {
 } from "./collector";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import { shQuote } from "../utils/process-utils";
-import { runProcessWithInputTimeout } from "../workspace/process";
-import type { AgentSessionFileAccess } from "../agent/session-file-access";
-import {
-  createAgentSessionResolverContext,
-  codexIdsFromTitle,
-  resolveAgentSessionInfo,
-} from "../agent/session-resolver";
+import { runUsageProcess } from "./process";
+import { runUsageWorker } from "./worker";
+import { usageScope } from "./lifetime";
+import { codexIdsFromTitle } from "../agent/session-resolver";
 import { normalizeAgentName } from "../agent/chat-harnesses";
 import type { HerdrCall } from "../agent/session-types";
 
@@ -63,8 +58,19 @@ export type RuntimeUsage = HostUsage & {
 
 /** Generated from the actual production functions; no second parser to drift.
  * stdin carries trusted code; stdout contains only the bounded numeric projection. */
-export function usageHostProgram(options: CollectorOptions) {
-  return `const fs = await import('node:fs/promises');
+export function usageHostProgram(
+  options: CollectorOptions,
+  mode: "stdio" | "ssh" | "worker" = "stdio",
+) {
+  return `${
+    mode === "ssh"
+      ? `process.stdin.resume();
+process.stdin.once('end', () => process.exit(1));
+process.once('SIGHUP', () => process.exit(1));
+setTimeout(() => process.exit(1), 20000).unref();`
+      : ""
+  }
+const fs = await import('node:fs/promises');
 const os = await import('node:os');
 const path = await import('node:path');
 const crypto = await import('node:crypto');
@@ -78,32 +84,34 @@ hash: value => crypto.createHash('sha256').update(value).digest('hex'),
 decompress: typeof Bun !== 'undefined' ? boundedDecompress :
 typeof zlib.zstdDecompressSync === 'function' ? value => zlib.zstdDecompressSync(value, { maxOutputLength: 67108864 }) : undefined,
 });
-process.stdout.write(JSON.stringify(result));`;
+${
+  mode === "worker"
+    ? `const { parentPort } = await import('node:worker_threads'); parentPort.postMessage(result);`
+    : `await new Promise((resolve, reject) => process.stdout.write(JSON.stringify(result), error => error ? reject(error) : resolve()));${mode === "ssh" ? "process.exit(0);" : ""}`
+}`;
 }
 
 export async function readHostUsage(
   options: CollectorOptions,
   sshHost?: string,
+  signal?: AbortSignal,
 ): Promise<HostUsage> {
-  if (!sshHost)
-    return collectHarnessUsage(options, createUsageProjection, {
-      fs,
-      home: homedir(),
-      env: process.env,
-      join,
-      hash: usageDigest,
-      decompress: boundedUsageDecompress,
-    });
-  const command =
-    "if command -v bun >/dev/null 2>&1; then exec bun run -; elif command -v node >/dev/null 2>&1; then exec node --input-type=module; else exit 69; fi";
-  const result = await runProcessWithInputTimeout(
-    sshCommandArgv(sshHost, `bash -lc ${shQuote(command)}`),
-    usageHostProgram(options),
-    20_000,
-  );
-  if (result.code !== 0 || Buffer.byteLength(result.stdout) > 768 * 1024)
-    throw new Error("Usage source unavailable");
-  return validateHostUsage(JSON.parse(result.stdout));
+  const owner = usageScope(signal);
+  try {
+    if (!sshHost)
+      return validateHostUsage(
+        await runUsageWorker(usageHostProgram(options, "worker"), owner.signal),
+      );
+    const program = shQuote(usageHostProgram(options, "ssh"));
+    const command = `if command -v bun >/dev/null 2>&1; then exec bun -e ${program}; elif command -v node >/dev/null 2>&1; then exec node --input-type=module -e ${program}; else exit 69; fi`;
+    const result = await runUsageProcess(
+      sshCommandArgv(sshHost, `bash -lc ${shQuote(command)}`),
+      owner.signal,
+    );
+    return validateHostUsage(JSON.parse(result));
+  } finally {
+    owner.dispose();
+  }
 }
 
 /** Never let a remote projection smuggle text, paths, invalid counts or unbounded rows. */
@@ -185,7 +193,26 @@ export function validateHostUsage(raw: any): HostUsage {
       tokens,
     };
   });
-  return { rows, sources, truncated: raw.truncated };
+  if (
+    raw.title_matches !== undefined &&
+    (!Array.isArray(raw.title_matches) || raw.title_matches.length > 128)
+  )
+    throw new Error("Invalid usage title matches");
+  const title_matches = (raw.title_matches ?? []).map((match: any) => {
+    if (!digest(match?.prefix_key) || !digest(match?.session_key))
+      throw new Error("Invalid usage title match");
+    return {
+      prefix_key: match.prefix_key as string,
+      session_key: match.session_key as string,
+    };
+  });
+  if (
+    new Set(
+      title_matches.map((match: { prefix_key: string }) => match.prefix_key),
+    ).size !== title_matches.length
+  )
+    throw new Error("Ambiguous usage title matches");
+  return { rows, sources, truncated: raw.truncated, title_matches };
 }
 
 function witness(agent: Record<string, unknown>) {
@@ -200,108 +227,183 @@ function witness(agent: Record<string, unknown>) {
   ]);
 }
 
+/** A runtime owns all of its readers, sockets and child execution. */
 export function createRuntimeUsage(args: {
   herdrCall: HerdrCall;
-  files: AgentSessionFileAccess;
   sshHost?: string;
   collect?: typeof readHostUsage;
 }) {
-  const context = createAgentSessionResolverContext();
-  return async (
+  const lifetime = new AbortController();
+  const active = new Set<Promise<RuntimeUsage>>();
+  const read = (
     agents: Record<string, unknown>[],
     now: number,
     isCurrent = () => true,
+    signal?: AbortSignal,
   ): Promise<RuntimeUsage> => {
-    const bindings: (UsageBinding & { witness: string })[] = [];
-    const files: NonNullable<CollectorOptions["files"]> = [];
-    const unsupported = new Set<string>();
-    for (const agent of agents.slice(0, 128)) {
-      if (!isCurrent()) throw new Error("Usage lease retired");
-      const harness = normalizeAgentName(String(agent.agent ?? ""));
-      if (!["claude", "codex", "pi", "gemini"].includes(harness)) {
-        if (/^[a-z0-9_-]{1,40}$/.test(harness)) unsupported.add(harness);
-        continue;
-      }
-      const raw = agent.agent_session as
-        | { kind?: string; value?: string }
-        | undefined;
-      let session = raw,
-        path: string | null = null;
-      if (
-        harness === "codex" &&
-        (raw?.value ||
-          codexIdsFromTitle(String(agent.terminal_title ?? "")).length)
-      ) {
-        try {
-          const resolved = await resolveAgentSessionInfo(
-            { pane_id: agent.pane_id },
-            agent,
-            args.files,
-            context,
-            { herdrCall: args.herdrCall, listedCodexPanes: agents },
+    const parent = signal
+      ? AbortSignal.any([signal, lifetime.signal])
+      : lifetime.signal;
+    const owner = usageScope(parent);
+    const task = (async () => {
+      const check = () => {
+        owner.signal.throwIfAborted();
+        if (!isCurrent()) throw new Error("Usage lease retired");
+      };
+      check();
+      const files: NonNullable<CollectorOptions["files"]> = [];
+      const prefixes = new Set<string>(),
+        unsupported = new Set<string>();
+      const bindings: UsageBinding[] = [];
+      // The inexpensive inventory is complete. If expensive attribution capacity
+      // is exceeded, keep every number host-level rather than invent uniqueness.
+      let truncated = agents.length > 128;
+      const titleBindings = new Map<string, UsageBinding>();
+      for (const agent of agents.slice(0, 128)) {
+        const harness = normalizeAgentName(String(agent.agent ?? ""));
+        if (!["claude", "codex", "pi", "gemini"].includes(harness)) {
+          if (/^[a-z0-9_-]{1,40}$/.test(harness)) unsupported.add(harness);
+          continue;
+        }
+        const raw = agent.agent_session as
+          | { kind?: string; value?: string }
+          | undefined;
+        let session =
+          raw?.kind === "id" && typeof raw.value === "string"
+            ? usageDigest(`${harness}\0${raw.value}`)
+            : null;
+        let path =
+          raw?.kind === "path" &&
+          typeof raw.value === "string" &&
+          isAbsolute(raw.value)
+            ? raw.value
+            : null;
+        let prefix: string | null = null;
+        if (harness === "codex") {
+          const ids = codexIdsFromTitle(String(agent.terminal_title ?? ""));
+          const candidates = ids.some((id) => id.truncated)
+            ? ids.filter((id) => id.truncated)
+            : ids;
+          if (candidates.length) {
+            // Title evidence replaces a possibly stale hook; no cwd inference
+            // or uncancellable transcript discovery is used by this connector.
+            session = null;
+            path = null;
+            const unique = [...new Set(candidates.map((id) => id.prefix))];
+            if (unique.length === 1) {
+              if (candidates[0]!.truncated) {
+                prefix = unique[0]!;
+                prefixes.add(prefix);
+              } else session = usageDigest(`codex\0${unique[0]}`);
+            }
+          }
+        }
+        if (path) files.push({ harness, path });
+        if (
+          truncated ||
+          ![
+            agent.pane_id,
+            agent.tab_id,
+            agent.workspace_id,
+            agent.terminal_id,
+          ].every(
+            (v) => typeof v === "string" && v.length > 0 && v.length <= 160,
+          )
+        )
+          continue;
+        const binding: UsageBinding = {
+          harness,
+          session_key: session,
+          file_key: path ? usageDigest(path.replace(/\.zst$/, "")) : null,
+          pane_id: agent.pane_id as string,
+          tab_id: agent.tab_id as string,
+          workspace_id: agent.workspace_id as string,
+        };
+        if (prefix)
+          titleBindings.set(
+            `${usageDigest(prefix)}:${binding.pane_id}`,
+            binding,
           );
-          session = resolved.session ?? undefined;
-          path = resolved.file?.path ?? null;
+        else if (session || path) bindings.push(binding);
+      }
+      const result = await (args.collect ?? readHostUsage)(
+        { now, files, codex_prefixes: [...prefixes] },
+        args.sshHost,
+        owner.signal,
+      );
+      check();
+      for (const match of result.title_matches ?? [])
+        for (const [key, binding] of titleBindings)
+          if (key.startsWith(`${match.prefix_key}:`))
+            bindings.push({ ...binding, session_key: match.session_key });
+      const complete =
+        agents.every((agent) =>
+          [
+            agent.pane_id,
+            agent.tab_id,
+            agent.workspace_id,
+            agent.terminal_id,
+          ].every(
+            (value) =>
+              typeof value === "string" &&
+              value.length > 0 &&
+              value.length <= 160,
+          ),
+        ) &&
+        new Set(agents.map((agent) => agent.pane_id)).size === agents.length;
+      let unchanged = !truncated && complete;
+      if (bindings.length) {
+        try {
+          // A complete post-collection listing preserves newly observed claims
+          // and conflicts. Any changed or added candidate invalidates attribution
+          // for this observation, including candidates previously unlinked.
+          const current = (await args.herdrCall(
+            "agent.list",
+            {},
+            8000,
+            undefined,
+            owner.signal,
+          )) as { agents?: Record<string, unknown>[] };
+          truncated ||=
+            Array.isArray(current.agents) && current.agents.length > 128;
+          const before = agents.map(witness).sort(),
+            after = Array.isArray(current.agents)
+              ? current.agents.map(witness).sort()
+              : null;
+          unchanged =
+            !truncated &&
+            complete &&
+            after !== null &&
+            JSON.stringify(before) === JSON.stringify(after);
         } catch {
-          session = undefined;
+          unchanged = false;
         }
       }
-      if (
-        session?.kind === "path" &&
-        session.value &&
-        isAbsolute(session.value)
-      )
-        path = session.value;
-      if (path) files.push({ harness, path });
-      if (
-        !session?.value ||
-        ![
-          agent.pane_id,
-          agent.tab_id,
-          agent.workspace_id,
-          agent.terminal_id,
-        ].every((v) => typeof v === "string" && v.length > 0 && v.length <= 160)
-      )
-        continue;
-      bindings.push({
-        harness,
-        session_key:
-          session.kind === "id"
-            ? usageDigest(`${harness}\0${session.value}`)
-            : null,
-        file_key: path ? usageDigest(path.replace(/\.zst$/, "")) : null,
-        pane_id: agent.pane_id as string,
-        tab_id: agent.tab_id as string,
-        workspace_id: agent.workspace_id as string,
-        witness: witness(agent),
-      });
-    }
-    if (!isCurrent()) throw new Error("Usage lease retired");
-    const result = await (args.collect ?? readHostUsage)(
-      { now, files },
-      args.sshHost,
+      check();
+      return {
+        ...result,
+        truncated: truncated || result.truncated,
+        bindings: unchanged ? bindings : [],
+        unsupported: [...unsupported],
+      };
+    })();
+    active.add(task);
+    void task.then(
+      () => {
+        active.delete(task);
+        owner.dispose();
+      },
+      () => {
+        active.delete(task);
+        owner.dispose();
+      },
     );
-    const current: UsageBinding[] = [];
-    for (const binding of bindings) {
-      if (!isCurrent()) throw new Error("Usage lease retired");
-      try {
-        const result = (await args.herdrCall("agent.get", {
-          target: binding.pane_id,
-        })) as { agent?: Record<string, unknown> };
-        if (result.agent && witness(result.agent) === binding.witness) {
-          current.push({
-            harness: binding.harness,
-            session_key: binding.session_key,
-            file_key: binding.file_key,
-            pane_id: binding.pane_id,
-            tab_id: binding.tab_id,
-            workspace_id: binding.workspace_id,
-          });
-        }
-      } catch {
-        /* Missing or changed bindings stay unattributed at the host. */
-      }
-    }
-    return { ...result, bindings: current, unsupported: [...unsupported] };
+    return task;
   };
+  return Object.assign(read, {
+    async close() {
+      lifetime.abort();
+      await Promise.allSettled(active);
+    },
+  });
 }

@@ -94,6 +94,31 @@ test("host projection bounds and incomplete writes disclose coverage loss", asyn
   expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(512 * 1024);
 });
 
+test("a preamble cannot hide canonical session identity or duplicate copied responses", async () => {
+  const home = await fixture();
+  for (const name of ["original", "copy"])
+    await write(home, `.claude/projects/synthetic/${name}.jsonl`, [
+      {
+        type: "file-history-snapshot",
+        snapshot: { content: "PRIVATE_SENTINEL" },
+      },
+      assistant(),
+    ]);
+  const result = await collectHarnessUsage({ now }, createUsageProjection, {
+    fs,
+    home,
+    env: {},
+    join,
+    hash: usageDigest,
+  });
+  expect(result.rows).toHaveLength(1);
+  expect(result.rows[0]).toMatchObject({
+    session_key: usageDigest("claude\0synthetic-session"),
+    responses: 1,
+  });
+  expect(JSON.stringify(result)).not.toContain("PRIVATE_SENTINEL");
+});
+
 test("numeric collector ignores symlink files and reads configured session roots", async () => {
   const home = await fixture(),
     outside = await fixture();
@@ -255,6 +280,7 @@ test("bundling preserves the self-contained host program used by compiled servic
     entrypoints: [entry],
     target: "bun",
     format: "esm",
+    minify: true,
   });
   expect(build.success).toBe(true);
   const path = join(root, "bundle.mjs");
@@ -281,4 +307,109 @@ test("bundling preserves the self-contained host program used by compiled servic
   expect(stderr).toBe("");
   expect(exit).toBe(0);
   expect(validateHostUsage(JSON.parse(stdout)).rows).toEqual([]);
+});
+
+test("the production local adapter runs its numeric collector in an owned worker", async () => {
+  const home = await fixture();
+  await write(home, "claude/projects/synthetic/session.jsonl", [assistant()]);
+  const source = `import {readHostUsage} from ${JSON.stringify(join(import.meta.dir, "host.ts"))};
+process.stdout.write(JSON.stringify(await readHostUsage({now:${now}})));`;
+  const proc = Bun.spawn([process.execPath, "-e", source], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      HOME: home,
+      CLAUDE_CONFIG_DIR: join(home, "claude"),
+      CODEX_HOME: join(home, "codex"),
+      PI_CODING_AGENT_DIR: join(home, "pi"),
+    },
+  });
+  const [exit, stdout, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  expect(stderr).toBe("");
+  expect(exit).toBe(0);
+  expect(validateHostUsage(JSON.parse(stdout)).rows[0]?.tokens.input).toBe(10);
+  expect(stdout).not.toContain("PRIVATE_SENTINEL");
+  expect(stdout).not.toContain(home);
+});
+
+test("the SSH program's input lifetime channel ends blocked remote work", async () => {
+  const home = await fixture();
+  const source = usageHostProgram({ now }, "ssh").replace(
+    "const fs =",
+    "process.stderr.write('ready'); await new Promise(()=>{}); const fs =",
+  );
+  const proc = Bun.spawn(["node", "--input-type=module", "-e", source], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      HOME: home,
+      CLAUDE_CONFIG_DIR: join(home, "claude"),
+      CODEX_HOME: join(home, "codex"),
+      PI_CODING_AGENT_DIR: join(home, "pi"),
+    },
+  });
+  const fallback = setTimeout(() => proc.kill("SIGKILL"), 2000);
+  const reader = proc.stderr.getReader();
+  try {
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("ready");
+    await proc.stdin.end();
+    expect(await proc.exited).toBe(1);
+    expect(await new Response(proc.stdout).text()).toBe("");
+  } finally {
+    clearTimeout(fallback);
+    proc.kill();
+    await proc.exited;
+    await reader.cancel();
+    reader.releaseLock();
+  }
+});
+
+test("Codex title prefixes resolve only against a unique complete numeric session inventory", async () => {
+  const home = await fixture(),
+    id = "11111111-1111-4111-8111-111111111111",
+    prefix = id.slice(0, 29);
+  const records = (session: string) => [
+    { type: "session_meta", payload: { id: session } },
+    { type: "turn_context", payload: { model: "m" } },
+    {
+      type: "event_msg",
+      timestamp: new Date(now - 500).toISOString(),
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: { input_tokens: 10, output_tokens: 2 },
+          last_token_usage: { input_tokens: 10, output_tokens: 2 },
+        },
+      },
+    },
+  ];
+  await write(home, ".codex/sessions/synthetic/first.jsonl", records(id));
+  const read = () =>
+    collectHarnessUsage(
+      { now, codex_prefixes: [prefix] },
+      createUsageProjection,
+      { fs, home, env: {}, join, hash: usageDigest },
+    );
+  const first = await read();
+  expect(first.title_matches).toEqual([
+    {
+      prefix_key: usageDigest(prefix),
+      session_key: usageDigest(`codex\0${id}`),
+    },
+  ]);
+  expect(JSON.stringify(first)).not.toContain(id);
+  await write(
+    home,
+    ".codex/sessions/synthetic/second.jsonl",
+    records(id.slice(0, -1) + "2"),
+  );
+  expect((await read()).title_matches).toEqual([]);
 });

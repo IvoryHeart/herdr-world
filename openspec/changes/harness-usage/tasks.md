@@ -15,6 +15,14 @@
 - [x] Verify synthetic parser and collector fixtures, source merging, lease races, attribution, cost and frame limits; update coverage evidence and current docs.
 - [x] Validate OpenSpec and prepare the candidate for repository hooks and independent review.
 
+## Review repairs at the original candidate
+
+- [x] Preserve cumulative high-water evidence across decreases, malformed records and copied replays; exercise bounded recovery schedules.
+- [x] Resolve canonical session identity before projection and verify copied preambles through exact runtime/service attribution.
+- [x] Refuse pane attribution beyond the candidate budget or after complete revalidation changes/adds claims.
+- [x] Own cancellation/deadline and exit/reap receipts for local workers, SSH streams, decompression and one-shot revalidation; isolate generation replacement and drain shutdown.
+- [x] Exercise streaming stdout/stderr limits, blocked I/O/decompression, lifecycle cancellation and failed-source health; update the current guide and scoped evidence.
+
 Delivery: stage and format once, inspect privacy/diff, commit and push through
 required hooks. Open one ready PR with checked description and send review
 routing to steward-main. Independent review and required CI remain publication
