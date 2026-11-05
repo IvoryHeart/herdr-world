@@ -670,9 +670,18 @@ Jira or SSH lookup finishes in the background.
   source says **Sign in with gh auth login**. World stores no GitHub token.
   Merged pull requests cover the last 7 days by default (1 to 90 in
   **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
-  World follows cursor pages of 100 results through GitHub search's 1,000-result
-  limit. The configured window filters this history; there is no smaller
-  client-side count cap.
+  World reads open authored, review-requested and assigned pull requests in
+  separate requests of at most 50 each, then reads your own pull requests'
+  action details before merged history. History uses cursor pages of 50, up to
+  400 pull requests, under the same one-minute refresh deadline. These smaller
+  requests reduce the risk of GitHub's ten-second GraphQL timeout; they cannot
+  guarantee a response time. The first history page checks the count once;
+  over 400 stops immediately. If the count or deadline shortens history, the
+  source reports an error and keeps its last complete list. The message names
+  the oldest valid merge date actually observed, or says no merge date could
+  be confirmed. That date describes an observation, not continuous coverage or
+  a retention cutoff. Shorten the merged window in **Settings → Sources** and
+  refresh. A shortened refresh never replaces the list or authorizes actions.
 - **Your open pull requests** are read in more detail: checks on the head,
   changed files, and the last 30 reviews and 50 comments, which stay in the
   service (the browser gets only reviewer results and an image count). World

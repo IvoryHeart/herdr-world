@@ -573,12 +573,16 @@ each source's state, switch it off or configure it.
 
 - **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
   auth login`): open pull requests you opened, were asked to review or are
-  assigned, every pull request you opened that was merged in the last 7 days
+  assigned, pull requests you opened that were merged in the last 7 days
   (change the window in **Settings → Sources**, 1 to 90 days) and issues
   assigned to you, each with review state, checks and mergeability. World
   stores no GitHub credentials. Work's **Merged** and **Done** columns group
   cards by the day each was merged or resolved, newest day open; tap an older
-  day to open it.
+  day to open it. GitHub history is bounded to 400 pull requests and one
+  minute per refresh, after your open PR action details. If history is
+  shortened, World keeps its last complete list, reports the oldest merge
+  date actually observed (or no confirmed date), and asks you to shorten the
+  window in **Settings → Sources**; partial history does not authorize actions.
 - **Jira Cloud** needs a site, your account email and an API token. The token
   stays in World's private storage on the service and is never shown again;
   changing the site or email removes it, so enter the token again with them.
