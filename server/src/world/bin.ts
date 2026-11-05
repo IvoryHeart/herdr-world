@@ -31,8 +31,9 @@ export type BinAdd = BinTarget & {
   view: BinView;
   /**
    * Board this entry's bus (Town: one bus collects everyone at the stop).
-   * Boarding before the bus pulls away restarts the countdown in full for
-   * everyone on it; once it has pulled away the agent waits for the next.
+   * Boarding before pull-away resets everyone for the larger of the trip's
+   * original countdown and the current setting. After pull-away it waits
+   * for the next bus, whose countdown uses the current setting.
    */
   join?: string;
   /** A captured browser pin: native admission must preserve this tab. */
@@ -149,12 +150,17 @@ export class WorldBinRegistry {
       );
     const joined =
       waiting.find((entry) => entry.id === input.join) ?? waiting[0];
-    const duration = parseBinCountdown(this.deps.countdown()) * 1000;
+    // Keep the fixed set-off timetable serviceable if the setting shrinks;
+    // a larger current setting may extend this reversible waiting trip.
+    const duration = Math.max(
+      joined?.trip_duration_ms ?? 0,
+      parseBinCountdown(this.deps.countdown()) * 1000,
+    );
     const id = `bin-${this.deps.epoch}-${this.nextId++}`;
     const remaining = duration + BIN_DEPARTURE_MS;
     const deadline = this.paused ? null : now + remaining;
     const trip = joined ? joined.trip : id;
-    // Boarding restarts the countdown in full for everyone on that bus.
+    // Boarding applies the same restarted window to everyone on that bus.
     if (joined)
       for (const entry of this.entries.values())
         if (entry.trip === trip)

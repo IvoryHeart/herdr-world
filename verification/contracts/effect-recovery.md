@@ -86,8 +86,10 @@ and native consumer jobs remain required.
 ## Agent bin: reversible departure and shared boarding clock
 
 Allowed: Board, Desk and Town stage the same service-owned countdown; a drop
-before pull-away resets every member of the waiting trip in full, even without
-a browser join hint. A drop at/after pull-away waits for another trip. No intent
+before pull-away resets every member of the waiting trip for the larger of its
+original trip duration and the current countdown setting, even without a browser
+join hint. A setting change alone does not alter a staged deadline; new trips use
+the current setting. A drop at/after pull-away waits for another trip. No intent
 or native close exists before the countdown plus six-second departure ends;
 hold freezes departure, and restore cancels it. Close now remains explicit and
 run-scoped. Source replacement cannot grant the staged capture close authority.
@@ -135,8 +137,12 @@ in Town. These UI consumers do not replace the native source/stop fences.
 The multi-stop route also consumes the optional immutable `trip_joined_ms`
 observation (older services mean zero). Stops and room assignment come from
 the shared layout/road model; joins and Put back do not change the canonical
-cruise speed. A join restarts the service countdown and close deadline in full
-for that trip; Put back does not reset the remaining riders' deadline.
+cruise speed. A join restarts the service countdown for
+`max(trip_duration_ms, currentSetting * 1000)` plus the existing departure,
+without rewriting the original duration or join observations. This explicitly
+changes the reversible staging deadline policy so shortening the setting cannot
+force departure before the fixed timetable's pickups. A larger setting extends
+the wait. Put back does not reset the remaining riders' deadline.
 `bin-observers.test.ts` now removes a set-off rider at the final stop and compares the surviving scene with a fresh
 observer using only the service sample. It retains the earlier reset/hold checks.
 The `TownCanvas.bus.test.ts` consumer additionally drives the real Pixi bus layer
@@ -186,3 +192,16 @@ to a service-coherent departure. Original hit, room-move, native and source/stop
 assertions/timeouts remain. These direct geometry/clock consumers add no service
 history, admission or native-close authority; the existing Q49 model and native
 recovery consumers remain required in their original scope.
+
+The MAX reset policy is checked directly for all four original/current setting
+pairs (16 combinations), both running and socket-held. The real registry timers
+must commit neither at the old deadline nor at 0:00, only after the restarted
+window and departure; a fresh trip uses the selected setting. Registry-to-scene
+consumers additionally drive 120→10 and 10→120 through actual generated nearest
+room stops, checking waiting before pickup, fixed original timetable, early
+arrival/waiting and departure from F. This finite staging policy is not a new
+close/recovery authority model: the unchanged Q49 mapping still requires its
+complete listed consumer files and protected M5/model/native gate. A focused
+policy case alone, or the earlier failed 4ffd CI's passing model subset, cannot
+accept this revised source. The unrelated missing-CI-browser-witness and
+Windows cleanup failure remain independently unresolved.

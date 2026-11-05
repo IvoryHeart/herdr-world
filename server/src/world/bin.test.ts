@@ -64,6 +64,71 @@ const agent = (pane: string, extra: Partial<BinAdd> = {}): BinAdd => ({
 
 const TOTAL = 30_000 + BIN_DEPARTURE_MS;
 
+test("waiting-trip resets use the larger original or current countdown, running or held", async () => {
+  for (const original of [10, 30, 60, 120] as const)
+    for (const selected of [10, 30, 60, 120] as const)
+      for (const held of [false, true]) {
+        const { registry, committed, advance, setCountdown } = fixture();
+        setCountdown(original);
+        registry.add(agent("first"));
+        await advance(1_000);
+        setCountdown(selected);
+        expect(registry.list().entries[0]!.remaining_ms).toBe(
+          original * 1_000 + BIN_DEPARTURE_MS - 1_000,
+        );
+        const owner = {};
+        if (held) {
+          registry.pause(owner);
+          await advance(60_000);
+        }
+        const restarted = Math.max(original, selected) * 1_000;
+        const joined = registry.add(agent("second"));
+        expect(joined.countdown_s).toBe(selected);
+        expect(joined.entries.map((e) => e.duration_ms)).toEqual([
+          restarted,
+          restarted,
+        ]);
+        expect(joined.entries.map((e) => e.remaining_ms)).toEqual([
+          restarted + BIN_DEPARTURE_MS,
+          restarted + BIN_DEPARTURE_MS,
+        ]);
+        expect(joined.entries.map((e) => e.trip_duration_ms)).toEqual([
+          original * 1_000,
+          original * 1_000,
+        ]);
+        expect(joined.entries.map((e) => e.trip_joined_ms)).toEqual([0, 1_000]);
+        if (held) {
+          await advance(60_000);
+          expect(
+            registry
+              .list()
+              .entries.every(
+                (e) => e.remaining_ms === restarted + BIN_DEPARTURE_MS,
+              ),
+          ).toBe(true);
+          expect(committed).toEqual([]);
+          registry.release(owner);
+        }
+        await advance(restarted);
+        expect(registry.list().entries.map((e) => e.remaining_ms)).toEqual([
+          BIN_DEPARTURE_MS,
+          BIN_DEPARTURE_MS,
+        ]);
+        expect(committed).toEqual([]);
+        await advance(BIN_DEPARTURE_MS - 1);
+        expect(committed).toEqual([]);
+        await advance(1);
+        expect(committed).toHaveLength(1);
+        expect(committed[0]).toHaveLength(2);
+        const fresh = registry.add(agent("fresh")).entries[0]!;
+        expect(fresh.duration_ms).toBe(selected * 1_000);
+        expect(fresh.trip_duration_ms).toBe(selected * 1_000);
+        expect(fresh.remaining_ms).toBe(selected * 1_000 + BIN_DEPARTURE_MS);
+        expect(fresh.trip_joined_ms).toBe(0);
+        registry.dispose();
+      }
+});
+
 test("closing a held browser during service shutdown cannot restart staging", async () => {
   const { registry, advance, committed } = fixture();
   const owner = {};
@@ -345,7 +410,7 @@ test("boarding a held bus restarts its countdown and keeps it held", () => {
   expect(state.entries.map((e) => e.remaining_ms)).toEqual([TOTAL, TOTAL]);
 });
 
-test("the same pane is never staged twice and the setting sets new countdowns", () => {
+test("the same pane is never staged twice and the new setting applies to fresh trips", () => {
   const { registry, setCountdown } = fixture();
   registry.add(agent("p1"));
   expect(registry.add(agent("p1")).entries).toHaveLength(1);
@@ -353,8 +418,12 @@ test("the same pane is never staged twice and the setting sets new countdowns", 
   const state = registry.add(agent("p2"));
   expect(state.countdown_s).toBe(10);
   expect(state.entries.find((e) => e.pane_id === "p2")!.duration_ms).toBe(
-    10_000,
+    30_000,
   );
+  for (const entry of registry.list().entries) registry.restore(entry.id);
+  const fresh = registry.add(agent("fresh")).entries[0]!;
+  expect(fresh.duration_ms).toBe(10_000);
+  expect(fresh.trip_duration_ms).toBe(10_000);
 });
 
 test("a host's new runtime returns its staged agents without closing them", async () => {
