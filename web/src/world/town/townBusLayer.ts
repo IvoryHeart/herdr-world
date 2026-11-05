@@ -40,6 +40,8 @@ export type TownBusSource = {
   onArrive?(): void;
   /** The layer's clock for emptied buses driving away, ms. */
   now?(): number;
+  /** Each drawn frame's scene, so world controls follow the bus as drawn. */
+  onDrawn?(scene: TownBusScene): void;
 };
 
 /**
@@ -162,6 +164,7 @@ export class TownBusLayer implements TownWorldOverlay {
       }
     }
     this.hideUnused();
+    this.source.onDrawn?.(scene);
     return (
       this.leavers.length > 0 ||
       this.fades.size > 0 ||

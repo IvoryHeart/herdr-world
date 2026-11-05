@@ -161,6 +161,8 @@ export function useTownBus({
    * destroyed and be attached again.)
    */
   const layerRef = useRef<TownBusLayer | null>(null);
+  /** World controls listening for each drawn frame (they re-render alone). */
+  const drawnListeners = useRef(new Set<() => void>());
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!ready || !renderer) return;
@@ -172,6 +174,9 @@ export function useTownBus({
       paused: () => latest.current.bin.paused,
       agent: (id) => latest.current.riders.get(id),
       roomOf: (id) => latest.current.riders.get(id)?.roomKey,
+      onDrawn: () => {
+        for (const listener of drawnListeners.current) listener();
+      },
       onArrive: () => playBinSound("horn"),
     });
     layerRef.current = layer;
@@ -497,6 +502,10 @@ export function useTownBus({
     <TownBusControls
       scene={scene}
       live={() => layerRef.current?.scene ?? null}
+      onDrawn={(listener) => {
+        drawnListeners.current.add(listener);
+        return () => drawnListeners.current.delete(listener);
+      }}
       entries={bin.entries}
       paused={bin.paused}
       remaining={(entry) => store.remaining(entry)}
@@ -516,6 +525,18 @@ export function useTownBus({
   };
 }
 
+/** What the world controls show of a scene: change it and they re-render. */
+const controlsKey = (scene: TownBusScene) =>
+  [
+    ...scene.buses.map(
+      (bus) =>
+        `${bus.key}:${Math.round(bus.x)}:${bus.y}:${bus.phase}:${bus.doorsOpen}:${Math.round(bus.elapsed / 50)}:${bus.riders.length}`,
+    ),
+    ...scene.stops.map(
+      (stop) => `${stop.id}:${stop.riders}:${stop.waiting.length}`,
+    ),
+  ].join("|");
+
 /**
  * The bus's controls in world space: a tap opens the common held tray,
  * Resume drives on, and dragging a rider away sends it back. A bus
@@ -523,8 +544,9 @@ export function useTownBus({
  * is one target, hit-tested against the bus as drawn when pressed.
  */
 function TownBusControls({
-  scene,
+  scene: rendered,
   live,
+  onDrawn,
   entries,
   paused,
   remaining,
@@ -534,6 +556,8 @@ function TownBusControls({
   scene: TownBusScene | null;
   /** The scene as last drawn (it moves between React renders). */
   live(): TownBusScene | null;
+  /** Listen for each drawn frame; returns the unsubscribe. */
+  onDrawn(listener: () => void): () => void;
   entries: readonly BinEntry[];
   paused: boolean;
   remaining(entry: BinEntry): number;
@@ -548,6 +572,26 @@ function TownBusControls({
   } | null>(null);
   /** A drag that just put a rider back; the click that follows does nothing. */
   const dragged = useRef(false);
+  // Follow the bus as drawn, frame by frame: only this component re-renders,
+  // and only when what it shows (a bus's place, phase or clock) changed.
+  const [, redraw] = useState(0);
+  const shown = useRef("");
+  const subscribe = useRef(onDrawn);
+  subscribe.current = onDrawn;
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  useEffect(
+    () =>
+      subscribe.current(() => {
+        const drawn = liveRef.current();
+        const key = drawn ? controlsKey(drawn) : "";
+        if (key === shown.current) return;
+        shown.current = key;
+        redraw((n) => n + 1);
+      }),
+    [],
+  );
+  const scene = live() ?? rendered;
   if (!scene || !entries.length) return null;
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const soon = soonestBus(entries, remaining);
