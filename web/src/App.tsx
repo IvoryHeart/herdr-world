@@ -90,6 +90,8 @@ import {
   loadZenMode,
   zenCovers,
   zenModeKey,
+  normalizeBlackBackground,
+  serializeBlackBackground,
   serializeZenMode,
   UI_SCALE_DEFAULT,
   type ResolvedTheme,
@@ -288,6 +290,7 @@ const THEME_KEY = "theme";
 const ACCENT_COLOR_KEY = "accentColor";
 const UI_SCALE_KEY = "uiScale";
 const TERMINAL_FONT_FAMILY_KEY = "terminalFontFamily";
+const BLACK_BACKGROUND_KEY = "blackBackground";
 const LazyTerminalView = lazyWithReload("terminal-view", () =>
   import("./components/TerminalView").then((module) => ({
     default: module.TerminalView,
@@ -417,6 +420,12 @@ function loadTerminalFontScale(): number {
 function loadTerminalFontFamily(): string {
   return normalizeTerminalFontFamily(
     worldLocalStorage.getItem(TERMINAL_FONT_FAMILY_KEY),
+  );
+}
+
+function loadBlackBackground(): boolean {
+  return normalizeBlackBackground(
+    worldLocalStorage.getItem(BLACK_BACKGROUND_KEY),
   );
 }
 
@@ -1063,6 +1072,7 @@ export default function App({
     loadSystemTheme(),
   );
   const resolvedTheme: ResolvedTheme = theme === "system" ? systemTheme : theme;
+  const [blackBackground, setBlackBackground] = useState(loadBlackBackground);
   const [accentColor, setAccentColor] = useState<AccentColor>(() =>
     loadAccentColor(),
   );
@@ -1090,8 +1100,14 @@ export default function App({
         resolvedTheme,
         terminalThemeSelection,
         customTerminalThemes,
+        blackBackground,
       ),
-    [resolvedTheme, terminalThemeSelection, customTerminalThemes],
+    [
+      resolvedTheme,
+      terminalThemeSelection,
+      customTerminalThemes,
+      blackBackground,
+    ],
   );
   const zenKey = zenModeKey(zenScope);
   const zenKeyRef = useRef(zenKey);
@@ -3690,6 +3706,8 @@ export default function App({
     worldLocalStorage.setItem(THEME_KEY, theme);
     document.documentElement.dataset.accent = accentColor;
     worldLocalStorage.setItem(ACCENT_COLOR_KEY, accentColor);
+    if (blackBackground) document.documentElement.dataset.black = "";
+    else delete document.documentElement.dataset.black;
     document.documentElement.style.zoom =
       uiScale === UI_SCALE_DEFAULT ? "" : String(uiScale / 100);
     if (uiScale === UI_SCALE_DEFAULT) {
@@ -3726,7 +3744,11 @@ export default function App({
       String(zoomRectRatio),
     );
     worldLocalStorage.setItem(UI_SCALE_KEY, String(uiScale));
-  }, [accentColor, resolvedTheme, theme, uiScale]);
+    worldLocalStorage.setItem(
+      BLACK_BACKGROUND_KEY,
+      serializeBlackBackground(blackBackground),
+    );
+  }, [accentColor, blackBackground, resolvedTheme, theme, uiScale]);
   useTextScales(terminalFontScale);
   // A view switch moves to that view's own Zen choice, or its default.
   const applyZenModeRef = useRef(applyZenMode);
@@ -3762,6 +3784,8 @@ export default function App({
     () =>
       subscribeLocalStorage((key) => {
         if (key === null || key === THEME_KEY) setTheme(loadTheme());
+        if (key === null || key === BLACK_BACKGROUND_KEY)
+          setBlackBackground(loadBlackBackground());
         if (key === null || key === ACCENT_COLOR_KEY)
           setAccentColor(loadAccentColor());
         if (key === null || key === UI_SCALE_KEY) setUiScale(loadUiScale());
@@ -4303,6 +4327,8 @@ export default function App({
               terminalThemeSelection={terminalThemeSelection}
               customTerminalThemes={customTerminalThemes}
               onThemeChange={setTheme}
+              blackBackground={blackBackground}
+              onBlackBackgroundChange={setBlackBackground}
               onAccentColorChange={setAccentColor}
               uiScale={uiScale}
               onUiScaleChange={setUiScale}
