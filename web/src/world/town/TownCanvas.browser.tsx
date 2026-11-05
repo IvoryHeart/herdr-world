@@ -75,6 +75,8 @@ import { isTownRoomMoveCandidate } from "../testing/townRoomMoveCandidate";
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const scale = params.get("scale") ?? "typical";
+// The bin fixture is independent of the retired completion-mark fixture.
+const fakeBin = createFakeBin();
 const failures: string[] = [];
 const releaseWitnesses: unknown[] = [];
 const boundaryWitnesses: { kind: string; detail?: unknown }[] = [];
@@ -637,7 +639,6 @@ const completionSeen = {
     revision: number;
   }[],
 };
-const fakeBin = createFakeBin();
 /**
  * The service's Desk review record: one record per agent identity, a mark
  * naming the stop it reviewed. Undo clears only the exact mark it names.
