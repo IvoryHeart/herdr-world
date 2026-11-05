@@ -670,6 +670,7 @@ const opensOn = (label: string) =>
  */
 async function openAgent(label: string) {
   const target = agentTarget(label)!;
+  const before = calls.length;
   flushSync(() => {
     target.click();
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
@@ -683,6 +684,22 @@ async function openAgent(label: string) {
       ),
     `${label} window on ${opensOn(label) === "history" ? "Chat" : "its terminal"}`,
   );
+  // A window on Chat hides its terminal: its attach keeps the agent's Herdr
+  // pane at the tab's current size, and nothing resizes it before Terminal.
+  const terminalId = `${label.toLowerCase()}-terminal`;
+  if (opensOn(label) === "history")
+    check(
+      calls
+        .slice(before)
+        .every(
+          ({ method, params }) =>
+            params.terminal_id !== terminalId ||
+            (method !== "terminal.resize" &&
+              (method !== "terminal.attach" ||
+                (params.surface_cols === 160 && params.surface_rows === 48))),
+        ),
+      `${label} window on Chat resized its Herdr pane`,
+    );
   flushSync(() =>
     document
       .querySelector<HTMLButtonElement>(
@@ -886,6 +903,23 @@ async function run() {
         )!,
       ).cursor === "pointer",
     "Town did not establish one parked creation endpoint without opening an Inspector",
+  );
+  // Herdr resizes a pane to every attach, for every viewer: the parked,
+  // undisplayed endpoint attaches at the tab's current 160×48 surface.
+  check(
+    calls.some(
+      ({ method, params }) =>
+        method === "terminal.attach" &&
+        params.terminal_id === "builder-terminal",
+    ) &&
+      calls.every(
+        ({ method, params }) =>
+          method !== "terminal.attach" ||
+          params.terminal_id !== "builder-terminal" ||
+          (params.surface_cols === 160 && params.surface_rows === 48),
+      ) &&
+      !calls.some(({ method }) => method === "terminal.resize"),
+    "the parked creation endpoint resized the Herdr pane",
   );
   check(
     !calls.some(
