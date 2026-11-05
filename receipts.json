@@ -1,0 +1,184 @@
+[
+  {
+    "scene": "chat-asked",
+    "viewport": "phone",
+    "width": 390,
+    "height": 844,
+    "layoutShift": 0,
+    "longTasksMs": [
+      55
+    ],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-asked",
+    "viewport": "laptop",
+    "width": 1512,
+    "height": 982,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-asked",
+    "viewport": "half",
+    "width": 1280,
+    "height": 1440,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-asked",
+    "viewport": "wide",
+    "width": 2560,
+    "height": 1440,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-asked",
+    "viewport": "portrait",
+    "width": 1440,
+    "height": 2560,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-trust",
+    "viewport": "phone",
+    "width": 390,
+    "height": 844,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-trust",
+    "viewport": "laptop",
+    "width": 1512,
+    "height": 982,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-trust",
+    "viewport": "half",
+    "width": 1280,
+    "height": 1440,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-trust",
+    "viewport": "wide",
+    "width": 2560,
+    "height": 1440,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "chat-trust",
+    "viewport": "portrait",
+    "width": 1440,
+    "height": 2560,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "needs-you",
+    "viewport": "phone",
+    "width": 390,
+    "height": 844,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "needs-you",
+    "viewport": "laptop",
+    "width": 1512,
+    "height": 982,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "needs-you",
+    "viewport": "half",
+    "width": 1280,
+    "height": 1440,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "needs-you",
+    "viewport": "wide",
+    "width": 2560,
+    "height": 1440,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "needs-you",
+    "viewport": "portrait",
+    "width": 1440,
+    "height": 2560,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "cards",
+    "viewport": "phone",
+    "width": 390,
+    "height": 844,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "cards",
+    "viewport": "laptop",
+    "width": 1512,
+    "height": 982,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "cards",
+    "viewport": "half",
+    "width": 1280,
+    "height": 1440,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "cards",
+    "viewport": "wide",
+    "width": 2560,
+    "height": 1440,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  },
+  {
+    "scene": "cards",
+    "viewport": "portrait",
+    "width": 1440,
+    "height": 2560,
+    "layoutShift": 0,
+    "longTasksMs": [],
+    "horizontalOverflow": false
+  }
+]
