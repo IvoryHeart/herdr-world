@@ -193,11 +193,11 @@ test.skipIf(!chrome)(
   30000 + BROWSER_STARTUP_TIMEOUT_MS,
 );
 
-// Claude's recorded questions, an unknown prompt and the folder-trust
-// question, in Chat and Needs you, with synthetic data only.
+// Claude's recorded questions and an unknown prompt, in Chat and Needs you,
+// with synthetic data only.
 for (const width of [1280, 390])
   test.skipIf(!chrome)(
-    `Chat and Needs you show Claude's questions and trust choices (${width}px)`,
+    `Chat and Needs you show Claude's questions whole (${width}px)`,
     async () => {
       const dir = await mkdtemp(join(tmpdir(), "question-cards-"));
       const { assets } = await buildWorldBrowserBundle("QuestionCards", dir);

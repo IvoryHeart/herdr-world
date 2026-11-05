@@ -37,7 +37,6 @@ import {
   type PendingPrompt,
 } from "./pending-prompt";
 import { askedQuestions, withAskedQuestions } from "./asked-questions";
-import { createTrustPrompts } from "./trust-prompt";
 import { stepsFromEntries, type ConversationStep } from "./conversation-steps";
 import type { AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
@@ -153,11 +152,6 @@ export function createHerdrConversationSource(args: {
     }
     return isRecord(result) && isRecord(result.agent) ? result.agent : null;
   };
-  const trustPrompts = createTrustPrompts({
-    herdrCall: args.herdrCall,
-    agentInfo,
-    active: sendGuard.active,
-  });
 
   const unavailable = (
     base: Omit<Conversation, "status" | "unavailable">,
@@ -484,16 +478,10 @@ export function createHerdrConversationSource(args: {
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
     const status = shown.agent_status ?? "";
-    // Before Claude has a session, only its folder-trust question is read,
-    // under its pre-session witness. A blocked agent's question is on its
-    // screen, and so is a command menu, which Chat asks for.
-    const trust =
-      shown.agent === "claude" && shown.unavailable?.reason === "no_session"
-        ? await trustPrompts.read(pane_id).catch(() => null)
-        : null;
+    // A blocked agent's question is on its screen, and so is a command
+    // menu, which Chat asks for.
     const pending_prompt =
-      trust ??
-      ((status === "blocked" || (menus && MENU_STATUSES.has(status))) &&
+      (status === "blocked" || (menus && MENU_STATUSES.has(status))) &&
       shown.session_binding !== "guessed" &&
       (shown.agent !== "codex" || Boolean(shown.session_fingerprint))
         ? await agentInfo(pane_id)
@@ -507,7 +495,7 @@ export function createHerdrConversationSource(args: {
               return (await readMenu(pane_id, info, shown)) ?? asked;
             })
             .catch(() => null)
-        : null);
+        : null;
     const list = reservations.deliveries(
       pane_id,
       shown,
@@ -575,7 +563,6 @@ export function createHerdrConversationSource(args: {
 
   const source: ConversationSource & { dispose(): void } = {
     id: "herdr",
-    trust: trustPrompts.choose,
     ...createPromptActions({
       active: sendGuard.active,
       herdrCall: args.herdrCall,

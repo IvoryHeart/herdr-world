@@ -294,16 +294,6 @@ export interface ConversationSource {
     },
   ): Promise<ConversationAnswerResult>;
   /**
-   * Answer Claude's folder-trust question before any session exists, with
-   * the choice the user picked, under the source's pre-session witness.
-   */
-  trust?(
-    target: ConversationTarget & {
-      prompt_fingerprint: string;
-      choice: string;
-    },
-  ): Promise<import("./trust-prompt").TrustResult>;
-  /**
    * Press one key in the pane for the Chat session that asked: a key the
    * shown command menu names (with `menu_fingerprint`), text for that menu's
    * field, or one of the composer's key controls.

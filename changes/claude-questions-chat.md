@@ -1,9 +1,3 @@
-### Added
-
-- Chat answers Claude's folder-trust question before its session starts: the
-  card shows **No, exit** and **Yes, I trust this folder**, and a click is
-  checked against the same question and Claude process before each key.
-
 ### Fixed
 
 - Show Claude's questions whole in Chat and Needs you, from its own record:

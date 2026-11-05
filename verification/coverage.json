@@ -1155,7 +1155,7 @@
       "area": "History/task/checkout reports",
       "owner": "server/src/agent/",
       "requirement": "openspec/specs/world-surfaces/spec.md",
-      "properties": "Atomic publication and session identity; old reports cannot overwrite newer state; terminal settings require current terminal/lease witnesses, one-time import and convergent master revisions; prompt answers require the same transcript question and screen, and pre-session trust input requires a current pane/terminal/process witness with no session, the exact menu before every key, and the per-pane input lock",
+      "properties": "Atomic publication and session identity; old reports cannot overwrite newer state; terminal settings require current terminal/lease witnesses, one-time import and convergent master revisions; prompt answers require the same transcript question and screen",
       "existingTests": [
         "server/src/agent/worktree.test.ts",
         "server/src/agent/terminal-settings.test.ts",
@@ -1176,7 +1176,6 @@
         "server/src/agent/pending-prompt.test.ts",
         "server/src/agent/pending-prompt-captured.test.ts",
         "server/src/agent/asked-questions.test.ts",
-        "server/src/agent/trust-prompt.test.ts",
         "server/src/agent/conversation-questions.test.ts",
         "web/src/world/NeedsYouCard.browser.test.ts",
         "server/src/agent/prompt-answer.test.ts",

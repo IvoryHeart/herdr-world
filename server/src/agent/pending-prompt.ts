@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import type { AskedQuestions } from "./asked-questions";
-import type { TrustChoice } from "./trust-prompt";
 
 /**
  * The question a blocked agent is asking, read from the bottom of its screen.
@@ -54,11 +53,6 @@ export type PendingPrompt = {
   unanswerable?: string;
   /** The prompt as the terminal shows it, when Chat cannot read it whole. */
   screen?: string[];
-  /**
-   * Claude's folder-trust question before any session exists, answered
-   * through its pre-session witness: the choice its cursor is on.
-   */
-  trust?: { cursor: TrustChoice };
   /** Identifies this exact prompt, in this session, at this Herdr state. */
   fingerprint: string;
 };

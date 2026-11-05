@@ -10,25 +10,11 @@ import { createAgentSessionResolverContext } from "./session-resolver";
 import type { HerdrCall } from "./session-types";
 
 // Chat reads Claude's question from its transcript and answers it only on the
-// matching screen; before Claude has a session, only its trust question is
-// offered, under the pre-session witness. Synthetic transcript and screens.
+// matching screen. Synthetic transcript and screens.
 const QUESTION = readFileSync(
   new URL("./fixtures/pending-prompts/claude-question.txt", import.meta.url),
   "utf8",
 );
-const TRUST = [
-  "────────────────────────────────",
-  " Accessing workspace:",
-  "",
-  " /work/example",
-  "",
-  " Quick safety check: Is this a project you created or one you trust?",
-  "",
-  " ❯ No, exit",
-  "   Yes, I trust this folder",
-  "",
-  " Enter to confirm · Esc to cancel",
-].join("\n");
 
 let root = "";
 let transcript = "";
@@ -103,13 +89,6 @@ function fakeHerdr() {
         },
       };
     if (method === "pane.read") return { read: { text: state.screen } };
-    if (method === "pane.process_info")
-      return {
-        process_info: {
-          foreground_process_group_id: 77,
-          foreground_processes: [{ pid: 77, name: "claude" }],
-        },
-      };
     if (method === "pane.send_input") {
       state.sent.push(...(params as { keys: string[] }).keys);
       return {};
@@ -180,44 +159,4 @@ test("a question the screen does not show is read whole and never answered", asy
     }),
   ).toMatchObject({ status: "refused", reason: "changed" });
   expect(state.sent).toEqual([]);
-});
-
-test("the trust question is offered before a session, and never after", async () => {
-  const { state, source } = fakeHerdr();
-  state.session = false;
-  state.screen = TRUST;
-  const read = await source.read({ pane_id: "w1:p1" });
-  expect(read.status).toBe("unavailable");
-  expect(read.pending_prompt).toMatchObject({ trust: { cursor: "cancel" } });
-  // Neither the question path nor the session-bound key path takes it.
-  expect(
-    await source.answer({
-      pane_id: "w1:p1",
-      key: "cancel",
-      prompt_fingerprint: read.pending_prompt!.fingerprint,
-    }),
-  ).toMatchObject({ status: "refused" });
-  expect(
-    await source.press({
-      pane_id: "w1:p1",
-      key: "enter",
-      session_fingerprint: "",
-      menu_fingerprint: read.pending_prompt!.fingerprint,
-    }),
-  ).toMatchObject({ status: "refused" });
-  expect(state.sent).toEqual([]);
-  expect(
-    await source.trust!({
-      pane_id: "w1:p1",
-      prompt_fingerprint: read.pending_prompt!.fingerprint,
-      choice: "cancel",
-    }),
-  ).toMatchObject({ status: "sent", label: "No, exit" });
-  expect(state.sent).toEqual(["enter"]);
-  // With a session, the same screen is not a pre-session question.
-  state.session = true;
-  await writeFile(transcript, ask([COLOR]));
-  expect(
-    (await source.read({ pane_id: "w1:p1" })).pending_prompt?.trust,
-  ).toBeUndefined();
 });

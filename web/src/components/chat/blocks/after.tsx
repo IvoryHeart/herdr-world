@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import { elapsed } from "./now";
 import { AskCard, UNCONFIRMED } from "./ask";
 import { MenuCard } from "./menu";
-import { TrustCard } from "./trust";
-import type { AnswerResult, PendingPrompt, TrustChoice } from "../types";
+import type { AnswerResult, PendingPrompt } from "../types";
 
 /** Only live step/prompt content trails the transcript. Sends stay at their time. */
 export function ChatAfterBlocks({
@@ -20,7 +19,6 @@ export function ChatAfterBlocks({
   onPress,
   onType,
   onOpenTerminal,
-  onTrust,
   renderPromptMessage,
 }: {
   running: {
@@ -47,8 +45,6 @@ export function ChatAfterBlocks({
   onPress?: (key: string) => void;
   onType?: (text: string) => void;
   onOpenTerminal?: () => void;
-  /** Claude's folder-trust choice, before it has a session. */
-  onTrust?: (choice: TrustChoice) => void;
   renderPromptMessage?: (message: ReactNode) => ReactNode;
 }) {
   return (
@@ -105,19 +101,7 @@ export function ChatAfterBlocks({
           ) : null}
         </div>
       ) : null}
-      {prompt?.trust ? (
-        onTrust ? (
-          <TrustCard
-            key={prompt.fingerprint}
-            prompt={prompt}
-            choosing={answering}
-            notice={notice}
-            onChoose={onTrust}
-            onOpenTerminal={onOpenTerminal}
-            renderMessage={renderPromptMessage}
-          />
-        ) : null
-      ) : prompt?.menu && onPress && onType ? (
+      {prompt?.menu && onPress && onType ? (
         <MenuCard
           // One card for the menu's steps, so keyboard focus survives each
           // redraw; the scope above remounts it for another session.
