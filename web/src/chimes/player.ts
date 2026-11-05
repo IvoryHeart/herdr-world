@@ -225,7 +225,7 @@ export function chimeAudioReady() {
 }
 
 /**
- * Play a short World sound effect (the bin's drop and close) through the
+ * Play a short World sound effect (the bin's close) through the
  * chimes' audio context. Effects follow a gesture, which also unlocks audio.
  */
 export function playEffect(

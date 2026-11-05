@@ -521,6 +521,11 @@ function TownBusControls({
   if (!scene || !entries.length) return null;
   const soon = soonestTownBus(entries, remaining);
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  /** A rider's wait, as the signs show it: then "leaving" once it is over. */
+  const wait = (entry: BinEntry) => {
+    const left = remaining(entry) - entry.departure_ms;
+    return left < 0 ? "leaving" : clock(left);
+  };
   // Riders waiting at a stop (a standing figure above its feet), or seen
   // through a bus's open doors (a window): the boxes townBusRiderAt hits.
   const riders = [
@@ -613,7 +618,7 @@ function TownBusControls({
             className="town-bus-rider"
             data-bin-entry={rider.entryId}
             style={box}
-            title={`${entry.label} · ${clock(remaining(entry))}`}
+            title={`${entry.label} · ${wait(entry)}`}
             aria-label={`${entry.label} is riding the bus. Open the bin tray`}
             onClick={onHold}
           />

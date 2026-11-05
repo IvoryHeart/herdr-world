@@ -728,8 +728,7 @@ opening another World keeps the trip's progress, including time held still. If
 the bus's stop is off screen, the red chip at the screen's edge shows the next
 departure. While you carry an agent, the chip moves near the top of the screen
 as a large **Bus stop** target ("drop on a room, or on Bus stop to close"); it
-lights up under your finger and the town does not edge-pan beside it. The chip
-stays clear of the held-bus panel and other Town controls. When the countdown ends the bus drives
+lights up under your finger and the town does not edge-pan beside it. When the countdown ends the bus drives
 away, and the agent closes only when the bus has left the map. Until then,
 tap or click the bus (even while it is coming or leaving), any stop, or the
 chip, on a phone or desktop, to open that same tray and hold the countdown; in

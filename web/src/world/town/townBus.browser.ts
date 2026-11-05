@@ -50,6 +50,18 @@ export async function checkTownBus(
     `the bin add was not qualified: ${JSON.stringify(add?.params)}`,
   );
   await waitFor(() => !atDesk(), "the rider stayed at its desk");
+  // Town's controls follow the bus layer's drawn frames: the rider's own
+  // target (and the off-screen chip) appear on the first frame drawn after
+  // the add, so every step below starts from that frame.
+  const riderId = bin.state.entries[0]!.id;
+  const riderTarget = () =>
+    host.querySelector<HTMLButtonElement>(
+      `.town-bus-rider[data-bin-entry="${CSS.escape(riderId)}"]`,
+    );
+  await waitFor(
+    () => riderTarget() !== null,
+    "the rider's place at the stop was never drawn",
+  );
   check(
     /· 1/.test(host.querySelector(".town-bus-sign")?.textContent ?? ""),
     "the stop's sign does not count the rider",
@@ -76,7 +88,10 @@ export async function checkTownBus(
     );
   };
   // Off screen, the stop's chip opens the tray and brings the stop in view.
+  // In this fixture the stop where the bus waits starts off screen at every
+  // viewport, so the chip must be there.
   const chip = host.querySelector<HTMLButtonElement>(".town-bus-chip");
+  check(chip !== null, "the off-screen stop has no chip");
   if (chip) {
     await opens(chip, "the stop's chip did not open the bin tray");
     await resume("Resume from the chip's tray did not resume the bin");
@@ -95,12 +110,19 @@ export async function checkTownBus(
   }
   // A waiting rider is its own target, beside the stop's, opening the
   // same tray.
-  const waiting = host.querySelector<HTMLButtonElement>(
-    `.town-bus-rider[data-bin-entry="${CSS.escape(bin.state.entries[0]!.id)}"]`,
-  );
+  const waiting = riderTarget();
   check(waiting !== null, "a waiting rider is not a button");
   if (waiting) {
     await opens(waiting, "tapping a waiting rider did not open the bin tray");
+    // Held, the rider's own label shows the same wait as the stop's sign.
+    const signWait = /^\S+/.exec(
+      host.querySelector(".town-bus-sign")?.textContent ?? "",
+    )?.[0];
+    const title = riderTarget()?.title ?? "";
+    check(
+      Boolean(signWait) && title.endsWith(` · ${signWait}`),
+      `the rider's wait "${title}" differs from the stop sign's "${signWait}"`,
+    );
     await resume("Resume from the rider's tray did not resume the bin");
   }
   // The bus too, from the keyboard (a click with no pointer).

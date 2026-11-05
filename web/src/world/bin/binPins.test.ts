@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { BinEntry } from "../../../../shared/bin";
+import { binEmptiesPinnedTab, type BinEntry } from "../../../../shared/bin";
 import type { BoardPane, BoardTab } from "../board/boardModel";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { binDropOfAgent } from "./binTown";
@@ -72,7 +72,8 @@ test("Board: a pinned tab keeps its last pane when its sibling already waits in 
   ).toBeNull();
 });
 
-function office(): HerdrOfficeProjection {
+/** A room with one tab of `panes`, of which the desk lists at most four. */
+function office(panes = ["p1", "p2"]): HerdrOfficeProjection {
   const ref = (kind: string, nativeId: string) => ({
     connectionId: "studio",
     generation: 4,
@@ -91,7 +92,7 @@ function office(): HerdrOfficeProjection {
     currentTerminalRef: ref("terminal", `term-${pane}`),
   });
   return {
-    roster: [{ agent: agent("p1") }, { agent: agent("p2") }],
+    roster: panes.map((pane) => ({ agent: agent(pane) })),
     rooms: [
       {
         key: "room-1",
@@ -99,10 +100,11 @@ function office(): HerdrOfficeProjection {
         desks: [
           {
             key: "desk-1",
-            paneDevices: ["p1", "p2"].map((pane) => ({
+            paneDevices: panes.slice(0, 4).map((pane) => ({
               paneRef: ref("pane", pane),
               terminalRef: ref("terminal", `term-${pane}`),
             })),
+            omittedPaneCount: Math.max(0, panes.length - 4),
           },
         ],
       },
@@ -127,5 +129,39 @@ test("Town: the same rule holds for agents sent to the bus stop", () => {
   const other = { ...staged("p1"), connection_generation: 3 };
   expect(
     "refusal" in binDropOfAgent(town, "agent-p2", "town", [other], PINNED),
+  ).toBe(false);
+});
+
+test("Town: a desk that lists only some of a pinned tab's panes leaves the rule to the service", () => {
+  // Six panes, the desk lists four: Town cannot see p5 and p6, so it must
+  // not refuse p4 (or p5) as the last pane; the service reads every pane.
+  const panes = ["p1", "p2", "p3", "p4", "p5", "p6"];
+  const town = office(panes);
+  for (const [agentKey, waiting] of [
+    ["agent-p4", ["p1", "p2", "p3"]],
+    ["agent-p5", ["p1", "p2", "p3", "p4"]],
+  ] as const) {
+    const drop = binDropOfAgent(
+      town,
+      agentKey,
+      "town",
+      waiting.map(staged),
+      PINNED,
+    );
+    expect("refusal" in drop).toBe(false);
+    // It goes in asking the service to keep the pinned tab's last pane.
+    expect(drop).toMatchObject({ preserve_tab: true });
+  }
+  // The service's rule over all six panes agrees: p5 and p6 survive p4.
+  const all = panes.map((pane) => ({
+    pane_id: pane,
+    terminal_id: `term-${pane}`,
+  }));
+  expect(
+    binEmptiesPinnedTab(
+      { connection_id: "studio", connection_generation: 4, pane_id: "p4" },
+      all,
+      ["p1", "p2", "p3"].map(staged),
+    ),
   ).toBe(false);
 });

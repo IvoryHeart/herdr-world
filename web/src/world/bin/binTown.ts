@@ -88,8 +88,12 @@ export function binDropOfAgent(
   // A tab pin (kept in this browser) protects the tab's last pane.
   const desk = room?.desks.find((item) => item.key === agent.deskKey);
   const pins = pinnedTabs ?? tabPinsFor(agent.currentPaneRef.connectionId);
+  // The desk lists only its first few panes; with some omitted this view
+  // cannot see every pane of the tab, so it leaves the pinned-tab rule to
+  // the service, which reads them all (preserve_tab).
   const pinned =
     pins.has(agent.currentTabRef.nativeId) &&
+    desk?.omittedPaneCount === 0 &&
     binEmptiesPinnedTab(
       {
         connection_id: agent.currentPaneRef.connectionId,
