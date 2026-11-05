@@ -123,13 +123,111 @@ export async function checkTownBus(
   }
   // Bind the incoming hit-region check to a source-clock sample on the
   // occupied road, after the real chip/stop navigation has finished.
+  const store0 = worldBinStore(bridge);
+  const current = store0.elapsed(store0.get().entries[0]!);
+  const lead = Math.max(clock.lead, Math.ceil(current) + 1);
+  const setupWitness = {
+    setup: {
+      current,
+      requestedLead: clock.lead,
+      lead,
+      before: clock.before,
+      arrival: clock.arrival,
+    },
+    drawn0: 0,
+    handshake: [] as unknown[],
+    accepted: null as unknown,
+  };
+  const receipts = new URL(location.href).searchParams.has("releaseWitness");
+  if (receipts) {
+    // Add this fixture's receipt to the existing private output, preserving
+    // every original release record and leaving the runner unchanged.
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = Object.assign(
+      (input: RequestInfo | URL, init?: RequestInit) => {
+        if (input === "/release-witness" && typeof init?.body === "string") {
+          window.fetch = originalFetch;
+          return originalFetch(input, {
+            ...init,
+            body: JSON.stringify({
+              ...JSON.parse(init.body),
+              busClockSetup: setupWitness,
+            }),
+          });
+        }
+        return originalFetch(input, init);
+      },
+      originalFetch,
+    );
+  }
+  if (
+    !Number.isFinite(current) ||
+    !Number.isFinite(lead) ||
+    lead < current ||
+    lead >= clock.before
+  )
+    throw new Error(
+      `the trip clock is already past the lead-in ${JSON.stringify(setupWitness.setup)}`,
+    );
   for (const entry of bin.state.entries)
     Object.assign(entry, {
       trip_duration_ms: 30_000,
-      trip_elapsed_ms: clock.before,
+      trip_elapsed_ms: lead,
     });
   bin.state.revision++;
-  await worldBinStore(bridge).refresh();
+  const drawn0 = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
+  setupWitness.drawn0 = drawn0;
+  await store0.refresh();
+  const snapshot = () => {
+    const entry = store0.get().entries[0];
+    const bus = host.querySelector<HTMLElement>(".town-bus-hold");
+    const rect = bus?.getBoundingClientRect();
+    const scale =
+      rect && bus?.offsetWidth ? rect.width / bus.offsetWidth : null;
+    const point =
+      rect && scale
+        ? [rect.right - (BUS_W / 2) * scale, rect.bottom - 4 * scale]
+        : null;
+    const top = point ? document.elementFromPoint(point[0]!, point[1]!) : null;
+    const elapsed = entry ? store0.elapsed(entry) : null;
+    return {
+      sourceElapsed: elapsed,
+      expectedPlanPose: elapsed === null ? null : clock.position(elapsed),
+      frame: window.__HERDR_TOWN_RENDERER__?.frames ?? 0,
+      domElapsed: bus?.dataset.tripElapsed ?? null,
+      phase: bus?.dataset.phase ?? null,
+      left: bus?.style.left ?? null,
+      top: bus?.style.top ?? null,
+      offsetWidth: bus?.offsetWidth ?? null,
+      offsetHeight: bus?.offsetHeight ?? null,
+      rect: rect?.toJSON() ?? null,
+      hit: {
+        point,
+        tag: top?.tagName ?? null,
+        class: top?.getAttribute("class") ?? null,
+        isBus: !!top && !!bus?.contains(top),
+      },
+      viewport: {
+        width: innerWidth,
+        height: innerHeight,
+        dpr: devicePixelRatio,
+      },
+    };
+  };
+  // Readiness is a new drawn frame on this clock, not a latency promise.
+  // The original acceptance window below still rejects a missed arrival.
+  await waitFor(
+    () => {
+      const frame = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
+      const elapsed = Number(
+        host.querySelector<HTMLElement>(".town-bus-hold")?.dataset.tripElapsed,
+      );
+      if (receipts) setupWitness.handshake.push(snapshot());
+      return frame > drawn0 && elapsed >= lead;
+    },
+    () =>
+      `the bus did not draw the led-in clock ${JSON.stringify(setupWitness)}`,
+  );
   const clockWitnesses: unknown[] = [];
   await waitFor(
     () => {
@@ -203,6 +301,7 @@ export async function checkTownBus(
         },
       )}`,
   );
+  if (receipts) setupWitness.accepted = snapshot();
   // Counted from here: the chip's own tray open and shut came before.
   const paused0 = pausesAll(),
     resumed0 = resumesAll();

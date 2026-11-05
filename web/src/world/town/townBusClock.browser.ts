@@ -54,17 +54,20 @@ export function townBusClockSample(host: HTMLElement) {
     tripDurationMs: 30_000,
     riders: [{ entryId: "sample", home: stop.id, joinedMs: 0 }],
   });
+  const before = Math.max(
+    Math.ceil(hi) + 1,
+    // The final brake stays beside the stop that the real chip flew to;
+    // earlier cruise can be behind Town chrome on the left.
+    Math.floor(arrival - Math.min(1_000, timetable.rampMs / 2)),
+  );
   return {
     stop: stop.id,
     width: route.width,
     stops: route.stops.map((s) => s.id),
     position: (elapsed: number) => townBusPosition(plan, elapsed),
-    before: Math.max(
-      Math.ceil(hi) + 1,
-      // The final brake stays beside the stop that the real chip flew to;
-      // earlier cruise can be behind Town chrome on the left.
-      Math.floor(arrival - Math.min(1_000, timetable.rampMs / 2)),
-    ),
+    before,
+    // Start the refreshed source clock before the checked final-brake window.
+    lead: Math.max(Math.ceil(hi) + 1, before - 1_000),
     arrival,
   };
 }
