@@ -7,19 +7,40 @@ by steward-main. Phase 1 is ready for mockups, not owner-approved. After approva
 apply the approved rules to new UI and code you touch. Token and component
 changes come in separate PRs. This guide doesn't change product code.
 
+## What this guide is for
+
+This is the visual rulebook for all of Herdr World: the shell around the views
+(the view picker, Needs you, Hosts, menus and bars), the four views (Town,
+Board, Desk and Spaces), the windows and trays that float over them, and
+dialogs and settings, on desktop and on phones. Use it to review a mockup or a
+UI change, and to find the existing look before inventing a new one.
+
 World is one Bun service with a React web app. Its look comes from
 [Roamgate](../../UPSTREAM.md): colour tokens in
 [`web/src/styles/tokens.css`](../../web/src/styles/tokens.css) and primitives in
 [`web/src/styles/base.css`](../../web/src/styles/base.css). World adds three
-views, Town, Board and Desk, plus floating windows and trays. This guide says
-how they all look like one product.
+views, Town, Board and Desk, beside Spaces, its terminal workspace, plus
+floating windows and trays. This guide says how they all look like one product.
 
-The images are a static specimen rendered from the real `tokens.css` and
-`base.css`, with local styles illustrating the proposals and synthetic names.
-They are not product screenshots or evidence of reusable shipping APIs.
+- [Scope](#scope-every-surface) lists every surface, how it looks today and the
+  rules that matter most there.
+- [World today](#world-today) shows Town, Board and Desk as they ship.
+- [Icons](#icons) explains every icon and state mark World uses.
+- The sections from [Principles](#principles) on are the rules. Each says
+  whether it describes shipping World or a proposal.
+
+The guide has two kinds of images. **Captures** show shipping production
+components rendered with synthetic data. **Specimens** illustrate the
+proposals: they load the real `tokens.css`, `base.css` and agent-mark styles
+and the product's own Lucide icons, add local styles for the proposed rules,
+and use synthetic names. Specimens are not product screenshots or evidence of
+reusable shipping APIs.
 
 ## Contents
 
+- [Scope: every surface](#scope-every-surface)
+- [World today](#world-today)
+- [Icons](#icons)
 - [Principles](#principles)
 - [Skins](#skins)
 - [Tokens](#tokens)
@@ -29,6 +50,120 @@ They are not product screenshots or evidence of reusable shipping APIs.
 - [Accessibility](#accessibility)
 - [Dos and don'ts](#dos-and-donts)
 - [Checklist for a UI change](#checklist-for-a-ui-change)
+
+## Scope: every surface
+
+| Surface | Today (shipping) | Rules that matter most |
+| --- | --- | --- |
+| **Shell on desktop** | Every view opens in Zen: a floating dock at the top holds Needs you, the view picker and Exit Zen, and Needs you also waits as a tab on the left edge. Outside Zen, a top bar holds the view, Needs you, Hosts, Actions, the shortcut cheat sheet, Ranger, window controls, Menu and a status dot. | [Colour roles](#colour-roles), [Button](#button), [Badges](#badges-and-counters), [Icons](#icons) |
+| **Shell on phones** | Root screens open in Zen: a floating view button and a Needs you pill sit at the bottom. Detail screens, such as an agent window or Spaces, keep a top bar with Back. Outside Zen, the bar holds the title, Needs you, Hosts, Actions and Menu, and a bottom nav switches views. | [Phone header](#phone-header), [Hit areas](#hit-areas), [Badges](#badges-and-counters) |
+| **Town** | A pixel-art scene with DOM overlays: the Town board, receptions, room plaques, zoom and New room. | [Skins](#skins), [State colours](#state-colours), [Motion](#motion) |
+| **Board** | A canvas of host spaces and workspace cards, with a dock for Work, zoom, fit, tidy and settings. | [State colours](#state-colours), [Card](#card), [Badges](#badges-and-counters) |
+| **Desk** | Count tiles; Now, Agents and Reviewed tabs with counts; Find; and three lanes of cards with action buttons and key hints. | [Card](#card), [Button](#button), [Badges](#badges-and-counters), [State colours](#state-colours) |
+| **Spaces** | The terminal workspace: workspaces, tabs and terminal windows, much of it Roamgate-derived (`web/src/components/`). | [Principle 6](#principles), [Panel and tray](#panel-and-tray) |
+| **Windows** | Agent and Inspector windows with Chat, Terminal, Files and Changes views and More, Maximize and Close controls. Over Town they wear the Town skin. | [Skins](#skins), [Panel and tray](#panel-and-tray) |
+| **Needs you** | A side tray, or a sheet on phones, of questions and blocked agents. Each item has an answer row, Dismiss and Chat. An Outbox lists answers to check. | [Card](#card), [Inline input](#inline-input-with-action), [Panel and tray](#panel-and-tray) |
+| **Menus, dialogs and settings** | The Actions menu, the Hosts list and Menu; `.modal` dialogs; the shared close button. | [Dialogs](#dialogs), [Button](#button), [Radius](#radius-and-control-heights) |
+
+Principles, tokens, motion and accessibility apply on every surface. Rules are
+proposals unless they say they describe shipping World.
+
+## World today
+
+These captures show shipping production components with synthetic data: two
+hosts, atlas and nova; four rooms; and agents claude, codex and pi. Desktop is
+the 1512 × 982 laptop viewport and the phone is 390 × 844. Every view opens in
+Zen, World's default. They show where each rule lands; they are not mockups of
+the proposals.
+
+### Town
+
+<img src="images/view-town-laptop.png" alt="Town on a laptop: the Town board, two receptions, four rooms of desks and agents, zoom controls, the Zen dock at the top and the Needs you tab on the left edge" width="74%"> <img src="images/view-town-phone.png" alt="Town on a phone: one building with room plaques, zoom controls, the view button and the Needs you pill" width="22%">
+
+- **What is there:** the Town board (Working, Need you, Done), a reception per
+  host, room plaques with their `!` counts, desks and agents, zoom (`+`, `−`,
+  `ALL`) and New room.
+- **Rules:** surfaces over Town wear the [Town skin](#skins). State uses the
+  [state map](#state-colours) through Town's `--town-*` values. The scene
+  follows the Town renderer's own [frame rules](#motion).
+- **Proposed here:** the fuller [Town skin](#skins) for windows and trays over
+  Town, and its title font policy.
+
+### Board
+
+<img src="images/view-board-laptop.png" alt="Board on a laptop: a space for each host with workspace hubs and tab cards, and the Work and zoom dock at the bottom right" width="74%"> <img src="images/view-board-phone.png" alt="Board on a phone: host spaces with workspace cards, the shell's floating terminal controls and the Board dock" width="22%">
+
+- **What is there:** a space for each host with workspace hubs and tab cards,
+  the links between them, and a dock: Work, zoom out, fit, zoom in, tidy and
+  settings.
+- **Rules:** cards follow the [state map](#state-colours) through Board's
+  `--s-*` values. Board's card badges draw `!`, `✓` and `~` in CSS rather than
+  using [agent marks](#icons).
+- **Proposed here:** the shared state map and the
+  [one count badge](#badges-and-counters).
+
+### Desk
+
+<img src="images/view-desk-laptop.png" alt="Desk on a laptop: count tiles, Now, Agents and Reviewed tabs, Find, and the Needs you, To review and In flight lanes" width="74%"> <img src="images/view-desk-phone.png" alt="Desk on a phone: count tiles, tabs, Find and the Needs you lane, with the shell's floating terminal controls over it" width="22%">
+
+- **What is there:** count tiles for need you, to review, working and quiet;
+  Now, Agents and Reviewed tabs with counts; Find; and lanes for Needs you, To
+  review and In flight. Each card shows the agent, its place, what it asked or
+  is doing, an action button and a key hint (`↵` or `E`).
+- **Rules:** [cards](#card), [buttons](#button), the
+  [inline count](#badges-and-counters) and the [state map](#state-colours).
+- **Today and the proposal:** the lane actions (Answer, Open and Watch) are
+  solid, state-coloured buttons. The proposed [button set](#button) has no such
+  variant, so how Desk's actions look depends on the pending primary-button
+  decision. The tab counts already resemble the proposed inline count.
+
+On phones, Board and Desk also show the shell's floating controls for the
+selected terminal: Ranger, Tabs, window arrangement and the workspace views
+(files, changes, commits and history). Today they can cover lane content. No
+rule here covers floating controls yet.
+
+## Icons
+
+World draws its icons from one set, [Lucide](https://lucide.dev/icons/), through
+`lucide-react` ([`web/package.json`](../../web/package.json)). Icons use stroke
+2, usually 13–16 px in bars, menus and toolbars and 22 px in phone navigation,
+beside a visible label or an `aria-label`. Agent state uses agent marks: one
+glyph in a coloured circle per state, defined in
+[`agentMarks.ts`](../../web/src/world/agentMarks.ts) and styled by
+[`AgentMark.css`](../../web/src/components/AgentMark.css). A few controls are
+plain text glyphs.
+
+![World's icons: the views, agent state marks, shell bar controls, window, Board and Town controls, and text glyphs](images/icons.png)
+
+| Icon | Means | Where today |
+| --- | --- | --- |
+| `Castle`, `StickyNote`, `LayoutDashboard`, `PanelsTopLeft` | Town, Board, Desk, Spaces | Zen view picker, phone view button and nav |
+| `Minimize2`; `Maximize2` | Exit Zen or restore; show the bars, maximize or fit | Zen dock, windows, Board |
+| `Server` | Hosts | top bar; with a count badge on phones |
+| `Keyboard` | Actions, the command menu | top bar |
+| `Command` | Shortcut cheat sheet | desktop top bar |
+| `Menu` | Menu | phone top bar; desktop shows the word |
+| `Compass` | Ranger | top bar, phone floating controls |
+| `LayoutGrid`; `PanelsTopLeft` with a count | Arrange windows; open windows | top bar; Arrange also on phones |
+| `SquareStack` with a count | Tabs | phone bars and floating controls |
+| `Search` | Search this view | view toolbar |
+| `ArrowLeft`; `ChevronLeft` | Back | phone detail bar; a window opened from another surface |
+| `X` | Close | windows, dialogs, search |
+| `MoreHorizontal`; `EllipsisVertical` | More actions; more or settings | windows; Board, Town and phones |
+| `MessagesSquare`, `SquareTerminal`, `FolderTree`, `FileDiff` | Chat, Terminal, Files, Changes | agent window views |
+| `GitPullRequest`, `Sparkles`, `Minus`, `Plus` | Work, tidy, zoom out, zoom in or new | Board dock, Town |
+| `Pencil`; `Trash2` | Rename room; close room or delete | Town room plaques, Board |
+| Agent marks `•` `!` `?` `✓` `×` `–` `~` | Working, Needs you, Asks you, Done, Offline, Idle or Reviewed, No signal | Needs you, agent hover cards and Town's peek; Desk shows the `?` mark |
+| Text `ⓘ`, `‹`, `↵`, `E` | About an agent; hide Needs you; open; mark reviewed | Needs you items and tab, Desk key hints |
+
+The same meaning still has more than one form today. Back is `ArrowLeft` on
+phone bars, `ChevronLeft` in windows and the text `‹ Back` in the Needs you
+sheet. Close is `X` in windows and dialogs, the text `×` in Board's trays and
+Town's peek, and `‹` for Needs you. Board's card badges are CSS glyphs, not
+agent marks. Reuse an icon for its existing meaning before adding one.
+
+The specimens below use these icons. Their `Inbox` is #638's design for a
+compact Needs you button, which does not ship yet.
 
 ## Principles
 
@@ -234,9 +369,9 @@ this PR does not implement them.
 A card has up to four zones, 8 px apart, inside 12 px padding, with radius 12 and
 a 1 px `--border` on `--panel`:
 
-1. **Header**, one line: kind icon (16 px, shape and colour from the state
-   map), name (13/700 `--text-strong`, may be a link), meta (12 `--muted`,
-   ellipsis) and an optional quiet icon button at the end.
+1. **Header**, one line: the agent mark for its state (16 px; see
+   [Icons](#icons)), name (13/700 `--text-strong`, may be a link), meta (12
+   `--muted`, ellipsis) and an optional quiet icon button at the end.
 2. **Body:** reading text clamped to three lines with More/Less. Inner blocks
    use `--input-bg`, radius 8 and padding 8 10.
 3. **Answer zone** (optional): answer choices (wrapping, 8 apart), then the
@@ -257,11 +392,13 @@ inner highlight.
 
 ### Badges and counters
 
-![Count badges on icons, inline counts and status pills](images/badges.png)
+![Count badges on Needs you (Inbox, #638's design) and Hosts (Server), inline counts and status pills](images/badges.png)
 
-1. **Count badge on an icon** (header, dock, view picker). There is one look:
-   the Hosts badge (`.world-hosts-count` in
-   [`world-shell.css`](../../web/src/world/world-shell.css)).
+1. **Count badge on an icon** (header, dock, view picker). Use one look: the
+   Hosts badge (`.world-hosts-count` in
+   [`world-shell.css`](../../web/src/world/world-shell.css)), which today shows
+   only on phones. Today World has four count looks; see
+   [Dos and don'ts](#dos-and-donts).
    - Size and position: 14 px tall, minimum 14 px wide, padding 0 2, radius 7,
      offset `-7px` top and `-9px` right.
    - Colour and text: `--accent` fill, `--bg` text, 9 px/700.
@@ -316,20 +453,26 @@ On phones, dialog buttons are 44 px.
 
 ### Phone header
 
-![Phone header: view name, Needs you with its count, Hosts, command menu and Menu; and a sheet header with Back](images/phone-header.png)
+![Proposed phone header: the view name, Needs you with its count, Hosts, Actions and Menu, each in a dashed 44 px slot; and a sheet header with Back](images/phone-header.png)
 
-- **Bar (proposed):** 48 px excluding the safe-area top, matching the
-  specimen's bar height. Total border-box height is
+**Today:** phone root screens open in Zen without this bar; a floating view
+button and a Needs you pill sit at the bottom (see [World today](#world-today)).
+The bar shows on detail screens, such as an agent window or Spaces, with Back,
+and outside Zen, where it holds the title, Needs you, Hosts with its count,
+Actions and Menu. These rules are for that bar.
+
+- **Bar (proposed):** 48 px excluding the safe-area top. Total border-box height is
   `calc(48px + env(safe-area-inset-top, 0px))`, including the bottom divider.
   Use the safe-area inset as top padding, no other vertical padding, 10 px
   horizontal padding and an 8 px gap. Centre a row of 44 px targets in the
-  remaining bar space. Sticky and opaque. The specimen shows the visual height;
-  its 6 px vertical padding is not the proposed hit-area layout.
+  remaining bar space. Sticky and opaque. The specimen draws this geometry and
+  dashes each 44 px slot.
 - **No second bar under the header.** Notices go to Needs you or a toast.
-- **Left:** the view name, then the Needs you icon with its count badge. On a
-  detail screen, `‹ Back` and the title instead.
-- **Right:** icon buttons only, such as Hosts, the command menu and Menu. At
-  most four icon buttons in the whole bar at 360 px.
+- **Left:** the view name, then the Needs you icon with its count badge
+  (`Inbox` in #638's design). On a detail screen, `‹ Back` and the title
+  instead.
+- **Right:** icon buttons only: Hosts (`Server`), Actions (`Keyboard`) and Menu
+  (`Menu`). At most four icon buttons in the whole bar at 360 px.
 - **Icon buttons:** 36 px drawn, 44 px hit area, radius 8, the
   `--topbar-control-*` tokens. When pressed or open: an `--accent` border and
   `--topbar-control-active-bg`. Reserve a separate 44 px-wide layout slot for
@@ -395,9 +538,9 @@ laptop 1512 × 982, half 1280 × 1440, wide 2560 × 1440 and portrait 1440 × 25
 
 ![Don't: a solid accent fill. Do: the soft primary.](images/dont-primary.png)
 
-![Don't: four count-badge styles. Do: one.](images/dont-badges.png)
+![Don't: today's four count looks on Hosts, the phone tabs button, the floating Tabs button and Desk's tabs. Do: one count badge on icons and the inline count in labels.](images/dont-badges.png)
 
-![Don't: Dismiss in the input row.](images/dont-input.png)
+![Don't: Dismiss beside the answer field and Chat on a row of its own. Do: only Answer beside the field, with Dismiss and Chat in the footer.](images/dont-input.png)
 
 ## Checklist for a UI change
 

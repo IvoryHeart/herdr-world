@@ -7,10 +7,11 @@ were removed.
 Use this map to locate ownership, then read the relevant contract, source and focused
 test. For end-to-end module and data-flow navigation, use the
 [foundation source guide](foundation-guide.md); for visual and terminal tasks,
-use the [World component routes](../web/src/world/README.md). For proposed visual
-rules (skins, tokens, buttons, cards, badges, trays and phone header), see the
-[proposed World style guide](design/style-guide.md). Mockups may explore it;
-shipping adoption awaits the steward-coordinated owner decision, including #638.
+use the [World component routes](../web/src/world/README.md). For World's visual
+rules across every surface (shell, Town, Board, Desk, Spaces, windows, trays,
+dialogs and phone), see the [proposed World style guide](design/style-guide.md);
+it separates shipping facts from proposals. Mockups may explore it; shipping
+adoption awaits the steward-coordinated owner decision, including #638.
 [Current OpenSpec specs](../openspec/specs/) describe maintained product
 behavior; source and tests show its implementation. [Active changes](../openspec/changes/)
 hold deltas and decisions at different delivery stages. Check their task state with
