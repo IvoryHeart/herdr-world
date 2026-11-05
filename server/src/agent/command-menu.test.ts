@@ -59,6 +59,51 @@ test("Claude /model: digits pick only where no longer number starts with them", 
   }
 });
 
+test("Claude /model on a phone-width pane: a wrapped footer still reads", () => {
+  // 52 columns: Claude wraps descriptions and the footer onto two rows.
+  const prompt = menu("menu-claude-model-narrow")!;
+  expect(prompt.question).toEqual(["Select model"]);
+  expect(prompt.options.map((option) => option.number)).toEqual([
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+  ]);
+  expect(prompt.options.find((option) => option.cursor)?.number).toBe("2");
+  expect(prompt.options[0]).toMatchObject({
+    label: "Opus 5.5 ✔",
+    description: "For complex work and everyday tasks",
+  });
+  expect(prompt.menu).toMatchObject({
+    footer:
+      "Enter to set as default · s to use this session only · Esc to cancel",
+  });
+  expect(prompt.menu!.overlay).toBeUndefined();
+  expect(keys("menu-claude-model-narrow")).toEqual([
+    "enter",
+    "s",
+    "esc",
+    "left",
+    "right",
+    "up",
+    "down",
+  ]);
+  // Only a whole footer joins: its wrapped half alone, or rows with a gap
+  // between them, are not a menu.
+  const lines = screen("menu-claude-model-narrow").trimEnd().split("\n");
+  for (const cut of [
+    lines.slice(0, -2).concat(lines.at(-1)!),
+    lines.slice(0, -1).concat("", lines.at(-1)!),
+  ])
+    expect(parseCommandMenu("claude", cut.join("\n"), context)).toBeNull();
+});
+
 test("Claude /model scrolled: the window and its cursor follow the screen", () => {
   const prompt = menu("menu-claude-model-scrolled")!;
   expect(prompt.options.map((option) => option.number)).toEqual([

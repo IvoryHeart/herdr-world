@@ -49,3 +49,7 @@ were replaced (`/project/demo`, `dev@example`); blank runs were squeezed.
   Claude Code `blocked`.
 - `menu-claude-closed` and `menu-codex-closed` show the screens after Escape
   or a choice. Otherwise Herdr reported Claude Code `idle` and Codex `done`.
+- `menu-claude-model-narrow` is Claude Code 2.1.318 `/model` at 52 columns,
+  the width of a phone's terminal (isolated Herdr 0.9.3 session; only the
+  menu panel kept). Claude wraps option descriptions and its key footer onto
+  two rows; the footer reads only as one whole, same-indent run of rows.

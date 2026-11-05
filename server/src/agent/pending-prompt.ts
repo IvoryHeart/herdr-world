@@ -564,22 +564,43 @@ function menuFooter(line: string, agent: string): MenuControl[] | null {
   return controls.some((control) => control.key === "esc") ? controls : null;
 }
 
-/** Where a command menu's footer is, or -1. */
+/** Rows a narrow pane can wrap one footer onto. */
+const FOOTER_ROWS = 3;
+
+/**
+ * The footer ending at row `end`: one row, or rows a narrow pane wrapped it
+ * onto, which follow each other at the same indent. Null when no whole
+ * footer ends there.
+ */
+function footerEndingAt(lines: string[], end: number, agent: string) {
+  const indent = (line: string) => /^\s*/u.exec(line)![0].length;
+  for (let start = end; start > end - FOOTER_ROWS && start >= 0; start -= 1) {
+    const rows = lines.slice(start, end + 1);
+    if (rows.some((row) => !row.trim() || indent(row) !== indent(rows[0]!)))
+      return null;
+    const text = rows.map((row) => row.trim()).join(" ");
+    if (menuFooter(text, agent)) return { start, end, text };
+  }
+  return null;
+}
+
+/** Where a command menu's footer is, or null. */
 function menuFooterAt(lines: string[], agent: string) {
   let end = lines.length - 1;
   while (end >= 0 && !lines[end]!.trim()) end -= 1;
-  if (end < 0) return -1;
-  if (menuFooter(lines[end]!, agent)) return end;
-  if (agent !== "codex") return -1;
+  if (end < 0) return null;
+  const last = footerEndingAt(lines, end, agent);
+  if (last) return last;
+  if (agent !== "codex") return null;
   // Codex draws a confirmation above its idle composer: the footer, blank
   // rows, then the composer's › row and at most three status rows.
   let composer = end;
   while (composer > end - 4 && composer >= 0 && !/^›\s/u.test(lines[composer]!))
     composer -= 1;
-  if (composer < 0 || !/^›\s/u.test(lines[composer]!)) return -1;
+  if (composer < 0 || !/^›\s/u.test(lines[composer]!)) return null;
   let footer = composer - 1;
   while (footer >= 0 && !lines[footer]!.trim()) footer -= 1;
-  return footer >= 0 && menuFooter(lines[footer]!, agent) ? footer : -1;
+  return footer >= 0 ? footerEndingAt(lines, footer, agent) : null;
 }
 
 /**
@@ -591,9 +612,9 @@ function menuFooterAt(lines: string[], agent: string) {
  * take it. Anything else is not a menu Chat offers.
  */
 function commandMenu(lines: string[], agent: string): Parsed | null {
-  const footerAt = menuFooterAt(lines, agent);
-  if (footerAt < 0) return null;
-  const footer = lines[footerAt]!;
+  const found = menuFooterAt(lines, agent);
+  if (!found) return null;
+  const { start: footerAt, end: footerEnd, text: footer } = found;
   let start: number;
   if (agent === "claude") {
     start = footerAt - 1;
@@ -708,7 +729,7 @@ function commandMenu(lines: string[], agent: string): Parsed | null {
       after,
       controls,
       ...(field !== undefined ? { field } : {}),
-      ...(lines.slice(footerAt + 1).some((line) => line.trim())
+      ...(lines.slice(footerEnd + 1).some((line) => line.trim())
         ? { overlay: true as const }
         : {}),
     },
