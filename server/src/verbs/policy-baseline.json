@@ -117,6 +117,8 @@
   "rpc:settings.workspace_auto_sync.list": "allow deny deny deny deny deny",
   "rpc:settings.workspace_auto_sync.update": "allow deny deny deny deny deny",
   "rpc:settings.workspace_auto_sync.update_key": "allow deny deny deny deny deny",
+  "rpc:settings.worktree_command.update": "allow deny deny deny deny deny",
+  "rpc:settings.worktree_directory.get": "allow deny deny deny deny deny",
   "rpc:settings.worktree_hooks.get": "allow deny deny deny deny deny",
   "rpc:tab.close": "allow deny deny deny deny deny",
   "rpc:tab.create": "allow deny deny deny deny deny",

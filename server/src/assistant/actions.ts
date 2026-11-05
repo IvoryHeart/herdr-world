@@ -6,12 +6,16 @@ import type {
   AssistantWorkspace,
 } from "../../../shared/assistant";
 import { isRecord } from "../agent/session-utils";
-import { workspaceRepoSettingsKey } from "../config/gui-settings";
+import {
+  workspaceRepoSettingsKey,
+  worktreeCommandFor,
+} from "../config/gui-settings";
 import { validateConnectionId } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { assertUnixHost } from "../connections/unix-only";
 import { inspectRuntimeWorkspacePath } from "../workspace/path";
 import { checkoutPath } from "../workspace/utils";
+import { worktreeCheckoutPath } from "../worktree/create";
 import { surfaceAssistantUserError } from "./errors";
 
 export type AssistantActionPreview = Omit<
@@ -314,16 +318,21 @@ export async function prepareAssistantAction(args: {
       (typeof command !== "string" || command.length > 20_000)
     )
       throw new Error("Cannot preview this setup hook");
-    const enabled = await read(() =>
-      runtime.worktreeHooks.hooksEnabled(
-        workspaceRepoSettingsKey(
-          source,
-          runtime.sshHost(),
-          target.connection_id,
-        ),
-      ),
+    const key = workspaceRepoSettingsKey(
+      source,
+      runtime.sshHost(),
+      target.connection_id,
     );
-    return { command, enabled };
+    const enabled = await read(() => runtime.worktreeHooks.hooksEnabled(key));
+    // The repository's worktree location decides the new checkout's path,
+    // and the configured command, if any, creates it instead of Herdr. Both
+    // come from the owning runtime's settings, read once.
+    const settings = await read(() => runtime.readSettings());
+    const directory =
+      (key ? settings.repositories[key]?.worktree_directory : undefined) ??
+      null;
+    const worktreeCommand = worktreeCommandFor(settings, key) ?? null;
+    return { command, enabled, directory, worktreeCommand };
   }
 
   try {
@@ -618,16 +627,22 @@ export async function prepareAssistantAction(args: {
       );
       const root = absolutePath(resolved.root);
       const hooks = await hookState(current, root);
+      const path = hooks.directory
+        ? worktreeCheckoutPath(hooks.directory, branch)
+        : undefined;
       previewParams = {
         branch,
         ...(label ? { label } : {}),
         cwd: root,
+        path: path ?? "(Herdr's default worktree location)",
         base: "Latest origin default branch (fetched at confirmation)",
         setup_hook: hooks.command ?? "(none configured)",
         setup_hook_enabled: String(hooks.enabled),
+        worktree_command:
+          hooks.worktreeCommand ?? "(none configured: Herdr creates it)",
       };
       summary =
-        "Fetch origin's default branch, create its worktree, save the source relationship, and run the displayed setup hook if enabled. Focus will stay unchanged.";
+        "Fetch origin's default branch, create its worktree (with the displayed worktree command if one is configured and installed on the host, otherwise with Herdr), save the source relationship, and run the displayed setup hook if enabled. Focus will stay unchanged.";
       perform = async (dispatch, isCurrent) => {
         const actualRoot = await read(() =>
           runtime.files.resolveWorkspaceGitRoot({
@@ -639,7 +654,9 @@ export async function prepareAssistantAction(args: {
           JSON.stringify(await hookState(await workspace(), root)) !==
             JSON.stringify(hooks)
         )
-          throw new Error("Worktree source or setup hook changed");
+          throw new Error(
+            "Worktree source, setup hook, location or command changed",
+          );
         if ((await worktrees()).some((item) => item.branch === branch))
           return {
             status: "failed",
@@ -653,10 +670,13 @@ export async function prepareAssistantAction(args: {
               workspace_id: target.workspace_id,
               branch,
               ...(label ? { label } : {}),
+              // The previewed path, not one recomputed at dispatch.
+              ...(path ? { path } : {}),
               focus: false,
               expected_setup_hook: hooks.command,
               expected_hooks_enabled: hooks.enabled,
               expected_source_root: root,
+              expected_worktree_command: hooks.worktreeCommand,
             },
             isCurrent,
             beforeDispatch,

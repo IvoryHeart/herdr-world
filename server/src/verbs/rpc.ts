@@ -173,6 +173,8 @@ export const rpcVerbs = [
   rpc("settings.workspace_auto_sync.list", "read", "runtime"),
   rpc("settings.workspace_auto_sync.update", "reconcilable", "runtime"),
   rpc("settings.workspace_auto_sync.update_key", "reconcilable", "runtime"),
+  rpc("settings.worktree_command.update", "reconcilable", "runtime"),
+  rpc("settings.worktree_directory.get", "read", "runtime"),
   rpc("settings.worktree_hooks.get", "read", "runtime"),
   rpc("tab.close", "reconcilable", "runtime"),
   rpc("tab.create", "reconcilable", "runtime"),

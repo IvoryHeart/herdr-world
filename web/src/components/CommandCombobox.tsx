@@ -71,6 +71,7 @@ import {
 } from "./WindowArrangementMenu";
 import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
 import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
+import { WorktreeLocationDialog } from "./WorktreeLocationDialog";
 import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 
 type TextAction =
@@ -304,6 +305,9 @@ function OwnedCommandCombobox({
   const [worktreeHooksWorkspaceId, setWorktreeHooksWorkspaceId] = useState<
     string | null
   >(null);
+  const [locationWorkspaceId, setLocationWorkspaceId] = useState<string | null>(
+    null,
+  );
   const [lifecycleWorkspaceId, setLifecycleWorkspaceId] = useState<
     string | null
   >(null);
@@ -560,6 +564,19 @@ function OwnedCommandCombobox({
       detail: workspaceName(focusedWorkspace),
       keywords: ["existing worktree", "open existing", "checkout", "branch"],
       run: () => setOpenWorktreeWorkspaceId(focusedWorkspace.workspace_id),
+    });
+    currentActions.push({
+      key: "current-worktree-location",
+      icon: <FolderOpen size={15} />,
+      title: "Worktree location",
+      detail: workspaceName(focusedWorkspace),
+      keywords: [
+        "worktree directory",
+        "worktree path",
+        "where worktrees are created",
+        "worktree folder",
+      ],
+      run: () => setLocationWorkspaceId(focusedWorkspace.workspace_id),
     });
   }
   if (focusedWorkspace?.worktree) {
@@ -1291,6 +1308,11 @@ function OwnedCommandCombobox({
         open={operationalShortcutsEnabled && !!worktreeHooksWorkspaceId}
         workspaceId={worktreeHooksWorkspaceId ?? undefined}
         onClose={() => setWorktreeHooksWorkspaceId(null)}
+      />
+      <WorktreeLocationDialog
+        open={!!locationWorkspaceId}
+        workspaceId={locationWorkspaceId}
+        onClose={() => setLocationWorkspaceId(null)}
       />
       <WorktreeLifecycleDialog
         open={operationalShortcutsEnabled && !!lifecycleWorkspaceId}

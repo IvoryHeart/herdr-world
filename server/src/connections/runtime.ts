@@ -893,6 +893,8 @@ export function createLegacyConnectionRuntime(args: {
     status,
     workspaceAutoSync,
     worktreeHooks,
+    /** The owning service's settings, read-only. */
+    readSettings,
     worktreeRemovalCoordinator,
     worktreeRemovalRuntime,
     terminalBridge,

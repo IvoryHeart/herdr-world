@@ -1869,11 +1869,17 @@ export const store = {
             loading: true,
           },
         });
-        const result = await lease.client.call("worktree.create", {
-          workspace_id: workspaceId,
-          branch,
-          focus: leaseSnapshot(lease).navigationMode !== "browser-local",
-        });
+        const result = await lease.client.call(
+          "worktree.create",
+          {
+            workspace_id: workspaceId,
+            branch,
+            focus: leaseSnapshot(lease).navigationMode !== "browser-local",
+          },
+          // A configured worktree command may run for minutes; the server
+          // bounds it, and a disconnect still ends the wait.
+          null,
+        );
         if (browserSelectionIsCurrent(navigation, lease))
           adoptBrowserTarget(lease, result);
         const setupHook = result?.setup_hook as
@@ -1882,8 +1888,20 @@ export const store = {
         const setupNotice = setupHook
           ? summarizeDirectHookResult(setupHook)
           : null;
+        const fallback =
+          typeof result?.command_fallback === "string"
+            ? result.command_fallback
+            : null;
         if (setupNotice) {
           setForConnection(lease, { notice: setupNotice });
+        } else if (fallback) {
+          setForConnection(lease, {
+            notice: {
+              kind: "info",
+              message: "Worktree created without the worktree command",
+              detail: fallback,
+            },
+          });
         } else {
           const commit = String(result?.base_sync?.commit ?? "").slice(0, 12);
           const base = String(
@@ -2063,6 +2081,14 @@ export const store = {
         );
         if (completionNotice) {
           setForConnection(lease, { notice: completionNotice });
+        } else if (typeof result?.command_fallback === "string") {
+          setForConnection(lease, {
+            notice: {
+              kind: "info",
+              message: "Worktree removed without the remove command",
+              detail: result.command_fallback,
+            },
+          });
         } else if (!beforeRemoveNotice) {
           setForConnection(lease, {
             notice: {
@@ -2089,6 +2115,39 @@ export const store = {
       const result = await lease.client.call("settings.update_repo", {
         key,
         settings: { worktree_hooks_enabled: enabled },
+      });
+      await refreshNow(lease);
+      return result;
+    });
+  },
+
+  setRepoWorktreeDirectory(key: string, directory: string) {
+    return action(async (lease) => {
+      const result = await lease.client.call("settings.update_repo", {
+        key,
+        settings: { worktree_directory: directory },
+      });
+      await refreshNow(lease);
+      return result;
+    });
+  },
+
+  setRepoWorktreeCommand(key: string, command: string) {
+    return action(async (lease) => {
+      const result = await lease.client.call("settings.update_repo", {
+        key,
+        settings: { worktree_command: command },
+      });
+      await refreshNow(lease);
+      return result;
+    });
+  },
+
+  setRepoWorktreeRemoveCommand(key: string, command: string) {
+    return action(async (lease) => {
+      const result = await lease.client.call("settings.update_repo", {
+        key,
+        settings: { worktree_remove_command: command },
       });
       await refreshNow(lease);
       return result;

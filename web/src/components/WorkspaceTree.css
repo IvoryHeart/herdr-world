@@ -277,3 +277,14 @@
   border-radius: 50%;
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
 }
+
+/* Clipped at the start, the end kept: "…ject-system-iga-184". The text
+   inside stays left to right. */
+.start-ellipsis {
+  direction: rtl;
+  text-align: left;
+}
+
+.start-ellipsis > span {
+  unicode-bidi: isolate;
+}
