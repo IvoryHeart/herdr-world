@@ -314,7 +314,9 @@ export class WorldBinStore {
     if (!newRun && next.revision < this.state.revision) return this.state;
     if (newRun) this.seen = new Set();
     const fresh = next.outcomes.filter((o) => !this.seen.has(o.id));
-    for (const o of next.outcomes) this.seen.add(o.id);
+    // Keep only the service's bounded result window; discarded outcomes do
+    // not return at newer revisions, and older revisions were refused above.
+    this.seen = new Set(next.outcomes.map((o) => o.id));
     // Only a page that was already showing the bin announces: a first load
     // shows earlier results without replaying their sounds.
     const announce = this.loaded ? fresh : [];

@@ -136,6 +136,41 @@ test("results are announced once, and not at a page's first load", () => {
   expect(heard.map((o) => o.label)).toEqual(["New"]);
 });
 
+test("rolling outcome snapshots retain only the current dedup window without replaying notifications", () => {
+  const { store, heard } = fixture();
+  const outcome = (index: number): BinOutcome => ({
+    id: `bin-run1-${index}`,
+    label: `Example ${index}`,
+    view: "board",
+    result: "closed",
+    closed_tab: false,
+  });
+  const initial = state("run1", 12, {
+    outcomes: Array.from({ length: 12 }, (_, i) => outcome(i)),
+  });
+  store.accept(initial);
+  store.accept(initial);
+  expect(heard).toEqual([]);
+  for (let index = 12; index < 10_000; index++) {
+    const snapshot = state("run1", index + 1, {
+      outcomes: Array.from({ length: 12 }, (_, i) => outcome(index - 11 + i)),
+    });
+    store.accept(snapshot);
+    store.accept(snapshot);
+  }
+  expect(store.get().outcomes).toHaveLength(12);
+  expect(heard).toHaveLength(10_000 - 12);
+  expect(new Set(heard.map((o) => o.id)).size).toBe(heard.length);
+  // Directly check the reported retention bound without adding a public
+  // production API for inspecting this private resource.
+  const retained = (store as unknown as { seen: ReadonlySet<string> }).seen;
+  expect(retained.size).toBeLessThanOrEqual(store.get().outcomes.length);
+  const latest = store.get();
+  store.accept(initial);
+  expect(store.get()).toBe(latest);
+  expect(heard).toHaveLength(10_000 - 12);
+});
+
 test("time left runs from the read, and stops while the bin is paused", () => {
   const { store, advance } = fixture();
   store.accept(state("run1", 1, { entries: [entry("bin-run1-1")] }));
