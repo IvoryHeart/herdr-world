@@ -6,6 +6,9 @@ import {
   timeoutRun,
 } from "./crew/run-lifecycle";
 import { crewVerdict } from "./crew/round-readiness";
+import { verdictState } from "./gate/predicate";
+import { reviewObservation, reviewStartError } from "./crew/review-boundary";
+import { routeJudgment, deliverReviewJudgments } from "./crew/review-judgments";
 import { parseOptions, USAGE } from "./crew/options";
 export { parseOptions } from "./crew/options";
 import { reconcileOwnerAsks } from "./crew/owner-asks";
@@ -148,7 +151,12 @@ export function crewPass(context: PassContext) {
   // reads. Each step is committed as it happens, so a crash never forgets a
   // prompt that was already sent. A dry run changes nothing and takes no lock.
   const pass = () => {
-    const { verdicts, inputs } = context.judge();
+    const { inputs, verdicts } = reviewObservation(
+      context.judge(),
+      settings,
+      loadConfig(configPath),
+      now,
+    );
     const live = seatInventory(deps.run);
     const names = [
       ...new Set([
@@ -206,8 +214,36 @@ export function crewPass(context: PassContext) {
         url: check.url!,
         minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
       }));
-      const actions = plan(verdict, input, settings, names, stalls);
+      const boundaryError = reviewStartError(
+        input,
+        settings.reviewStarts[String(input.number)],
+        now,
+        crew,
+        deps.run,
+        join(dir, "mirror.git"),
+      );
+      if (boundaryError) {
+        verdict.conditions.push({
+          id: "crew-review-boundary",
+          state: "judgment",
+          detail: boundaryError,
+        });
+        verdict.state = verdictState(verdict.conditions);
+      }
+      const actions: Action[] = boundaryError
+        ? [
+            {
+              key: `${input.number}:${verdict.head}:judgment:owner:review-boundary`,
+              pr: input.number,
+              head: verdict.head!,
+              kind: "judgment",
+              target: "owner",
+              text: `NEEDS-OWNER #${input.number}: ${boundaryError}`,
+            },
+          ]
+        : plan(verdict, input, settings, names, stalls);
       let due =
+        !boundaryError &&
         input.state === "OPEN" &&
         !isOnHold(input) &&
         !input.hold &&
@@ -237,7 +273,7 @@ export function crewPass(context: PassContext) {
             (entry) => entry.kind === "ready",
           ),
         );
-      planned.push(...due);
+      planned.push(...due.map((action) => routeJudgment(action, settings)));
     }
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
@@ -246,7 +282,7 @@ export function crewPass(context: PassContext) {
       const owed = new Map<number, string[]>();
       const root = dirname(dirname(context.dir));
       for (const entry of planned)
-        if (entry.target === "owner" && entry.kind === "judgment")
+        if (entry.target !== "github" && entry.kind === "judgment")
           owe(owed, entry, root);
       oweHeldNotices(crew, owed, root, parkedPrs(inputs, verdicts, settings));
       for (const verdict of verdicts) {
@@ -305,14 +341,16 @@ function act(
   const causes = new Map<number, string[]>();
   const root = dirname(dirname(context.dir));
   const publicText = (text: string) => text.replaceAll(`${root}/`, "");
-  const record = (entry: Action) => {
+  const record = (raw: Action) => {
+    const entry = routeJudgment(raw, settings);
     if (
-      entry.target === "owner" &&
+      entry.kind === "judgment" &&
+      entry.target !== "github" &&
       parked.has(entry.pr) &&
       entry.key.split("|")[1] !== "timeout"
     )
       return;
-    if (entry.target === "owner" && entry.kind === "judgment") {
+    if (entry.target !== "github" && entry.kind === "judgment") {
       owe(causes, entry, root);
       // Its signed GitHub comment, posted once.
       addAction(
@@ -530,6 +568,15 @@ function act(
   const keys = new Set(planned.map((entry) => entry.key));
   const deliverable = (entry: StoredAction) =>
     keys.has(entry.key.split("|")[0]!) || entry.key.split("|")[1] === "timeout";
+  for (const entry of actionsIn(crew, ["pending", "sent", "failed"]))
+    if (
+      entry.kind === "judgment" &&
+      entry.target !== "owner" &&
+      entry.target !== "github" &&
+      (!prs.length || observed.has(entry.pr)) &&
+      (!deliverable(entry) || noticeHolds(crew, entry) === false)
+    )
+      setAction(crew, entry.key, "superseded", now, entry.detail);
   deliver(crew, settings, live, authors, deliverable, record, context, say);
   reconcileOwnerAsks(
     crew,
@@ -580,7 +627,7 @@ function owe(
     ...(causes.get(entry.pr) ?? []),
     entry.text
       .replaceAll(`${root}/`, "")
-      .replace(/^(?:NEEDS-OWNER )?#\d+ (?:at \w+: )?/u, ""),
+      .replace(/^(?:NEEDS-(?:OWNER|REVIEW) )?#\d+ (?:at \w+: )?/u, ""),
   ]);
 }
 
@@ -593,7 +640,8 @@ function oweHeldNotices(
 ) {
   for (const entry of actionsIn(crew, ["pending", "sent"]))
     if (
-      entry.target === "owner" &&
+      entry.kind === "judgment" &&
+      entry.target !== "github" &&
       !parked.has(entry.pr) &&
       !causes.get(entry.pr)?.length &&
       noticeHolds(crew, entry) === true
@@ -717,6 +765,7 @@ function deliver(
   }
 
   startReviewers(crew, context, settings, pending(), authors, say);
+  deliverReviewJudgments(crew, now, deps, live, settings, deliverable, say);
 
   // Each owner notice's signed comment, once, so GitHub shows what the PR
   // waits for. One whose notice was dropped before it went out is dropped
@@ -884,13 +933,21 @@ export async function main(argv: string[], deps: Deps = realDeps) {
             worker,
           });
           const open = actionsIn(crew, ["pending", "running"]);
-          if (judged.value)
+          if (judged.value) {
+            const settings = loadSettings(configPath);
+            const current = reviewObservation(
+              judged.value,
+              settings,
+              loadConfig(configPath),
+              now,
+            );
             busy = busyPrs(
-              judged.value.verdicts,
-              judged.value.inputs,
-              loadSettings(configPath),
+              current.verdicts,
+              current.inputs,
+              settings,
               open.map((entry) => entry.pr),
             );
+          }
           if (!options.dryRun)
             deps.out(
               `${new Date(now).toISOString()} pass${scope ? ` ${numbers(scope)}` : ""}: ${planned.length} planned, ${open.length} open${busy?.length ? `; busy ${numbers(busy)}` : ""}`,

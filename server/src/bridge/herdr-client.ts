@@ -127,6 +127,7 @@ export class HerdrClient extends EventEmitter {
     params: Record<string, unknown> = {},
     timeoutMs = 8000,
     beforeSend?: () => void,
+    signal?: AbortSignal,
   ): Promise<any> {
     const requestId = `r_${Date.now().toString(36)}_${Math.random()
       .toString(36)
@@ -149,7 +150,7 @@ export class HerdrClient extends EventEmitter {
       );
     }
     return new Promise((resolve, reject) => {
-      if (this.#closed) {
+      if (this.#closed || signal?.aborted) {
         reject(new Error("Herdr connection stopped"));
         return;
       }
@@ -158,6 +159,8 @@ export class HerdrClient extends EventEmitter {
       let done = false;
       const decoder = new TextDecoder();
       const abort = (error: Error) => finish(error);
+      const cancel = () => finish(new Error("Herdr call cancelled"));
+      signal?.addEventListener("abort", cancel, { once: true });
       pending.add(abort);
       // Debug timing: total call time, plus write -> first response byte,
       // which isolates the round trip and Herdr's own wait from the connect.
@@ -177,6 +180,7 @@ export class HerdrClient extends EventEmitter {
         if (done) return;
         done = true;
         pending.delete(abort);
+        signal?.removeEventListener("abort", cancel);
         clearTimeout(timer);
         try {
           // One-shot RPCs never reuse the socket. Force closure so a peer that
@@ -281,6 +285,7 @@ export class HerdrClient extends EventEmitter {
             }
             try {
               beforeSend?.();
+              if (done) return;
               sendRest(socket);
             } catch (error) {
               fail(error, "RPC dispatch rejected");
