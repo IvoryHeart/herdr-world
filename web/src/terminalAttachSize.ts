@@ -1,14 +1,19 @@
-import { terminalSqueezed } from "../../shared/terminalSize";
+import {
+  TERMINAL_DEFAULT_SIZE,
+  terminalSqueezed,
+} from "../../shared/terminalSize";
 import type { ConnectionClient } from "./api";
 import { terminalPaneSize, type TerminalSize } from "./terminalResize";
 import type { PaneLayout } from "./types";
 
 type Ref<T> = { readonly current: T };
 
-/** The size a squeezed terminal gets when this browser has seen no better. */
-export const TERMINAL_DEFAULT_SIZE: TerminalSize = { cols: 100, rows: 30 };
-/** The last unsqueezed size per connection and terminal, in this browser. */
+export { TERMINAL_DEFAULT_SIZE };
+/** The last unsqueezed size per connection runtime and terminal, here. */
 const lastGood = new Map<string, TerminalSize>();
+/** A retired runtime's geometry never sizes a replacement's terminal. */
+const sizeKey = (client: ConnectionClient, terminalId: string) =>
+  `${client.connectionId}\0${client.serverRuntimeGeneration}\0${terminalId}`;
 /** One pane.layout read, valid only for the client and pane that made it. */
 type LayoutRead = {
   terminalId: string;
@@ -36,12 +41,20 @@ export class TerminalAttachSize {
   private read: LayoutRead | null = null;
   private waiting = false;
   private hidden = false;
+  /** The size this view is shown at, while shown. */
+  private shownAt: TerminalSize | null = null;
+  private claimedSqueeze = false;
 
   constructor(
     private readonly view: {
       paneIdRef: Ref<string | undefined>;
       paneTabIdRef: Ref<string | undefined>;
       paneLayoutRef: Ref<PaneLayout | null>;
+      /**
+       * Whether this view shows the selected pane. Only it claims the size:
+       * Herdr's focus is also the tab's cursor, and the surface is the tab.
+       */
+      isActivePaneRef: Ref<boolean>;
       currentClientRef: Ref<ConnectionClient>;
       desiredTerminalRef: Ref<string | null>;
       /** Runs the attach again once a read settles. */
@@ -88,9 +101,15 @@ export class TerminalAttachSize {
     this.hidden = !fitted;
     if (size) {
       this.read = null;
-      const key = `${client.connectionId}\0${terminalId}`;
-      if (!terminalSqueezed(size)) lastGood.set(key, size);
-      else if (!fitted) size = lastGood.get(key) ?? TERMINAL_DEFAULT_SIZE;
+      const key = sizeKey(client, terminalId);
+      // A squeeze shrinks the whole tab; with no layout (a failed read), the
+      // xterm's own size is all there is to judge.
+      const area = layout?.area;
+      const squeezed =
+        !fitted &&
+        terminalSqueezed(area ? { cols: area.width, rows: area.height } : size);
+      if (squeezed) size = lastGood.get(key) ?? TERMINAL_DEFAULT_SIZE;
+      else lastGood.set(key, size);
       return { ...size, layout, relayLayout: fitted ? stored : layout };
     }
     if (read || !paneId) return null;
@@ -136,6 +155,7 @@ export class TerminalAttachSize {
   /** The terminal is not displayed (its container has no size). */
   hide() {
     this.hidden = true;
+    this.shownAt = null;
   }
 
   /**
@@ -144,13 +164,32 @@ export class TerminalAttachSize {
    */
   fitted(size: TerminalSize) {
     const terminalId = this.view.desiredTerminalRef.current;
-    if (terminalId && !terminalSqueezed(size))
+    if (terminalId)
       lastGood.set(
-        `${this.view.currentClientRef.current.connectionId}\0${terminalId}`,
+        sizeKey(this.view.currentClientRef.current, terminalId),
         size,
       );
-    const claim = this.hidden;
+    const claim = this.hidden && this.view.isActivePaneRef.current;
     this.hidden = false;
+    this.shownAt = size;
     return claim;
+  }
+
+  /**
+   * A frame from Herdr at `width`×`height`. Returns whether it shows another
+   * client squeezed this shown terminal, so it must claim its size again:
+   * once per squeeze, re-armed by the next unsqueezed frame. A smaller but
+   * usable size from another viewer is theirs to keep (last focus wins).
+   */
+  squeezedFrame(width: number, height: number) {
+    if (!this.view.isActivePaneRef.current) return false;
+    if (!this.shownAt || terminalSqueezed(this.shownAt)) return false;
+    if (!terminalSqueezed({ cols: width, rows: height })) {
+      this.claimedSqueeze = false;
+      return false;
+    }
+    if (this.claimedSqueeze) return false;
+    this.claimedSqueeze = true;
+    return true;
   }
 }

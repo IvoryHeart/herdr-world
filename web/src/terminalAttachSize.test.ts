@@ -5,6 +5,7 @@ import {
   TerminalAttachSize,
 } from "./terminalAttachSize";
 import { terminalSqueezed } from "../../shared/terminalSize";
+import { terminalEndpointViewportSize } from "./terminalResize";
 import type { PaneLayout } from "./types";
 
 const layout = (width: number, height: number): PaneLayout => ({
@@ -23,15 +24,18 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** A client whose pane.layout answers come from `answers`, in order. */
 let connections = 0;
-function client(answers: Array<Promise<unknown>>) {
+function client(answers: Array<Promise<unknown>>, generation = 1) {
   let current = true;
   // Each test's browser memory of good sizes is its own.
   connections += 1;
   const reads: unknown[] = [];
   const value: ConnectionClient = {
-    connectionId: `connection-${connections}`,
+    connectionId:
+      generation === 1
+        ? `connection-${connections}`
+        : `connection-${connections - 1}`,
     generation: 1,
-    serverRuntimeGeneration: 1,
+    serverRuntimeGeneration: generation,
     isCurrent: () => current,
     acceptsServerGeneration: () => true,
     call: async (method, params) => {
@@ -49,6 +53,7 @@ function hiddenView(first: ConnectionClient) {
     paneIdRef: { current: "pane" as string | undefined },
     paneTabIdRef: { current: "tab" as string | undefined },
     paneLayoutRef: { current: null as PaneLayout | null },
+    isActivePaneRef: { current: true },
     currentClientRef: { current: first },
     desiredTerminalRef: { current: "terminal" as string | null },
   };
@@ -134,11 +139,13 @@ test("a shown terminal uses its fitted size and reads nothing", () => {
   expect(one.reads).toHaveLength(0);
 });
 
-test("a squeeze is below 40×10 in either dimension", () => {
-  expect(terminalSqueezed({ cols: 12, rows: 1 })).toBe(true);
-  expect(terminalSqueezed({ cols: 200, rows: 9 })).toBe(true);
-  expect(terminalSqueezed({ cols: 39, rows: 50 })).toBe(true);
-  expect(terminalSqueezed({ cols: 40, rows: 10 })).toBe(false);
+test("a squeeze is below 30×5 in either dimension", () => {
+  // Observed squeezes: 12–24 columns by 1–3 rows; a shown 30×8 is legitimate.
+  expect(terminalSqueezed({ cols: 13, rows: 1 })).toBe(true);
+  expect(terminalSqueezed({ cols: 24, rows: 3 })).toBe(true);
+  expect(terminalSqueezed({ cols: 200, rows: 4 })).toBe(true);
+  expect(terminalSqueezed({ cols: 30, rows: 5 })).toBe(false);
+  expect(terminalSqueezed({ cols: 30, rows: 8 })).toBe(false);
 });
 
 test("a hidden terminal never adopts a squeezed layout: it uses the default", () => {
@@ -188,4 +195,79 @@ test("only a terminal shown after being hidden claims its size", () => {
   // Attached while shown: no claim needed.
   view.size.resolve("terminal", { cols: 96, rows: 27 }, xterm);
   expect(view.size.fitted({ cols: 96, rows: 27 })).toBe(false);
+});
+
+test("a replacement runtime never reuses the retired runtime's good size", () => {
+  // Found by rev-sol on #650: same connection and terminal IDs, new runtime.
+  const before = client([], 1);
+  const retired = hiddenView(before.value);
+  retired.size.resolve("terminal", null, xterm);
+  retired.size.fitted({ cols: 240, rows: 80 });
+  const after = client([], 2);
+  expect(after.value.connectionId).toBe(before.value.connectionId);
+  const replacement = hiddenView(after.value);
+  replacement.refs.paneLayoutRef.current = layout(13, 1);
+  expect(replacement.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
+});
+
+test("a shown terminal reclaims a squeeze once, re-armed by a healthy frame", () => {
+  const one = client([]);
+  const view = hiddenView(one.value);
+  expect(view.size.squeezedFrame(12, 2)).toBe(false); // not shown yet
+  view.size.fitted({ cols: 96, rows: 27 });
+  expect(view.size.squeezedFrame(96, 27)).toBe(false);
+  expect(view.size.squeezedFrame(12, 2)).toBe(true);
+  expect(view.size.squeezedFrame(12, 2)).toBe(false);
+  expect(view.size.squeezedFrame(60, 20)).toBe(false); // usable: theirs
+  expect(view.size.squeezedFrame(12, 2)).toBe(true);
+  view.size.hide();
+  expect(view.size.squeezedFrame(12, 2)).toBe(false);
+});
+
+/** A tab of `count` panes side by side (or stacked), sized like Herdr's. */
+const split = (
+  width: number,
+  height: number,
+  count: number,
+  stacked = false,
+): PaneLayout => ({
+  ...layout(width, height),
+  panes: Array.from({ length: count }, (_, index) => ({
+    pane_id: index === 0 ? "pane" : `pane-${index}`,
+    focused: index === 0,
+    rect: stacked
+      ? { x: 0, y: index * (height / count), width, height: height / count }
+      : { x: index * (width / count), y: 0, width: width / count, height },
+  })),
+});
+
+test("a split pane is not a squeeze: the floor is the tab's", () => {
+  // Found by rev-opus on #650: a pane-level floor turned a 3-pane 120×40
+  // tab into a 309×32 surface.
+  for (const [tab, cells] of [
+    [split(120, 40, 3), { cols: 37, rows: 38 }],
+    [split(80, 40, 2), { cols: 37, rows: 38 }],
+    [split(120, 30, 3, true), { cols: 117, rows: 8 }],
+    [layout(38, 20), { cols: 37, rows: 20 }],
+  ] as const) {
+    const one = client([]);
+    const view = hiddenView(one.value);
+    view.refs.paneLayoutRef.current = tab;
+    const size = view.resolve()!;
+    expect(size).toMatchObject(cells);
+    expect(terminalEndpointViewportSize(size, tab, "pane")).toEqual({
+      cols: tab.area.width,
+      rows: tab.area.height,
+    });
+  }
+});
+
+test("only the selected pane claims its size", () => {
+  const one = client([]);
+  const view = hiddenView(one.value);
+  view.refs.isActivePaneRef.current = false;
+  view.refs.paneLayoutRef.current = layout(120, 40);
+  view.resolve();
+  expect(view.size.fitted({ cols: 96, rows: 27 })).toBe(false);
+  expect(view.size.squeezedFrame(12, 2)).toBe(false);
 });

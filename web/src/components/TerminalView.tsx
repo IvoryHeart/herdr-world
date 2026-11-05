@@ -713,6 +713,7 @@ export function TerminalView({
         paneIdRef,
         paneTabIdRef,
         paneLayoutRef,
+        isActivePaneRef,
         currentClientRef,
         desiredTerminalRef,
         retry: setSizeRead,
@@ -1527,6 +1528,9 @@ export function TerminalView({
       )
         return;
       attachWatchdogRef.current?.markFrame();
+      // Another client squeezed this shown terminal: claim it back, once.
+      if (attachSize.squeezedFrame(frame.width, frame.height))
+        focusTerminalEndpoint(connectionClient, desiredTerminalRef.current!);
       if (typeof frame.mouse_reporting === "boolean") {
         // Native endpoint repaints replace the whole viewport. Keep one latest
         // repaint per mounted owner, rather than decoding every noisy burst.

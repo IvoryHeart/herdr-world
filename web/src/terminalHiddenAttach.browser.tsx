@@ -4,7 +4,7 @@
 // shown, the terminal fits its container and resizes as before.
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { bridge, type ConnectionClient } from "./api";
+import { bridge, type ConnectionClient, type TerminalPush } from "./api";
 import { __storeTesting, store, type State } from "./store";
 import { TerminalView } from "./components/TerminalView";
 import type { Pane, PaneLayout } from "./types";
@@ -49,7 +49,26 @@ const client: ConnectionClient = {
 };
 let current = client;
 bridge.connection = () => current;
-bridge.onTerminal = () => () => {};
+const terminalListeners = new Set<(frame: TerminalPush) => void>();
+bridge.onTerminal = (listener) => {
+  terminalListeners.add(listener);
+  return () => terminalListeners.delete(listener);
+};
+/** A frame from Herdr at the terminal's actual size. */
+const push = (width: number, height: number) =>
+  flushSync(() => {
+    for (const listener of terminalListeners)
+      listener({
+        connection_id: client.connectionId,
+        connection_generation: 1,
+        terminal_id: pane.terminal_id,
+        width,
+        height,
+        full: true,
+        mouse_reporting: false,
+        bytes: btoa("x"),
+      });
+  });
 
 const pane: Pane = {
   pane_id: "pane",
@@ -256,6 +275,96 @@ try {
     order.indexOf("terminal.resize") < claimed &&
       !order.slice(0, claimed).includes("terminal.attach"),
     `the shown terminal did not claim its size: ${order.join(", ")}`,
+  );
+
+  // While it stays shown, another client (an older World page) attaches at
+  // 13×1: Herdr's frames arrive squeezed. The view claims its size back once,
+  // not per frame, and re-arms only after an unsqueezed frame.
+  calls.length = 0;
+  push(12, 2);
+  push(12, 2);
+  push(12, 2);
+  await frame();
+  check(
+    of("terminal.focus").length === 1,
+    `a shown terminal did not reclaim a squeeze exactly once: ${of("terminal.focus").length}`,
+  );
+  push(80, 24);
+  push(12, 2);
+  await frame();
+  check(
+    of("terminal.focus").length === 2,
+    "a later squeeze, after a healthy frame, was not reclaimed",
+  );
+  push(40, 12);
+  await frame();
+  check(
+    of("terminal.focus").length === 2,
+    "a usable smaller size from another viewer was fought over",
+  );
+
+  // A split tab shown after Chat: every pane fits, but only the selected
+  // pane claims, or Herdr's focus (the tab's cursor) lands on the last pane.
+  const second: Pane = {
+    ...pane,
+    pane_id: "pane-2",
+    terminal_id: "terminal-2",
+    focused: false,
+  };
+  const splitLayout: PaneLayout = {
+    ...layout,
+    panes: [
+      {
+        pane_id: pane.pane_id,
+        focused: true,
+        rect: { x: 0, y: 0, width: 80, height: 45 },
+      },
+      {
+        pane_id: second.pane_id,
+        focused: false,
+        rect: { x: 80, y: 0, width: 80, height: 45 },
+      },
+    ],
+  };
+  calls.length = 0;
+  mountId += 1;
+  host.style.cssText = "position:fixed;inset:0;display:none";
+  flushSync(() => {
+    __storeTesting.replaceState({
+      ...store.get(),
+      panes: [pane, second],
+      selectedPaneId: pane.pane_id,
+      layout: splitLayout,
+    });
+    root.render(
+      <>
+        {[pane, second].map((view) => (
+          <div
+            key={`${mountId}-${view.pane_id}`}
+            style={{ flex: 1, display: "flex" }}
+          >
+            <TerminalView
+              paneId={view.pane_id}
+              terminalTheme={{ background: "#171922", foreground: "#dddddd" }}
+              terminalFontScale={100}
+              showMobileKeys={false}
+            />
+          </div>
+        ))}
+      </>,
+    );
+  });
+  await until(() => of("terminal.attach").length >= 2, "split hidden attaches");
+  for (let index = 0; index < 10; index += 1) await frame();
+  calls.length = 0;
+  host.style.cssText =
+    "position:fixed;inset:0;display:flex;width:80vw;height:60vh";
+  await until(() => of("terminal.resize").length >= 2, "split shown resizes");
+  for (let index = 0; index < 10; index += 1) await frame();
+  const claims = of("terminal.focus").map((call) => call.params.terminal_id);
+  check(
+    claims.length === 1 && claims[0] === pane.terminal_id,
+    `a shown split claimed for ${JSON.stringify(claims)}, not only the selected pane`,
   );
 } catch (error) {
   failures.push(String(error));
