@@ -72,7 +72,28 @@ generation, detail expiry and exact-head admission before dispatching a merge.
 - **WHEN** more than a hundred pull requests the user authored were merged
   in the merged window (seven days unless changed in Sources settings)
 - **THEN** the Work lens shows every one, grouped by the day it merged with
-  only the newest day open, up to GitHub's 1,000-result search limit
+  only the newest day open, when at most 400 fit within the shared one-minute
+  refresh deadline; due action details for the user's own open pull requests
+  are read before merged history
+
+#### Scenario: Merged history exceeds the refresh bounds
+- **WHEN** the first merged page reports more than 400 pull requests, history
+  continues beyond eight pages of fifty, or the history exhausts the shared
+  one-minute refresh deadline
+- **THEN** the source reports that history was shortened, keeps its last
+  complete list and asks the user to shorten the window in Settings → Sources
+- **AND** a count over 400 stops immediately after the first merged page;
+  the message names the oldest valid merge date actually observed, or states
+  that no merge date could be confirmed, without claiming continuous coverage
+- **AND** partial history never replaces the list, proves absence or grants
+  action authority; cached action details retain their head and read-time
+  qualification independently of the failed history
+
+#### Scenario: A pull request merges between list requests
+- **WHEN** an open-work request reports a pull request as OPEN and a later
+  history request reports the same pull request as MERGED
+- **THEN** World keeps one merged item with its observed merge time and all
+  observed roles, without attaching open-only action details
 
 #### Scenario: Merge confirmed on the head the user saw
 - **WHEN** the user confirms Merge on a pull request GitHub would merge as it

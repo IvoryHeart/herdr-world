@@ -784,30 +784,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       ),
     ).toBe(true);
 
-    // Town's checked completions are shared the same way.
-    const seenIdentity = {
-      connection_id: "alpha",
-      connection_generation: oldAlphaGeneration,
-      terminal_id: "alpha-terminal",
-    };
-    const seenNotice = browserB.nextControl(
-      (control) => control.type === "world_completion_seen_changed",
-    );
-    expect(
-      await browserA.rpc("world.completion_seen.mark", seenIdentity),
-    ).toMatchObject({
-      revision: 1,
-      records: [{ ...seenIdentity, revision: 1 }],
-    });
-    expect(await seenNotice).toEqual({
-      type: "world_completion_seen_changed",
-      revision: 1,
-    });
-    expect(await browserB.rpc("world.completion_seen.list")).toMatchObject({
-      revision: 1,
-      records: [seenIdentity],
-    });
-
+    // Town, Desk and Needs you share the Desk review record.
     const deskIdentity = {
       connection_id: "alpha",
       connection_generation: oldAlphaGeneration,
@@ -859,10 +836,6 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     ).generation as number;
     expect(newAlphaGeneration).not.toBe(oldAlphaGeneration);
     expect(await browserA.rpc("world.desk.get")).toMatchObject({ records: [] });
-    expect(await browserA.rpc("world.completion_seen.list")).toMatchObject({
-      revision: 2,
-      records: [],
-    });
 
     const betaPaneCloseCalls = () =>
       (controlCalls.get("beta") ?? []).filter(

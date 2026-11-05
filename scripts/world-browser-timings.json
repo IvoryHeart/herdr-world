@@ -1,6 +1,9 @@
 {
   "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
   "units": "seconds; JUnit suite totals; Town groups sum their original testcase durations",
+  "sourceNotes": {
+    "NeedsYouCard.browser": "2026-11-02 local focused run: 0.83273 s testcase duration, seven assertions, bun run test web/src/world/NeedsYouCard.browser.test.ts."
+  },
   "seconds": {
     "AnswerDeliveries.browser": 10,
     "BoardView": 21.518,
@@ -16,6 +19,7 @@
     "HostsFilter.pending": 8.475,
     "HostsFilter.resources": 34.746,
     "HostsFilter.timeouts": 2.87,
+    "NeedsYouCard.browser": 0.833,
     "ProductionContexts": 10.689,
     "ProductionContexts.animated": 80.362,
     "ProductionContexts.board": 68.934,

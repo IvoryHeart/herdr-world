@@ -1,3 +1,4 @@
+import { ArrowLeft, Inbox, X } from "lucide-react";
 import {
   useEffect,
   useMemo,
@@ -64,14 +65,38 @@ function useWaitingCount(world: Pick<WorldObject, "leaves">) {
   return asks.length + blocked;
 }
 
-/** "Needs you N" in the existing top bar and Zen's picker: opens the tab. */
+/**
+ * "Needs you N" in the existing top bar and Zen's picker: opens the tab. A
+ * phone's top bar shows it compact, as an inbox icon with the Hosts icon's
+ * count badge, hidden at zero.
+ */
 export function NeedsYouCounter({
   world,
+  compact = false,
 }: {
   world: Pick<WorldObject, "leaves">;
+  compact?: boolean;
 }) {
   const count = useWaitingCount(world);
   const { open } = useNeedsYouState();
+  if (compact)
+    return (
+      <button
+        type="button"
+        className="needs-you-counter is-compact"
+        aria-label={`Needs you, ${count}`}
+        aria-pressed={open}
+        title={open ? "Hide Needs you" : "Show Needs you"}
+        onClick={toggleNeedsYou}
+      >
+        <Inbox size={16} aria-hidden="true" />
+        {count ? (
+          <b className="world-hosts-count" aria-hidden="true">
+            {count}
+          </b>
+        ) : null}
+      </button>
+    );
   return (
     <button
       type="button"
@@ -145,24 +170,24 @@ export function NeedsYouHost({
             type="button"
             className="needs-you-back"
             aria-label="Back"
+            title="Back"
             data-layer-back
             onClick={closeNeedsYou}
           >
-            ‹ Back
+            <ArrowLeft size={20} aria-hidden="true" />
           </button>
         ) : null}
-        <h2>
-          Needs you <b>{count}</b>
-        </h2>
+        <h2>Needs you</h2>
+        {count ? <b className="needs-you-head-count">{count}</b> : null}
         {mobile ? null : (
           <button
             type="button"
-            className="needs-you-close"
+            className="needs-you-icon needs-you-close"
             aria-label="Hide Needs you"
             title="Hide Needs you"
             onClick={closeNeedsYou}
           >
-            ‹
+            <X size={16} aria-hidden="true" />
           </button>
         )}
       </header>
@@ -234,8 +259,15 @@ function usePhoneSheetFocus(
       const item = request.itemKey
         ? sheet.querySelector<HTMLElement>(".needs-you-item.is-focused")
         : null;
+      // The item's reply (its first quick reply or its field), else its
+      // first icon past the name (which opens its window).
       const target =
-        item?.querySelector<HTMLElement>("button:not([disabled]), input") ??
+        item?.querySelector<HTMLElement>(
+          ".needs-you-replies button:not([disabled]), .needs-you-field input, .agent-chat-ask-options button:not([disabled])",
+        ) ??
+        item?.querySelector<HTMLElement>(
+          "header button:not([disabled]):not(.needs-you-name)",
+        ) ??
         sheet.querySelector<HTMLElement>(".needs-you-back") ??
         sheet;
       target.focus();
@@ -371,13 +403,19 @@ export function NeedsYouList({
   const deliveries = useAnswerDeliveryCounts();
   return (
     <div className="needs-you" ref={body}>
-      <p className="needs-you-count" role="status">
-        {count
-          ? `${count} waiting on you`
-          : items.length
-            ? "Nothing blocked; finished work to review below."
-            : "Nobody is waiting on you."}
-      </p>
+      {items.length ? (
+        // The header's count shows it; this tells a screen reader.
+        <p className="needs-you-count" role="status">
+          {count
+            ? `${count} waiting on you`
+            : "Nothing blocked; finished work to review below."}
+        </p>
+      ) : (
+        <p className="needs-you-none" role="status">
+          <AgentMark kind="reviewed" label="Nothing waiting" />
+          Nothing needs you.
+        </p>
+      )}
       {shownStart > 0 ? (
         <button
           type="button"

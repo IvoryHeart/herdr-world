@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldLedger } from "../../storage/world-storage";
-import { systemScheduler } from "../../service/ports";
+import { systemScheduler, type Scheduler } from "../../service/ports";
 import { handleDeskRpc } from "../../rpc/desk";
 import type { BridgeRpcContext } from "../../rpc/context";
 import { WorldDeskStore } from "../../../../web/src/world/deskStateStore";
@@ -15,7 +15,6 @@ import type { WorldLeafObject } from "../../../../web/src/world/worldObject";
 import { PersistentTerminalMarks } from "../persistent-terminal-marks";
 import { WorldDeskRegistry } from "../desk-state";
 import { WorldWatchlistRegistry } from "../watchlist";
-import { WorldCompletionSeenRegistry } from "../completion-seen";
 import { deskSessionFingerprint } from "../desk-observation";
 
 export function reviewPane(index = 0, value = `session-${index}`) {
@@ -30,12 +29,17 @@ export function reviewPane(index = 0, value = `session-${index}`) {
 }
 
 /** Real SQLite worker, RPC admission and browser consumers; no external runtime. */
-export async function reviewStopFixture() {
-  const root = mkdtempSync(join(tmpdir(), "review-stops-"));
-  let time = 1000,
+export async function reviewStopFixture(seed?: {
+  root: string;
+  panes: Record<string, unknown>[];
+  time?: number;
+  scheduler?: Scheduler;
+}) {
+  const root = seed?.root ?? mkdtempSync(join(tmpdir(), "review-stops-"));
+  let time = seed?.time ?? 1000,
     generation = 1,
     current = true;
-  let panes: Record<string, unknown>[] = [reviewPane()];
+  let panes: Record<string, unknown>[] = seed?.panes ?? [reviewPane()];
   const clock = { now: () => time, monotonic: () => time };
   const paths = {
     database: join(root, "world.sqlite"),
@@ -51,7 +55,6 @@ export async function reviewStopFixture() {
     return {
       desk: new WorldDeskRegistry(),
       watchlist: new WorldWatchlistRegistry(),
-      seen: new WorldCompletionSeenRegistry(),
     };
   }
   function makeMarks() {
@@ -60,6 +63,7 @@ export async function reviewStopFixture() {
       incarnation: `service-${generation}`,
       registries,
       now: clock.now,
+      scheduler: seed?.scheduler,
       changed() {},
       failed: (error) => {
         failures.push(error);
@@ -113,6 +117,11 @@ export async function reviewStopFixture() {
       ),
       kind: "agent",
       status: panes[index]?.agent_status,
+      lastActivityAt:
+        typeof panes[index]?.last_activity_at === "number" &&
+        Number(panes[index]?.last_activity_at) > 0
+          ? panes[index]!.last_activity_at
+          : undefined,
     }) as WorldLeafObject;
   const stop = (index = 0, browser = browsers[0]!) => {
     const agent = leaf(index),

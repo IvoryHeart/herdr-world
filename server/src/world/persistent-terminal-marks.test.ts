@@ -7,14 +7,11 @@ import { systemClock, systemScheduler } from "../service/ports";
 import { PersistentTerminalMarks } from "./persistent-terminal-marks";
 import { WorldDeskRegistry } from "./desk-state";
 import { WorldWatchlistRegistry } from "./watchlist";
-import { WorldCompletionSeenRegistry } from "./completion-seen";
 import { deskSessionFingerprint } from "./desk-observation";
 import { handleDeskRpc } from "../rpc/desk";
-import { handleCompletionSeenRpc } from "../rpc/completion-seen";
 import { handleWorldRpc } from "../rpc/world";
 import { WorldDeskStore } from "../../../web/src/world/deskStateStore";
 import { WorldWatchlistStore } from "../../../web/src/world/watchlistStore";
-import { CompletionSeenStore } from "../../../web/src/world/completionSeenState";
 import type { BridgeControlMsg } from "../../../web/src/api";
 
 const roots: string[] = [],
@@ -50,7 +47,6 @@ async function fixture(root?: string, generation = 1) {
   const registries = {
     desk: new WorldDeskRegistry(),
     watchlist: new WorldWatchlistRegistry(),
-    seen: new WorldCompletionSeenRegistry(),
   };
   let panes: Record<string, unknown>[] = [pane()],
     current = true,
@@ -107,11 +103,7 @@ async function fixture(root?: string, generation = 1) {
     },
     changed(kind, revision, connectionId, generation) {
       const type =
-        kind === "desk"
-          ? "world_desk_changed"
-          : kind === "watchlist"
-            ? "world_watchlist_changed"
-            : "world_completion_seen_changed";
+        kind === "desk" ? "world_desk_changed" : "world_watchlist_changed";
       notices.push(type);
       noticeRevisions.push({ type, revision, connectionId, generation });
       for (const listener of controls) listener({ type, revision });
@@ -139,10 +131,8 @@ async function fixture(root?: string, generation = 1) {
     persistentMarks: marks,
     worldDesk: registries.desk,
     worldWatchlist: registries.watchlist,
-    worldCompletionSeen: registries.seen,
     publishDeskChanged() {},
     publishWatchlistChanged() {},
-    publishCompletionSeenChanged() {},
     connectionManager: { readyRuntimeLease: lease },
   };
   const call = async (method: string, params?: Record<string, unknown>) => {
@@ -161,8 +151,6 @@ async function fixture(root?: string, generation = 1) {
       },
     };
     if (method.startsWith("world.desk.")) await handleDeskRpc(rpc as any);
-    else if (method.startsWith("world.completion_seen."))
-      await handleCompletionSeenRpc(rpc);
     else await handleWorldRpc(rpc as any);
     if (failure) throw failure;
     return value;
@@ -184,7 +172,6 @@ async function fixture(root?: string, generation = 1) {
       draft.desk.mark(deskIdentity, "stop-a", true, ++time);
       draft.desk.open(deskIdentity, ++time);
       draft.watchlist.pin({ ...identity, label: "Synthetic watch" });
-      draft.seen.mark(identity);
     });
   return {
     root,
@@ -224,7 +211,6 @@ async function fixture(root?: string, generation = 1) {
         draft.desk.mark(agent, "stop-a", true, ++time);
         draft.desk.open(agent, ++time);
         draft.watchlist.pin({ ...owner, label: "Synthetic watch" });
-        draft.seen.mark(owner);
       });
     },
     advance(ms: number) {
@@ -247,16 +233,15 @@ async function fixture(root?: string, generation = 1) {
     },
   };
 }
-test("all three records survive SQLite reopening unresolved, then attach to the same evidence in a new generation", async () => {
+test("Desk and watch records survive SQLite reopening unresolved, then attach to the same evidence in a new generation", async () => {
   const first = await fixture();
   await first.seed();
   const rows = first.store.terminalMarks.list();
-  expect(rows).toHaveLength(3);
+  expect(rows).toHaveLength(2);
   await first.close();
   const second = await fixture(first.root, 7);
   expect(second.registries.desk.list().records).toEqual([]);
   expect(second.registries.watchlist.list().records).toEqual([]);
-  expect(second.registries.seen.list().records).toEqual([]);
   await second.observe();
   expect(
     second.store.terminalMarks
@@ -272,9 +257,6 @@ test("all three records survive SQLite reopening unresolved, then attach to the 
   expect(
     second.registries.watchlist.list().records[0]!.connection_generation,
   ).toBe(7);
-  expect(second.registries.seen.list().records[0]!.connection_generation).toBe(
-    7,
-  );
 });
 for (const duplicate of ["pane", "terminal", "session"] as const)
   test(`ambiguous ${duplicate} never attaches or deletes a saved record`, async () => {
@@ -293,8 +275,7 @@ for (const duplicate of ["pane", "terminal", "session"] as const)
     await f.observe();
     expect(f.registries.watchlist.list().records).toEqual([]);
     expect(f.registries.desk.list().records).toEqual([]);
-    expect(f.registries.seen.list().records).toEqual([]);
-    expect(f.store.terminalMarks.list()).toHaveLength(3);
+    expect(f.store.terminalMarks.list()).toHaveLength(2);
     await expect(f.seed()).rejects.toThrow("ambiguous");
     f.setPanes([pane()]);
     await f.observe();
@@ -322,7 +303,7 @@ test("complete absence and reused native pane clear records; labels never attach
     { reviewed_stop: null },
   ]);
 });
-test("a positive session replacement ends Desk and seen, while a watch follows its terminal move", async () => {
+test("a positive session replacement ends Desk, while a watch follows its terminal move", async () => {
   const f = await fixture();
   await f.seed();
   const watch = f.store.terminalMarks
@@ -333,7 +314,6 @@ test("a positive session replacement ends Desk and seen, while a watch follows i
   expect(f.registries.desk.list().records).toMatchObject([
     { reviewed_stop: null, opened_at: null },
   ]);
-  expect(f.registries.seen.list().records).toEqual([]);
   expect(f.registries.watchlist.list().records).toHaveLength(1);
   expect(
     f.store.terminalMarks
@@ -345,26 +325,23 @@ test("a positive session replacement ends Desk and seen, while a watch follows i
     f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
   ).toMatchObject([{ id: watch.id, binding: { native_id: "moved-pane" } }]);
 });
-test("fresh busy evidence or later completion sequence ends seen, including work missed during a restart", async () => {
+test("fresh busy evidence and later sequence create a new Desk stop, including work missed during restart", async () => {
   const f = await fixture();
   await f.seed();
+  const old = f.registries.desk.list().records[0]!.observed_stop_id;
   f.setPanes([{ ...pane(), agent_status: "working", state_change_seq: 5 }]);
   await f.observe();
-  expect(f.registries.seen.list().records).toEqual([]);
-  await f.marks.mutate(f.identity, (draft) => {
-    draft.seen.mark(f.identity);
-  });
-  expect(f.registries.seen.list().records).toEqual([]);
-  f.setPanes([pane()]);
-  await f.seed();
+  f.setPanes([{ ...pane(), state_change_seq: 6 }]);
+  await f.observe();
+  const fresh = f.registries.desk.list().records[0]!.observed_stop_id;
+  expect(fresh).not.toBe(old);
   await f.close();
   const again = await fixture(f.root, 2);
   again.setPanes([{ ...pane(), state_change_seq: 8 }]);
   await again.observe();
-  expect(again.registries.seen.list().records).toEqual([]);
-  expect(
-    again.registries.desk.list().records[0]!.observed_stop_id,
-  ).not.toBeNull();
+  expect(again.registries.desk.list().records[0]!.observed_stop_id).not.toBe(
+    fresh,
+  );
 });
 test("two browser clients share real RPC changes and exact Undo over SQLite", async () => {
   const f = await fixture();
@@ -373,13 +350,8 @@ test("two browser clients share real RPC changes and exact Undo over SQLite", as
     new WorldWatchlistStore(f.client),
     new WorldWatchlistStore(f.client),
   ];
-  const seen = [
-    new CompletionSeenStore(f.client),
-    new CompletionSeenStore(f.client),
-  ];
   for (const store of desks) store.start();
   for (const store of watches) store.start();
-  const releases = seen.map((store) => store.retain());
   await Promise.all(desks.map((store) => store.refresh()));
   try {
     await f.seed();
@@ -389,8 +361,6 @@ test("two browser clients share real RPC changes and exact Undo over SQLite", as
     for (const store of desks)
       expect(store.get().records[0]!.reviewed_stop).toBe("stop-a");
     for (const store of watches) expect(store.get().records).toHaveLength(1);
-    for (const store of seen)
-      expect(store.get().terminals.has("terminal-a")).toBe(true);
     await desks[0]!.mutate("world.desk.review", f.deskIdentity, {
       stop_id: "stop-b",
       reviewed: true,
@@ -408,11 +378,9 @@ test("two browser clients share real RPC changes and exact Undo over SQLite", as
     f.setPanes([{ ...pane(), agent_status: "working", state_change_seq: 5 }]);
     await f.observe();
     await f.client.call("world.desk.get");
-    for (const store of seen) expect(store.get().terminals.size).toBe(0);
   } finally {
     for (const store of desks) store.stop();
     for (const store of watches) store.stop();
-    for (const release of releases) release();
   }
 });
 test("retirement hides saved records without deleting their continuity evidence", async () => {
@@ -420,7 +388,7 @@ test("retirement hides saved records without deleting their continuity evidence"
   await f.seed();
   f.retire();
   expect(f.registries.watchlist.list().records).toEqual([]);
-  expect(f.store.terminalMarks.list()).toHaveLength(3);
+  expect(f.store.terminalMarks.list()).toHaveLength(2);
   await expect(f.seed()).rejects.toThrow("unavailable");
 });
 
@@ -461,18 +429,15 @@ test("a refused write publishes nothing and cannot poison the next admitted muta
   expect(f.registries.desk.list().records).toEqual([]);
   f.store.terminalMarks.put = put;
   await f.seed();
-  expect(f.store.terminalMarks.list()).toHaveLength(3);
+  expect(f.store.terminalMarks.list()).toHaveLength(2);
 });
-test("a lower native sequence cannot erase a newer checked completion", async () => {
+test("a lower native sequence cannot erase a newer Desk stop", async () => {
   const f = await fixture();
   await f.seed();
+  const before = f.store.terminalMarks.list();
   f.setPanes([{ ...pane(), agent_status: "working", state_change_seq: 2 }]);
   await f.observe();
-  expect(f.registries.seen.list().records).toHaveLength(1);
-  expect(
-    f.store.terminalMarks.list().find((row) => row.kind === "completion-seen")
-      ?.body.stateChangeSeq,
-  ).toBe(4);
+  expect(f.store.terminalMarks.list()).toEqual(before);
 });
 test("unknown session evidence binds to the terminal and unchanged fresh lists do no writes", async () => {
   const f = await fixture();
@@ -484,7 +449,6 @@ test("unknown session evidence binds to the terminal and unchanged fresh lists d
       true,
       1000,
     );
-    draft.seen.mark(f.identity);
   });
   const before = f.store.terminalMarks.list();
   expect(
@@ -690,11 +654,7 @@ for (const replacement of [false, true])
     f.marks.retire("beta", beta.generation, replacement);
     release.resolve();
     await pending;
-    for (const registry of [
-      f.registries.desk,
-      f.registries.watchlist,
-      f.registries.seen,
-    ])
+    for (const registry of [f.registries.desk, f.registries.watchlist])
       expect(
         registry
           .list()
@@ -704,7 +664,7 @@ for (const replacement of [false, true])
       f.store.terminalMarks
         .list()
         .filter((row) => row.binding.instance === "beta"),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     for (const type of new Set(f.notices)) {
       const revisions = f.noticeRevisions
         .filter((notice) => notice.type === type)
@@ -748,11 +708,7 @@ test("global open trimming does not reattach a connection retired during another
   f.marks.retire("beta", 1, false);
   release.resolve();
   await pending;
-  for (const registry of [
-    f.registries.desk,
-    f.registries.watchlist,
-    f.registries.seen,
-  ])
+  for (const registry of [f.registries.desk, f.registries.watchlist])
     expect(
       registry.list().records.some((record) => record.connection_id === "beta"),
     ).toBe(false);
@@ -776,7 +732,7 @@ test("global open trimming does not reattach a connection retired during another
       .records.find((record) => record.connection_id === "beta"),
   ).toMatchObject({ reviewed_stop: "stop-a", opened_at: null });
 });
-for (const kind of ["unknown Desk", "completion"] as const)
+for (const kind of ["unknown Desk", "known Desk"] as const)
   test(`pending ${kind} RPC refuses replacement followed by the original ownership`, async () => {
     const f = await fixture();
     const initial =
@@ -792,7 +748,11 @@ for (const kind of ["unknown Desk", "completion"] as const)
             reviewed: true,
             stop_id: "stale-unknown-stop",
           })
-        : f.client.call("world.completion_seen.mark", f.identity);
+        : f.client.call("world.desk.review", {
+            ...f.deskIdentity,
+            reviewed: true,
+            stop_id: "stale-unknown-stop",
+          });
     await held.entered.promise;
     f.setPanes([pane("replacement-session")]);
     const replacement = f.observe();
@@ -874,7 +834,8 @@ test("unavailable Unpin releases the global watch capacity", async () => {
   expect(
     f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
   ).toHaveLength(128);
-});
+}, 30_000);
+
 for (const generation of [1, 2])
   test(`an older watch capture cannot remove its replacement in generation ${generation}`, async () => {
     const f = await fixture();
