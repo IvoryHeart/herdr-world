@@ -1776,3 +1776,42 @@ test("a reported session alone cannot select Chat; manual views and replacements
     }).view,
   ).toBe("terminal");
 });
+
+test("a replaced session resets the view whether a manual choice beat the Chat read", () => {
+  const reported = {
+    ...inspectorConversation(0),
+    view: "files" as const,
+    resourceIdentity: "session-a",
+    agentSessionFingerprint: "session-a",
+  };
+  const replacement = {
+    ...reported,
+    view: "terminal" as const,
+    resourceIdentity: "session-b",
+    agentSessionFingerprint: "session-b",
+  };
+  // A manual Files choice made before or after the Chat read resolved leaves
+  // `false` or no opening flag; either way a new session resets the window.
+  for (const awaitChatSession of [false, undefined]) {
+    const next = reconcileWorldInspectorConversation(
+      { ...reported, awaitChatSession },
+      replacement,
+    );
+    expect([next.view, next.awaitChatSession]).toEqual([
+      "terminal",
+      awaitChatSession,
+    ]);
+  }
+  // The same manual choice still survives the session's first arrival.
+  expect(
+    reconcileWorldInspectorConversation(
+      {
+        ...reported,
+        resourceIdentity: "pending",
+        agentSessionFingerprint: undefined,
+        awaitChatSession: false,
+      },
+      replacement,
+    ).view,
+  ).toBe("files");
+});

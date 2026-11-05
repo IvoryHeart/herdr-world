@@ -148,12 +148,17 @@ export function reconcileWorldInspectorConversation(
     current.terminalId === observed.terminalId &&
     current.context.agent === observed.context.agent;
   const waiting = samePane && current.awaitChatSession === true;
+  // An opening window keeps its view while its session first arrives; a
+  // replaced session resets it, however the opening wait ended.
+  const sessionReplaced =
+    Boolean(current.agentSessionFingerprint) &&
+    current.agentSessionFingerprint !== observed.agentSessionFingerprint;
   const keepView =
     sameWorkspace &&
     observed.availableViews.includes(current.view) &&
     (current.paneId !== observed.paneId ||
       sameResource ||
-      current.awaitChatSession !== undefined);
+      (current.awaitChatSession !== undefined && !sessionReplaced));
   const next: WorldInspectorConversation = {
     ...observed,
     view: keepView ? current.view : observed.view,

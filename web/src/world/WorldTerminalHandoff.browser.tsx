@@ -344,6 +344,7 @@ function currentWorldCoverage() {
   };
 }
 
+let heldConversationRead: Promise<void> | undefined;
 let client: ConnectionClient = {
   connectionId: "local",
   generation: 1,
@@ -594,6 +595,7 @@ let client: ConnectionClient = {
     // This fixture already exposes readable History. Its summary admits a
     // read-only conversation without inventing a native session or Send authority.
     if (method === "agent_conversation.latest") {
+      await heldConversationRead;
       const readable =
         panes.find((pane) => pane.pane_id === params.pane_id)?.agent ===
         "claude";
@@ -4363,6 +4365,12 @@ async function run() {
     "restored desktop layout",
   );
   await until(() => boardTarget("Reviewer"), "Reviewer before retirement");
+  // CI's order: the owner picks Files before the reopened window's Chat read
+  // returns, then the session is replaced.
+  let releaseConversationRead = () => {};
+  heldConversationRead = new Promise<void>(
+    (resolve) => (releaseConversationRead = resolve),
+  );
   flushSync(() => boardTarget("Reviewer")!.click());
   await until(
     () => reviewerInspectorActive(),
@@ -4379,6 +4387,13 @@ async function run() {
   await until(
     () => reviewerInspector.getAttribute("data-view") === "files",
     "Reviewer Files state before session replacement",
+  );
+  heldConversationRead = undefined;
+  releaseConversationRead();
+  await settle();
+  check(
+    reviewerInspector.getAttribute("data-view") === "files",
+    "a late Chat read overrode the owner's Files choice",
   );
   const worktreeBeforeReplacement = calls.length;
   const replacementSession = {
