@@ -156,6 +156,13 @@
   "rpc:world.ask.delivery.resend": "allow deny deny deny deny deny",
   "rpc:world.ask.dismiss": "allow deny deny deny deny deny",
   "rpc:world.asks.get": "allow deny deny deny deny deny",
+  "rpc:world.bin.add": "allow deny deny deny deny deny",
+  "rpc:world.bin.close_now": "allow deny deny deny deny deny",
+  "rpc:world.bin.countdown.set": "allow deny deny deny deny deny",
+  "rpc:world.bin.list": "allow deny deny deny deny deny",
+  "rpc:world.bin.pause": "allow deny deny deny deny deny",
+  "rpc:world.bin.restore": "allow deny deny deny deny deny",
+  "rpc:world.bin.resume": "allow deny deny deny deny deny",
   "rpc:world.board.get": "allow deny deny deny deny deny",
   "rpc:world.board.patch": "allow deny deny deny deny deny",
   "rpc:world.chimes.save": "allow deny deny deny deny deny",
@@ -170,6 +177,7 @@
   "rpc:world.profiles.get": "allow deny deny deny deny deny",
   "rpc:world.profiles.save": "allow deny deny deny deny deny",
   "rpc:world.snapshot": "allow deny deny deny deny deny",
+  "rpc:world.usage.get": "allow deny deny deny deny deny",
   "rpc:world.town_master.set": "allow deny deny deny deny deny",
   "rpc:world.watchlist.list": "allow deny deny deny deny deny",
   "rpc:world.watchlist.pin": "allow deny deny deny deny deny",
@@ -209,5 +217,6 @@
   "source:github.pull-request.close": "confirm deny deny deny deny deny",
   "source:github.pull-request.ready": "confirm deny deny deny deny deny",
   "effect:notification.show": "allow allow allow deny deny deny",
-  "effect:world.ask.deliver-answer": "allow allow deny deny deny deny"
+  "effect:world.ask.deliver-answer": "allow allow deny deny deny deny",
+  "effect:world.bin.close": "allow deny deny deny deny deny"
 }

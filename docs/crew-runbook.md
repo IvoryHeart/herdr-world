@@ -10,6 +10,13 @@ other than the shared skills (`bun run check:agents`).
 The crew itself, its marks and its watcher are described in
 [agent development](agent-development.md#act-on-readiness-with-agentcrew).
 
+When a separate steward owns the owner's ready-to-try notice, set
+`crew.readyAsk: false` in the local gate config before starting the scoped crew.
+This suppresses only READY owner asks; mechanical readiness marks, review/fixer
+work and genuine judgment/timeout escalation are unchanged. The default is
+`true`. It applies to every PR in scope, so retain the pilot's explicit `--pr`
+selection. A mechanical mark alone does not establish UI trial acceptance.
+
 Every CI failure is real and blocks readiness for that head, including a
 failure followed by a green rerun or a failed aggregate job. Diagnose its cause
 and fix it; do not rerun to get green. The gate has no flake list or rerun budget,
@@ -40,10 +47,13 @@ reset inactivity or suppress timeout reporting.
 If the alert cannot be delivered, the timeout and alert failure remain in the
 local ledger/feed; the slot stays released. Inspect `agent:crew runs --pr <N>`,
 `status`, the round's pane and its run log before deciding what to do next.
-Completion evidence observed before settlement releases the slot normally and
-keeps the completed chat, including a manual review with no action row. Manual
+Completion evidence observed before settlement releases the slot normally;
+reviewer sessions exit and remain available through `open --run`, including
+a manual review with no action row. Manual
 completion requires a valid RESULT from its reviewer on its pinned head, posted
-after that run started. A known Codex session remains readable in its original
+after that run started and no later than the observing pass. Trusted explicit
+pinned-head posts also finish manual reviews after an unreconciled push without
+carrying review acceptance to that new head. A known Codex session remains readable in its original
 date folder as newer session folders appear; only new-session discovery uses
 the two newest folders. Late worker finalization cannot erase a recorded
 timeout; a late valid reviewer RESULT clears its notice. A merged or closed PR
@@ -51,6 +61,24 @@ retires the notice. The watcher must be running to perform this maintenance;
 starting it or resuming stopped sessions requires an explicit owner instruction.
 
 ## Review rounds and evaluation
+
+When adopting a PR from hand-run reviewers, record its full adoption head and
+UTC millisecond time under `crew.reviewStarts["<PR>"]` and set
+`crew.reviewJudgmentSeat` to the operating steward. Pre-boundary RESULTs stay
+readable history, never evidence for crew adoption/readiness. Keep the same
+boundary through fix rounds; do not move it to hide an unresolved finding or
+re-review a crew head already accepted. This is a crew projection, not a gate
+waiver or a rewrite of the original posts. Every later finding still blocks.
+
+Attribution/adoption gaps and review-plumbing failures prompt the configured
+steward once per cause. They do not create owner questions. Missing/unavailable
+operators hold locally without an owner fallback. Only an explicit evaluator
+`Process: owner` decision keeps its owner ask. Preserve existing keyed ask/send
+receipts and withdraw obsolete migration asks before changing over; never restart
+the old routing to recreate them. Restart only after the reviewed change is
+merged and the steward accepts a fresh exact source/config dry run. Shared
+roster additions can change the full config hash: repin that actual hash and
+verify the intended PR projection rather than silently using an earlier hash.
 
 Round 1 reviews the whole PR. Every reviewer reads the linked issue and flags
 behaviour it did not request (scope drift). Later rounds use fresh sessions,
@@ -88,6 +116,16 @@ the queue across pushes.
 The author pushes fixes and replies to **every** open finding, signed with
 `[<seat>]` (or `[fixer #<PR>]`), one line per finding naming its fixing commit.
 Use the finding's stable ID, such as `rev2:123:1`, or its exact `file:line`.
+A finding line starts with its P1/P2/P3 level (also `[P2]`), optionally inside a Markdown
+bullet, numbered list or heading. Historical summaries mentioning a P-level
+inside ordinary prose are context, not additional findings. An open RESULT
+whose finding text cannot be parsed still remains held under its stable ID.
+This applies to mixed parsed/unparsed results too: declared remaining/new
+counts cannot be satisfied by replying only to the recognized items. Missing
+items retain an explicit unparsed hold with the original post text.
+For finding-count extraction, canonical fractional RESULTs may end with
+`at <7–40 digit hex SHA>`; other unknown trailing text keeps the unparsed hold.
+This suffix does not change reviewed-commit binding or the gate's verdict rules.
 A bare filename suffices only when there is one finding on that file. Two
 findings on a file require separate identifiers. A reviewer RESULT that cannot
 be mapped to a file still needs an explicit reply using its ID. Replies must
@@ -184,7 +222,7 @@ ledger. Everything after the hand-off already runs without you:
 - the crew watcher (`bun run agent:crew -- watch`) starts fresh reviewers for
   the first round, then admits scoped rounds after finding replies and a quiet
   period (see [review rounds](#review-rounds-and-evaluation)), sends findings back to the author
-  seat (or to a fresh fixer when that seat is busy on another PR), and marks a head
+  seat (or to a fresh fixer when that seat is absent or busy on another PR), and marks a head
   `crew/merge-ready` or `crew/needs-owner`;
 - the owner merges, and only PRs whose head shows a green `crew/merge-ready`.
 

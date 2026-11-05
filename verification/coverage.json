@@ -213,7 +213,8 @@
       "existingTests": [
         "server/src/connections/protocol.test.ts",
         "server/src/connections/session-link-routing.test.ts",
-        "server/src/connections/http-routing.test.ts"
+        "server/src/connections/http-routing.test.ts",
+        "server/src/bridge/herdr-client.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "qualified-operation",
@@ -230,12 +231,13 @@
         "tests": [
           "server/src/connections/protocol.test.ts",
           "server/src/connections/session-link-routing.test.ts",
-          "server/src/connections/http-routing.test.ts"
+          "server/src/connections/http-routing.test.ts",
+          "server/src/bridge/herdr-client.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams.",
+      "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. Usage revalidation directly checks one-shot AbortSignal socket cancellation without expanding operation authority or the model domain.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1074,6 +1076,11 @@
         "web/src/world/DeskView.browser.test.ts",
         "server/src/world/completion-seen.test.ts",
         "web/src/world/completionSeenState.test.ts",
+        "web/src/world/useReviewedWork.test.ts",
+        "web/src/world/shownReport.test.ts",
+        "web/src/world/needsYou.test.ts",
+        "web/src/world/needsYouAnswers.test.ts",
+        "web/src/world/town/TownCanvas.test.ts",
         "server/src/world/review-stop-coverage.test.ts",
         "server/src/world/review-stop-scale.test.ts",
         "server/src/world/review-stop-review.test.ts"
@@ -1084,7 +1091,7 @@
       "status": "alternative-evidence",
       "remaining": "A summary is presentation evidence, not proof that external work succeeded; publication identity remains a separate operational guard.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real helper/store cases reject same-value session replacements by source, harness or identity kind at either queued live read before native focus. Permanent reveal cancellation is exercised through the real React hook, existing Inspector controller and qualified focus queue. Deferred shell reads and queued focus survive exit/return without late filter changes, native focus dispatch, Inspector publication or recent-open records. Supersession stays retryable while genuine identity/read failures remain disabled. These finite UI/service boundaries use direct consumers rather than a new model. Outside-filter reveal uses finite direct admission and deferred-retirement cases for captured connection/runtime/pane/terminal/session identity, with desktop and phone shell consumers proving explicit filter widening, qualified Inspector opening and preservation of existing owners. These concrete browser and live-read boundaries add evidence without a separate model; arbitrary external transport schedules remain excluded. Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo. Paired real-registry/browser-store consumers with 41 agents check unequal receipt polling coverage, filter changes, later native activity and service stops. Deferred native admissions check session replacement, return to the original fingerprint and observation eviction; the browser checks exact next-card focus after external-store publication; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded. Stable stop identities are checked across 13-hour timestamp/observation expiry for idle and done agents, including native counter progress after an unobserved working phase. The real fresh-snapshot callback carries agent.list data; pane-only identity, missing pane agent/session fields, and duplicate, malformed, mismatched or obsolete progress cases exercise the adapter. Metadata cannot manufacture a browser/RPC identity. Browser consumers retain Reviewed on display expiry and refresh receipts for new stable stop IDs while native status/activity remain unchanged. Deferred reads and failed refreshes leave the successor unmarkable against its predecessor report; repeated failure settles without an old report, and a late superseded response cannot publish. Town completion checks share the durable terminal-mark family (Q51), and the service alone ends a check from its own host reads (busy ends it, a mark while busy is ignored), so no browser's late view orders it. Registry cases cover that rule, generation retirement and the bound. Two store clients over the real RPC handler and observation path cover cross-browser agreement, late reads in either order, an unresolved restart projection with Q51 checking fresh verified restoration, and two Town projections agreeing on an inferred finish checked on one device. The real-process test awaits the published notice. Desk watches add exhaustive bounded interest traces, deferred per-holder captured-trigger/failure cases, native session fences, two-browser declaration consumers and dispatcher/cleanup tests. The actual Desk browser fixture checks shared hooks and legacy fallback; bounds and excluded claims are in verification/contracts/shared-acquisition.md. Timer removal activates all original T2 assertions, with two-host Inspector/reference/retry consumers, deferred catalogue coalescing, failed bootstrap recovery and actual Chrome preview-removal effects. The actual service hello advertises the capability. See verification/contracts/shared-acquisition.md for bounds and excluded liveness claims. The composed acceptance now runs createWorldService with two synthetic hosts, a real Bridge/store Worker and a second real WebSocket, checking the parity outputs, shared native acquisition, notices, Desk references and retirement in flight; original T2 bodies/harnesses remain unchanged. Current specs include both complete shared-acquisition deltas. Q51 additionally checks cross-connection retirement/revision preservation, ownership tokens for unknown or omitted session fingerprints, exact unavailable Unpin and browser capture forwarding. Current stop coverage and retention: real SQLite/production RPC/two browser stores cover first-observed stopped agents without fabricated time, unreviewed/reviewed aged stops, known-session restart and null restart/replacement/returning-known no-carry. Current records survive 500; oldest inactive history yields under a fixed 500-row and 768 KiB budget. Known captures remain unresolved/protected during recovery; capacity refusal preserves current rows and service availability. Maintained 10-source wire/SQLite byte measurements and dense native-frame refusal are explicit; no composed dense success or null-session restart continuity is claimed. Three compiled stop/expiry/unknown-continuity controls complement existing mandatory storage/identity/publication controls. Part 1 retains completion_seen; migration/retirement is separately Chat-merge gated. Review repairs add seven real-consumer cases and four compiled faults for 501-stop recovery re-entry, durable known-to-unknown supersession before restart, canonical whole-plan capacity refusal with no durable prefix, shrinking-before-growth ordering, whole-list malformed native identity refusal and retired-input fences. Canonical SQLite bytes are 180481 for sources-10 (179761 acknowledged-list bytes); no native runtime-instance continuity is claimed.",
+      "evidenceDecision": "Town, Desk and Needs you read one reviewed record (Desk's stop mark, or the terminal's completion check when Desk names no stop); direct helper and isolated DOM cases show the mark names the shown stop, falls back only when no stop is named, counts either record as reviewed, keeps Town's reviewed view free of stop-only re-renders, and turns every opener request (including a repeated one) to its item's page with one page of conversation watches; a read_failed report never grants the requested stop, a replaced agent session inherits no answer receipt or late result, Town's peek marks only the stop whose report it shows and confirms only a saved mark, and the phone list takes focus, keeps the app inert and gives focus back; the Town browser suite checks Needs you counts and the reception letter opener, and opening without review writes neither record. Real helper/store cases reject same-value session replacements by source, harness or identity kind at either queued live read before native focus. Permanent reveal cancellation is exercised through the real React hook, existing Inspector controller and qualified focus queue. Deferred shell reads and queued focus survive exit/return without late filter changes, native focus dispatch, Inspector publication or recent-open records. Supersession stays retryable while genuine identity/read failures remain disabled. These finite UI/service boundaries use direct consumers rather than a new model. Outside-filter reveal uses finite direct admission and deferred-retirement cases for captured connection/runtime/pane/terminal/session identity, with desktop and phone shell consumers proving explicit filter widening, qualified Inspector opening and preservation of existing owners. These concrete browser and live-read boundaries add evidence without a separate model; arbitrary external transport schedules remain excluded. Fixture receipt parsing and real Desk browser routing/review tests directly check human-facing summaries and review intent. Shared Desk state (#164): direct registry cases cover bounded metadata, exact conditional Undo, owner/session replacement, expiry and older observations after live mutations. RPC tests revalidate the captured runtime and session after live pane admission. Two-WebSocket service and Desk browser regressions establish shared marks/recent opens and cross-browser Undo. Paired real-registry/browser-store consumers with 41 agents check unequal receipt polling coverage, filter changes, later native activity and service stops. Deferred native admissions check session replacement, return to the original fingerprint and observation eviction; the browser checks exact next-card focus after external-store publication; deferred client replies cover revision and reconnect epochs. These finite metadata transitions are exercised directly rather than adding a model that repeats the store; arbitrary external transport liveness remains excluded. Stable stop identities are checked across 13-hour timestamp/observation expiry for idle and done agents, including native counter progress after an unobserved working phase. The real fresh-snapshot callback carries agent.list data; pane-only identity, missing pane agent/session fields, and duplicate, malformed, mismatched or obsolete progress cases exercise the adapter. Metadata cannot manufacture a browser/RPC identity. Browser consumers retain Reviewed on display expiry and refresh receipts for new stable stop IDs while native status/activity remain unchanged. Deferred reads and failed refreshes leave the successor unmarkable against its predecessor report; repeated failure settles without an old report, and a late superseded response cannot publish. Town completion checks share the durable terminal-mark family (Q51), and the service alone ends a check from its own host reads (busy ends it, a mark while busy is ignored), so no browser's late view orders it. Registry cases cover that rule, generation retirement and the bound. Two store clients over the real RPC handler and observation path cover cross-browser agreement, late reads in either order, an unresolved restart projection with Q51 checking fresh verified restoration, and two Town projections agreeing on an inferred finish checked on one device. The real-process test awaits the published notice. Desk watches add exhaustive bounded interest traces, deferred per-holder captured-trigger/failure cases, native session fences, two-browser declaration consumers and dispatcher/cleanup tests. The actual Desk browser fixture checks shared hooks and legacy fallback; bounds and excluded claims are in verification/contracts/shared-acquisition.md. Timer removal activates all original T2 assertions, with two-host Inspector/reference/retry consumers, deferred catalogue coalescing, failed bootstrap recovery and actual Chrome preview-removal effects. The actual service hello advertises the capability. See verification/contracts/shared-acquisition.md for bounds and excluded liveness claims. The composed acceptance now runs createWorldService with two synthetic hosts, a real Bridge/store Worker and a second real WebSocket, checking the parity outputs, shared native acquisition, notices, Desk references and retirement in flight; original T2 bodies/harnesses remain unchanged. Current specs include both complete shared-acquisition deltas. Q51 additionally checks cross-connection retirement/revision preservation, ownership tokens for unknown or omitted session fingerprints, exact unavailable Unpin and browser capture forwarding. Current stop coverage and retention: real SQLite/production RPC/two browser stores cover first-observed stopped agents without fabricated time, unreviewed/reviewed aged stops, known-session restart and null restart/replacement/returning-known no-carry. Current records survive 500; oldest inactive history yields under a fixed 500-row and 768 KiB budget. Known captures remain unresolved/protected during recovery; capacity refusal preserves current rows and service availability. Maintained 10-source wire/SQLite byte measurements and dense native-frame refusal are explicit; no composed dense success or null-session restart continuity is claimed. Three compiled stop/expiry/unknown-continuity controls complement existing mandatory storage/identity/publication controls. Part 1 retains completion_seen; migration/retirement is separately Chat-merge gated. Review repairs add seven real-consumer cases and four compiled faults for 501-stop recovery re-entry, durable known-to-unknown supersession before restart, canonical whole-plan capacity refusal with no durable prefix, shrinking-before-growth ordering, whole-list malformed native identity refusal and retired-input fences. Canonical SQLite bytes are 180481 for sources-10 (179761 acknowledged-list bytes); no native runtime-instance continuity is claimed.",
       "partialEvidence": {
         "models": [],
         "contracts": [
@@ -1884,7 +1891,15 @@
       "properties": "Concurrent callers share bounded work; obsolete results cannot repopulate retired caches; failures do not change action authority",
       "existingTests": [
         "server/src/world/observability.test.ts",
-        "server/src/world/observability-http.test.ts"
+        "server/src/world/observability-http.test.ts",
+        "server/src/usage/projection.test.ts",
+        "server/src/usage/collector.test.ts",
+        "server/src/usage/host.test.ts",
+        "server/src/usage/service.test.ts",
+        "server/src/rpc/usage.test.ts",
+        "server/src/usage/process.test.ts",
+        "server/src/usage/reader.test.ts",
+        "server/src/bridge/herdr-client.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/155",
       "technique": "alternative",
@@ -1892,13 +1907,24 @@
       "status": "alternative-evidence",
       "remaining": "Metrics do not grant operation authority; provider availability and network deadlines are observed integration behavior.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration.",
+      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. Harness-log usage uses direct parser, incremental host-cache, attribution/lease, retention/size, transport cancellation/reaping and RPC admission consumers under verification/contracts/world-usage.md. These read-only consumers do not expand accepted model claims.",
       "partialEvidence": {
         "models": [],
-        "contracts": ["verification/consumer-evidence.md"],
+        "contracts": [
+          "verification/consumer-evidence.md",
+          "verification/contracts/world-usage.md"
+        ],
         "tests": [
           "server/src/world/observability.test.ts",
-          "server/src/world/observability-http.test.ts"
+          "server/src/world/observability-http.test.ts",
+          "server/src/usage/projection.test.ts",
+          "server/src/usage/collector.test.ts",
+          "server/src/usage/host.test.ts",
+          "server/src/usage/service.test.ts",
+          "server/src/rpc/usage.test.ts",
+          "server/src/usage/process.test.ts",
+          "server/src/usage/reader.test.ts",
+          "server/src/bridge/herdr-client.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -2612,7 +2638,8 @@
         "server/src/world/effect-restart.test.ts",
         "server/src/world/attention-dispatch.test.ts",
         "server/src/world/answer-dispatch.test.ts",
-        "server/src/storage/answer-delivery-crash.test.ts"
+        "server/src/storage/answer-delivery-crash.test.ts",
+        "server/src/world/bin-close.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "bounded-model-and-real-sqlite-crash-matrix",

@@ -134,25 +134,6 @@
   max-height: none;
   overflow: visible;
 }
-.town-rail .town-outbox-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  min-height: 32px;
-  padding: 5px 8px;
-  text-align: left;
-  font: inherit;
-  font-size: 11px;
-}
-.town-rail .town-outbox-collapsed {
-  display: inline-flex;
-  padding: 2px 4px;
-  color: var(--town-work);
-  font: inherit;
-  font-size: 11px;
-}
 .town-building-sign .town-reception-tags {
   position: absolute;
   right: -18px;
@@ -179,11 +160,6 @@
   cursor: pointer;
 }
 @media (max-width: 640px) {
-  .town-rail .town-outbox-row {
-    flex: 1 0 100%;
-    min-height: 40px;
-    order: -1;
-  }
   .answer-deliveries button,
   .answer-delivery summary,
   .town-building-sign .town-reception-letter {

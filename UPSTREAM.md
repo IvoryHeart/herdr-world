@@ -25,7 +25,7 @@ The v0.8.1 refresh added structured workspace and agent mentions, quick model
 and thinking controls, custom thinking effort, explicit all-workspace consent in
 High mode, and Open worktree actions. It also fixes terminal composition and
 shortcut identity and adds independently stored session signing keys and
-optional `HERDR_WORLD_PIN` login. World uses Bun 1.4.3 with standard and native
+optional `HERDR_WORLD_PIN` login. World uses Bun 1.4.4 with standard and native
 type checks; its full-check script remains separate from Bun's native checker.
 The v0.8.2 refresh adds Ranger task-management and close previews, reorganized
 settings and chat history, a minimap below compact conversations, and service-owned

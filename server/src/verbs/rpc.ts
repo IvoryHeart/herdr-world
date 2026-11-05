@@ -217,6 +217,41 @@ export const rpcVerbs = [
   rpc("world.ask.delivery.resend", "reconcilable", "world"),
   rpc("world.ask.dismiss", "reconcilable", "world"),
   rpc("world.asks.get", "read", "world"),
+  // The handler qualifies the named host's current runtime itself: world.*
+  // requests are bridge-global and never carry the runtime capability.
+  rpc(
+    "world.bin.add",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      tab_id: text,
+      pane_id: text,
+      terminal_id: text,
+      label: Type.Optional(Type.String({ maxLength: 200 })),
+      view: Type.Optional(Type.String({ maxLength: 16 })),
+      join: Type.Optional(Type.String({ maxLength: 600 })),
+    }),
+  ),
+  rpc(
+    "world.bin.close_now",
+    "reconcilable",
+    "world",
+    // Explicit IDs of one service run: never an unscoped "everything".
+    object({ ids: Type.Array(text, { minItems: 1, maxItems: 64 }) }),
+  ),
+  rpc(
+    "world.bin.countdown.set",
+    "reconcilable",
+    "world",
+    object({ countdown_s: Type.Integer() }),
+  ),
+  rpc("world.bin.list", "read", "world"),
+  rpc("world.bin.pause", "reconcilable", "world"),
+  rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
+  rpc("world.bin.resume", "reconcilable", "world"),
   rpc("world.board.get", "read", "world"),
   rpc(
     "world.board.patch",
@@ -236,6 +271,16 @@ export const rpcVerbs = [
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),
   rpc("world.snapshot", "read", "world"),
+  rpc(
+    "world.usage.get",
+    "read",
+    "world",
+    object({
+      window: Type.Optional(
+        Type.Union([Type.Literal("today"), Type.Literal("7d")]),
+      ),
+    }),
+  ),
   rpc("world.town_master.set", "reconcilable", "world"),
   rpc("world.watchlist.list", "read", "world"),
   rpc("world.watchlist.pin", "reconcilable", "world"),

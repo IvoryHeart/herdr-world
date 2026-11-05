@@ -6,6 +6,9 @@ import {
   timeoutRun,
 } from "./crew/run-lifecycle";
 import { crewVerdict } from "./crew/round-readiness";
+import { verdictState } from "./gate/predicate";
+import { reviewObservation, reviewStartError } from "./crew/review-boundary";
+import { routeJudgment, deliverReviewJudgments } from "./crew/review-judgments";
 import { parseOptions, USAGE } from "./crew/options";
 export { parseOptions } from "./crew/options";
 import { reconcileOwnerAsks } from "./crew/owner-asks";
@@ -40,12 +43,15 @@ import {
   plan,
 } from "./crew/plan";
 import { checkoutOf, openChat, review, runs } from "./crew/review";
+import { postedResult } from "./crew/run-results";
+import { evaluations } from "./crew/round-policy-store";
 import { markDue, markHeads } from "./crew/marks";
 import {
   crewCodeVersion,
   forgetOnExit,
   noticeStaleWatcher,
   type Seat,
+  seatInventory,
   seats,
   startSeat,
 } from "./crew/seats";
@@ -145,10 +151,18 @@ export function crewPass(context: PassContext) {
   // reads. Each step is committed as it happens, so a crash never forgets a
   // prompt that was already sent. A dry run changes nothing and takes no lock.
   const pass = () => {
-    const { verdicts, inputs } = context.judge();
-    const live = seats(deps.run);
+    const { inputs, verdicts } = reviewObservation(
+      context.judge(),
+      settings,
+      loadConfig(configPath),
+      now,
+    );
+    const live = seatInventory(deps.run);
     const names = [
-      ...new Set([...Object.keys(settings.roster), ...live.map((s) => s.name)]),
+      ...new Set([
+        ...Object.keys(settings.roster),
+        ...(live ?? []).map((s) => s.name),
+      ]),
     ];
     const byNumber = new Map(inputs.map((input) => [input.number, input]));
     // How long each running check of an in-scope PR has been running, as
@@ -179,7 +193,12 @@ export function crewPass(context: PassContext) {
         ...input.history,
         ...(input.item?.pr?.reviewers ?? []),
       ])
-        if (claim.reviewer && claim.commit && claim.line.trim())
+        if (
+          claim.reviewer &&
+          claim.commit &&
+          claim.line.trim() &&
+          claim.outcome !== "unknown"
+        )
           posted.set(`${claim.reviewer}:${claim.commit}`, {
             commit: claim.commit,
             source: claim.url,
@@ -195,8 +214,36 @@ export function crewPass(context: PassContext) {
         url: check.url!,
         minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
       }));
-      const actions = plan(verdict, input, settings, names, stalls);
+      const boundaryError = reviewStartError(
+        input,
+        settings.reviewStarts[String(input.number)],
+        now,
+        crew,
+        deps.run,
+        join(dir, "mirror.git"),
+      );
+      if (boundaryError) {
+        verdict.conditions.push({
+          id: "crew-review-boundary",
+          state: "judgment",
+          detail: boundaryError,
+        });
+        verdict.state = verdictState(verdict.conditions);
+      }
+      const actions: Action[] = boundaryError
+        ? [
+            {
+              key: `${input.number}:${verdict.head}:judgment:owner:review-boundary`,
+              pr: input.number,
+              head: verdict.head!,
+              kind: "judgment",
+              target: "owner",
+              text: `NEEDS-OWNER #${input.number}: ${boundaryError}`,
+            },
+          ]
+        : plan(verdict, input, settings, names, stalls);
       let due =
+        !boundaryError &&
         input.state === "OPEN" &&
         !isOnHold(input) &&
         !input.hold &&
@@ -226,7 +273,7 @@ export function crewPass(context: PassContext) {
             (entry) => entry.kind === "ready",
           ),
         );
-      planned.push(...due);
+      planned.push(...due.map((action) => routeJudgment(action, settings)));
     }
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
@@ -235,7 +282,7 @@ export function crewPass(context: PassContext) {
       const owed = new Map<number, string[]>();
       const root = dirname(dirname(context.dir));
       for (const entry of planned)
-        if (entry.target === "owner" && entry.kind === "judgment")
+        if (entry.target !== "github" && entry.kind === "judgment")
           owe(owed, entry, root);
       oweHeldNotices(crew, owed, root, parkedPrs(inputs, verdicts, settings));
       for (const verdict of verdicts) {
@@ -280,7 +327,7 @@ function act(
   planned: Action[],
   verdicts: Verdict[],
   inputs: GateInput[],
-  live: Seat[],
+  live: Seat[] | null,
   authors: Map<number, Item>,
   say: (text: string) => void,
 ) {
@@ -294,14 +341,16 @@ function act(
   const causes = new Map<number, string[]>();
   const root = dirname(dirname(context.dir));
   const publicText = (text: string) => text.replaceAll(`${root}/`, "");
-  const record = (entry: Action) => {
+  const record = (raw: Action) => {
+    const entry = routeJudgment(raw, settings);
     if (
-      entry.target === "owner" &&
+      entry.kind === "judgment" &&
+      entry.target !== "github" &&
       parked.has(entry.pr) &&
       entry.key.split("|")[1] !== "timeout"
     )
       return;
-    if (entry.target === "owner" && entry.kind === "judgment") {
+    if (entry.target !== "github" && entry.kind === "judgment") {
       owe(causes, entry, root);
       // Its signed GitHub comment, posted once.
       addAction(
@@ -324,7 +373,9 @@ function act(
     if (!RUN_KINDS.has(entry.kind)) continue;
     const known = getAction(crew, entry.key)!;
     const stuck =
-      (known.state === "done" && now - known.updatedAt > STUCK_MS) ||
+      (known.state === "done" &&
+        now - known.updatedAt > STUCK_MS &&
+        !latestRun(crew, entry.key)?.result) ||
       known.state === "failed";
     if (stuck && runFor(crew, known)?.exitCode !== RUN_TIMEOUT_EXIT_CODE)
       record(
@@ -352,23 +403,41 @@ function act(
   completeManualReviews(crew, inputs, context.dir, now, deps);
   // A review is done once its RESULT is on GitHub for the head it was
   // given, whatever its session has done since: it may have posted just
-  // before a newer push, or ended before this pass saw the post. A session
-  // still open stays in its pane as a chat until the PR closes.
+  // before a newer push, or ended before this pass saw the post. Finishing
+  // its recorded run also tells the worker to exit its harness session.
+  const byNumber = new Map(inputs.map((input) => [input.number, input]));
   for (const entry of actionsIn(crew, [
     "pending",
     "running",
     "failed",
     "done",
   ])) {
-    const claim = REVIEW_KINDS.has(entry.kind)
+    if (!REVIEW_KINDS.has(entry.kind) && entry.kind !== "evaluate") continue;
+    const run = latestRun(crew, entry.key);
+    if (entry.state === "done" && run?.result && run.finishedAt !== null)
+      continue;
+    const parsed = REVIEW_KINDS.has(entry.kind)
       ? authors.get(entry.pr)?.posted.get(`${entry.target}:${entry.head}`)
       : undefined;
+    const claim =
+      parsed && reviewClaimCounts(crew, entry, parsed.source)
+        ? parsed
+        : postedResult(
+            entry,
+            byNumber.get(entry.pr)?.reviewPosts ?? [],
+            entry.kind === "evaluate"
+              ? evaluations(crew, entry.pr).find(
+                  (evaluation) =>
+                    evaluation.head === entry.head &&
+                    entry.key.endsWith(`:evaluation-${evaluation.checkpoint}`),
+                )
+              : undefined,
+          );
     if (
       claim?.commit !== entry.head ||
       !reviewClaimCounts(crew, entry, claim.source)
     )
       continue;
-    const run = latestRun(crew, entry.key);
     if (run && run.result === null) setRunResult(crew, run.id, claim.line);
     if (run && run.finishedAt === null)
       finishRun(
@@ -381,7 +450,7 @@ function act(
     if (entry.state === "done") continue;
     setAction(crew, entry.key, "done", now);
     say(
-      `#${entry.pr} ${entry.target} posted ${claim.line}; its session stays open as a chat`,
+      `#${entry.pr} ${entry.target} posted ${claim.line}; its worker can exit`,
     );
   }
 
@@ -499,6 +568,15 @@ function act(
   const keys = new Set(planned.map((entry) => entry.key));
   const deliverable = (entry: StoredAction) =>
     keys.has(entry.key.split("|")[0]!) || entry.key.split("|")[1] === "timeout";
+  for (const entry of actionsIn(crew, ["pending", "sent", "failed"]))
+    if (
+      entry.kind === "judgment" &&
+      entry.target !== "owner" &&
+      entry.target !== "github" &&
+      (!prs.length || observed.has(entry.pr)) &&
+      (!deliverable(entry) || noticeHolds(crew, entry) === false)
+    )
+      setAction(crew, entry.key, "superseded", now, entry.detail);
   deliver(crew, settings, live, authors, deliverable, record, context, say);
   reconcileOwnerAsks(
     crew,
@@ -549,7 +627,7 @@ function owe(
     ...(causes.get(entry.pr) ?? []),
     entry.text
       .replaceAll(`${root}/`, "")
-      .replace(/^(?:NEEDS-OWNER )?#\d+ (?:at \w+: )?/u, ""),
+      .replace(/^(?:NEEDS-(?:OWNER|REVIEW) )?#\d+ (?:at \w+: )?/u, ""),
   ]);
 }
 
@@ -562,7 +640,8 @@ function oweHeldNotices(
 ) {
   for (const entry of actionsIn(crew, ["pending", "sent"]))
     if (
-      entry.target === "owner" &&
+      entry.kind === "judgment" &&
+      entry.target !== "github" &&
       !parked.has(entry.pr) &&
       !causes.get(entry.pr)?.length &&
       noticeHolds(crew, entry) === true
@@ -594,7 +673,7 @@ function noticeHolds(crew: Database, entry: StoredAction) {
 function deliver(
   crew: Database,
   settings: CrewSettings,
-  live: Seat[],
+  live: Seat[] | null,
   authors: Map<number, Item>,
   deliverable: (entry: StoredAction) => boolean,
   record: (entry: Action) => void,
@@ -618,36 +697,50 @@ function deliver(
     if (AUTHOR_KINDS.has(entry.kind) && !fixing.has(entry.pr))
       bySeat.set(entry.target, [...(bySeat.get(entry.target) ?? []), entry]);
   for (const [name, entries] of bySeat) {
+    // A failed read says nothing about whether the author is still working.
+    if (live === null) {
+      for (const entry of entries) {
+        if (entry.detail === "seat inventory unreadable") continue;
+        setAction(crew, entry.key, "pending", now, "seat inventory unreadable");
+        say(`#${entry.pr} waiting for readable seat inventory for ${name}`);
+      }
+      continue;
+    }
     const why = promptable(
       live.find((seat) => seat.name === name),
       settings,
     );
     if (why) {
-      // A busy author's fix, ci and conflict steps can go to a fresh fixer.
+      // An absent or busy author's steps can go to a fresh fixer.
       const seat = live.find((candidate) => candidate.name === name);
       const branches = new Map(
         entries.map((entry) => [entry.pr, authors.get(entry.pr)?.branch]),
       );
-      const fixers = seat
-        ? startFixers(crew, context, settings, seat, entries, branches, say)
-        : { handed: new Set<string>(), waits: new Map<number, string>() };
+      const fixers = startFixers(
+        crew,
+        context,
+        settings,
+        seat ?? { name, status: "absent" },
+        entries,
+        branches,
+        say,
+      );
       for (const entry of entries) {
-        if (fixers.handed.has(entry.key) || entry.detail === why) continue;
-        setAction(crew, entry.key, "pending", now, why);
         const fixer = fixers.waits.get(entry.pr);
-        say(
-          `#${entry.pr} waiting for ${name} (${why}${fixer ? `; no fixer: ${fixer}` : ""})`,
-        );
+        const detail = fixer ? `${why}; no fixer: ${fixer}` : why;
+        if (fixers.handed.has(entry.key) || entry.detail === detail) continue;
+        setAction(crew, entry.key, "pending", now, detail);
+        say(`#${entry.pr} waiting for ${name} (${detail})`);
         if (
-          why === "no live seat" ||
+          (why === "no live seat" && fixer !== "no free run slot") ||
           why === "never prompted" ||
           why === "blocked"
         )
           record(
             notice(
               entry,
-              `waits-${digest(why)}`,
-              `#${entry.pr} waits for ${name} (${why}): ${entry.text}`,
+              `waits-${digest(detail)}`,
+              `#${entry.pr} waits for ${name} (${detail}): ${entry.text}`,
             ),
           );
       }
@@ -672,6 +765,7 @@ function deliver(
   }
 
   startReviewers(crew, context, settings, pending(), authors, say);
+  deliverReviewJudgments(crew, now, deps, live, settings, deliverable, say);
 
   // Each owner notice's signed comment, once, so GitHub shows what the PR
   // waits for. One whose notice was dropped before it went out is dropped
@@ -839,13 +933,21 @@ export async function main(argv: string[], deps: Deps = realDeps) {
             worker,
           });
           const open = actionsIn(crew, ["pending", "running"]);
-          if (judged.value)
+          if (judged.value) {
+            const settings = loadSettings(configPath);
+            const current = reviewObservation(
+              judged.value,
+              settings,
+              loadConfig(configPath),
+              now,
+            );
             busy = busyPrs(
-              judged.value.verdicts,
-              judged.value.inputs,
-              loadSettings(configPath),
+              current.verdicts,
+              current.inputs,
+              settings,
               open.map((entry) => entry.pr),
             );
+          }
           if (!options.dryRun)
             deps.out(
               `${new Date(now).toISOString()} pass${scope ? ` ${numbers(scope)}` : ""}: ${planned.length} planned, ${open.length} open${busy?.length ? `; busy ${numbers(busy)}` : ""}`,

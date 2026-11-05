@@ -31,6 +31,8 @@
     },
     "authors": {},
     "neverPrompt": ["firstmate"],
+    "readyAsk": true,
+    "reviewStarts": {},
     "maxRuns": 3,
     "runTimeoutMinutes": 90,
     "stallMinutes": 30

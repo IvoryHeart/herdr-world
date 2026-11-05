@@ -1,5 +1,5 @@
 import { AnswerDeliverySign } from "./AnswerDeliverySign";
-import { Fragment, memo, useMemo } from "react";
+import { Fragment, memo, useMemo, useRef } from "react";
 import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
@@ -20,12 +20,7 @@ import {
   townFoldedActivityLabel,
   type TownFoldedActivity,
 } from "./townFoldedActivity";
-import {
-  TOWN_FACADE,
-  TOWN_TILE as T,
-  townDeskSlots,
-  type TownLayout,
-} from "./townLayout";
+import { TOWN_TILE as T, townDeskSlots, type TownLayout } from "./townLayout";
 import { townAttention, townRoomCounts, type TownModel } from "./townModel";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { TownQuestPennant, type TownQuestMark } from "./townQuestPennant";
@@ -88,6 +83,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   onSelect,
   onActivate,
   onActivateRoom,
+  onRoomCardPress,
   onFocusTarget,
   visible,
   onHoverEntry,
@@ -124,8 +120,16 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   onSelect(key: string): void;
   onActivate(key: string): void;
   onActivateRoom(key: string): void;
+  /**
+   * A press on a room card, passed to the town beneath: a hold over a desk
+   * lifts it, a tap zooms the room. False when the town cannot take it.
+   */
+  onRoomCardPress?(event: PointerEvent, roomKey: string): boolean;
   onFocusTarget(target: TownTarget): void;
 }) {
+  // A card press the town took ends as the town's tap; only keyboard
+  // activation (or an untaken press) zooms through the card's own click.
+  const cardPressTaken = useRef(false);
   const terminalAsksByHost = useMemo(() => {
     type Device = (typeof model.projection.paneRoster)[number]["device"];
     const byHost = new Map<string, Device[]>();
@@ -246,8 +250,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
               data-stale={host?.stale || undefined}
               style={{
-                left: building.doorX * T,
-                top: (building.y + building.h + TOWN_FACADE) * T + 6,
+                // The board stands in the yard above the front door.
+                left: (building.entryX + 0.5) * T,
+                top: building.y * T - 18,
               }}
               role="group"
               aria-label={`${host?.displayLabel ?? "Host"} reception, ${queue.length} waiting`}
@@ -361,10 +366,23 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                         {
                           "--room-w": `${placed.w * T}px`,
                           "--carpet": roomCarpet(room.key),
+                          // Presses pass to the town: a pan, or a hold that
+                          // lifts the table beneath.
+                          touchAction: "none",
                         } as React.CSSProperties
                       }
                       aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
-                      onClick={() => onActivateRoom(room.key)}
+                      onPointerDown={(event) => {
+                        cardPressTaken.current =
+                          onRoomCardPress?.(event.nativeEvent, room.key) ??
+                          false;
+                      }}
+                      onClick={(event) => {
+                        const taken =
+                          cardPressTaken.current && event.detail > 0;
+                        cardPressTaken.current = false;
+                        if (!taken) onActivateRoom(room.key);
+                      }}
                       tabIndex={-1}
                     >
                       <span className="town-room-card-name">{label}</span>
@@ -604,8 +622,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         <div
           className="town-new-room-wrap"
           style={{
-            left: (newRoomBuilding.x + 18) * T,
-            top: (newRoomBuilding.y + 3) * T,
+            // In the lobby beside the front door, clear of the counter.
+            left: (newRoomBuilding.entryX + 2) * T,
+            top: (newRoomBuilding.y + 2) * T,
           }}
         >
           <button

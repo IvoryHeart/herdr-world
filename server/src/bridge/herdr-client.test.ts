@@ -45,6 +45,42 @@ async function startServer(
 }
 
 describe("HerdrClient one-shot lifecycle", () => {
+  test("an operation abort closes its pending one-shot socket", async () => {
+    const requested = Promise.withResolvers<void>(),
+      closed = Promise.withResolvers<void>();
+    const controller = new AbortController();
+    const client = new HerdrClient(
+      await startServer(() => requested.resolve()),
+    );
+    servers
+      .at(-1)!
+      .once("connection", (socket) => socket.once("close", closed.resolve));
+    const pending = client.call(
+      "agent.list",
+      {},
+      8000,
+      undefined,
+      controller.signal,
+    );
+    await requested.promise;
+    controller.abort();
+    await expect(pending).rejects.toThrow("cancelled");
+    await closed.promise;
+    expect(sockets.size).toBe(0);
+    client.close();
+  });
+
+  test("a pre-aborted operation never opens a one-shot socket", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const client = new HerdrClient(await startServer());
+    await expect(
+      client.call("agent.list", {}, 8000, undefined, controller.signal),
+    ).rejects.toThrow();
+    expect(sockets.size).toBe(0);
+    client.close();
+  });
+
   test("rechecks authorization after socket connection and sends no revoked request", async () => {
     let received = false;
     let checked = false;

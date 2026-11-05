@@ -5,23 +5,19 @@
  */
 
 import { useEffect, useState } from "react";
-import { bridge, type ConnectionClient } from "../../api";
-import { watchConversation } from "../../conversationWatch";
-import type { Conversation } from "../../components/AgentChat";
+import {
+  leafOwner,
+  useConversationRead,
+  type LatestConversation,
+} from "../conversationRead";
 import { terminalComposerRequest } from "../../terminalComposer";
-import { deskClient } from "../handoffs";
 import { questionFromScreen, screenIdentity } from "../paneScreen";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 
 export type TownChoice = { key: string; label: string };
 
 /** The pane's own current connection, or null if its owner changed. */
-export const townOwner = (leaf: WorldLeafObject): ConnectionClient | null =>
-  deskClient(
-    (candidate: WorldLeafObject) =>
-      bridge.connection(candidate.connectionId, candidate.generation),
-    leaf,
-  );
+export const townOwner = leafOwner;
 
 export function townLeaf(
   world: WorldObject,
@@ -108,69 +104,14 @@ export function useTownScreen(
   return screen?.id === identity ? screen.text : null;
 }
 
-export type TownConversation = Omit<Conversation, "messages">;
+export type TownConversation = LatestConversation;
 
-/**
- * The agent's latest message from Chat's conversation read model
- * (`agent_conversation.latest`), with the same unavailable reasons Chat
- * shows. While `active` it is read once and again whenever the service pushes
- * a change for this pane, as Chat is: no timer. A read that fails after a
- * readable one keeps the readable one, as Chat does. Null until the first
- * answer.
- */
+/** The agent's latest message, as Chat reads it (see useConversationRead). */
 export function useTownConversation(
   leaf: WorldLeafObject | null,
   active: boolean,
 ): TownConversation | null {
-  const [conversation, setConversation] = useState<{
-    id: string;
-    value: TownConversation;
-  } | null>(null);
-  const identity = leaf ? townPaneIdentity(leaf) : null;
-  useEffect(() => {
-    const client = leaf && townOwner(leaf);
-    if (!leaf || !client || !active || !identity) return;
-    let cancelled = false;
-    let shown: TownConversation | null = null;
-    // Only the newest read may answer; an older one can finish later.
-    let sequence = 0;
-    const read = async () => {
-      const mine = ++sequence;
-      try {
-        const reply = (await client.call(
-          "agent_conversation.latest",
-          { pane_id: leaf.pane.pane_id },
-          8_000,
-        )) as TownConversation | null;
-        if (
-          cancelled ||
-          mine !== sequence ||
-          !client.isCurrent() ||
-          !reply ||
-          typeof reply !== "object" ||
-          (reply.status !== "ok" && reply.status !== "unavailable") ||
-          (reply.unavailable?.reason === "read_failed" &&
-            shown?.status === "ok")
-        )
-          return;
-        shown = reply;
-        setConversation({ id: identity, value: reply });
-      } catch {
-        // An unreadable conversation keeps the last one until it can be read.
-      }
-    };
-    const stop = watchConversation(client, leaf.pane.pane_id, () => {
-      void read();
-    });
-    void read();
-    return () => {
-      cancelled = true;
-      stop();
-    };
-    // identity captures the leaf's owner and pane.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, active]);
-  return conversation?.id === identity ? conversation.value : null;
+  return useConversationRead(leaf, active).conversation;
 }
 
 /**

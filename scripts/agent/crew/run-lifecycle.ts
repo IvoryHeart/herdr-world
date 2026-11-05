@@ -4,6 +4,7 @@ import type { GateInput } from "../gate/predicate";
 import type { Deps } from "./deps";
 import type { Action, CrewSettings } from "./plan";
 import { checkoutOf } from "./review";
+import { postedResult } from "./run-results";
 import {
   activeRuns,
   actionsIn,
@@ -48,8 +49,23 @@ export function completeManualReviews(
         claim.outcome !== "unknown" &&
         claim.line.trim(),
     );
-    if (!claim) continue;
-    setRunResult(crew, run.id, `RESULT #${run.pr}: ${claim.line.trim()}`);
+    const result = claim
+      ? `RESULT #${run.pr}: ${claim.line.trim()}`
+      : postedResult(
+          {
+            key: run.actionKey,
+            pr: run.pr,
+            head: run.head,
+            kind: "review",
+            target: run.reviewer,
+            text: "",
+          },
+          (input.reviewPosts ?? []).filter(
+            (post) => post.at >= run.startedAt && post.at <= now,
+          ),
+        )?.line;
+    if (!result) continue;
+    setRunResult(crew, run.id, result);
     finishRun(
       crew,
       run.id,

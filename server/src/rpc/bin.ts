@@ -1,0 +1,64 @@
+import type { BinAdd } from "../world/bin";
+import type { BridgeRpcContext } from "./context";
+
+/**
+ * The agent bin (world.bin.*). Every method changes only the reversible,
+ * in-memory countdown; Herdr is reached only by the durable close intent
+ * recorded when a countdown ends or on Close now.
+ */
+export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
+  const { id, method, params, sendReply, sendError } = rpc;
+  const bin = rpc.services.bin;
+  const p = (params ?? {}) as Record<string, unknown>;
+  const reply = (result: unknown) => {
+    sendReply({ id, result }, "world-bin");
+  };
+  try {
+    if (!bin) throw new Error("The bin needs World storage");
+    const { registry } = bin;
+    if (method === "world.bin.list") return reply(registry.list());
+    if (method === "world.bin.pause") return reply(registry.pause());
+    if (method === "world.bin.resume") return reply(registry.resume());
+    if (method === "world.bin.restore")
+      return reply(registry.restore(String(p.id)));
+    if (method === "world.bin.close_now")
+      return reply(
+        registry.closeNow(
+          Array.isArray(p.ids) ? p.ids.map((id) => String(id)) : [],
+        ),
+      );
+    if (method === "world.bin.countdown.set") {
+      await bin.setCountdown(Number(p.countdown_s));
+      return reply(registry.list());
+    }
+    if (method !== "world.bin.add") throw new Error("unknown bin operation");
+    const target = p as unknown as BinAdd;
+    // Admission: the pane must still be this terminal on its current runtime.
+    const lease = bin.lease(target.connection_id);
+    if (
+      !lease ||
+      lease.generation !== target.connection_generation ||
+      !lease.isCurrent()
+    )
+      throw new Error("That agent's host is unavailable");
+    const result = (await lease.call(
+      "pane.list",
+      { workspace_id: target.workspace_id },
+      5_000,
+    )) as { panes?: Record<string, unknown>[] } | null;
+    const pane = Array.isArray(result?.panes)
+      ? result.panes.find((item) => item?.pane_id === target.pane_id)
+      : undefined;
+    if (
+      !lease.isCurrent() ||
+      !pane ||
+      pane.terminal_id !== target.terminal_id ||
+      pane.tab_id !== target.tab_id ||
+      pane.workspace_id !== target.workspace_id
+    )
+      throw new Error("That agent has already closed or moved");
+    reply(registry.add(target));
+  } catch (error) {
+    sendError("world-bin-error", error);
+  }
+}

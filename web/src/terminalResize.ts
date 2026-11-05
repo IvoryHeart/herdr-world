@@ -101,6 +101,27 @@ export function terminalRelayViewportSize(
   };
 }
 
+/**
+ * The xterm size `paneId` has in `layout` now: the inverse of
+ * `terminalEndpointViewportSize`, so attaching at it leaves the tab's surface
+ * as it is. A terminal that is not shown has no size of its own and uses this.
+ */
+export function terminalPaneSize(
+  layout: TerminalRelayLayout | null | undefined,
+  paneId: string | null | undefined,
+): TerminalSize | null {
+  const pane = paneId
+    ? layout?.panes.find((item) => item.pane_id === paneId)
+    : undefined;
+  if (!layout || !pane) return null;
+  const splitLayout = layout.panes.length > 1 && !layout.zoomed;
+  const size = {
+    cols: pane.rect.width - (splitLayout ? 3 : 1),
+    rows: pane.rect.height - (splitLayout ? 2 : 0),
+  };
+  return validSize(size) ? size : null;
+}
+
 /** Endpoint surfaces cover the tab, excluding app sidebar and tab-bar insets. */
 export function terminalEndpointViewportSize(
   size: TerminalSize,

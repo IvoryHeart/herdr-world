@@ -61,15 +61,12 @@ import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { createWorkspaceWorktree } from "../worktree/create";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
+import { createBinService } from "./bin-service";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
-import { OfficeObservabilityService } from "../world/observability";
-import {
-  createOfficeObservabilityHttpHandler,
-  resolveOfficeObservabilityBootstrap,
-  withOfficeObservabilityEndpoint,
-} from "../world/observability-http";
+import { WorldUsageService } from "../usage/service";
+import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
@@ -166,25 +163,8 @@ async function compose(
     path: paths.webPush,
     warn: (message) => logger.warn(message),
   });
-  const officeObservabilityBootstrap = await settings
-    .read()
-    .then((current) => resolveOfficeObservabilityBootstrap(current))
-    .catch(() => {
-      logger.warn("invalid Office observability configuration was disabled");
-      return { endpoint: null, source: "none" as const };
-    });
-  const officeObservability = new OfficeObservabilityService({
-    ...officeObservabilityBootstrap,
-    now: () => clock.now(),
-  });
-  const handleOfficeObservability = createOfficeObservabilityHttpHandler({
-    service: officeObservability,
-    persist: async (endpoint) => {
-      await settings.update((current) =>
-        withOfficeObservabilityEndpoint(current, endpoint),
-      );
-    },
-  });
+  const { officeObservability, handleOfficeObservability } =
+    await createUsageTelemetry(settings, () => clock.now(), logger);
   const downstreamConnectionConfig = {
     socketPath: config.socketPath,
     clientSocketPath: config.clientSocketPath,
@@ -281,6 +261,7 @@ async function compose(
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null =
     null;
+  let worldUsage: WorldUsageService | null = null;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
@@ -324,6 +305,20 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
+  /** The agent bin: reversible countdowns, then a durable fenced close. */
+  const bin = createBinService({
+    incarnation: serviceIncarnation,
+    clock,
+    scheduler,
+    settings,
+    ledger: () => storage.ledger(),
+    outbox: () => storage.attention(),
+    effects: () => storage.effects(),
+    connections: () => connectionManager,
+    publish: revisionPublisher("world_bin_changed", "world-bin"),
+    log: (message) => logger.warn(message),
+  });
+  void bin.start();
 
   const {
     observe: observeHost,
@@ -376,6 +371,7 @@ async function compose(
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
     (status) => {
+      worldUsage?.connectionStatus(status);
       focusedAcquisition.reconcile();
       deskWatches.reconcile();
       publishConnectionsChanged();
@@ -385,6 +381,7 @@ async function compose(
         status.state === "ready",
         !["error", "disconnected"].includes(status.state),
       );
+      bin.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -767,6 +764,15 @@ async function compose(
   });
   const handleWorldSources = createSourcesHttpHandler(worldSources);
 
+  worldUsage = new WorldUsageService({
+    incarnation: serviceIncarnation,
+    connections: connectionManager,
+    topology: () => worldSnapshots!.snapshot({}),
+    prices: async () => (await settings.read()).custom.world_usage_prices_v1,
+    telemetry: () => officeObservability.snapshot(),
+    now: () => clock.now(),
+    scheduler,
+  });
   const rpcServices: RpcServices = {
     clock,
     bindings: storage.bindings,
@@ -792,8 +798,10 @@ async function compose(
     snapshotAdmission,
     townMoveQueues,
     ...terminalMarks,
+    bin,
     worldCli,
     worldSnapshots,
+    worldUsage,
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -949,11 +957,13 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
+    const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();
     connectionProfiles.stopSupervision();
     webPush.stop();
     await worldCli.stop();
+    await bin.stop();
     // Drop browser sockets as a process exit does; pages reconnect.
     for (const ws of [...browsers.clients]) ws.terminate();
     try {
@@ -962,6 +972,7 @@ async function compose(
       // fenced, and so does every request, within a bound.
       await disposeAssistant();
       await connectionManager.stopAll();
+      await usageStopped;
       await startTask?.catch(() => {});
       await disposeAssistant();
       await drained();

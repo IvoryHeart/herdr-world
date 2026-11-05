@@ -180,9 +180,10 @@ hosts stay usable.
    opens its launcher with that room selected. Choose **Terminal** for a plain
    tab, a profile, or an agent kind. If the requested room is no longer
    available, choose a current room in the launcher before creating anything.
-3. Look at reception for blocked agents waiting for input, oldest first. Finished
-   agents also wait there until you open their terminal or mark that completion
-   reviewed, then join idle agents in the lounge. These locations visualize
+3. Look at reception, at the top of each building, for blocked agents waiting
+   for input, oldest first. Finished agents also wait there until you open
+   their terminal or mark that completion reviewed, then join idle agents at
+   the bar in the building's bottom corner. These locations visualize
    status; they do not move the underlying pane or change its host. For the
    whole picture, press **Summary** on the Town board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
@@ -213,15 +214,19 @@ hosts stay usable.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it.
    [Chat with an agent](#chat) explains reading, replying and answering there.
-   The **NEEDS YOU** list provides another route to waiting
-   agents and becomes a bottom tray on phones; it hides when no agent is
-   blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
+   **Needs you** in the top bar (in the view picker in Zen and on a phone)
+   counts the questions and blocked agents waiting on you, in every view. Tap
+   it to open the **Needs you** tab on the left: each question, blocked agent
+   and finished task is a short message from its agent with its quick reply in
+   place, and **Chat about this** opens the agent's Chat. Hover an agent's name
+   (or tap **ⓘ**) for its card. The tab stays open or closed on this device;
+   **‹** (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a
    small preview card: its latest message as **Chat** shows it, never terminal
    text; when the conversation cannot be read, it says why. It highlights a
    question when one can be identified, and refreshes when the conversation
    changes. Opening
-   an agent brings it back to its desk from reception or the lounge until its
+   an agent brings it back to its desk from reception or the bar until its
    status changes. To open terminals instead, set **Menu → Agents open** to
    **Terminal** (Board and Desk follow it too); that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
@@ -285,8 +290,10 @@ hosts stay usable.
    reception.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
-7. To move a table to another room, zoom in until you see tables, then drag it
-   with the mouse, or hold it for a moment on a phone and then drag. Drop it on
+7. To move a table to another room, zoom in until you see tables (room
+   summaries are close enough), then drag it with the mouse, or hold it for a
+   moment on a phone and then drag. A hold works even where a room summary
+   covers the table; a tap on the summary still zooms into the room. Drop it on
    another room of the same building; the plaque under your pointer says where
    it will land, or why it cannot. Hold it near the edge of the view to scroll
    the town toward rooms out of sight, as on a phone where rooms stack. The table lifts off and swings along behind
@@ -341,7 +348,7 @@ hosts stay usable.
    choose the same action from the window’s **⋯** menu.
    The table wears a pin, stays put
    when tabs are reordered or the room grows, and its agents stay at it rather
-   than taking breaks in the lounge; they still go to reception when they need
+   than taking breaks at the bar; they still go to reception when they need
    you or finish, and come straight back once seen. Choose **Unpin desk in
    Town** to let it follow the tab order again.
 
@@ -357,16 +364,19 @@ A quiet **?** at reception means an agent has asked you a question with
 `herdr-world ask`. The question also arrives as a Herdr notification, which
 reaches Herdr and, when you enabled them, your phone notifications. It stays
 at reception until answered, dismissed or withdrawn;
-tapping its reception entry opens that agent. Read the question first in
-**Needs you** or **Summary**, where it names the asking agent, then choose an
-option or type an answer. The waiting agent receives that answer. **Open agent**
-opens the asker; **Dismiss** closes a stale or mistaken question without
-answering it. A question marked unverified came from a process World could not
-confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
-blocking, while **✓** means a finish still needs checking.
+tapping its reception entry opens that agent, and tapping its letter opens
+**Needs you** at that question. Read it there or in **Summary**, where it names
+the asking agent, then choose an option or type an answer. The waiting agent
+receives that answer. **Chat about this** (in Needs you) or **Open agent** (in
+Summary) opens the asker; **Dismiss** closes a stale or mistaken question
+without answering it. A question marked unverified came from a process World
+could not confirm runs in that pane. Town, Board, Desk and Chat share one set
+of marks, each with one glyph, colour and word: **•** Working, **!** Needs you
+(blocked on its own question), **?** Asks you, **✓** Done (not reviewed yet),
+**–** Idle or Reviewed, **~** No signal and **×** Offline.
 
-**Mark reviewed** acknowledges that completion in every browser connected to
-this World service, so your phone and desktop agree. World saves the mark across
+**Mark reviewed** acknowledges that completion in one record on this World
+service, so Town, Desk, Needs you, your phone and your desktop agree. World saves the mark across
 restarts. It reappears after World verifies the same terminal and known agent
 session; a replacement session or later completion needs review again.
 Opening a finished agent's terminal also clears its reception stop; neither action proves the result
@@ -696,7 +706,7 @@ work.
 Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
 to colour and pin its card, group with the agent that started it, report a
 task result, or ask you a question (`herdr-world ask "Ship it?" --options
-yes,no --wait`). A question shows first in Town's **Needs you** list with the
+yes,no --wait`). A question shows first in the **Needs you** tab with the
 agent's name and waits at reception with **?**; pick an option or type an answer,
 and the waiting agent carries on. An asker can withdraw a cleared question with
 `herdr-world ask withdraw <question-id>`, which clears its markers. If its
@@ -784,7 +794,8 @@ location. Use **Actions > New workspace** or **New tab** from a visual view;
 confirm the destination host. Creation needs a ready host and prepares the source
 terminal before opening the result in the current view.
 
-In **Desk**, start with **Needs you** for blocked agents, **To review** for
+In **Desk**, start with **Needs you** for blocked agents (**Answer** opens the
+Needs you tab at that agent), **To review** for
 finished turns and **In flight** for running work. Open a card to read its Chat or
 inspect the terminal, files or changes. Read the result and verify the diff before
 using **Mark reviewed**; the mark is shared by every browser connected to this

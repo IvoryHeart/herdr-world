@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: "1.4.3"
+          bun-version: "1.4.4"
       - name: Resolve the latest published stable release once
         id: plan
         env:
@@ -70,7 +70,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: "1.4.3"
+          bun-version: "1.4.4"
           no-cache: true
       # Linux installs take seconds; Windows and macOS spend up to 90 s
       # downloading packages. CI runs only for pull requests, so a cache serves

@@ -209,35 +209,6 @@
 .board-tab.board-s-blocked {
   border-color: var(--s-blocked);
 }
-.board-badge {
-  position: absolute;
-  top: -9px;
-  right: -9px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: none;
-  place-items: center;
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--board-card);
-}
-.board-s-blocked .board-badge,
-.board-s-done .board-badge,
-.board-s-unknown .board-badge {
-  display: grid;
-  background: var(--pulse);
-}
-.board-s-blocked .board-badge::before {
-  content: "!";
-}
-.board-s-done .board-badge::before {
-  content: "\2713";
-}
-.board-s-unknown .board-badge::before {
-  content: "?";
-}
-
 /* Status pulses: only a working agent, or the selected card, pulses; idle,
    done and waiting cards are still (waiting keeps its red border and badge). */
 .board-tab::after {

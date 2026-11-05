@@ -23,7 +23,9 @@ function fixture() {
     params?: Record<string, unknown>,
     _timeoutMs?: number,
     beforeSend?: () => void,
+    signal?: AbortSignal,
   ) => {
+    signal?.throwIfAborted();
     beforeSend?.();
     if (method === "agent.get") {
       return {

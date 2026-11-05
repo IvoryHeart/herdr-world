@@ -34,12 +34,19 @@ const EMPTY: CompletionSeenState = {
 
 export function completionSeenIdentity(agent: SeenAgent) {
   const terminal = agent.currentTerminalRef;
-  return JSON.stringify([
+  return completionSeenKey(
     terminal.connectionId,
     terminal.generation,
     terminal.nativeId,
-  ]);
+  );
 }
+
+/** A terminal's check key, as completionSeenIdentity() builds it. */
+export const completionSeenKey = (
+  connectionId: string,
+  generation: number,
+  terminalId: string,
+) => JSON.stringify([connectionId, generation, terminalId]);
 
 /** Keys of the roster's agents that have a check. */
 export function checkedAgentKeys(
@@ -168,13 +175,28 @@ export class CompletionSeenStore {
     return this.mutate("world.completion_seen.mark", wireIdentity(agent));
   }
 
+  /**
+   * The same check for a terminal named directly. Only for work Desk's
+   * review record cannot name a stop for (see useReviewedWork); true once
+   * the service saved it.
+   */
+  markTerminal(connectionId: string, generation: number, terminalId: string) {
+    return this.mutate("world.completion_seen.mark", {
+      connection_id: connectionId,
+      connection_generation: generation,
+      terminal_id: terminalId,
+    });
+  }
+
   private async mutate(method: string, params: Record<string, unknown>) {
     const epoch = this.epoch;
     try {
       this.accept(await this.client.call(method, params), epoch, false);
+      return true;
     } catch {
       // Presentation state: the next list or change notice corrects it.
       void this.refresh();
+      return false;
     }
   }
 

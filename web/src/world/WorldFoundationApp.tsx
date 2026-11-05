@@ -70,6 +70,8 @@ import { closeTopLayer } from "../layerStack";
 import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldViewPicker } from "./WorldViewPicker";
+import { NeedsYouCounter } from "./NeedsYouTab";
+import { needsYouInTopbar } from "./needsYou";
 import { WorldControlPlane } from "./WorldControlPlane";
 import {
   WorldPanelsContext,
@@ -387,6 +389,11 @@ export default function WorldFoundationApp() {
               mobile={mobile}
               onSelect={setView}
               onExitZen={exitZen}
+              extra={
+                view === "spaces" ? null : (
+                  <NeedsYouCounter world={topbarWorld} />
+                )
+              }
             />
           )}
           onZenActiveChange={setZenActive}
@@ -475,6 +482,14 @@ export default function WorldFoundationApp() {
                   ))}
                 </select>
               </label>
+              {needsYouInTopbar({
+                view,
+                mobile,
+                zen: zenActive,
+                detail: Boolean(canReturnToView),
+              }) ? (
+                <NeedsYouCounter world={topbarWorld} />
+              ) : null}
               {canReturnToView ? (
                 <button
                   type="button"

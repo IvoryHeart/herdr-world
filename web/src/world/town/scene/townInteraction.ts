@@ -171,14 +171,23 @@ export class TownInteraction {
     at: Point;
     primary: boolean;
     pointerType: string;
+    /**
+     * The room whose card was pressed: a tap there zooms that room, and a
+     * hold over one of its desks lifts the desk beneath the card.
+     */
+    card?: string;
   }) {
     const stage = this.ports.stage();
     if (!stage) return;
     const hit = this.hitAt(pointer.at.x, pointer.at.y);
-    const target: TownGestureTarget = {
-      hit,
-      drag: townDragFor(hit, this.ports.world().model, stage.level),
-    };
+    const drag = townDragFor(hit, this.ports.world().model, stage.level);
+    const target: TownGestureTarget = pointer.card
+      ? {
+          hit: { kind: "room", key: pointer.card },
+          drag:
+            drag?.kind === "desk" && drag.from === pointer.card ? drag : null,
+        }
+      : { hit, drag };
     this.feed({
       type: "down",
       id: pointer.id,
