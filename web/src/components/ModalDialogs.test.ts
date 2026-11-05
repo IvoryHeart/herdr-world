@@ -515,6 +515,7 @@ async function registerDomTests() {
             clientY: 10,
           }),
         );
+        await import("./ContextMenu");
       });
     const requestAction = () =>
       Array.from(container.querySelectorAll("button")).find((button) =>
