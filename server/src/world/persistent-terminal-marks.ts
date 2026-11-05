@@ -581,6 +581,7 @@ export class PersistentTerminalMarks {
           connectionId,
           panes,
           admitted,
+          !action,
           isCurrent,
         )
       : { proofs: new Map(), resolvable: new Set<string>() };

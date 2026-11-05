@@ -783,7 +783,9 @@ identity/persistence boundaries. Maintained 10-source inputs fit the unchanged
 frame with headroom; dense native input is explicitly refused before capture,
 without a composed dense success claim. These checks complement existing binding
 and runtime models; no SQL abstraction replaces actual savepoint/worker evidence.
-Completion-seen remains compatible pending the separately gated migration.
+Schema 10 retires the completion-seen row kind, RPCs and browser fallback;
+the [draining-archive evidence](contracts/terminal-marks.md#draining-legacy-review-archive)
+covers qualified transfer, deferred receipt retention and bounded retirement.
 
 PR #622 review repairs add real SQLite recovery re-entry, durable unknown-owner
 supersession across restart, atomic canonical-capacity refusal, shrinking-before-

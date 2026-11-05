@@ -14,4 +14,5 @@
 ### Fixed
 
 - Enforce legacy-review expiry at the resolving Desk write and retain a receipt
-  when sparse or duplicate metadata cannot name the exact displayed stop.
+  when sparse or duplicate metadata cannot name the exact displayed stop,
+  including when opening another report before the next complete observation.

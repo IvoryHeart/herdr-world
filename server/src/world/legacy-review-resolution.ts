@@ -7,6 +7,7 @@ export async function legacyReviewCandidates(
   connectionId: string,
   panes: readonly Record<string, unknown>[],
   admitted: ReturnType<typeof admittedAgentPanes>,
+  activityObserved: boolean,
   isCurrent: () => boolean,
 ) {
   const byTerminal = new Map(
@@ -28,7 +29,9 @@ export async function legacyReviewCandidates(
               : null,
           status: agent?.status ?? "unknown",
           last_activity_at: agent?.lastActivityAt ?? null,
-          activity_matches: agent?.activityMatchesWorld ?? false,
+          // Pane-only action admission cannot attest the World leaf's metadata.
+          activity_matches:
+            activityObserved && (agent?.activityMatchesWorld ?? false),
         },
       ];
     }),

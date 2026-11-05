@@ -34,7 +34,16 @@ const cases = [
     match: /activityMatchesWorld: activity === displayedActivity/,
     replacement: "activityMatchesWorld: true",
     assertion:
-      "activity admission preserves the receipt until sparse session agrees with the actual World leaf",
+      "activity admission preserves the receipt through Desk open 0 until sparse session agrees with the actual World leaf",
+  },
+  {
+    name: "archive action activity fence",
+    entry: resolve(import.meta.dir, "legacy-review-boundaries.test.ts"),
+    file: "legacy-review-resolution.ts",
+    match: /activityObserved && /,
+    replacement: "",
+    assertion:
+      "activity admission preserves the receipt through Desk open 1 until duplicate rows agrees with the actual World leaf",
   },
   {
     name: "positive browser review consumers",

@@ -9,7 +9,11 @@ import {
   buildWorldObject,
   type WorldLeafObject,
 } from "../../../web/src/world/worldObject";
-import { isReviewedStop } from "../../../web/src/world/useReviewedWork";
+import {
+  isReviewedStop,
+  reviewStop,
+} from "../../../web/src/world/useReviewedWork";
+import { deskIdentity } from "../../../web/src/world/useDeskState";
 import type { WorldRuntimeConnection } from "../../../web/src/world/runtimeStore";
 
 const fixtures: Awaited<ReturnType<typeof reviewStopFixture>>[] = [];
@@ -100,41 +104,82 @@ for (const metadata of [
   "missing terminal",
   "other session",
 ] as const)
-  test(`activity admission preserves the receipt until ${metadata} agrees with the actual World leaf`, async () => {
+  for (const open of [0, 1])
+    test(`activity admission preserves the receipt through Desk open ${open} until ${metadata} agrees with the actual World leaf`, async () => {
+      const pane = {
+        ...legacyPane(),
+        last_activity_at: undefined,
+        workspace_id: "workspace",
+        tab_id: "tab",
+      };
+      const f = await fixture([pane, legacyPane(1)]);
+      const agent = {
+        ...legacyPane(),
+        ...(metadata === "sparse session" ? { agent_session: undefined } : {}),
+        ...(metadata === "missing terminal" ? { terminal_id: undefined } : {}),
+        ...(metadata === "other session"
+          ? { agent_session: legacyPane(1).agent_session }
+          : {}),
+      };
+      const agents =
+        metadata === "duplicate rows" ? [agent, { ...agent }] : [agent];
+      const leaf = worldLeaf(pane, agents);
+      expect(leaf.lastActivityAt).toBe(1000);
+      await f.marks.observe("alpha", 1, [pane], 2001, agents);
+      await f.refresh();
+      expect(f.failures).toEqual([]);
+      expect(f.storage.terminalMarks.archiveStatus().count).toBe(1);
+      for (const browser of f.browsers)
+        expect(browser.get().records[0]?.reviewed_stop).toBeNull();
+      expect(
+        await f.browsers[0]!.mutate(
+          "world.desk.open",
+          deskIdentity(f.leaf(open)),
+        ),
+      ).toBe(true);
+      await f.refresh();
+      expect(f.storage.terminalMarks.archiveStatus().count).toBe(1);
+      for (const browser of f.browsers)
+        expect(
+          browser.get().records.find((r) => r.terminal_id === "terminal-0")
+            ?.reviewed_stop,
+        ).toBeNull();
+      // A later unique matching metadata row can transfer the retained receipt.
+      const qualified = [legacyPane()];
+      await f.marks.observe("alpha", 1, [pane], 2002, qualified);
+      await f.refresh();
+      expect(f.storage.terminalMarks.archiveStatus().count).toBe(0);
+      for (const browser of f.browsers)
+        expect(
+          isReviewedStop(
+            worldLeaf(pane, qualified),
+            browser.get().records.find((r) => r.terminal_id === "terminal-0"),
+          ),
+        ).toBe(true);
+    });
+
+for (const undo of [false, true])
+  test(`explicit review ${undo ? "and Undo" : "alone"} disqualifies a deferred receipt before the next full observation`, async () => {
     const pane = {
       ...legacyPane(),
       last_activity_at: undefined,
       workspace_id: "workspace",
       tab_id: "tab",
     };
-    const f = await fixture([pane]);
-    const agent = {
-      ...legacyPane(),
-      ...(metadata === "sparse session" ? { agent_session: undefined } : {}),
-      ...(metadata === "missing terminal" ? { terminal_id: undefined } : {}),
-      ...(metadata === "other session"
-        ? { agent_session: legacyPane(1).agent_session }
-        : {}),
-    };
-    const agents =
-      metadata === "duplicate rows" ? [agent, { ...agent }] : [agent];
-    const leaf = worldLeaf(pane, agents);
-    expect(leaf.lastActivityAt).toBe(1000);
+    const f = await fixture([pane]),
+      agents = [legacyPane(), legacyPane()];
     await f.marks.observe("alpha", 1, [pane], 2001, agents);
     await f.refresh();
-    expect(f.failures).toEqual([]);
+    const leaf = worldLeaf(pane, agents);
+    const stop = reviewStop(leaf, f.browsers[0]!.get().records[0]);
+    expect(await f.review(0, true, stop)).toBe(true);
+    if (undo) expect(await f.review(0, false, stop)).toBe(true);
+    await f.marks.observe("alpha", 1, [pane], 2002, [legacyPane()]);
+    await f.refresh();
     expect(f.storage.terminalMarks.archiveStatus().count).toBe(1);
     for (const browser of f.browsers)
-      expect(browser.get().records[0]?.reviewed_stop).toBeNull();
-    // A later unique matching metadata row can transfer the retained receipt.
-    const qualified = [legacyPane()];
-    await f.marks.observe("alpha", 1, [pane], 2002, qualified);
-    await f.refresh();
-    expect(f.storage.terminalMarks.archiveStatus().count).toBe(0);
-    for (const browser of f.browsers)
-      expect(
-        isReviewedStop(worldLeaf(pane, qualified), browser.get().records[0]),
-      ).toBe(true);
+      expect(browser.get().records[0]?.reviewed_stop).toBe(undo ? null : stop);
+    expect(f.failures).toEqual([]);
   });
 
 test("native pane activity permits exact transfer without trusting duplicate metadata progress", async () => {

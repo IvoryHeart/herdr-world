@@ -168,6 +168,9 @@ Resolution requires a fresh complete unambiguous observation after migration:
 same connection ID, terminal, known session and unchanged native state-change
 sequence. Activity uses the same pane/matched-agent normalization as the World
 leaf, so the canonical stop shape remains `stop:[observed_stop_id,activity]`.
+Pane-only Desk action admission cannot attest that activity: opening either the
+same or another agent's report retains a deferred receipt until a complete
+matching observation. Explicit review and Undo still disqualify the receipt.
 There is no synthetic transition time. Unknown legacy sessions never resolve;
 missing sequence defers. Positive replacement, unknown ownership, changed
 sequence or busy status disqualifies the receipt permanently, including return
@@ -213,7 +216,8 @@ ambiguous metadata. The canonical stop string shape stays unchanged.
 
 `world/legacy-review-boundaries.test.ts` covers just before, exactly at and after
 the deadline, with and without restart, plus actual `buildWorldObject` consumers
-for metadata disagreement and later valid transfer. Two compiled faults remove
-the resolving expiry check or falsely attest matching activity and must fail
+for metadata disagreement, opening the same or another report, explicit review
+and Undo, and later valid transfer. Three compiled faults remove
+the resolving expiry check or falsely attest observed/action activity and must fail
 the named boundary regressions. Existing replacement/no-carry/sequence fences,
 real-SQLite rollback, all maintained models and native CI remain required.
