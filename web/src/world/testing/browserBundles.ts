@@ -4,7 +4,8 @@ import { basename, dirname, join } from "node:path";
 export type WorldBrowserEntry =
   | "HostsFilter"
   | "ProductionContexts"
-  | "AnswerDeliveries";
+  | "AnswerDeliveries"
+  | "NeedsYouCard";
 export type WorldBrowserBundle = {
   directory: string;
   assets: Map<string, Blob>;

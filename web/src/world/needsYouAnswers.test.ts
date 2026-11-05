@@ -38,6 +38,7 @@ async function registerDomTest() {
     "Event",
     "CustomEvent",
     "MutationObserver",
+    "ResizeObserver",
     "KeyboardEvent",
     "MouseEvent",
     "FocusEvent",
@@ -258,7 +259,8 @@ async function registerDomTest() {
     container.querySelector<HTMLElement>(`[data-needs-you-item="leaf:${id}"]`)!;
   const button = (scope: HTMLElement, text: string) =>
     [...scope.querySelectorAll<HTMLButtonElement>("button")].find((entry) =>
-      entry.textContent!.includes(text),
+      // An icon button is found by its tooltip.
+      `${entry.textContent} ${entry.title}`.includes(text),
     )!;
 
   test("a prompt Chat cannot answer opens the Terminal, not Chat", async () => {

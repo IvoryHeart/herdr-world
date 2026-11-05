@@ -457,23 +457,35 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
-- **Needs you** in the top bar (in the view picker in Zen, including on a phone) counts
+- **Needs you** in the top bar (in the view picker in Zen, including on a phone;
+  outside Zen a phone shows it as an inbox icon with a count badge, hidden at
+  zero, right after the view's name) counts
   open questions and the blocked agents of the hosts the Hosts filter shows, in
   every view, and opens the **Needs you** tab on the left: beside the view on
   wide landscape screens, over it on narrower ones, full screen with **Back** on a
   phone, where it takes focus, keeps the app behind it out of reach and gives
   focus back when it closes. It stays open or closed per device; while closed and anything waits, a
-  **Needs you** handle sits at the left edge. Each item is a short message from its
-  agent with Chat's formatting and a quick reply in place: **?** questions
-  (options, a typed answer, **Dismiss**, and why an owner alert may not have
-  arrived), **!** blocked agents (the agent's own question, answered and confirmed
-  as Chat does, with **Open Terminal** when the answer could not be confirmed) and
-  **✓** finished work, done agents and idle agents the service saw finish in the
-  last 12 hours (**Mark reviewed** marks the report shown, says so if the mark
-  could not be saved, and offers **Retry** if the report could not be read; Desk's
-  To review lane can also list idle agents from recent transcript turns). Every item names its agent and marks an
-  unverified asker; **Chat about this** (**Follow up…** for finished work) opens
-  the agent's Chat, and hovering the agent's name (or **ⓘ**) shows its card with
+  **Needs you** handle sits at the left edge. Each item is a compact notification
+  from its agent with Chat's formatting: one header row (its mark, name, place
+  and age, then icons), the message, and answer controls only when the agent
+  asked. **?** questions show their options as quick replies (the first
+  highlighted; **Other…** opens a typed answer) or one answer field with a send
+  icon, plus why an owner alert may not have arrived; **!** blocked agents show
+  the agent's own question with its options as quick replies, answered and
+  confirmed as Chat does, with **Open Terminal** when the answer could not be
+  confirmed; **✓** finished work lists done agents and idle agents the service saw
+  finish in the last 12 hours, with no answer row (Desk's To review lane can
+  also list idle agents from recent transcript turns). Every item names its
+  agent and marks an unverified asker; the name and the chat icon (**Open in
+  Chat**, or **Follow up in Chat** for finished work) open the agent's Chat.
+  The **✕** icon keeps each kind's own action: **Dismiss question** on a
+  question, **Mark reviewed** on finished work (it marks the report shown, says
+  so if the mark could not be saved, and the item offers **Retry** if the report
+  could not be read); a blocked agent has none. Every icon has a label and a
+  tooltip. A message longer than two lines shows **more** on its last line: it,
+  or a tap on the text, shows the whole message in place with its links, and
+  **less** clips it again. Keyboard focus entering the message reveals its
+  links. Hovering the agent's name shows its card with
   the latest message. An answered question folds to one line until the tab
   closes. It shows a page of 30 items; **Show … more** and **Show the … before**
   turn the page, and every opener turns to its item's page. Town's reception

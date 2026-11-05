@@ -214,13 +214,19 @@ hosts stay usable.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it.
    [Chat with an agent](#chat) explains reading, replying and answering there.
-   **Needs you** in the top bar (in the view picker in Zen and on a phone)
-   counts the questions and blocked agents waiting on you, in every view. Tap
-   it to open the **Needs you** tab on the left: each question, blocked agent
-   and finished task is a short message from its agent with its quick reply in
-   place, and **Chat about this** opens the agent's Chat. Hover an agent's name
-   (or tap **ⓘ**) for its card. The tab stays open or closed on this device;
-   **‹** (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
+   **Needs you** in the top bar (in the view picker in Zen and on a phone,
+   where outside Zen it is an inbox icon with a count badge after the view's
+   name) counts the questions and blocked agents waiting on you, in every view.
+   Tap it to open the **Needs you** tab on the left: each question, blocked
+   agent and finished task is a compact notification from its agent. When the
+   agent asked something, tap a quick reply (or **Other…** to type), or type in
+   the answer field and press Enter. Tap a long message (or **more**) to read
+   all of it, links included; **less** shortens it again. Tabbing into a
+   message reveals its links. The agent's name and the chat icon open the
+   agent's Chat for the context behind it. **✕** dismisses a question, or marks
+   finished work reviewed; its tooltip says which. Hover an agent's name for
+   its card. The tab stays open or closed on this device; **✕** in its header
+   (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a
    small preview card: its latest message as **Chat** shows it, never terminal
    text; when the conversation cannot be read, it says why. It highlights a

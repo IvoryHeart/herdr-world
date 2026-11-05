@@ -1799,10 +1799,23 @@ window opened from it SHALL cover it until that window closes, and focus SHALL
 then return to the list. Whether it is open SHALL persist per device, and while it is closed
 and something waits a handle at the left edge SHALL open it. Each item SHALL be
 a short message from its agent, name its agent, mark an asker World could not
-verify, show why an owner alert may not have arrived, and offer Chat about this,
-which opens that exact agent's Chat; hovering its agent (or a visible control on
-touch) SHALL show the agent's card with its latest message. A question SHALL be
-answerable with its options or typed text, or dismissed. A blocked agent's own
+verify, show why an owner alert may not have arrived, and offer a chat icon,
+which opens that exact agent's Chat; the agent's name SHALL open that same Chat
+on every item whose agent World can place. Every item SHALL have one compact
+anatomy: a header row with the agent's mark, name, place and age and its icon
+actions, the message, and answer controls only when the agent asked something.
+Every icon SHALL have an accessible name and a tooltip. A ✕ icon SHALL keep its
+kind's own action, never another kind's: Dismiss on a question, Mark reviewed on
+finished work, and none on a blocked agent. Every item's message SHALL show its
+first two lines with a visible more while it runs longer, and SHALL expand in place
+to the whole message, links included, on more or a tap on the clipped text (a
+link opens rather than expands), and less SHALL clip it again. Keyboard focus
+entering a clipped message SHALL reveal its content without moving focus;
+collapsing with less SHALL keep focus on that control. Expanding SHALL
+move nothing above the item and keep its answer controls on it; hovering its agent's name
+SHALL show the agent's card with its latest message. A question SHALL be
+answerable with its options as quick replies or typed text (one answer field
+when it offers no options), or dismissed. A blocked agent's own
 question SHALL be answered with Chat's checked answer and show Chat's receipt,
 including an unconfirmed answer's warning and the agent's Terminal; a prompt
 Chat cannot answer SHALL offer the Terminal, never Chat. Finished work SHALL
@@ -1814,7 +1827,7 @@ as the current stop's report. An answer's receipt, question and pending result
 SHALL belong to the exact pane owner and agent session: a new session on the
 same pane SHALL start without them. Blocked and finished items SHALL come from
 the hosts the Hosts filter admits. A Needs you counter in the existing top bar (in the view picker in Zen; a phone's top bar
-outside Zen, never an agent window's bar) SHALL count open questions and the admitted blocked agents and
+outside Zen, as an inbox icon with a count badge, hidden at zero, right after the view's name, never an agent window's bar) SHALL count open questions and the admitted blocked agents and
 open the tab; Town's reception letters, Desk's Answer and Board's attention
 badges SHALL open it at their item. The tab SHALL show and observe one bounded
 page of items at a time, with actions to show the next and earlier pages, and
@@ -1828,6 +1841,12 @@ open the next agent that needs the user.
 - **WHEN** three agents in two hosts are blocked and the user presses Town's next-agent key repeatedly
 - **THEN** Town opens each agent's exact pane in age order and the Needs you
   tab reflects each answer without reordering unrelated entries
+
+#### Scenario: Read a long question before answering
+
+- **WHEN** an agent asks a question longer than two lines, with a link to its pull request
+- **THEN** its Needs you item shows the first two lines with more, a tap shows the whole question in
+  place with the link working, its answer controls and Dismiss stay on the item, and the agent's name opens its Chat
 
 #### Scenario: Open Needs you at an agent past the limit
 
