@@ -4043,7 +4043,9 @@ countdown the user chooses (10 s, 30 s by default, 1 min or 2 min, saved on the
 World service). The countdown is reversible staging held in the service's memory:
 it survives reloading or leaving World, and a service restart SHALL cancel every
 countdown without closing anything. Entries in the same waiting trip SHALL share
-one countdown; a drop before pull-away restarts it in full for every member.
+one countdown. A join restarts the trip countdown at the longer of the trip's
+own countdown and the current setting; a new setting otherwise applies from the
+next trip.
 Opening the bin, or holding Town's bus, SHALL pause every countdown until the lid
 is closed or the bus is let go. Taking an agent out SHALL close nothing and
 return it to its place. Entry IDs and revisions SHALL name their service run, so
@@ -4117,7 +4119,7 @@ the final stop ahead during the bus's stand there SHALL NOT move the bus: it
 leaves after its usual stand. The bus SHALL sound a short horn
 as it reaches its final stop, under this device's sound setting. An agent sent
 while a bus has not yet pulled away SHALL board it, and the service SHALL restart
-the countdown in full for everyone on that bus. Drops from Board, Desk and Town SHALL
+the countdown for everyone on that bus by that join rule. Drops from Board, Desk and Town SHALL
 use that same service rule without requiring a browser join hint. An agent sent
 after it pulled away SHALL wait for the next bus with its own countdown. Its
 pull-away SHALL come from the bus's mover character shared by Town's movers.

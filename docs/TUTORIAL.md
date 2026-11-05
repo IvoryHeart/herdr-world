@@ -706,8 +706,10 @@ board), and stops at the last one with agents, sounding its horn, to wait until
 0:00. Each stop takes about a second; in a big town on a short countdown the
 stops are shorter, so the bus still arrives in time. Sending another
 agent from Board, Desk or Town before the bus pulls away starts the shared
-countdown again for both; the bus never slows down for it, so it arrives early
-and waits longer. An agent sent after the bus has left its stop waits at the
+countdown again for both, at the longer of the bus's own countdown and the
+current **Bin countdown** setting (a changed setting otherwise applies from the
+next bus). The bus never slows down for it, so it arrives early and waits
+longer. An agent sent after the bus has left its stop waits at the
 next stop ahead instead. If you put back everyone at the bus's last stop, the
 bus drives off, then fades back in at the last stop that still has riders. If
 you put back every earlier rider, a late rider returns to its own room's stop

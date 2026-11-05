@@ -191,8 +191,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     at their stops and it stops at the last one with a short horn,
     waiting there until 0:00 (eight to a bus; more ride a second bus close
     behind). An agent who boards
-    before the bus pulls away starts the countdown again in full for everyone
-    on it. Board and Desk drops reset that same service countdown. The bus never
+    before the bus pulls away starts the countdown again for everyone on it,
+    at the longer of the bus's own countdown and the current **Bin countdown**
+    (a changed setting otherwise applies from the next bus). Board and Desk drops reset that same service countdown. The bus never
     slows for a reset: it arrives early and waits longer. An agent sent after
     the bus left its stop waits at the next stop ahead. Put back everyone at
     the last stop and the bus drives off, then fades in at the last stop that still

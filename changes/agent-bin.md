@@ -5,7 +5,8 @@
   take it back first. Town's bin has London bus stops at its crossings, where a
   red double-decker drives in, sounds its horn at the stop and collects the
   agents waiting there (a drop from Board, Desk or Town restarts the shared
-  countdown for everyone on it, while the bus keeps its original approach
+  countdown for everyone on it, at the longer of the bus's own countdown and
+  the current setting, while the bus keeps its original approach
   speed and waits longer at the stop); when the countdown ends it drives away, and you can still
   stop it until it leaves the map. Nothing is
   closed before then or before you choose Close now, and a World restart cancels
