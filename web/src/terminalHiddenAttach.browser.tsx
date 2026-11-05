@@ -41,6 +41,9 @@ const client: ConnectionClient = {
   call: async (method, params = {}) => {
     calls.push({ method, params: params as Record<string, unknown> });
     if (method === "pane.layout") return paneLayoutReply();
+    // An endpoint attach advertises pane focus, which claims the size.
+    if (method === "terminal.attach")
+      return { endpoint: { methods: ["pane.focus"], capabilities: [] } };
     return {};
   },
 };
@@ -210,7 +213,19 @@ try {
   current = client;
   clientCurrent = true;
 
-  // Shown: it fits its container and resizes the pane to what is visible.
+  // An old World page pinned the pane at 13×1. A (re)loaded hidden view does
+  // not adopt that squeeze: it attaches at this browser's last good size.
+  mountHidden(sized(13, 1));
+  attach = await hiddenAttach("squeezed layout");
+  check(
+    attach.cols === 159 && attach.rows === 45,
+    `a reload re-pinned the squeezed size, got ${attach.cols}×${attach.rows}`,
+  );
+  for (let index = 0; index < 10; index += 1) await frame();
+  calls.length = 0;
+
+  // Shown: it fits its container, resizes the pane to what is visible and
+  // then claims that size, so a pane another client squeezed recovers.
   host.style.display = "flex";
   host.style.inset = "auto";
   host.style.width = "60vw";
@@ -231,6 +246,16 @@ try {
   check(
     screen.width <= host.getBoundingClientRect().width + 1,
     "the shown terminal overflows its container",
+  );
+  await until(() => of("terminal.focus").length > 0, "shown claim");
+  // The claim itself, not a later re-attach (the watchdog's, as frames
+  // never arrive here), is what follows the resize.
+  const order = calls.map((call) => call.method);
+  const claimed = order.indexOf("terminal.focus");
+  check(
+    order.indexOf("terminal.resize") < claimed &&
+      !order.slice(0, claimed).includes("terminal.attach"),
+    `the shown terminal did not claim its size: ${order.join(", ")}`,
   );
 } catch (error) {
   failures.push(String(error));

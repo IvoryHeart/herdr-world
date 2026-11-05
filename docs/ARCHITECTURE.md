@@ -339,7 +339,12 @@ applies every attach's size to the pane for all of its viewers, so a terminal
 that is not displayed (World's parked creation endpoint, or a window showing
 Chat) attaches at the pane's current size from the tab layout, or from one
 `pane.layout` read, instead of its unfitted xterm size; it resizes the pane
-only once shown and fitted. The service's popup observer is an app client and
+only once shown and fitted. Herdr sizes a terminal by the client that last
+attached or focused it, so a hidden terminal never adopts a squeezed size
+(below 40×10, `shared/terminalSize.ts`): it uses this browser's last good size
+for it, or 100×30. A terminal shown after being hidden sends its fitted size and
+then focuses the pane, claiming the size back from whichever client squeezed it.
+The service's popup observer is an app client and
 connects at the session's current app size (`pane.layout` area plus offset),
 since an app client's handshake resizes every pane. When layout
 is available, the browser also supplies `surface_cols`/`surface_rows` for the

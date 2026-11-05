@@ -1668,9 +1668,12 @@ export function TerminalView({
       }
       selectionBounds = bounds;
       const size = fitVisibleTerminal();
-      if (!size) return;
+      if (!size) return attachSize.hide();
       if (attachSize.shown()) return setSizeRead((value) => value + 1);
-      resizeSync.schedule(size);
+      if (!attachSize.fitted(size)) return resizeSync.schedule(size);
+      // Shown after being hidden: claim the size (Herdr follows the last focus).
+      resizeSync.sendNow(size);
+      focusTerminalEndpoint(connectionClient, attachedRef.current ?? undefined);
     });
     ro.observe(container);
 

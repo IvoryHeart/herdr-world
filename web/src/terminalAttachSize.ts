@@ -1,8 +1,14 @@
+import { terminalSqueezed } from "../../shared/terminalSize";
 import type { ConnectionClient } from "./api";
 import { terminalPaneSize, type TerminalSize } from "./terminalResize";
 import type { PaneLayout } from "./types";
 
 type Ref<T> = { readonly current: T };
+
+/** The size a squeezed terminal gets when this browser has seen no better. */
+export const TERMINAL_DEFAULT_SIZE: TerminalSize = { cols: 100, rows: 30 };
+/** The last unsqueezed size per connection and terminal, in this browser. */
+const lastGood = new Map<string, TerminalSize>();
 /** One pane.layout read, valid only for the client and pane that made it. */
 type LayoutRead = {
   terminalId: string;
@@ -20,10 +26,16 @@ type LayoutRead = {
  * from the store's layout of its tab or else from one `pane.layout` read;
  * only if that read fails does it use the xterm's size, so the attach (and
  * its endpoint) is never withheld. A shown terminal uses its fitted size.
+ *
+ * Herdr sizes a terminal by the client that attached or focused it last, so
+ * World never adopts a squeezed size: below the floor a hidden terminal uses
+ * the last good size, or the default. And a terminal shown after being hidden
+ * claims its fitted size (`fitted`), healing a pane another client squeezed.
  */
 export class TerminalAttachSize {
   private read: LayoutRead | null = null;
   private waiting = false;
+  private hidden = false;
 
   constructor(
     private readonly view: {
@@ -73,8 +85,12 @@ export class TerminalAttachSize {
       };
     }
     this.waiting = !size;
+    this.hidden = !fitted;
     if (size) {
       this.read = null;
+      const key = `${client.connectionId}\0${terminalId}`;
+      if (!terminalSqueezed(size)) lastGood.set(key, size);
+      else if (!fitted) size = lastGood.get(key) ?? TERMINAL_DEFAULT_SIZE;
       return { ...size, layout, relayLayout: fitted ? stored : layout };
     }
     if (read || !paneId) return null;
@@ -115,5 +131,26 @@ export class TerminalAttachSize {
     const waiting = this.waiting;
     this.waiting = false;
     return waiting;
+  }
+
+  /** The terminal is not displayed (its container has no size). */
+  hide() {
+    this.hidden = true;
+  }
+
+  /**
+   * The terminal is displayed at `size`. Returns whether it was hidden until
+   * now, so it must claim its size rather than only resize.
+   */
+  fitted(size: TerminalSize) {
+    const terminalId = this.view.desiredTerminalRef.current;
+    if (terminalId && !terminalSqueezed(size))
+      lastGood.set(
+        `${this.view.currentClientRef.current.connectionId}\0${terminalId}`,
+        size,
+      );
+    const claim = this.hidden;
+    this.hidden = false;
+    return claim;
   }
 }
