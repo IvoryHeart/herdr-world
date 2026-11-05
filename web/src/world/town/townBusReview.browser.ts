@@ -4,7 +4,36 @@ import type { createFakeBin } from "../testing/fakeBin";
 import { townBusSender } from "./useTownBus";
 import { setTabPinned } from "../../tabPins";
 import type { WorldLeafObject } from "../worldObject";
-import { townBusClockSample } from "./townBusClock.browser";
+import { TOWN_TILE as T } from "./townLayout";
+import { townBusRoute, townBusTimetable } from "./scene/townBusRoute";
+
+/**
+ * Service clock samples for a 30 s trip on the stops Town shows: standing
+ * at its first stop (still arriving), and arrived at the terminus.
+ */
+function busClock(host: HTMLElement) {
+  const stops = [...host.querySelectorAll<HTMLElement>(".town-bus-stop")].map(
+    (e, order) => {
+      const [road, x] = e.dataset.stop!.split(":").map(Number);
+      return {
+        id: e.dataset.stop!,
+        order,
+        main: e.dataset.main === "true",
+        road: road!,
+        x: x!,
+        y: road!,
+        queueStart: 1,
+      };
+    },
+  );
+  const width = window.__HERDR_TOWN_RENDERER__!.layout!.width * T;
+  const table = townBusTimetable(townBusRoute(stops, width), 30_000);
+  const first = table.stops[0]!;
+  return {
+    before: Math.floor((first.arriveMs + first.leaveMs) / 2),
+    arrival: Math.ceil(table.stops.slice(-1)[0]!.arriveMs) + 1,
+  };
+}
 
 /** Owner sequence through actual Town and Board views sharing the browser store. */
 export async function checkBinViewHolds(
@@ -118,76 +147,6 @@ export async function checkBinViewHolds(
   for (const entry of [...store.get().entries]) await store.restore(entry.id);
   await switchTo("town");
   await waitFor(() => !!townBusSender.send, "Town bus sender did not remount");
-}
-
-/** Held controls must leave the full 44px waiting / 52px carry chip usable. */
-export async function checkHeldBusChip(
-  host: HTMLElement,
-  waitFor: (condition: () => boolean, message: string) => Promise<void>,
-  check: (condition: boolean, message: string) => void,
-) {
-  const key = host.querySelector<HTMLElement>(
-    '.world-semantic-target[data-kind="agent"]',
-  )!.dataset.targetKey!;
-  const store = worldBinStore(bridge);
-  await townBusSender.send!(key);
-  await store.pause();
-  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
-  for (let i = 0; i < 40; i++)
-    canvas.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
-    );
-  const chip = () => host.querySelector<HTMLElement>(".town-bus-chip");
-  await waitFor(
-    () => !!chip() && !!host.querySelector(".town-bus-held"),
-    "held bus chip did not appear after pan",
-  );
-  const probe = (size: number) => {
-    const e = chip()!,
-      r = e.getBoundingClientRect();
-    check(
-      r.height >= size &&
-        r.left >= 0 &&
-        r.top >= 0 &&
-        r.right <= innerWidth &&
-        r.bottom <= innerHeight,
-      `held ${size}px chip must fit the viewport`,
-    );
-    const hits = [0.1, 0.5, 0.9].flatMap((x) =>
-      [0.1, 0.5, 0.9].map((y) =>
-        e.contains(
-          document.elementFromPoint(r.left + r.width * x, r.top + r.height * y),
-        ),
-      ),
-    );
-    check(
-      hits.every(Boolean),
-      `held ${size}px chip must be topmost at all9points (got ${hits.filter(Boolean).length}/9) ${JSON.stringify({ chip: { x: r.x, y: r.y, width: r.width, height: r.height }, panels: [...host.querySelectorAll<HTMLElement>(".town-bus-held,.town-rail,.town-zoom")].map((p) => ({ className: p.className, rect: p.getBoundingClientRect().toJSON(), transform: getComputedStyle(p).transform, origin: getComputedStyle(p).transformOrigin })), tops: [0.1, 0.5, 0.9].flatMap((x) => [0.1, 0.5, 0.9].map((y) => document.elementFromPoint(r.left + r.width * x, r.top + r.height * y)?.className)) })}`,
-    );
-  };
-  probe(44);
-  // The fixture supplies the same carry-presence DOM port the real gesture
-  // produces; this is geometry evidence, not a native drag/admission claim.
-  const ghost = document.createElement("div");
-  ghost.className = "town-drag-ghost";
-  document.body.append(ghost);
-  canvas.dispatchEvent(
-    new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
-  );
-  await waitFor(
-    () => chip()?.dataset.carrying === "true",
-    "carry chip did not draw",
-  );
-  probe(52);
-  ghost.remove();
-  canvas.dispatchEvent(
-    new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
-  );
-  await waitFor(
-    () => chip()?.dataset.carrying === "false",
-    "carry presence did not clear",
-  );
-  for (const entry of [...store.get().entries]) await store.restore(entry.id);
 }
 
 /** Actual Town peek admissions; expiry is a service event, never a second UI add. */
@@ -367,10 +326,10 @@ export async function checkTownBusRemount(
   const store = worldBinStore(bridge);
   await townBusSender.send!(sameRoom[0]!);
   await waitFor(
-    () => !!host.querySelector(".town-bus-rider"),
+    () => store.get().entries.length === 1,
     "I2: initial rider did not reach its stop",
   );
-  const clock = townBusClockSample(host);
+  const clock = busClock(host);
   const first = bin.state.entries[0]!;
   Object.assign(first, {
     trip_duration_ms: 30_000,

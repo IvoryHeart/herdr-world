@@ -3,7 +3,7 @@ import type { BinEntry } from "../../../../shared/bin";
 import type { BoardPane, BoardTab } from "../board/boardModel";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { binDropOfAgent } from "./binTown";
-import { binPaneKey, boardBinCandidate, stagedPaneKeys } from "./useBoardBin";
+import { boardBinCandidate } from "./useBoardBin";
 
 const PINNED = new Set(["w1:t1"]);
 
@@ -49,17 +49,26 @@ test("Board: a pinned tab keeps its last pane when its sibling already waits in 
   const [p1, p2] = tab.panes;
   // Either pane alone may go: the tab keeps the other.
   expect(
-    boardBinCandidate(tab, p1, "board", new Set(), PINNED)!.drag.refusal,
+    boardBinCandidate(tab, p1, "board", [], PINNED)!.drag.refusal,
   ).toBeNull();
   // With p1 already staged, p2 is the pinned tab's last pane.
-  const waiting = stagedPaneKeys([staged("p1")]);
-  expect(waiting.has(binPaneKey("studio", 4, "p1", "term-p1"))).toBe(true);
+  const waiting = [staged("p1")];
   expect(
     boardBinCandidate(tab, p2, "board", waiting, PINNED)!.drag.refusal,
   ).toContain("pinned tab");
   // An unpinned tab may lose both.
   expect(
     boardBinCandidate(tab, p2, "board", waiting, new Set())!.drag.refusal,
+  ).toBeNull();
+  // A sibling staged under an older generation is not this pane's sibling.
+  expect(
+    boardBinCandidate(
+      tab,
+      p2,
+      "board",
+      [{ ...staged("p1"), connection_generation: 3 }],
+      PINNED,
+    )!.drag.refusal,
   ).toBeNull();
 });
 

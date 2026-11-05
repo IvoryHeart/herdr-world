@@ -10,7 +10,7 @@ import { bridge } from "../../api";
 import type { BinTarget } from "../../../../shared/bin";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 import type { BoardPane, BoardTab } from "../board/boardModel";
-import { boardBinCandidate, overBin, stagedPaneKeys } from "./useBoardBin";
+import { boardBinCandidate, overBin } from "./useBoardBin";
 import { useWorldBin, worldBinStore } from "./binStore";
 import { WorldBin } from "./WorldBin";
 import "./deskBin.css";
@@ -57,7 +57,7 @@ export function deskBinCandidate(
     { key: leaf.id, panes } as BoardTab,
     pane,
     "desk",
-    stagedPaneKeys(reservations),
+    reservations,
     pins,
   );
 }

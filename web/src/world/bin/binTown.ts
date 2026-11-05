@@ -1,8 +1,12 @@
-import type { BinReservation, BinTarget } from "../../../../shared/bin";
+import {
+  binEmptiesPinnedTab,
+  type BinReservation,
+  type BinTarget,
+} from "../../../../shared/bin";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type { OfficeAgent } from "../officeProjectionTypes";
 import { withOfficeReadModel } from "../officeReadModel";
-import { paneCloseBlockReason, tabPinsFor } from "../../tabPins";
+import { PINNED_TAB_LAST_PANE_CLOSE_REASON, tabPinsFor } from "../../tabPins";
 import type { BinDrop } from "./binStore";
 
 const terminalKey = (connectionId: string, terminalId: string) =>
@@ -73,7 +77,7 @@ export function binDropOfAgent(
   view: BinDrop["view"],
   /** Entries already waiting in the bin: their panes close first. */
   staged: readonly BinTarget[] = [],
-  pins?: ReadonlySet<string>,
+  pinnedTabs?: ReadonlySet<string>,
 ): BinDrop | { refusal: string } {
   const agent = office.roster.find(
     (entry) => entry.agent.key === agentKey,
@@ -83,33 +87,23 @@ export function binDropOfAgent(
   const room = office.rooms.find((item) => item.key === agent.roomKey);
   // A tab pin (kept in this browser) protects the tab's last pane.
   const desk = room?.desks.find((item) => item.key === agent.deskKey);
-  // Siblings already waiting in the bin count as gone.
-  const waiting = new Set(
-    staged
-      .filter(
-        (entry) =>
-          entry.connection_id === agent.currentPaneRef.connectionId &&
-          entry.connection_generation === agent.currentPaneRef.generation,
-      )
-      .map((entry) => `${entry.pane_id}\u0000${entry.terminal_id}`),
-  );
-  const pinned = paneCloseBlockReason(
-    agent.currentPaneRef.nativeId,
-    (desk?.paneDevices ?? [])
-      .filter(
-        (device) =>
-          device.paneRef.nativeId === agent.currentPaneRef.nativeId ||
-          !waiting.has(
-            `${device.paneRef.nativeId}\u0000${device.terminalRef.nativeId}`,
-          ),
-      )
-      .map((device) => ({
+  const pins = pinnedTabs ?? tabPinsFor(agent.currentPaneRef.connectionId);
+  const pinned =
+    pins.has(agent.currentTabRef.nativeId) &&
+    binEmptiesPinnedTab(
+      {
+        connection_id: agent.currentPaneRef.connectionId,
+        connection_generation: agent.currentPaneRef.generation,
+        pane_id: agent.currentPaneRef.nativeId,
+      },
+      (desk?.paneDevices ?? []).map((device) => ({
         pane_id: device.paneRef.nativeId,
-        tab_id: agent.currentTabRef.nativeId,
+        terminal_id: device.terminalRef.nativeId,
       })),
-    pins ?? tabPinsFor(agent.currentPaneRef.connectionId),
-  );
-  if (pinned) return { refusal: pinned.replace(/\.$/u, "") };
+      staged,
+    );
+  if (pinned)
+    return { refusal: PINNED_TAB_LAST_PANE_CLOSE_REASON.replace(/\.$/u, "") };
   const workspace = room?.workspaceRef;
   const { currentPaneRef: pane, currentTabRef: tab } = agent;
   const terminal = agent.currentTerminalRef;
@@ -129,6 +123,6 @@ export function binDropOfAgent(
     terminal_id: terminal.nativeId,
     label: agent.agentName ?? agent.displayLabel,
     view,
-    preserve_tab: (pins ?? tabPinsFor(pane.connectionId)).has(tab.nativeId),
+    preserve_tab: pins.has(tab.nativeId),
   };
 }

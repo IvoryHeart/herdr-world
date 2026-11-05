@@ -9,9 +9,9 @@
  * stop it reaches, empty or not, for the same short dwell, braking in and
  * pulling away over the same ramp: one timetable per trip, fixed by the
  * layout and the trip's countdown alone, so no boarding, reset or Put back
- * changes its speed or moves it. It holds at the last occupied stop with its
- * doors open until its departure, and never reaches the stops after it. It is
- * drawn on every street it drives. World px.
+ * changes its speed or moves it. Every trip runs the whole route to its last
+ * stop, the terminus, and waits there with its doors open until its
+ * departure. It is drawn on every street it drives. World px.
  */
 
 import { TOWN_TILE as T } from "../townLayout";
@@ -36,8 +36,6 @@ export const BUS_STOP_SHARE = 0.5;
 export const BUS_RAMP = 96;
 /** Canonical distance of a brake into a stop (two ramps' worth). */
 export const BUS_BRAKE = 2 * BUS_RAMP;
-/** Space between buses of a convoy. */
-export const BUS_GAP = 6;
 
 export type TownBusRouteStop = {
   id: string;
@@ -209,7 +207,7 @@ export type TownBusRiderInput = {
 };
 
 export type TownBusRiderPlan = TownBusRiderInput & {
-  /** Where it waits: its home, or the next stop ahead if the bus had left it. */
+  /** Where it waits: its home, or the terminus if the bus had left home. */
   stop: string;
 };
 
@@ -220,18 +218,15 @@ export type TownBusPlan = {
   speed: number;
   dwellMs: number;
   riders: TownBusRiderPlan[];
-  /** Occupied stops in road order. */
-  occupied: TownBusRouteStop[];
+  /** The route's last stop: every trip's bus waits there until 0:00. */
   final: TownBusRouteStop | null;
 };
 
 /**
- * Who waits where, by replaying the joins in order (a pure function of the
- * entries, so every observer and every remount agrees). A rider's stop is its
- * home, unless the bus is already holding at its final stop past the dwell
- * (that stop) or had left its home when it joined (the first stop the bus has
- * not yet left). A rider with no earlier rider left waits at home regardless:
- * the bus goes back for it.
+ * Who waits where. A rider waits at home unless the bus had already pulled
+ * away from home on the timetable when it joined; then it waits at the
+ * terminus, where the bus makes its final wait. The riders never change
+ * where the bus is.
  */
 export function townBusPlan(input: {
   route: TownBusRoute;
@@ -240,39 +235,24 @@ export function townBusPlan(input: {
 }): TownBusPlan {
   const { route } = input;
   const timetable = townBusTimetable(route, input.tripDurationMs);
-  const slots = new Map(timetable.stops.map((slot) => [slot.id, slot]));
+  const leaves = new Map(
+    timetable.stops.map((slot) => [slot.id, slot.leaveMs]),
+  );
   const byId = new Map(route.stops.map((stop) => [stop.id, stop]));
-  const fallback = route.stops.find((stop) => stop.main) ?? route.stops[0];
-  const occupied = new Set<TownBusRouteStop>();
-  const finalOf = () =>
-    [...occupied].reduce<TownBusRouteStop | null>(
-      (last, stop) => (!last || stop.at > last.at ? stop : last),
-      null,
-    );
-  const riders = [...input.riders]
-    .sort((a, b) => a.joinedMs - b.joinedMs || (a.entryId < b.entryId ? -1 : 1))
-    .map((rider) => {
-      const home = byId.get(rider.home) ?? fallback!;
-      const t = Math.max(0, rider.joinedMs);
-      const final = finalOf();
-      let stop = home;
-      // No earlier remaining rider can reconstruct a late rider's old pickup.
-      // The approved orphan rule places it at home, then replays later joins.
-      if (!final) stop = home;
-      else if (t >= slots.get(final.id)!.leaveMs) stop = final;
-      else if (t >= slots.get(home.id)!.leaveMs)
-        stop = route.stops.find((s) => slots.get(s.id)!.leaveMs > t) ?? final;
-      occupied.add(stop);
-      return { ...rider, stop: stop.id };
-    });
+  const main = route.stops.find((stop) => stop.main) ?? route.stops[0];
+  const final = route.stops[route.stops.length - 1] ?? null;
+  const riders = input.riders.map((rider) => {
+    const home = byId.get(rider.home) ?? main!;
+    const stop = rider.joinedMs < leaves.get(home.id)! ? home : final!;
+    return { ...rider, stop: stop.id };
+  });
   return {
     route,
     timetable,
     speed: timetable.speed,
     dwellMs: timetable.dwellMs,
     riders,
-    occupied: [...occupied].sort((a, b) => a.at - b.at),
-    final: finalOf(),
+    final,
   };
 }
 
@@ -284,26 +264,23 @@ export type TownBusPosition = {
   y: number;
   /** Px per ms now (0 standing). */
   speed: number;
-  /** Come to a stand at its final stop. */
+  /** Come to a stand at the terminus. */
   arrived: boolean;
-  /** On a street it drives, up to its final stop's: drawn; else off the map. */
+  /** On the map: drawn; else between streets, off the map. */
   visible: boolean;
-  /** The stop it stands at, doors open (a dwell or its final hold). */
+  /** The stop it stands at, doors open (a dwell or its final wait). */
   atStop: string | null;
 };
 
 /**
- * Bus `index` of the convoy (0 leads), `elapsedMs` into the trip. The convoy
- * moves and stands as one, BUS_W + BUS_GAP apart; once the timetable would
- * take it on from its final stop, it holds there.
+ * The trip's bus `elapsedMs` into the trip, from the layout and the trip's
+ * countdown alone: it runs the timetable to the terminus and waits there.
  */
 export function townBusPosition(
   plan: TownBusPlan,
   elapsedMs: number,
-  index = 0,
 ): TownBusPosition {
   const { route, final } = plan;
-  const back = index * (BUS_W + BUS_GAP);
   const t = Math.max(0, elapsedMs);
   const slot = final
     ? plan.timetable.stops.find((s) => s.id === final.id)!
@@ -312,7 +289,7 @@ export function townBusPosition(
     slot && t >= slot.leaveMs
       ? { at: slot.at, speed: 0, standing: slot.id }
       : townBusAt(plan.timetable, t);
-  const at = now.at - back;
+  const { at } = now;
   const leg = Math.max(
     0,
     Math.min(route.legs.length - 1, Math.floor(at / route.legLength)),
@@ -325,7 +302,7 @@ export function townBusPosition(
     y: route.legs[leg]?.y ?? 0,
     speed: now.speed,
     arrived: slot !== null && t >= slot.arriveMs,
-    visible: x < route.width && leg <= (final?.leg ?? -1),
+    visible: x < route.width,
     atStop: now.standing,
   };
 }

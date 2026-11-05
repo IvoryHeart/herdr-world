@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { bridge } from "../../api";
-import type { BinEntry, BinTarget, BinView } from "../../../../shared/bin";
-import { paneCloseBlockReason, tabPinsFor } from "../../tabPins";
+import {
+  binEmptiesPinnedTab,
+  type BinEntry,
+  type BinTarget,
+  type BinView,
+} from "../../../../shared/bin";
+import { PINNED_TAB_LAST_PANE_CLOSE_REASON, tabPinsFor } from "../../tabPins";
 import type { BoardPane, BoardTab } from "../board/boardModel";
-import { playBinSound } from "./binSounds";
 import { useWorldBin, worldBinStore, type BinDrop } from "./binStore";
 import { WorldBin, type BinDrag } from "./WorldBin";
 
@@ -17,8 +21,8 @@ export function boardBinCandidate(
   tab: BoardTab,
   pane: BoardPane | undefined,
   view: BinView,
-  /** Panes already waiting in the bin (binPaneKey): they will close first. */
-  staged: ReadonlySet<string> = new Set(),
+  /** Panes already waiting in the bin: they will close first. */
+  staged: readonly BinTarget[] = [],
   pins: ReadonlySet<string> = pane
     ? tabPinsFor(pane.leaf.connectionId)
     : new Set(),
@@ -26,33 +30,25 @@ export function boardBinCandidate(
   if (!pane) return null;
   const leaf = pane.leaf;
   const label = leaf.agentName || leaf.agentLabel || leaf.label || "Agent";
-  // A pin keeps a tab's last pane: siblings already staged count as gone.
-  const pinned = paneCloseBlockReason(
-    leaf.nativeId,
-    tab.panes
-      .filter(
-        (item) =>
-          item === pane ||
-          !staged.has(
-            binPaneKey(
-              item.leaf.connectionId,
-              item.leaf.generation,
-              item.leaf.nativeId,
-              item.leaf.terminalId,
-            ),
-          ),
-      )
-      .map((item) => ({
+  const pinned =
+    pins.has(leaf.tabId) &&
+    binEmptiesPinnedTab(
+      {
+        connection_id: leaf.connectionId,
+        connection_generation: leaf.generation,
+        pane_id: leaf.nativeId,
+      },
+      tab.panes.map((item) => ({
         pane_id: item.leaf.nativeId,
-        tab_id: item.leaf.tabId,
+        terminal_id: item.leaf.terminalId,
       })),
-    pins,
-  );
+      staged,
+    );
   const refusal =
     leaf.stale || !leaf.actionable
       ? UNREACHABLE_BIN_REASON
       : pinned
-        ? pinned.replace(/\.$/u, "")
+        ? PINNED_TAB_LAST_PANE_CLOSE_REASON.replace(/\.$/u, "")
         : null;
   return {
     tabKey: tab.key,
@@ -75,26 +71,6 @@ export function boardBinCandidate(
     },
   };
 }
-
-/** One staged pane, as pin admission compares them. */
-export const binPaneKey = (
-  connectionId: string,
-  generation: number,
-  paneId: string,
-  terminalId: string,
-) => `${connectionId}\u0000${generation}\u0000${paneId}\u0000${terminalId}`;
-
-export const stagedPaneKeys = (entries: readonly BinTarget[]) =>
-  new Set(
-    entries.map((entry) =>
-      binPaneKey(
-        entry.connection_id,
-        entry.connection_generation,
-        entry.pane_id,
-        entry.terminal_id,
-      ),
-    ),
-  );
 
 /** Whether a screen point is over the bin (with a forgiving margin). */
 export function overBin(x: number, y: number) {
@@ -178,19 +154,12 @@ export function useBoardBin({
       toast("That agent has already closed or moved.");
       return;
     }
-    candidate = boardBinCandidate(
-      tab,
-      pane,
-      view,
-      stagedPaneKeys(store.reservedTargets()),
-    )!;
+    candidate = boardBinCandidate(tab, pane, view, store.reservedTargets())!;
     if (candidate.drag.refusal) {
-      playBinSound("refuse");
       setShake((n) => n + 1);
       toast(`${candidate.drag.refusal}.`);
       return;
     }
-    playBinSound("drop");
     void store
       .add(candidate.drop)
       .catch((error) =>
@@ -222,7 +191,7 @@ export function useBoardBin({
             tab,
             paneFor(tab, pressed.current),
             view,
-            stagedPaneKeys(store.reservedTargets()),
+            store.reservedTargets(),
           )
         : null;
       hotRef.current = false;
@@ -276,7 +245,7 @@ export function useBoardBin({
         tab,
         paneFor(tab, paneKey),
         view,
-        stagedPaneKeys(store.reservedTargets()),
+        store.reservedTargets(),
       );
       if (candidate) put(candidate);
     },

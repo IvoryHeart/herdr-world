@@ -45,6 +45,34 @@ export type BinTarget = {
   terminal_id: string;
 };
 
+/**
+ * The one pinned-tab rule, for the service's admission and both browser
+ * pre-checks: a pinned tab keeps its last pane, and panes already staged in
+ * the bin on the same connection generation count as gone. True when no
+ * other pane of the target's pinned tab would survive closing it.
+ */
+export function binEmptiesPinnedTab(
+  target: Pick<
+    BinTarget,
+    "connection_id" | "connection_generation" | "pane_id"
+  >,
+  /** Every pane of the target's tab. */
+  tabPanes: readonly { pane_id: string; terminal_id: string }[],
+  staged: readonly BinTarget[],
+): boolean {
+  const gone = (pane: { pane_id: string; terminal_id: string }) =>
+    staged.some(
+      (entry) =>
+        entry.connection_id === target.connection_id &&
+        entry.connection_generation === target.connection_generation &&
+        entry.pane_id === pane.pane_id &&
+        entry.terminal_id === pane.terminal_id,
+    );
+  return !tabPanes.some(
+    (pane) => pane.pane_id !== target.pane_id && !gone(pane),
+  );
+}
+
 export type BinEntry = BinTarget & {
   id: string;
   /** The agent's name, for the bin, the bus and the receipt. */

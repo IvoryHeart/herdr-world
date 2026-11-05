@@ -185,20 +185,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the top of the screen, lighting up under your finger (the carry hint names
     it), and the town does not edge-pan beside it.
     The agent leaves its desk and waits with a box. One red double-decker runs
-    the route street by street from the left edge, on a timetable fixed when
-    it sets off, stopping briefly at every stop (about a second, shorter in a
-    big town on a short countdown) whether or not anyone waits; riders board
-    at their stops and it stops at the last one with a short horn,
-    waiting there until 0:00 (eight to a bus; more ride a second bus close
-    behind). An agent who boards
-    before the bus pulls away starts the countdown again for everyone on it,
-    at the longer of the bus's own countdown and the current **Bin countdown**
-    (a changed setting otherwise applies from the next bus). Board and Desk drops reset that same service countdown. The bus never
-    slows for a reset: it arrives early and waits longer. An agent sent after
-    the bus left its stop waits at the next stop ahead. Put back everyone at
-    the last stop and the bus drives off, then fades in at the last stop that still
-    has riders. If every earlier rider is put back, a late rider returns with the
-    bus to its own room's stop, even if its assigned next stop was still ahead.
+    the whole route street by street from the left edge, on a timetable fixed
+    when it sets off, stopping briefly at every stop (about a second, shorter
+    in a big town on a short countdown) whether or not anyone waits; riders
+    board at their stops, and it always ends at the town's last stop, waiting
+    there until 0:00, even when everyone boarded earlier. It seats eight and
+    shows the rest as "+N". An agent who boards before the bus pulls away
+    starts the countdown again for everyone on it. Board and Desk drops reset
+    that same service countdown. The bus never slows or moves for a reset, a
+    new rider or a Put back: it arrives early and waits longer. An agent sent
+    after the bus left its own stop waits at the last stop instead.
     Reloading or opening another World
     reconstructs that same progress; holds freeze the trip as well as the
     countdown. Desk cards and directory rows offer **Close agent…**, and Desk
@@ -212,14 +208,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Enter or Space does the same. Board, Desk and Town show that same held tray
     with Put back, Close now, Close all now and **Resume**. A view switch keeps
     the hold visible; Resume closes the tray and continues from the held time.
-    Closing the holding browser window releases its hold. Riders can still be
-    dragged back to their desks; a bus whose last rider is put back drives on
-    off the map rather than vanishing. It shares the bin's
-    countdown, refusals and sounds; under reduced motion it stays parked for the
-    countdown and the departure time. When the stop is off screen or under the
-    asks rail, zoom buttons or held-bus panel, the red chip brings it back into
-    view. Its whole touch target stays clear of those controls while waiting
-    and while carrying an agent.
+    Closing the holding browser window releases its hold. A bus whose last
+    rider is put back drives on off the map rather than vanishing. It shares
+    the bin's countdown, refusals and close sound; under reduced motion it
+    stays parked at the last stop for the countdown and the departure time.
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it
@@ -427,8 +419,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     agent in a new tab and sends the note once it is ready.
   - **The bin** closes an agent after a countdown. Drag a card towards the
     bottom-right corner (bottom-left on a phone) and the bin rises; drop it in
-    and the card waits there while a ring drains (**Bin countdown** in the menu:
-    10 s, 30 s by default, 1 min or 2 min). Dragging from a pane row closes that
+    and the card waits there while a ring drains for 30 seconds. Dragging from a pane row closes that
     pane; the header closes the tab's agent. The countdown runs on the World
     service, so it carries on if you reload or leave; a World restart cancels it
     and closes nothing. After the countdown the ring keeps draining for the
@@ -441,8 +432,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     without dragging. Desk shows the bin while it holds anything. The close is
     checked against the same pane, terminal and host runtime first; the tab (or
     workspace) closes with its last pane, and nothing is sent if the agent
-    already moved or its host restarted. Sounds follow this device's chime
-    setting; motion stops under reduced motion.
+    already moved or its host restarted. A close plays a sound under this
+    device's chime setting; motion stops under reduced motion.
   - Drag a tab onto another workspace of its host to move it (asks first).
     On phones, hold a card still before dragging; adding a second finger switches
     to pinch zoom without committing a move. Settling pauses while you type in

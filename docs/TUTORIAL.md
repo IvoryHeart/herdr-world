@@ -684,8 +684,7 @@ to the intended workspace or pane. Read the target before using **Send**.
 
 Drag an agent's card towards the bottom-right corner (bottom-left on a phone,
 after holding the card still). A bin rises; drop the card in. The card leaves
-the board and the bin counts down (30 seconds unless you change **Menu → Bin
-countdown**), plus the 6 seconds Town's bus takes to drive away. Nothing
+the board and the bin counts down 30 seconds, plus the 6 seconds Town's bus takes to drive away. Nothing
 reaches Herdr until then, and it keeps running on the World service if you
 reload. To change your mind, click the bin:
 every timer pauses and the bin opens. Drag the card out, or choose **Put back**,
@@ -700,20 +699,16 @@ close is still being completed.
 In Town the bin is a London bus stop: there is one at every crossing, and the
 one nearest the middle of town is the main stop. Drag an agent to any stop (or
 use **Send to the bus stop** in its peek): it waits at the stop nearest its own
-room. One red double-decker runs the route for everyone, street by street from
-the left, stops briefly at every stop with its doors open (agents waiting there
-board), and stops at the last one with agents, sounding its horn, to wait until
-0:00. Each stop takes about a second; in a big town on a short countdown the
-stops are shorter, so the bus still arrives in time. Sending another
-agent from Board, Desk or Town before the bus pulls away starts the shared
-countdown again for both, at the longer of the bus's own countdown and the
-current **Bin countdown** setting (a changed setting otherwise applies from the
-next bus). The bus never slows down for it, so it arrives early and waits
-longer. An agent sent after the bus has left its stop waits at the
-next stop ahead instead. If you put back everyone at the bus's last stop, the
-bus drives off, then fades back in at the last stop that still has riders. If
-you put back every earlier rider, a late rider returns to its own room's stop
-with the bus, even if its assigned pickup stop was still ahead. Reloading or
+room. One red double-decker runs the whole route for everyone, street by
+street from the left, stops briefly at every stop with its doors open (agents
+waiting there board), and always ends at the town's last stop, where it waits
+until 0:00, even if everyone boarded earlier. Each stop takes about a second;
+in a big town on a short countdown the stops are shorter, so the bus still
+arrives in time. A bus seats eight and shows any more riders as "+N". Sending
+another agent from Board, Desk or Town before the bus pulls away starts the
+shared countdown again for both. The bus never slows down or moves for it, so
+it arrives early and waits longer. An agent sent after the bus has left its
+own stop waits at the last stop instead. Reloading or
 opening another World keeps the trip's progress, including time held still. If
 the bus's stop is off screen, the red chip at the screen's edge shows the next
 departure. While you carry an agent, the chip moves near the top of the screen
@@ -725,7 +720,7 @@ tap or click the bus (even while it is coming or leaving), any stop, or the
 chip, on a phone or desktop, to open that same tray and hold the countdown; in
 Town it shows each agent's stop.
 **Put back** returns a rider (an empty bus drives on off the map);
-**Resume** closes the tray and drives on. You can also drag a rider off the bus.
+**Resume** closes the tray and drives on.
 
 **You are done when:** you have dropped an agent in the bin or at the bus stop
 and taken it back out before the bus left the map.

@@ -286,9 +286,6 @@ export class WorldBinStore {
   resume() {
     return this.mutate("world.bin.resume");
   }
-  setCountdown(seconds: number) {
-    return this.mutate("world.bin.countdown.set", { countdown_s: seconds });
-  }
 
   /** Resolves with the accepted state, or throws the service's refusal. */
   private async mutate(method: string, params?: object) {

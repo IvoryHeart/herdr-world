@@ -4039,8 +4039,8 @@ first observed complete on a ready runtime after this change. It SHALL:
 ### Requirement: Agent bin
 
 World SHALL let the user close an agent's pane by dropping it in a bin, after a
-countdown the user chooses (10 s, 30 s by default, 1 min or 2 min, saved on the
-World service). The countdown is reversible staging held in the service's memory:
+countdown (the World service's bin setting, 30 s by default; World offers no
+control for it). The countdown is reversible staging held in the service's memory:
 it survives reloading or leaving World, and a service restart SHALL cancel every
 countdown without closing anything. Entries in the same waiting trip SHALL share
 one countdown. A join restarts the trip countdown at the longer of the trip's
@@ -4087,83 +4087,62 @@ street (meeting it from above or below), drawn in the world on that street's
 top pavement just right of the crossing, with buses using the lane beside it.
 Stops come from the shared layout's road model (stable IDs, road order: streets
 top to bottom, then left to right); the stop nearest the town centre SHALL be the
-main stop. An agent dropped on any stop or the chip, or sent from its peek,
-leaves its desk and SHALL wait at the stop nearest its room (ties: road order).
-There SHALL still be one bus per departure, one shared countdown and one tray.
-The bus SHALL run a canonical route: every street with a stop in road order,
-each from the map's left edge to its right edge, leaving by the right and
-re-entering from the left for the next street. It SHALL stand briefly with its
-doors open at every stop it reaches, whether or not anyone waits there, and
-riders at a stop SHALL board during that same stand, with no extra time. Its
-timetable SHALL be fixed by the layout and the trip's own original countdown
-alone: the whole route, standing at every stop in the town, takes the approach,
-which ends with 10 s left, or the first 3 s when the countdown is 10 s. Each
-stand SHALL last 1 s, or less when the stops would otherwise take more than half
-the approach (then half the approach shared equally, so every stop still gets
-one). The bus SHALL cruise between stops at the one speed that fits, and its
-position SHALL follow that timetable on the service's active trip time, so a
-boarding reset, a hold or a Put back never changes its speed or moves it. It
-SHALL be drawn on every street it drives and hold at the last occupied stop in
-road order, waiting there with its doors open until the countdown ends, never
-reaching the stops after it; then pull away, speeding up, and leave the map by
-the right edge exactly as the departure ends, which is when the close commits.
-A rider who joins before the bus has left the stop nearest its room SHALL wait
-there; one who joins after SHALL wait at the first stop the bus has not yet
-left, and one who joins while the bus holds at its final stop after its stand
-SHALL wait at that stop. When a Put back leaves
-the last occupied stop behind the bus, the bus SHALL wait at that stop exactly as
-a trip that always ended there; a live view MAY drive the old bus off and fade it
-in there. If every rider who joined before it is put back, a late rider SHALL
-wait at its own stop and the bus SHALL return for it. A late rider that moves
-the final stop ahead during the bus's stand there SHALL NOT move the bus: it
-leaves after its usual stand. The bus SHALL sound a short horn
-as it reaches its final stop, under this device's sound setting. An agent sent
-while a bus has not yet pulled away SHALL board it, and the service SHALL restart
-the countdown for everyone on that bus by that join rule. Drops from Board, Desk and Town SHALL
-use that same service rule without requiring a browser join hint. An agent sent
-after it pulled away SHALL wait for the next bus with its own countdown. Its
-pull-away SHALL come from the bus's mover character shared by Town's movers.
-The service SHALL publish the original trip duration and active elapsed time,
-excluding holds and independent of boarding resets, so a remount or new observer
-reconstructs the same route, stops and progress without a private
-previous-trajectory map.
-Each entry SHALL also carry optional `trip_joined_ms`: its active trip time at
-admission, sampled once from the same service clock, with zero for set-off riders.
-Boarding resets, holds and Put back of another rider SHALL NOT change that sample.
-Consumers of an older service that omits the field SHALL treat it as zero.
-This observation SHALL NOT change admission, countdown/departure deadlines,
-pause ownership or native close authority, and the service SHALL NOT need layout data.
-A bus seats eight; more riders
-SHALL ride following buses of the same departure, in convoy one bus length behind
-on the same route and clock, so every rider has a place on the map. While the stop where the bus waits (the main stop when nobody rides) is off
-screen, a chip at the nearest screen edge SHALL show the next departure; a tap
-SHALL open the common tray and fly the camera to that stop. While an agent is carried the chip SHALL be a large drop
-target at the top of the free screen, where the town SHALL NOT edge-pan over
-or near it, and SHALL grow and highlight under the finger; it SHALL accept a
-drop only within its visible face. A carry over no room or desk SHALL name the bus stop in its hint.
-The town SHALL hold still while a carried agent is over a stop or the chip.
-A tap on any stop or its sign SHALL open the same tray as a tap on the bus; in
-Town the tray SHALL name each agent's stop. The main stop and stops with riders
-SHALL show the shared countdown; other stops show only their sign.
+main stop, and the last stop in road order SHALL be the terminus. An agent
+dropped on any stop or the chip, or sent from its peek, leaves its desk. There
+SHALL be one bus per departure, one shared countdown and one tray.
+Every trip's bus SHALL run the whole route: every street with a stop in road
+order, each from the map's left edge to its right edge, standing briefly with
+its doors open at every stop, whether or not anyone waits there, and ending at
+the terminus, where it SHALL wait with its doors open until the countdown ends,
+even when every rider boarded earlier. Its timetable SHALL be fixed by the
+layout and the trip's own original countdown alone: the whole route takes the
+approach, which ends with 10 s left, or the first 3 s when the countdown is
+10 s. Each stand SHALL last 1 s, or less when the stops would otherwise take
+more than half the approach (then half the approach shared equally). The bus
+SHALL cruise between stops at the one speed that fits, and its position SHALL
+follow that timetable on the service's active trip time and nothing else: a
+boarding reset, a hold, a join or a Put back SHALL NOT change its speed or move
+it. Then it SHALL pull away and leave the map by the right edge exactly as the
+departure ends, which is when the close commits.
+A rider SHALL wait at the stop nearest its room (ties: road order) when it joins
+before the bus has pulled away from that stop, including while the bus stands
+there, and otherwise at the terminus; riders board when the bus stands at their
+stop. The service SHALL publish the original trip duration, the active elapsed
+time (excluding holds, independent of boarding resets) and each entry's optional
+`trip_joined_ms` (its active trip time at admission, zero for set-off riders,
+treated as zero when absent), so a remount or new observer draws the same bus
+and stops without private history. This observation SHALL NOT change admission,
+countdown/departure deadlines, pause ownership or native close authority, and
+the service SHALL NOT need layout data.
+An agent sent while a bus has not yet pulled away SHALL board it, and the
+service SHALL restart the countdown for everyone on that bus by the join rule;
+drops from Board, Desk and Town SHALL use that same rule without a browser join
+hint. An agent sent after it pulled away SHALL wait for the next bus with its
+own countdown. A bus seats eight and SHALL show the riders beyond that as "+N".
+While the stop where the soonest bus waits is off screen, a chip at the nearest
+screen edge SHALL show the next departure; a tap SHALL open the common tray and
+bring that stop into view. While an agent is carried the chip SHALL be a large
+drop target near the top of the town, where the town SHALL NOT edge-pan over or
+near it, and SHALL grow and highlight under the finger; it SHALL accept a drop
+only within its visible face. A carry over no room or desk SHALL name the bus
+stop in its hint, and the town SHALL hold still while a carried agent is over a
+stop or the chip.
+A plain tap/click on any stop, its chip or a bus (approaching, waiting or
+departing), or Enter or Space on it, SHALL open the same tray component used by
+Board and Desk, naming each agent's stop, and hold the shared countdown; no long
+press SHALL be required. The main stop and stops with riders SHALL show the
+shared countdown; other stops show only their sign.
 A bus emptied before it leaves (Put back, Close now) SHALL drive on off the map
-by the right edge, never vanish in place; under reduced motion it MAY go at once. While the stop is off screen, or under the asks rail or
-the zoom controls or held-bus panel, its chip SHALL show and bring it into the
-free part of the screen. The full waiting and carry-chip touch regions SHALL
-remain clear of those panels. A plain tap/click on a bus with riders, approaching,
-waiting or departing, SHALL open the same tray component used by Board and Desk
-and hold the shared countdown; Enter or Space SHALL do the same. No long press
-SHALL be required, including on phones. Only the tray's anchor SHALL differ.
+by the right edge, never vanish in place; under reduced motion it MAY go at once.
 A held bin/bus SHALL show held state and Resume in every view, including after
 switching views or returning one of several riders. The logical common tray
 SHALL stay open across view switches. Resume (Close lid) SHALL close it and
 continue from the held time. A browser socket owns the hold it opens; closing
 that window SHALL release its hold, and SHALL NOT release another open owner's
-hold. An explicit Resume SHALL end the shared hold in every observer. Dragging
-a rider off a waiting, held or moving bus SHALL put them back at their desk.
-Drops, closes, returns and refusals SHALL
-play World's sounds under this device's sound setting. Under reduced motion the
-bus SHALL stay parked for the countdown and the departure time, then the close
-commits.
+hold. An explicit Resume SHALL end the shared hold in every observer.
+A close SHALL play World's one bin sound under this device's sound setting.
+Under reduced motion the bus SHALL stay parked at the terminus for the countdown
+and the departure time, then the close commits.
 
 #### Scenario: Change of mind
 
@@ -4214,11 +4193,11 @@ commits.
 
 #### Scenario: A reset never changes the bus's speed
 
-- **WHEN** boarding resets the clock to 0:30 while a bus is one second from its
-  final stop, including after an earlier reset, or another rider is put back
-- **THEN** its speed and position are unchanged, it reaches the stop about one
-  second later, sounds its arrival cue and waits about 29 seconds until 0:00;
-  another reset while parked only extends its wait
+- **WHEN** boarding resets the clock to 0:30 while a bus is one second from the
+  terminus, including after an earlier reset, or another rider is put back
+- **THEN** its speed and position are unchanged, it reaches the terminus about
+  one second later and waits about 29 seconds until 0:00; another reset while
+  parked only extends its wait
 
 #### Scenario: Agents wait at the stop nearest their rooms
 
@@ -4226,45 +4205,31 @@ commits.
   lower street are dropped on any stops
 - **THEN** each waits at the stop nearest its own room, the one bus stands at
   every stop in road order on one countdown, including stops and streets with
-  nobody waiting, boards A and then B, waits at B's stop, and tapping any stop
-  opens the one tray naming each agent's stop
+  nobody waiting, boards A and then B, waits at the terminus, and tapping any
+  stop opens the one tray naming each agent's stop
 
 #### Scenario: A big town on a short countdown
 
 - **WHEN** a town has more stops than one-second stands fit into half the
   approach, such as 19 stops on a 30 s or 10 s countdown
-- **THEN** the bus still stands at every stop it reaches, each stand is shorter
-  (about 0.5 s and 0.08 s), and it still reaches its final stop with 10 s left
-  (or within the first 3 s of a 10 s countdown)
+- **THEN** the bus still stands at every stop, each stand is shorter (about
+  0.5 s and 0.08 s), and it still reaches the terminus with 10 s left (or within
+  the first 3 s of a 10 s countdown)
 
 #### Scenario: A rider joins behind the bus
 
-- **WHEN** an agent is sent after the bus has left the stop nearest its room
-- **THEN** it waits at the next stop ahead (or the bus's final stop), and a
-  reload shows the same stops, riders and bus position; one sent while the bus
-  stands at that stop boards it there
-
-#### Scenario: The final stop's riders are put back
-
-- **WHEN** the bus waits at its final stop and every agent waiting there is put
-  back while riders from an earlier stop remain aboard
-- **THEN** the bus waits at that earlier stop as if it had always ended there
-  (a live view drives the old bus off and fades it in), and a reload shows the
-  same
+- **WHEN** an agent is sent after the bus has pulled away from the stop nearest
+  its room
+- **THEN** it waits at the terminus, the bus does not move, and a reload shows
+  the same stops, riders and bus position; one sent while the bus stands at that
+  stop boards it there
 
 #### Scenario: Catch the leaving bus
 
 - **WHEN** the countdown ends and the bus is driving away with an agent, and the
-  user presses and holds it before it leaves the map, then drags the agent off
+  user taps it before it leaves the map, then puts the agent back from the tray
 - **THEN** the bus stops where it is, nothing is closed, and the agent returns
   to their desk
-
-#### Scenario: Hold the bus
-
-- **WHEN** the user presses and holds the bus carrying an agent in Town, then
-  drags the agent off it
-- **THEN** the countdown pauses with the bus's doors open, the agent returns to
-  their desk, and the empty bus leaves without closing anything
 
 #### Scenario: The stop is off screen
 

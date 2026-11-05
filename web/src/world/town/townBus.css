@@ -41,8 +41,7 @@
 }
 
 .town-bus-stop,
-.town-bus-hold,
-.town-bus-rider {
+.town-bus-hold {
   position: absolute;
   padding: 0;
   border: 0;
@@ -52,14 +51,23 @@
   cursor: pointer;
 }
 
-.town-bus-rider {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  cursor: grab;
+/* Riders beyond the bus's eight seats. */
+.town-bus-extra {
+  position: absolute;
+  right: 2px;
+  top: -10px;
+  padding: 0 3px;
+  border: 1px solid #1c1722;
+  border-radius: 3px;
+  background: #fff7e0;
+  color: #1c1722;
+  font:
+    700 9px "Silkscreen",
+    ui-monospace,
+    monospace;
+  pointer-events: none;
 }
 
-.town-bus-rider:focus-visible,
 .town-bus-stop:focus-visible,
 .town-bus-hold:focus-visible {
   outline: 2px solid #ffd166;

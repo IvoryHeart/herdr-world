@@ -243,7 +243,6 @@ export function TownCanvas({
     layout: () => latest.current.layout,
     ready,
     rendererRef,
-    host: hostRef,
     view,
     hud: () => hud,
   });

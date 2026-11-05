@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from "react";
 import { bridge } from "../../api";
@@ -12,29 +11,18 @@ import type { BinEntry } from "../../../../shared/bin";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { binOutcomeText } from "../bin/WorldBin";
 import { WorldBinTray } from "../bin/WorldBinTray";
-import { playBinSound } from "../bin/binSounds";
+import { playBinCloseSound } from "../bin/binSounds";
 import { useWorldBin, worldBinStore } from "../bin/binStore";
 import {
   binDropOfAgent,
   binnedAgents,
   withoutBinnedAgents,
 } from "../bin/binTown";
-import {
-  inTownBusDropZone,
-  townBusRiderAt,
-  type TownBusScene,
-} from "./scene/townBus";
-import type { TownHud } from "./scene/townHud";
+import { inTownBusDropZone, type TownBusScene } from "./scene/townBus";
+import { townScreenAnchor, type TownHud } from "./scene/townHud";
 import type { TownSceneCamera } from "./scene/townSceneCamera";
 import { BUS_H, BUS_W, STOP_H, STOP_W } from "./townBusGeometry";
-import {
-  freeScreenArea,
-  insideScreenArea,
-  townPanels,
-  type ScreenRect,
-} from "./townBusReach";
 import { TownBusLayer } from "./townBusLayer";
-import { townBusChipStop, soonestTownBus } from "./townBusChip";
 import { townStopRooms } from "./townBusStop";
 import type { TownLayout } from "./townLayout";
 import type { TownMoveResult } from "./townMoves";
@@ -50,36 +38,37 @@ type Point = { x: number; y: number };
 const CHIP_DROP_TOP = 44;
 /** How near the chip, screen px, a carry holds the town still. */
 const CHIP_NEAR = 32;
+/** The chip's half size, screen px: it stays whole inside the town. */
+const CHIP_PAD = { x: 72, y: 32 };
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-type TownCamera = NonNullable<TownSceneCamera["camera"]>;
-
-/** The camera's view without its chrome insets, in screen pixels. */
-const viewArea = (camera: TownCamera): ScreenRect => {
-  const { width, height, inset } = camera.viewport;
-  return {
-    left: inset.left,
-    top: inset.top,
-    right: width - inset.right,
-    bottom: height - inset.bottom,
-  };
-};
-
-/** That stop, its sign and the bus standing beside it, in screen pixels. */
-const stopBox = (
-  camera: TownCamera,
-  l: TownLayout,
-  scene: TownBusScene | null | undefined,
+/**
+ * The soonest bus's clock, from the bin's own state rather than the last
+ * drawn frame, so a boarding shows at once: its wait left, or leaving.
+ */
+const soonestTownBus = (
   entries: readonly BinEntry[],
   remaining: (entry: BinEntry) => number,
-): ScreenRect => {
-  const { pole, foot } = townBusChipStop(l, scene, entries, remaining);
-  const a = camera.toScreen(pole - STOP_W / 2 - BUS_W - 4, foot - STOP_H - 16);
-  const b = camera.toScreen(pole + STOP_W, foot + 2 + BUS_H);
-  return { left: a.x, top: a.y, right: b.x, bottom: b.y };
+) => {
+  if (!entries.length) return null;
+  const left = Math.min(
+    ...entries.map((entry) => remaining(entry) - entry.departure_ms),
+  );
+  return { remaining: Math.max(0, left), leaving: left < 0 };
+};
+
+/** Where the soonest bus waits, its sign and the bus beside it, world px. */
+const waitBox = (scene: TownBusScene | null | undefined, l: TownLayout) => {
+  const at = scene?.next?.stop ?? {
+    x: l.busStop.x * 16 + 8,
+    y: l.busStop.y * 16 + 16,
+  };
+  const x = at.x - STOP_W / 2 - BUS_W - 4;
+  const y = at.y - STOP_H - 16;
+  return { x, y, width: at.x + STOP_W - x, height: at.y + 2 + BUS_H - y };
 };
 
 /** The mounted Town's way to send an agent to the stop (the peek's action). */
@@ -96,7 +85,6 @@ export function useTownBus({
   layout,
   ready,
   rendererRef,
-  host,
   view,
   hud,
 }: {
@@ -105,8 +93,6 @@ export function useTownBus({
   layout(): TownLayout | null;
   ready: boolean;
   rendererRef: RefObject<TownRendererHandle | null>;
-  /** The town's canvas, whose screen the camera and the chip share. */
-  host: RefObject<HTMLElement | null>;
   view: TownSceneCamera;
   hud(): TownHud;
 }) {
@@ -151,7 +137,6 @@ export function useTownBus({
       onDrawn: () => {
         for (const listener of drawnListeners.current) listener();
       },
-      onArrive: () => playBinSound("horn"),
     });
     layerRef.current = layer;
     renderer.setOverlay(layer);
@@ -179,7 +164,7 @@ export function useTownBus({
   useEffect(
     () =>
       store.onOutcome((outcome) => {
-        if (outcome.result === "closed") playBinSound("close");
+        if (outcome.result === "closed") playBinCloseSound();
         setToast(binOutcomeText(outcome));
       }),
     [store],
@@ -190,7 +175,6 @@ export function useTownBus({
     return () => window.clearTimeout(timer);
   }, [toast]);
   const report = (error: unknown) => {
-    playBinSound("refuse");
     setToast(error instanceof Error ? error.message : String(error));
   };
 
@@ -226,7 +210,6 @@ export function useTownBus({
     )[0];
     try {
       await store.add(soonest ? { ...drop, join: soonest.id } : drop);
-      playBinSound("drop");
       return "moved";
     } catch (error) {
       report(error);
@@ -271,90 +254,60 @@ export function useTownBus({
   useEffect(
     () =>
       hud().onFrame(() => {
-        // A carry shows the drag ghost; its absence ends a carry for sure.
-        const carried = document.querySelector(".town-drag-ghost") !== null;
-        const { setEdge, setCarrying } = setters.current;
-        setCarrying(carried);
+        const { setEdge } = setters.current;
+        const carried = shown.current.carrying;
         const camera = view.camera;
         const l = layout();
-        const canvas = host.current;
-        if (!camera || !l || !canvas) return;
+        if (!camera || !l) return;
         if (!carried && !latest.current.bin.entries.length) {
           setEdge(null);
           return;
         }
-        // Where the stop and its waiting bus can be pressed: not off screen,
-        // and not under the asks rail or the zoom column.
-        const free = freeScreenArea(viewArea(camera), townPanels(canvas));
+        const { width, height, inset } = camera.viewport;
         if (carried) {
-          // Carrying, the chip is the drop target: top centre of the free
-          // town, below the edge-pan band, away from the thumb's resting
-          // place and the system's bottom gestures, wherever the stop is.
+          // Carrying, the chip is the drop target: top centre of the town,
+          // below the edge-pan band, away from the thumb's resting place
+          // and the system's bottom gestures, wherever the stop is.
           setEdge({
-            x: Math.round((free.left + free.right) / 2 / 4) * 4,
-            y: Math.round((free.top + CHIP_DROP_TOP) / 4) * 4,
+            x: Math.round((inset.left + width - inset.right) / 2 / 4) * 4,
+            y: Math.round((inset.top + CHIP_DROP_TOP) / 4) * 4,
           });
           return;
         }
-        const box = stopBox(
+        // Off screen, the chip points at the stop from the nearest edge.
+        const box = waitBox(layerRef.current?.scene, l);
+        const anchor = townScreenAnchor(
+          { x: box.x + box.width / 2, y: box.y + box.height / 2 },
           camera,
-          l,
-          layerRef.current?.scene,
-          latest.current.bin.entries,
-          (entry) => store.remaining(entry),
+          {
+            left: inset.left + CHIP_PAD.x,
+            top: inset.top + CHIP_PAD.y,
+            right: width - inset.right - CHIP_PAD.x,
+            bottom: height - inset.bottom - CHIP_PAD.y,
+          },
         );
-        const padX = 72,
-          padY = 32;
-        const next = insideScreenArea(free, box)
-          ? null
-          : {
-              x:
-                Math.round(
-                  Math.min(
-                    free.right - padX,
-                    Math.max(free.left + padX, (box.left + box.right) / 2),
-                  ) / 4,
-                ) * 4,
-              y:
-                Math.round(
-                  Math.min(
-                    free.bottom - padY,
-                    Math.max(free.top + padY, (box.top + box.bottom) / 2),
-                  ) / 4,
-                ) * 4,
-            };
-        setEdge(next);
+        setEdge(
+          !anchor || anchor.visible
+            ? null
+            : {
+                x: Math.round(anchor.x / 4) * 4,
+                y: Math.round(anchor.y / 4) * 4,
+              },
+        );
       }),
-    [hud, view, layout, host],
+    [hud, view, layout],
   );
-  /** Fly the stop and its bus into the middle of the town's free area. */
+  /** Bring the stop where the soonest bus waits into view. */
   const flyToStop = () => {
-    const camera = view.camera;
     const l = layout();
-    const canvas = host.current;
-    if (!camera || !l || !canvas) return;
-    const free = freeScreenArea(viewArea(camera), townPanels(canvas));
-    const box = stopBox(
-      camera,
-      l,
-      layerRef.current?.scene,
-      latest.current.bin.entries,
-      (entry) => store.remaining(entry),
-    );
-    const focus = camera.focusPoint();
-    const z = camera.z;
-    // The stop box's centre, in world pixels, placed at the free area's centre.
-    const at = camera.toWorld(
-      (box.left + box.right) / 2,
-      (box.top + box.bottom) / 2,
-    );
-    camera.flyTo(
-      at.x - ((free.left + free.right) / 2 - focus.x) / z,
-      at.y - ((free.top + free.bottom) / 2 - focus.y) / z,
-      z,
-      0.6,
-    );
-    rendererRef.current?.invalidate("bus-stop");
+    if (!l) return;
+    view.focusTarget({
+      key: "bus-stop",
+      kind: "room",
+      label: "Bus stop",
+      rect: waitBox(layerRef.current?.scene, l),
+      canActivate: false,
+    });
   };
 
   /**
@@ -414,7 +367,6 @@ export function useTownBus({
   };
   const next = soonestTownBus(bin.entries, (entry) => store.remaining(entry));
   const putBack = (entry: BinEntry) => {
-    playBinSound("back");
     void store
       .restore(entry.id)
       .then(() => setToast(`${entry.label} is back at its desk.`), report);
@@ -496,7 +448,6 @@ export function useTownBus({
       paused={bin.paused}
       remaining={(entry) => store.remaining(entry)}
       onHold={openTray}
-      onPutBack={putBack}
     />
   );
 
@@ -516,7 +467,7 @@ const controlsKey = (scene: TownBusScene) =>
   [
     ...scene.buses.map(
       (bus) =>
-        `${bus.key}:${Math.round(bus.x)}:${bus.y}:${bus.phase}:${bus.doorsOpen}:${Math.round(bus.elapsed / 50)}:${bus.riders.length}`,
+        `${bus.key}:${Math.round(bus.x)}:${bus.y}:${bus.phase}:${bus.doorsOpen}:${Math.round(bus.elapsed / 50)}:${bus.riders.length}:${bus.extra}`,
     ),
     ...scene.stops.map(
       (stop) => `${stop.id}:${stop.riders}:${stop.waiting.length}`,
@@ -524,10 +475,9 @@ const controlsKey = (scene: TownBusScene) =>
   ].join("|");
 
 /**
- * The bus's controls in world space: a tap opens the common held tray,
- * Resume drives on, and dragging a rider away sends it back. A bus
- * driving away can still be stopped until it leaves the map: its road ahead
- * is one target, hit-tested against the bus as drawn when pressed.
+ * The bus's controls in world space: a tap on any stop or bus opens the
+ * common held tray (Put back and Resume live there). A bus driving away can
+ * still be stopped this way until it leaves the map.
  */
 function TownBusControls({
   scene: rendered,
@@ -537,7 +487,6 @@ function TownBusControls({
   paused,
   remaining,
   onHold,
-  onPutBack,
 }: {
   scene: TownBusScene | null;
   /** The scene as last drawn (it moves between React renders). */
@@ -548,16 +497,7 @@ function TownBusControls({
   paused: boolean;
   remaining(entry: BinEntry): number;
   onHold(): void;
-  onPutBack(entry: BinEntry): void;
 }) {
-  const drag = useRef<{
-    id: string;
-    x: number;
-    y: number;
-    moved: boolean;
-  } | null>(null);
-  /** A drag that just put a rider back; the click that follows does nothing. */
-  const dragged = useRef(false);
   // Follow the bus as drawn, frame by frame: only this component re-renders,
   // and only when what it shows (a bus's place, phase or clock) changed.
   const [, redraw] = useState(0);
@@ -579,72 +519,7 @@ function TownBusControls({
   );
   const scene = live() ?? rendered;
   if (!scene || !entries.length) return null;
-  const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const soon = soonestTownBus(entries, remaining);
-  const riderDown = (id: string, event: ReactPointerEvent) => {
-    event.stopPropagation();
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // A pointer that is no longer down: the drag ends on its own.
-    }
-    drag.current = { id, x: event.clientX, y: event.clientY, moved: false };
-  };
-  const riderMove = (event: ReactPointerEvent) => {
-    const d = drag.current;
-    if (d && Math.hypot(event.clientX - d.x, event.clientY - d.y) > 24)
-      d.moved = true;
-  };
-  const riderUp = (event: ReactPointerEvent) => {
-    const d = drag.current;
-    drag.current = null;
-    const entry = d && byId.get(d.id);
-    dragged.current = Boolean(d?.moved);
-    if (d?.moved)
-      window.setTimeout(() => {
-        dragged.current = false;
-      }, 0);
-    if (entry && d.moved) {
-      event.stopPropagation();
-      onPutBack(entry);
-    }
-  };
-  /**
-   * A press on a bus driving away: a rider under it is taken off (pressed
-   * for a drag); a simple tap opens the tray.
-   */
-  const roadDown = (left: number, event: ReactPointerEvent<HTMLElement>) => {
-    const box = event.currentTarget.getBoundingClientRect();
-    const drawn = live();
-    const scale = box.width / Math.max(1, event.currentTarget.offsetWidth);
-    const id =
-      drawn &&
-      townBusRiderAt(
-        drawn,
-        left + (event.clientX - box.left) / scale,
-        Number.parseFloat(event.currentTarget.style.top) +
-          (event.clientY - box.top) / scale,
-      );
-    if (id) riderDown(id, event);
-    else drag.current = null;
-  };
-  const roadUp = (event: ReactPointerEvent) => {
-    const d = drag.current;
-    drag.current = null;
-    const entry = d && byId.get(d.id);
-    if (entry && d.moved) {
-      dragged.current = true;
-      window.setTimeout(() => {
-        dragged.current = false;
-      }, 0);
-      event.stopPropagation();
-      onPutBack(entry);
-    }
-  };
-  const riders = [
-    ...scene.waiting,
-    ...scene.buses.filter((bus) => bus.doorsOpen).flatMap((bus) => bus.riders),
-  ];
   return (
     <div className="town-bus-controls">
       {scene.stops.map((stop) => {
@@ -687,85 +562,31 @@ function TownBusControls({
           </Fragment>
         );
       })}
-      {scene.buses.map((bus) => {
-        // Driving in or away: a stretch of its street around it, which holds
-        // the bus wherever it has got to.
-        const moving = bus.phase !== "waiting" && !paused;
-        const coming = moving && bus.phase === "arriving";
-        const leaving = moving && !coming;
-        const left = moving ? Math.max(0, bus.x - BUS_W) : bus.x;
-        return (
-          <button
-            key={bus.key}
-            type="button"
-            className="town-bus-hold"
-            data-phase={bus.phase}
-            data-trip-elapsed={bus.elapsed}
-            data-leaving={String(leaving)}
-            data-coming={String(coming)}
-            style={{
-              left,
-              top: bus.y,
-              width: moving
-                ? Math.max(
-                    BUS_W,
-                    Math.min(scene.edge, bus.x + 2 * BUS_W) - left,
-                  )
-                : BUS_W,
-              height: BUS_H,
-            }}
-            aria-label={
-              paused
-                ? "Bus held with its doors open"
-                : coming
-                  ? "The bus is coming: open bin tray"
-                  : leaving
-                    ? "The bus is leaving: open bin tray"
-                    : "Open bin tray"
-            }
-            aria-pressed={paused}
-            onPointerDown={(event) =>
-              moving ? roadDown(left, event) : undefined
-            }
-            onPointerMove={riderMove}
-            onPointerUp={(event) => (moving ? roadUp(event) : undefined)}
-            onPointerCancel={() => {
-              drag.current = null;
-            }}
-            // A normal tap, click, Enter or Space opens the shared held tray.
-            onClick={(event) => {
-              if (dragged.current && event.detail !== 0) {
-                dragged.current = false;
-                return;
-              }
-              dragged.current = false;
-              onHold();
-            }}
-            onContextMenu={(event) => event.preventDefault()}
-          />
-        );
-      })}
-      {riders.map((rider) => {
-        const entry = byId.get(rider.entryId);
-        if (!entry) return null;
-        return (
-          <button
-            key={rider.entryId}
-            type="button"
-            className="town-bus-rider"
-            style={{ left: rider.x - 2, top: rider.y - 2 }}
-            title={`${entry.label} · ${clock(remaining(entry))}`}
-            aria-label={`Take ${entry.label} off the bus`}
-            onPointerDown={(event) => riderDown(rider.entryId, event)}
-            onPointerMove={riderMove}
-            onPointerUp={riderUp}
-            onClick={() => {
-              if (dragged.current) dragged.current = false;
-              else onHold();
-            }}
-          />
-        );
-      })}
+      {scene.buses.map((bus) => (
+        <button
+          key={bus.key}
+          type="button"
+          className="town-bus-hold"
+          data-phase={bus.phase}
+          data-trip-elapsed={bus.elapsed}
+          style={{ left: bus.x, top: bus.y, width: BUS_W, height: BUS_H }}
+          aria-label={
+            paused
+              ? "Bus held with its doors open"
+              : bus.phase === "arriving"
+                ? "The bus is coming: open bin tray"
+                : bus.phase === "departing"
+                  ? "The bus is leaving: open bin tray"
+                  : "Open bin tray"
+          }
+          aria-pressed={paused}
+          onClick={onHold}
+        >
+          {bus.extra ? (
+            <span className="town-bus-extra">+{bus.extra}</span>
+          ) : null}
+        </button>
+      ))}
     </div>
   );
 }

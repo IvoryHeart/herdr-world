@@ -110,7 +110,7 @@ foundation; this composition does not replace them.
 
 The actual Board browser case drops A at 0:30, advances to 0:25, drops B and
 checks the shared full ring and both reset clocks. Town scene/browser cases
-cover departure, hold, rescue, keyboard activation and reduced motion. A
+cover departure, hold, Put back, keyboard activation and reduced motion. A
 boarding reset preserves the bus's set-off trajectory, including deceleration;
 it can arrive early and wait until 0:00. The one-second-out regression checks
 unchanged speed, arrival one second later and the remaining 29-second wait.
@@ -127,7 +127,7 @@ Put back; a direct store.add labelled desk is not its UI consumer.
 
 I2's `bin-observers.test.ts` composes the registry with Town's production scene,
 without private trajectory maps: a reset one active second before the
-timetable-derived final-stop arrival, a 60-second hold, and one further active
+timetable-derived terminus arrival, a 60-second hold, and one further active
 second preserve position, speed and early arrival.
 Town's bus browser case fully remounts the component/layer from service-shaped
 trip-clock samples after an approach reset, while held, and after a parked reset.
@@ -136,27 +136,37 @@ in Town. These UI consumers do not replace the native source/stop fences.
 
 The multi-stop route also consumes the optional immutable `trip_joined_ms`
 observation (older services mean zero). Stops and room assignment come from
-the shared layout/road model; joins and Put back do not change the canonical
-cruise speed. A join restarts the service countdown for
+the shared layout/road model. A join restarts the service countdown for
 `max(trip_duration_ms, currentSetting * 1000)` plus the existing departure,
-without rewriting the original duration or join observations. This explicitly
-changes the reversible staging deadline policy so shortening the setting cannot
-force departure before the fixed timetable's pickups. A larger setting extends
-the wait. Put back does not reset the remaining riders' deadline.
-`bin-observers.test.ts` now removes a set-off rider at the final stop and compares the surviving scene with a fresh
-observer using only the service sample. It retains the earlier reset/hold checks.
-The `TownCanvas.bus.test.ts` consumer additionally drives the real Pixi bus layer
-in Chrome on an injected observation clock: the old bus leaves before the bus
-at the new final stop fades in, and its settled pose equals a remount. Zero
-riders retain the emptied-bus path. This directly checks the approved observer
-animation exception; it does not establish native pointer admission or physical
-frame smoothness. The underlying M5 ordering/authority domain and native fences
-are unchanged; the existing Q49 consumer mappings remain required.
+without rewriting the original duration or join observations, so shortening
+the setting cannot force departure before the fixed timetable's pickups. A
+larger setting extends the wait. Put back does not reset the remaining riders'
+deadline.
 
-The held-panel chip regression checks every point of a 3×3 interior hit grid,
-viewport bounds and both 44px waiting / 52px carry heights at phone and laptop
-sizes. The carry geometry fixture supplies Town's existing carry-presence DOM
-port; this is presentation evidence, not a native pointer admission claim.
+Allowed: every trip's drawn bus is a pure function of the layout, the original
+trip duration and the active trip clock; it stands at every stop and waits at
+the route's last stop (terminus) until 0:00. A rider waits at its room's stop
+when it joined before the bus left it on that timetable, else at the terminus.
+Forbidden: a join, reset, hold or Put back moving or re-speeding the bus; the
+bus passing the terminus before 0:00; a view-private trajectory history.
+Consumers: `townBusRoute.test.ts` checks identical positions for any rider set
+and across a join or Put back, home-before-leave and terminus-after-leave
+assignment, positive bounded dwells within the exact approach budget,
+continuous ramps and no position past the terminus before 0:00.
+`townBus.test.ts` checks the emptied-bus leaver, one bus with "+N" past eight
+seats and reduced-motion parking at the terminus. `bin-observers.test.ts`
+removes the terminus rider through the real registry and checks that the
+bus's pose equals the parked pose and a fresh observer's.
+
+The Town bus browser suite drives the real layer against a fixture bin: a
+qualified add, tray opening from the chip, a stop and the bus (keyboard click),
+Resume, a tap holding the leaving bus, Put back, the boarding reset, the
+Town -> Board -> Desk common-tray hold, remounts from service-shaped samples
+and the pinned-sibling refusal. It asserts behaviour, not pixels or frame
+timing, and adds no service history, admission or native-close authority.
+
+Registry/RPC ownership tests release one browser socket without resetting time
+or another socket's hold; explicit Resume ends all holds.
 
 These finite timing, RPC, SQLite and renderer boundaries use direct consumers
 rather than a model that repeats the countdown implementation. M5's maintained
@@ -165,41 +175,13 @@ and browser fixtures do not establish native Herdr execution or wall-clock
 smoothness; source-bound isolated Herdr evidence and independent whole-PR and
 consumer-mapping review remain separate acceptance requirements.
 
-The owner common-tray delta has direct rendered consumers in the Town bus suite:
-actual Town -> Board (running) -> open tray -> Put back one -> Town (held and
-Resume visible), then ordinary bus click -> Board -> actual Desk (same held
-tray). Both phone and laptop viewports preserve Resume/countdown assertions.
-Registry/RPC ownership tests release one browser socket without resetting time
-or another socket's hold; explicit Resume ends all holds. Native close authority,
-intent timing and the maintained M5 recovery proof remain independent.
-
-The route consumers cover the evening every-stop timetable: positive dwell at
-all stops, including empty streets through the final stop, exact approach-time
-budget, fixed cruise from layout and original trip duration, continuous ramps,
-and a rigid convoy. Late joins use the approved order: orphan at home, final
-waiting lock after `leaveMs_F`, home boarding before `leaveMs_home`, then the
-first stop not yet left. Joining while the final stop's normal dwell runs can
-extend the route without a position jump. The orphan's live leaver-then-fade
-still ends equal to a fresh observer. The registry/scene observer also checks
-overlapping trips: the edge chip targets the departure whose clock it displays.
-
-The real layer browser consumer samples arrival, middle and end of each dwell
-with no hold active, checking visible standstill, open doors and home boarding.
-Its approach/hit and remount samples derive from the production timetable, not
-from distance divided by cruise speed; earlier dwells must be included. The
-departure fixture advances both the remaining countdown and active trip clock
-to a service-coherent departure. Original hit, room-move, native and source/stop
-assertions/timeouts remain. These direct geometry/clock consumers add no service
-history, admission or native-close authority; the existing Q49 model and native
-recovery consumers remain required in their original scope.
-
 The MAX reset policy is checked directly for all four original/current setting
 pairs (16 combinations), both running and socket-held. The real registry timers
 must commit neither at the old deadline nor at 0:00, only after the restarted
 window and departure; a fresh trip uses the selected setting. Registry-to-scene
 consumers additionally drive 120→10 and 10→120 through actual generated nearest
 room stops, checking waiting before pickup, fixed original timetable, early
-arrival/waiting and departure from F. This finite staging policy is not a new
+arrival/waiting and departure from the terminus. This finite staging policy is not a new
 close/recovery authority model: the unchanged Q49 mapping still requires its
 complete listed consumer files and protected M5/model/native gate. A focused
 policy case alone, or the earlier failed 4ffd CI's passing model subset, cannot

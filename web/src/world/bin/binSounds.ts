@@ -2,12 +2,9 @@ import { chimeDevice } from "../../chimes/chimeCenter";
 import { playEffect } from "../../chimes/player";
 
 /**
- * The bin's sounds, synthesised like the chimes and following this device's
- * sound setting: a rustle and lid thump on drop, a crunch and falling tone on
- * close, a rising blip when an agent comes back, a double buzz on refusal, and
- * the bus's short two-note horn as it reaches the stop.
+ * The bin's one sound, synthesised like the chimes and following this
+ * device's sound setting: a crunch and falling tone when an agent closes.
  */
-export type BinSound = "drop" | "close" | "back" | "refuse" | "horn";
 
 function noise(
   ctx: AudioContext,
@@ -35,59 +32,27 @@ function noise(
   source.start(ctx.currentTime + when);
 }
 
-function tone(
-  ctx: AudioContext,
-  out: AudioNode,
-  from: number,
-  to: number,
-  duration: number,
-  gain: number,
-  when = 0,
-  type: OscillatorType = "sine",
-) {
+function close(ctx: AudioContext, out: AudioNode) {
+  noise(ctx, out, 0.35, 600, 0.8, 0.55);
+  noise(ctx, out, 0.25, 1800, 2, 0.25, 0.08);
   const oscillator = ctx.createOscillator();
   const level = ctx.createGain();
-  const start = ctx.currentTime + when;
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(from, start);
-  oscillator.frequency.exponentialRampToValueAtTime(to, start + duration);
-  level.gain.setValueAtTime(gain, start);
-  level.gain.exponentialRampToValueAtTime(0.001, start + duration);
+  const start = ctx.currentTime + 0.15;
+  oscillator.type = "triangle";
+  oscillator.frequency.setValueAtTime(520, start);
+  oscillator.frequency.exponentialRampToValueAtTime(130, start + 0.5);
+  level.gain.setValueAtTime(0.18, start);
+  level.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
   oscillator.connect(level).connect(out);
   oscillator.start(start);
-  oscillator.stop(start + duration);
+  oscillator.stop(start + 0.5);
 }
 
-const SOUNDS: Record<BinSound, (ctx: AudioContext, out: AudioNode) => void> = {
-  drop(ctx, out) {
-    noise(ctx, out, 0.18, 2400, 1.2, 0.35);
-    tone(ctx, out, 140, 70, 0.18, 0.5, 0.12);
-  },
-  close(ctx, out) {
-    noise(ctx, out, 0.35, 600, 0.8, 0.55);
-    noise(ctx, out, 0.25, 1800, 2, 0.25, 0.08);
-    tone(ctx, out, 520, 130, 0.5, 0.18, 0.15, "triangle");
-  },
-  back(ctx, out) {
-    tone(ctx, out, 330, 660, 0.15, 0.15);
-  },
-  horn(ctx, out) {
-    // Parp-parp: two notes a third apart, twice.
-    for (const when of [0, 0.2])
-      for (const pitch of [349, 440])
-        tone(ctx, out, pitch, pitch * 0.97, 0.14, 0.09, when, "sawtooth");
-  },
-  refuse(ctx, out) {
-    tone(ctx, out, 200, 180, 0.12, 0.2, 0, "square");
-    tone(ctx, out, 200, 180, 0.12, 0.2, 0.16, "square");
-  },
-};
-
-export function playBinSound(sound: BinSound) {
+export function playBinCloseSound() {
   const device = chimeDevice();
   if (!device.on) return;
   try {
-    playEffect(SOUNDS[sound], device.volume);
+    playEffect(close, device.volume);
   } catch {
     // Audio is optional.
   }

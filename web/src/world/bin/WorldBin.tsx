@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { bridge } from "../../api";
 import type { BinEntry, BinOutcome } from "../../../../shared/bin";
 import { useWorldBin, worldBinStore } from "./binStore";
-import { playBinSound } from "./binSounds";
+import { playBinCloseSound } from "./binSounds";
 import "./bin.css";
 import { WorldBinTray } from "./WorldBinTray";
 
@@ -84,7 +84,7 @@ export function WorldBin({
     () =>
       store.onOutcome((outcome) => {
         if (outcome.result === "closed") {
-          playBinSound("close");
+          playBinCloseSound();
           setPulse("close");
         }
         setToast(binOutcomeText(outcome));
@@ -143,7 +143,6 @@ export function WorldBin({
     );
   };
   const putBack = (entry: BinEntry, at: { x: number; y: number } | null) => {
-    playBinSound("back");
     void store.restore(entry.id).then(
       () => {
         report(`${entry.label} is back in its place.`);

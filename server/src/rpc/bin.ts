@@ -1,3 +1,4 @@
+import { binEmptiesPinnedTab } from "../../../shared/bin";
 import type { BinAdd } from "../world/bin";
 import type { BridgeRpcContext } from "./context";
 
@@ -62,26 +63,26 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
     )
       throw new Error("That agent has already closed or moved");
     registry.observeWorkspace(target, result!.panes!);
-    if (target.preserve_tab === true) {
-      const reserved = registry.list().reservations ?? [];
-      const survives = result!.panes!.filter(
-        (item) =>
-          item.workspace_id === target.workspace_id &&
-          item.tab_id === target.tab_id &&
-          (item.pane_id === target.pane_id ||
-            !reserved.some(
-              (entry) =>
-                entry.connection_id === target.connection_id &&
-                entry.connection_generation === target.connection_generation &&
-                entry.pane_id === item.pane_id &&
-                entry.terminal_id === item.terminal_id,
-            )),
+    if (
+      target.preserve_tab === true &&
+      binEmptiesPinnedTab(
+        target,
+        result!
+          .panes!.filter(
+            (item) =>
+              item.workspace_id === target.workspace_id &&
+              item.tab_id === target.tab_id,
+          )
+          .map((item) => ({
+            pane_id: String(item.pane_id),
+            terminal_id: String(item.terminal_id),
+          })),
+        registry.list().reservations ?? [],
+      )
+    )
+      throw new Error(
+        "The last pane of a pinned tab cannot be closed; unpin it first",
       );
-      if (survives.length <= 1)
-        throw new Error(
-          "The last pane of a pinned tab cannot be closed; unpin it first",
-        );
-    }
     reply(registry.add(target));
   } catch (error) {
     sendError("world-bin-error", error);

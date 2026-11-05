@@ -17,11 +17,9 @@ import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import type { AnswerNotice } from "../worldAnswerDeliveries";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownBus } from "./townBus.browser";
-import { checkTownBusReturnLayer } from "./townBusReturn.browser";
 import {
   checkTownBusRemount,
   checkTownClosingPin,
-  checkHeldBusChip,
   checkBinViewHolds,
 } from "./townBusReview.browser";
 import { townBusSender } from "./useTownBus";
@@ -1414,12 +1412,7 @@ async function run() {
   );
 
   if (scale === "bus" && mode === "test") {
-    boundaryWitnesses.push({
-      kind: "bus-return-layer",
-      detail: checkTownBusReturnLayer(check),
-    });
     await checkTownBus(host, check, waitFor, fakeBin);
-    await checkHeldBusChip(host, waitFor, check);
     await checkBinViewHolds(host, waitFor, check);
     await checkTownBusRemount(
       host,

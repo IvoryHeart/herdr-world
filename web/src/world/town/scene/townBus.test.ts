@@ -5,7 +5,7 @@ import { layoutTown, TOWN_TILE as T, TownGround } from "../townLayout";
 import { townBusRoute, townBusTimetable } from "./townBusRoute";
 import {
   inTownBusDropZone,
-  townBusAt,
+  townBusHitAt,
   townBusLeaverAt,
   townBusLeavers,
   townBusRiderAt,
@@ -231,6 +231,28 @@ test("under reduced motion the bus stays parked through the countdown and the de
   ]);
 });
 
+test("with every stop, reduced motion parks the bus at the terminus whoever rides", () => {
+  const { layout } = layoutTown(town(3), "wide");
+  const terminus = townBusRoute(layout.busStops, layout.width * T).stops.slice(
+    -1,
+  )[0]!;
+  for (const home of [layout.busStops[0]!.id, layout.busStop.id]) {
+    const s = townBusScene({
+      stops: layout.busStops,
+      width: layout.width * T,
+      entries: [rider("trip-rm", TOTAL - 100).entry],
+      homeStop: () => home,
+      remaining: (entry) => entry.remaining_ms,
+      paused: false,
+      reducedMotion: true,
+    });
+    expect([s.buses[0]!.x, s.buses[0]!.y]).toEqual([
+      terminus.busX,
+      terminus.busY,
+    ]);
+  }
+});
+
 test("a crossing meeting the street from above or from below both count", async () => {
   const { townBusStop } = await import("../townBusStop");
   // Today's grid: the vertical road ends on the street.
@@ -249,19 +271,17 @@ test("a crossing meeting the street from above or from below both count", async 
   expect(townBusStop([10], [{ x: 20, y0: 30, y1: 40 }], 60, 3).x).toBe(54);
 });
 
-test("every rider of a crowded town has a seat on the map and is found under the pointer", () => {
+test("a crowded bus seats eight, counts the rest as +N, and is found under the pointer", () => {
   const entries = [
     // All at the stop (inside the last 10 s of their countdowns).
     ...Array.from({ length: 41 }, () => rider("trip-big", 14_000).entry),
   ];
   const { scene: s, layout } = scene(entries, {}, 2);
-  const seated = s.buses.flatMap((bus) => bus.riders);
-  expect(seated).toHaveLength(entries.length);
-  // One departure/clock, with enough convoy buses to seat every rider.
-  expect(s.buses.filter((b) => b.trip === "trip-big")).toHaveLength(6);
-  expect(Math.max(...s.buses.map((b) => b.riders.length))).toBeLessThanOrEqual(
-    BUS_SEATS.length,
-  );
+  // One departure, one bus.
+  expect(s.buses).toHaveLength(1);
+  const seated = s.buses[0]!.riders;
+  expect(seated).toHaveLength(BUS_SEATS.length);
+  expect(s.buses[0]!.extra).toBe(entries.length - BUS_SEATS.length);
   for (const bus of s.buses) {
     expect(bus.x).toBeGreaterThanOrEqual(0);
     expect(bus.x + BUS_W).toBeLessThanOrEqual(layout.width * T);
@@ -269,7 +289,7 @@ test("every rider of a crowded town has a seat on the map and is found under the
   for (const r of seated)
     expect(townBusRiderAt(s, r.x + 4, r.y + 4)).toBe(r.entryId);
   for (const bus of s.buses) {
-    expect(townBusAt(s, bus.x + 30, bus.y + 20)).toBe(bus);
+    expect(townBusHitAt(s, bus.x + 30, bus.y + 20)).toBe(bus);
     expect(inTownBusDropZone(s, bus.x + 30, bus.y + 20)).toBe(true);
   }
   expect(inTownBusDropZone(s, s.stop.x + 5, s.stop.y + 20)).toBe(true);
@@ -279,10 +299,13 @@ test("the edge chip reads the soonest departure's wait", () => {
   const a = rider("trip-e", 12_000 + BIN_DEPARTURE_MS).entry;
   const b = rider("trip-e", 12_000 + BIN_DEPARTURE_MS).entry;
   const c = rider("trip-f", 25_000).entry;
-  expect(scene([c, a, b]).scene.next).toEqual({
+  const { layout, scene: s } = scene([c, a, b]);
+  expect(s.next).toEqual({
     remaining: 12_000,
     leaving: false,
     riders: 2,
+    // Where its bus waits: the terminus.
+    stop: { x: layout.busStop.x * T + T / 2, y: layout.busStop.y * T + T },
   });
   expect(scene([]).scene.next).toBeNull();
 });
@@ -352,36 +375,6 @@ test("reset at 0:01 while one second out arrives in one second and waits 29 seco
   expect(at(30_001).phase).toBe("departing");
 });
 
-test("a restarted clock and an arrival are told apart; holding is neither", async () => {
-  const { townBusChanges, townBusSeen } = await import("./townBus");
-  const comingEntry = {
-    ...rider("trip-c", TOTAL - arrivalMs() + 100).entry,
-    trip_duration_ms: 30_000,
-    trip_elapsed_ms: arrivalMs() - 100,
-  };
-  const coming = scene([comingEntry]).scene.buses;
-  const arrived = scene([
-    {
-      ...comingEntry,
-      remaining_ms: TOTAL - arrivalMs() - 100,
-      trip_elapsed_ms: arrivalMs() + 100,
-    },
-  ]).scene.buses;
-  const seen = townBusSeen(coming);
-  expect(townBusChanges(seen, arrived, false)).toEqual({
-    returns: new Set(),
-    arrivals: 1,
-  });
-  // Held, the horn waits.
-  expect(townBusChanges(seen, arrived, true).arrivals).toBe(0);
-  // Boarding: the clock goes back to full.
-  const reset = scene([{ ...comingEntry, remaining_ms: TOTAL }]).scene.buses;
-  expect(townBusChanges(seen, reset, false)).toEqual({
-    returns: new Set(),
-    arrivals: 0,
-  });
-});
-
 test("a bus emptied at the stop pulls away from rest and leaves the map; it never vanishes", () => {
   const { layout, scene: full } = scene([
     rider("trip-e", TOTAL - 20_000).entry,
@@ -425,7 +418,9 @@ test("a bus emptied while held or driving keeps going at its own speed", () => {
     .buses[0]!;
   expect(leaving.speed).toBeGreaterThan(0);
   const [on] = townBusLeavers(townBusSeen([leaving]), [], width, 0, false);
-  expect(on!.run.speedAt(0)).toBeGreaterThanOrEqual(leaving.speed - 1e-6);
+  expect(on!.run.speedAt(0) * 1000).toBeGreaterThanOrEqual(
+    leaving.speed - 1e-6,
+  );
 });
 
 test("buses still riding, off the map, or under reduced motion never become leavers", () => {
