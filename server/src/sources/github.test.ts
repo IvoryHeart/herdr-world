@@ -4,6 +4,7 @@ import {
   GITHUB_NOT_INSTALLED,
   GITHUB_SIGNED_OUT,
   githubQuery,
+  mergedPageQuery,
   normalizeMergedDays,
   parseGitHubResponse,
   refreshGitHub,
@@ -191,14 +192,17 @@ describe("GitHub source", () => {
     expect(workBadgeText(merged!)).toBe("#6 ◆");
   });
 
-  test("asks for pull requests merged in the window, a hundred at a time", () => {
+  test("asks for pull requests merged in the window, fifty at a time", () => {
     const now = Date.parse("2026-03-10T12:00:00Z");
-    const query = githubQuery(now);
+    const query = mergedPageQuery(now, 7);
     expect(query).toContain("merged:>=2026-03-03T12:00:00Z");
-    expect(query).toContain("review-requested:@me");
-    expect(query).toMatch(/merged: search\(type: ISSUE, first: 100,/u);
+    expect(githubQuery()).toContain("review-requested:@me");
+    expect(query).toMatch(/merged: search\(type: ISSUE, first: 50,/u);
     expect(query).toContain("pageInfo { hasNextPage endCursor }");
-    expect(githubQuery(now, 30)).toContain("merged:>=2026-02-08T12:00:00Z");
+    expect(mergedPageQuery(now, 7, "page-1")).toMatch(
+      /merged: search\(type: ISSUE, after: "page-1", first: 50,/u,
+    );
+    expect(mergedPageQuery(now, 30)).toContain("merged:>=2026-02-08T12:00:00Z");
     expect(() => normalizeMergedDays(0)).toThrow();
     expect(() => normalizeMergedDays(91)).toThrow();
     expect(() => normalizeMergedDays(2.5)).toThrow();
@@ -210,29 +214,38 @@ describe("GitHub source", () => {
       state: "MERGED",
       mergedAt: "2026-03-09T08:00:00Z",
     });
-  /** gh answering with `total` merged pull requests, 100 per page. */
+  /** gh answering with open work and `total` merged pull requests, 50 per page. */
   const pagedGitHub = (total: number, failPage?: number) => {
     const queries: string[] = [];
     const run: RunProcess = async (argv) => {
       if (argv[1] === "auth") return { code: 0, stdout: "", stderr: "" };
       const query = argv.at(-1)!;
       queries.push(query);
+      if (!query.includes("merged: search(")) {
+        const open: Record<string, unknown> = response({
+          authored: [pr(1)],
+        }).data;
+        delete open.merged;
+        for (const alias of ["authored", "reviewing", "assigned"])
+          Object.assign(open[alias]!, { pageInfo: { hasNextPage: false } });
+        return { code: 0, stdout: JSON.stringify({ data: open }), stderr: "" };
+      }
       const page = Number(/after: "page-(\d+)"/u.exec(query)?.[1] ?? 0);
       if (page === failPage) return { code: 1, stdout: "", stderr: "" };
       const nodes = Array.from(
-        { length: Math.max(0, Math.min(100, total - page * 100)) },
-        (_, index) => merged(1_000 + page * 100 + index),
+        { length: Math.max(0, Math.min(50, total - page * 50)) },
+        (_, index) => merged(1_000 + page * 50 + index),
       );
-      const more = (page + 1) * 100 < total;
+      const more = (page + 1) * 50 < total;
       const search = {
         pageInfo: { hasNextPage: more, endCursor: `page-${page + 1}` },
         nodes,
       };
-      const data =
-        page === 0
-          ? { ...response({ authored: [pr(1)] }).data, merged: search }
-          : { merged: search };
-      return { code: 0, stdout: JSON.stringify({ data }), stderr: "" };
+      return {
+        code: 0,
+        stdout: JSON.stringify({ data: { merged: search } }),
+        stderr: "",
+      };
     };
     return { run, queries };
   };
@@ -246,10 +259,12 @@ describe("GitHub source", () => {
     expect(items[0]).toMatchObject({
       finishedAt: Date.parse("2026-03-09T08:00:00Z"),
     });
-    expect(queries).toHaveLength(3);
-    expect(queries[1]).toContain('after: "page-1"');
-    expect(queries[1]).not.toContain("review-requested");
-    expect(queries[2]).toContain('after: "page-2"');
+    // Open work, then five pages of merged pull requests.
+    expect(queries).toHaveLength(6);
+    expect(queries[1]).not.toContain("after:");
+    expect(queries[2]).toContain('after: "page-1"');
+    expect(queries[2]).not.toContain("review-requested");
+    expect(queries[5]).toContain('after: "page-4"');
   });
 
   test("stops at GitHub's 1,000-result search limit", async () => {
@@ -258,12 +273,62 @@ describe("GitHub source", () => {
     expect(
       result.ok && result.items.filter((item) => item.lane === "merged"),
     ).toHaveLength(1_000);
-    expect(queries).toHaveLength(10);
+    expect(queries).toHaveLength(21);
   });
 
   test("a failed page fails the refresh, so the last complete list stays", async () => {
     const { run } = pagedGitHub(250, 2);
     expect((await refreshGitHub(run, 0)).ok).toBe(false);
+  });
+
+  test("GitHub's next-page flag, not a full page, asks for the next fifty", async () => {
+    for (const [total, merges] of [
+      [0, 1],
+      [49, 1],
+      [50, 1],
+      [51, 2],
+      [100, 2],
+      [101, 3],
+    ] as const) {
+      const { run, queries } = pagedGitHub(total);
+      const result = await refreshGitHub(run, 0);
+      expect(
+        result.ok && result.items.filter((item) => item.lane === "merged"),
+      ).toHaveLength(total);
+      expect(result.ok && result.pullRequestsComplete).toBe(true);
+      expect(queries).toHaveLength(1 + merges);
+    }
+  });
+
+  test("a failed first merged page fails the refresh, though open work answered", async () => {
+    const { run, queries } = pagedGitHub(10, 0);
+    expect(await refreshGitHub(run, 0)).toMatchObject({
+      ok: false,
+      state: "error",
+    });
+    expect(queries).toHaveLength(2);
+  });
+
+  test("a pull request that shifts onto the next page while paging is kept once", async () => {
+    const { run: paged } = pagedGitHub(100);
+    const run: RunProcess = async (argv, timeoutMs) => {
+      const answer = await paged(argv, timeoutMs);
+      if (!argv.at(-1)!.includes('after: "page-1"')) return answer;
+      // A merge landed between the reads: the first page's last row
+      // shows again at the top of the second.
+      const data = JSON.parse(answer.stdout);
+      data.data.merged.nodes.unshift(merged(1_049));
+      return { ...answer, stdout: JSON.stringify(data) };
+    };
+    const result = await refreshGitHub(run, 0);
+    const refs = result.ok
+      ? result.items
+          .filter((item) => item.lane === "merged")
+          .map((item) => item.ref)
+      : [];
+    expect(refs).toHaveLength(100);
+    expect(new Set(refs).size).toBe(100);
+    expect(result.ok && result.items).toHaveLength(101);
   });
 
   test("all pages share one deadline", async () => {
@@ -302,7 +367,7 @@ describe("GitHub source", () => {
     });
   });
 
-  test("runs one GraphQL request after the sign-in check", async () => {
+  test("reads open work, then merged pull requests, after the sign-in check", async () => {
     const calls: string[][] = [];
     const run: RunProcess = async (argv) => {
       calls.push(argv);
@@ -321,7 +386,24 @@ describe("GitHub source", () => {
     expect(calls.map((argv) => argv.slice(0, 3))).toEqual([
       ["gh", "auth", "status"],
       ["gh", "api", "graphql"],
+      ["gh", "api", "graphql"],
     ]);
+  });
+
+  test("merged pull requests are read apart from open work, fifty per request", async () => {
+    // GitHub stops a GraphQL request after ten seconds. A week of busy
+    // merges, each with its check contexts, took longer than that inside
+    // the open-work request, so every refresh failed with HTTP 504.
+    const { run, queries } = pagedGitHub(120);
+    const result = await refreshGitHub(run, 0);
+    expect(result.ok).toBe(true);
+    for (const query of queries) {
+      const searches = query.match(/\w+: search\(/gu) ?? [];
+      if (!query.includes("merged: search(")) continue;
+      expect(searches).toEqual(["merged: search("]);
+      expect(query).toMatch(/first: 50\b/u);
+    }
+    expect(queries[0]).not.toContain("merged: search(");
   });
 
   test("a failed request is an error, never raw CLI output", async () => {

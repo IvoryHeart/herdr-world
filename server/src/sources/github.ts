@@ -18,8 +18,8 @@ import {
 /**
  * GitHub through the service user's `gh` sign-in: open pull requests the user
  * authored, was asked to review or is assigned, recently merged ones, and
- * assigned issues. One bounded GraphQL request per refresh, plus a page of
- * 100 for each further hundred merged in the window.
+ * assigned issues. One bounded GraphQL request for open work, then one
+ * request per fifty pull requests merged in the window.
  */
 
 export type ProcessResult = { code: number; stdout: string; stderr: string };
@@ -36,9 +36,14 @@ const TIMEOUT_MS = 20_000;
 /** One refresh, every page included. */
 const DEADLINE_MS = 60_000;
 const PAGE = 50;
-const MERGED_PAGE = 100;
+/**
+ * GitHub stops a GraphQL request after ten seconds, and each merged pull
+ * request carries its check contexts: a hundred of them in one request, or
+ * beside the open searches, ran past that limit (HTTP 504).
+ */
+const MERGED_PAGE = 50;
 /** GitHub's search answers at most 1,000 results. */
-const MERGED_PAGES = 10;
+const MERGED_PAGES = 1_000 / MERGED_PAGE;
 export const DEFAULT_MERGED_DAYS = 7;
 export const MAX_MERGED_DAYS = 90;
 const MAX_TITLE = 300;
@@ -85,30 +90,31 @@ function mergedQuery(now: number, days: number) {
   return `is:pr is:merged author:@me merged:>=${since}`;
 }
 
-export function githubQuery(now: number, mergedDays = DEFAULT_MERGED_DAYS) {
+/** Open work: pull requests and assigned issues, without merged history. */
+export function githubQuery() {
   const issue = `nodes { ... on Issue { number title url updatedAt repository { nameWithOwner } } }`;
   return `query {
   ${search("authored", "is:pr is:open author:@me archived:false", PAGE, OPEN_NODES)}
   ${search("reviewing", "is:pr is:open review-requested:@me archived:false", PAGE, OPEN_NODES)}
   ${search("assigned", "is:pr is:open assignee:@me archived:false", PAGE, OPEN_NODES)}
-  ${search("merged", mergedQuery(now, mergedDays), MERGED_PAGE, MERGED_NODES)}
   ${search("issues", "is:issue is:open assignee:@me archived:false", PAGE, issue)}
 }`;
 }
 
-/** The next hundred merged pull requests after `cursor`. */
+/** A page of pull requests merged in the window, after `cursor` if given. */
 export function mergedPageQuery(
   now: number,
   mergedDays: number,
-  cursor: string,
+  cursor?: string,
 ) {
-  return `query {
-  ${search(
+  const page = search(
     "merged",
     mergedQuery(now, mergedDays),
     MERGED_PAGE,
     MERGED_NODES,
-  ).replace("first: ", `after: ${JSON.stringify(cursor)}, first: `)}
+  );
+  return `query {
+  ${cursor === undefined ? page : page.replace("first: ", `after: ${JSON.stringify(cursor)}, first: `)}
 }`;
 }
 
@@ -155,24 +161,23 @@ export async function refreshGitHub(
     return record(response.data);
   };
   try {
-    const data = await query(githubQuery(now, mergedDays));
-    // Every pull request merged in the window, a hundred at a time. A
-    // failed page fails the refresh, so the last successful list stays.
-    const merged = [...nodes(data.merged)];
-    let mergedRowsKnown = Array.isArray(record(data.merged).nodes);
-    let page = record(record(data.merged).pageInfo);
-    for (
-      let pages = 1;
-      pages < MERGED_PAGES && page.hasNextPage === true;
-      pages++
-    ) {
-      if (typeof page.endCursor !== "string" || !page.endCursor) break;
+    const data = await query(githubQuery());
+    // Every pull request merged in the window, fifty at a time. A failed
+    // page fails the refresh, so the last successful list stays.
+    const merged: Record<string, unknown>[] = [];
+    let mergedRowsKnown = true;
+    let page: Record<string, unknown> = {};
+    let cursor: string | undefined;
+    for (let pages = 0; pages < MERGED_PAGES; pages++) {
       const next = record(
-        (await query(mergedPageQuery(now, mergedDays, page.endCursor))).merged,
+        (await query(mergedPageQuery(now, mergedDays, cursor))).merged,
       );
       mergedRowsKnown &&= Array.isArray(next.nodes);
       merged.push(...nodes(next));
       page = record(next.pageInfo);
+      if (page.hasNextPage !== true) break;
+      if (typeof page.endCursor !== "string" || !page.endCursor) break;
+      cursor = page.endCursor;
     }
     const items = parseGitHubResponse({
       data: { ...data, merged: { nodes: merged } },

@@ -43,11 +43,13 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   failed refresh keeps the last items. There are no webhooks, which would need
   a public endpoint. Links are recomputed at most every 15 seconds.
 - **GitHub through `gh`.** One `gh api graphql` request reads open PRs the
-  user authored, was asked to review or is assigned, the first hundred PRs
-  they authored that were merged in the merged window and assigned issues, each with review decision,
-  mergeability and the head commit's check rollup. Further merged PRs follow
-  a hundred per request until the window is exhausted, at most ten pages
-  (GitHub search's 1,000-result limit), every request under one minute's
+  user authored, was asked to review or is assigned and assigned issues, each
+  with review decision, mergeability and the head commit's check rollup. PRs
+  they authored that were merged in the merged window, with the same fields,
+  follow in their own requests, fifty per request until the window is
+  exhausted, at most twenty pages (GitHub search's 1,000-result limit). A
+  hundred merged PRs with their check contexts in the open request ran past
+  GitHub's ten-second GraphQL limit (HTTP 504). Every request is under one minute's
   deadline and the per-request time and output limits; a failed page fails
   the refresh so the last complete list stays. The window is seven days by
   default and 1 to 90 days in Sources settings. The owner's existing sign-in

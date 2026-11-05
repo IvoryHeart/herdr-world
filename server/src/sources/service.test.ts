@@ -173,17 +173,18 @@ describe("World sources service", () => {
 
   test("refreshes at most once per interval; forcing waits five seconds", async () => {
     const { service, counts, advance } = setup();
+    // A refresh is three gh calls: sign-in check, open work, merged page.
     await service.snapshot();
     await service.snapshot();
-    expect(counts.gh).toBe(2);
+    expect(counts.gh).toBe(3);
     advance(60_000);
     await service.snapshot();
-    expect(counts.gh).toBe(4);
-    await service.snapshot(true);
-    expect(counts.gh).toBe(4);
-    advance(5_000);
+    expect(counts.gh).toBe(6);
     await service.snapshot(true);
     expect(counts.gh).toBe(6);
+    advance(5_000);
+    await service.snapshot(true);
+    expect(counts.gh).toBe(9);
   });
 
   test("a slow source never holds a request: it answers with what it has and refreshing", async () => {

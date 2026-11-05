@@ -252,6 +252,8 @@ describe("PR detail freshness is independent of list success", () => {
     const run: RunProcess = async (argv) => {
       if (argv[1] === "auth") return { code: 0, stdout: "", stderr: "" };
       const query = argv.at(-1)!;
+      if (query.includes("merged: search"))
+        return ok({ merged: { nodes: [], pageInfo: { hasNextPage: false } } });
       if (query.includes("authored: search"))
         return ok({
           authored: {
