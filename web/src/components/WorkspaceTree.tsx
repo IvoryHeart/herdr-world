@@ -17,6 +17,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -69,6 +70,12 @@ import {
   parseAgentOrder,
   serializeAgentOrder,
 } from "../agentOrder";
+import {
+  visibleWorkspaceTabChips,
+  type WorkspaceTabChip,
+  workspaceTabChips,
+} from "../workspaceTabChips";
+import type { AgentStateKind } from "./agentSession";
 import {
   AGENT_LIST_SCOPE_STORAGE_KEY,
   WORKSPACE_AGENT_LAYOUT_STORAGE_KEY,
@@ -280,6 +287,9 @@ export function WorkspaceTree({
     : session;
   const store = useOperationalStore();
   const connectionClient = useConnectionClient();
+  const connectedServerCount = s.connections.filter(
+    (connection) => connection.state === "ready",
+  ).length;
   const reviews = useWorkspacePullRequests(
     connectionClient,
     s.status === "connected" ? s.workspaces : [],
@@ -376,13 +386,10 @@ export function WorkspaceTree({
     () => groupAgentPanesByWorkspace(s.panes, includeTerminals),
     [s.panes, includeTerminals],
   );
-  const tabCountsByWorkspace = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const tab of s.tabs) {
-      counts.set(tab.workspace_id, (counts.get(tab.workspace_id) ?? 0) + 1);
-    }
-    return counts;
-  }, [s.tabs]);
+  const tabChipsByWorkspace = useMemo(
+    () => workspaceTabChips(s.tabs, s.panes),
+    [s.tabs, s.panes],
+  );
   const defaultAgentPanes = useMemo(() => {
     const workspaceNumbers = new Map(
       s.workspaces.map((workspace) => [
@@ -669,22 +676,26 @@ export function WorkspaceTree({
       <div className="panel-head">
         <h2>Workspaces</h2>
         <div className="panel-actions">
-          <ThemedSelect
-            className="workspace-scope-control"
-            aria-label="Workspace server scope"
-            value={allServers ? "all" : "current"}
-            options={[
-              { value: "current", label: "Current" },
-              { value: "all", label: "All servers" },
-            ]}
-            onChange={(scope) => {
-              clearWorkspaceDrag();
-              clearAgentDrag();
-              setMenu(null);
-              setAgentMenu(null);
-              setAllServers(scope === "all");
-            }}
-          />
+          {/* Only the classic sidebar chooses a scope, and only when there
+              is more than one connected server to choose. */}
+          {!observedTopology && connectedServerCount > 1 ? (
+            <ThemedSelect
+              className="workspace-scope-control"
+              aria-label="Workspace server scope"
+              value={allServers ? "all" : "current"}
+              options={[
+                { value: "current", label: "Current" },
+                { value: "all", label: "All servers" },
+              ]}
+              onChange={(scope) => {
+                clearWorkspaceDrag();
+                clearAgentDrag();
+                setMenu(null);
+                setAgentMenu(null);
+                setAllServers(scope === "all");
+              }}
+            />
+          ) : null}
           {focusedRepoWorkspace ? (
             <button
               type="button"
@@ -786,7 +797,7 @@ export function WorkspaceTree({
                   ? agentsByWorkspace
                   : EMPTY_AGENT_PANES_BY_WORKSPACE
               }
-              tabCountsByWorkspace={tabCountsByWorkspace}
+              tabChipsByWorkspace={tabChipsByWorkspace}
               alwaysShowTabCount={agentLayout === "compact"}
               activePaneId={activePaneId}
               pinnedWorkspaceKeys={pinnedWorkspaceSet}
@@ -1149,9 +1160,7 @@ function ServerWorkspaceRows({
     layout === "nested"
       ? groupAgentPanesByWorkspace(snapshot?.panes ?? [])
       : EMPTY_AGENT_PANES_BY_WORKSPACE;
-  const tabCounts = new Map<string, number>();
-  for (const tab of source.tabs)
-    tabCounts.set(tab.workspace_id, (tabCounts.get(tab.workspace_id) ?? 0) + 1);
+  const tabChips = workspaceTabChips(source.tabs, snapshot?.panes ?? []);
   const updateCollapsed = (workspace: Workspace, collapsed: boolean) => {
     if (onCollapsedChange) onCollapsedChange(workspace, collapsed);
     else {
@@ -1200,7 +1209,7 @@ function ServerWorkspaceRows({
           depth={0}
           childrenByParent={childrenByParent}
           agentsByWorkspace={agents}
-          tabCountsByWorkspace={tabCounts}
+          tabChipsByWorkspace={tabChips}
           alwaysShowTabCount={layout === "compact"}
           activePaneId={activePaneId}
           pinnedWorkspaceKeys={pins}
@@ -1248,6 +1257,83 @@ function workspaceSubtreeContainsActiveItem(
   );
 }
 
+const TAB_CHIP_STATUS_LABELS: Record<AgentStateKind, string> = {
+  blocked: "Blocked",
+  done: "Done",
+  working: "Working",
+  idle: "Idle",
+  unknown: "No agent",
+};
+
+function WorkspaceTabChips({
+  chips,
+  workspaceFocused,
+  onOpen,
+}: {
+  chips: readonly WorkspaceTabChip[];
+  workspaceFocused: boolean;
+  onOpen: (chip: WorkspaceTabChip) => void;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [availableWidth, setAvailableWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setAvailableWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const { visible, hidden } = visibleWorkspaceTabChips(chips, availableWidth);
+  const stop = (event: { stopPropagation: () => void }) =>
+    event.stopPropagation();
+  return (
+    <span
+      ref={ref}
+      className="workspace-tab-chips"
+      role="group"
+      aria-label="Tabs"
+    >
+      {visible.map((chip) => {
+        const status = TAB_CHIP_STATUS_LABELS[chip.status];
+        const name = chip.label.trim() || `Tab ${chip.number}`;
+        return (
+          <button
+            key={chip.tabId}
+            type="button"
+            className={`workspace-tab-chip is-${chip.status} ${
+              workspaceFocused && chip.focused ? "is-active" : ""
+            }`}
+            title={`${chip.number}: ${name} · ${status}`}
+            aria-label={`Tab ${chip.number}, ${name}, ${status}`}
+            onPointerDown={stop}
+            onPointerMove={stop}
+            onPointerUp={stop}
+            onPointerCancel={stop}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpen(chip);
+            }}
+          >
+            {chip.number}
+          </button>
+        );
+      })}
+      {hidden > 0 ? (
+        <span
+          className="workspace-tab-chip-more"
+          title={`${hidden} more tabs`}
+          aria-label={`${hidden} more tabs`}
+        >
+          +{hidden}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function WorkspaceRow({
   w,
   source,
@@ -1255,7 +1341,7 @@ function WorkspaceRow({
   depth,
   childrenByParent,
   agentsByWorkspace,
-  tabCountsByWorkspace,
+  tabChipsByWorkspace,
   alwaysShowTabCount = false,
   activePaneId,
   pinnedWorkspaceKeys,
@@ -1274,7 +1360,7 @@ function WorkspaceRow({
   depth: number;
   childrenByParent: Map<string, Workspace[]>;
   agentsByWorkspace: ReadonlyMap<string, Pane[]>;
-  tabCountsByWorkspace: ReadonlyMap<string, number>;
+  tabChipsByWorkspace: ReadonlyMap<string, WorkspaceTabChip[]>;
   alwaysShowTabCount?: boolean;
   activePaneId: string | null;
   pinnedWorkspaceKeys: ReadonlySet<string>;
@@ -1293,8 +1379,10 @@ function WorkspaceRow({
   const children = childrenByParent.get(w.workspace_id) ?? [];
   const review = workspacePullRequest(reviews[w.workspace_id]);
   const agents = agentsByWorkspace.get(w.workspace_id) ?? [];
-  const tabCount = tabCountsByWorkspace.get(w.workspace_id) ?? 0;
+  const tabChips = tabChipsByWorkspace.get(w.workspace_id) ?? [];
+  const tabCount = tabChips.length;
   const tabCountVisible = alwaysShowTabCount || tabCount > 1;
+  const tabChipsVisible = tabCount > 1;
   const s = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
@@ -1540,6 +1628,32 @@ function WorkspaceRow({
         >
           <span dir="ltr">{workspaceDisplayName(w)}</span>
         </strong>
+        {tabCountVisible && !tabChipsVisible ? (
+          <span
+            className="workspace-tab-count"
+            title={`${tabCount} tabs`}
+            aria-label={`${tabCount} tabs`}
+          >
+            {tabCount}
+          </span>
+        ) : null}
+        {tabChipsVisible ? (
+          <WorkspaceTabChips
+            chips={tabChips}
+            workspaceFocused={workspaceFocused}
+            onOpen={(chip) => {
+              if (current) {
+                // World's navigator selects without moving Herdr's own focus.
+                if (!focusOnSelect) onSelect?.(w);
+                else void store.focusTab(chip.tabId).then(() => onSelect?.(w));
+                return;
+              }
+              if (source) {
+                void openServerSession(source, w.workspace_id, chip.paneId);
+              }
+            }}
+          />
+        ) : null}
         {source ? (
           <span
             className="workspace-server-badge"
@@ -1547,15 +1661,6 @@ function WorkspaceRow({
             aria-label={`Server: ${source.serverLabel}`}
           >
             {source.serverLabel}
-          </span>
-        ) : null}
-        {tabCountVisible ? (
-          <span
-            className="workspace-tab-count"
-            title={`${tabCount} tabs`}
-            aria-label={`${tabCount} tabs`}
-          >
-            {tabCount}
           </span>
         ) : null}
         {pinned ? (
@@ -1628,7 +1733,7 @@ function WorkspaceRow({
               depth={depth + 1}
               childrenByParent={childrenByParent}
               agentsByWorkspace={agentsByWorkspace}
-              tabCountsByWorkspace={tabCountsByWorkspace}
+              tabChipsByWorkspace={tabChipsByWorkspace}
               alwaysShowTabCount={alwaysShowTabCount}
               activePaneId={activePaneId}
               pinnedWorkspaceKeys={pinnedWorkspaceKeys}

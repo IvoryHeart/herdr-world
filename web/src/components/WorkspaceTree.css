@@ -306,3 +306,63 @@
 .start-ellipsis > span {
   unicode-bidi: isolate;
 }
+
+/* Numbered tab chips replace the plain tab count. The chip row takes the
+   space left after the name and folds extra tabs into "+N" as it narrows. */
+.workspace-tab-chips {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 40px;
+  overflow: hidden;
+}
+
+.workspace-tab-chip {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.workspace-tab-chip:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.workspace-tab-chip:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.workspace-tab-chip.is-working {
+  color: var(--yellow);
+}
+
+.workspace-tab-chip.is-blocked {
+  color: var(--red);
+}
+
+.workspace-tab-chip.is-done {
+  color: var(--blue);
+}
+
+.workspace-tab-chip.is-active {
+  border-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+.workspace-tab-chip-more {
+  flex: 0 0 auto;
+  min-width: 22px;
+  color: color-mix(in srgb, var(--muted) 55%, transparent);
+  font-size: 10px;
+}
