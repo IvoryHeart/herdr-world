@@ -3,8 +3,11 @@ import { terminalPaneSize, type TerminalSize } from "./terminalResize";
 import type { PaneLayout } from "./types";
 
 type Ref<T> = { readonly current: T };
+/** One pane.layout read, valid only for the client and pane that made it. */
 type LayoutRead = {
   terminalId: string;
+  paneId: string;
+  client: ConnectionClient;
   layout: PaneLayout | null;
   done: boolean;
 };
@@ -53,7 +56,15 @@ export class TerminalAttachSize {
     const stored = view.paneLayoutRef.current;
     let layout = stored?.tab_id === view.paneTabIdRef.current ? stored : null;
     let size = fitted ?? terminalPaneSize(layout, paneId);
-    const read = this.read?.terminalId === terminalId ? this.read : null;
+    const client = view.currentClientRef.current;
+    // A read made through a replaced client (a transport reconnect) is not
+    // this attach's: its failure is no fallback, and the new client reads.
+    const read =
+      this.read?.terminalId === terminalId &&
+      this.read.paneId === paneId &&
+      this.read.client === client
+        ? this.read
+        : null;
     if (!size && read?.done) {
       layout = read.layout;
       size = terminalPaneSize(layout, paneId) ?? {
@@ -67,8 +78,13 @@ export class TerminalAttachSize {
       return { ...size, layout, relayLayout: fitted ? stored : layout };
     }
     if (read || !paneId) return null;
-    const client = view.currentClientRef.current;
-    const pending: LayoutRead = { terminalId, layout: null, done: false };
+    const pending: LayoutRead = {
+      terminalId,
+      paneId,
+      client,
+      layout: null,
+      done: false,
+    };
     this.read = pending;
     client
       .call("pane.layout", { pane_id: paneId })

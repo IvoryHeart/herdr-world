@@ -31,11 +31,12 @@ const until = async (condition: () => boolean, message: string) => {
 const calls: { method: string; params: Record<string, unknown> }[] = [];
 // What Herdr answers to `pane.layout` in the current scenario.
 let paneLayoutReply: () => Promise<unknown> = async () => ({});
+let clientCurrent = true;
 const client: ConnectionClient = {
   connectionId: "hidden-attach-test",
   generation: 1,
   serverRuntimeGeneration: 1,
-  isCurrent: () => true,
+  isCurrent: () => clientCurrent,
   acceptsServerGeneration: () => true,
   call: async (method, params = {}) => {
     calls.push({ method, params: params as Record<string, unknown> });
@@ -43,7 +44,8 @@ const client: ConnectionClient = {
     return {};
   },
 };
-bridge.connection = () => client;
+let current = client;
+bridge.connection = () => current;
 bridge.onTerminal = () => () => {};
 
 const pane: Pane = {
@@ -186,6 +188,51 @@ try {
   await hiddenAttach("failed read");
   for (let index = 0; index < 10; index += 1) await frame();
   check(of("terminal.resize").length === 0, "a hidden terminal sent a resize");
+
+  // The transport reconnects while a read is in flight: the old client's
+  // read fails as stale, and the retained view attaches again through a
+  // healthy client. That client reads the layout itself; the old failure is
+  // not its fallback.
+  const held = Promise.withResolvers<unknown>();
+  paneLayoutReply = () => held.promise;
+  mountHidden(null);
+  await until(() => of("pane.layout").length === 1, "old client read");
+  clientCurrent = false;
+  held.reject(new Error("connection changed during request"));
+  await frame();
+  let replacementReads = 0;
+  current = {
+    ...client,
+    generation: 2,
+    isCurrent: () => true,
+    call: async (method, params = {}) => {
+      calls.push({ method, params: params as Record<string, unknown> });
+      if (method !== "pane.layout") return {};
+      replacementReads += 1;
+      return { layout: sized(160, 45) };
+    },
+  };
+  calls.length = 0;
+  flushSync(() =>
+    __storeTesting.replaceState({
+      ...store.get(),
+      terminalAttachEpoch: store.get().terminalAttachEpoch + 1,
+    }),
+  );
+  attach = await hiddenAttach("replacement client");
+  check(
+    replacementReads === 1,
+    `the replacement client made ${replacementReads} layout reads`,
+  );
+  check(
+    attach.cols === 159 &&
+      attach.rows === 45 &&
+      attach.surface_cols === 160 &&
+      attach.surface_rows === 45,
+    `the reconnected hidden attach shrank the pane, got ${attach.cols}×${attach.rows} (${attach.surface_cols}×${attach.surface_rows})`,
+  );
+  current = client;
+  clientCurrent = true;
 
   // Shown: it fits its container and resizes the pane to what is visible.
   host.style.display = "flex";
