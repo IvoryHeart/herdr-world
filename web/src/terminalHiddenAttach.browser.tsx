@@ -303,6 +303,45 @@ try {
     "a usable smaller size from another viewer was fought over",
   );
 
+  // Hidden now: a background page keeps its geometry, and a container can be
+  // hidden before ResizeObserver runs. Neither claims (rev-sol on #650).
+  push(80, 24);
+  calls.length = 0;
+  const visibility = Object.getOwnPropertyDescriptor(
+    document,
+    "visibilityState",
+  );
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => "hidden",
+  });
+  push(12, 2);
+  await frame();
+  check(of("terminal.focus").length === 0, "a background page claimed");
+  if (visibility)
+    Object.defineProperty(document, "visibilityState", visibility);
+  else delete (document as { visibilityState?: unknown }).visibilityState;
+  const shownStyle = host.style.cssText;
+  host.style.display = "none";
+  push(12, 2);
+  await frame();
+  check(
+    of("terminal.focus").length === 0,
+    "a container hidden before ResizeObserver claimed",
+  );
+  host.style.cssText = shownStyle;
+  // Shown again it claims as any reveal does; then the squeeze is still
+  // claimed once, since the hidden frames spent nothing.
+  await until(() => of("terminal.focus").length > 0, "claim on reveal");
+  for (let index = 0; index < 3; index += 1) await frame();
+  calls.length = 0;
+  push(12, 2);
+  await frame();
+  check(
+    of("terminal.focus").length === 1,
+    "a squeeze after being hidden was not claimed",
+  );
+
   // A split tab shown after Chat: every pane fits, but only the selected
   // pane claims, or Herdr's focus (the tab's cursor) lands on the last pane.
   const second: Pane = {

@@ -3,7 +3,11 @@ import {
   terminalSqueezed,
 } from "../../shared/terminalSize";
 import type { ConnectionClient } from "./api";
-import { terminalPaneSize, type TerminalSize } from "./terminalResize";
+import {
+  terminalEndpointViewportSize,
+  terminalPaneSize,
+  type TerminalSize,
+} from "./terminalResize";
 import type { PaneLayout } from "./types";
 
 type Ref<T> = { readonly current: T };
@@ -12,6 +16,16 @@ export { TERMINAL_DEFAULT_SIZE };
 /** The last unsqueezed size per connection runtime and terminal, here. */
 const lastGood = new Map<string, TerminalSize>();
 /** A retired runtime's geometry never sizes a replacement's terminal. */
+/**
+ * The tab a pane's size implies in `layout` (the endpoint surface). A squeeze
+ * is a tab property: split panes are legitimately narrow. With no layout, the
+ * size is all there is to judge.
+ */
+const impliedTab = (
+  size: TerminalSize,
+  layout: PaneLayout | null | undefined,
+  paneId: string | undefined,
+) => terminalEndpointViewportSize(size, layout, paneId) ?? size;
 const sizeKey = (client: ConnectionClient, terminalId: string) =>
   `${client.connectionId}\0${client.serverRuntimeGeneration}\0${terminalId}`;
 /** One pane.layout read, valid only for the client and pane that made it. */
@@ -108,7 +122,15 @@ export class TerminalAttachSize {
       const squeezed =
         !fitted &&
         terminalSqueezed(area ? { cols: area.width, rows: area.height } : size);
-      if (squeezed) size = lastGood.get(key) ?? TERMINAL_DEFAULT_SIZE;
+      // A remembered size is a fallback only if it would not squeeze the tab
+      // too (a tiny shown fit is real for that viewer, not for this attach).
+      const remembered = lastGood.get(key);
+      if (squeezed)
+        size =
+          remembered &&
+          !terminalSqueezed(impliedTab(remembered, layout, paneId))
+            ? remembered
+            : TERMINAL_DEFAULT_SIZE;
       else lastGood.set(key, size);
       return { ...size, layout, relayLayout: fitted ? stored : layout };
     }
@@ -181,10 +203,28 @@ export class TerminalAttachSize {
    * once per squeeze, re-armed by the next unsqueezed frame. A smaller but
    * usable size from another viewer is theirs to keep (last focus wins).
    */
-  squeezedFrame(width: number, height: number) {
+  squeezedFrame(
+    width: number,
+    height: number,
+    container: { clientWidth: number; clientHeight: number },
+  ) {
     if (!this.view.isActivePaneRef.current) return false;
-    if (!this.shownAt || terminalSqueezed(this.shownAt)) return false;
-    if (!terminalSqueezed({ cols: width, rows: height })) {
+    // Hidden now (a background page, or hidden before ResizeObserver runs):
+    // neither claim nor spend the one claim a later recovery needs.
+    if (
+      (typeof document !== "undefined" &&
+        document.visibilityState === "hidden") ||
+      !container.clientWidth ||
+      !container.clientHeight
+    )
+      return false;
+    const { paneLayoutRef, paneTabIdRef, paneIdRef } = this.view;
+    const stored = paneLayoutRef.current;
+    const layout = stored?.tab_id === paneTabIdRef.current ? stored : null;
+    const tab = (size: TerminalSize) =>
+      impliedTab(size, layout, paneIdRef.current);
+    if (!this.shownAt || terminalSqueezed(tab(this.shownAt))) return false;
+    if (!terminalSqueezed(tab({ cols: width, rows: height }))) {
       this.claimedSqueeze = false;
       return false;
     }
