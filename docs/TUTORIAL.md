@@ -701,11 +701,13 @@ In Town the bin is a London bus stop: there is one at every crossing, and the
 one nearest the middle of town is the main stop. Drag an agent to any stop (or
 use **Send to the bus stop** in its peek): it waits at the stop nearest its own
 room. One red double-decker runs the route for everyone, street by street from
-the left, calls only at stops where agents wait, picks them up as it rolls past,
-and stops at the last one, sounding its horn, to wait until 0:00. Sending another
+the left, stops briefly at every stop with its doors open (agents waiting there
+board), and stops at the last one with agents, sounding its horn, to wait until
+0:00. Each stop takes about a second; in a big town on a short countdown the
+stops are shorter, so the bus still arrives in time. Sending another
 agent from Board, Desk or Town before the bus pulls away starts the shared
 countdown again for both; the bus never slows down for it, so it arrives early
-and waits longer. An agent sent after the bus has passed its stop waits at the
+and waits longer. An agent sent after the bus has left its stop waits at the
 next stop ahead instead. If you put back everyone at the bus's last stop, the
 bus drives off, then fades back in at the last stop that still has riders. If
 you put back every earlier rider, a late rider returns to its own room's stop

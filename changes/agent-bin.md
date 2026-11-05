@@ -31,6 +31,11 @@
   its room, the one bus calls only at stops with riders in road order at a
   speed fixed when it sets off, and tapping any stop opens the tray, which
   names each agent's stop.
+- Town's bus now stops briefly at every stop on its way, empty or not, like a
+  real bus, on a timetable still fixed when it sets off and drawn on every
+  street it drives; in a big town on a short countdown each stop is shorter so
+  it still arrives in time.
 - Keep the bus-stop chip aimed at the departure whose clock it shows when
-  trips overlap. Late riders joining during the final brake board at that stop;
+  trips overlap. Late riders joining while the bus holds at its final stop
+  board there;
   if every earlier rider is put back, the bus returns with them to their own stop.

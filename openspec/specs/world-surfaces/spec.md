@@ -4090,24 +4090,31 @@ leaves its desk and SHALL wait at the stop nearest its room (ties: road order).
 There SHALL still be one bus per departure, one shared countdown and one tray.
 The bus SHALL run a canonical route: every street with a stop in road order,
 each from the map's left edge to its right edge, leaving by the right and
-re-entering from the left for the next street. Its speed SHALL be fixed by the
-trip's own original countdown (the route length over the approach, which ends with
-10 s left, or over its first 3 s when the countdown is 10 s), and its progress
-SHALL be that speed times the service's active trip time, so a boarding reset,
-a hold or a Put back never changes its speed or moves it. It SHALL be drawn only
-on streets with an occupied stop, roll past occupied intermediate stops with its
-doors open while their riders board (no positional slowing), and ease into the
-last occupied stop in road order, waiting there with its doors open until the
-countdown ends; then pull away, speeding up, and leave the map by the right edge
-exactly as the departure ends, which is when the close commits. A rider who joins
-after the bus has passed its stop SHALL wait at the next stop ahead (or at the
-final stop, including while the bus already waits there). When a Put back leaves
+re-entering from the left for the next street. It SHALL stand briefly with its
+doors open at every stop it reaches, whether or not anyone waits there, and
+riders at a stop SHALL board during that same stand, with no extra time. Its
+timetable SHALL be fixed by the layout and the trip's own original countdown
+alone: the whole route, standing at every stop in the town, takes the approach,
+which ends with 10 s left, or the first 3 s when the countdown is 10 s. Each
+stand SHALL last 1 s, or less when the stops would otherwise take more than half
+the approach (then half the approach shared equally, so every stop still gets
+one). The bus SHALL cruise between stops at the one speed that fits, and its
+position SHALL follow that timetable on the service's active trip time, so a
+boarding reset, a hold or a Put back never changes its speed or moves it. It
+SHALL be drawn on every street it drives and hold at the last occupied stop in
+road order, waiting there with its doors open until the countdown ends, never
+reaching the stops after it; then pull away, speeding up, and leave the map by
+the right edge exactly as the departure ends, which is when the close commits.
+A rider who joins before the bus has left the stop nearest its room SHALL wait
+there; one who joins after SHALL wait at the first stop the bus has not yet
+left, and one who joins while the bus holds at its final stop after its stand
+SHALL wait at that stop. When a Put back leaves
 the last occupied stop behind the bus, the bus SHALL wait at that stop exactly as
 a trip that always ended there; a live view MAY drive the old bus off and fade it
 in there. If every rider who joined before it is put back, a late rider SHALL
 wait at its own stop and the bus SHALL return for it. A late rider that moves
-the final stop ahead while the bus is braking
-MAY move it by at most half its braking distance. The bus SHALL sound a short horn
+the final stop ahead during the bus's stand there SHALL NOT move the bus: it
+leaves after its usual stand. The bus SHALL sound a short horn
 as it reaches its final stop, under this device's sound setting. An agent sent
 while a bus has not yet pulled away SHALL board it, and the service SHALL restart
 the countdown in full for everyone on that bus. Drops from Board, Desk and Town SHALL
@@ -4215,15 +4222,25 @@ commits.
 
 - **WHEN** agent A from a room on the first street and agent B from a room on a
   lower street are dropped on any stops
-- **THEN** each waits at the stop nearest its own room, the one bus calls at A's
-  stop and then B's in road order on one countdown, a stop with nobody waiting
-  shows nothing, and tapping any stop opens the one tray naming each agent's stop
+- **THEN** each waits at the stop nearest its own room, the one bus stands at
+  every stop in road order on one countdown, including stops and streets with
+  nobody waiting, boards A and then B, waits at B's stop, and tapping any stop
+  opens the one tray naming each agent's stop
+
+#### Scenario: A big town on a short countdown
+
+- **WHEN** a town has more stops than one-second stands fit into half the
+  approach, such as 19 stops on a 30 s or 10 s countdown
+- **THEN** the bus still stands at every stop it reaches, each stand is shorter
+  (about 0.5 s and 0.08 s), and it still reaches its final stop with 10 s left
+  (or within the first 3 s of a 10 s countdown)
 
 #### Scenario: A rider joins behind the bus
 
-- **WHEN** an agent is sent after the bus has passed the stop nearest its room
+- **WHEN** an agent is sent after the bus has left the stop nearest its room
 - **THEN** it waits at the next stop ahead (or the bus's final stop), and a
-  reload shows the same stops, riders and bus position
+  reload shows the same stops, riders and bus position; one sent while the bus
+  stands at that stop boards it there
 
 #### Scenario: The final stop's riders are put back
 

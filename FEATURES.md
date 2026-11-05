@@ -185,15 +185,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the top of the screen, lighting up under your finger (the carry hint names
     it), and the town does not edge-pan beside it.
     The agent leaves its desk and waits with a box. One red double-decker runs
-    the route street by street from the left edge, at a speed fixed when it
-    sets off, showing only on streets where agents wait; it picks riders up as
-    it rolls past their stops and eases into the last one with a short horn,
+    the route street by street from the left edge, on a timetable fixed when
+    it sets off, stopping briefly at every stop (about a second, shorter in a
+    big town on a short countdown) whether or not anyone waits; riders board
+    at their stops and it stops at the last one with a short horn,
     waiting there until 0:00 (eight to a bus; more ride a second bus close
     behind). An agent who boards
     before the bus pulls away starts the countdown again in full for everyone
     on it. Board and Desk drops reset that same service countdown. The bus never
     slows for a reset: it arrives early and waits longer. An agent sent after
-    the bus passed its stop waits at the next stop ahead. Put back everyone at
+    the bus left its stop waits at the next stop ahead. Put back everyone at
     the last stop and the bus drives off, then fades in at the last stop that still
     has riders. If every earlier rider is put back, a late rider returns with the
     bus to its own room's stop, even if its assigned next stop was still ahead.

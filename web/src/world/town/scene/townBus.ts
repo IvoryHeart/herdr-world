@@ -3,10 +3,10 @@
  * as a pure function of the bin's state, the layout's stops and the service's
  * trip clock (route clock: townBusRoute.ts). One bus per departure (a bin
  * "trip"), with following buses in convoy when it has more riders than seats.
- * It runs the canonical route at a speed fixed by its trip's own countdown,
- * shows only on streets with an occupied stop, rolls past intermediate stops
- * (riders hop on) and eases into the last occupied one, waiting there with
- * its doors open until the countdown ends. Then it pulls away and leaves by
+ * It runs the canonical route on a timetable fixed by its trip's own
+ * countdown, drawn on every street it drives, and stands briefly at every
+ * stop it reaches, doors open (riders there board), until the last occupied
+ * one, where it waits with its doors open until the countdown ends. Then it pulls away and leaves by
  * the right edge exactly when the close commits (the entry's departure time).
  * Until it has left it can still be stopped. World pixels throughout.
  */
@@ -257,7 +257,7 @@ export function townBusScene(input: TownBusInput): TownBusScene {
         elapsed,
         phase,
         // Held (paused), a bus stands where it is with its doors open; it
-        // opens them too as it rolls past a stop where riders hop on.
+        // opens them too while it stands at any stop on its way.
         doorsOpen:
           phase === "waiting" ||
           input.paused ||
