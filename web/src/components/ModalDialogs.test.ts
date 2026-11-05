@@ -88,9 +88,11 @@ async function registerDomTests() {
   const { WorktreeOpenDialog } = await import("./WorktreeOpenDialog");
   const { WorktreeLifecycleDialog } = await import("./WorktreeLifecycleDialog");
   const { WorktreeLocationDialog } = await import("./WorktreeLocationDialog");
-  const { useWorktreePullRequests, useWorkspacePullRequests } = await import(
-    "../useWorktreePullRequests"
-  );
+  const {
+    forgetPullRequestLookups,
+    useWorktreePullRequests,
+    useWorkspacePullRequests,
+  } = await import("../useWorktreePullRequests");
   const { bridge } = await import("../api");
   const { __storeTesting, store } = await import("../store");
   const { WorkspaceTree } = await import("./WorkspaceTree");
@@ -149,6 +151,7 @@ async function registerDomTests() {
   afterEach(async () => {
     if (root) await act(async () => root?.unmount());
     root = null;
+    forgetPullRequestLookups();
     document.body.replaceChildren();
     await browser.happyDOM.whenAsyncComplete();
   });
@@ -1124,10 +1127,77 @@ async function registerDomTests() {
     },
   );
 
+  test("sidebar reviews shown again after another connection reuse a recent lookup", async () => {
+    const asked: Array<{ lane?: string }> = [];
+    const makeClient = (
+      connectionId: string,
+      generation: number,
+    ): ConnectionClient => ({
+      ...client,
+      connectionId,
+      generation,
+      call: async (_method, _params, _timeout, options) => {
+        asked.push({ lane: options?.lane });
+        return mergedStatus;
+      },
+    });
+    function Reviews({ client }: { client: ConnectionClient }) {
+      return h(
+        "pre",
+        null,
+        JSON.stringify(useWorkspacePullRequests(client, [sidebarWorkspace])),
+      );
+    }
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const render = (client: ConnectionClient) =>
+      act(async () => root!.render(h(Reviews, { client })));
+    const previousState = store.get();
+    const connection = (id: string) => ({
+      id,
+      label: id,
+      source: "local" as const,
+      is_default: id === "dialog-test",
+      state: "ready" as const,
+      generation: 1,
+    });
+    try {
+      __storeTesting.replaceState({
+        ...previousState,
+        connections: [
+          connection("dialog-test"),
+          connection("other-connection"),
+        ],
+      });
+      await render(makeClient("dialog-test", 1));
+      expect(asked).toEqual([{ lane: "background" }]);
+      // Another connection, then this one again: its badge is not asked twice.
+      await render(makeClient("other-connection", 2));
+      expect(asked).toHaveLength(2);
+      await render(makeClient("dialog-test", 3));
+      expect(asked).toHaveLength(2);
+      expect(container.textContent).toContain('"request"');
+      // A reconnect of the connection shown asks again. In World a reconnect
+      // is a new runtime generation, which also scopes the summaries.
+      await render({
+        ...makeClient("dialog-test", 4),
+        serverRuntimeGeneration: 2,
+      });
+      expect(asked).toHaveLength(3);
+    } finally {
+      __storeTesting.replaceState(previousState);
+      worldLocalStorage.removeItem(PULL_REQUEST_CACHE_KEY);
+    }
+  });
+
   test.each(["workspace", "worktree"] as const)(
     "%s detached reviews require a new successful lookup after reconnect",
     async (kind) => {
       const previousState = store.get();
+      // World's harness catalogues the test connection, so an earlier case's
+      // late lookup may have persisted a summary; count only this case's.
+      worldLocalStorage.removeItem(PULL_REQUEST_CACHE_KEY);
       let generation = 1;
       let ready = true;
       const replies: Array<(status: PullRequestStatus) => void> = [];

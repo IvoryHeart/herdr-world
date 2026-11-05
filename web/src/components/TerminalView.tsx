@@ -183,6 +183,11 @@ import {
   terminalWheelScroll,
 } from "../terminalScroll";
 import { TerminalSelectionDragGuard } from "../terminalSelectionGuard";
+import {
+  createEchoProbe,
+  latencyDebugEnabled,
+  logLatency,
+} from "../latencyDebug";
 import { applyTerminalTheme } from "../terminalThemes";
 import { useTerminalOptionAsMeta } from "../terminalOptionKey";
 import {
@@ -524,6 +529,8 @@ export function TerminalView({
   const attachedRef = useRef<string | null>(null);
   const attachingRef = useRef<string | null>(null);
   const desiredTerminalRef = useRef<string | null>(null);
+  // Opt-in latency samples: input to the next written frame (?debugLatency).
+  const echoProbeRef = useRef(latencyDebugEnabled ? createEchoProbe() : null);
   const ownedAttachmentRef = useRef<{
     terminalId: string;
     attempt: number;
@@ -1165,6 +1172,16 @@ export function TerminalView({
             autoDismissMs: 8000,
           }),
       },
+      {
+        written: () => {
+          const echoMs = echoProbeRef.current?.presented() ?? null;
+          if (echoMs !== null)
+            logLatency("terminal echo", {
+              terminal: desiredTerminalRef.current ?? undefined,
+              input_to_frame_ms: echoMs,
+            });
+        },
+      },
     );
     termRef.current = renderer.term;
     fitRef.current = renderer.fit;
@@ -1411,6 +1428,7 @@ export function TerminalView({
       acceptsEndpointInput() &&
       isActivePaneRef.current &&
       (!shouldAvoidVirtualKeyboard() || inputActiveRef.current);
+    const echoProbe = echoProbeRef.current;
 
     const inputData = term.onData((data) => {
       invalidateLinks();
@@ -1441,6 +1459,7 @@ export function TerminalView({
       if (!terminalId) return;
       imeKeyEvent.recordXtermData(unsuppressedData);
       const bytes = new TextEncoder().encode(unsuppressedData);
+      echoProbe?.sent(unsuppressedData);
       sendBytes(connectionClient, bytes, terminalId).catch(() => {});
     });
 
@@ -3385,6 +3404,11 @@ export function TerminalView({
                 return;
               }
               const recovery = recoveryBudgetRef.current.fail();
+              logLatency("attach watchdog fired", {
+                terminal: terminalId,
+                watchdog_ms: watchdogMs,
+                recovery,
+              });
               attachedRef.current = null;
               attachingRef.current = null;
               detachOwnedTerminal(terminalId);

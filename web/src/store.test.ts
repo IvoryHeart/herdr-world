@@ -1339,6 +1339,47 @@ describe("independent qualified operational sessions", () => {
     });
   });
 
+  test("a pane picked from a list on screen opens at once in browser-local mode", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const snapshot = partitionState();
+      __storeTesting.replaceState({
+        ...snapshot,
+        sessionsByConnectionId: {
+          ...snapshot.sessionsByConnectionId,
+          beta: session("beta", 1, {
+            navigationMode: "browser-local",
+            selectedPaneId: null,
+          }),
+        },
+      });
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const target = {
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: "same-pane",
+      };
+      const paneReads = () =>
+        calls.filter(
+          (call) => call.host === "beta" && call.method === "pane.get",
+        );
+      // Listed on screen: shown at once, without asking the host first.
+      expect(
+        await store.focusWorkspaceSource(target, { fromKnownList: true }),
+      ).toBe(true);
+      expect(paneReads()).toEqual([]);
+      expect(owned.get().selectedPaneId).toBe("same-pane");
+      // Other callers still check the pane with its host first.
+      expect(await store.focusWorkspaceSource(target)).toBe(true);
+      expect(paneReads()).toHaveLength(1);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
   test("opening a cold host waits for its already running topology refresh", async () => {
     await withIndependentClients(async (_calls, held) => {
       held.resolve({});

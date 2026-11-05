@@ -1459,11 +1459,24 @@ export const store = {
     );
   },
 
-  focusWorkspaceSource: (target: WorkspaceSourceTarget) =>
-    store.focusQualifiedTarget({ ...target, paneId: target.paneId ?? null }),
+  /**
+   * `options.fromKnownList`: the target was picked from a list on screen (the
+   * All servers rows), so a pane the connection last listed is shown at once.
+   */
+  focusWorkspaceSource: (
+    target: WorkspaceSourceTarget,
+    options: { fromKnownList?: boolean } = {},
+  ) =>
+    store.focusQualifiedTarget(
+      { ...target, paneId: target.paneId ?? null },
+      options,
+    ),
   loadConnectionSession: (connectionId: string) =>
     refreshNow(captureConnectionLease(connectionId), true),
-  async focusQualifiedTarget(target: QualifiedFocusTarget): Promise<boolean> {
+  async focusQualifiedTarget(
+    target: QualifiedFocusTarget,
+    options: { fromKnownList?: boolean } = {},
+  ): Promise<boolean> {
     if (!qualifiedRuntimeTargetIsCurrent(target)) return false;
     const lease = captureConnectionLease(target.connectionId);
     const navigationRevision = target.navigationRevision;
@@ -1492,7 +1505,23 @@ export const store = {
     return enqueueFocusAction(async () => {
       if (!current()) return false;
       let pane: Pane | null = null;
-      if (target.paneId) {
+      // Picked from a list on screen (Roamgate R#552): in browser-local mode
+      // a matching pane this connection last listed is shown at once, and the
+      // refresh navigateBrowser starts checks it after, not a pane.get first.
+      const listed =
+        options.fromKnownList &&
+        leaseSnapshot(lease).navigationMode === "browser-local"
+          ? leaseSnapshot(lease).panes.find(
+              (each) => each.pane_id === target.paneId,
+            )
+          : undefined;
+      if (
+        target.paneId &&
+        notificationPaneMatches(target, listed) &&
+        typeof listed.tab_id === "string"
+      ) {
+        pane = listed;
+      } else if (target.paneId) {
         const response = await lease.client.call("pane.get", {
           pane_id: target.paneId,
         });
