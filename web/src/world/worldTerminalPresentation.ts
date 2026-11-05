@@ -148,10 +148,6 @@ export function reconcileWorldInspectorConversation(
     current.terminalId === observed.terminalId &&
     current.context.agent === observed.context.agent;
   const waiting = samePane && current.awaitChatSession === true;
-  const arrived =
-    waiting &&
-    Boolean(observed.agentSessionFingerprint) &&
-    observed.availableViews.includes("history");
   const keepView =
     sameWorkspace &&
     observed.availableViews.includes(current.view) &&
@@ -160,10 +156,10 @@ export function reconcileWorldInspectorConversation(
       current.awaitChatSession !== undefined);
   const next: WorldInspectorConversation = {
     ...observed,
-    view: arrived ? "history" : keepView ? current.view : observed.view,
+    view: keepView ? current.view : observed.view,
     ...(current.awaitChatSession !== undefined
       ? {
-          awaitChatSession: arrived ? undefined : waiting,
+          awaitChatSession: waiting,
         }
       : {}),
     dock: current.dock,
@@ -248,7 +244,6 @@ export function worldInspectorForNode(
   const awaiting =
     view === "history" &&
     leaf?.kind === "agent" &&
-    !leaf.agentSessionFingerprint &&
     availableViews.includes("terminal");
   return {
     nodeId: node.id,

@@ -1972,11 +1972,15 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 ### Requirement: Honest agent startup presentation
 
-When Chat is the chosen opening view, an agent without a reported conversation
-SHALL open on Terminal. When the same agent reports its session, the window
-SHALL switch to Chat unless the user has chosen a view. Replacing the terminal
-or harness SHALL cancel that automatic switch.
+When Chat is the chosen opening view, an agent SHALL open on Terminal until
+Chat can show its conversation. No session, unsupported harness, missing
+integration and unreadable records SHALL all keep it on Terminal; a reported
+session alone is insufficient. When the same agent's conversation becomes
+readable, the window SHALL switch to Chat unless the user has chosen a view.
+Replacing the terminal or harness SHALL cancel that automatic switch, including
+late replies after the original identity is restored.
 
+Unavailable Chat explanations SHALL appear only when the user chooses Chat.
 Chat before a conversation exists SHALL show an empty conversation, plain
 starting/waiting guidance and Open Terminal. A named record that is missing or
 unreadable SHALL keep its error. Startup presentation SHALL NOT allow sending
@@ -1988,10 +1992,16 @@ messages or answering prompts without their existing authority checks.
 - **THEN** its window opens on Terminal; manually opened Chat explains startup
   without suggesting an integration install
 
-#### Scenario: The first session arrives
+#### Scenario: Chat becomes available
 
-- **WHEN** the same agent reports its session and no view was chosen by hand
+- **WHEN** the same agent's conversation becomes readable and no view was chosen by hand
 - **THEN** the existing window switches to Chat
+
+#### Scenario: A reported session has an unreadable record
+
+- **WHEN** the agent is opened and Chat cannot read its reported record
+- **THEN** the window stays on Terminal; choosing Chat manually shows the
+  original record error and Open Terminal
 
 #### Scenario: A view was chosen or the agent was replaced
 

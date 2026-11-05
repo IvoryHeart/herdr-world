@@ -93,8 +93,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     queue. Reopening or redocking the window keeps the
     conversation. A new agent without a session shows **No messages yet**;
     missing or unreadable reported transcripts still show their error. A window
-    without a conversation opens on Terminal and switches to Chat when the
-    session arrives, unless you choose a view by hand. Chat describes startup
+    opens on Terminal whenever Chat cannot show its conversation, including
+    when a reported record cannot be read. It switches once Chat is available,
+    unless you choose a view by hand. Unavailable messages appear when you
+    pick Chat yourself. Chat describes startup
     or a question plainly and offers Open Terminal; integration guidance waits
     while the agent is starting or waiting for you in Terminal. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide

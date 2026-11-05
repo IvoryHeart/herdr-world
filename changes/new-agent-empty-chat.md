@@ -7,7 +7,9 @@
   A definite failure allows a deliberate retry.
 - Ignore replies from a dismissed New agent window and finish opening a login
   tab before accepting another start, preserving the active attempt's result.
-- Open agents on Terminal until their conversation arrives, then switch to Chat
-  unless a view was chosen manually. Describe startup questions honestly and
+- Open agents on Terminal until Chat can show their conversation, including
+  when a session exists but its record is unreadable. Switch to Chat only when
+  it becomes available, unless a view was chosen manually. Show unavailable
+  explanations only in manually selected Chat. Describe startup questions honestly and
   show plain starting/waiting guidance instead of an installation hint.
   A replacement terminal or harness cannot inherit the old automatic switch.

@@ -735,9 +735,8 @@ describe("World view preference", () => {
     expect(worldIntentInitialView(agent, null)).toBe("terminal");
     expect(worldIntentInitialView(agent, "changes")).toBe("changes");
     expect(worldIntentInitialView(terminal, "history")).toBe("terminal");
-    // Opening a node anywhere: an agent Chat can read opens on Chat unless
-    // Agents open says Terminal; a shell, or a harness Chat cannot read,
-    // opens its terminal; a workspace opens its files.
+    // This chooses the opening intent; the window checks actual Chat availability.
+    // A shell opens Terminal and a workspace opens Files.
     expect(worldNodeOpenView(agent, "chat")).toBe("history");
     expect(worldNodeOpenView(agent, "terminal")).toBe("terminal");
     for (const harness of [
@@ -766,7 +765,15 @@ describe("World view preference", () => {
         { ...agent, pane: { ...agent.pane, agent: "gemini" } },
         "chat",
       ),
-    ).toBe("terminal");
+    ).toBe("history");
+    const opening = worldInspectorForNode(
+      { ...agent, agentSessionFingerprint: "reported-session" },
+      "history",
+      worldIntentViews(agent),
+      worldInspectorContext(agent)!,
+      { dock: "right", expanded: false, size: 520 },
+    );
+    expect(opening).toMatchObject({ view: "terminal", awaitChatSession: true });
     expect(worldNodeOpenView(world.spaces[0], "chat")).toBe("files");
     expect(worldNodeOpenView(world.hosts[0], "chat")).toBeNull();
     expect(worldInspectorContext(agent)).toMatchObject({
@@ -1738,7 +1745,7 @@ test("presentation retention follows exact catalogue owners regardless of host r
   ]);
 });
 
-test("a waiting window follows its first session; manual views and replacements cancel it", () => {
+test("a reported session alone cannot select Chat; manual views and replacements stay fenced", () => {
   const waiting = { ...inspectorConversation(0), awaitChatSession: true };
   const arrived = {
     ...waiting,
@@ -1746,9 +1753,10 @@ test("a waiting window follows its first session; manual views and replacements 
     resourceIdentity: "session",
     agentSessionFingerprint: "session",
   };
-  expect(reconcileWorldInspectorConversation(waiting, arrived).view).toBe(
-    "history",
-  );
+  expect(reconcileWorldInspectorConversation(waiting, arrived)).toMatchObject({
+    view: "terminal",
+    awaitChatSession: true,
+  });
   expect(
     reconcileWorldInspectorConversation(
       { ...waiting, view: "files", awaitChatSession: false },

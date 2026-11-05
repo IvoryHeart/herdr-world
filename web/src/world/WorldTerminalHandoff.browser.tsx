@@ -593,7 +593,10 @@ let client: ConnectionClient = {
     }
     // This fixture already exposes readable History. Its summary admits a
     // read-only conversation without inventing a native session or Send authority.
-    if (method === "agent_conversation.latest")
+    if (method === "agent_conversation.latest") {
+      const readable =
+        panes.find((pane) => pane.pane_id === params.pane_id)?.agent ===
+        "claude";
       return {
         conversation_version: 1,
         source: "synthetic",
@@ -603,11 +606,18 @@ let client: ConnectionClient = {
         session_binding: "guessed",
         session_fingerprint: null,
         session_label: "Synthetic readable conversation",
-        status: "ok",
-        unavailable: null,
+        status: readable ? "ok" : "unavailable",
+        unavailable: readable
+          ? null
+          : {
+              reason: "unsupported_agent",
+              detail:
+                "This synthetic harness has no Chat support. Open Terminal.",
+            },
         messages: [],
         latest: null,
       };
+    }
     if (method === "agent_history.get") {
       return {
         status: "ok",

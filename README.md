@@ -76,8 +76,9 @@ open it at full resolution.
 [![Spaces with the workspace list and a live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
 
 Each agent has one window with Chat, Terminal, Files and Changes, whether
-opened from Town, Board or Desk. Before a conversation exists, it opens on
-Terminal and switches to Chat when the conversation arrives, unless you chose
+opened from Town, Board or Desk. When set to open Chat, it starts on Terminal
+until Chat can show the conversation, including when a session exists but its
+record cannot be read. It switches once Chat is available, unless you chose
 a view yourself. See [Chat](./docs/CHAT.md) and the
 [tutorial's review exercise](./docs/TUTORIAL.md#daily) for the complete flow.
 

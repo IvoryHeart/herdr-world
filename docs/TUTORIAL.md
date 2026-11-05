@@ -910,11 +910,12 @@ attention, and `done`/`idle` suggest when to return. **Status is not verificatio
 Open **Chat** in the Inspector to read the conversation and reply. Chat shows
 user and agent messages, with one line for each run of tool calls, and updates
 while the agent works. A new agent without a session shows **No messages yet.**
-Its window starts on **Terminal** for startup questions and switches to Chat
-when its session arrives, unless you have chosen a view yourself. Chat offers
-**Open Terminal** while it is starting or waiting for you, rather than
-suggesting an integration install.
-A missing or unreadable reported transcript still shows an error.
+With Chat as the opening preference, its window starts on **Terminal** whenever
+Chat cannot show the conversation: no session, unsupported harness, missing
+integration or an unreadable record. It switches once Chat is available, unless
+you have chosen a view yourself. Pick Chat yourself to see its explanation and
+**Open Terminal**. A missing or unreadable reported transcript keeps its error;
+an agent still starting or waiting is not told to install an integration.
 If Chat cannot read the conversation it says why and
 offers the fix it names, or **Open Terminal**. A message you send shows as
 not yet seen until the transcript has the same words; if it went to another session, a red
