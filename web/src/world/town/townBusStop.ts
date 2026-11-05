@@ -182,3 +182,40 @@ export function townStopRooms(layout: {
   }
   return result;
 }
+
+/**
+ * A street's furniture: a bus stop at every crossing (each stepping past a
+ * bar door's path onto its pavement; the main one nearest the centre), and a
+ * lamp every 11 tiles along each street's top pavement, clear of crossings and
+ * stops. `walk` says whether a tile is pavement.
+ */
+export function townStreetFurniture(
+  town: {
+    roads: readonly number[];
+    verticalRoads: readonly { x: number; y0: number; y1: number }[];
+    width: number;
+    height: number;
+    margin: number;
+    buildings: readonly { barDoorX: number; roadY: number }[];
+  },
+  walk: (x: number, y: number) => boolean,
+) {
+  const { roads, verticalRoads, width } = town;
+  const busStops = townBusStops(
+    roads,
+    verticalRoads,
+    { width, height: town.height },
+    town.margin,
+    town.buildings.map((b) => ({ x: b.barDoorX, y: b.roadY })),
+  );
+  const lamps: { x: number; y: number }[] = [];
+  for (const ry of roads)
+    for (let tx = 6; tx < width - 4; tx += 11) {
+      if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
+      if (busStops.some((stop) => nearTownBusStop(stop, { x: tx, y: ry })))
+        continue;
+      if (walk(tx, ry)) lamps.push({ x: tx, y: ry });
+    }
+  const busStop = busStops.find((stop) => stop.main)!;
+  return { busStops, busStop, lamps };
+}

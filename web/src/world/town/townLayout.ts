@@ -1,6 +1,6 @@
 /** Deterministic Town layout with stable room capacity, pins and desk order. */
 
-import { nearTownBusStop, townBusStops, type TownBusStop } from "./townBusStop";
+import { townStreetFurniture, type TownBusStop } from "./townBusStop";
 
 export const TOWN_TILE = 16;
 
@@ -779,22 +779,10 @@ export function layoutTown(
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
-  const busStops = townBusStops(
-    roads,
-    verticalRoads,
-    { width, height },
-    MARGIN,
-    buildings.map((b) => ({ x: b.barDoorX, y: b.roadY })),
+  const { busStops, busStop, lamps } = townStreetFurniture(
+    { roads, verticalRoads, width, height, buildings, margin: MARGIN },
+    (tx, ty) => get(tx, ty) === TownGround.walk,
   );
-  const busStop = busStops.find((stop) => stop.main)!;
-  const lamps: TownPoint[] = [];
-  for (const ry of roads)
-    for (let tx = 6; tx < width - 4; tx += 11) {
-      if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
-      if (busStops.some((stop) => nearTownBusStop(stop, { x: tx, y: ry })))
-        continue;
-      if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
-    }
 
   const random = mulberry32(42);
   const trees: TownTree[] = [];
