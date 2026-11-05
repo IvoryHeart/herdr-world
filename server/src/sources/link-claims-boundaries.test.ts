@@ -165,6 +165,8 @@ test("successful truncated GitHub pages retain a branch claim until absence is c
     const query = argv.at(-1)!;
     if (
       !query.includes("authored: search") &&
+      !query.includes("reviewing: search") &&
+      !query.includes("assigned: search") &&
       !query.includes("merged: search")
     )
       return { code: 1, stdout: "", stderr: "unavailable detail" };
@@ -257,7 +259,9 @@ test("the service retires owners immediately, independently of its cached topolo
         stderr: "",
       };
     if (argv[1] === "auth") return { code: 0, stdout: "", stderr: "" };
-    if (!argv.at(-1)!.includes("authored: search"))
+    if (
+      !/authored: search|reviewing: search|assigned: search/u.test(argv.at(-1)!)
+    )
       return { code: 1, stdout: "", stderr: "" };
     return {
       code: 0,

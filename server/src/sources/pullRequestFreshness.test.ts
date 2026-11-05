@@ -62,7 +62,7 @@ function fixture() {
     if (argv[1] === "pr") return { code: 0, stdout: "", stderr: "" };
     const query = argv.at(-1)!;
     if (query.includes("p0: repository")) return read();
-    if (query.includes("authored: search"))
+    if (/authored: search|reviewing: search|assigned: search/u.test(query))
       return ok({
         authored: { nodes: [current] },
         reviewing: { nodes: [] },
@@ -254,6 +254,12 @@ describe("PR detail freshness is independent of list success", () => {
       const query = argv.at(-1)!;
       if (query.includes("merged: search"))
         return ok({ merged: { nodes: [], pageInfo: { hasNextPage: false } } });
+      if (/reviewing: search|assigned: search/u.test(query))
+        return ok({
+          reviewing: { nodes: [] },
+          assigned: { nodes: [] },
+          issues: { nodes: [] },
+        });
       if (query.includes("authored: search"))
         return ok({
           authored: {

@@ -31,9 +31,8 @@ test("exhaustive four-search completeness requires affirmative end-of-list evide
               ),
             );
         }
-  const query = githubQuery();
   for (const alias of ["authored", "reviewing", "assigned"])
-    expect(query).toMatch(
+    expect(githubQuery(alias as "authored" | "reviewing" | "assigned")).toMatch(
       new RegExp(`${alias}: search[^\\n]+pageInfo \\{ hasNextPage \\}`),
     );
 });
@@ -77,7 +76,7 @@ test("malformed row sets and a capped merged search cannot prove claim absence",
       stderr: "",
     };
   }, 100);
-  // Open work, then GitHub's 1,000-result limit at fifty per page.
-  expect(pages).toBe(21);
+  // Three open searches, then the 400-result history bound at fifty per page.
+  expect(pages).toBe(11);
   expect(result.ok && result.pullRequestsComplete).toBe(false);
 });

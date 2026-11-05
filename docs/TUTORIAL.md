@@ -643,7 +643,12 @@ on your phone and desktop.
    working on it; tap one to close Work and jump to its card. **Merged**
    groups the week's pull requests you opened by the day they merged, with
    today open; tap a day to open
-   it, and change how many days it covers in **Settings → Sources**. Escape or a
+   it, and change how many days it covers in **Settings → Sources**. History
+   has a 400-PR bound and shares a one-minute refresh deadline with open work
+   and action details, which are read first. If Sources says history was
+   shortened, shorten the window there and refresh. World keeps its last
+   complete list; the reported merge date is only the oldest valid date
+   observed, not proof that every merge since that date was read. Escape or a
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull

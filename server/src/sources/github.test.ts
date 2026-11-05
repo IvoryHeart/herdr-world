@@ -196,9 +196,19 @@ describe("GitHub source", () => {
     const now = Date.parse("2026-03-10T12:00:00Z");
     const query = mergedPageQuery(now, 7);
     expect(query).toContain("merged:>=2026-03-03T12:00:00Z");
-    expect(githubQuery()).toContain("review-requested:@me");
+    expect(githubQuery("reviewing")).toContain("review-requested:@me");
+    for (const alias of ["authored", "reviewing", "assigned"] as const) {
+      const open = githubQuery(alias);
+      expect(
+        open.match(/: search\(type: ISSUE, first: 50, query: "is:pr/gu),
+      ).toHaveLength(1);
+      expect(open).not.toContain("merged: search(");
+      expect(open.includes("issues: search(")).toBe(alias === "assigned");
+    }
     expect(query).toMatch(/merged: search\(type: ISSUE, first: 50,/u);
     expect(query).toContain("pageInfo { hasNextPage endCursor }");
+    expect(query).toContain("issueCount");
+    expect(mergedPageQuery(now, 7, "page-1")).not.toContain("issueCount");
     expect(mergedPageQuery(now, 7, "page-1")).toMatch(
       /merged: search\(type: ISSUE, after: "page-1", first: 50,/u,
     );
@@ -238,6 +248,7 @@ describe("GitHub source", () => {
       );
       const more = (page + 1) * 50 < total;
       const search = {
+        issueCount: total,
         pageInfo: { hasNextPage: more, endCursor: `page-${page + 1}` },
         nodes,
       };
@@ -259,21 +270,49 @@ describe("GitHub source", () => {
     expect(items[0]).toMatchObject({
       finishedAt: Date.parse("2026-03-09T08:00:00Z"),
     });
-    // Open work, then five pages of merged pull requests.
-    expect(queries).toHaveLength(6);
-    expect(queries[1]).not.toContain("after:");
-    expect(queries[2]).toContain('after: "page-1"');
-    expect(queries[2]).not.toContain("review-requested");
-    expect(queries[5]).toContain('after: "page-4"');
+    // Three open searches, then five pages of merged pull requests.
+    expect(queries).toHaveLength(8);
+    expect(queries[3]).not.toContain("after:");
+    expect(queries[4]).toContain('after: "page-1"');
+    expect(queries[4]).not.toContain("review-requested");
+    expect(queries[7]).toContain('after: "page-4"');
   });
 
-  test("stops at GitHub's 1,000-result search limit", async () => {
-    const { run, queries } = pagedGitHub(5_000);
+  test("reads a complete 400-result history within the page bound", async () => {
+    const { run, queries } = pagedGitHub(400);
     const result = await refreshGitHub(run, 0);
     expect(
       result.ok && result.items.filter((item) => item.lane === "merged"),
-    ).toHaveLength(1_000);
-    expect(queries).toHaveLength(21);
+    ).toHaveLength(400);
+    expect(result.ok && result.pullRequestsComplete).toBe(true);
+    expect(queries).toHaveLength(11);
+  });
+
+  test("401 results stop after the first count check with an observed merge date", async () => {
+    const { run, queries } = pagedGitHub(401);
+    expect(await refreshGitHub(run, 0)).toEqual({
+      ok: false,
+      state: "error",
+      detail:
+        "GitHub history was shortened; oldest confirmed merge: 2026-03-09. World keeps the last complete list. Shorten the merged window in Settings > Sources.",
+    });
+    expect(queries).toHaveLength(4);
+  });
+
+  test("a shortened history without a valid observed merge date names no cutoff", async () => {
+    const { run: paged } = pagedGitHub(401);
+    const run: RunProcess = async (argv, timeout) => {
+      const answer = await paged(argv, timeout);
+      if (!argv.at(-1)!.includes("merged: search(")) return answer;
+      const body = JSON.parse(answer.stdout);
+      for (const node of body.data.merged.nodes) node.mergedAt = "invalid";
+      return { ...answer, stdout: JSON.stringify(body) };
+    };
+    expect(await refreshGitHub(run, 0)).toMatchObject({
+      ok: false,
+      detail:
+        "GitHub history was shortened before a merge date could be confirmed. World keeps the last complete list. Shorten the merged window in Settings > Sources.",
+    });
   });
 
   test("a failed page fails the refresh, so the last complete list stays", async () => {
@@ -296,7 +335,7 @@ describe("GitHub source", () => {
         result.ok && result.items.filter((item) => item.lane === "merged"),
       ).toHaveLength(total);
       expect(result.ok && result.pullRequestsComplete).toBe(true);
-      expect(queries).toHaveLength(1 + merges);
+      expect(queries).toHaveLength(3 + merges);
     }
   });
 
@@ -306,7 +345,60 @@ describe("GitHub source", () => {
       ok: false,
       state: "error",
     });
-    expect(queries).toHaveLength(2);
+    expect(queries).toHaveLength(4);
+  });
+
+  test("a pull request merged between requests keeps its merged observation and every role", async () => {
+    const queries: string[] = [];
+    const open = pr(1, { baseRefName: "main", headRefOid: "a".repeat(40) });
+    const mergedAt = "2026-03-09T08:00:00Z";
+    const updatedAt = "2026-03-09T08:01:00Z";
+    const run: RunProcess = async (argv) => {
+      if (argv[1] === "auth") return { code: 0, stdout: "", stderr: "" };
+      const query = argv.at(-1)!;
+      queries.push(query);
+      const data = query.includes("merged: search(")
+        ? response({
+            merged: [
+              pr(1, {
+                state: "MERGED",
+                title: "Merged synthetic change",
+                mergedAt,
+                updatedAt,
+              }),
+            ],
+          }).data
+        : response({
+            authored: [open],
+            reviewing: [open],
+            assigned: [open],
+          }).data;
+      for (const search of Object.values(data))
+        Object.assign(search, { pageInfo: { hasNextPage: false } });
+      return { code: 0, stdout: JSON.stringify({ data }), stderr: "" };
+    };
+
+    const result = await refreshGitHub(run, Date.parse("2026-03-10T12:00:00Z"));
+    expect(result).toMatchObject({ ok: true, pullRequestsComplete: true });
+    const items = result.ok ? result.items : [];
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      key: "github:pr:example-org/widgets#1",
+      title: "Merged synthetic change",
+      lane: "merged",
+      status: "merged",
+      finishedAt: Date.parse(mergedAt),
+      updatedAt: Date.parse(updatedAt),
+      roles: ["author", "reviewer", "assignee"],
+    });
+    expect(items[0]).not.toHaveProperty("base");
+    expect(items[0]).not.toHaveProperty("headSha");
+    expect(items[0]).not.toHaveProperty("pr");
+    expect(items[0]).not.toHaveProperty("prObservation");
+    // Details are read before history, but never attached to its merged row.
+    expect(queries).toHaveLength(5);
+    expect(queries[3]).toContain("p0: repository");
+    expect(queries[4]).toContain("merged: search(");
   });
 
   test("a pull request that shifts onto the next page while paging is kept once", async () => {
@@ -332,7 +424,7 @@ describe("GitHub source", () => {
   });
 
   test("all pages share one deadline", async () => {
-    const { run: paged } = pagedGitHub(5_000);
+    const { run: paged } = pagedGitHub(400);
     let clock = 0;
     const timeouts: number[] = [];
     const run: RunProcess = async (argv, timeoutMs) => {
@@ -385,6 +477,8 @@ describe("GitHub source", () => {
     ]);
     expect(calls.map((argv) => argv.slice(0, 3))).toEqual([
       ["gh", "auth", "status"],
+      ["gh", "api", "graphql"],
+      ["gh", "api", "graphql"],
       ["gh", "api", "graphql"],
       ["gh", "api", "graphql"],
     ]);
