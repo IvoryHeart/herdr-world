@@ -1,8 +1,11 @@
 # World style guide
 
-**Status: proposed, awaiting owner approval.** Use it for new UI and for
-anything you touch. Token and component changes come in separate PRs after
-approval. This guide doesn't change product code.
+**Status: proposed, awaiting owner approval.** All rules below are proposals
+unless explicitly described as shipping facts. Mockups may explore these rules
+now; shipping changes, including #638, wait for the owner decision coordinated
+by steward-main. Phase 1 is ready for mockups, not owner-approved. After approval,
+apply the approved rules to new UI and code you touch. Token and component
+changes come in separate PRs. This guide doesn't change product code.
 
 World is one Bun service with a React web app. Its look comes from
 [Roamgate](../../UPSTREAM.md): colour tokens in
@@ -12,7 +15,8 @@ views, Town, Board and Desk, plus floating windows and trays. This guide says
 how they all look like one product.
 
 The images are a static specimen rendered from the real `tokens.css` and
-`base.css`, with synthetic names. They are not product screenshots.
+`base.css`, with local styles illustrating the proposals and synthetic names.
+They are not product screenshots or evidence of reusable shipping APIs.
 
 ## Contents
 
@@ -50,17 +54,33 @@ The images are a static specimen rendered from the real `tokens.css` and
 
 ## Skins
 
+**Shipping precedent:** `.world-managed-window.is-town-skin` in
+[`windows.css`](../../web/src/world/windows/windows.css) remaps text, accent
+and viewer tokens, sets the window background directly and adds the Town edge
+ring. It does **not** remap `--panel` or `--panel-2`. Town window controls use
+dedicated `--town-button` rules, so shell panel/control tokens alone do not
+produce the pictured Town appearance today. Window UI uses Rubik; window titles
+use Pixelify Sans, bundled in
+[`worldFonts.css`](../../web/src/world/worldFonts.css).
+
+**Proposed skin contract:** extend that precedent to shared panel and control
+roles so components can use shell tokens in both skins. This is future work,
+not an existing component guarantee.
+
 | Skin | Where | How |
 | --- | --- | --- |
 | **Shell** (default) | Board, Desk, Spaces, Chat, dialogs, settings | `tokens.css` as is; accent colours from the user's accent setting |
-| **Town** | the Town view and every surface floating over it | a scope that re-maps the shell tokens to Town values, as `.world-managed-window.is-town-skin` does in [`windows.css`](../../web/src/world/windows/windows.css), plus a 2 px edge ring |
+| **Town** | the Town view and every surface floating over it | a proposed fuller shell-token remap, extending the existing window scope, plus a 2 px edge ring |
 
-- Town re-maps `--panel`, `--text`, `--text-strong`, `--muted`, `--accent`,
-  `--accent-soft` and `--panel-2`.
-- Town's fonts are Rubik for UI text and Silkscreen for plaques and window
-  titles. Never use Silkscreen for body text, names or buttons.
-- Components never read `--town-*` tokens or hard-code Town colours. A
-  component written in shell tokens is automatically right in both skins.
+- The proposed scope remaps `--panel`, `--text`, `--text-strong`, `--muted`,
+  `--accent`, `--accent-soft` and `--panel-2`, including shared control roles.
+- The proposed font policy keeps Rubik for UI text and uses Silkscreen for
+  plaques and window titles. Changing window titles from Pixelify Sans requires
+  approval and a later implementation. Silkscreen is never for body text, names
+  or buttons.
+- Under the proposed contract, components use shell tokens rather than reading
+  `--town-*` tokens or hard-coding Town colours. The specimen illustrates this
+  fuller remap with local styles; today's window scope does not supply it.
 
 | Shell | Town |
 | --- | --- |
@@ -160,7 +180,16 @@ Never nest a radius equal to or larger than its container's.
 
 ### Button
 
-All variants are in `base.css`.
+**Shipping selectors:** [`base.css`](../../web/src/styles/base.css) supplies
+`button`, `button.ghost` and `button.danger`. Its soft primary is positional:
+`.modal-actions > button:last-child:not(.ghost):not(.danger)`. An ordinary button
+outside that context remains secondary. Modal actions currently have a 34 px
+minimum height.
+
+**Proposed reusable APIs:** a primary variant, a link-button variant and shared
+28/32/44 px size variants. These are local specimen styles today, not reusable
+variants exported by `base.css`. The table and sizes below describe the proposal;
+this PR does not implement them.
 
 ![Primary, secondary, quiet, destructive and link buttons at 32 and 28 px](images/buttons.png)
 
@@ -236,6 +265,10 @@ inner highlight.
    - Size and position: 14 px tall, minimum 14 px wide, padding 0 2, radius 7,
      offset `-7px` top and `-9px` right.
    - Colour and text: `--accent` fill, `--bg` text, 9 px/700.
+     This inherited pair has a known neutral light-theme contrast gap:
+     `#e1e2e7` on `#2e7de9` is 3.1062:1, below 4.5:1 for these small digits.
+     The proposed unification needs an accessible foreground/fill pairing,
+     pending owner approval; this is not an approved colour prescription.
    - Hidden at 0 and capped at 99+. Its parent must not clip it.
 2. **Inline count in a label** ("Now 32"): 11/600, padding 0 6, 16 px tall,
    radius 999, `color-mix(in srgb, var(--text) 12%, transparent)` fill and
@@ -285,8 +318,13 @@ On phones, dialog buttons are 44 px.
 
 ![Phone header: view name, Needs you with its count, Hosts, command menu and Menu; and a sheet header with Back](images/phone-header.png)
 
-- **Bar:** 40 px plus the safe-area top, padding 6 10, gap 8. Sticky and
-  opaque.
+- **Bar (proposed):** 48 px excluding the safe-area top, matching the
+  specimen's bar height. Total border-box height is
+  `calc(48px + env(safe-area-inset-top, 0px))`, including the bottom divider.
+  Use the safe-area inset as top padding, no other vertical padding, 10 px
+  horizontal padding and an 8 px gap. Centre a row of 44 px targets in the
+  remaining bar space. Sticky and opaque. The specimen shows the visual height;
+  its 6 px vertical padding is not the proposed hit-area layout.
 - **No second bar under the header.** Notices go to Needs you or a toast.
 - **Left:** the view name, then the Needs you icon with its count badge. On a
   detail screen, `‹ Back` and the title instead.
@@ -294,7 +332,9 @@ On phones, dialog buttons are 44 px.
   most four icon buttons in the whole bar at 360 px.
 - **Icon buttons:** 36 px drawn, 44 px hit area, radius 8, the
   `--topbar-control-*` tokens. When pressed or open: an `--accent` border and
-  `--topbar-control-active-bg`.
+  `--topbar-control-active-bg`. Reserve a separate 44 px-wide layout slot for
+  each target; centre the 36 px visual inside it. Targets stay within the bar
+  below the safe area and never overlap adjacent targets.
 - `‹ Back` is the only text button in the phone header.
 - The header collapses while the keyboard is up for terminal input.
 
@@ -303,7 +343,8 @@ On phones, dialog buttons are 44 px.
 On phones, every tappable thing has a 44 × 44 px hit area. That includes link
 buttons, ⓘ, dock icons and header icons. A control drawn smaller extends its hit
 area with a transparent pseudo-element (`::before { inset: -4px }` or more)
-without moving its neighbours.
+while reserving enough layout space to avoid overlap with neighbours. In the
+header, use the 44 px slots above rather than overlapping hit extensions.
 
 ### Viewports
 
@@ -326,8 +367,12 @@ laptop 1512 × 982, half 1280 × 1440, wide 2560 × 1440 and portrait 1440 × 25
   - Known gap: today `--muted` reaches only 3.7:1 on `--panel` in the dark
     theme and 3.4:1 in the light theme.
   - Light-theme `--accent` links on `--panel` reach 2.9:1.
-  - A token fix waits for the owner's decision. Until then, don't use `--muted`
-    for text a person must read to act.
+  - Neutral light-theme count digits (`--bg` on `--accent`, `#e1e2e7` on
+    `#2e7de9`) reach 3.1062:1. This is a separate gap from accent links on
+    `--panel`. An accessible label does not fix the visible digits' contrast.
+  - Token fixes and an accessible badge foreground/fill pairing wait for the
+    owner's decision. Until then, don't use `--muted` for text a person must
+    read to act, or treat the inherited badge pair as contrast-compliant.
 - Every control has a visible `:focus-visible` style. Never set
   `outline: none` without a replacement ring.
 - Icon-only buttons have an `aria-label`. Counts are part of the label
@@ -356,8 +401,10 @@ laptop 1512 × 982, half 1280 × 1440, wide 2560 × 1440 and portrait 1440 × 25
 
 ## Checklist for a UI change
 
-Before you ask for review:
+For mockup review now, and shipping UI review after owner approval:
 
+- [ ] For shipping changes, the applicable owner decisions are approved;
+      proposed rules alone do not authorize implementation, including #638.
 - [ ] Colours come from the role tokens. No new hex values and no hex
       fallbacks.
 - [ ] Spacing is from 2, 4, 6, 8, 10, 12, 16 or 24, and type is from 11, 12,
@@ -367,6 +414,9 @@ Before you ask for review:
 - [ ] Cards follow header, body, answer zone, footer.
 - [ ] Counts use the one count badge, and status uses the state map plus an
       icon or word.
+- [ ] Verify visible text contrast, including count digits, against the actual
+      surface in both themes and the Town skin (4.5:1 for small text). Record
+      gaps and pending colour decisions; labels do not replace this check.
 - [ ] A surface over Town wears the Town skin.
 - [ ] Phone: 44 px hit areas, Back at the top left, no new header bar.
 - [ ] Focus is visible, icon buttons have labels, and the change honours
