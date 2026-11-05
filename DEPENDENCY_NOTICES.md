@@ -123,6 +123,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @lezer/yaml | 1.0.4 | MIT |
 | @lobehub/icons-static-svg | 1.102.0 | MIT |
 | @marijn/find-cluster-break | 1.0.2 | MIT |
+| @napi-rs/canvas | 1.1.0 | MIT |
 | @nodelib/fs.scandir | 2.1.5 | MIT |
 | @nodelib/fs.stat | 2.0.5 | MIT |
 | @nodelib/fs.walk | 1.2.8 | MIT |
@@ -372,6 +373,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | parse5 | 8.0.1 | MIT |
 | partial-json | 0.1.7 | MIT |
 | path-key | 3.1.1 | MIT |
+| pdfjs-dist | 6.4.299 | Apache-2.0 |
 | picocolors | 1.1.1 | ISC |
 | picomatch | 2.3.2 | MIT |
 | picomatch | 4.0.7 | MIT |

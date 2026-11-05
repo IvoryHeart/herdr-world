@@ -1130,8 +1130,10 @@ is open in the current connection.
   leading `/` resolves from the filesystem root.
   External links open a new browser tab.
 - Preview SVG, PNG/APNG, JPEG, GIF, WebP, BMP, ICO, and AVIF images with zoom and
-  Fit controls, plus PDFs and workspace-local Markdown images. Unsupported
-  binaries remain download-only; image decoding depends on the browser.
+  Fit controls, plus PDFs and workspace-local Markdown images. Phones and other
+  browsers without a PDF viewer draw a PDF three pages at a time, with Previous
+  pages and Next pages. Unsupported binaries remain download-only; image
+  decoding depends on the browser.
 - Drag uploads onto the root/directory. Download files or workspace-scoped
   `.tar.gz` directories; copy absolute paths; delete with confirmation.
   Open actions by right-click or touch long-press.
