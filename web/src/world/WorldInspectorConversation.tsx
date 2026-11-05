@@ -281,6 +281,9 @@ function InspectorResources({
           reply.pane_id === conversation.paneId &&
           reply.status === "ok" &&
           reply.unavailable === null &&
+          // A Codex title that names no thread yet reads "ok", but Chat has no
+          // conversation to show and cannot tell where a message would go.
+          !(reply.session_binding === "title" && !reply.session_fingerprint) &&
           (reply.session_binding !== "reported" ||
             !conversation.agentSessionFingerprint ||
             reply.session_fingerprint === conversation.agentSessionFingerprint)

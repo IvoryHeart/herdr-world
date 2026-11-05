@@ -71,9 +71,19 @@ export function AgentLauncherDialog({
   useLayer(true, dismiss, { element: () => ref.current });
   const { document } = useAgentProfiles();
   const profiles = document?.profiles ?? [];
+  // A ready host keeps its rooms listed while one observation is uncertain
+  // (invalidated in flight); only actionable rooms can start anything.
   const rooms = useMemo(
-    () => world.spaces.filter((space) => space.actionable && !space.stale),
-    [world.spaces],
+    () =>
+      world.spaces.filter((space) => {
+        if (space.actionable && !space.stale) return true;
+        const host = world.hosts.find(({ id }) => id === space.parentId);
+        return (
+          host?.connection.state === "ready" &&
+          host.connection.generation === space.generation
+        );
+      }),
+    [world.spaces, world.hosts],
   );
   const preferred = initial.profileId
     ? profiles.find((p) => p.id === initial.profileId)
@@ -105,12 +115,15 @@ export function AgentLauncherDialog({
           space.generation === selection.generation,
       ) ?? null)
     : null;
-  const target: LaunchTarget | null = room && {
-    connectionId: room.connectionId,
-    generation: room.generation,
-    workspaceId: room.nativeId,
-    workspaceLabel: room.label,
-  };
+  const target: LaunchTarget | null =
+    room?.actionable && !room.stale
+      ? {
+          connectionId: room.connectionId,
+          generation: room.generation,
+          workspaceId: room.nativeId,
+          workspaceLabel: room.label,
+        }
+      : null;
   const [task, setTask] = useState("");
   const [catalog, setCatalog] = useState<LauncherCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);

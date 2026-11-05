@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { bridge } from "../api";
 import { store } from "../store";
 import { AgentLauncherDialog } from "../world/AgentLauncherDialog";
 import type { LaunchOutcome } from "../world/agentProfiles";
-import type { WorldObject } from "../world/worldObject";
+import { buildWorldObject, type WorldObject } from "../world/worldObject";
 import "../styles/tokens.css";
 import "../styles/base.css";
 
@@ -27,6 +28,61 @@ const world = {
     },
   ],
 } as unknown as WorldObject;
+/** The room as World observes it; `uncertain` is a ready host whose latest
+ * observation was invalidated in flight (stale, not actionable). */
+const observedWorld = (uncertain: boolean) =>
+  buildWorldObject(
+    [
+      {
+        connectionId: "alpha",
+        label: "Demo host",
+        source: "startup-config",
+        isDefault: true,
+        state: "ready",
+        generation: 7,
+        snapshotGeneration: 7,
+        stale: uncertain,
+        actionable: !uncertain,
+        snapshot: {
+          workspaces: [
+            {
+              workspace_id: "room",
+              number: 1,
+              label: "Demo room",
+              focused: true,
+              pane_count: 1,
+              tab_count: 1,
+              agent_status: "idle",
+            },
+          ],
+          tabs: [
+            {
+              tab_id: "tab",
+              workspace_id: "room",
+              number: 1,
+              label: "Shell",
+              focused: true,
+              pane_count: 1,
+              agent_status: "idle",
+            },
+          ],
+          panes: [
+            {
+              pane_id: "pane",
+              workspace_id: "room",
+              tab_id: "tab",
+              terminal_id: "terminal",
+              focused: true,
+              agent_status: "idle",
+              revision: 1,
+            },
+          ],
+          agents: [],
+        },
+      },
+    ] as Parameters<typeof buildWorldObject>[0],
+    "alpha",
+  );
 async function run() {
   const previous = {
     connection: bridge.connection,
@@ -34,6 +90,7 @@ async function run() {
     create: store.createQualifiedTab,
   };
   let starts = 0,
+    catalogs = 0,
     includeLogin = false;
   let answer = Promise.withResolvers<LaunchOutcome>();
   let login = Promise.withResolvers<{ terminal_id: string; command: string }>();
@@ -72,6 +129,7 @@ async function run() {
         }
         if (method === "launcher.login") return login.promise;
         if (method !== "launcher.catalog") throw Error(`Unexpected ${method}`);
+        catalogs++;
         const kinds = [
           "codex",
           ...(includeLogin ? ["claude"] : []),
@@ -96,8 +154,11 @@ async function run() {
       },
     };
   };
-  function Harness() {
+  let showWorld: (next: WorldObject) => void = () => {};
+  function Harness({ initialWorld = world }: { initialWorld?: WorldObject }) {
     const [open, setOpen] = useState(true);
+    const [shown, setShown] = useState(initialWorld);
+    showWorld = setShown;
     return (
       <>
         <button id="reopen" onClick={() => setOpen(true)}>
@@ -105,7 +166,7 @@ async function run() {
         </button>
         {open ? (
           <AgentLauncherDialog
-            world={world}
+            world={shown}
             initial={initial}
             onOpen={(target) => opened.push(target)}
             onEditProfiles={() => {}}
@@ -245,6 +306,67 @@ async function run() {
         `${kind}: old completion cannot open a terminal or close the reopened dialog`,
       );
     }
+    // One uncertain observation while a start is pending (World invalidated
+    // its in-flight snapshot) keeps the room and form; the launcher closes
+    // exactly once, when the start is confirmed, and never comes back.
+    answer = Promise.withResolvers();
+    opened.length = 0;
+    const certified = observedWorld(false);
+    const uncertain = observedWorld(true);
+    root.render(
+      <Harness key="uncertain-observation" initialWorld={certified} />,
+    );
+    await settle();
+    const presence: boolean[] = [];
+    let collapsed = false;
+    const watch = new MutationObserver(() => {
+      const dialog = host.querySelector(".agent-launcher");
+      if (presence[presence.length - 1] !== !!dialog) presence.push(!!dialog);
+      if (
+        dialog &&
+        (!dialog.querySelector("select") ||
+          /create a room first|room is unavailable/.test(
+            dialog.textContent ?? "",
+          ))
+      )
+        collapsed = true;
+    });
+    watch.observe(host, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    flushSync(() => showWorld(uncertain));
+    check(
+      button(".agent-launcher-kind").disabled,
+      "An uncertain room cannot start an agent",
+    );
+    flushSync(() => showWorld(certified));
+    await settle();
+    const catalogsBefore = catalogs;
+    start();
+    await settle();
+    flushSync(() => showWorld(uncertain));
+    await settle();
+    flushSync(() => showWorld(certified));
+    await settle();
+    answer.resolve({ status: "started", terminal_id: "observed-terminal" });
+    await settle();
+    await settle();
+    watch.disconnect();
+    check(!collapsed, "An uncertain observation collapsed the launcher's form");
+    check(
+      catalogs === catalogsBefore,
+      "An uncertain observation refetched the catalog",
+    );
+    check(
+      presence.length === 2 && presence[0] && !presence[1],
+      `The launcher closes exactly once and never reopens: ${JSON.stringify(presence)}`,
+    );
+    check(
+      opened.length === 1 && opened[0]?.terminalId === "observed-terminal",
+      "The confirmed start opens its terminal once",
+    );
     // Login finishes before a deliberate start can own the result.
     includeLogin = true;
     login = Promise.withResolvers();

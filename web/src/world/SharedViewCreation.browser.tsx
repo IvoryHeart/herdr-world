@@ -200,26 +200,34 @@ for (const host of hosts) {
         conversationReads++;
         await conversationBarrier;
         completedConversationReads++;
+        // A new Codex pane's title can bind it before naming a thread: the
+        // service reads "ok" with no fingerprint and no conversation.
+        const unboundTitle = chatUnavailable === "unbound_title";
+        const readable = sessionArrived && (!chatUnavailable || unboundTitle);
         return {
           conversation_version: 1,
           pane_id: params.pane_id,
           agent: "claude",
           agent_status: "idle",
-          status: sessionArrived && !chatUnavailable ? "ok" : "unavailable",
-          session_binding: sessionArrived ? "reported" : null,
-          session_fingerprint: sessionArrived
-            ? taskSummarySessionFingerprint(syntheticSession)
-            : null,
+          status: readable ? "ok" : "unavailable",
+          session_binding: unboundTitle
+            ? "title"
+            : sessionArrived
+              ? "reported"
+              : null,
+          session_fingerprint:
+            sessionArrived && !unboundTitle
+              ? taskSummarySessionFingerprint(syntheticSession)
+              : null,
           session_label: sessionArrived ? "Synthetic session" : null,
-          unavailable:
-            sessionArrived && !chatUnavailable
-              ? null
-              : {
-                  reason: chatUnavailable || "no_session",
-                  detail: chatUnavailable
-                    ? `Synthetic ${chatUnavailable}. Open Terminal.`
-                    : "Claude is starting. Check Terminal.",
-                },
+          unavailable: readable
+            ? null
+            : {
+                reason: chatUnavailable || "no_session",
+                detail: chatUnavailable
+                  ? `Synthetic ${chatUnavailable}. Open Terminal.`
+                  : "Claude is starting. Check Terminal.",
+              },
           messages: [],
           latest: null,
         };
@@ -541,6 +549,7 @@ async function run() {
     "missing_integration",
     "unsupported_agent",
     "read_failed",
+    "unbound_title",
   ]) {
     chatUnavailable = reason;
     const before = conversationReads;
