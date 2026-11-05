@@ -6024,6 +6024,27 @@ async function run() {
     await settle();
   }
   root.unmount();
+  // The preceding case deliberately retired the client. Complete its synthetic
+  // reconnect before testing current Inspector admission and stale read cleanup.
+  if (client.serverRuntimeGeneration !== runtimeGeneration) {
+    client = {
+      ...client,
+      generation: client.generation + 1,
+      serverRuntimeGeneration: runtimeGeneration,
+      isCurrent: () => true,
+      acceptsServerGeneration: (generation) => generation === runtimeGeneration,
+    };
+    __storeTesting.applyCatalog(
+      store
+        .get()
+        .connections.map((owner) =>
+          owner.id === client.connectionId
+            ? { ...owner, generation: runtimeGeneration }
+            : owner,
+        ),
+      client.connectionId,
+    );
+  }
   await runSharedInspectorChecks(check);
 }
 

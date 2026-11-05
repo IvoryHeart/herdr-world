@@ -121,3 +121,37 @@ task previews SHALL block automatic follow-up admission.
 - **WHEN** two busy sends with the same request ID finish asynchronous scope capture
 - **THEN** at most one queue entry is persisted or admitted as a turn, and published
   and persisted queues retain unique IDs
+
+### Requirement: Qualified engine and navigation behavior
+
+Ranger MAY use the service account's Claude Code CLI or the configured Pi-backed
+provider. Both engines SHALL retain the same captured workspace permissions and
+confirmation policy. Engine checkpoints SHALL NOT be resumed by another engine.
+An interrupted Claude turn SHALL fail closed and retain queued-message controls.
+
+A show request SHALL carry its originating question and captured connection/runtime
+owner. Only the asking browser SHALL follow it through shared Inspector admission.
+A service-instance change SHALL retire earlier navigation requests. Stale or
+unavailable targets SHALL report refusal without selecting another runtime.
+Scheduled runs SHALL NOT publish browser navigation requests.
+
+#### Scenario: Another browser receives a show reply
+
+- **WHEN** a browser observes a reply to a question sent by another browser
+- **THEN** its Inspector and selection SHALL remain unchanged
+
+### Requirement: Explicit dynamic task membership
+
+An explicitly selected all-workspace task MAY include newly authorized workspaces
+at each new run admission. It SHALL remain within the current explicit workspace
+grants and SHALL NOT require the broader global all-workspace grant. It SHALL
+capture and validate that run's current owners. Fixed-scope tasks SHALL retain
+their saved identity checks. Membership selection SHALL NOT authorize a stale
+active run to retarget a replacement runtime.
+
+#### Scenario: Refresh membership for a new run only
+
+- **WHEN** a new run of an explicit all-workspace task is admitted within the current
+  explicit workspace grants
+- **THEN** that run SHALL capture the currently authorized workspace owners
+- **AND** an earlier admitted run SHALL NOT retarget a replacement runtime

@@ -998,6 +998,23 @@ on **+** to break the pane into a new tab.
 5. Expand **Thinking** above a reply when the model provides reasoning. Selecting
    text there or in the answer stays intact while terminal output updates.
 
+Ranger can also use **Claude Code** as its model provider. Install and sign in to
+`claude` as the account running World, then select **Claude Code** and a model in
+Ranger settings. It uses that CLI's sign-in. Other providers continue to use the
+configured Ranger or explicitly selected Pi credentials. Changing between these
+engines starts fresh model context; your conversation remains visible.
+
+For a scheduled task, **All workspaces, new ones too** follows the workspaces
+Ranger is permitted to use when each run starts. It follows the current explicit
+workspace grants; high-permission all-workspace access is not required. Use a fixed selection to stay on named workspaces.
+Each run still captures current connection generations, and confirmed actions
+retain the normal permission checks.
+
+Ask Ranger to show a workspace or session to open it in the shared Inspector.
+Only the World window that sent that question follows the reply. A replaced
+runtime or missing target produces an unavailable-target notice; it never selects
+another host as a fallback.
+
 Workspace reads and actions still use explicit permissions and captured ownership;
 steering does not enable high-permission mode or send a prompt to another agent.
 

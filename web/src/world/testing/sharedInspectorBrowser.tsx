@@ -1,3 +1,12 @@
+import type { AssistantSnapshot } from "../../../../shared/assistant";
+import type { WorkspaceSurfaceSelection } from "../../App";
+import {
+  __resetAssistantForTests,
+  startAssistantClient,
+  refreshAssistant,
+  sendAssistant,
+} from "../../assistant";
+import { useAssistantShow } from "../useAssistantShow";
 import { useLayoutEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -33,6 +42,75 @@ const props = {
 export async function runSharedInspectorChecks(
   check: (value: boolean, message: string) => void,
 ): Promise<void> {
+  __resetAssistantForTests();
+  const originalCall = bridge.call;
+  const originalAssistant = bridge.onAssistant;
+  const originalNotify = store.notify;
+  const errors: unknown[] = [];
+  const pushed = new Set<(snapshot: AssistantSnapshot) => void>();
+  let requestId = "";
+  let revision = 0;
+  const assistantSnapshot = (): AssistantSnapshot => ({
+    instance_id: "show-browser",
+    revision: revision++,
+    config: {
+      provider: "test",
+      model: "test",
+      credential_source: "assistant",
+      allowed_workspaces: [],
+    },
+    providers: [
+      { id: "test", label: "Test", configured: true, methods: ["api_key"] },
+    ],
+    models: [{ provider: "test", id: "test", label: "Test" }],
+    messages: [],
+    running: false,
+    error: null,
+    auth: null,
+  });
+  bridge.call = ((
+    method: string,
+    params: Record<string, unknown>,
+    ...rest: any[]
+  ) => {
+    if (method.startsWith("bridge.assistant.")) {
+      if (method.endsWith(".send")) requestId = String(params.request_id);
+      return Promise.resolve(assistantSnapshot());
+    }
+    return (originalCall as any).call(bridge, method, params, ...rest);
+  }) as typeof bridge.call;
+  bridge.onAssistant = (listener) => {
+    pushed.add(listener);
+    return () => {
+      pushed.delete(listener);
+    };
+  };
+  store.notify = (notification) => {
+    errors.push(notification);
+  };
+  let stopAssistant: (() => void) | undefined;
+  let surfaceCalls = 0;
+  const results: Array<Promise<boolean>> = [];
+  const showHandler: {
+    current:
+      | ((selection: WorkspaceSurfaceSelection) => Promise<boolean>)
+      | null;
+  } = { current: null };
+  const selectionReady = (
+    handler:
+      | ((selection: WorkspaceSurfaceSelection) => Promise<boolean>)
+      | null,
+  ) => {
+    showHandler.current = handler
+      ? (selection) => {
+          surfaceCalls++;
+          const result = handler(selection);
+          results.push(result);
+          return result;
+        }
+      : null;
+  };
+  let clearInspectors = () => {};
   const connection = bridge.connection;
   const hello = Object.getOwnPropertyDescriptor(bridge, "hello");
   const mount = document.createElement("div");
@@ -52,8 +130,11 @@ export async function runSharedInspectorChecks(
   };
   function Probe() {
     const [conversations, change] = useState<WorldInspectorConversation[]>([]);
+    clearInspectors = () => change([]);
+    useAssistantShow(showHandler);
     const current = useWorldInspectorController({
       ...props,
+      onWorkspaceSurfaceSelectionReady: selectionReady,
       inspectorConversations: conversations,
       onInspectorConversationsChange: change,
     });
@@ -71,7 +152,12 @@ export async function runSharedInspectorChecks(
     await worldRuntimeStore.refresh();
     Object.defineProperty(bridge, "hello", {
       configurable: true,
-      get: () => ({ capabilities: { world_shared_acquisition: true } }),
+      get: () => ({
+        capabilities: {
+          world_shared_acquisition: true,
+          embedded_assistant: true,
+        },
+      }),
     });
     bridge.connection = ((id, generation) => {
       const client = connection.call(bridge, id, generation);
@@ -111,10 +197,96 @@ export async function runSharedInspectorChecks(
     flushSync(() => root.render(<Probe />));
     await ready;
     const leaf = controller!.aggregateWorld.leaves.find(
-      (leaf) => leaf.actionable && leaf.kind === "agent" && !!leaf.tabId,
+      (leaf) =>
+        leaf.actionable &&
+        leaf.kind === "agent" &&
+        leaf.capabilities.agentHistory &&
+        !!leaf.tabId,
     );
     if (!leaf?.tabId)
       throw new Error("Inspector fixture needs an actionable agent tab");
+    await Promise.resolve();
+    stopAssistant = startAssistantClient();
+    await refreshAssistant();
+    const generation = leaf.generation;
+    const scope = {
+      connection_id: leaf.connectionId,
+      workspace_id: leaf.workspaceId!,
+      runtime_generation: generation,
+    };
+    const show = (request: string, ownerGeneration = generation) => {
+      const snapshot = assistantSnapshot();
+      snapshot.messages = [
+        {
+          id: `reply-${snapshot.revision}`,
+          role: "assistant",
+          sent_at: "2026-11-01T00:00:00Z",
+          text: "Requested",
+          tools: [],
+          sources: [],
+          show: {
+            ...scope,
+            runtime_generation: ownerGeneration,
+            pane_id: leaf.pane.pane_id,
+            request_id: request,
+          },
+        },
+      ];
+      for (const push of pushed) push(snapshot);
+    };
+    show("another-browser");
+    check(
+      surfaceCalls === 0,
+      "Ranger show from another browser does not enter Inspector admission",
+    );
+    await sendAssistant("Show this session", [scope]);
+    const openedByRanger = reaches((value) =>
+      value.inspectorConversations.some(
+        (c) =>
+          c.connectionId === leaf.connectionId &&
+          c.paneId === leaf.pane.pane_id,
+      ),
+    );
+    show(requestId);
+    await Promise.all(results);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (results.length !== 1 || !(await results[0]))
+      throw new Error(
+        `Ranger show did not admit: requests=${requestId} calls=${surfaceCalls} errors=${JSON.stringify(errors)} intent=${controller?.intentError} active=${bridge.activeConnectionId} leaf=${leaf.connectionId}/${leaf.generation} scope=${JSON.stringify(scope)} client=${JSON.stringify({ transport: bridge.connection(leaf.connectionId)?.generation, runtime: bridge.connection(leaf.connectionId)?.serverRuntimeGeneration })} store=${JSON.stringify(store.get().connections.map((c) => ({ id: c.id, generation: c.generation, state: c.state })))} target=${JSON.stringify({ native: leaf.nativeId, pane: leaf.pane.pane_id, workspace: leaf.workspaceId })}`,
+      );
+    await openedByRanger;
+    check(
+      surfaceCalls === 1,
+      "the originating Ranger browser reaches the actual shared Inspector handler",
+    );
+    check(
+      controller!.inspectorConversations.some(
+        (c) =>
+          c.connectionId === leaf.connectionId &&
+          c.runtimeGeneration === generation &&
+          c.paneId === leaf.pane.pane_id &&
+          c.view === "history",
+      ),
+      "Ranger opens only its captured runtime's session in History",
+    );
+    await sendAssistant("Show after replacement", [scope]);
+    const count = controller!.inspectorConversations.length;
+    show(requestId, generation + 1);
+    await Promise.all(results);
+    await Promise.resolve();
+    check(
+      controller!.inspectorConversations.length === count &&
+        Number(results.length) === 2 &&
+        (await results[1]) === false,
+      "an obsolete Ranger generation cannot admit an Inspector",
+    );
+    check(
+      errors.length === 1,
+      "unavailable Ranger navigation reports an unavailable-target notification",
+    );
+    flushSync(() => clearInspectors());
+    stopAssistant();
+    stopAssistant = undefined;
     closed = { owner: leaf.connectionId, tab: leaf.tabId };
     const opened = reaches((value) =>
       value.inspectorConversations.some(
@@ -153,6 +325,11 @@ export async function runSharedInspectorChecks(
     flushSync(() => root.unmount());
     mount.remove();
     bridge.connection = connection;
+    bridge.call = originalCall;
+    bridge.onAssistant = originalAssistant;
+    store.notify = originalNotify;
+    stopAssistant?.();
+    __resetAssistantForTests();
     if (hello) Object.defineProperty(bridge, "hello", hello);
     else delete (bridge as unknown as { hello?: unknown }).hello;
     closed = null;

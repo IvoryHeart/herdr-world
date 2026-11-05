@@ -50,7 +50,7 @@
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
       },
-      "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model\u2019s domain."
+      "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model’s domain."
     },
     {
       "id": "Q02",
@@ -803,7 +803,7 @@
         ],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller\u2019s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves. v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory.",
+      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller’s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves. v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1196,7 +1196,11 @@
         "web/src/components/ConversationMinimap.test.ts",
         "server/src/agent/checkout-context.test.ts",
         "server/src/herdr/task-summary.test.ts",
-        "web/src/components/ModalDialogs.test.ts"
+        "web/src/components/ModalDialogs.test.ts",
+        "server/src/agent/session-file-access.test.ts",
+        "server/src/agent/session-resolver.test.ts",
+        "server/src/agent/session-trajectory.test.ts",
+        "server/src/connections/runtime-process.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "alternative",
@@ -1233,12 +1237,17 @@
           "web/src/components/ConversationMinimap.test.ts",
           "server/src/agent/checkout-context.test.ts",
           "server/src/herdr/task-summary.test.ts",
-          "web/src/components/ModalDialogs.test.ts"
+          "web/src/components/ModalDialogs.test.ts",
+          "server/src/agent/session-file-access.test.ts",
+          "server/src/agent/session-resolver.test.ts",
+          "server/src/agent/session-trajectory.test.ts",
+          "server/src/agent/conversation-send-race.test.ts",
+          "server/src/connections/runtime-process.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed. Repository popover consumers also verify that retained PR/MR reports stay within the complete connection/runtime/workspace/checkout/cwd/branch/worktree association: a failed read after target replacement cannot reuse the former request, while same-association refresh failures retain it. This is direct React consumer evidence for a read-only report cache, not an abstract model of provider or Git semantics. Per-terminal settings add direct P5 platform checks and P7 finite exhaustive convergence evidence; the unchanged runtime-leases model supplies only lease authority, not token atomicity or HLC convergence. See the terminal-settings contract for the finite domain, migration and platform limits.",
+      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed. Repository popover consumers also verify that retained PR/MR reports stay within the complete connection/runtime/workspace/checkout/cwd/branch/worktree association: a failed read after target replacement cannot reuse the former request, while same-association refresh failures retain it. This is direct React consumer evidence for a read-only report cache, not an abstract model of provider or Git semantics. Per-terminal settings add direct P5 platform checks and P7 finite exhaustive convergence evidence; the unchanged runtime-leases model supplies only lease authority, not token atomicity or HLC convergence. See the terminal-settings contract for the finite domain, migration and platform limits. Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Continuation regressions require bounded top-level provenance, renewed remote UUID/path authority and owned local process cancellation; nested or discarded branch content cannot establish a session. Local configured-root parity is not claimed.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1254,7 +1263,12 @@
       "existingTests": [
         "server/src/assistant/service.test.ts",
         "server/src/assistant-recovery.integration.test.ts",
-        "server/src/assistant/durable-storage.test.ts"
+        "server/src/assistant/durable-storage.test.ts",
+        "server/src/assistant/claude-driver.test.ts",
+        "server/src/assistant/claude-mcp.test.ts",
+        "server/src/assistant/ranger-driver.test.ts",
+        "web/src/assistant.test.ts",
+        "web/src/world/WorldTerminalHandoff.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "ranger-authority",
@@ -1272,7 +1286,12 @@
           "quint/ranger-recovery.test.ts",
           "server/src/assistant/service.test.ts",
           "server/src/assistant-recovery.integration.test.ts",
-          "server/src/assistant/durable-storage.test.ts"
+          "server/src/assistant/durable-storage.test.ts",
+          "server/src/assistant/claude-driver.test.ts",
+          "server/src/assistant/claude-mcp.test.ts",
+          "server/src/assistant/ranger-driver.test.ts",
+          "web/src/assistant.test.ts",
+          "web/src/world/WorldTerminalHandoff.test.ts"
         ],
         "checks": [
           "bun run verification:check",
@@ -1284,7 +1303,8 @@
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
-      }
+      },
+      "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required."
     },
     {
       "id": "Q27",
@@ -1294,7 +1314,9 @@
       "properties": "One active run; pause/delete blocks future dispatch; missed runs and restart have defined semantics",
       "existingTests": [
         "server/src/assistant/tasks.test.ts",
-        "server/src/assistant/task-schedule.test.ts"
+        "server/src/assistant/task-schedule.test.ts",
+        "web/src/components/AssistantTasks.test.ts",
+        "server/src/assistant/task-storage.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "ranger-authority",
@@ -1311,7 +1333,9 @@
         "tests": [
           "quint/ranger-recovery.test.ts",
           "server/src/assistant/tasks.test.ts",
-          "server/src/assistant/task-schedule.test.ts"
+          "server/src/assistant/task-schedule.test.ts",
+          "web/src/components/AssistantTasks.test.ts",
+          "server/src/assistant/task-storage.test.ts"
         ],
         "checks": [
           "bun run verification:check",
@@ -1323,7 +1347,8 @@
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
-      }
+      },
+      "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Real SQLite v1-v3 migration and reopen controls preserve dynamic membership intent and completed omission notices; model-tool creation/edit proposals confirm through storage, and restart admission follows only current explicit workspace grants."
     },
     {
       "id": "Q28",
@@ -1333,7 +1358,10 @@
       "properties": "Approval/context validity checked at dispatch; cancellation cannot redirect tool effects",
       "existingTests": [
         "server/src/assistant/actions.test.ts",
-        "server/src/assistant/context.test.ts"
+        "server/src/assistant/context.test.ts",
+        "server/src/assistant/claude-driver.test.ts",
+        "server/src/assistant/claude-mcp.test.ts",
+        "server/src/assistant/ranger-driver.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "ranger-authority",
@@ -1350,7 +1378,10 @@
         "tests": [
           "quint/ranger-authority.test.ts",
           "server/src/assistant/actions.test.ts",
-          "server/src/assistant/context.test.ts"
+          "server/src/assistant/context.test.ts",
+          "server/src/assistant/claude-driver.test.ts",
+          "server/src/assistant/claude-mcp.test.ts",
+          "server/src/assistant/ranger-driver.test.ts"
         ],
         "checks": [
           "bun run verification:check",
@@ -1362,7 +1393,8 @@
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
-      }
+      },
+      "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required."
     },
     {
       "id": "Q29",
@@ -1545,7 +1577,7 @@
       "status": "alternative-evidence",
       "remaining": "No new abstract authentication model replaces protocol/security tests; trusted-single-user and supported deployment assumptions remain unchanged.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary. v0.8.5: Configured passwords accept 8\u20131024 Unicode characters with a recommendation warning below 15. Direct boundary tests cover ASCII/Unicode and CLI/environment ingestion; session, Origin and throttling evidence remains mandatory. Agent CLI (FM-WORLDCLI): the `/api/world/cli` bearer path is tested directly for loopback-only, no-Origin admission, a derived CLI token that the login credential cannot replace, wrong and missing tokens, and a throttle that never blocks the owner's login. Pane attribution is a pure check of the caller's process ancestry against Herdr's pane process info, tested with spoofed panes, a second connection on the same port from another loopback address, ambiguous rows, shared sockets, IPv6, unknown processes and remote hosts. End to end in a throwaway Herdr session, an in-pane call was verified and the same pane ID from another process was not; the port-collision case is covered only by the synthetic /proc tests. No ordering or recovery protocol is added, so a model would restate these checks. Owner ask withdrawal (#472) compares the verified original connection, runtime, terminal and agent-session digest. Service regressions cover cause-key deduplication, foreign/unverified refusal, idempotent withdrawal, answer preservation and rejection of later answers; the existing endpoint/process ownership fixtures remain mandatory.",
+      "evidenceDecision": "Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary. v0.8.5: Configured passwords accept 8–1024 Unicode characters with a recommendation warning below 15. Direct boundary tests cover ASCII/Unicode and CLI/environment ingestion; session, Origin and throttling evidence remains mandatory. Agent CLI (FM-WORLDCLI): the `/api/world/cli` bearer path is tested directly for loopback-only, no-Origin admission, a derived CLI token that the login credential cannot replace, wrong and missing tokens, and a throttle that never blocks the owner's login. Pane attribution is a pure check of the caller's process ancestry against Herdr's pane process info, tested with spoofed panes, a second connection on the same port from another loopback address, ambiguous rows, shared sockets, IPv6, unknown processes and remote hosts. End to end in a throwaway Herdr session, an in-pane call was verified and the same pane ID from another process was not; the port-collision case is covered only by the synthetic /proc tests. No ordering or recovery protocol is added, so a model would restate these checks. Owner ask withdrawal (#472) compares the verified original connection, runtime, terminal and agent-session digest. Service regressions cover cause-key deduplication, foreign/unverified refusal, idempotent withdrawal, answer preservation and rejection of later answers; the existing endpoint/process ownership fixtures remain mandatory.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -2484,7 +2516,7 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "direct-exhaustive-policy",
-      "assessment": "Finite verb \u00d7 actor baseline, all existing CLI commands through both actor paths against pre-registry outcomes, browser call inventory and actual service/dispatcher controls",
+      "assessment": "Finite verb × actor baseline, all existing CLI commands through both actor paths against pre-registry outcomes, browser call inventory and actual service/dispatcher controls",
       "status": "alternative-evidence",
       "remaining": "Separate resource and assistant action catalogs retain their current owners. Fresh service-issued browser confirmation challenges and observation-linked command tracking require later browser/effect integration; no grant API, retry queue or new workflow authoring is introduced.",
       "requiredChecks": [

@@ -60,6 +60,9 @@ export type AssistantMentionCatalog = {
   truncated?: boolean;
 };
 
+/** The provider whose turns run on the bridge's Claude Code (`claude`). */
+export const CLAUDE_CODE_PROVIDER = "claude-code";
+
 export const ASSISTANT_THINKING_LEVELS = [
   "off",
   "minimal",
@@ -208,6 +211,18 @@ export type AssistantMessage = {
   sources: AssistantSource[];
   actions?: AssistantAction[];
   task_proposals?: AssistantTaskProposal[];
+  /** What the reply requested to show in the browser that asked. */
+  show?: AssistantShow;
+};
+
+/**
+ * A workspace or pane requested by a reply in World; only the browser that
+ * sent `request_id` may follow it.
+ */
+export type AssistantShow = AssistantWorkspaceRef & {
+  runtime_generation: number;
+  pane_id?: string;
+  request_id: string;
 };
 
 export type AssistantTaskSchedule =
@@ -220,6 +235,11 @@ export type AssistantTaskInput = {
   prompt: string;
   mentions?: AssistantMentionTarget[];
   scope: AssistantWorkspaceRef[];
+  /**
+   * Every workspace Ranger may use when a run starts, new ones included:
+   * `scope` is then the list as of the last run (or creation).
+   */
+  all_workspaces?: true;
   schedule: AssistantTaskSchedule;
   notification_mode?: "status" | "agent";
 };
@@ -245,6 +265,8 @@ export type AssistantTaskRun = {
   started_at?: string;
   finished_at?: string;
   error: string | null;
+  /** What the run left out, such as workspaces past the limit. */
+  notice?: string;
 };
 
 export type AssistantTaskNotification = {
@@ -584,7 +606,8 @@ function taskRun(value: unknown): value is AssistantTaskRun {
     timestamp(value.scheduled_at) &&
     (value.started_at === undefined || timestamp(value.started_at)) &&
     (value.finished_at === undefined || timestamp(value.finished_at)) &&
-    (value.error === null || text(value.error))
+    (value.error === null || text(value.error)) &&
+    (value.notice === undefined || text(value.notice))
   );
 }
 
@@ -714,9 +737,31 @@ function action(value: unknown): value is AssistantAction {
   );
 }
 
+export function isAssistantShow(value: unknown): value is AssistantShow {
+  return (
+    record(value) &&
+    text(value.connection_id) &&
+    text(value.workspace_id) &&
+    Number.isSafeInteger(value.runtime_generation) &&
+    (value.runtime_generation as number) >= 0 &&
+    (value.pane_id === undefined || text(value.pane_id)) &&
+    text(value.request_id) &&
+    Object.keys(value).every((key) =>
+      [
+        "connection_id",
+        "workspace_id",
+        "runtime_generation",
+        "pane_id",
+        "request_id",
+      ].includes(key),
+    )
+  );
+}
+
 export function isAssistantMessage(value: unknown): value is AssistantMessage {
   return (
     record(value) &&
+    (value.show === undefined || isAssistantShow(value.show)) &&
     text(value.id) &&
     (value.role === "user" || value.role === "assistant") &&
     text(value.text) &&

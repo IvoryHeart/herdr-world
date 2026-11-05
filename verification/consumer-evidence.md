@@ -827,3 +827,29 @@ GatewayPorts enforcement or native agent acceptance. Those remain platform and
 isolated integration evidence in the [whole-system plan](../docs/reviews/roamgate-sync-test-plan.md).
 Full applicable CI and independent consumer review are required; this candidate
 extends evidence, not the historical promotion approval.
+
+### Ranger and transcript integration candidate (Q25–Q28)
+
+Direct transcript consumers check Claude continuation provenance, remote append and
+replacement, Pi/OMP records and Pi directory inference. World retains the 32 MiB
+text-cache budget, bounded full trajectory consumers and lazy older history; this
+is not a claim of upstream peak-memory parity. Native send/answer/session fences
+remain mandatory for inferred history.
+
+The existing Ranger recovery/authority models retain their stated run-local
+capture and recovery bounds. Driver/MCP tests exercise token/tool isolation and
+teardown; actual service consumers check captured show scope, cancellation across
+awaited reads and interrupted Claude recovery. The browser client rejects foreign,
+repeated and old-service show requests, and shared Inspector Chrome checks exercise
+current and stale-generation navigation. All-workspace task consumers select fresh
+membership for each new run while retaining fixed-scope recovery controls. These
+are concrete adapter claims; they do not promote arbitrary catalogue churn,
+provider behavior, native CLI/SSH or whole-system resource acceptance.
+
+The Ranger/transcript repair adds direct Q25/Q27 consumers for structured, bounded
+Claude continuation provenance and current remote UUID/path validation, local
+process retirement/cancellation, SQLite schema migration, dynamic proposal
+confirmation, restart admission and completed-run omission notices. Existing
+manual per-workspace grants remain the permission fence. These consumers do not
+extend the abstract models to filesystem/provider semantics or establish native
+SSH, local configured-root parity, UI smoothness or final integration acceptance.

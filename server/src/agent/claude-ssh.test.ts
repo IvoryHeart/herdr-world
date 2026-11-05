@@ -7,6 +7,7 @@ import {
   rename,
   rm,
   symlink,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,15 +25,17 @@ const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
 
 function isolatedPayload(shell: string, projects: string) {
   const ordinary =
-    shell.startsWith("\nset -eu\npath=") ||
+    /^\n?set -eu\npath=/.test(shell) ||
+    shell.startsWith("f=") ||
     shell.startsWith("set -eu\ncat ") ||
+    shell.startsWith("set -eu\nhead -c ") ||
     shell === "date +%s%N";
   if (ordinary) {
     if (/\$(?:HOME\b|\{HOME\b)/.test(shell))
       throw new Error("Unexpected home access in a fixture file operation.");
     return shell;
   }
-  const anchor = 'root="$HOME/.claude/projects"';
+  const anchor = 'root="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"';
   if (shell.split(anchor).length !== 2)
     throw new Error("Expected exactly one fixture home substitution.");
   return shell.replace(anchor, `root=${quote(projects)}`);
@@ -86,7 +89,6 @@ async function fixture(host = "claude-fixture.example") {
       expect(argv[argv.length - 2]).toBe(host);
       expect(argv).toContain("BatchMode=yes");
       expect(argv).toContain("StrictHostKeyChecking=yes");
-      expect(timeout).toBe(15_000);
       // Execute the production POSIX payload locally. Only the remote home
       // boundary is replaced; this is not a native OpenSSH acceptance test.
       const command = argv[argv.length - 1]!;
@@ -94,6 +96,11 @@ async function fixture(host = "claude-fixture.example") {
       const shell = command
         .slice("bash -lc '".length, -1)
         .replaceAll("'\\''", "'");
+      // Appended transcript reads retain their existing longer transfer budget;
+      // discovery, stat, successor lookup and clock probes keep the file budget.
+      expect(timeout).toBe(
+        shell.startsWith("set -eu\npath=") ? 60_000 : 15_000,
+      );
       const result = await runBinaryProcessWithTimeout(
         [
           "bash",
@@ -180,7 +187,7 @@ describe.skipIf(process.platform === "win32" || !Bun.which("bash"))(
       const f = await fixture();
       try {
         const shown = await f.chat.read({ pane_id: "w7:p2" });
-        expect(shown.status).toBe("ok");
+        expect(shown).toMatchObject({ status: "ok" });
         expect(shown.messages.map((message) => message.text)).toEqual([
           "Read the example README.",
           "It describes a synthetic project.",
@@ -217,7 +224,7 @@ describe.skipIf(process.platform === "win32" || !Bun.which("bash"))(
       const f = await fixture();
       try {
         const shown = await f.chat.read({ pane_id: "w7:p2" });
-        expect(shown.status).toBe("ok");
+        expect(shown).toMatchObject({ status: "ok" });
         f.switchSession();
         const result = await f.chat.send({
           pane_id: "w7:p2",
@@ -449,3 +456,48 @@ test("malformed lookup output is refused before reading a transcript", async () 
     expect(calls).toBe(1);
   }
 });
+
+test.each([
+  "valid",
+  "same-second",
+  "nested",
+  "malformed",
+  "ambiguous",
+] as const)(
+  "SSH continuation metadata and newline paths: %s",
+  async (variant) => {
+    if (process.platform === "win32" || !Bun.which("bash")) return;
+    const f = await fixture();
+    try {
+      const continued = join(f.directory, `${otherId}.jsonl`);
+      const record =
+        variant === "nested"
+          ? {
+              sessionId: otherId,
+              message: {
+                content: [{ type: "tool_use", input: { sessionId } }],
+              },
+            }
+          : { sessionId };
+      await writeFile(
+        continued,
+        (variant === "malformed" ? "not-json\n" : "") +
+          JSON.stringify(record) +
+          "\n",
+      );
+      await utimes(f.path, new Date(1000), new Date(1000));
+      if (variant === "same-second")
+        await utimes(continued, new Date(1500), new Date(1500));
+      if (variant === "ambiguous")
+        await writeFile(
+          join(f.directory, "22222222-2222-4222-8222-222222222222.jsonl"),
+          JSON.stringify({ sessionId }) + "\n",
+        );
+      expect(await f.files.findClaudeSuccessor(f.path, sessionId)).toBe(
+        variant === "valid" || variant === "same-second" ? continued : null,
+      );
+    } finally {
+      f.chat.dispose();
+    }
+  },
+);

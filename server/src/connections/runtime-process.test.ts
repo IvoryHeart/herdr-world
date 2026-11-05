@@ -1,6 +1,7 @@
 import { expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import * as os from "node:os";
 import { join } from "node:path";
 import { createLegacyConnectionRuntime } from "./runtime";
 import { sshCommandArgv } from "../bridge/ssh-command";
@@ -37,6 +38,7 @@ const operations = [
   "launcher-skills",
   "integration-versions",
   "local-archive",
+  "local-claude-successor",
 ] as const;
 test.each(
   operations.flatMap((operation) =>
@@ -48,7 +50,9 @@ test.each(
     const root = mkdtempSync(join(tmpdir(), "runtime-process-"));
     const destination = "queued.example";
     const deferredPort =
-      operation === "local-archive" || operation === "forward-remote-scan";
+      operation === "local-archive" ||
+      operation === "local-claude-successor" ||
+      operation === "forward-remote-scan";
     const held = await Promise.all(
       Array.from(
         {
@@ -77,9 +81,11 @@ test.each(
     let portOwner = 0;
     if (deferredPort) {
       const target =
-        operation === "local-archive" ? inputProcess : processUtils;
+        operation === "local-archive" || operation === "local-claude-successor"
+          ? inputProcess
+          : processUtils;
       const key =
-        operation === "local-archive"
+        operation === "local-archive" || operation === "local-claude-successor"
           ? "runBinaryProcessWithTimeout"
           : "runProcess";
       const original = (target as any)[key];
@@ -93,14 +99,35 @@ test.each(
         }),
       );
     }
+    if (operation === "local-claude-successor")
+      mocks.push(spyOn(os, "homedir").mockReturnValue(root));
     function runtime(index: number) {
       const id = index === 0 ? "alpha" : "beta";
+      const sessionId =
+        index === 0
+          ? "11111111-1111-4111-8111-111111111111"
+          : "22222222-2222-4222-8222-222222222222";
       const checkout =
-        operation === "local-archive"
-          ? join(root, id, "checkout")
-          : `/synthetic/${id}/checkout`;
-      if (operation === "local-archive")
+        operation === "local-claude-successor"
+          ? join(root, ".claude", "projects", id)
+          : operation === "local-archive"
+            ? join(root, id, "checkout")
+            : `/synthetic/${id}/checkout`;
+      if (
+        operation === "local-archive" ||
+        operation === "local-claude-successor"
+      ) {
         mkdirSync(join(checkout, "folder"), { recursive: true });
+        if (operation === "local-claude-successor")
+          writeFileSync(
+            join(checkout, `${sessionId}.jsonl`),
+            JSON.stringify({
+              type: "user",
+              sessionId,
+              message: { role: "user", content: "Synthetic" },
+            }) + "\n",
+          );
+      }
       const controlPath = `/synthetic/${id}/m.ctl`;
       const owner = {};
       owners.push(owner);
@@ -125,7 +152,11 @@ test.each(
         config: {
           socketPath: `/synthetic/${id}/control.sock`,
           clientSocketPath: `/synthetic/${id}/render.sock`,
-          sshHost: operation === "local-archive" ? undefined : destination,
+          sshHost:
+            operation === "local-archive" ||
+            operation === "local-claude-successor"
+              ? undefined
+              : destination,
           masterControlPath: controlPath,
           remoteSocketPath: "/synthetic/control.sock",
           remoteClientSocketPath: "/synthetic/render.sock",
@@ -144,6 +175,19 @@ test.each(
       });
       mocks.push(
         spyOn(value.herdr, "call").mockImplementation(async (method) => {
+          if (operation === "local-claude-successor" && method === "agent.get")
+            return {
+              agent: {
+                agent: "claude",
+                workspace_id: "w1",
+                agent_session: {
+                  agent: "claude",
+                  source: "herdr:claude",
+                  kind: "id",
+                  value: sessionId,
+                },
+              },
+            };
           if (method === "server.agent_manifests")
             return { manifests: [{ agent: "claude" }] };
           if (method === "pane.list")
@@ -258,6 +302,12 @@ test.each(
             run: value.runProcessWithCodeTimeout,
           },
         );
+      if (operation === "local-claude-successor")
+        return value.agentSessions.readHistory({
+          pane_id: "synthetic-pane",
+          agent: "claude",
+          history_version: 2,
+        });
       if (operation === "local-archive")
         return value.files.downloadWorkspaceFile({ ...params, path: "folder" });
       return createWorkspaceWorktree(
@@ -323,6 +373,7 @@ test.each(
           "launcher-skills",
           "integration-versions",
           "local-archive",
+          "local-claude-successor",
         ].includes(operation)
       )
         expect(await (retired ? peer : pending)).not.toBeInstanceOf(Error);
@@ -340,3 +391,93 @@ test.each(
     }
   },
 );
+
+test("stopping the local runtime cancels its active Claude continuation child", async () => {
+  const root = mkdtempSync(join(tmpdir(), "runtime-claude-child-"));
+  const id = "11111111-1111-4111-8111-111111111111";
+  const project = join(root, ".claude", "projects", "synthetic");
+  mkdirSync(project, { recursive: true });
+  const path = join(project, `${id}.jsonl`);
+  const home = spyOn(os, "homedir").mockReturnValue(root);
+  writeFileSync(
+    path,
+    JSON.stringify({
+      type: "user",
+      sessionId: id,
+      message: { role: "user", content: "Synthetic" },
+    }) + "\n",
+  );
+  const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings: createGuiSettingsStore(join(root, "settings.json")),
+    identity: { id: "alpha", label: "Alpha", source: "test" },
+    connectionGeneration: 7,
+    config: {
+      socketPath: join(root, "control.sock"),
+      clientSocketPath: join(root, "render.sock"),
+      hasExplicitSocketPath: true,
+      hasExplicitClientSocketPath: true,
+    },
+    safeSend: () => true,
+    clientLabel: () => "test",
+    markRpcError() {},
+    onEvent() {},
+  });
+  const herdr = spyOn(runtime.herdr, "call").mockResolvedValue({
+    agent: {
+      agent: "claude",
+      workspace_id: "w1",
+      agent_session: {
+        agent: "claude",
+        source: "herdr:claude",
+        kind: "id",
+        value: id,
+      },
+    },
+  });
+  const began = Promise.withResolvers<void>(),
+    exit = Promise.withResolvers<number>();
+  let childSignal: AbortSignal | undefined;
+  let killSignal: unknown;
+  const spawn = spyOn(Bun, "spawn").mockImplementation(
+    (argv: any, options: any = {}) => {
+      expect(argv[0]).toBe("sh");
+      childSignal = options.signal;
+      killSignal = options.killSignal;
+      began.resolve();
+      return {
+        exited: exit.promise,
+        stdout: new Response("").body!,
+        stderr: new Response("").body!,
+        kill() {
+          exit.resolve(137);
+        },
+      } as any;
+    },
+  );
+  const reading = runtime.agentSessions
+    .readHistory({
+      pane_id: "synthetic-pane",
+      agent: "claude",
+      history_version: 2,
+    })
+    .catch((error) => error);
+  try {
+    await began.promise;
+    await runtime.stop();
+    expect(childSignal?.aborted).toBe(true);
+    expect(killSignal).toBe("SIGKILL");
+    exit.resolve(137);
+    expect(await reading).toBeInstanceOf(Error);
+  } finally {
+    exit.resolve(0);
+    await reading;
+    await runtime.stop();
+    spawn.mockRestore();
+    herdr.mockRestore();
+    home.mockRestore();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
