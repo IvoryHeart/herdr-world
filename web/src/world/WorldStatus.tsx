@@ -99,9 +99,16 @@ export function localHerdrSetupOffer(world: WorldObject) {
   );
 }
 
-export function TownHerdrSetupOffer({ world }: { world: WorldObject }) {
-  if (!localHerdrSetupOffer(world)) return null;
-  const local = world.hosts.find((host) => host.connection.isDefault)!;
+export function TownHerdrSetupOffer({
+  world,
+  aggregate = world,
+}: {
+  world: WorldObject;
+  aggregate?: WorldObject;
+}) {
+  // Hosts changes presentation, never whether any runtime is already ready.
+  if (!localHerdrSetupOffer(aggregate)) return null;
+  const local = aggregate.hosts.find((host) => host.connection.isDefault)!;
   return (
     <div className="town-herdr-setup">
       <HerdrSetupCard key={local.connection.connectionId} />

@@ -107,6 +107,7 @@ function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
 
 export default function TownView({
   world,
+  aggregate = world,
   toolbarPortal = null,
   selectedId,
   onSelect,
@@ -126,6 +127,8 @@ export default function TownView({
     focus?: boolean,
   ) => void;
   world: WorldObject;
+  /** Unfiltered connection observation for local setup admission. */
+  aggregate?: WorldObject;
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string, signal?: AbortSignal): void | Promise<boolean>;
@@ -893,7 +896,7 @@ export default function TownView({
           ))}
         </div>
         <div className="town-stage">
-          <TownHerdrSetupOffer world={world} />
+          <TownHerdrSetupOffer world={world} aggregate={aggregate} />
           <TownCanvas
             trace={trace}
             projection={office}

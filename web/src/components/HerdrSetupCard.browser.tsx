@@ -2,7 +2,9 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { HerdrSetupCard } from "./HerdrSetupCard";
 import { TownHerdrSetupOffer } from "../world/WorldStatus";
-import type { WorldObject } from "../world/worldObject";
+import { buildWorldObject, type WorldObject } from "../world/worldObject";
+import { worldObjectForHosts } from "../world/worldFilters";
+import type { WorldRuntimeConnection } from "../world/runtimeStore";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../world/world-stage.css";
@@ -252,21 +254,32 @@ async function run() {
 
 /** Town placement: the offer inside a synthetic stage, gated by the world. */
 async function townPlacement() {
-  const townWorld = (local: Record<string, unknown>, remoteReady = false) =>
-    ({
-      hosts: [
-        { connection: { connectionId: "local", isDefault: true, ...local } },
-        {
-          connection: {
-            connectionId: "remote",
-            isDefault: false,
-            state: remoteReady ? "ready" : "error",
-            error: remoteReady ? undefined : "Synthetic timeout",
-          },
-        },
-      ],
-    }) as unknown as WorldObject;
-  const failing = { state: "error", error: "Synthetic socket refused" };
+  const townWorld = (
+    local: Partial<WorldRuntimeConnection>,
+    remoteReady = false,
+  ) => {
+    const connection = (id: string): WorldRuntimeConnection => ({
+      connectionId: id,
+      label: id,
+      source: "test",
+      isDefault: id === "local",
+      state: "error",
+      generation: 1,
+      snapshotGeneration: null,
+      stale: false,
+      actionable: false,
+      snapshot: null,
+    });
+    return buildWorldObject([
+      { ...connection("local"), ...local },
+      { ...connection("remote"), state: remoteReady ? "ready" : "error" },
+    ]);
+  };
+  const failing = {
+    state: "error",
+    error: "Synthetic socket refused",
+  } as const;
+  const aggregateReady = townWorld(failing, true);
   const stage = document.createElement("div");
   stage.className = "town-stage";
   // town.css's stage box, without the canvas it frames.
@@ -275,9 +288,11 @@ async function townPlacement() {
   document.body.replaceChildren(stage);
   document.body.style.margin = "0";
   const town = createRoot(stage);
-  const show = (world: WorldObject) =>
+  const show = (world: WorldObject, aggregate = world) =>
     flushSync(() =>
-      town.render(<TownHerdrSetupOffer key={key} world={world} />),
+      town.render(
+        <TownHerdrSetupOffer key={key} world={world} aggregate={aggregate} />,
+      ),
     );
   const card = () =>
     document.querySelector<HTMLElement>(
@@ -286,14 +301,19 @@ async function townPlacement() {
 
   allowed = true;
   statusFailure = false;
-  for (const [name, world] of [
+  for (const [name, world, aggregate] of [
     ["connecting", townWorld({ state: "connecting" })],
     ["disconnected", townWorld({ state: "disconnected" })],
-    ["another host ready", townWorld(failing, true)],
+    ["another host ready", aggregateReady],
+    [
+      "ready host hidden by Hosts",
+      worldObjectForHosts(aggregateReady, ["local"]),
+      aggregateReady,
+    ],
   ] as const) {
     const before = statusRequests;
     key++;
-    show(world);
+    show(world, aggregate);
     await settle();
     check(
       !document.querySelector(".town-herdr-setup"),

@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WorldRuntimeConnection } from "./runtimeStore";
-import type { WorldObject } from "./worldObject";
+import { buildWorldObject, type WorldObject } from "./worldObject";
+import { worldObjectForHosts } from "./worldFilters";
 import {
   localHerdrSetupOffer,
   TownHerdrSetupOffer,
@@ -17,7 +18,7 @@ function host(connection: Partial<WorldRuntimeConnection>) {
       label: "Local",
       source: "local",
       isDefault: true,
-      state: "connecting",
+      state: "connecting" as const,
       generation: 1,
       snapshotGeneration: null,
       stale: false,
@@ -112,4 +113,20 @@ test("Town's no-hosts state points to Hosts → Manage connections", () => {
   const markup = renderToStaticMarkup(createElement(TownNoHosts));
   expect(markup).toContain("Hosts → Manage connections");
   expect(markup).not.toContain("Spaces");
+});
+
+test("a ready host hidden by Hosts still suppresses Town setup", () => {
+  const aggregate = buildWorldObject([
+    host({ state: "error", error: refused }).connection,
+    host({ ...remote, state: "ready" }).connection,
+  ]);
+  const presented = worldObjectForHosts(aggregate, ["local"]);
+  expect(presented.hosts.map((host) => host.connectionId)).toEqual(["local"]);
+  expect(localHerdrSetupOffer(presented)).toBe(true);
+  expect(localHerdrSetupOffer(aggregate)).toBe(false);
+  expect(
+    renderToStaticMarkup(
+      createElement(TownHerdrSetupOffer, { world: presented, aggregate }),
+    ),
+  ).toBe("");
 });
