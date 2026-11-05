@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { JSDOM } from "jsdom";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -27,9 +28,13 @@ const render = (since: number, live?: boolean) =>
     }),
   );
 
-test("a fresh wait is busy, announces its label and shows no percentage", () => {
+test("a fresh wait announces outside busy content and shows no percentage", () => {
   const html = render(Date.now());
-  expect(html).toContain('aria-busy="true"');
+  const status = new JSDOM(html).window.document.querySelector(
+    '[role="status"]',
+  );
+  expect(status).not.toBeNull();
+  expect(!!status!.closest('[aria-busy="true"]')).toBe(false);
   expect(html).toContain('role="status"');
   expect(html).toContain("Starting Codex…");
   expect(html).toContain("Creating its tab.");

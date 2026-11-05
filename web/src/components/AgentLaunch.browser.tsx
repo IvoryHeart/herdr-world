@@ -232,6 +232,12 @@ async function run() {
       );
       const label = status === "uncertain" ? "Reviewer" : "Codex";
       check(
+        !host
+          .querySelector(".agent-launcher-status")!
+          .closest('[aria-busy="true"]'),
+        `${status}: launch announcements remain outside busy content`,
+      );
+      check(
         pending().filter((element) => element.tagName === "BUTTON").length ===
           1 &&
           pending().includes(choice) &&

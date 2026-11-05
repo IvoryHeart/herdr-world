@@ -102,7 +102,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens on Terminal whenever Chat cannot show its conversation, including
     when a reported record cannot be read. It switches once Chat is available,
     unless you choose a view by hand. While a new window waits, a line under its
-    header says the agent is starting and offers **Stay on Terminal**. Unavailable messages appear when you
+    header says Chat is not available yet and offers **Stay on Terminal**. Unavailable messages appear when you
     pick Chat yourself. Chat describes startup
     or a question plainly and offers Open Terminal; integration guidance waits
     while the agent is starting or waiting for you in Terminal. In Town it

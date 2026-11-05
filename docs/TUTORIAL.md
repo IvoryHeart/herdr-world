@@ -563,7 +563,7 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    after 10 seconds it says **Taking longer than usual**. Progress and the
    outcome stay visible above the choices, even with a long readiness list.
    If the new window opens on Terminal before Chat can read the agent, a line
-   under its header says it is waiting for the agent to answer; Chat opens by
+   under its header says Chat is not available yet; Chat opens by
    itself when it can, or choose **Stay on Terminal**.
    The launcher closes when the start is confirmed. After an uncertain
    start, its start choices stay disabled: open the existing tab, or

@@ -721,9 +721,9 @@ function InspectorResources({
                     <WorldLoader
                       className="world-inspector-chat-wait"
                       since={awaitSince}
-                      label={`${waitingName} is starting: waiting for it to answer`}
-                      longerLabel={`Taking longer than usual: ${waitingName} has not answered yet`}
-                      detail="Chat opens when its conversation can be read. Terminal works now."
+                      label="Chat is not available yet: showing Terminal"
+                      longerLabel="Still showing Terminal: Chat is not available yet"
+                      detail={`Chat opens here when ${waitingName}'s conversation can be read.`}
                       actions={
                         <button
                           type="button"

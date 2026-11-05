@@ -54,7 +54,6 @@ export function WorldLoader({
   return (
     <div
       className={`world-loader${longer ? " is-longer" : ""}${className ? ` ${className}` : ""}`}
-      aria-busy="true"
     >
       <LoaderCircle
         size={16}
