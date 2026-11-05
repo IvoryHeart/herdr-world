@@ -11,8 +11,8 @@ import {
 } from "./menu-send-guard";
 import { withMenuSize } from "./menu-size";
 import { isSlashCommand } from "../../../shared/conversationInput";
-import { existsSync, type FSWatcher, watch } from "node:fs";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
+import { createCodexSessionWatch } from "./codex-session-watch";
 import {
   conversationMessages,
   runningTool,
@@ -36,8 +36,10 @@ import {
   PROMPT_SCREEN_LINES,
   type PendingPrompt,
 } from "./pending-prompt";
+import { askedQuestions, withAskedQuestions } from "./asked-questions";
+import { createTrustPrompts } from "./trust-prompt";
 import { stepsFromEntries, type ConversationStep } from "./conversation-steps";
-import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
+import type { AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
   SESSION_AGENTS,
@@ -137,66 +139,7 @@ export function createHerdrConversationSource(args: {
     (timer as { unref?: () => void }).unref?.();
     deadlines.add(timer);
   };
-  // Change detection may reuse a remembered Codex title match only while
-  // every Codex session root is watched: any created or removed transcript
-  // can change which transcripts a title prefix matches, so it forgets them
-  // all. Remote hosts and unwatchable roots always search.
-  let codexWatch: { ok: boolean; close(): void } | null = null;
-  const watchCodexSessions = () => {
-    if (args.files.remote) return false;
-    if (codexWatch) return codexWatch.ok;
-    const watchers: FSWatcher[] = [];
-    let ok = true;
-    const forget = () => {
-      args.context.codexTitles.clear();
-      args.onCodexSessionsChanged?.();
-    };
-    const home = codexHome();
-    const roots = ["sessions", "archived_sessions"];
-    for (const name of roots) {
-      const root = join(home, name);
-      if (!existsSync(root)) continue;
-      try {
-        const watcher = watch(
-          root,
-          { recursive: true, persistent: false },
-          (type) => {
-            if (type === "rename") forget();
-          },
-        );
-        watcher.on("error", () => {
-          watcher.close();
-          if (codexWatch) codexWatch.ok = false;
-          args.context.codexTitles.clear();
-        });
-        watchers.push(watcher);
-      } catch {
-        ok = false;
-      }
-    }
-    // A root created later (Codex archives a thread for the first time) is
-    // seen through the home directory, and the roots are watched afresh.
-    try {
-      const watcher = watch(home, { persistent: false }, (_type, name) => {
-        if (!roots.includes(String(name))) return;
-        codexWatch?.close();
-        codexWatch = null;
-        forget();
-      });
-      watcher.on("error", () => {
-        watcher.close();
-        if (codexWatch) codexWatch.ok = false;
-      });
-      watchers.push(watcher);
-    } catch {
-      ok = false;
-    }
-    codexWatch = {
-      ok,
-      close: () => watchers.forEach((watcher) => watcher.close()),
-    };
-    return ok;
-  };
+  const codexSessions = createCodexSessionWatch(args);
 
   const agentInfo = async (paneId: string) => {
     let result: unknown;
@@ -210,6 +153,11 @@ export function createHerdrConversationSource(args: {
     }
     return isRecord(result) && isRecord(result.agent) ? result.agent : null;
   };
+  const trustPrompts = createTrustPrompts({
+    herdrCall: args.herdrCall,
+    agentInfo,
+    active: sendGuard.active,
+  });
 
   const unavailable = (
     base: Omit<Conversation, "status" | "unavailable">,
@@ -467,13 +415,18 @@ export function createHerdrConversationSource(args: {
       strip_ansi: true,
     });
     const text = screenText(result);
-    return text === null
-      ? null
-      : parsePendingPrompt(
-          normalizeAgentName(stringValue(info?.agent)),
-          text,
-          promptContext(info),
-        );
+    const agent = normalizeAgentName(stringValue(info?.agent));
+    if (text === null) return null;
+    const shown = parsePendingPrompt(agent, text, promptContext(info));
+    // Claude records the questions it asks: only the pane's reported
+    // session, read for this same agent record, supplies them.
+    const step = agent === "claude" && info ? await resolve(paneId) : null;
+    const bound = paneBinding(agent, info ?? {}, args.context)?.fingerprint;
+    if (!step || !("resolved" in step) || !step.resolved.file || !bound)
+      return shown;
+    if (step.base.session_fingerprint !== bound) return shown;
+    const { entries } = await args.cache.get(step.resolved);
+    return withAskedQuestions(shown, askedQuestions(entries));
   };
 
   /**
@@ -531,10 +484,16 @@ export function createHerdrConversationSource(args: {
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
     const status = shown.agent_status ?? "";
-    // A blocked agent's question is on its screen, not in its transcript,
-    // and so is a command menu, which Chat asks for.
+    // Before Claude has a session, only its folder-trust question is read,
+    // under its pre-session witness. A blocked agent's question is on its
+    // screen, and so is a command menu, which Chat asks for.
+    const trust =
+      shown.agent === "claude" && shown.unavailable?.reason === "no_session"
+        ? await trustPrompts.read(pane_id).catch(() => null)
+        : null;
     const pending_prompt =
-      (status === "blocked" || (menus && MENU_STATUSES.has(status))) &&
+      trust ??
+      ((status === "blocked" || (menus && MENU_STATUSES.has(status))) &&
       shown.session_binding !== "guessed" &&
       (shown.agent !== "codex" || Boolean(shown.session_fingerprint))
         ? await agentInfo(pane_id)
@@ -548,7 +507,7 @@ export function createHerdrConversationSource(args: {
               return (await readMenu(pane_id, info, shown)) ?? asked;
             })
             .catch(() => null)
-        : null;
+        : null);
     const list = reservations.deliveries(
       pane_id,
       shown,
@@ -616,6 +575,7 @@ export function createHerdrConversationSource(args: {
 
   const source: ConversationSource & { dispose(): void } = {
     id: "herdr",
+    trust: trustPrompts.choose,
     ...createPromptActions({
       active: sendGuard.active,
       herdrCall: args.herdrCall,
@@ -637,8 +597,7 @@ export function createHerdrConversationSource(args: {
       claims.clear();
       for (const timer of deadlines) clearTimeout(timer);
       deadlines.clear();
-      codexWatch?.close();
-      codexWatch = null;
+      codexSessions.close();
       args.context.codexDiscovery.clear();
     },
     read,
@@ -648,7 +607,7 @@ export function createHerdrConversationSource(args: {
       // Watching runs on every Herdr event; it need not search Codex
       // transcripts again for a title it already resolved, while creations
       // and removals of Codex transcripts are being watched.
-      const step = await resolve(pane_id, watchCodexSessions());
+      const step = await resolve(pane_id, codexSessions.watch());
       // Every branch carries the receipts' states, so a check that ends
       // with no agent in the pane still reaches the browsers showing it.
       const receipts = deliveries

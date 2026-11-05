@@ -5,7 +5,8 @@ export type WorldBrowserEntry =
   | "HostsFilter"
   | "ProductionContexts"
   | "AnswerDeliveries"
-  | "NeedsYouCard";
+  | "NeedsYouCard"
+  | "QuestionCards";
 export type WorldBrowserBundle = {
   directory: string;
   assets: Map<string, Blob>;

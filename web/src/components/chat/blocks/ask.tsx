@@ -56,12 +56,23 @@ export function AskCard({
       <SquareTerminal size={13} /> Answer in the Terminal
     </button>
   ) : null;
+  // Without keys, Claude's own record of its questions is shown whole, or
+  // else the prompt as the terminal draws it, never a clipped tail.
   const message = (
     <>
       {prompt.request.length ? <pre>{prompt.request.join("\n")}</pre> : null}
-      {prompt.question.map((line, index) => (
-        <p key={index}>{line}</p>
-      ))}
+      {prompt.asked && !options.length ? (
+        <AskedQuestions asked={prompt.asked} />
+      ) : prompt.screen && !options.length ? (
+        <pre
+          className="agent-chat-ask-screen"
+          aria-label="The prompt as the Terminal shows it"
+        >
+          {prompt.screen.join("\n")}
+        </pre>
+      ) : (
+        prompt.question.map((line, index) => <p key={index}>{line}</p>)
+      )}
     </>
   );
   return (
@@ -178,7 +189,8 @@ export function AskCard({
         <p className="agent-chat-ask-fine">
           {nativeEditor
             ? "This text editor is already open in the Terminal. Continue there."
-            : "Chat cannot read the choices in this prompt safely, so it does not answer it."}{" "}
+            : (prompt.unanswerable ??
+              "Chat cannot read the choices in this prompt safely, so it does not answer it.")}{" "}
           {terminal}
         </p>
       )}
@@ -188,5 +200,73 @@ export function AskCard({
         </p>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * The questions as Claude recorded them: each header, question, option and
+ * description, whether several may be picked, and the free-text and
+ * discussion choices Claude adds. Shown for reading only: the answer goes in
+ * the Terminal.
+ */
+function AskedQuestions({
+  asked,
+}: {
+  asked: NonNullable<PendingPrompt["asked"]>;
+}) {
+  return (
+    <ol className="agent-chat-asked" aria-label="Questions asked">
+      {asked.questions.map((item, index) => (
+        <li
+          key={index}
+          aria-current={asked.current === index ? "step" : undefined}
+        >
+          {item.header ? (
+            <span className="agent-chat-asked-header">{item.header}</span>
+          ) : null}
+          <p>{item.question}</p>
+          {item.kind === "choice" ? (
+            <ul
+              className="agent-chat-asked-options"
+              aria-label={item.multi_select ? "Pick any" : "Pick one"}
+            >
+              {item.options.map((option, number) => (
+                <li key={number}>
+                  <span aria-hidden="true">
+                    {item.multi_select ? "☐" : "○"}
+                  </span>
+                  <span className="agent-chat-ask-label">
+                    {option.label}
+                    {option.description ? (
+                      <small>{option.description}</small>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <span className="agent-chat-asked-more">
+            <input
+              type="text"
+              disabled
+              placeholder={
+                item.kind === "number" ? "Type a number" : "Type something"
+              }
+              aria-label={`${item.kind === "number" ? "Type a number" : "Type something"} (answer in the Terminal)`}
+            />
+            {item.kind === "choice" && !item.multi_select ? (
+              <button type="button" disabled>
+                Chat about this
+              </button>
+            ) : null}
+          </span>
+          {item.multi_select ? (
+            <small className="agent-chat-asked-note">
+              Several options can be picked.
+            </small>
+          ) : null}
+        </li>
+      ))}
+    </ol>
   );
 }

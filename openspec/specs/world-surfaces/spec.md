@@ -2109,6 +2109,34 @@ question reloads in the same owner scope until the next answer attempt, even
 when the question disappears. Herdr's lack
 of conditional input remains a documented gap between the last check and dispatch.
 
+Claude Code's ask-the-user questions SHALL be read from the newest open call in
+the pane's reported session transcript, bounded and complete, and joined with
+the screen. Answer keys SHALL be offered only when the screen shows one of those
+questions with exactly its options and descriptions (wrapping aside) and, for a
+form, the same header chips, or the form's own review. Otherwise, and for
+multi-select or typed questions, Chat SHALL show every recorded question,
+header, option, description and selection mode with no keys, the reason, and
+the Terminal. The prompt fingerprint SHALL cover the call and its questions as
+well as the screen. A guessed conversation SHALL NOT supply questions. An
+unrecognized prompt SHALL be shown as its whole bottom block, with the reason,
+never as a clipped tail. Needs you SHALL show the same card.
+
+Claude Code's folder-trust question before a session SHALL be recognized only
+as the complete dialog: its "Quick safety check" text, the unnumbered choices
+"No, exit" then "Yes, I trust this folder" with exactly one cursor, and the
+"Enter to confirm · Esc to cancel" footer. Its input SHALL be bound to a
+service-owned pre-session witness: the source's connection runtime, the pane,
+its terminal, Claude with no reported session, and the pane's foreground
+process group and processes. Every key SHALL follow a fresh read of the witness
+and the exact question, with Herdr's record unchanged across that check, under
+the per-pane input lock. A click SHALL move the cursor with one arrow key only
+when needed, confirm the same question with the cursor on that choice, and only
+then press Enter. A session arriving, a replaced process or terminal, another
+question, a stale or partial read, an unmoved cursor or concurrent input SHALL
+refuse further keys. Digit shortcuts, automatic acceptance, a fabricated
+session fingerprint or relaxed session-bound answer, key or send paths SHALL
+NOT be used.
+
 #### Scenario: Codex waits without hooks
 
 - **WHEN** Herdr reports a bound Codex pane blocked on a complete question dialog
@@ -2134,6 +2162,26 @@ of conditional input remains a documented gap between the last check and dispatc
   its new turn, and progress arrives during the bounded wait
 - **THEN** Chat acknowledges only same-owner working progress or a completed
   turn with at least two sequence advances, and otherwise leaves it unconfirmed
+
+#### Scenario: A recorded question the screen does not show
+
+- **WHEN** Claude's transcript records a question whose options or text differ
+  from the screen, or that allows several options
+- **THEN** Chat shows the recorded question whole with no answer keys, says
+  why, and refuses any answer to that card
+
+#### Scenario: Folder trust before a session
+
+- **WHEN** Claude shows its folder-trust question with no session and the user
+  picks the choice not under the cursor
+- **THEN** the service checks the witness and question, presses one arrow key,
+  confirms the cursor moved on the same question, and presses Enter
+
+#### Scenario: A session or process change during folder trust
+
+- **WHEN** a session arrives, the foreground process changes or the question
+  changes between the card and a key
+- **THEN** no further key is sent and the card shows the refusal
 
 ### Requirement: Chat completes harness command menus and composer keys
 

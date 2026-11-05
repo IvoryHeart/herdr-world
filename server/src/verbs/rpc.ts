@@ -55,6 +55,12 @@ export const rpcVerbs = [
   ),
   rpc("agent_conversation.steps", "read", "runtime", object({ pane_id: text })),
   rpc(
+    "agent_conversation.trust",
+    "opaque",
+    "runtime",
+    object({ pane_id: text }),
+  ),
+  rpc(
     "agent_conversation.unwatch",
     "reconcilable",
     "runtime",

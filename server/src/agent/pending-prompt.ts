@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import type { AskedQuestions } from "./asked-questions";
+import type { TrustChoice } from "./trust-prompt";
 
 /**
  * The question a blocked agent is asking, read from the bottom of its screen.
@@ -41,6 +43,22 @@ export type PendingPrompt = {
    * its other lines are the request.
    */
   menu?: PromptMenu;
+  /** A multi-question form's review of its answers, before submitting. */
+  review?: true;
+  /**
+   * Claude's own record of the questions it asked, from its transcript. The
+   * options carry keys only when the screen shows the same question.
+   */
+  asked?: AskedQuestions;
+  /** Why Chat offers no answers for this prompt; Chat says so. */
+  unanswerable?: string;
+  /** The prompt as the terminal shows it, when Chat cannot read it whole. */
+  screen?: string[];
+  /**
+   * Claude's folder-trust question before any session exists, answered
+   * through its pre-session witness: the choice its cursor is on.
+   */
+  trust?: { cursor: TrustChoice };
   /** Identifies this exact prompt, in this session, at this Herdr state. */
   fingerprint: string;
 };
@@ -149,6 +167,7 @@ type Parsed = {
   options: PromptOption[];
   steps?: PromptStep[];
   menu?: PromptMenu;
+  review?: true;
 };
 
 /** A form's header chips, or null for any other line. */
@@ -382,6 +401,7 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
           )
         : [],
     ...(steps ? { steps } : {}),
+    ...(review ? { review: true as const } : {}),
   };
 }
 
@@ -793,21 +813,50 @@ export function parsePendingPrompt(
   if (parsed && parsed !== "incomplete") {
     // A request the harness shortened is not one Chat can approve.
     const abbreviated = parsed.request.some((line) => ABBREVIATED.test(line));
+    const options = abbreviated ? [] : parsed.options;
     return {
       question: parsed.question,
       request: parsed.request,
-      options: abbreviated ? [] : parsed.options,
+      options,
       ...(parsed.steps ? { steps: parsed.steps } : {}),
+      ...(parsed.review ? { review: true as const } : {}),
+      ...(options.length
+        ? {}
+        : {
+            unanswerable: abbreviated ? SHORTENED : UNREADABLE,
+            screen: promptScreen(parsed.shown),
+          }),
       fingerprint: fingerprint(context, parsed.shown),
     };
   }
-  // Not a supported, complete menu: the end of the screen is shown as the
-  // question, with no answers.
-  const tail = text.slice(-6).map((line) => line.trim());
+  // Not a supported, complete menu: the bottom of the screen is shown as the
+  // terminal draws it, its last lines as the question, with no answers.
+  const shown = promptScreen(lines);
   return {
-    question: tail,
+    question: text.slice(-6).map((line) => line.trim()),
     request: [],
     options: [],
-    fingerprint: fingerprint(context, tail),
+    unanswerable: UNKNOWN,
+    screen: shown,
+    fingerprint: fingerprint(context, shown),
   };
+}
+
+/** Rows of an unread prompt Chat shows, from the bottom of the screen. */
+export const PROMPT_SHOWN_ROWS = 40;
+const UNKNOWN =
+  "Chat does not recognise this prompt, so it shows it as the terminal does and does not answer it.";
+const UNREADABLE =
+  "Chat cannot read every choice in this prompt safely (it may be cut off or still drawing), so it does not answer it.";
+const SHORTENED =
+  "The agent shows this request shortened, so Chat does not approve it.";
+
+/** The bottom of a screen as drawn: no edge blank rows or blank runs. */
+function promptScreen(lines: readonly string[]) {
+  const shown: string[] = [];
+  for (const line of lines.slice(-PROMPT_SHOWN_ROWS).map(trimEnd))
+    if (line || (shown.length && shown[shown.length - 1] !== ""))
+      shown.push(line);
+  while (shown.length && !shown[shown.length - 1]) shown.pop();
+  return shown;
 }

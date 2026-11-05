@@ -80,8 +80,48 @@ export type PendingPrompt = {
     controls: { key: string; label: string; action: string }[];
     field?: string;
   };
+  /** A multi-question form's review of its answers, before submitting. */
+  review?: true;
+  /**
+   * The questions Claude recorded in its transcript; the options above carry
+   * keys only when the screen showed the same question (`current`).
+   */
+  asked?: {
+    call_id: string;
+    questions: {
+      question: string;
+      header?: string;
+      options: { label: string; description?: string }[];
+      multi_select: boolean;
+      kind: "choice" | "text" | "number";
+    }[];
+    current: number | null;
+  };
+  /** Why Chat offers no answers here. */
+  unanswerable?: string;
+  /** The prompt as the terminal shows it, when Chat cannot read it whole. */
+  screen?: string[];
+  /** Claude's folder-trust question before a session: its cursor's choice. */
+  trust?: { cursor: TrustChoice };
   fingerprint: string;
 };
+
+export type TrustChoice = "cancel" | "confirm";
+
+// Mirrors TrustResult in server/src/agent/trust-prompt.ts.
+export type TrustResult =
+  | {
+      status: "sent";
+      choice: TrustChoice;
+      label: string;
+      acknowledged: boolean;
+    }
+  | {
+      status: "refused";
+      reason: string;
+      message: string;
+      prompt: PendingPrompt | null;
+    };
 
 // Mirrors ConversationKeyResult in server/src/agent/conversation.ts.
 export type KeyResult =

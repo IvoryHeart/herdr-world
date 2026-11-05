@@ -29,6 +29,7 @@ import { useChatBlocks } from "./chat/useChatBlocks";
 import { useChatKeys } from "./chat/useChatKeys";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { ChatAfterBlocks, decorateChat } from "./chat/blocks/registry";
+import { chooseTrust } from "./chat/blocks/trust";
 import type { WorkItem } from "../../../shared/worldSources";
 import {
   DOUBLE_ESCAPE_MS,
@@ -40,6 +41,7 @@ import type {
   AnswerResult,
   Conversation,
   SendResult,
+  TrustChoice,
   UnconfirmedReason,
 } from "./chat/types";
 import "./chat/blocks/now.css";
@@ -363,6 +365,25 @@ export function AgentChat({
         setAnswering(false);
         load();
       }
+    },
+    [answering, answerScope, connectionClient, load, pane.pane_id, prompt],
+  );
+  // Claude's folder-trust question, before any session: checked and
+  // answered by the service under its pre-session witness.
+  const trust = useCallback(
+    async (choice: TrustChoice) => {
+      if (!prompt?.trust || answering) return;
+      setAnswering(true);
+      setAskNotice(null);
+      const refused = await chooseTrust(
+        connectionClient,
+        pane.pane_id,
+        prompt,
+        choice,
+      );
+      if (refused) setAskNotice({ scope: answerScope, text: refused });
+      setAnswering(false);
+      load();
     },
     [answering, answerScope, connectionClient, load, pane.pane_id, prompt],
   );
@@ -703,7 +724,8 @@ export function AgentChat({
         </div>
       ) : (
         <div className="agent-chat-list">
-          {history.messages.length === 0 ? (
+          {/* A question card stands in for the empty conversation. */}
+          {history.messages.length === 0 && !(showAsk && prompt) ? (
             <p
               className={
                 noRecord || history.history || history.error
@@ -784,6 +806,7 @@ export function AgentChat({
                 onPress={(key) => keys.pressMenu(prompt!.fingerprint, key)}
                 onType={(text) => keys.pressMenu(prompt!.fingerprint, "", text)}
                 onOpenTerminal={onOpenTerminal}
+                onTrust={(choice) => void trust(choice)}
               />
             }
           />
