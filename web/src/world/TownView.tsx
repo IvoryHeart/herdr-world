@@ -74,6 +74,7 @@ import {
 } from "./officePreferences";
 import { worldNodeOpenView } from "./worldInspectorSelection";
 import { useTownMaster } from "./town/useTownMaster";
+import { TownHerdrSetupOffer, TownNoHosts } from "./WorldStatus";
 import {
   TownRoomDialogs,
   useTownRoomActions,
@@ -775,15 +776,7 @@ export default function TownView({
     };
   };
 
-  if (!world.hosts.length) {
-    return (
-      <div className="world-empty" role="status">
-        <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
-        <h2>No connected spaces yet</h2>
-        <p>Add or connect a local or SSH Herdr profile from Spaces.</p>
-      </div>
-    );
-  }
+  if (!world.hosts.length) return <TownNoHosts />;
 
   const toolbar = (
     <WorldViewToolbar
@@ -900,6 +893,7 @@ export default function TownView({
           ))}
         </div>
         <div className="town-stage">
+          <TownHerdrSetupOffer world={world} />
           <TownCanvas
             trace={trace}
             projection={office}

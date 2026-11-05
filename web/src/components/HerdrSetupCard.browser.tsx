@@ -1,8 +1,11 @@
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { HerdrSetupCard } from "./HerdrSetupCard";
+import { TownHerdrSetupOffer } from "../world/WorldStatus";
+import type { WorldObject } from "../world/worldObject";
 import "../styles/tokens.css";
 import "../styles/base.css";
+import "../world/world-stage.css";
 
 const params = new URLSearchParams(location.search);
 const preview = params.has("preview");
@@ -11,11 +14,13 @@ let state = params.get("state") ?? "missing";
 let allowed = true;
 let statusFailure = false;
 let posts = 0;
+let statusRequests = 0;
 let confirmed = false;
 let completeSetup: ((response: Response) => void) | undefined;
 window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input);
   if (url === "/api/herdr/status") {
+    statusRequests++;
     return Promise.resolve(
       Response.json(
         { state, can_setup: allowed, verified_version: "0.9.0" },
@@ -245,6 +250,106 @@ async function run() {
   }
 }
 
+/** Town placement: the offer inside a synthetic stage, gated by the world. */
+async function townPlacement() {
+  const townWorld = (local: Record<string, unknown>, remoteReady = false) =>
+    ({
+      hosts: [
+        { connection: { connectionId: "local", isDefault: true, ...local } },
+        {
+          connection: {
+            connectionId: "remote",
+            isDefault: false,
+            state: remoteReady ? "ready" : "error",
+            error: remoteReady ? undefined : "Synthetic timeout",
+          },
+        },
+      ],
+    }) as unknown as WorldObject;
+  const failing = { state: "error", error: "Synthetic socket refused" };
+  const stage = document.createElement("div");
+  stage.className = "town-stage";
+  // town.css's stage box, without the canvas it frames.
+  stage.style.cssText =
+    "position:relative;overflow:hidden;width:1280px;height:800px;background:#2f4a2b";
+  document.body.replaceChildren(stage);
+  document.body.style.margin = "0";
+  const town = createRoot(stage);
+  const show = (world: WorldObject) =>
+    flushSync(() =>
+      town.render(<TownHerdrSetupOffer key={key} world={world} />),
+    );
+  const card = () =>
+    document.querySelector<HTMLElement>(
+      ".town-stage > .town-herdr-setup > .herdr-setup-card",
+    );
+
+  allowed = true;
+  statusFailure = false;
+  for (const [name, world] of [
+    ["connecting", townWorld({ state: "connecting" })],
+    ["disconnected", townWorld({ state: "disconnected" })],
+    ["another host ready", townWorld(failing, true)],
+  ] as const) {
+    const before = statusRequests;
+    key++;
+    show(world);
+    await settle();
+    check(
+      !document.querySelector(".town-herdr-setup"),
+      `town ${name}: no card`,
+    );
+    check(statusRequests === before, `town ${name}: no status request`);
+  }
+
+  state = "running";
+  key++;
+  show(townWorld(failing));
+  await settle();
+  check(!card(), "town running: no card");
+
+  state = "missing";
+  const postsBefore = posts;
+  key++;
+  show(townWorld({ ...failing, state: "reconnecting" }));
+  await waitFor(() => card() !== null, "the Town setup card");
+  click(primary());
+  check(
+    document.querySelector("h2")?.textContent === "Install Herdr 0.9.0?",
+    "town missing: install confirmation",
+  );
+  check(posts === postsBefore, "town review must not send POST");
+
+  for (const [width, height] of [
+    [390, 844],
+    [1280, 800],
+    [390, 320],
+  ]) {
+    stage.style.width = `${width}px`;
+    stage.style.height = `${height}px`;
+    await settle();
+    const panel = document.querySelector<HTMLElement>(".town-herdr-setup")!;
+    const outer = stage.getBoundingClientRect();
+    const box = panel.getBoundingClientRect();
+    const size = `town ${width}x${height}`;
+    check(box.left - outer.left >= 16, `${size}: left gutter`);
+    check(outer.right - box.right >= 16, `${size}: right gutter`);
+    check(box.bottom <= outer.bottom, `${size}: inside the stage`);
+    check(
+      document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
+      `${size}: no horizontal page scroll`,
+    );
+    check(card()!.scrollWidth <= card()!.clientWidth, `${size}: card overflow`);
+    if (height < 400)
+      check(
+        panel.scrollHeight > panel.clientHeight,
+        `${size}: scrolls inside itself`,
+      );
+  }
+  town.unmount();
+}
+
 if (preview) {
   document.documentElement.dataset.theme = params.get("theme") ?? "dark";
   render(params.has("compact"));
@@ -257,6 +362,7 @@ if (preview) {
 } else {
   try {
     await run();
+    await townPlacement();
   } catch (error) {
     failures.push(String(error));
   }
