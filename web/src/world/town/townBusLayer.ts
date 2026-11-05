@@ -53,7 +53,10 @@ export class TownBusLayer implements TownWorldOverlay {
   private current: TownBusScene | null = null;
   /** Each bus as last drawn, to see an arrival or a return. */
   private seen: TownBusSeen = new Map();
-  /** Buses that returned to an earlier stop, fading in there (layer clock). */
+  /**
+   * Buses that returned to an earlier stop: when each starts fading in there
+   * (layer clock), after its old self has driven off; hidden until then.
+   */
   private readonly fades = new Map<string, number>();
   private roomStops: { layout: TownLayout; stops: Map<string, string> } | null =
     null;
@@ -103,19 +106,22 @@ export class TownBusLayer implements TownWorldOverlay {
     );
     if (arrivals) this.source.onArrive?.();
     const now = this.source.now?.() ?? performance.now();
-    // Riders ahead were put back: the bus drives off from where it stood and
-    // fades in where it now waits (observer-only; a remount just shows it).
-    for (const key of returns) this.fades.set(key, now);
-    this.leavers.push(
-      ...townBusLeavers(
-        this.seen,
-        scene.buses,
-        layout.width * T,
-        now,
-        reducedMotion,
-        returns,
-      ),
+    // Riders ahead were put back: the bus drives off from where it stood,
+    // THEN fades in where it now waits, once that drive has left the map
+    // (observer-only; a remount just shows it waiting there).
+    const leaving = townBusLeavers(
+      this.seen,
+      scene.buses,
+      layout.width * T,
+      now,
+      reducedMotion,
+      returns,
     );
+    for (const key of returns) {
+      const old = leaving.find((leaver) => leaver.key === key);
+      this.fades.set(key, now + (old?.run.duration ?? 0));
+    }
+    this.leavers.push(...leaving);
     this.seen = townBusSeen(scene.buses);
     for (const [key, start] of this.fades)
       if (!this.seen.has(key) || now - start >= BUS_FADE_MS)
@@ -141,7 +147,9 @@ export class TownBusLayer implements TownWorldOverlay {
       const x = Math.round(bus.x);
       const fade = this.fades.get(bus.key);
       const alpha =
-        fade === undefined ? 1 : Math.min(1, (now - fade) / BUS_FADE_MS);
+        fade === undefined
+          ? 1
+          : Math.max(0, Math.min(1, (now - fade) / BUS_FADE_MS));
       this.add(busSprite(bus.doorsOpen, bus.wheel), x, bus.y, alpha);
       for (const rider of bus.riders) {
         const look = lookOf(rider.entryId);
