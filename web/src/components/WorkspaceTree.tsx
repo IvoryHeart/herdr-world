@@ -290,10 +290,7 @@ export function WorkspaceTree({
   const connectedServerCount = s.connections.filter(
     (connection) => connection.state === "ready",
   ).length;
-  const reviews = useWorkspacePullRequests(
-    connectionClient,
-    s.status === "connected" ? s.workspaces : [],
-  );
+  const reviews = useWorkspacePullRequests(connectionClient, s.workspaces);
   const agentOrderStorageKey = connectionStorageKey(
     s.activeConnectionId,
     AGENT_ORDER_STORAGE_KEY,
