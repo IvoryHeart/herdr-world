@@ -10,6 +10,7 @@ import {
   Minus,
   MessageSquareText,
   Moon,
+  Option,
   Palette,
   Plus,
   SquareTerminal,
@@ -37,7 +38,12 @@ import {
   type MobileTerminalShortcutRows,
   type MobileTerminalSideShortcuts,
 } from "../mobileTerminalShortcuts";
+import { detectShortcutPlatform } from "../shortcutBindings";
 import { shallowEqual, store, useStoreSelector } from "../store";
+import {
+  setTerminalOptionAsMeta,
+  useTerminalOptionAsMeta,
+} from "../terminalOptionKey";
 import type {
   CustomTerminalTheme,
   TerminalThemeSelection,
@@ -136,6 +142,8 @@ export function ConfigurationDialog({
     }),
     shallowEqual,
   );
+  const optionAsMeta = useTerminalOptionAsMeta();
+  const applePlatform = detectShortcutPlatform() === "mac";
   const connectionClient = useConnectionClient();
   const [tab, setTab] = useState<ConfigurationTab>(initialTab);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -540,6 +548,33 @@ export function ConfigurationDialog({
                     </button>
                   </div>
                 ))}
+              {applePlatform ? (
+                <div className="config-preference-row">
+                  <span className="config-item-icon">
+                    <Option size={15} />
+                  </span>
+                  <div className="config-item-copy">
+                    <strong>Option key as Alt in terminals</strong>
+                    <span>
+                      {optionAsMeta
+                        ? "Option sends Alt-modified keys"
+                        : "Option types characters such as @, [ and ~"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Option key as Alt in terminals"
+                    aria-checked={optionAsMeta}
+                    className={
+                      "settings-switch" + (optionAsMeta ? " is-on" : "")
+                    }
+                    onClick={() => setTerminalOptionAsMeta(!optionAsMeta)}
+                  >
+                    <span />
+                  </button>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="config-menu-item"

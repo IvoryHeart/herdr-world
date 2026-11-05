@@ -37,6 +37,7 @@ import {
 } from "./annotations";
 import { subscribeLocalStorage, worldLocalStorage } from "./browserStorage";
 import { useLayoutPreferences } from "./layoutPreferences";
+import { passwordManagerIgnore } from "./passwordManagerIgnore";
 import {
   shortcutMatches,
   shortcutTitle,
@@ -717,10 +718,10 @@ function PaneJumpOverlay({
             <input
               ref={searchInputRef}
               className="pane-jump-search"
-              type="text"
               value={search}
               spellCheck={false}
               autoComplete="off"
+              {...passwordManagerIgnore}
               placeholder="Workspace, tab, server, directory, or agent"
               role="combobox"
               aria-label="Search panes"
