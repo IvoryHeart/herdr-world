@@ -1,6 +1,6 @@
 /** Deterministic Town layout with stable room capacity, pins and desk order. */
 
-import { nearTownBusStop, townBusStop, type TownBusStop } from "./townBusStop";
+import { nearTownBusStop, townBusStops, type TownBusStop } from "./townBusStop";
 
 export const TOWN_TILE = 16;
 
@@ -213,8 +213,10 @@ export type TownLayout = {
    * roads on at least three sides.
    */
   verticalRoads: { x: number; y0: number; y1: number }[];
-  /** Town's one bus stop, where the bin's bus collects agents (townBusStop.ts). */
+  /** The main bus stop, nearest the town centre (townBusStop.ts). */
   busStop: TownBusStop;
+  /** A bus stop at every crossing, in road order; the bin's bus calls at those with riders. */
+  busStops: TownBusStop[];
   /** The lot reserved for the town hall: the last lot on the grid. */
   townHall: { x: number; y: number; w: number; h: number };
   plaza: TownPoint;
@@ -777,12 +779,20 @@ export function layoutTown(
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
-  const busStop = townBusStop(roads, verticalRoads, width, MARGIN);
+  const busStops = townBusStops(
+    roads,
+    verticalRoads,
+    { width, height },
+    MARGIN,
+    buildings.map((b) => ({ x: b.barDoorX, y: b.roadY })),
+  );
+  const busStop = busStops.find((stop) => stop.main)!;
   const lamps: TownPoint[] = [];
   for (const ry of roads)
     for (let tx = 6; tx < width - 4; tx += 11) {
       if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
-      if (nearTownBusStop(busStop, { x: tx, y: ry })) continue;
+      if (busStops.some((stop) => nearTownBusStop(stop, { x: tx, y: ry })))
+        continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 
@@ -850,6 +860,7 @@ export function layoutTown(
       roads,
       verticalRoads,
       busStop,
+      busStops,
       townHall,
       plaza,
       board: { x: plaza.x + 4, y: plaza.y - 2 },
