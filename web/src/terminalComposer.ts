@@ -75,6 +75,25 @@ export function terminalComposerDraftKey(
   return JSON.stringify([connectionId, connectionGeneration, paneId]);
 }
 
+/**
+ * Carries unsent drafts from a runtime generation that is being replaced to
+ * the same terminals in its successor (Roamgate #485, same document only).
+ * Drafts stay in memory; the caller proves each pair is the same connection,
+ * destination, pane and terminal. A destination that already has text keeps
+ * it.
+ */
+export function moveTerminalComposerDrafts(
+  moves: readonly { from: string; to: string }[],
+): void {
+  for (const { from, to } of moves) {
+    const text = drafts.get(from);
+    if (!text || drafts.get(to)) continue;
+    writeTerminalComposerDraft(to, text);
+    const selection = selections.get(from);
+    if (selection) selections.set(to, selection);
+  }
+}
+
 export function readTerminalComposerDraft(key: string): string {
   return drafts.get(key) ?? "";
 }
