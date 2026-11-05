@@ -67,7 +67,14 @@ const MARKDOWN_DROP_CONTENT_TAGS = new Set([
 ]);
 
 export function isSafeMarkdownUrl(value: string) {
-  const trimmed = value.trim().toLowerCase();
+  // From Roamgate #567 (ded99da2f6ccf8ed3fa85ae29e27011598ec4b04).
+  // Browsers drop tabs/line breaks in URLs and read backslashes as slashes.
+  // Ignore C0 controls, spaces and DEL for validation only; keep the URL as written.
+  const trimmed = [...value]
+    .filter((char) => char > " " && char !== "\u007f")
+    .join("")
+    .replace(/\\/g, "/")
+    .toLowerCase();
   if (!trimmed || trimmed.startsWith("//")) return false;
   if (trimmed.startsWith("#") || trimmed.startsWith("/")) return true;
   const protocolMatch = trimmed.match(/^([a-z][a-z0-9+.-]*):/);
@@ -201,6 +208,8 @@ export function sanitizeMarkdownHtml(
           !(
             options.sourceFileLinks &&
             name === "href" &&
+            // Only scheme-like file references need this exception (main.ts:9, C:\...).
+            /^[a-z][a-z0-9+.-]*:/i.test(attr.value.trim()) &&
             parseSourceFileLink(attr.value)
           )
         ) {
