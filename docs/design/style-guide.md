@@ -119,8 +119,10 @@ the proposals.
 
 On phones, Board and Desk also show the shell's floating controls for the
 selected terminal: Ranger, Tabs, window arrangement and the workspace views
-(files, changes, commits and history). Today they can cover lane content. No
-rule here covers floating controls yet.
+(Files, Changes, Annotations, Commits and agent message History), plus the
+Workspaces toggle. The floating X hides these mobile controls; it does not close
+an agent window. Today they can cover lane content. No rule here covers floating
+controls yet.
 
 ## Icons
 
@@ -146,11 +148,15 @@ plain text glyphs.
 | `Compass` | Ranger | top bar, phone floating controls |
 | `LayoutGrid`; `PanelsTopLeft` with a count | Arrange windows; open windows | top bar; Arrange also on phones |
 | `SquareStack` with a count | Tabs | phone bars and floating controls |
+| `PanelTop` | Show or hide Workspaces | phone workspace shortcut |
 | `Search` | Search this view | view toolbar |
 | `ArrowLeft`; `ChevronLeft` | Back | phone detail bar; a window opened from another surface |
-| `X` | Close | windows, dialogs, search |
+| `X` | Close a window, dialog or search; hide mobile controls | windows, dialogs, search; phone floating controls |
 | `MoreHorizontal`; `EllipsisVertical` | More actions; more or settings | windows; Board, Town and phones |
 | `MessagesSquare`, `SquareTerminal`, `FolderTree`, `FileDiff` | Chat, Terminal, Files, Changes | agent window views |
+| `MessageSquareText` | Review Annotations | phone workspace views |
+| `GitBranch` | Workspace Commits | phone workspace views |
+| `History` | Agent message History | phone workspace views |
 | `GitPullRequest`, `Sparkles`, `Minus`, `Plus` | Work, tidy, zoom out, zoom in or new | Board dock, Town |
 | `Pencil`; `Trash2` | Rename room; close room or delete | Town room plaques, Board |
 | Agent marks `•` `!` `?` `✓` `×` `–` `~` | Working, Needs you, Asks you, Done, Offline, Idle or Reviewed, No signal | Needs you, agent hover cards and Town's peek; Desk shows the `?` mark |
