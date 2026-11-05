@@ -180,6 +180,8 @@ test("Chat source-file links retain their local navigation attributes", () => {
   for (const value of [
     "src/main.ts:12",
     "main.ts:9",
+    "my file.ts:9",
+    "notes v2.md:3:1",
     "C:\\project\\demo\\main.ts:5",
     "src/a%20b.ts#L12",
   ]) {
@@ -191,4 +193,9 @@ test("Chat source-file links retain their local navigation attributes", () => {
     expect(link.getAttribute("href")).toBe("#");
     expect(link.getAttribute("data-source-file")).toBe(value);
   }
+  const link = document(
+    renderMarkdown("[source](my&#32;file.ts:9)", { sourceFileLinks: true }),
+  ).querySelector("a")!;
+  expect(link.getAttribute("href")).toBe("#");
+  expect(link.getAttribute("data-source-file")).toBe("my file.ts:9");
 });
