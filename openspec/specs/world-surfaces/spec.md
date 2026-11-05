@@ -2097,6 +2097,118 @@ of conditional input remains a documented gap between the last check and dispatc
 - **THEN** Chat acknowledges only same-owner working progress or a completed
   turn with at least two sequence advances, and otherwise leaves it unconfirmed
 
+### Requirement: Chat completes harness command menus and composer keys
+
+Chat SHALL show a harness's own command menu (such as Claude Code's or Codex's
+`/model` and `/permissions`) that is open while Herdr reports the bound agent
+idle or done, read from the bottom of its screen only on Chat's request. When
+Herdr reports the pane blocked, Chat SHALL show a menu only if the prompt
+parser reads no question there and the transcript is readable with no open
+tool call; otherwise the screen remains a question. A Codex menu drawn above
+its idle composer SHALL NOT be offered when the agent's last message quotes its
+title or footer or the transcript cannot be read. Only a
+complete recognized panel SHALL be offered: a Claude Code panel between its top
+edge and a footer of key segments including Escape, or a Codex title paragraph,
+numbered option block and such a footer at the bottom of the screen or directly
+above its idle composer. Options SHALL come only from numbered rows with at most
+one cursor and consecutive numbers; Chat SHALL NOT infer choices from prose. A
+digit SHALL pick an option only when no longer option number starts with it and
+the menu has no text field. Key buttons SHALL come only from keys the footer or
+an arrow hint names, plus the arrows of a list.
+
+The service MAY report `menu_unreadable` with reason `terminal_too_small` and the
+measured rows only when no prompt/menu was read for the current same-session
+command and `pane.get` reports positive integer viewport rows below the shared
+`TERMINAL_SIZE_FLOOR.rows`. Connection/runtime/pane ownership, native read witness
+and current command SHALL remain qualified across the read. Unknown rows,
+layout dimensions and default sizes SHALL NOT supply a size claim. With no
+prompt, Chat SHALL show “The terminal is too small to show this menu — open or
+click Terminal to fix.” and its existing Open Terminal action for that fact.
+The note SHALL grant no send, press, answer or refusal authority.
+
+Each menu key SHALL carry the session and menu fingerprint Chat showed. The
+service SHALL refuse with nothing sent unless the pane's session matches, the
+pane still shows a menu under those rules, the screen shows that menu, the key is one it names and
+the pane's agent, session, terminal, title, revision and state sequence are
+unchanged on a second read. Field text SHALL be one line of at most 500
+characters without control characters and SHALL be typed without Enter. A
+refusal SHALL return the menu now shown; a sent key SHALL return the next menu
+or none. Menu keys and answers to one pane SHALL NOT interleave.
+
+The composer's ellipsis menu SHALL offer the Terminal's configured key
+controls on desktop and phone, with the characters and modifiers the Terminal
+would send; a combination Herdr cannot name that way SHALL be disabled. Each SHALL be sent only as a Herdr key name for
+the session Chat shows and only after a second unchanged pane read; scrolling
+and keys Herdr does not name SHALL be disabled. A new connection, runtime, pane
+or session SHALL retire a shown menu and its notice. Chat SHALL NOT type a
+message or slash command into a pane that may show a menu: Send SHALL be
+disabled while a menu card is shown, and after its last preparation await the
+service SHALL read the screen regardless of reported status and refuse with
+nothing typed when the read fails or is malformed or the screen shows a menu,
+a question or a menu-like footer or cursor, including boxed options in an
+incomplete capture; blank screen padding SHALL NOT conceal that evidence.
+The final native read SHALL retain the terminal, session, state sequence and
+other identity captured for the screen check, or the send SHALL refuse.
+Ordinary prose quoted by the same
+session's last assistant message SHALL remain sendable, including Claude's
+recognized message prefix and over SSH
+with a browser delivery baseline; that baseline SHALL NOT supply quote authority.
+World inputs to one pane SHALL NOT
+overlap. A slash command SHALL be reserved per pane, session and text before
+dispatch; it SHALL be released only when nothing reached the pane and SHALL
+otherwise stay reserved, and show as waiting, until a successful qualified
+read begun after dispatch shows another session or an idle/done status. Known
+native non-submission, including `agent_not_ready`, SHALL release the reservation
+so a legitimate retry can succeed. Unknown, failed, blocked or older observations
+SHALL NOT retire a live reservation or remove its waiting presentation.
+Dismissing its receipt SHALL NOT release it. Keyboard focus SHALL stay on
+the menu card across the menu's steps, unless the user moved it outside the card
+while a key was pending. Opening, changing or
+closing a menu SHALL keep the transcript, its scroll position, the composer
+draft, attachments and send receipts. Herdr's lack of conditional input
+remains a documented gap between the last check and the key.
+
+#### Scenario: Quoted terminal instructions in an SSH reply
+
+- **WHEN** a bound SSH session's last assistant reply quotes terminal footer instructions and Chat supplies a delivery baseline
+- **THEN** ordinary text may be sent after checking quote text from that session; actual menus and unknown screen reads still refuse
+
+#### Scenario: A partial question or blank padding hides menu structure
+
+- **WHEN** a question's top edge is missing, or a cut-off menu is followed by blank terminal rows
+- **THEN** Chat refuses text without sending input even when it cannot offer answer controls
+
+#### Scenario: The final observation reports a replacement terminal
+
+- **WHEN** a screen is checked under one terminal/state witness and the final native read reports a changed witness with the same session
+- **THEN** Chat refuses without sending input; an ordinary quoted footer with Claude's message prefix remains sendable when the witness is unchanged
+
+#### Scenario: Retry a command after native refusal
+
+- **WHEN** the native runtime rejects a command before submitting input and the same session becomes ready
+- **THEN** an identical retry may submit once; a lost acknowledgement keeps it reserved
+
+#### Scenario: A late idle observation arrives after queue admission
+
+- **WHEN** an idle read starts before a command is admitted to a working session and returns after dispatch
+- **THEN** the command remains reserved and its receipt remains waiting; a malformed observation also cannot clear either
+
+#### Scenario: Pick a model from Chat
+
+- **WHEN** a user sends `/model` from Chat and picks a numbered model
+- **THEN** Chat shows the harness's menu, presses that digit only if the same
+  session still shows the same menu, and shows the next step or none
+
+#### Scenario: The menu changes before the key
+
+- **WHEN** the menu, session or pane changes between Chat's card and the key
+- **THEN** the service sends nothing and returns the menu now shown
+
+#### Scenario: Press a terminal key from Chat
+
+- **WHEN** a user presses Ctrl+C in the composer's ellipsis menu
+- **THEN** the service presses it only for the session Chat shows
+
 ### Requirement: Town peeks show recent chatter and take replies
 
 An agent's peek SHALL show the agent's latest message from the conversation

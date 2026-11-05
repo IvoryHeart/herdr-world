@@ -30,6 +30,11 @@ export type ConversationDelivery = {
   kind?: "command";
   /** Herdr reported working immediately before native prompt admission. */
   queued?: boolean;
+  /**
+   * A command World admitted while the agent worked and has not seen it
+   * reach: same session, no non-working status observed since.
+   */
+  waiting?: boolean;
   id: string;
   text: string;
   sent_at: string;

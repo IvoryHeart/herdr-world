@@ -118,6 +118,9 @@ async function fixture(
       message: "Fixture is not blocked",
       pending_prompt: null,
     }),
+    press: async () => {
+      throw new Error("unused");
+    },
     dismiss: () => false,
     read: async () => {
       const observed = view();
