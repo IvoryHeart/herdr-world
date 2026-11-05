@@ -34,6 +34,7 @@ import {
   type ScreenRect,
 } from "./townBusReach";
 import { TownBusLayer } from "./townBusLayer";
+import { townStopRooms } from "./townBusStop";
 import type { TownLayout } from "./townLayout";
 import type { TownMoveResult } from "./townMoves";
 import type { TownRendererHandle } from "./townRenderer";
@@ -409,6 +410,17 @@ export function useTownBus({
   };
 
   const scene = layerRef.current?.scene ?? null;
+  /** "Main stop", or the stop named after its nearest room. */
+  const stopName = (entryId: string) => {
+    const l = layout();
+    const stop = scene?.stopOf.get(entryId);
+    const at = stop ? scene?.stops.find((s) => s.id === stop) : undefined;
+    if (!l || !at) return null;
+    if (at.main) return "at the main stop";
+    const room = townStopRooms(l).get(at.id);
+    const label = projection.rooms.find((r) => r.key === room)?.displayLabel;
+    return label ? `at the stop by ${label}` : "at a bus stop";
+  };
   const next = soonestBus(bin.entries, (entry) => store.remaining(entry));
   const putBack = (entry: BinEntry) => {
     playBinSound("back");
@@ -432,6 +444,7 @@ export function useTownBus({
             timeLeft={(entry) => store.remaining(entry)}
             onShut={() => void store.resume().catch(report)}
             onPutBack={(entry) => putBack(entry)}
+            place={(entry) => stopName(entry.id)}
             onCloseNow={(ids) => {
               if (!bin.verified)
                 return report("The bin is reconnecting; try again.");

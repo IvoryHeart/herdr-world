@@ -27,3 +27,7 @@
   the carry hint, and the town no longer edge-pans beside it. Tapping the stop
   or its chip opens the bin tray, and a bus emptied by Put back drives away
   instead of vanishing. The tray shows its held state and the shared wait.
+- Put a bus stop at every crossing in Town: an agent waits at the stop nearest
+  its room, the one bus calls only at stops with riders in road order at a
+  speed fixed when it sets off, and tapping any stop opens the tray, which
+  names each agent's stop.

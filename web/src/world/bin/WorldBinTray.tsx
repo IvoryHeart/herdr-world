@@ -22,6 +22,7 @@ export function WorldBinTray({
   onPutBack,
   onCloseNow,
   onDragOut,
+  place,
   className,
 }: {
   entries: readonly BinEntry[];
@@ -32,6 +33,8 @@ export function WorldBinTray({
   onPutBack: (entry: BinEntry, at: { x: number; y: number } | null) => void;
   onCloseNow: (ids: readonly string[]) => void;
   onDragOut?: (entry: BinEntry | null) => void;
+  /** Where the agent waits (Town: its bus stop); other views show none. */
+  place?: (entry: BinEntry) => string | null;
   className?: string;
 }) {
   const tray = useRef<HTMLDivElement>(null);
@@ -126,6 +129,9 @@ export function WorldBinTray({
               onPointerCancel={(event) => endDrag(event, true)}
             >
               <b>{entry.label}</b>
+              {place?.(entry) ? (
+                <small className="world-bin-card-place">{place(entry)}</small>
+              ) : null}
               <code>{clock(entry, timeLeft)}</code>
               <span className="world-bin-card-actions">
                 <button

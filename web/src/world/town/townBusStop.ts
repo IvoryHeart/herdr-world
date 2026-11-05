@@ -150,3 +150,35 @@ export function townRoomStops(layout: {
       );
   return stops;
 }
+
+/** Each stop's nearest room (ties: the first room laid out), for its name. */
+export function townStopRooms(layout: {
+  busStops: readonly TownBusStop[];
+  buildings: readonly {
+    rooms: readonly {
+      key: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }[];
+  }[];
+}): Map<string, string> {
+  const rooms = layout.buildings.flatMap((building) => building.rooms);
+  const result = new Map<string, string>();
+  for (const stop of layout.busStops) {
+    let best: string | null = null;
+    let bestDistance = Infinity;
+    for (const room of rooms) {
+      const distance =
+        (room.x + room.w / 2 - stop.x) ** 2 +
+        (room.y + room.h / 2 - stop.y) ** 2;
+      if (distance < bestDistance) {
+        best = room.key;
+        bestDistance = distance;
+      }
+    }
+    if (best !== null) result.set(stop.id, best);
+  }
+  return result;
+}

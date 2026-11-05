@@ -697,21 +697,27 @@ Closing the holding browser window releases its hold. The last pane
 of a pinned tab is refused until you unpin the tab, including while a sibling's
 close is still being completed.
 
-In Town the bin is a London bus stop on the top street. Drag an agent to the
-stop (or use **Send to the bus stop** in its peek) and watch the bus drive in;
-it stops with 10 seconds left on the clock and sounds its horn. Sending another
+In Town the bin is a London bus stop: there is one at every crossing, and the
+one nearest the middle of town is the main stop. Drag an agent to any stop (or
+use **Send to the bus stop** in its peek): it waits at the stop nearest its own
+room. One red double-decker runs the route for everyone, street by street from
+the left, calls only at stops where agents wait, picks them up as it rolls past,
+and stops at the last one, sounding its horn, to wait until 0:00. Sending another
 agent from Board, Desk or Town before the bus pulls away starts the shared
-countdown again for both. A bus already coming keeps its speed, arrives early
-and waits until 0:00; one already at the stop waits longer. Reloading or opening
-another World keeps the trip's progress, including time held still. If
-the stop is off screen, the red chip at the screen's edge shows the next
+countdown again for both; the bus never slows down for it, so it arrives early
+and waits longer. An agent sent after the bus has passed its stop waits at the
+next stop ahead instead. If you put back everyone at the bus's last stop, the
+bus fades out and back in at the last stop that still has riders. Reloading or
+opening another World keeps the trip's progress, including time held still. If
+the bus's stop is off screen, the red chip at the screen's edge shows the next
 departure. While you carry an agent, the chip moves near the top of the screen
 as a large **Bus stop** target ("drop on a room, or on Bus stop to close"); it
 lights up under your finger and the town does not edge-pan beside it. The chip
 stays clear of the held-bus panel and other Town controls. When the countdown ends the bus drives
 away, and the agent closes only when the bus has left the map. Until then,
-tap or click the bus (even while it is coming or leaving), the stop, or the
-chip, on a phone or desktop, to open that same tray and hold the countdown.
+tap or click the bus (even while it is coming or leaving), any stop, or the
+chip, on a phone or desktop, to open that same tray and hold the countdown; in
+Town it shows each agent's stop.
 **Put back** returns a rider (an empty bus drives on off the map);
 **Resume** closes the tray and drives on. You can also drag a rider off the bus.
 

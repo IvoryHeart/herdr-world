@@ -373,6 +373,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Where the agent waits (Town: its bus stop). */
+.world-bin-card-place {
+  flex: 1 1 100%;
+  order: 1;
+  color: var(--bin-soft);
+  font-size: 12px;
+}
+
 .world-bin-card code {
   color: var(--bin-soft);
   font: 12px var(--world-font-mono, ui-monospace, monospace);

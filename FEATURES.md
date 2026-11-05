@@ -174,22 +174,28 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     pointer and end with a short fade. The live panes move, agents keep running, a failed
     move attempts rollback and reports partial or unknown results. Moving a
     room's last table asks first because the room closes. When a table closes, the tables after it close up.
-  - **The bus stop** is Town's bin: a London bus stop on the top street, right
-    of its last crossing. Drag an agent there (or **Send to the bus stop** in
-    its peek); the town holds still while you hover over the stop. While the
-    stop is off screen, a red chip at the screen's edge shows the next departure;
-    tap it, the stop or its sign to open the bin tray and see the bus. While
+  - **The bus stops** are Town's bin: a London bus stop at every crossing; the
+    one nearest the middle of town is the main stop. Drag an agent to any stop
+    (or **Send to the bus stop** in its peek); it waits at the stop nearest its
+    own room, and the town holds still while you hover over a stop. While the
+    bus's stop is off screen, a red chip at the screen's edge shows the next
+    departure; tap it, any stop or a sign to open the bin tray (which names
+    each agent's stop) and see the bus. While
     you carry an agent the chip becomes a large **Bus stop** drop target near
     the top of the screen, lighting up under your finger (the carry hint names
     it), and the town does not edge-pan beside it.
-    The agent leaves its desk and waits with a box while a red double-decker
-    drives in from the town's left edge, slowing as it reaches the stop with
-    10 seconds left on the clock and a short horn, then rides it (eight to a
-    bus; more take more buses, queued behind the stop). An agent who boards
+    The agent leaves its desk and waits with a box. One red double-decker runs
+    the route street by street from the left edge, at a speed fixed when it
+    sets off, showing only on streets where agents wait; it picks riders up as
+    it rolls past their stops and eases into the last one with a short horn,
+    waiting there until 0:00 (eight to a bus; more ride a second bus close
+    behind). An agent who boards
     before the bus pulls away starts the countdown again in full for everyone
-    on it. Board and Desk drops reset that same service countdown. The bus keeps
-    its set-off speed after a reset, arrives early and waits until 0:00; one
-    already at the stop keeps waiting. Reloading or opening another World
+    on it. Board and Desk drops reset that same service countdown. The bus never
+    slows for a reset: it arrives early and waits longer. An agent sent after
+    the bus passed its stop waits at the next stop ahead. Put back everyone at
+    the last stop and the bus fades out and back in at the last stop that still
+    has riders. Reloading or opening another World
     reconstructs that same progress; holds freeze the trip as well as the
     countdown. Desk cards and directory rows offer **Close agent…**, and Desk
     cards can be dropped into its bin. Pinned tabs retain their last pane even

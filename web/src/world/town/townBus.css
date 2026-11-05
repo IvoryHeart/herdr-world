@@ -26,6 +26,13 @@
   pointer-events: none;
 }
 
+/* Signs at stops other than the main one stay small: a town has many. */
+.town-bus-sign[data-main="false"] {
+  padding: 1px 4px;
+  font-size: 9px;
+  background: #2a4aa8;
+}
+
 /* The stop and its sign: a finger-sized target at any zoom. */
 .town-bus-stop {
   width: max(16px, calc(44px * var(--iz)));
