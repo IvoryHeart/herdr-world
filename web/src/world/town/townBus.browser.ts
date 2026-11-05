@@ -161,18 +161,50 @@ export async function checkTownBus(
         ),
       `boarding did not restart the countdown for the bus: ${JSON.stringify(bin.state.entries.map((e) => [e.trip, e.remaining_ms]))}`,
     );
-    // Both go back from the common tray.
+    // Both go back from the common tray, one tap each. Before each tap the
+    // tray must show exactly the riders still in the bin; the tap must
+    // restore the card it was made on, and that card must then leave the
+    // tray (which shuts once the bin is empty) before the next tap.
     await opens(
       host.querySelector<HTMLElement>(".town-bus-stop")!,
       "the stop did not open the tray for two riders",
     );
+    const cards = () =>
+      [...(held()?.querySelectorAll<HTMLElement>("[data-bin-entry]") ?? [])]
+        .map((card) => card.dataset.binEntry!)
+        .join();
+    const state = () =>
+      JSON.stringify({
+        entries: bin.state.entries.map((e) => e.id),
+        cards: cards(),
+        paused: bin.state.paused,
+        calls: bin.calls.slice(-6).map((c) => [c.method, c.params]),
+        tray: held()?.textContent ?? null,
+        toast: host.querySelector(".town-bus-toast")?.textContent ?? null,
+      });
     for (const left of [1, 0]) {
-      host
-        .querySelector<HTMLButtonElement>(".town-bus-held li button")!
-        .click();
       await waitFor(
-        () => bin.state.entries.length === left,
-        "a rider was not put back",
+        () => cards() === bin.state.entries.map((e) => e.id).join(),
+        () => `the tray does not show the riders in the bin ${state()}`,
+      );
+      const card = held()!.querySelector<HTMLElement>("[data-bin-entry]")!;
+      const id = card.dataset.binEntry!;
+      const restores = () =>
+        bin.calls.filter(
+          (call) =>
+            call.method === "world.bin.restore" && call.params.id === id,
+        ).length;
+      card.querySelector<HTMLButtonElement>("button")!.click();
+      await waitFor(
+        () =>
+          restores() === 1 &&
+          bin.state.entries.length === left &&
+          !bin.state.entries.some((e) => e.id === id) &&
+          (left
+            ? cards() === bin.state.entries.map((e) => e.id).join()
+            : held() === null),
+        () =>
+          `a rider was not put back ${JSON.stringify({ left, id })} ${state()}`,
       );
     }
   }
