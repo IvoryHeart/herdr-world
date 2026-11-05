@@ -204,6 +204,10 @@ button.needs-you-icon:hover:not(:disabled) {
   padding-left: 24px;
   background: linear-gradient(90deg, transparent, var(--panel) 14px);
 }
+/* Keep the toggle's hit area from adding scroll overflow to the clip. */
+.needs-you-text.is-clipped > button.needs-you-more-text::before {
+  bottom: 0;
+}
 .needs-you-more-text:hover {
   text-decoration: underline;
 }
@@ -589,6 +593,12 @@ body:has(.world-managed-window) .needs-you-tab.is-sheet {
   border-radius: 7px;
   background: var(--topbar-control-bg, var(--panel));
   color: var(--topbar-control-text, var(--text));
+}
+/* 36px drawn, 44px to hit; the bar's clip padding below retains the inset. */
+.needs-you-counter.is-compact::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
 }
 .needs-you-counter.is-compact[aria-pressed="true"] {
   border-color: var(--accent);

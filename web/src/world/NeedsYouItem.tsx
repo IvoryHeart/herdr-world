@@ -345,7 +345,6 @@ function NeedsYouAsk({
           <button
             type="button"
             className="ghost"
-            aria-label="Type another answer"
             title="Type another answer"
             disabled={busy}
             onClick={() => setTyping(true)}
@@ -541,6 +540,11 @@ function NeedsYouAgent({
             : null
         }
         prompt={asking}
+        renderPromptMessage={(message) => (
+          <NeedsYouText>
+            <div className="needs-you-markdown">{message}</div>
+          </NeedsYouText>
+        )}
         agent={name}
         answering={answering}
         notice={notice}

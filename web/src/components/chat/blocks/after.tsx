@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { elapsed } from "./now";
 import { AskCard, UNCONFIRMED } from "./ask";
 import type { AnswerResult, PendingPrompt } from "../types";
@@ -13,6 +14,7 @@ export function ChatAfterBlocks({
   notice,
   onAnswer,
   onOpenTerminal,
+  renderPromptMessage,
 }: {
   running: {
     id: string;
@@ -33,6 +35,7 @@ export function ChatAfterBlocks({
   notice: string;
   onAnswer: (key: string, text?: string) => void;
   onOpenTerminal?: () => void;
+  renderPromptMessage?: (message: ReactNode) => ReactNode;
 }) {
   return (
     <>
@@ -80,6 +83,7 @@ export function ChatAfterBlocks({
           notice={notice}
           onAnswer={onAnswer}
           onOpenTerminal={onOpenTerminal}
+          renderMessage={renderPromptMessage}
         />
       ) : notice ? (
         <p className="agent-chat-ask-notice" role="alert">

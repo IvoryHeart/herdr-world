@@ -1,5 +1,5 @@
 import { SquareTerminal } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { PendingPrompt, UnconfirmedReason } from "../types";
 import "./ask.css";
 
@@ -31,6 +31,7 @@ export function AskCard({
   notice,
   onAnswer,
   onOpenTerminal,
+  renderMessage,
 }: {
   agent: string;
   prompt: PendingPrompt;
@@ -38,6 +39,7 @@ export function AskCard({
   notice: string;
   onAnswer(key: string, text?: string): void;
   onOpenTerminal?: () => void;
+  renderMessage?: (message: ReactNode) => ReactNode;
 }) {
   const nativeEditor = prompt.options.some((option) => option.active);
   const options = nativeEditor ? [] : prompt.options;
@@ -54,6 +56,14 @@ export function AskCard({
       <SquareTerminal size={13} /> Answer in the Terminal
     </button>
   ) : null;
+  const message = (
+    <>
+      {prompt.request.length ? <pre>{prompt.request.join("\n")}</pre> : null}
+      {prompt.question.map((line, index) => (
+        <p key={index}>{line}</p>
+      ))}
+    </>
+  );
   return (
     <section
       className="agent-chat-ask"
@@ -102,10 +112,7 @@ export function AskCard({
           ))}
         </ol>
       ) : null}
-      {prompt.request.length ? <pre>{prompt.request.join("\n")}</pre> : null}
-      {prompt.question.map((line, index) => (
-        <p key={index}>{line}</p>
-      ))}
+      {renderMessage ? renderMessage(message) : message}
       {options.length ? (
         <>
           <div

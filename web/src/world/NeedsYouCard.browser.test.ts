@@ -114,10 +114,10 @@ test.skipIf(!chrome)(
       const state = () =>
         evaluate(`({ expanded: ${card}.querySelector('.needs-you-more-text').getAttribute('aria-expanded'),
       href: document.activeElement.getAttribute('href'), toggle: document.activeElement.matches('.needs-you-more-text') })`);
-      const pointerClick = async (element: string) => {
+      const pointerClick = async (element: string, topOffset = 2) => {
         const point = await evaluate(`(() => {
           const rect = ${element}.getClientRects()[0];
-          return { x: rect.left + 2, y: rect.top + 2 };
+          return { x: rect.left + 2, y: rect.top + ${topOffset} };
         })()`);
         for (const type of ["mousePressed", "mouseReleased"])
           await command("Input.dispatchMouseEvent", {
@@ -130,6 +130,13 @@ test.skipIf(!chrome)(
           "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
         );
       };
+      const counter = `document.querySelector('.fixture-bar .needs-you-counter')`;
+      const pressed = await evaluate(`${counter}.getAttribute('aria-pressed')`);
+      await pointerClick(counter, -3);
+      expect(
+        await evaluate(`${counter}.getAttribute('aria-pressed')`),
+      ).not.toBe(pressed);
+      await pointerClick(counter);
       // Native pointer focus must not reveal a visible link; plain text must.
       await evaluate(
         `${card}.querySelector('.needs-you-text a').addEventListener('click', event => event.preventDefault(), { once: true })`,
@@ -166,6 +173,16 @@ test.skipIf(!chrome)(
       expect(await state()).toMatchObject({ expanded: "false", toggle: true });
       await key("Enter", 13); // "more".
       expect((await state()).expanded).toBe("true");
+      await evaluate(`${card}.querySelector('.needs-you-more-text').click()`);
+      await evaluate(
+        `${card}.querySelector('.needs-you-markdown').textContent = 'Short.'`,
+      );
+      await evaluate(
+        "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
+      );
+      expect(
+        await evaluate(`${card}.querySelector('.needs-you-more-text')`),
+      ).toBeNull();
     } finally {
       connection?.close();
       await stopChrome(child);

@@ -77,11 +77,13 @@ const ask = (
 
 const asker = leaf("atlas", "working");
 const blocked = leaf("beacon", "blocked");
+const prompted = leaf("deneb", "blocked");
 const world = {
-  leaves: [asker, blocked],
+  leaves: [asker, blocked, prompted],
   nodeById: new Map([
     [asker.id, asker],
     [blocked.id, blocked],
+    [prompted.id, prompted],
   ]),
 } as unknown as Pick<WorldObject, "leaves" | "nodeById">;
 const asks = [
@@ -103,11 +105,29 @@ const client = {
   generation: 1,
   serverRuntimeGeneration: null,
   isCurrent: () => true,
-  call: async (method: string) =>
+  call: async (method: string, params: Record<string, unknown>) =>
     method === "agent_conversation.latest"
       ? {
           status: "ok",
           latest: { role: "assistant", text: LONG.replace("PR #42", "PR #43") },
+          ...(params.pane_id === "w1:deneb"
+            ? {
+                pending_prompt: {
+                  fingerprint: "synthetic-question",
+                  request: ["Synthetic request"],
+                  question: LONG.split("\n"),
+                  options: [
+                    { number: "1", key: "1", label: "Proceed" },
+                    {
+                      number: "2",
+                      key: "2",
+                      label: "Add detail",
+                      input: "text",
+                    },
+                  ],
+                },
+              }
+            : {}),
         }
       : null,
 };
@@ -129,9 +149,12 @@ document.body.append(root);
 flushSync(() =>
   createRoot(root).render(
     <>
-      <header className="fixture-bar">
-        <NeedsYouCounter world={world} compact />
-        <NeedsYouCounter world={{ leaves: [] }} compact />
+      <header className="topbar-start fixture-bar" style={{ marginTop: 12 }}>
+        <div className="world-topbar-control-plane">
+          <span>Town</span>
+          <NeedsYouCounter world={world} compact />
+          <NeedsYouCounter world={{ leaves: [] }} compact />
+        </div>
       </header>
       <aside
         className="needs-you-tab"
@@ -218,9 +241,15 @@ async function run() {
       ),
     "replies only where asked",
   );
-  card
-    .querySelector<HTMLButtonElement>('[aria-label="Type another answer"]')!
-    .click();
+  const other = [...card.querySelectorAll("button")].find(
+    (button) => button.textContent === "Other…",
+  )!;
+  check(
+    !other.getAttribute("aria-label") ||
+      other.getAttribute("aria-label")!.includes("Other"),
+    "Other visible label remains in its accessible name",
+  );
+  other.click();
   await frame();
   const field = card.querySelector<HTMLInputElement>(".needs-you-field input");
   check(
@@ -234,10 +263,34 @@ async function run() {
     ),
     "unplaced asker has no window opener",
   );
+  const pending = document.querySelector<HTMLElement>(
+    '[data-needs-you-item="leaf:deneb"]',
+  )!;
+  check(
+    !!pending.querySelector(".needs-you-more-text"),
+    "long native question uses shared more/less",
+  );
+  const choices = [
+    ...pending.querySelectorAll<HTMLButtonElement>(
+      ".agent-chat-ask-options button",
+    ),
+  ];
+  check(
+    choices.length === 2 &&
+      choices.every((button) => !button.closest(".needs-you-text")),
+    "native options stay outside the clipped message",
+  );
+  choices[1]!.click();
+  await frame();
+  const nativeInput = pending.querySelector(".agent-chat-ask-text input");
+  check(
+    !!nativeInput && !nativeInput.closest(".needs-you-text"),
+    "native text editor remains outside the clip",
+  );
   const counters = document.querySelectorAll(".fixture-bar .needs-you-counter");
   check(
-    counters[0]?.getAttribute("aria-label") === "Needs you, 1" &&
-      counters[0].querySelector(".world-hosts-count")?.textContent === "1",
+    counters[0]?.getAttribute("aria-label") === "Needs you, 2" &&
+      counters[0].querySelector(".world-hosts-count")?.textContent === "2",
     "phone counter names and badges its count",
   );
   check(
