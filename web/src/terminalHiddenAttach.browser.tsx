@@ -41,6 +41,9 @@ const client: ConnectionClient = {
   call: async (method, params = {}) => {
     calls.push({ method, params: params as Record<string, unknown> });
     if (method === "pane.layout") return paneLayoutReply();
+    // An endpoint attach advertises pane focus, which claims the size.
+    if (method === "terminal.attach")
+      return { endpoint: { methods: ["pane.focus"], capabilities: [] } };
     return {};
   },
 };
@@ -210,7 +213,19 @@ try {
   current = client;
   clientCurrent = true;
 
-  // Shown: it fits its container and resizes the pane to what is visible.
+  // An old World page pinned the pane at 13×1. A (re)loaded hidden view does
+  // not adopt that squeeze: it attaches at this browser's last good size.
+  mountHidden(sized(13, 1));
+  attach = await hiddenAttach("squeezed layout");
+  check(
+    attach.cols === 159 && attach.rows === 45,
+    `a reload re-pinned the squeezed size, got ${attach.cols}×${attach.rows}`,
+  );
+  for (let index = 0; index < 10; index += 1) await frame();
+  calls.length = 0;
+
+  // Shown: it fits its container, resizes the pane to what is visible and
+  // then claims that size, so a pane another client squeezed recovers.
   host.style.display = "flex";
   host.style.inset = "auto";
   host.style.width = "60vw";
@@ -231,6 +246,126 @@ try {
   check(
     screen.width <= host.getBoundingClientRect().width + 1,
     "the shown terminal overflows its container",
+  );
+  await until(() => of("terminal.focus").length > 0, "shown claim");
+  // The claim itself, not a later re-attach (the watchdog's, as frames
+  // never arrive here), is what follows the resize.
+  const order = calls.map((call) => call.method);
+  const claimed = order.indexOf("terminal.focus");
+  check(
+    order.indexOf("terminal.resize") < claimed &&
+      !order.slice(0, claimed).includes("terminal.attach"),
+    `the shown terminal did not claim its size: ${order.join(", ")}`,
+  );
+
+  // A click on the shown terminal claims its size too (pointerdown focus):
+  // with Herdr, the client that focused a terminal last sizes it.
+  calls.length = 0;
+  host
+    .querySelector(".xterm-screen")!
+    .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  await frame();
+  check(
+    of("terminal.focus").length === 1,
+    `a click on the shown terminal did not claim it: ${of("terminal.focus").length}`,
+  );
+
+  // A split tab shown after Chat: every pane fits, but only the selected
+  // pane claims, or Herdr's focus (the tab's cursor) lands on the last pane.
+  const second: Pane = {
+    ...pane,
+    pane_id: "pane-2",
+    terminal_id: "terminal-2",
+    focused: false,
+  };
+  const splitLayout: PaneLayout = {
+    ...layout,
+    panes: [
+      {
+        pane_id: pane.pane_id,
+        focused: true,
+        rect: { x: 0, y: 0, width: 80, height: 45 },
+      },
+      {
+        pane_id: second.pane_id,
+        focused: false,
+        rect: { x: 80, y: 0, width: 80, height: 45 },
+      },
+    ],
+  };
+  calls.length = 0;
+  mountId += 1;
+  host.style.cssText = "position:fixed;inset:0;display:none";
+  flushSync(() => {
+    __storeTesting.replaceState({
+      ...store.get(),
+      panes: [pane, second],
+      selectedPaneId: pane.pane_id,
+      layout: splitLayout,
+    });
+    root.render(
+      <>
+        {[pane, second].map((view) => (
+          <div
+            key={`${mountId}-${view.pane_id}`}
+            style={{ flex: 1, display: "flex" }}
+          >
+            <TerminalView
+              paneId={view.pane_id}
+              terminalTheme={{ background: "#171922", foreground: "#dddddd" }}
+              terminalFontScale={100}
+              showMobileKeys={false}
+            />
+          </div>
+        ))}
+      </>,
+    );
+  });
+  await until(() => of("terminal.attach").length >= 2, "split hidden attaches");
+  for (let index = 0; index < 10; index += 1) await frame();
+  calls.length = 0;
+  host.style.cssText =
+    "position:fixed;inset:0;display:flex;width:80vw;height:60vh";
+  await until(() => of("terminal.resize").length >= 2, "split shown resizes");
+  for (let index = 0; index < 10; index += 1) await frame();
+  const claims = of("terminal.focus").map((call) => call.params.terminal_id);
+  check(
+    claims.length === 1 && claims[0] === pane.terminal_id,
+    `a shown split claimed for ${JSON.stringify(claims)}, not only the selected pane`,
+  );
+  // G2: revealed while the document is hidden (a background page whose
+  // container gets a size), it does not claim. Once visible, a squeeze from
+  // another client is still claimed.
+  flushSync(() => {
+    __storeTesting.replaceState({ ...store.get(), panes: [pane], layout });
+  });
+  mountHidden(layout);
+  await hiddenAttach("hidden before reveal");
+  for (let index = 0; index < 10; index += 1) await frame();
+  calls.length = 0;
+  const g2Visibility = Object.getOwnPropertyDescriptor(
+    document,
+    "visibilityState",
+  );
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => "hidden",
+  });
+  host.style.cssText = "position:fixed;display:flex;width:60vw;height:50vh";
+  for (let index = 0; index < 10; index += 1) await frame();
+  check(
+    of("terminal.focus").length === 0,
+    "a terminal revealed in a background page claimed",
+  );
+  if (g2Visibility)
+    Object.defineProperty(document, "visibilityState", g2Visibility);
+  else delete (document as { visibilityState?: unknown }).visibilityState;
+  // Visible again, its pending claim is made at the next fit.
+  host.style.width = "62vw";
+  await until(() => of("terminal.focus").length > 0, "claim once visible");
+  check(
+    of("terminal.focus").length === 1,
+    "a background reveal's claim was not made once visible",
   );
 } catch (error) {
   failures.push(String(error));

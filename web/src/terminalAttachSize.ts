@@ -1,8 +1,47 @@
+import {
+  TERMINAL_DEFAULT_SIZE,
+  terminalSqueezed,
+} from "../../shared/terminalSize";
 import type { ConnectionClient } from "./api";
-import { terminalPaneSize, type TerminalSize } from "./terminalResize";
+import {
+  terminalEndpointViewportSize,
+  terminalPaneSize,
+  type TerminalSize,
+} from "./terminalResize";
 import type { PaneLayout } from "./types";
 
 type Ref<T> = { readonly current: T };
+
+export { TERMINAL_DEFAULT_SIZE };
+/**
+ * The last size this page saw for each pane (connection, runtime, pane), from
+ * a successful layout read or a visible fit, and only when the tab it implied
+ * was not squeezed. Bounded; never persisted. A retired runtime's geometry
+ * never sizes a replacement's pane.
+ */
+const lastGood = new Map<string, TerminalSize>();
+const LAST_GOOD_LIMIT = 256;
+const remember = (key: string, size: TerminalSize) => {
+  lastGood.delete(key);
+  lastGood.set(key, size);
+  if (lastGood.size > LAST_GOOD_LIMIT)
+    lastGood.delete(lastGood.keys().next().value!);
+};
+/**
+ * The tab a pane's size implies in `layout` (the endpoint surface). A squeeze
+ * is a tab property: split panes are legitimately narrow. With no layout, the
+ * size is all there is to judge.
+ */
+const impliedTab = (
+  size: TerminalSize,
+  layout: PaneLayout | null | undefined,
+  paneId: string | undefined,
+) => terminalEndpointViewportSize(size, layout, paneId) ?? size;
+/** The page is visible: a background page never claims a size. */
+const pageVisible = () =>
+  typeof document === "undefined" || document.visibilityState !== "hidden";
+const sizeKey = (client: ConnectionClient, paneId: string | undefined) =>
+  `${client.connectionId}\0${client.serverRuntimeGeneration}\0${paneId}`;
 /** One pane.layout read, valid only for the client and pane that made it. */
 type LayoutRead = {
   terminalId: string;
@@ -20,16 +59,30 @@ type LayoutRead = {
  * from the store's layout of its tab or else from one `pane.layout` read;
  * only if that read fails does it use the xterm's size, so the attach (and
  * its endpoint) is never withheld. A shown terminal uses its fitted size.
+ *
+ * Herdr sizes a terminal by the client that attached or focused it last, so
+ * World never adopts a squeezed size: below the floor a hidden terminal uses
+ * the last good size, or the default. And the selected pane, shown after
+ * being hidden, claims its fitted size (`fitted`), healing a pane another
+ * client squeezed; a click claims it too (TerminalView's pointerdown focus).
+ * Herdr's frames arrive at each viewer's own size, so a squeeze while shown
+ * is not observable from them.
  */
 export class TerminalAttachSize {
   private read: LayoutRead | null = null;
   private waiting = false;
+  private hidden = false;
 
   constructor(
     private readonly view: {
       paneIdRef: Ref<string | undefined>;
       paneTabIdRef: Ref<string | undefined>;
       paneLayoutRef: Ref<PaneLayout | null>;
+      /**
+       * Whether this view shows the selected pane. Only it claims the size:
+       * Herdr's focus is also the tab's cursor, and the surface is the tab.
+       */
+      isActivePaneRef: Ref<boolean>;
       currentClientRef: Ref<ConnectionClient>;
       desiredTerminalRef: Ref<string | null>;
       /** Runs the attach again once a read settles. */
@@ -65,16 +118,40 @@ export class TerminalAttachSize {
       this.read.client === client
         ? this.read
         : null;
+    const key = sizeKey(client, paneId);
+    // After a failed read, the size this page last saw for the pane is the
+    // best witness of it (a narrow split pane is not a squeeze).
+    let witnessed = false;
     if (!size && read?.done) {
       layout = read.layout;
-      size = terminalPaneSize(layout, paneId) ?? {
-        cols: xterm.cols,
-        rows: xterm.rows,
-      };
+      const known = layout ? undefined : lastGood.get(key);
+      witnessed = Boolean(known);
+      size = terminalPaneSize(layout, paneId) ??
+        known ?? { cols: xterm.cols, rows: xterm.rows };
     }
     this.waiting = !size;
+    this.hidden = !fitted;
     if (size) {
       this.read = null;
+      // A squeeze shrinks the whole tab; with no layout (a failed read), the
+      // xterm's own size is all there is to judge.
+      const area = layout?.area;
+      const squeezed =
+        !fitted &&
+        !witnessed &&
+        terminalSqueezed(area ? { cols: area.width, rows: area.height } : size);
+      // A remembered size is a fallback only if it would not squeeze the tab
+      // too (a tiny shown fit is real for that viewer, not for this attach).
+      const remembered = lastGood.get(key);
+      if (squeezed)
+        size =
+          remembered &&
+          !terminalSqueezed(impliedTab(remembered, layout, paneId))
+            ? remembered
+            : TERMINAL_DEFAULT_SIZE;
+      // Remembered only from a layout or a visible fit whose tab is healthy.
+      else if (layout && !terminalSqueezed(impliedTab(size, layout, paneId)))
+        remember(key, size);
       return { ...size, layout, relayLayout: fitted ? stored : layout };
     }
     if (read || !paneId) return null;
@@ -115,5 +192,28 @@ export class TerminalAttachSize {
     const waiting = this.waiting;
     this.waiting = false;
     return waiting;
+  }
+
+  /** The terminal is not displayed (its container has no size). */
+  hide() {
+    this.hidden = true;
+  }
+
+  /**
+   * The terminal is displayed at `size`. Returns whether it was hidden until
+   * now, so it must claim its size rather than only resize.
+   */
+  fitted(size: TerminalSize) {
+    const { paneIdRef, paneTabIdRef, paneLayoutRef, currentClientRef } =
+      this.view;
+    const stored = paneLayoutRef.current;
+    const layout = stored?.tab_id === paneTabIdRef.current ? stored : null;
+    if (!terminalSqueezed(impliedTab(size, layout, paneIdRef.current)))
+      remember(sizeKey(currentClientRef.current, paneIdRef.current), size);
+    // In a background page the claim waits for the next visible fit.
+    if (!pageVisible()) return false;
+    const claim = this.hidden && this.view.isActivePaneRef.current;
+    this.hidden = false;
+    return claim;
   }
 }

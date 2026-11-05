@@ -6,3 +6,7 @@
   every pane to 80×24. Both now attach at the size the session already has,
   so harness menus such as Claude Code's or Codex's `/model` draw normally and
   Chat can read them.
+- A terminal another client squeezed (for example an older World page) is
+  never kept that small by World: a hidden terminal uses its last good size
+  instead, and showing or clicking the Terminal view gives the agent its full
+  size back.
