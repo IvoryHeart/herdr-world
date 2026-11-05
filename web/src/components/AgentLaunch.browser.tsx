@@ -89,6 +89,10 @@ async function run() {
     call: bridge.call,
     create: store.createQualifiedTab,
   };
+  const lastStart: { params: { kind?: string; profile_id?: string } | null } = {
+    params: null,
+  };
+  const startedWith = () => lastStart.params;
   let starts = 0,
     catalogs = 0,
     includeLogin = false;
@@ -125,6 +129,7 @@ async function run() {
         );
         if (method === "launcher.start") {
           starts++;
+          lastStart.params = (params ?? null) as typeof lastStart.params;
           return answer.promise;
         }
         if (method === "launcher.login") return login.promise;
@@ -308,65 +313,86 @@ async function run() {
     }
     // One uncertain observation while a start is pending (World invalidated
     // its in-flight snapshot) keeps the room and form; the launcher closes
-    // exactly once, when the start is confirmed, and never comes back.
-    answer = Promise.withResolvers();
-    opened.length = 0;
-    const certified = observedWorld(false);
-    const uncertain = observedWorld(true);
-    root.render(
-      <Harness key="uncertain-observation" initialWorld={certified} />,
-    );
-    await settle();
-    const presence: boolean[] = [];
-    let collapsed = false;
-    const watch = new MutationObserver(() => {
-      const dialog = host.querySelector(".agent-launcher");
-      if (presence[presence.length - 1] !== !!dialog) presence.push(!!dialog);
-      if (
-        dialog &&
-        (!dialog.querySelector("select") ||
-          /create a room first|room is unavailable/.test(
-            dialog.textContent ?? "",
-          ))
-      )
-        collapsed = true;
-    });
-    watch.observe(host, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-    });
-    flushSync(() => showWorld(uncertain));
-    check(
-      button(".agent-launcher-kind").disabled,
-      "An uncertain room cannot start an agent",
-    );
-    flushSync(() => showWorld(certified));
-    await settle();
-    const catalogsBefore = catalogs;
-    start();
-    await settle();
-    flushSync(() => showWorld(uncertain));
-    await settle();
-    flushSync(() => showWorld(certified));
-    await settle();
-    answer.resolve({ status: "started", terminal_id: "observed-terminal" });
-    await settle();
-    await settle();
-    watch.disconnect();
-    check(!collapsed, "An uncertain observation collapsed the launcher's form");
-    check(
-      catalogs === catalogsBefore,
-      "An uncertain observation refetched the catalog",
-    );
-    check(
-      presence.length === 2 && presence[0] && !presence[1],
-      `The launcher closes exactly once and never reopens: ${JSON.stringify(presence)}`,
-    );
-    check(
-      opened.length === 1 && opened[0]?.terminalId === "observed-terminal",
-      "The confirmed start opens its terminal once",
-    );
+    // exactly once, when the start is confirmed, and never comes back. Both
+    // entry points: a harness, and a profile (Reviewer starts Codex with a
+    // brief, as the owner did).
+    for (const [path, selector] of [
+      ["harness", ".agent-launcher-kind"],
+      ["Reviewer profile", '[aria-label="Start Reviewer"]'],
+    ] as const) {
+      answer = Promise.withResolvers();
+      opened.length = 0;
+      lastStart.params = null;
+      const certified = observedWorld(false);
+      const uncertain = observedWorld(true);
+      root.render(
+        <Harness
+          key={`uncertain-observation-${path}`}
+          initialWorld={certified}
+        />,
+      );
+      await settle();
+      const presence: boolean[] = [];
+      let collapsed = false;
+      const watch = new MutationObserver(() => {
+        const dialog = host.querySelector(".agent-launcher");
+        if (presence[presence.length - 1] !== !!dialog) presence.push(!!dialog);
+        if (
+          dialog &&
+          (!dialog.querySelector("select") ||
+            /create a room first|room is unavailable/.test(
+              dialog.textContent ?? "",
+            ))
+        )
+          collapsed = true;
+      });
+      watch.observe(host, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+      flushSync(() => showWorld(uncertain));
+      check(
+        host.querySelector<HTMLButtonElement>(selector)?.disabled === true,
+        `${path}: an uncertain room keeps its choice but cannot start an agent`,
+      );
+      flushSync(() => showWorld(certified));
+      await settle();
+      const catalogsBefore = catalogs;
+      button(selector).click();
+      await settle();
+      flushSync(() => showWorld(uncertain));
+      await settle();
+      flushSync(() => showWorld(certified));
+      await settle();
+      answer.resolve({ status: "started", terminal_id: "observed-terminal" });
+      await settle();
+      await settle();
+      watch.disconnect();
+      const started = startedWith();
+      check(
+        path === "harness"
+          ? started?.kind === "codex" && !started.profile_id
+          : started?.profile_id === "reviewer",
+        `${path}: started the chosen entry point: ${JSON.stringify(started)}`,
+      );
+      check(
+        !collapsed,
+        `${path}: an uncertain observation collapsed the launcher's form`,
+      );
+      check(
+        catalogs === catalogsBefore,
+        `${path}: an uncertain observation refetched the catalog`,
+      );
+      check(
+        presence.length === 2 && presence[0] && !presence[1],
+        `${path}: the launcher closes exactly once and never reopens: ${JSON.stringify(presence)}`,
+      );
+      check(
+        opened.length === 1 && opened[0]?.terminalId === "observed-terminal",
+        `${path}: the confirmed start opens its terminal once`,
+      );
+    }
     // Login finishes before a deliberate start can own the result.
     includeLogin = true;
     login = Promise.withResolvers();
