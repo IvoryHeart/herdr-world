@@ -47,17 +47,43 @@ export function AgentLauncherDialog({
   world: WorldObject;
   initial: Partial<LaunchTarget> & { profileId?: string };
   /** Open this terminal (a new agent or a login) once World shows it. */
-  onOpen(terminal: { connectionId: string; terminalId: string }): void;
+  onOpen(terminal: {
+    connectionId: string;
+    runtimeGeneration: number;
+    terminalId: string;
+  }): void;
   onEditProfiles(): void;
   onClose(): void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useLayer(true, () => onClose(), { element: () => ref.current });
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const dismiss = () => {
+    if (!mounted.current) return;
+    mounted.current = false;
+    onClose();
+  };
+  useLayer(true, dismiss, { element: () => ref.current });
   const { document } = useAgentProfiles();
   const profiles = document?.profiles ?? [];
+  // A ready host keeps its rooms listed while one observation is uncertain
+  // (invalidated in flight); only actionable rooms can start anything.
   const rooms = useMemo(
-    () => world.spaces.filter((space) => space.actionable && !space.stale),
-    [world.spaces],
+    () =>
+      world.spaces.filter((space) => {
+        if (space.actionable && !space.stale) return true;
+        const host = world.hosts.find(({ id }) => id === space.parentId);
+        return (
+          host?.connection.state === "ready" &&
+          host.connection.generation === space.generation
+        );
+      }),
+    [world.spaces, world.hosts],
   );
   const preferred = initial.profileId
     ? profiles.find((p) => p.id === initial.profileId)
@@ -89,17 +115,26 @@ export function AgentLauncherDialog({
           space.generation === selection.generation,
       ) ?? null)
     : null;
-  const target: LaunchTarget | null = room && {
-    connectionId: room.connectionId,
-    generation: room.generation,
-    workspaceId: room.nativeId,
-    workspaceLabel: room.label,
-  };
+  const target: LaunchTarget | null =
+    room?.actionable && !room.stale
+      ? {
+          connectionId: room.connectionId,
+          generation: room.generation,
+          workspaceId: room.nativeId,
+          workspaceLabel: room.label,
+        }
+      : null;
   const [task, setTask] = useState("");
   const [catalog, setCatalog] = useState<LauncherCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [checks, setChecks] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
+  // Fence synchronous clicks as well as retries after an uncertain outcome.
+  const attempt = useRef(false);
+  const operation = useRef(false);
+  const [loginBusy, setLoginBusy] = useState<string | null>(null);
+  const locked = attempted || Boolean(busy) || Boolean(loginBusy);
   const [outcome, setOutcome] = useState<RetainedOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,13 +144,20 @@ export function AgentLauncherDialog({
   useEffect(() => {
     setCatalog(null);
     setCatalogError(null);
-    if (!connectionId || generation === undefined || !workspaceId) return;
+    if (
+      !mounted.current ||
+      !connectionId ||
+      generation === undefined ||
+      !workspaceId
+    )
+      return;
     let current = true;
     launcherCatalog({ connectionId, generation, workspaceId })
-      .then((next) => current && setCatalog(next))
+      .then((next) => current && mounted.current && setCatalog(next))
       .catch(
         (cause: unknown) =>
           current &&
+          mounted.current &&
           setCatalogError(
             cause instanceof Error ? cause.message : String(cause),
           ),
@@ -126,7 +168,11 @@ export function AgentLauncherDialog({
   }, [connectionId, generation, workspaceId, checks]);
 
   const launch = async (choice: { profile?: AgentProfile; kind?: string }) => {
-    if (!target || busy) return;
+    if (!mounted.current || !target || operation.current || attempt.current)
+      return;
+    operation.current = true;
+    attempt.current = true;
+    setAttempted(true);
     const profile = choice.profile;
     const label = profile?.name ?? harnessLabel(choice.kind ?? "");
     const trimmed = task.trim();
@@ -150,6 +196,7 @@ export function AgentLauncherDialog({
         label,
         text,
       });
+      if (!mounted.current) return;
       // A ready agent opens and the dialog closes; anything else stays
       // here with its reason and a way to open the tab.
       if (
@@ -158,21 +205,34 @@ export function AgentLauncherDialog({
       ) {
         onOpen({
           connectionId: target.connectionId,
+          runtimeGeneration: target.generation,
           terminalId: result.terminal_id,
         });
-        onClose();
+        dismiss();
         return;
+      }
+      if (result.status === "failed") {
+        attempt.current = false;
+        setAttempted(false);
       }
       setOutcome(retainedOutcome(target, result));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (mounted.current)
+        setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(null);
+      if (mounted.current) {
+        operation.current = false;
+        setBusy(null);
+      }
     }
   };
 
   const createTerminal = async () => {
-    if (!target || busy) return;
+    if (!mounted.current || !target || operation.current || attempt.current)
+      return;
+    operation.current = true;
+    attempt.current = true;
+    setAttempted(true);
     setBusy("Terminal");
     setOutcome(null);
     setError(null);
@@ -185,21 +245,29 @@ export function AgentLauncherDialog({
         target.workspaceId,
         { numberedLabel: true },
       );
-      onClose();
+      dismiss();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (mounted.current)
+        setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(null);
+      if (mounted.current) {
+        operation.current = false;
+        setBusy(null);
+      }
     }
   };
 
   const logIn = async (kind: string) => {
-    if (!target) return;
+    if (!mounted.current || !target || operation.current || attempt.current)
+      return;
+    operation.current = true;
+    setLoginBusy(kind);
     setOutcome(null);
     setError(null);
     try {
       // World types nothing into the tab; the user runs the command there.
       const opened = await openHarnessLogin(target, kind);
+      if (!mounted.current) return;
       setOutcome(
         retainedOutcome(target, {
           status: "opened",
@@ -209,7 +277,13 @@ export function AgentLauncherDialog({
         }),
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (mounted.current)
+        setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (mounted.current) {
+        operation.current = false;
+        setLoginBusy(null);
+      }
     }
   };
 
@@ -234,153 +308,14 @@ export function AgentLauncherDialog({
       >
         <div className="modal-head">
           <h2>New agent</h2>
-          <CloseButton onClick={onClose} label="Close new agent" />
+          <CloseButton onClick={dismiss} label="Close new agent" />
         </div>
-        {rooms.length === 0 ? (
-          <p className="agent-launcher-note">
-            Connect a host and create a room first.
-          </p>
-        ) : (
-          <>
-            {!room ? (
-              <p className="agent-launcher-note" role="status">
-                The requested room is unavailable. Choose a current room to
-                continue.
-              </p>
-            ) : null}
-            <label className="agent-field">
-              <span>Room</span>
-              <select
-                value={room?.id ?? ""}
-                onChange={(event) => {
-                  const chosen = rooms.find(
-                    (space) => space.id === event.target.value,
-                  );
-                  setSelection(
-                    chosen
-                      ? { id: chosen.id, generation: chosen.generation }
-                      : null,
-                  );
-                }}
-              >
-                {!room ? (
-                  <option value="" disabled>
-                    Choose a current room
-                  </option>
-                ) : null}
-                {rooms.map((space) => (
-                  <option key={space.id} value={space.id}>
-                    {space.label} · {space.hostLabel}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="agent-field">
-              <span>Agent task (optional)</span>
-              <textarea
-                value={task}
-                rows={2}
-                placeholder="What should it do? It fills {{task}} in the profile's brief."
-                onChange={(event) => setTask(event.target.value)}
-              />
-            </label>
-            {loggedOut.map((kind) => (
-              <p key={kind} className="agent-launcher-login-row">
-                {harnessLabel(kind)} is logged out on this host.
-                <button
-                  type="button"
-                  className="agent-launcher-login"
-                  title={`Opens a tab and shows ${harnessLabel(kind)}'s login command to run there`}
-                  onClick={() => void logIn(kind)}
-                >
-                  <LogIn size={13} aria-hidden="true" /> Log in
-                </button>
-              </p>
-            ))}
-            <button
-              type="button"
-              className="agent-launcher-card"
-              disabled={!target || Boolean(busy)}
-              onClick={() => void createTerminal()}
-            >
-              <Terminal size={24} aria-hidden="true" />
-              <span>
-                <b>Terminal</b>
-                <small>A plain shell in this room</small>
-              </span>
-            </button>
-            <div className="agent-launcher-section-head">
-              <h3>From a profile</h3>
-              <button type="button" onClick={onEditProfiles}>
-                <Settings2 size={13} aria-hidden="true" /> Edit profiles
-              </button>
-            </div>
-            <div className="agent-launcher-profiles">
-              {profiles.map((profile) => {
-                const note = readinessNote(profile.harness, catalog);
-                return (
-                  <button
-                    key={profile.id}
-                    type="button"
-                    className="agent-launcher-card"
-                    disabled={
-                      !target || Boolean(busy) || !catalog || note?.blocked
-                    }
-                    title={note?.text ?? `Start ${profile.name} here`}
-                    aria-label={`Start ${profile.name}`}
-                    onClick={() => void launch({ profile })}
-                  >
-                    <ProfileSprite look={profile.look} scale={2} />
-                    <span>
-                      <b>{profile.name}</b>
-                      <small>
-                        {harnessLabel(profile.harness)}
-                        {profile.model ? ` · ${profile.model}` : ""}
-                      </small>
-                      {note ? <em>{note.text}</em> : null}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="agent-launcher-section-head">
-              <h3>Quick start</h3>
-              <button
-                type="button"
-                title="Check installed harnesses and logins again"
-                onClick={() => setChecks((n) => n + 1)}
-              >
-                <RefreshCw size={13} aria-hidden="true" /> Check again
-              </button>
-            </div>
-            {catalog ? <HarnessReadinessSummary catalog={catalog} /> : null}
-            <div className="agent-launcher-kinds">
-              {target && !catalog && !catalogError ? (
-                <span className="agent-launcher-note">
-                  Asking the host which agents it supports…
-                </span>
-              ) : null}
-              {quickKinds.map((kind) => {
-                const note = readinessNote(kind, catalog);
-                return (
-                  <button
-                    key={kind}
-                    type="button"
-                    className="agent-launcher-kind"
-                    disabled={!target || Boolean(busy) || note?.blocked}
-                    title={note?.text ?? `Start ${harnessLabel(kind)} here`}
-                    onClick={() => void launch({ kind })}
-                  >
-                    <Play size={12} aria-hidden="true" /> {harnessLabel(kind)}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
         <div className="agent-launcher-status" role="status">
           {catalogError ? (
             <p className="agent-launcher-error">{catalogError}</p>
+          ) : null}
+          {loginBusy ? (
+            <p>Opening a login tab for {harnessLabel(loginBusy)}…</p>
           ) : null}
           {busy ? (
             <p>
@@ -414,8 +349,9 @@ export function AgentLauncherDialog({
                   type="button"
                   className="agent-launcher-login"
                   onClick={() => {
+                    if (!mounted.current) return;
                     onOpen(outcome.terminal!);
-                    onClose();
+                    dismiss();
                   }}
                 >
                   Open its tab
@@ -424,6 +360,155 @@ export function AgentLauncherDialog({
             </p>
           ) : null}
           {error ? <p className="agent-launcher-error">{error}</p> : null}
+        </div>
+        <div className="agent-launcher-choices">
+          {rooms.length === 0 ? (
+            <p className="agent-launcher-note">
+              Connect a host and create a room first.
+            </p>
+          ) : (
+            <>
+              {!room ? (
+                <p className="agent-launcher-note" role="status">
+                  The requested room is unavailable. Choose a current room to
+                  continue.
+                </p>
+              ) : null}
+              <label className="agent-field">
+                <span>Room</span>
+                <select
+                  value={room?.id ?? ""}
+                  disabled={locked}
+                  onChange={(event) => {
+                    const chosen = rooms.find(
+                      (space) => space.id === event.target.value,
+                    );
+                    setSelection(
+                      chosen
+                        ? { id: chosen.id, generation: chosen.generation }
+                        : null,
+                    );
+                  }}
+                >
+                  {!room ? (
+                    <option value="" disabled>
+                      Choose a current room
+                    </option>
+                  ) : null}
+                  {rooms.map((space) => (
+                    <option key={space.id} value={space.id}>
+                      {space.label} · {space.hostLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="agent-field">
+                <span>Agent task (optional)</span>
+                <textarea
+                  value={task}
+                  disabled={locked}
+                  rows={2}
+                  placeholder="What should it do? It fills {{task}} in the profile's brief."
+                  onChange={(event) => setTask(event.target.value)}
+                />
+              </label>
+              {loggedOut.map((kind) => (
+                <p key={kind} className="agent-launcher-login-row">
+                  {harnessLabel(kind)} is logged out on this host.
+                  <button
+                    type="button"
+                    className="agent-launcher-login"
+                    disabled={locked}
+                    title={`Opens a tab and shows ${harnessLabel(kind)}'s login command to run there`}
+                    onClick={() => void logIn(kind)}
+                  >
+                    <LogIn size={13} aria-hidden="true" /> Log in
+                  </button>
+                </p>
+              ))}
+              <button
+                type="button"
+                className="agent-launcher-card"
+                disabled={!target || locked}
+                onClick={() => void createTerminal()}
+              >
+                <Terminal size={24} aria-hidden="true" />
+                <span>
+                  <b>Terminal</b>
+                  <small>A plain shell in this room</small>
+                </span>
+              </button>
+              <div className="agent-launcher-section-head">
+                <h3>From a profile</h3>
+                <button
+                  type="button"
+                  onClick={onEditProfiles}
+                  disabled={locked}
+                >
+                  <Settings2 size={13} aria-hidden="true" /> Edit profiles
+                </button>
+              </div>
+              <div className="agent-launcher-profiles">
+                {profiles.map((profile) => {
+                  const note = readinessNote(profile.harness, catalog);
+                  return (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      className="agent-launcher-card"
+                      disabled={!target || locked || !catalog || note?.blocked}
+                      title={note?.text ?? `Start ${profile.name} here`}
+                      aria-label={`Start ${profile.name}`}
+                      onClick={() => void launch({ profile })}
+                    >
+                      <ProfileSprite look={profile.look} scale={2} />
+                      <span>
+                        <b>{profile.name}</b>
+                        <small>
+                          {harnessLabel(profile.harness)}
+                          {profile.model ? ` · ${profile.model}` : ""}
+                        </small>
+                        {note ? <em>{note.text}</em> : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="agent-launcher-section-head">
+                <h3>Quick start</h3>
+                <button
+                  type="button"
+                  title="Check installed harnesses and logins again"
+                  onClick={() => setChecks((n) => n + 1)}
+                >
+                  <RefreshCw size={13} aria-hidden="true" /> Check again
+                </button>
+              </div>
+              {catalog ? <HarnessReadinessSummary catalog={catalog} /> : null}
+              <div className="agent-launcher-kinds">
+                {target && !catalog && !catalogError ? (
+                  <span className="agent-launcher-note">
+                    Asking the host which agents it supports…
+                  </span>
+                ) : null}
+                {quickKinds.map((kind) => {
+                  const note = readinessNote(kind, catalog);
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      className="agent-launcher-kind"
+                      disabled={!target || locked || note?.blocked}
+                      title={note?.text ?? `Start ${harnessLabel(kind)} here`}
+                      onClick={() => void launch({ kind })}
+                    >
+                      <Play size={12} aria-hidden="true" /> {harnessLabel(kind)}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -1,11 +1,16 @@
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
-import { __storeTesting, emptyServerSessionState, store } from "../store";
+import {
+  __storeTesting,
+  connectionSnapshot,
+  emptyServerSessionState,
+  store,
+} from "../store";
 import { creationSources } from "../creationRequests";
 import { initializeLayoutPreferences } from "../layoutPreferences";
 import { initializeShortcutPreferences } from "../shortcutPreferences";
 import type { Pane, Tab, Workspace } from "../types";
-import { buildWorldObject } from "./worldObject";
+import { buildWorldObject, taskSummarySessionFingerprint } from "./worldObject";
 import { projectWorldOffice } from "./herdrOfficeProjection";
 import { worldRuntimeStore } from "./runtimeStore";
 import WorldFoundationApp from "./WorldFoundationApp";
@@ -109,7 +114,19 @@ function addWorkspace(host: string, id: string, count = 1) {
 addWorkspace("alpha", "a");
 addWorkspace("alpha", "b", 8);
 addWorkspace("beta", "a");
-// One agent, so Town has an agent card to open a terminal from.
+const syntheticSession = {
+  source: "herdr:claude",
+  agent: "claude",
+  kind: "id" as const,
+  value: "synthetic-session",
+};
+let sessionArrived = false;
+let chatUnavailable = "";
+let conversationReads = 0;
+let completedConversationReads = 0;
+let conversationBarrier: Promise<void> | null = null;
+const conversationControls = new Set<Parameters<typeof bridge.onControl>[0]>();
+// One agent starts without a session, so Town initially opens Terminal.
 runtime.get("beta")!.panes[0]!.agent = "claude";
 function workspaces(host: string) {
   const r = runtime.get(host)!;
@@ -179,6 +196,57 @@ for (const host of hosts) {
     acceptsServerGeneration: (value) => value === 7,
     call: async (method, params = {}) => {
       calls.push({ host, method, params });
+      if (method === "agent_conversation.latest") {
+        conversationReads++;
+        await conversationBarrier;
+        completedConversationReads++;
+        // A new Codex pane's title can bind it before naming a thread: the
+        // service reads "ok" with no fingerprint and no conversation.
+        const unboundTitle = chatUnavailable === "unbound_title";
+        const readable = sessionArrived && (!chatUnavailable || unboundTitle);
+        return {
+          conversation_version: 1,
+          pane_id: params.pane_id,
+          agent: "claude",
+          agent_status: "idle",
+          status: readable ? "ok" : "unavailable",
+          session_binding: unboundTitle
+            ? "title"
+            : sessionArrived
+              ? "reported"
+              : null,
+          session_fingerprint:
+            sessionArrived && !unboundTitle
+              ? taskSummarySessionFingerprint(syntheticSession)
+              : null,
+          session_label: sessionArrived ? "Synthetic session" : null,
+          unavailable: readable
+            ? null
+            : {
+                reason: chatUnavailable || "no_session",
+                detail: chatUnavailable
+                  ? `Synthetic ${chatUnavailable}. Open Terminal.`
+                  : "Claude is starting. Check Terminal.",
+              },
+          messages: [],
+          latest: null,
+        };
+      }
+      if (method === "agent_history.get")
+        return {
+          history_version: 2,
+          mode: "snapshot",
+          cursor: { epoch: "synthetic", revision: 1 },
+          window_limit: 200,
+          agent: "claude",
+          pane_id: params.pane_id,
+          workspace_id: "a",
+          tab_id: "a-1-tab",
+          updated_at: "2026-11-01T09:00:00Z",
+          path: "",
+          entries: [],
+        };
+      if (method === "agent_conversation.steps") return { steps: [] };
       if (method === "workspace.list")
         return {
           navigation_mode: "browser-local",
@@ -367,7 +435,13 @@ async function run() {
     listener("connected");
     return () => {};
   };
-  bridge.onControl = bridge.onEvent = () => () => {};
+  bridge.onEvent = () => () => {};
+  bridge.onControl = (listener) => {
+    conversationControls.add(listener);
+    return () => {
+      conversationControls.delete(listener);
+    };
+  };
   bridge.onTerminal = (listener) => {
     terminalListeners.add(listener);
     return () => {
@@ -417,6 +491,183 @@ async function run() {
         ?.value === "town",
     "Root did not default to Town",
   );
+  // A reported session is not proof that its conversation is readable.
+  const betaPane = runtime.get("beta")!.panes[0]!;
+  sessionArrived = true;
+  betaPane.agent_session = syntheticSession;
+  chatUnavailable = "missing_integration";
+  await worldRuntimeStore.refresh();
+  const openAgent = async (unavailable = true) => {
+    const selector =
+      '.town-view-shell .world-semantic-target[data-kind="agent"]';
+    await until(() => document.querySelector(selector), "Town agent target");
+    document.querySelector<HTMLButtonElement>(selector)!.click();
+    await until(
+      () =>
+        document.querySelector(
+          unavailable
+            ? '.workspace-inspector[data-view="terminal"]'
+            : ".workspace-inspector",
+        ),
+      "Unreadable Chat must open on Terminal even with a reported session",
+    );
+  };
+  const chooseView = async (view: "history" | "terminal") => {
+    const trigger = document.querySelector<HTMLButtonElement>(
+      '.workspace-inspector button[aria-label^="Inspector view:"]',
+    );
+    if (trigger) trigger.click();
+    const selector = trigger
+      ? `[aria-label="Inspector views"] [data-view="${view}"]`
+      : `.workspace-inspector [role="tab"][aria-label="${view === "history" ? "Chat" : "Terminal"}"]`;
+    await until(() => document.querySelector(selector), `Choose ${view}`);
+    document.querySelector<HTMLButtonElement>(selector)!.click();
+  };
+  const conversationChanged = () => {
+    for (const listener of conversationControls)
+      listener({
+        type: "agent_conversation_changed",
+        connection_id: "beta",
+        connection_generation: 7,
+        pane_id: betaPane.pane_id,
+      });
+  };
+  const closeAgent = async () => {
+    document
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Close Inspector window"]',
+      )!
+      .click();
+    await until(
+      () => !document.querySelector(".workspace-inspector"),
+      "Return to Town",
+    );
+  };
+  await openAgent();
+  for (const reason of [
+    "no_session",
+    "missing_integration",
+    "unsupported_agent",
+    "read_failed",
+    "unbound_title",
+  ]) {
+    chatUnavailable = reason;
+    const before = conversationReads;
+    conversationChanged();
+    await until(() => conversationReads > before, `Recheck ${reason}`);
+    await settle();
+    check(
+      !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
+        !document.querySelector(".agent-chat-unavailable"),
+      `${reason} stays on Terminal without an automatic error page`,
+    );
+  }
+  const manualReply = Promise.withResolvers<void>();
+  conversationBarrier = manualReply.promise;
+  chatUnavailable = "";
+  const manualRead = conversationReads;
+  conversationChanged();
+  await until(
+    () => conversationReads > manualRead,
+    "Delayed availability read",
+  );
+  await chooseView("terminal");
+  const manualCompleted = completedConversationReads;
+  conversationBarrier = null;
+  manualReply.resolve();
+  await until(
+    () => completedConversationReads > manualCompleted,
+    "Late availability reply",
+  );
+  await settle();
+  check(
+    !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+    "A late available reply cannot override a manual view choice",
+  );
+  chatUnavailable = "read_failed";
+  await chooseView("history");
+  await until(
+    () =>
+      document
+        .querySelector(".agent-chat-unavailable")
+        ?.textContent?.includes("Synthetic read_failed"),
+    "Manual Chat retains the bound record error",
+  );
+  const openTerminal = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      ".agent-chat-unavailable button",
+    ),
+  ).find((button) => button.textContent?.includes("Open Terminal"));
+  check(!!openTerminal, "Manual unavailable Chat offers Open Terminal");
+  openTerminal!.click();
+  await until(
+    () => document.querySelector('.workspace-inspector[data-view="terminal"]'),
+    "Open Terminal leaves unavailable Chat",
+  );
+  chatUnavailable = "";
+  conversationChanged();
+  await worldRuntimeStore.refresh();
+  check(
+    !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+    "Recovery cannot override a manual Terminal choice",
+  );
+  await closeAgent();
+  await openAgent(false);
+  await until(
+    () => document.querySelector('.workspace-inspector[data-view="history"]'),
+    "An untouched window follows actual Chat availability",
+  );
+  await closeAgent();
+  // Focused terminal/harness replacement retires the opening before aggregate
+  // reconciliation; even restoration cannot let its delayed reply switch views.
+  const focusedPane = (patch: Partial<Pane>) => {
+    const state = store.get(),
+      snapshot = connectionSnapshot(state, "beta");
+    const panes = snapshot.panes.map((pane) =>
+      pane.pane_id === betaPane.pane_id ? { ...pane, ...patch } : pane,
+    );
+    __storeTesting.replaceState({
+      ...state,
+      ...(state.activeConnectionId === "beta" ? { panes } : {}),
+      sessionsByConnectionId: {
+        ...state.sessionsByConnectionId,
+        beta: { ...snapshot, panes },
+      },
+    });
+  };
+  for (const replacement of [
+    { terminal_id: "replacement-terminal" },
+    { agent: "replacement-harness" },
+  ]) {
+    chatUnavailable = "read_failed";
+    await openAgent();
+    const reply = Promise.withResolvers<void>();
+    conversationBarrier = reply.promise;
+    chatUnavailable = "";
+    const before = conversationReads;
+    conversationChanged();
+    await until(() => conversationReads > before, "Captured availability read");
+    focusedPane(replacement);
+    await settle();
+    focusedPane({ terminal_id: betaPane.terminal_id, agent: betaPane.agent });
+    await settle();
+    const completed = completedConversationReads;
+    conversationBarrier = null;
+    reply.resolve();
+    await until(
+      () => completedConversationReads > completed,
+      "Replaced availability reply",
+    );
+    await settle();
+    check(
+      !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+      "Replacement/restoration cannot revive an automatic Chat switch",
+    );
+    await closeAgent();
+  }
+  sessionArrived = false;
+  delete betaPane.agent_session;
+  await worldRuntimeStore.refresh();
   // On the phone, a terminal opened from a Town agent's card takes two
   // Backs to leave: the first closes Composer, the second returns to Town.
   if (window.innerWidth < 640) {
@@ -440,9 +691,20 @@ async function run() {
       );
     await until(
       () =>
+        document.querySelector('.workspace-inspector[data-view="terminal"]') &&
+        viewTrigger(),
+      "Town pre-session agent window on Terminal",
+    );
+    sessionArrived = true;
+    Object.assign(runtime.get("beta")!.panes[0]!, {
+      agent_session: syntheticSession,
+    });
+    await worldRuntimeStore.refresh();
+    await until(
+      () =>
         document.querySelector('.workspace-inspector[data-view="history"]') &&
         viewTrigger(),
-      "Town agent window on Chat",
+      "Town agent window on Chat after session arrival",
     );
     viewTrigger()!.click();
     const terminalItem = () =>
@@ -457,6 +719,13 @@ async function run() {
           ".workspace-inspector textarea.terminal-composer-input",
         ),
       "Town opened the agent's terminal",
+    );
+    await worldRuntimeStore.refresh();
+    check(
+      Boolean(
+        document.querySelector('.workspace-inspector[data-view="terminal"]'),
+      ),
+      "A refresh replaced the manual Terminal choice",
     );
     document
       .querySelector<HTMLTextAreaElement>(

@@ -209,6 +209,8 @@ hosts stay usable.
    it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
+   Without a session yet it opens on Terminal for startup questions, then
+   switches to Chat when the session arrives; a view you choose by hand sticks.
    On a phone, the anchored header dropdown switches between **Chat**, **Terminal**,
    **Files** and **Changes**; the **⋯** menu contains attention settings.
    In Town it docks on the right at a readable width; drag its left edge to
@@ -546,6 +548,7 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    opens a small tab and shows the harness's own login command
    (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
    tab**, run it and finish the login there, then **Check again**.
+   The launcher finishes opening a login tab before accepting a start.
    Failed, incomplete or unsupported checks show **unknown**, never “not
    installed” or “logged out”. You can still try a supported harness; use
    **Check again** to retry or **Edit profiles** to review its configuration.
@@ -555,7 +558,14 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question
    first (for example Claude asking whether to trust a new folder), the
-   launcher says so and **Open its tab** lets you answer.
+   launcher says so and **Open its tab** lets you answer. Progress and the
+   outcome stay visible above the choices, even with a long readiness list.
+   The launcher closes when the start is confirmed. After an uncertain
+   start, its start choices stay disabled: open the existing tab, or
+   close the launcher before deliberately starting another agent. A definite
+   failure lets you retry, log in or edit profiles. Closing it
+   while a launch is pending leaves any created tab in its room; a late reply
+   does not reopen its window or close a new launcher.
 
 The profile assignment follows its terminal when you move it and is shared
 with other Worlds connected to that Herdr. Each World uses its own profile
@@ -928,7 +938,14 @@ attention, and `done`/`idle` suggest when to return. **Status is not verificatio
 
 Open **Chat** in the Inspector to read the conversation and reply. Chat shows
 user and agent messages, with one line for each run of tool calls, and updates
-while the agent works. If Chat cannot read the conversation it says why and
+while the agent works. A new agent without a session shows **No messages yet.**
+With Chat as the opening preference, its window starts on **Terminal** whenever
+Chat cannot show the conversation: no session, unsupported harness, missing
+integration or an unreadable record. It switches once Chat is available, unless
+you have chosen a view yourself. Pick Chat yourself to see its explanation and
+**Open Terminal**. A missing or unreadable reported transcript keeps its error;
+an agent still starting or waiting is not told to install an integration.
+If Chat cannot read the conversation it says why and
 offers the fix it names, or **Open Terminal**. A message you send shows as
 not yet seen until the transcript has the same words; if it went to another session, a red
 notice names it. Slash commands such as `/compact` work from Chat too (see

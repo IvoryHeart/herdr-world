@@ -97,7 +97,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     windows and phones keep bubbles. Explicitly opening or returning to Chat
     focuses its message input when available; Desk previews keep focus in the
     queue. Reopening or redocking the window keeps the
-    conversation. In Town it
+    conversation. A new agent without a session shows **No messages yet**;
+    missing or unreadable reported transcripts still show their error. A window
+    opens on Terminal whenever Chat cannot show its conversation, including
+    when a reported record cannot be read. It switches once Chat is available,
+    unless you choose a view by hand. Unavailable messages appear when you
+    pick Chat yourself. Chat describes startup
+    or a question plainly and offers Open Terminal; integration guidance waits
+    while the agent is starting or waiting for you in Terminal. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.
     Drag its inner edge to resize it; Town remembers the width. It can be
@@ -265,7 +272,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   creates an agent's tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
   harness stops on a question (such as Claude's folder trust) or exits at
-  once, it says so and offers to open the tab.
+  once, it says so and offers to open the tab. Progress and outcomes stay in
+  view above the choices. A confirmed start closes the launcher; an uncertain
+  attempt keeps its explanation and disables start choices. Open its existing
+  tab or close the launcher before another attempt. A definite failure lets
+  you retry, log in or edit profiles.
   - The launcher shows whether each harness is installed and logged in on the
     host, asked with the harness's own status command (`claude auth status`,
     `codex login status`; Pi reports only whether it is installed). **Log in**
@@ -364,7 +375,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
-    its terminal.
+    its terminal. Without a conversation yet, an agent starts on Terminal and
+    switches to Chat when its session arrives unless you choose another view.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
     still moves it). On a phone, where the card's terminal covers Board, the

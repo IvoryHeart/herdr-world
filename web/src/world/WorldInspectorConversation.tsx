@@ -1,3 +1,6 @@
+import { watchConversation } from "../conversationWatch";
+import { useEffectCallback } from "../useEffectCallback";
+import type { Conversation } from "../components/chat/types";
 import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
 import { leafAppearance, useAppearanceDocument } from "./appearance";
 import { useAgentWorktree } from "../useAgentWorktree";
@@ -123,7 +126,7 @@ function InspectorResources({
   floating,
   terminalActive,
   embedded = false,
-  onChange,
+  onChange: patchConversation,
   onClose,
   onDockOut,
   onDockIn,
@@ -220,6 +223,121 @@ function InspectorResources({
     foregroundCwd: historyPane?.foreground_cwd,
   });
   const connectionClient = worktree.client;
+  const cancelChatOpen = useRef(() => {});
+  const updateChatOpening = useEffectCallback(patchConversation);
+  const openingReplaced =
+    historyPane &&
+    (historyPane.terminal_id !== conversation.terminalId ||
+      historyPane.agent !== conversation.context.agent);
+  const awaitingChat =
+    Boolean(target) &&
+    conversation.awaitChatSession === true &&
+    conversation.view === "terminal" &&
+    conversation.availableViews.includes("history") &&
+    Boolean(historyPane) &&
+    !openingReplaced;
+  const reportedSession = historyPane?.agent_session?.value ?? null;
+  useLayoutEffect(() => {
+    if (conversation.awaitChatSession && openingReplaced) {
+      updateChatOpening({ awaitChatSession: false });
+      return;
+    }
+    if (!awaitingChat || !conversation.paneId) return;
+    let current = true,
+      pending = false,
+      again = false;
+    cancelChatOpen.current = () => {
+      current = false;
+    };
+    const currentPane = () =>
+      connectionSnapshot(store.get(), conversation.connectionId).panes.find(
+        (pane) =>
+          pane.workspace_id === conversation.workspaceId &&
+          pane.tab_id === conversation.tabId &&
+          pane.pane_id === conversation.paneId &&
+          pane.terminal_id === conversation.terminalId &&
+          pane.agent === conversation.context.agent,
+      );
+    const read = async () => {
+      if (!current || !baseConnectionClient.isCurrent() || !currentPane())
+        return;
+      if (pending) {
+        again = true;
+        return;
+      }
+      pending = true;
+      try {
+        const reply = (await baseConnectionClient.call(
+          "agent_conversation.latest",
+          { pane_id: conversation.paneId },
+        )) as Conversation | null;
+        const pane = currentPane();
+        if (
+          current &&
+          !again &&
+          baseConnectionClient.isCurrent() &&
+          pane &&
+          reply?.conversation_version === 1 &&
+          reply.pane_id === conversation.paneId &&
+          reply.status === "ok" &&
+          reply.unavailable === null &&
+          // A Codex title that names no thread yet reads "ok", but Chat has no
+          // conversation to show and cannot tell where a message would go.
+          !(reply.session_binding === "title" && !reply.session_fingerprint) &&
+          (reply.session_binding !== "reported" ||
+            !conversation.agentSessionFingerprint ||
+            reply.session_fingerprint === conversation.agentSessionFingerprint)
+        ) {
+          current = false;
+          updateChatOpening({ view: "history", awaitChatSession: undefined });
+        }
+      } catch {
+        /* Stay on Terminal; manual Chat owns its error presentation. */
+      } finally {
+        pending = false;
+        if (again) {
+          again = false;
+          void read();
+        }
+      }
+    };
+    const stop = watchConversation(
+      baseConnectionClient,
+      conversation.paneId,
+      () => void read(),
+    );
+    void read();
+    return () => {
+      current = false;
+      stop();
+    };
+  }, [
+    awaitingChat,
+    openingReplaced,
+    conversation.awaitChatSession,
+    baseConnectionClient,
+    conversation.connectionId,
+    conversation.runtimeGeneration,
+    conversation.workspaceId,
+    conversation.tabId,
+    conversation.paneId,
+    conversation.terminalId,
+    conversation.context.agent,
+    conversation.agentSessionFingerprint,
+    reportedSession,
+    updateChatOpening,
+  ]);
+  const onChange = (change: Partial<WorldInspectorConversation>) => {
+    if (change.view) {
+      cancelChatOpen.current();
+      patchConversation({
+        ...change,
+        ...(conversation.awaitChatSession !== undefined
+          ? { awaitChatSession: false }
+          : {}),
+      });
+    } else patchConversation(change);
+  };
   const scope = useMemo(
     () =>
       workspace

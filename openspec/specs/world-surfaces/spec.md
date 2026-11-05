@@ -1976,7 +1976,7 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 - **WHEN** Agents open names Chat and the user taps the table of an agent that is
   waiting at reception
-- **THEN** that agent's window opens on Chat, the agent walks back to its desk,
+- **THEN** that agent's window opens on Chat when its conversation exists (otherwise on Terminal under the startup rule), the agent walks back to its desk,
   and no terminal or peek card opens
 
 #### Scenario: Board opens an agent on Chat
@@ -1984,7 +1984,7 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** Agents open names Chat and the user opens an agent's tab in Board
   whose harness Chat reads, then a plain shell's tab and an agent whose harness
   Chat cannot read
-- **THEN** the first window opens on Chat and the other two on their terminals
+- **THEN** the first window opens on Chat when a conversation exists, otherwise on Terminal under the startup rule, and the other two open on their terminals
 
 #### Scenario: Town opens Terminal
 
@@ -1998,6 +1998,44 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** a blocked agent's latest lines contain neither a numbered menu nor a
   yes/no prompt
 - **THEN** the peek offers Reply and the terminal without answer buttons
+
+### Requirement: Honest agent startup presentation
+
+When Chat is the chosen opening view, an agent SHALL open on Terminal until
+Chat can show its conversation. No session, unsupported harness, missing
+integration and unreadable records SHALL all keep it on Terminal; a reported
+session alone is insufficient. When the same agent's conversation becomes
+readable, the window SHALL switch to Chat unless the user has chosen a view.
+Replacing the terminal or harness SHALL cancel that automatic switch, including
+late replies after the original identity is restored.
+
+Unavailable Chat explanations SHALL appear only when the user chooses Chat.
+Chat before a conversation exists SHALL show an empty conversation, plain
+starting/waiting guidance and Open Terminal. A named record that is missing or
+unreadable SHALL keep its error. Startup presentation SHALL NOT allow sending
+messages or answering prompts without their existing authority checks.
+
+#### Scenario: An agent is waiting at a startup question
+
+- **WHEN** the agent has not reported a conversation
+- **THEN** its window opens on Terminal; manually opened Chat explains startup
+  without suggesting an integration install
+
+#### Scenario: Chat becomes available
+
+- **WHEN** the same agent's conversation becomes readable and no view was chosen by hand
+- **THEN** the existing window switches to Chat
+
+#### Scenario: A reported session has an unreadable record
+
+- **WHEN** the agent is opened and Chat cannot read its reported record
+- **THEN** the window stays on Terminal; choosing Chat manually shows the
+  original record error and Open Terminal
+
+#### Scenario: A view was chosen or the agent was replaced
+
+- **WHEN** a session is later reported
+- **THEN** the old automatic switch does not change the chosen view
 
 ### Requirement: Shared Chat composer and honest send receipts
 

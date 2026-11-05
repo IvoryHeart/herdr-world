@@ -14,14 +14,28 @@ queue. Transcript, session and connection updates do not move your focus. If
 you move to another input or window while a conversation loads, its delayed
 reply box leaves focus where you put it.
 
+When agents are set to open on Chat, their windows start on **Terminal** until
+Chat can show the conversation. This includes agents without sessions,
+unsupported harnesses, missing integrations and unreadable records. The window
+switches to **Chat** once the conversation is readable, unless you chose a view
+by hand. Replacing the terminal or harness cancels that automatic switch.
+
+If you pick Chat yourself, an agent without a conversation shows **No messages
+yet**, explains that it is starting or waiting, and offers **Open Terminal**.
+Other unavailable conversations show their explanation and **Open Terminal**;
+missing or unreadable named records keep their error. While an agent is
+starting or waiting, Chat points you to Terminal rather than suggesting an
+integration install. Send still needs an identified conversation.
+
 ## What Chat does
 
 On Unix SSH hosts, Claude Code sessions reported by Herdr as UUIDs are resolved
 in that host's `~/.claude/projects/<project>/<UUID>.jsonl`. The transcript is read
 through the captured connection's SSH file adapter. Missing files, duplicate UUID
 matches and SSH errors never use a local transcript. A readable, reported session
-can use the same session-checked Send as a local conversation; missing integration
-metadata still shows the integration instructions.
+can use the same session-checked Send as a local conversation. When no session
+has been reported, Chat stays empty; use **Details** for session and integration
+information.
 The projects root is resolved on that host, including when it is a symlink.
 Discovered paths must name the requested UUID directly inside one project under
 that root; stat metadata cannot redirect the read to a different transcript.
