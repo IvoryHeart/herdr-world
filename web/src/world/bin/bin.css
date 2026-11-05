@@ -373,10 +373,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Where the agent waits (Town: its bus stop). */
+/* Where the agent waits (Town: its bus stop), on its own line under the name. */
 .world-bin-card-place {
   flex: 1 1 100%;
-  order: 1;
+  margin-top: -6px;
   color: var(--bin-soft);
   font-size: 12px;
 }
