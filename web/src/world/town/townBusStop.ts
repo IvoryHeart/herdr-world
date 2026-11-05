@@ -121,3 +121,32 @@ export const nearTownBusStop = (
   stop: TownBusStop,
   point: { x: number; y: number },
 ) => Math.abs(point.x - stop.x) <= 2 && Math.abs(point.y - stop.y) <= 1;
+
+/**
+ * Each room's stop: the one nearest the room's centre (ties: road order). An
+ * agent sent to the bus waits there, wherever it was dropped.
+ */
+export function townRoomStops(layout: {
+  busStops: readonly TownBusStop[];
+  buildings: readonly {
+    rooms: readonly {
+      key: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }[];
+  }[];
+}): Map<string, string> {
+  const stops = new Map<string, string>();
+  for (const building of layout.buildings)
+    for (const room of building.rooms)
+      stops.set(
+        room.key,
+        nearestTownBusStop(layout.busStops, {
+          x: room.x + room.w / 2,
+          y: room.y + room.h / 2,
+        }).id,
+      );
+  return stops;
+}

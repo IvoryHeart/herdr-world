@@ -9,7 +9,6 @@ import {
   townBusSeen,
   type TownBusScene,
   type TownBusSeen,
-  type TownBusApproach,
   type TownBusLeaver,
 } from "./scene/townBus";
 import { createTownLookResolver } from "./townAppearance";
@@ -19,9 +18,13 @@ import {
   busSprite,
   busStopSprite,
 } from "./townBusSprites";
+import { townRoomStops } from "./townBusStop";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import type { TownWorldOverlay } from "./townRenderer";
 import { townCharacter, townLookKey, type TownCanvas } from "./townSprites";
+
+/** A bus that returned to an earlier stop fades in there over this. */
+export const BUS_FADE_MS = 400;
 
 export type TownBusSource = {
   layout(): TownLayout | null;
@@ -31,6 +34,8 @@ export type TownBusSource = {
   paused(): boolean;
   /** The agent riding as each entry, for its look. */
   agent(entryId: string): OfficeAgent | undefined;
+  /** The room each entry's agent belongs to, for its nearest stop. */
+  roomOf?(entryId: string): string | undefined;
   /** A bus pulled in at the stop (its horn). */
   onArrive?(): void;
   /** The layer's clock for emptied buses driving away, ms. */
@@ -46,10 +51,12 @@ export class TownBusLayer implements TownWorldOverlay {
   private readonly textures = new Map<TownCanvas, Texture>();
   private readonly resolveLook = createTownLookResolver();
   private current: TownBusScene | null = null;
-  /** Each bus as last drawn, to see a restarted clock and an arrival. */
+  /** Each bus as last drawn, to see an arrival or a return. */
   private seen: TownBusSeen = new Map();
-  /** Set-off trajectories survive boarding resets without a new cruise speed. */
-  private readonly starts = new Map<string, TownBusApproach>();
+  /** Buses that returned to an earlier stop, fading in there (layer clock). */
+  private readonly fades = new Map<string, number>();
+  private roomStops: { layout: TownLayout; stops: Map<string, string> } | null =
+    null;
   /** Emptied buses driving off the map; not riders' buses, not targets. */
   private leavers: TownBusLeaver[] = [];
   /** Sprites reused frame to frame; those past `used` are hidden. */
@@ -73,28 +80,32 @@ export class TownBusLayer implements TownWorldOverlay {
       return false;
     }
     const paused = this.source.paused();
-    const sceneNow = () =>
-      townBusScene({
-        stop: layout.busStop,
-        width: layout.width * T,
-        entries: this.source.entries(),
-        remaining: (entry) => this.source.remaining(entry),
-        elapsed: this.source.elapsed,
-        paused,
-        reducedMotion,
-        starts: this.starts,
-      });
-    let scene = sceneNow();
-    // An agent boarded: its bus's clock started again, and it drives on
-    // from where it is rather than from the map's edge.
-    const { restarts } = townBusChanges(this.seen, scene.buses, paused);
-    if (restarts.size) {
-      for (const [key, approach] of restarts) this.starts.set(key, approach);
-      scene = sceneNow();
-    }
-    const { arrivals } = townBusChanges(this.seen, scene.buses, paused);
+    if (this.roomStops?.layout !== layout)
+      this.roomStops = { layout, stops: townRoomStops(layout) };
+    const roomStops = this.roomStops.stops;
+    const scene = townBusScene({
+      stops: layout.busStops,
+      width: layout.width * T,
+      entries: this.source.entries(),
+      homeStop: (entry) => {
+        const room = this.source.roomOf?.(entry.id);
+        return room === undefined ? undefined : roomStops.get(room);
+      },
+      remaining: (entry) => this.source.remaining(entry),
+      elapsed: this.source.elapsed,
+      paused,
+      reducedMotion,
+    });
+    const { arrivals, returns } = townBusChanges(
+      this.seen,
+      scene.buses,
+      paused,
+    );
     if (arrivals) this.source.onArrive?.();
     const now = this.source.now?.() ?? performance.now();
+    // Riders ahead were put back: the bus drives off from where it stood and
+    // fades in where it now waits (observer-only; a remount just shows it).
+    for (const key of returns) this.fades.set(key, now);
     this.leavers.push(
       ...townBusLeavers(
         this.seen,
@@ -102,13 +113,16 @@ export class TownBusLayer implements TownWorldOverlay {
         layout.width * T,
         now,
         reducedMotion,
+        returns,
       ),
     );
     this.seen = townBusSeen(scene.buses);
-    for (const key of this.starts.keys())
-      if (!this.seen.has(key)) this.starts.delete(key);
+    for (const [key, start] of this.fades)
+      if (!this.seen.has(key) || now - start >= BUS_FADE_MS)
+        this.fades.delete(key);
     this.current = scene;
-    this.add(busStopSprite(), scene.stop.x - 1, scene.stop.y - 1);
+    for (const stop of scene.stops)
+      this.add(busStopSprite(), stop.box.x - 1, stop.box.y - 1);
     const lookOf = (entryId: string) =>
       this.resolveLook(this.source.agent(entryId), entryId);
     for (const rider of scene.waiting) {
@@ -125,19 +139,24 @@ export class TownBusLayer implements TownWorldOverlay {
     });
     for (const bus of scene.buses) {
       const x = Math.round(bus.x);
-      this.add(busSprite(bus.doorsOpen, bus.wheel), x, bus.y);
+      const fade = this.fades.get(bus.key);
+      const alpha =
+        fade === undefined ? 1 : Math.min(1, (now - fade) / BUS_FADE_MS);
+      this.add(busSprite(bus.doorsOpen, bus.wheel), x, bus.y, alpha);
       for (const rider of bus.riders) {
         const look = lookOf(rider.entryId);
         this.add(
           busPassengerSprite(look, `${townLookKey(look)}`),
           rider.x,
           rider.y,
+          alpha,
         );
       }
     }
     this.hideUnused();
     return (
       this.leavers.length > 0 ||
+      this.fades.size > 0 ||
       scene.buses.some(
         (bus) => bus.phase !== "waiting" && !this.source.paused(),
       )
@@ -155,7 +174,7 @@ export class TownBusLayer implements TownWorldOverlay {
     this.textures.clear();
   }
 
-  private add(canvas: TownCanvas, x: number, y: number) {
+  private add(canvas: TownCanvas, x: number, y: number, alpha = 1) {
     let texture = this.textures.get(canvas);
     if (!texture) {
       texture = new Texture({
@@ -172,6 +191,7 @@ export class TownBusLayer implements TownWorldOverlay {
     this.used += 1;
     sprite.texture = texture;
     sprite.visible = true;
+    sprite.alpha = alpha;
     sprite.position.set(Math.round(x), Math.round(y));
   }
 }

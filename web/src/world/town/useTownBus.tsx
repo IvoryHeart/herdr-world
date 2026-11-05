@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -65,17 +66,29 @@ const viewArea = (camera: TownCamera): ScreenRect => {
   };
 };
 
-/** The stop, its sign and the bus standing beside it, in screen pixels. */
-const stopBox = (camera: TownCamera, l: TownLayout): ScreenRect => {
-  const pole = l.busStop.x * 16 + 8;
-  const a = camera.toScreen(
-    pole - STOP_W / 2 - BUS_W - 4,
-    l.busStop.y * 16 + 16 - STOP_H - 16,
-  );
-  const b = camera.toScreen(
-    pole + STOP_W,
-    l.busStop.road * 16 + 16 + 2 + BUS_H,
-  );
+/**
+ * The stop the chip points at: where the soonest bus waits (the last stop
+ * with riders), else the main stop. Its pole's foot, world px.
+ */
+const chipStop = (l: TownLayout, scene: TownBusScene | null | undefined) => {
+  const occupied = scene?.stops.filter((stop) => stop.riders > 0).pop();
+  return occupied
+    ? {
+        pole: occupied.box.x + STOP_W / 2,
+        foot: occupied.box.y + occupied.box.h,
+      }
+    : { pole: l.busStop.x * 16 + 8, foot: l.busStop.y * 16 + 16 };
+};
+
+/** That stop, its sign and the bus standing beside it, in screen pixels. */
+const stopBox = (
+  camera: TownCamera,
+  l: TownLayout,
+  scene: TownBusScene | null | undefined,
+): ScreenRect => {
+  const { pole, foot } = chipStop(l, scene);
+  const a = camera.toScreen(pole - STOP_W / 2 - BUS_W - 4, foot - STOP_H - 16);
+  const b = camera.toScreen(pole + STOP_W, foot + 2 + BUS_H);
   return { left: a.x, top: a.y, right: b.x, bottom: b.y };
 };
 
@@ -157,6 +170,7 @@ export function useTownBus({
       elapsed: (entry) => store.elapsed(entry),
       paused: () => latest.current.bin.paused,
       agent: (id) => latest.current.riders.get(id),
+      roomOf: (id) => latest.current.riders.get(id)?.roomKey,
       onArrive: () => playBinSound("horn"),
     });
     layerRef.current = layer;
@@ -302,7 +316,7 @@ export function useTownBus({
           });
           return;
         }
-        const box = stopBox(camera, l);
+        const box = stopBox(camera, l, layerRef.current?.scene);
         const padX = 72,
           padY = 32;
         const next = insideScreenArea(free, box)
@@ -334,7 +348,7 @@ export function useTownBus({
     const canvas = host.current;
     if (!camera || !l || !canvas) return;
     const free = freeScreenArea(viewArea(camera), townPanels(canvas));
-    const box = stopBox(camera, l);
+    const box = stopBox(camera, l, layerRef.current?.scene);
     const focus = camera.focusPoint();
     const z = camera.z;
     // The stop box's centre, in world pixels, placed at the free area's centre.
@@ -590,51 +604,71 @@ function TownBusControls({
   ];
   return (
     <div className="town-bus-controls">
-      <div
-        className="town-bus-sign"
-        style={{ left: scene.stop.x + scene.stop.w / 2, top: scene.stop.y - 4 }}
-      >
-        {soon ? (soon.leaving ? "leaving" : clock(soon.remaining)) : null} ·{" "}
-        {entries.length}
-        {paused ? " · held" : ""}
-      </div>
-      {/* The stop and its sign open the same tray as the bus. */}
-      <button
-        type="button"
-        className="town-bus-stop"
-        style={{
-          left: scene.stop.x + scene.stop.w / 2,
-          top: scene.stop.y + scene.stop.h,
-          height: scene.stop.h,
-        }}
-        aria-label={`Bus stop: ${entries.length} waiting. Open the bin tray`}
-        onClick={onHold}
-      />
+      {scene.stops.map((stop) => {
+        // Every stop has a sign; the main one and those with riders show the
+        // shared countdown, the rest just their name.
+        const shown = stop.main || stop.riders > 0;
+        const centre = stop.box.x + stop.box.w / 2;
+        return (
+          <Fragment key={stop.id}>
+            {shown ? (
+              <div
+                className="town-bus-sign"
+                data-stop={stop.id}
+                data-main={String(stop.main)}
+                style={{ left: centre, top: stop.box.y - 4 }}
+              >
+                {soon
+                  ? soon.leaving
+                    ? "leaving"
+                    : clock(soon.remaining)
+                  : null}{" "}
+                · {stop.riders || entries.length}
+                {paused ? " · held" : ""}
+              </div>
+            ) : null}
+            {/* Any stop and its sign open the same tray as the bus. */}
+            <button
+              type="button"
+              className="town-bus-stop"
+              data-stop={stop.id}
+              data-main={String(stop.main)}
+              style={{
+                left: centre,
+                top: stop.box.y + stop.box.h,
+                height: stop.box.h,
+              }}
+              aria-label={`${stop.main ? "Main bus stop" : "Bus stop"}: ${stop.riders} waiting here, ${entries.length} in the bin. Open the bin tray`}
+              onClick={onHold}
+            />
+          </Fragment>
+        );
+      })}
       {scene.buses.map((bus) => {
-        // Driving in or away: the road it is on (from the map's edge to its
-        // stop, or from its stop to the edge), which holds the bus
-        // wherever it has got to.
+        // Driving in or away: a stretch of its street around it, which holds
+        // the bus wherever it has got to.
         const moving = bus.phase !== "waiting" && !paused;
         const coming = moving && bus.phase === "arriving";
         const leaving = moving && !coming;
-        const left = coming ? 0 : leaving ? bus.home : bus.x;
+        const left = moving ? Math.max(0, bus.x - BUS_W) : bus.x;
         return (
           <button
-            key={`${bus.trip}:${bus.home}:${bus.y}`}
+            key={bus.key}
             type="button"
             className="town-bus-hold"
             data-phase={bus.phase}
-            data-trip-elapsed={bus.approach.elapsed}
+            data-trip-elapsed={bus.elapsed}
             data-leaving={String(leaving)}
             data-coming={String(coming)}
             style={{
               left,
               top: bus.y,
-              width: coming
-                ? bus.home + BUS_W
-                : leaving
-                  ? Math.max(BUS_W, scene.edge - left)
-                  : BUS_W,
+              width: moving
+                ? Math.max(
+                    BUS_W,
+                    Math.min(scene.edge, bus.x + 2 * BUS_W) - left,
+                  )
+                : BUS_W,
               height: BUS_H,
             }}
             aria-label={
