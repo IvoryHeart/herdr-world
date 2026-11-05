@@ -558,8 +558,13 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question
    first (for example Claude asking whether to trust a new folder), the
-   launcher says so and **Open its tab** lets you answer. Progress and the
+   launcher says so and **Open its tab** lets you answer. While it starts, the
+   choice you pressed stays marked and **Starting …** says what World is doing;
+   after 10 seconds it says **Taking longer than usual**. Progress and the
    outcome stay visible above the choices, even with a long readiness list.
+   If the new window opens on Terminal before Chat can read the agent, a line
+   under its header says it is waiting for the agent to answer; Chat opens by
+   itself when it can, or choose **Stay on Terminal**.
    The launcher closes when the start is confirmed. After an uncertain
    start, its start choices stay disabled: open the existing tab, or
    close the launcher before deliberately starting another agent. A definite

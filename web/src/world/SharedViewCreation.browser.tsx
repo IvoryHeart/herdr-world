@@ -543,6 +543,36 @@ async function run() {
       "Return to Town",
     );
   };
+  // While the opening waits on Terminal for Chat it says so; Stay on
+  // Terminal is a manual view choice, so a later readable Chat keeps it.
+  const waitLine = () =>
+    document.querySelector<HTMLElement>(
+      ".workspace-inspector .world-inspector-chat-wait",
+    );
+  await openAgent();
+  await until(waitLine, "The opening window says it is waiting for Chat");
+  check(
+    !!waitLine()?.textContent?.includes("waiting for it to answer") &&
+      waitLine()?.getAttribute("aria-busy") === "true" &&
+      !!waitLine()?.querySelector('[role="status"]') &&
+      !waitLine()!.closest(".workspace-inspector-body"),
+    "The wait line is a busy status outside the Terminal body",
+  );
+  const stay = Array.from(waitLine()!.querySelectorAll("button")).find(
+    (button) => button.textContent?.includes("Stay on Terminal"),
+  );
+  stay!.click();
+  await until(() => !waitLine(), "Stay on Terminal ends the wait line");
+  chatUnavailable = "";
+  conversationChanged();
+  await worldRuntimeStore.refresh();
+  await settle();
+  check(
+    !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+    "After Stay on Terminal a readable Chat does not switch the window",
+  );
+  chatUnavailable = "missing_integration";
+  await closeAgent();
   await openAgent();
   for (const reason of [
     "no_session",
@@ -581,7 +611,8 @@ async function run() {
   );
   await settle();
   check(
-    !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+    !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
+      !waitLine(),
     "A late available reply cannot override a manual view choice",
   );
   chatUnavailable = "read_failed";

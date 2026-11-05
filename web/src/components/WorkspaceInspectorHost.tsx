@@ -156,8 +156,11 @@ export function WorkspaceInspectorHost({
   chatFocusIntent,
   agentWorktree,
   presentationStale = false,
+  notice,
 }: {
   agentWorktree?: AgentWorktreeView;
+  /** A wait or note from the window, shown with status, outside the body. */
+  notice?: ReactNode;
   state: WorkspaceInspectorState;
   onReady?: () => void;
   visible: boolean;
@@ -939,6 +942,7 @@ export function WorkspaceInspectorHost({
         stale={presentationStale}
         available={!!workspace}
       />
+      {notice}
 
       {workspace ? (
         <div
