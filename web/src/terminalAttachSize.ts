@@ -13,9 +13,20 @@ import type { PaneLayout } from "./types";
 type Ref<T> = { readonly current: T };
 
 export { TERMINAL_DEFAULT_SIZE };
-/** The last unsqueezed size per connection runtime and terminal, here. */
+/**
+ * The last size this page saw for each pane (connection, runtime, pane), from
+ * a successful layout read or a visible fit, and only when the tab it implied
+ * was not squeezed. Bounded; never persisted. A retired runtime's geometry
+ * never sizes a replacement's pane.
+ */
 const lastGood = new Map<string, TerminalSize>();
-/** A retired runtime's geometry never sizes a replacement's terminal. */
+const LAST_GOOD_LIMIT = 256;
+const remember = (key: string, size: TerminalSize) => {
+  lastGood.delete(key);
+  lastGood.set(key, size);
+  if (lastGood.size > LAST_GOOD_LIMIT)
+    lastGood.delete(lastGood.keys().next().value!);
+};
 /**
  * The tab a pane's size implies in `layout` (the endpoint surface). A squeeze
  * is a tab property: split panes are legitimately narrow. With no layout, the
@@ -29,8 +40,8 @@ const impliedTab = (
 /** The page is visible: a background page never claims a size. */
 const pageVisible = () =>
   typeof document === "undefined" || document.visibilityState !== "hidden";
-const sizeKey = (client: ConnectionClient, terminalId: string) =>
-  `${client.connectionId}\0${client.serverRuntimeGeneration}\0${terminalId}`;
+const sizeKey = (client: ConnectionClient, paneId: string | undefined) =>
+  `${client.connectionId}\0${client.serverRuntimeGeneration}\0${paneId}`;
 /** One pane.layout read, valid only for the client and pane that made it. */
 type LayoutRead = {
   terminalId: string;
@@ -107,23 +118,27 @@ export class TerminalAttachSize {
       this.read.client === client
         ? this.read
         : null;
+    const key = sizeKey(client, paneId);
+    // After a failed read, the size this page last saw for the pane is the
+    // best witness of it (a narrow split pane is not a squeeze).
+    let witnessed = false;
     if (!size && read?.done) {
       layout = read.layout;
-      size = terminalPaneSize(layout, paneId) ?? {
-        cols: xterm.cols,
-        rows: xterm.rows,
-      };
+      const known = layout ? undefined : lastGood.get(key);
+      witnessed = Boolean(known);
+      size = terminalPaneSize(layout, paneId) ??
+        known ?? { cols: xterm.cols, rows: xterm.rows };
     }
     this.waiting = !size;
     this.hidden = !fitted;
     if (size) {
       this.read = null;
-      const key = sizeKey(client, terminalId);
       // A squeeze shrinks the whole tab; with no layout (a failed read), the
       // xterm's own size is all there is to judge.
       const area = layout?.area;
       const squeezed =
         !fitted &&
+        !witnessed &&
         terminalSqueezed(area ? { cols: area.width, rows: area.height } : size);
       // A remembered size is a fallback only if it would not squeeze the tab
       // too (a tiny shown fit is real for that viewer, not for this attach).
@@ -134,7 +149,9 @@ export class TerminalAttachSize {
           !terminalSqueezed(impliedTab(remembered, layout, paneId))
             ? remembered
             : TERMINAL_DEFAULT_SIZE;
-      else lastGood.set(key, size);
+      // Remembered only from a layout or a visible fit whose tab is healthy.
+      else if (layout && !terminalSqueezed(impliedTab(size, layout, paneId)))
+        remember(key, size);
       return { ...size, layout, relayLayout: fitted ? stored : layout };
     }
     if (read || !paneId) return null;
@@ -187,12 +204,12 @@ export class TerminalAttachSize {
    * now, so it must claim its size rather than only resize.
    */
   fitted(size: TerminalSize) {
-    const terminalId = this.view.desiredTerminalRef.current;
-    if (terminalId)
-      lastGood.set(
-        sizeKey(this.view.currentClientRef.current, terminalId),
-        size,
-      );
+    const { paneIdRef, paneTabIdRef, paneLayoutRef, currentClientRef } =
+      this.view;
+    const stored = paneLayoutRef.current;
+    const layout = stored?.tab_id === paneTabIdRef.current ? stored : null;
+    if (!terminalSqueezed(impliedTab(size, layout, paneIdRef.current)))
+      remember(sizeKey(currentClientRef.current, paneIdRef.current), size);
     // In a background page the claim waits for the next visible fit.
     if (!pageVisible()) return false;
     const claim = this.hidden && this.view.isActivePaneRef.current;

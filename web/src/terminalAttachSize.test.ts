@@ -307,3 +307,74 @@ test("a read that settles after the view is gone neither retries nor stays", asy
   expect(view.resolve()).toBeNull(); // a fresh read, not the settled one
   expect(one.reads).toHaveLength(2);
 });
+
+test("after a failed read, a shown split pane's real size is reused", async () => {
+  // Found by rev-opus on #650: a 25×38 pane of a healthy split, shown, then
+  // re-attached hidden with no layout, used to get the 100×30 default.
+  const one = client([Promise.reject(new Error("pane.layout failed"))]);
+  const view = hiddenView(one.value);
+  view.refs.paneLayoutRef.current = split(84, 40, 3);
+  view.size.resolve("terminal", { cols: 25, rows: 38 }, xterm);
+  view.size.fitted({ cols: 25, rows: 38 });
+  view.size.hide();
+  view.refs.paneLayoutRef.current = null;
+  expect(view.resolve()).toBeNull();
+  await settle();
+  expect(view.resolve()).toMatchObject({ cols: 25, rows: 38 });
+});
+
+/** A shown 25×38 pane of a healthy 84×40 three-pane split, then hidden. */
+const seenSplitPane = (value: ConnectionClient) => {
+  const view = hiddenView(value);
+  view.refs.paneLayoutRef.current = split(84, 40, 3);
+  view.size.resolve("terminal", { cols: 25, rows: 38 }, xterm);
+  view.size.fitted({ cols: 25, rows: 38 });
+  view.size.hide();
+  view.refs.paneLayoutRef.current = null;
+  return view;
+};
+
+test("a valid layout read wins over the remembered pane size", async () => {
+  const one = client([Promise.resolve({ layout: layout(120, 40) })]);
+  const view = seenSplitPane(one.value);
+  view.resolve();
+  await settle();
+  expect(view.resolve()).toMatchObject({ cols: 119, rows: 40 });
+});
+
+test("a remembered pane size is never reused by a replacement runtime", async () => {
+  const before = client([]);
+  seenSplitPane(before.value);
+  const after = client([Promise.reject(new Error("pane.layout failed"))], 2);
+  const view = hiddenView(after.value);
+  view.resolve();
+  await settle();
+  // No sample for this runtime: the existing behaviour (a squeezed xterm).
+  expect(view.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
+});
+
+test("a remembered pane size is never reused for another pane", async () => {
+  const one = client([Promise.reject(new Error("pane.layout failed"))]);
+  const view = seenSplitPane(one.value);
+  view.refs.paneIdRef.current = "pane-2";
+  view.refs.desiredTerminalRef.current = "terminal-2";
+  expect(view.size.resolve("terminal-2", null, xterm)).toBeNull();
+  await settle();
+  expect(view.size.resolve("terminal-2", null, xterm)).toMatchObject(
+    TERMINAL_DEFAULT_SIZE,
+  );
+});
+
+test("remembered pane sizes are bounded: the oldest closed panes are forgotten", async () => {
+  const one = client([Promise.reject(new Error("pane.layout failed"))]);
+  const first = seenSplitPane(one.value);
+  for (let index = 0; index < 256; index += 1) {
+    const other = hiddenView(one.value);
+    other.refs.paneIdRef.current = `closed-${index}`;
+    other.size.fitted({ cols: 96, rows: 27 });
+  }
+  first.resolve();
+  await settle();
+  // The attach is never withheld: with no sample left, the existing default.
+  expect(first.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
+});

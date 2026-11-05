@@ -343,7 +343,9 @@ only once shown and fitted. Herdr sizes a terminal by the client that last
 attached or focused it, so a hidden terminal never adopts a squeezed size: when
 its tab's area is below 30×5 (`shared/terminalSize.ts`; observed squeezes are
 12–24 columns by 1–3 rows, while split panes and narrow viewers are legitimately
-small), it uses this browser's last good size for it in that runtime, or 100×30.
+small), it uses the last size this page saw for that pane (connection, runtime
+and pane; from a layout read or a visible fit whose tab was healthy; bounded,
+in memory), or 100×30. After a failed layout read, that size is reused too.
 The selected pane, shown after being hidden while the page is visible, sends
 its fitted size and focuses the pane once, claiming the size back; a click on a
 shown terminal claims it the same way. Herdr's frames arrive at each viewer's
