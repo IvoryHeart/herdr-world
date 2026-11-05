@@ -74,6 +74,7 @@ export function createFakeBin(epoch = "fixture-run", now?: () => number) {
             departure_ms: BIN_DEPARTURE_MS,
             remaining_ms: 30_000 + BIN_DEPARTURE_MS,
             trip: soonest?.trip ?? id,
+            trip_joined_ms: soonest?.trip_elapsed_ms ?? 0,
             ...(soonest?.trip_duration_ms === undefined
               ? {}
               : {

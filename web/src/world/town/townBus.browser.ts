@@ -1,7 +1,10 @@
 import { BIN_DEPARTURE_MS } from "../../../../shared/bin";
 import type { createFakeBin } from "../testing/fakeBin";
-import { BUS_W } from "./townBusGeometry";
+import { BUS_H, BUS_W } from "./townBusGeometry";
 import { townBusSender } from "./useTownBus";
+import { bridge } from "../../api";
+import { worldBinStore } from "../bin/binStore";
+import { townBusClockSample } from "./townBusClock.browser";
 
 /**
  * Town's bus against the real scene and a fixture bin service: an agent sent
@@ -55,6 +58,7 @@ export async function checkTownBus(
     () => host.querySelectorAll(".town-bus-rider").length === 1,
     "the rider has no place at the stop or on the bus",
   );
+  const clock = townBusClockSample(host);
   check(
     /· 1/.test(host.querySelector(".town-bus-sign")?.textContent ?? ""),
     "the stop's sign does not count the rider",
@@ -117,6 +121,88 @@ export async function checkTownBus(
       "the tray opened from the stop did not shut",
     );
   }
+  // Bind the incoming hit-region check to a source-clock sample on the
+  // occupied road, after the real chip/stop navigation has finished.
+  for (const entry of bin.state.entries)
+    Object.assign(entry, {
+      trip_duration_ms: 30_000,
+      trip_elapsed_ms: clock.before,
+    });
+  bin.state.revision++;
+  await worldBinStore(bridge).refresh();
+  const clockWitnesses: unknown[] = [];
+  await waitFor(
+    () => {
+      const bus = host.querySelector<HTMLElement>(
+        '.town-bus-hold[data-phase="arriving"]',
+      );
+      const elapsed = Number(bus?.dataset.tripElapsed);
+      const store = worldBinStore(bridge);
+      const sample = store.elapsed(store.get().entries[0]!);
+      const pose = clock.position(sample);
+      if (!pose.arrived && clockWitnesses.length < 24) {
+        const layer = host.querySelector<HTMLElement>(".town-world")!;
+        const matrix = new DOMMatrix(getComputedStyle(layer).transform);
+        const canvas = host
+          .querySelector("canvas[data-office-canvas]")!
+          .getBoundingClientRect();
+        const point = [
+          canvas.left + matrix.e + matrix.a * (pose.x + BUS_W / 2),
+          canvas.top + matrix.f + matrix.d * (pose.y + BUS_H - 4),
+        ];
+        const top = document.elementFromPoint(point[0]!, point[1]!);
+        clockWitnesses.push({
+          sourceElapsed: sample,
+          pose,
+          drawnFrame: window.__HERDR_TOWN_RENDERER__?.frames,
+          domElapsed: bus?.dataset.tripElapsed,
+          anyBus: [...host.querySelectorAll<HTMLElement>(".town-bus-hold")].map(
+            (b) => ({
+              elapsed: b.dataset.tripElapsed,
+              phase: b.dataset.phase,
+              rect: b.getBoundingClientRect().toJSON(),
+            }),
+          ),
+          point,
+          top: top && {
+            class: top.getAttribute("class"),
+            label: top.getAttribute("aria-label"),
+          },
+          inViewport:
+            point[0]! >= 0 &&
+            point[0]! < innerWidth &&
+            point[1]! >= 0 &&
+            point[1]! < innerHeight,
+        });
+      }
+      return elapsed >= clock.before && elapsed < clock.arrival;
+    },
+    () =>
+      `incoming bus did not draw the expected active-clock sample ${JSON.stringify(
+        {
+          clock,
+          clockWitnesses,
+          layout: window.__HERDR_TOWN_RENDERER__?.layout,
+          frame: window.__HERDR_TOWN_RENDERER__?.frames,
+          entries: worldBinStore(bridge).get().entries,
+          buses: [...host.querySelectorAll<HTMLElement>(".town-bus-hold")].map(
+            (bus) => ({
+              phase: bus.dataset.phase,
+              elapsed: bus.dataset.tripElapsed,
+              left: bus.style.left,
+              top: bus.style.top,
+            }),
+          ),
+          stops: [...host.querySelectorAll<HTMLElement>(".town-bus-stop")].map(
+            (stop) => ({
+              id: stop.dataset.stop,
+              left: stop.style.left,
+              top: stop.style.top,
+            }),
+          ),
+        },
+      )}`,
+  );
   // Counted from here: the chip's own tray open and shut came before.
   const paused0 = pausesAll(),
     resumed0 = resumesAll();
@@ -138,7 +224,30 @@ export async function checkTownBus(
       holdAt.right - (BUS_W / 2) * holdScale,
       holdAt.bottom - 4 * holdScale,
     ),
-    "the waiting bus is covered where a finger would hold it",
+    `the waiting bus is covered where a finger would hold it ${JSON.stringify({
+      rect: holdAt.toJSON(),
+      point: [
+        holdAt.right - (BUS_W / 2) * holdScale,
+        holdAt.bottom - 4 * holdScale,
+      ],
+      phase: holdTarget.dataset.phase,
+      elapsed: holdTarget.dataset.tripElapsed,
+      frame: window.__HERDR_TOWN_RENDERER__?.frames,
+      viewport: [innerWidth, innerHeight],
+      top: (() => {
+        const e = document.elementFromPoint(
+          holdAt.right - (BUS_W / 2) * holdScale,
+          holdAt.bottom - 4 * holdScale,
+        );
+        return (
+          e && {
+            tag: e.tagName,
+            class: e.className,
+            label: e.getAttribute("aria-label"),
+          }
+        );
+      })(),
+    })}`,
   );
   host.querySelector<HTMLButtonElement>(".town-bus-hold")!.click();
   await waitFor(() => pauses() === 1, "Enter on the bus did not hold it");
@@ -148,6 +257,12 @@ export async function checkTownBus(
   await waitFor(
     () => host.querySelector(".town-bus-held") !== null,
     "a held bus shows no controls",
+  );
+  check(
+    /^at the (main stop|stop by .+)/.test(
+      host.querySelector(".world-bin-card-place")?.textContent ?? "",
+    ),
+    "the common tray does not show the rider's assigned stop",
   );
   const reachable = (button: HTMLElement) => {
     const box = button.getBoundingClientRect();

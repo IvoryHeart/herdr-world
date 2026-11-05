@@ -17,6 +17,7 @@ import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import type { AnswerNotice } from "../worldAnswerDeliveries";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
 import { checkTownBus } from "./townBus.browser";
+import { checkTownBusReturnLayer } from "./townBusReturn.browser";
 import {
   checkTownBusRemount,
   checkTownClosingPin,
@@ -1412,6 +1413,10 @@ async function run() {
   );
 
   if (scale === "bus" && mode === "test") {
+    boundaryWitnesses.push({
+      kind: "bus-return-layer",
+      detail: checkTownBusReturnLayer(check),
+    });
     await checkTownBus(host, check, waitFor, fakeBin);
     await checkHeldBusChip(host, waitFor, check);
     await checkBinViewHolds(host, waitFor, check);
@@ -1440,6 +1445,15 @@ async function run() {
       },
       waitFor,
       check,
+      (key) => {
+        const [connectionId, , terminalId] = JSON.parse(key);
+        const pane = base.connections
+          .find((c) => c.connectionId === connectionId)
+          ?.snapshot?.panes.find((p) => p.terminal_id === terminalId);
+        return pane
+          ? JSON.stringify([connectionId, pane.workspace_id])
+          : undefined;
+      },
     );
     const source = base.connections.find((connection) =>
       connection.snapshot?.tabs.some((tab) => {

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { BIN_DEPARTURE_MS, type BinEntry } from "../../../../../shared/bin";
 import { BUS_SEATS, BUS_W } from "../townBusGeometry";
 import { layoutTown, TOWN_TILE as T, TownGround } from "../townLayout";
+import { BUS_BRAKE, busApproachMs } from "./townBusRoute";
 import {
   inTownBusDropZone,
   townBusAt,
@@ -85,7 +86,9 @@ function scene(
   return {
     layout,
     scene: townBusScene({
-      stop: layout.busStop,
+      // Isolate one occupied street for these timing/seat consumers. The
+      // full multi-road plan is covered by townBusRoute.test.ts.
+      stops: [layout.busStop],
       width: layout.width * T,
       entries,
       remaining: (entry) => entry.remaining_ms,
@@ -99,15 +102,26 @@ function scene(
 // Remaining time counts the 30 s wait and then the drive away.
 const TOTAL = 30_000 + BIN_DEPARTURE_MS;
 const HALF_GONE = BIN_DEPARTURE_MS / 2;
+const arrivalMs = (duration = 30_000) => {
+  const { layout } = scene([]);
+  const finalAt = layout.busStop.x * T + T / 2 - 4;
+  return (
+    ((finalAt + BUS_BRAKE / 2) / (layout.width * T + BUS_W)) *
+    busApproachMs(duration)
+  );
+};
 
-test("a bus drives in to stop at 0:10, waits, and leaves the map as the close commits", () => {
+test("a bus follows its fixed route clock, waits at the occupied stop and leaves by close", () => {
   const D = BIN_DEPARTURE_MS;
+  const arrival = arrivalMs();
+  expect(arrival).toBeGreaterThan(1_000);
+  expect(arrival).toBeLessThanOrEqual(20_000);
   // Remaining counts the 30 s countdown, then the 6 s drive away.
   const at = [
-    TOTAL - 1_000,
-    TOTAL - 12_000,
-    D + 10_500,
-    D + 10_000,
+    TOTAL - 500,
+    TOTAL - arrival / 2,
+    TOTAL - arrival + 500,
+    TOTAL - arrival - 0.001,
     D + 4_000,
     D,
     HALF_GONE,
@@ -116,7 +130,7 @@ test("a bus drives in to stop at 0:10, waits, and leaves the map as the close co
   const scenes = at.map(
     (remaining) => scene([rider("trip-a", remaining).entry]).scene,
   );
-  const xs = scenes.map((s) => s.buses[0]!);
+  const xs = scenes.slice(0, -1).map((s) => s.buses[0]!);
   expect(xs.map((b) => b.phase)).toEqual([
     "arriving",
     "arriving",
@@ -124,7 +138,6 @@ test("a bus drives in to stop at 0:10, waits, and leaves the map as the close co
     "waiting",
     "waiting",
     "waiting",
-    "departing",
     "departing",
   ]);
   // Driving in, ever nearer, and slowing: the last half second covers less
@@ -135,16 +148,17 @@ test("a bus drives in to stop at 0:10, waits, and leaves the map as the close co
   expect(xs[2]!.x).toBeLessThan(slot);
   const first = scene([rider("trip-b0", TOTAL).entry]).scene.buses[0]!.x;
   expect(slot - xs[2]!.x).toBeLessThan(xs[0]!.x - first);
-  // At the stop from 0:10 to 0:00, doors open, the clock showing the wait.
+  // At the stop from its actual arrival to 0:00, doors open, clock still shared.
   expect([xs[3]!.x, xs[4]!.x, xs[5]!.x]).toEqual([slot, slot, slot]);
   expect(xs[3]!.doorsOpen && xs[5]!.doorsOpen).toBe(true);
-  expect([xs[3]!.remaining, xs[5]!.remaining]).toEqual([10_000, 0]);
+  expect(xs[3]!.remaining).toBeCloseTo(30_000 - arrival, 2);
+  expect(xs[5]!.remaining).toBe(0);
   // Pulling away, doors shut; off the map exactly when the close commits.
   const { layout } = scene([]);
   expect(xs[6]!.doorsOpen).toBe(false);
   expect(xs[6]!.x).toBeGreaterThan(slot);
   expect(xs[6]!.x).toBeLessThan(layout.width * T);
-  expect(xs[7]!.x).toBe(layout.width * T);
+  expect(scenes[7]!.buses).toEqual([]);
   expect(scenes.map((s) => s.next?.leaving)).toEqual([
     false,
     false,
@@ -157,17 +171,19 @@ test("a bus drives in to stop at 0:10, waits, and leaves the map as the close co
   ]);
 });
 
-test("a short countdown's bus still pulls in, over its first 3 s", () => {
+test("a short countdown's bus still completes its approach within 3 s", () => {
   const short = (remaining: number) =>
     scene([rider("trip-s", remaining, 10_000).entry]).scene.buses[0]!;
   const total = 10_000 + BIN_DEPARTURE_MS;
-  expect(short(total - 1_000).phase).toBe("arriving");
+  expect(arrivalMs(10_000)).toBeLessThanOrEqual(3_000);
+  expect(short(total - arrivalMs(10_000) / 2).phase).toBe("arriving");
   expect(short(total - 3_000).phase).toBe("waiting");
 });
 
 test("held while driving in, the bus stops where it is", () => {
-  const moving = scene([rider("trip-h", TOTAL - 8_000).entry]).scene.buses[0]!;
-  const held = scene([rider("trip-h2", TOTAL - 8_000).entry], { paused: true })
+  const remaining = TOTAL - arrivalMs() / 2;
+  const moving = scene([rider("trip-h", remaining).entry]).scene.buses[0]!;
+  const held = scene([rider("trip-h2", remaining).entry], { paused: true })
     .scene.buses[0]!;
   expect([held.phase, held.x, held.doorsOpen]).toEqual([
     "arriving",
@@ -237,14 +253,13 @@ test("a crossing meeting the street from above or from below both count", async 
 test("every rider of a crowded town has a seat on the map and is found under the pointer", () => {
   const entries = [
     // All at the stop (inside the last 10 s of their countdowns).
-    ...Array.from({ length: 11 }, () => rider("trip-big", 14_000).entry),
-    ...Array.from({ length: 30 }, (_, i) => rider("", 11_000 + i * 10).entry),
+    ...Array.from({ length: 41 }, () => rider("trip-big", 14_000).entry),
   ];
   const { scene: s, layout } = scene(entries, {}, 2);
   const seated = s.buses.flatMap((bus) => bus.riders);
   expect(seated).toHaveLength(entries.length);
-  // A trip bigger than one bus takes two.
-  expect(s.buses.filter((b) => b.trip === "trip-big")).toHaveLength(2);
+  // One departure/clock, with enough convoy buses to seat every rider.
+  expect(s.buses.filter((b) => b.trip === "trip-big")).toHaveLength(6);
   expect(Math.max(...s.buses.map((b) => b.riders.length))).toBeLessThanOrEqual(
     BUS_SEATS.length,
   );
@@ -274,45 +289,64 @@ test("the edge chip reads the soonest departure's wait", () => {
 });
 
 test("a boarding reset preserves the original approach speed and arrival", () => {
-  const before = scene([rider("trip-r", TOTAL - 10_000).entry]).scene.buses[0]!;
+  const elapsed = arrivalMs() / 2;
+  const entry: BinEntry = rider("trip-r", TOTAL - elapsed).entry;
+  entry.trip_duration_ms = 30_000;
+  entry.trip_elapsed_ms = elapsed;
+  const before = scene([entry]).scene.buses[0]!;
   expect(before.phase).toBe("arriving");
-  const starts = new Map([[before.key, before.approach]]);
-  const at = (remaining: number) =>
-    scene([rider("trip-r", remaining).entry], { starts }).scene.buses[0]!;
+  const at = (ms: number) =>
+    scene([
+      {
+        ...entry,
+        remaining_ms: TOTAL - ms,
+        trip_elapsed_ms: elapsed + ms,
+      },
+    ]).scene.buses[0]!;
   // The clock is full again: it is where it was, not back at the map's edge.
-  expect(at(TOTAL).x).toBeCloseTo(before.x, 6);
-  expect(at(TOTAL).phase).toBe("arriving");
-  // The original run still arrives ten seconds later, then waits twenty.
-  const original = scene([rider("trip-r", TOTAL - 11_000).entry]).scene
-    .buses[0]!;
-  expect(at(TOTAL - 1_000).x).toBeCloseTo(original.x, 6);
-  expect(at(TOTAL - 10_000).x).toBe(before.home);
-  expect(at(TOTAL - 10_000).phase).toBe("waiting");
+  expect(at(0).x).toBeCloseTo(before.x, 6);
+  expect(at(0).speed).toBeCloseTo(before.speed, 6);
+  expect(at(0).phase).toBe("arriving");
+  const original = scene([
+    {
+      ...entry,
+      remaining_ms: TOTAL - elapsed - 1_000,
+      trip_elapsed_ms: elapsed + 1_000,
+    },
+  ]).scene.buses[0]!;
+  expect(at(1_000).x).toBeCloseTo(original.x, 6);
+  const arrived = at(arrivalMs() - elapsed + 0.001);
+  expect(arrived.x).toBeCloseTo(before.home, 6);
+  expect(arrived.phase).toBe("waiting");
   // A bus already at the stop just keeps waiting.
-  const parkedBus = at(TOTAL - 10_000);
-  const parked = new Map([[before.key, parkedBus.approach]]);
-  const waiting = scene([rider("trip-r", TOTAL).entry], { starts: parked })
-    .scene.buses[0]!;
+  const waiting = scene([
+    { ...entry, remaining_ms: TOTAL, trip_elapsed_ms: arrivalMs() + 1 },
+  ]).scene.buses[0]!;
   expect([waiting.phase, waiting.x]).toEqual(["waiting", before.home]);
 });
 
 test("reset at 0:01 while one second out arrives in one second and waits 29 seconds", () => {
   // A second reset has extended the wait: this bus is still one second out
   // even though the departure clock currently shows 0:01.
-  const near = scene([rider("trip-near", TOTAL - 19_000).entry]).scene
-    .buses[0]!;
-  const starts = new Map([[near.key, near.approach]]);
+  const entry = {
+    ...rider("trip-near", BIN_DEPARTURE_MS + 1_000).entry,
+    trip_duration_ms: 30_000,
+    trip_elapsed_ms: arrivalMs() - 1_000,
+  };
+  const near = scene([entry]).scene.buses[0]!;
   const at = (ms: number) =>
-    scene([rider("trip-near", TOTAL - ms).entry], { starts }).scene.buses[0]!;
+    scene([
+      {
+        ...entry,
+        remaining_ms: TOTAL - ms,
+        trip_elapsed_ms: entry.trip_elapsed_ms + ms,
+      },
+    ]).scene.buses[0]!;
   const reset = at(0);
   expect(reset.x).toBeCloseTo(near.x, 6);
-  expect(reset.approach.run).toBe(near.approach.run);
-  expect(reset.approach.run.speedAt(reset.approach.elapsed)).toBeCloseTo(
-    near.approach.run.speedAt(near.approach.elapsed),
-    6,
-  );
+  expect(reset.speed).toBeCloseTo(near.speed, 6);
   expect(at(999).phase).toBe("arriving");
-  for (const ms of [1_000, 15_000, 29_999, 30_000]) {
+  for (const ms of [1_001, 15_000, 29_999, 30_000]) {
     expect(at(ms).phase).toBe("waiting");
     expect(at(ms).x).toBe(near.home);
   }
@@ -321,21 +355,30 @@ test("reset at 0:01 while one second out arrives in one second and waits 29 seco
 
 test("a restarted clock and an arrival are told apart; holding is neither", async () => {
   const { townBusChanges, townBusSeen } = await import("./townBus");
-  const coming = scene([rider("trip-c", BIN_DEPARTURE_MS + 10_100).entry]).scene
-    .buses;
-  const arrived = scene([rider("trip-c", BIN_DEPARTURE_MS + 9_900).entry]).scene
-    .buses;
+  const comingEntry = {
+    ...rider("trip-c", TOTAL - arrivalMs() + 100).entry,
+    trip_duration_ms: 30_000,
+    trip_elapsed_ms: arrivalMs() - 100,
+  };
+  const coming = scene([comingEntry]).scene.buses;
+  const arrived = scene([
+    {
+      ...comingEntry,
+      remaining_ms: TOTAL - arrivalMs() - 100,
+      trip_elapsed_ms: arrivalMs() + 100,
+    },
+  ]).scene.buses;
   const seen = townBusSeen(coming);
   expect(townBusChanges(seen, arrived, false)).toEqual({
-    restarts: new Map(),
+    returns: new Set(),
     arrivals: 1,
   });
   // Held, the horn waits.
   expect(townBusChanges(seen, arrived, true).arrivals).toBe(0);
   // Boarding: the clock goes back to full.
-  const reset = scene([rider("trip-c", TOTAL).entry]).scene.buses;
+  const reset = scene([{ ...comingEntry, remaining_ms: TOTAL }]).scene.buses;
   expect(townBusChanges(seen, reset, false)).toEqual({
-    restarts: new Map([[coming[0]!.key, coming[0]!.approach]]),
+    returns: new Set(),
     arrivals: 0,
   });
 });
@@ -393,7 +436,7 @@ test("buses still riding, off the map, or under reduced motion never become leav
   expect(townBusLeavers(seen, s.buses, width, 0, false)).toEqual([]);
   expect(townBusLeavers(seen, [], width, 0, true)).toEqual([]);
   const gone = scene([rider("trip-g", 0).entry]).scene.buses;
-  expect(gone[0]!.x).toBe(width);
+  expect(gone).toEqual([]);
   expect(townBusLeavers(townBusSeen(gone), [], width, 0, false)).toEqual([]);
   const offLeft = scene([rider("trip-o", TOTAL).entry]).scene.buses;
   expect(offLeft[0]!.x + BUS_W).toBeLessThanOrEqual(0);

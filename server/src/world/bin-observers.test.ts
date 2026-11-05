@@ -6,6 +6,11 @@ import {
   TOWN_TILE as T,
 } from "../../../web/src/world/town/townLayout";
 import { townBusScene } from "../../../web/src/world/town/scene/townBus";
+import {
+  BUS_BRAKE,
+  townBusRoute,
+  townBusSpeed,
+} from "../../../web/src/world/town/scene/townBusRoute";
 const TOTAL = 30_000 + BIN_DEPARTURE_MS;
 let next = 0;
 const rider = (_trip: string, remaining_ms: number) => ({
@@ -36,9 +41,13 @@ const { layout } = layoutTown(
 );
 const scene = (entries: BinEntry[]) => ({
   scene: townBusScene({
-    stop: layout.busStop,
+    stops: layout.busStops,
     width: layout.width * T,
     entries,
+    homeStop: (entry) =>
+      entry.workspace_id === "w2"
+        ? layout.busStops.at(-1)!.id
+        : layout.busStops[0]!.id,
     remaining: (e) => e.remaining_ms,
     paused: false,
     reducedMotion: false,
@@ -57,14 +66,24 @@ test("I2: new observers and remounted layers reconstruct a reset and held trip f
   });
   const first = rider("", TOTAL).entry;
   registry.add(first);
-  now = 19_000;
+  const finalFounder = { ...rider("", TOTAL).entry, workspace_id: "w2" };
+  registry.add(finalFounder);
+  const route = townBusRoute(layout.busStops, layout.width * T);
+  const speed = townBusSpeed(route, 30_000);
+  const arrival = Math.ceil((route.stops.at(-1)!.at + BUS_BRAKE / 2) / speed);
+  now = arrival - 1_000;
   const before = scene(registry.list().entries).scene.buses[0]!;
+  expect(before.phase).toBe("arriving");
   registry.add(rider("", TOTAL).entry);
   // Neither observer receives a private starts/seen map.
   const observerA = scene(registry.list().entries).scene.buses[0]!;
   const observerB = scene(structuredClone(registry.list().entries)).scene
     .buses[0]!;
-  expect([observerA.x, observerB.x]).toEqual([before.x, before.x]);
+  const pose = (bus: typeof before) => [bus.at, bus.x, bus.y, bus.speed];
+  expect([pose(observerA), pose(observerB)]).toEqual([
+    pose(before),
+    pose(before),
+  ]);
   registry.pause();
   now += 60_000;
   expect(scene(registry.list().entries).scene.buses[0]!.x).toBe(before.x);
@@ -78,4 +97,15 @@ test("I2: new observers and remounted layers reconstruct a reset and held trip f
     "waiting",
     arrived.home,
   ]);
+  // Remove the set-off rider at the final stop. Replayed late riders may
+  // now wait at F′; both a live scene and a completely fresh observer agree.
+  registry.restore(
+    registry.list().entries.find((e) => e.pane_id === finalFounder.pane_id)!.id,
+  );
+  const afterPutBack = registry.list().entries;
+  const liveReturned = scene(afterPutBack).scene.buses[0]!;
+  const freshReturned = scene(structuredClone(afterPutBack)).scene.buses[0]!;
+  expect(pose(freshReturned)).toEqual(pose(liveReturned));
+  expect(liveReturned.at).toBeLessThan(arrived.at);
+  expect(liveReturned.phase).toBe("waiting");
 });

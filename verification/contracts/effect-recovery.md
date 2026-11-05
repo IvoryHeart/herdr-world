@@ -131,6 +131,20 @@ trip-clock samples after an approach reset, while held, and after a parked reset
 The service owns original duration and active elapsed time; layout geometry stays
 in Town. These UI consumers do not replace the native source/stop fences.
 
+The multi-stop route also consumes the optional immutable `trip_joined_ms`
+observation (older services mean zero). Stops and room assignment come from
+the shared layout/road model; joins and Put back do not change the canonical
+cruise speed or the service's close deadline. `bin-observers.test.ts` now removes
+a set-off rider at the final stop and compares the surviving scene with a fresh
+observer using only the service sample. It retains the earlier reset/hold checks.
+The `TownCanvas.bus.test.ts` consumer additionally drives the real Pixi bus layer
+in Chrome on an injected observation clock: the old bus leaves before the bus
+at the new final stop fades in, and its settled pose equals a remount. Zero
+riders retain the emptied-bus path. This directly checks the approved observer
+animation exception; it does not establish native pointer admission or physical
+frame smoothness. The underlying M5 ordering/authority domain and native fences
+are unchanged; the existing Q49 consumer mappings remain required.
+
 The held-panel chip regression checks every point of a 3×3 interior hit grid,
 viewport bounds and both 44px waiting / 52px carry heights at phone and laptop
 sizes. The carry geometry fixture supplies Town's existing carry-presence DOM

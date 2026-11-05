@@ -4,6 +4,7 @@ import type { createFakeBin } from "../testing/fakeBin";
 import { townBusSender } from "./useTownBus";
 import { setTabPinned } from "../../tabPins";
 import type { WorldLeafObject } from "../worldObject";
+import { townBusClockSample } from "./townBusClock.browser";
 
 /** Owner sequence through actual Town and Board views sharing the browser store. */
 export async function checkBinViewHolds(
@@ -347,21 +348,34 @@ export async function checkTownBusRemount(
   remount: () => Promise<void>,
   waitFor: (condition: () => boolean, message: string) => Promise<void>,
   check: (condition: boolean, message: string) => void,
+  roomForKey: (key: string) => string | undefined,
 ) {
   const keys = [
     ...host.querySelectorAll<HTMLElement>(
       '.world-semantic-target[data-kind="agent"]',
     ),
   ].map((node) => node.dataset.targetKey!);
-  check(keys.length >= 2, "I2: remount fixture needs two agents");
-  if (keys.length < 2) return;
+  const room = roomForKey(keys[0]!);
+  const sameRoom = keys.filter(
+    (key) => room !== undefined && roomForKey(key) === room,
+  );
+  check(
+    sameRoom.length >= 2,
+    "I2: remount fixture needs two agents from the same qualified room",
+  );
+  if (sameRoom.length < 2) return;
   const store = worldBinStore(bridge);
-  await townBusSender.send!(keys[0]!);
+  await townBusSender.send!(sameRoom[0]!);
+  await waitFor(
+    () => !!host.querySelector(".town-bus-rider"),
+    "I2: initial rider did not reach its stop",
+  );
+  const clock = townBusClockSample(host);
   const first = bin.state.entries[0]!;
   Object.assign(first, {
     trip_duration_ms: 30_000,
-    trip_elapsed_ms: 19_000,
-    remaining_ms: 17_000,
+    trip_elapsed_ms: clock.before,
+    remaining_ms: 36_000 - clock.before,
   });
   bin.state.paused = true;
   bin.state.revision++;
@@ -369,16 +383,16 @@ export async function checkTownBusRemount(
   await waitFor(
     () =>
       !!host.querySelector(
-        '.town-bus-hold[data-phase="arriving"][data-trip-elapsed="19000"]',
+        `.town-bus-hold[data-phase="arriving"][data-trip-elapsed="${clock.before}"]`,
       ),
-    "I2: bus should still approach at original 19s",
+    "I2: bus should approach at the geometry-derived service clock sample",
   );
   const position = () =>
     Number.parseFloat(
       host.querySelector<HTMLElement>(".town-bus-hold")!.style.left,
     );
   const before = position();
-  await townBusSender.send!(keys[1]!);
+  await townBusSender.send!(sameRoom[1]!);
   await waitFor(
     () => store.get().entries.length === 2,
     "I2: boarding reset did not publish",
@@ -407,12 +421,15 @@ export async function checkTownBusRemount(
     "I2: fresh Town observer moved a held bus",
   );
   for (const entry of bin.state.entries)
-    Object.assign(entry, { trip_elapsed_ms: 20_000, remaining_ms: 35_000 });
+    Object.assign(entry, {
+      trip_elapsed_ms: clock.arrival,
+      remaining_ms: 36_000 - (clock.arrival - clock.before),
+    });
   bin.state.revision++;
   await store.refresh();
   await waitFor(
     () => !!host.querySelector('.town-bus-hold[data-phase="waiting"]'),
-    "I2: bus did not arrive after one more active second",
+    "I2: bus did not arrive at its expected active-clock boundary",
   );
   const parked = position();
   // A later reset leaves the parked bus parked, including a full layer remount.
