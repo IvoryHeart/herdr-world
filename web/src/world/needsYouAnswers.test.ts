@@ -154,23 +154,11 @@ async function registerDomTest() {
       return null;
     },
   };
-  // Terminal completion checks: the fallback when Desk names no stop.
-  const checks: Record<string, unknown>[] = [];
-  let seenControl: ((control: Record<string, unknown>) => void) | null = null;
-  const seenList = () => ({ revision: checks.length, records: checks });
   Object.assign(bridge, {
-    call: async (method: string, params?: Record<string, unknown>) => {
-      if (method === "world.completion_seen.list") return seenList();
-      if (method === "world.completion_seen.mark") {
-        checks.push(params!);
-        return seenList();
-      }
-      return null;
-    },
+    call: async () => null,
     connection: () => client,
     onControl: (listener: (control: Record<string, unknown>) => void) => {
       controls.add(listener);
-      seenControl = listener;
       return () => controls.delete(listener);
     },
     onStatus: () => () => {},
@@ -440,7 +428,7 @@ async function registerDomTest() {
     expect(watched.size).toBe(0);
   });
 
-  test("work Desk names no stop for is checked on its terminal, and leaves", async () => {
+  test("work missing its Desk record remains until an authoritative stop can be reviewed", async () => {
     const quiet = {
       ...leaf("quiet", "done"),
       lastActivityAt: undefined,
@@ -449,8 +437,30 @@ async function registerDomTest() {
     const host = document.createElement("div");
     document.body.append(host);
     const list = createRoot(host);
+    const quietMarks: Record<string, unknown>[] = [];
+    let available = false,
+      reviewedStop: string | null = null;
     const emptyDesk = new WorldDeskStore({
-      call: async () => ({ revision: 1, records: [] }),
+      call: async (method: string, params?: Record<string, unknown>) => {
+        if (method === "world.desk.review") {
+          quietMarks.push(params!);
+          reviewedStop = String(params!.stop_id);
+        }
+        return {
+          revision: reviewedStop ? 3 : available ? 2 : 1,
+          records: available
+            ? [
+                {
+                  ...deskIdentity(quiet),
+                  reviewed_stop: reviewedStop,
+                  observed_stop_id: "quiet-stop",
+                  stopped_at: null,
+                  opened_at: null,
+                },
+              ]
+            : [],
+        };
+      },
       onControl: () => () => {},
       onStatus: () => () => {},
     } as unknown as ConstructorParameters<typeof WorldDeskStore>[0]);
@@ -472,15 +482,18 @@ async function registerDomTest() {
       host.querySelector<HTMLElement>('[data-needs-you-item="leaf:quiet"]');
     await act(async () => button(quietItem()!, "Mark reviewed").click());
     await settle();
-    expect(checks).toEqual([
-      {
-        connection_id: "local",
-        connection_generation: 1,
-        terminal_id: "terminal-quiet",
-      },
-    ]);
-    seenControl?.({ type: "world_completion_seen_changed" });
+    expect(quietMarks).toEqual([]);
+    expect(quietItem()).not.toBeNull();
+    available = true;
+    await act(async () => button(quietItem()!, "Mark reviewed").click());
     await settle();
+    expect(quietMarks).toEqual([]);
+    expect(quietItem()).not.toBeNull();
+    await act(async () => button(quietItem()!, "Mark reviewed").click());
+    await settle();
+    expect(quietMarks[quietMarks.length - 1]?.stop_id).toBe(
+      'stop:["quiet-stop",null]',
+    );
     expect(quietItem()).toBeNull();
     await act(async () => list.unmount());
   });

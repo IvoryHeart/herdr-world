@@ -3,7 +3,11 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { worldMigrations, WORLD_APPLICATION_ID } from "./world-schema";
+import {
+  migrateWorldDatabase,
+  worldMigrations,
+  WORLD_APPLICATION_ID,
+} from "./world-schema";
 import { recordAnswerAttempt, answerAttemptEvidence } from "./answer-attempts";
 import { openWorldWriter } from "./world-writer";
 const ask = {
@@ -84,7 +88,7 @@ test("JSON import cannot forge recipient, answer occurrence or delivery evidence
 test("offline retry history is bounded while earlier uncertainty remains visible", () => {
   const db = new Database(":memory:");
   try {
-    db.exec(worldMigrations.join("\n"));
+    migrateWorldDatabase(db, ":memory:");
     recordAnswerAttempt(
       db,
       "e-fixture",

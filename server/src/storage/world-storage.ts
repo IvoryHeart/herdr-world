@@ -280,6 +280,7 @@ export async function openWorldLedger(
               new StorageWriteRejected("World storage is closing"),
             )
           : client.request<T>(request),
+      client.snapshot.legacyReviewArchive,
     ),
     runtimeStatus,
     profiles,

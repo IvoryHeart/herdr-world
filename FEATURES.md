@@ -160,6 +160,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     reviewed record, shared by Town, Desk, Needs you and every browser of this
     World, without certifying its correctness. They survive a World restart
     and reappear after the same terminal and known session are verified.
+    Upgrading old separate completion checks preserves proven known-session
+    reviews; work without session proof may need review once again. Missing Desk
+    stop metadata is refreshed before marking, and an unavailable stop stays retryable.
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.

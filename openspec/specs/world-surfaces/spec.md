@@ -1744,8 +1744,18 @@ and Board/Desk marks without inventing an agent harness or changing Herdr status
 #### Scenario: World restarts with checked completions
 
 - **WHEN** the World service restarts
-- **THEN** saved checks remain unresolved until fresh identity verification
-- **AND** every browser shows the same restored checks after verification
+- **THEN** saved Desk reviews remain unresolved until fresh terminal and known
+  session verification, and every browser shows the same verified review
+- **AND** unknown sessions receive fresh current stops without inherited review
+
+#### Scenario: Upgrade from separate completion checks
+
+- **WHEN** World upgrades legacy completion receipts after compatible Chat delivery
+- **THEN** only fresh same-source/terminal/known-session/unchanged native sequence
+  proof converts them into the current Desk review; unknown receipts may need
+  review once again
+- **AND** the old completion API and browser fallback are absent; missing Desk
+  stop metadata refreshes authoritatively and remains retryable if unverified
 
 ### Requirement: Pinned Town desks
 

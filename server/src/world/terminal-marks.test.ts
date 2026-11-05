@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createTerminalMarks } from "./terminal-marks";
+import { admittedAgentPanes } from "./desk-observation";
 
 const session = (value: string) => ({
   source: "reported",
@@ -43,15 +44,22 @@ function hostRead(
   );
 }
 
-const fresh = () =>
-  createTerminalMarks(
+const fresh = () => {
+  const observed: string[] = [];
+  const marks = createTerminalMarks(
     () => () => {},
-    () => {},
+    (_id, _generation, panes, _at, agents) => {
+      observed.push(
+        ...admittedAgentPanes(panes, agents).map((agent) => agent.status),
+      );
+    },
   );
+  marks.worldWatchlist.pin({ ...identity, label: "Watch" });
+  return { ...marks, observed };
+};
 
-test("a previous session's working row does not end the current check", () => {
+test("a previous session's working row does not change the current idle observation", () => {
   const marks = fresh();
-  marks.worldCompletionSeen.mark(identity);
 
   hostRead(
     marks,
@@ -59,10 +67,11 @@ test("a previous session's working row does not end the current check", () => {
     { session: "previous", status: "working" },
   );
 
-  expect(marks.worldCompletionSeen.list().records).toHaveLength(1);
+  expect(marks.observed).toEqual(["idle"]);
+  expect(marks.worldWatchlist.list().records).toHaveLength(1);
 });
 
-test("a previous session's idle row does not let a busy agent be checked", () => {
+test("a previous session's idle row does not hide the current working observation", () => {
   const marks = fresh();
 
   hostRead(
@@ -71,12 +80,11 @@ test("a previous session's idle row does not let a busy agent be checked", () =>
     { session: "previous", status: "idle" },
   );
 
-  expect(marks.worldCompletionSeen.mark(identity).changed).toBe(false);
+  expect(marks.observed).toEqual(["working"]);
 });
 
 test("the current session's row is the status World observes", () => {
   const marks = fresh();
-  marks.worldCompletionSeen.mark(identity);
 
   hostRead(
     marks,
@@ -84,5 +92,7 @@ test("the current session's row is the status World observes", () => {
     { session: "current", status: "working" },
   );
 
-  expect(marks.worldCompletionSeen.list().records).toEqual([]);
+  expect(marks.observed).toEqual(["working"]);
+  marks.retire("alpha", 8);
+  expect(marks.worldWatchlist.list().records).toEqual([]);
 });
