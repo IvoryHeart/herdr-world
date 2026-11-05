@@ -252,6 +252,15 @@ function publish(preferences: ShortcutPreferences, storageError = "") {
   };
   for (const listener of listeners) listener();
 }
+/**
+ * A browser's platform never changes, but tests that simulate another one
+ * re-detect it so presets written for it apply (Roamgate #531 applies a preset
+ * only on its own platform).
+ */
+export function __redetectShortcutPlatformForTests() {
+  platform = detectShortcutPlatform();
+  publish(snapshot.preferences, snapshot.storageError);
+}
 function read() {
   try {
     return parseShortcutPreferences(

@@ -393,9 +393,11 @@ async function registerDomTests() {
   );
   const { normalizeTerminalFontScale } = await import("../appearance");
   const { activeTerminalInput } = await import("../activeTerminalInput");
-  const { selectShortcutPreset, updateShortcut } = await import(
-    "../shortcutPreferences"
-  );
+  const {
+    __redetectShortcutPlatformForTests,
+    selectShortcutPreset,
+    updateShortcut,
+  } = await import("../shortcutPreferences");
   const {
     clearTerminalComposerDraft,
     readTerminalComposerDraft,
@@ -2242,6 +2244,7 @@ async function registerDomTests() {
       configurable: true,
       value: clipboard,
     });
+    __redetectShortcutPlatformForTests();
     selectShortcutPreset(platform);
     try {
       await run();
@@ -2252,6 +2255,7 @@ async function registerDomTests() {
       if (clipboardDescriptor)
         Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
       else Reflect.deleteProperty(navigator, "clipboard");
+      __redetectShortcutPlatformForTests();
       selectShortcutPreset("auto");
     }
   }
