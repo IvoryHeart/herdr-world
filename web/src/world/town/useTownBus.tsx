@@ -475,9 +475,9 @@ const controlsKey = (scene: TownBusScene) =>
   ].join("|");
 
 /**
- * The bus's controls in world space: a tap on any stop or bus opens the
- * common held tray (Put back and Resume live there). A bus driving away can
- * still be stopped this way until it leaves the map.
+ * The bus's controls in world space: a tap on any stop, bus or rider opens
+ * the common held tray (Put back and Resume live there). A bus driving away
+ * can still be stopped this way until it leaves the map.
  */
 function TownBusControls({
   scene: rendered,
@@ -520,6 +520,22 @@ function TownBusControls({
   const scene = live() ?? rendered;
   if (!scene || !entries.length) return null;
   const soon = soonestTownBus(entries, remaining);
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  // Riders waiting at a stop (a standing figure above its feet), or seen
+  // through a bus's open doors (a window): the boxes townBusRiderAt hits.
+  const riders = [
+    ...scene.waiting.map((rider) => ({
+      rider,
+      box: { left: rider.x - 5, top: rider.y - 22, width: 10, height: 24 },
+    })),
+    ...scene.buses
+      .filter((bus) => bus.doorsOpen)
+      .flatMap((bus) => bus.riders)
+      .map((rider) => ({
+        rider,
+        box: { left: rider.x - 2, top: rider.y - 2, width: 12, height: 12 },
+      })),
+  ];
   return (
     <div className="town-bus-controls">
       {scene.stops.map((stop) => {
@@ -587,6 +603,22 @@ function TownBusControls({
           ) : null}
         </button>
       ))}
+      {riders.map(({ rider, box }) => {
+        const entry = byId.get(rider.entryId);
+        if (!entry) return null;
+        return (
+          <button
+            key={rider.entryId}
+            type="button"
+            className="town-bus-rider"
+            data-bin-entry={rider.entryId}
+            style={box}
+            title={`${entry.label} · ${clock(remaining(entry))}`}
+            aria-label={`${entry.label} is riding the bus. Open the bin tray`}
+            onClick={onHold}
+          />
+        );
+      })}
     </div>
   );
 }

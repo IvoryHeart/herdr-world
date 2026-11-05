@@ -93,6 +93,16 @@ export async function checkTownBus(
     await opens(stop, "tapping the bus stop did not open the bin tray");
     await resume("Resume from the stop's tray did not resume the bin");
   }
+  // A waiting rider is its own target, beside the stop's, opening the
+  // same tray.
+  const waiting = host.querySelector<HTMLButtonElement>(
+    `.town-bus-rider[data-bin-entry="${CSS.escape(bin.state.entries[0]!.id)}"]`,
+  );
+  check(waiting !== null, "a waiting rider is not a button");
+  if (waiting) {
+    await opens(waiting, "tapping a waiting rider did not open the bin tray");
+    await resume("Resume from the rider's tray did not resume the bin");
+  }
   // The bus too, from the keyboard (a click with no pointer).
   await waitFor(
     () => host.querySelector(".town-bus-hold") !== null,

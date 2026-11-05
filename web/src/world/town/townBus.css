@@ -41,7 +41,8 @@
 }
 
 .town-bus-stop,
-.town-bus-hold {
+.town-bus-hold,
+.town-bus-rider {
   position: absolute;
   padding: 0;
   border: 0;
@@ -68,6 +69,7 @@
   pointer-events: none;
 }
 
+.town-bus-rider:focus-visible,
 .town-bus-stop:focus-visible,
 .town-bus-hold:focus-visible {
   outline: 2px solid #ffd166;
