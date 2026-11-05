@@ -340,6 +340,7 @@ function creationFixture(
     repositories: {},
     workspace_auto_sync: {},
     custom: {},
+    ui: {},
     ...settings,
   });
   return {

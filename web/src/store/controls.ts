@@ -1,3 +1,4 @@
+import { installUiSettings } from "./uiSettings";
 import {
   activityEntries,
   rememberActivity,
@@ -91,4 +92,5 @@ export function installStoreControls(): void {
   bridge.onControl(handleStoreControl);
   startFocusedInterest();
   installCatalogueRefresh();
+  installUiSettings();
 }

@@ -1,3 +1,4 @@
+import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
 import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
@@ -792,6 +793,11 @@ async function compose(
     safeSend,
     snapshotAdmission,
     townMoveQueues,
+    uiSettings: createUiSettingsRpcHandler({
+      readSettings: () => settings.read(),
+      updateSettings: (update, shouldCommit) =>
+        settings.update(update, shouldCommit),
+    }),
     ...terminalMarks,
     bin,
     worldCli,

@@ -30,6 +30,7 @@ const emptySettings = (): GuiSettings => ({
   repositories: {},
   workspace_auto_sync: {},
   custom: {},
+  ui: {},
 });
 
 const ref = { connection_id: "local", workspace_id: "w1" };
@@ -475,6 +476,7 @@ describe("confirmed Ranger action targets", () => {
                 repositories: {},
                 workspace_auto_sync: {},
                 custom: {},
+                ui: {},
               }),
             },
           ),

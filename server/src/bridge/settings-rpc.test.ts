@@ -4,7 +4,10 @@ import type { ServerWebSocket } from "bun";
 import type { GuiSettings } from "../config/gui-settings";
 import type { HerdrClient } from "./herdr-client";
 import { WorktreeHookConfigError } from "../worktree/worktree-hooks";
-import { createSettingsRpcHandler } from "./settings-rpc";
+import {
+  createSettingsRpcHandler,
+  createUiSettingsRpcHandler,
+} from "./settings-rpc";
 
 /** A settings file that lives only in memory, as a fresh service sees one. */
 function memorySettings() {
@@ -15,6 +18,7 @@ function memorySettings() {
     workspace_auto_sync: {},
     terminal_transport: {},
     custom: {},
+    ui: {},
   };
   return {
     path: "/settings.json",
@@ -39,6 +43,7 @@ test("terminal transport settings validate input, persist by connection, and rec
     repositories: {},
     workspace_auto_sync: {},
     custom: { keep: true },
+    ui: {},
     terminal_transport: { beta: { surface_codecs: false } },
   };
   const changed: boolean[] = [];
@@ -188,6 +193,7 @@ test("settings RPC lists and mutates only its connection namespace", async () =>
       },
     },
     custom: {},
+    ui: {},
   };
   const messages: any[] = [];
   const handler = createSettingsRpcHandler({
@@ -311,6 +317,7 @@ test("settings RPC cancels a queued mutation after replacement", async () => {
       },
     },
     custom: {},
+    ui: {},
   };
   const messages: string[] = [];
   const handler = createSettingsRpcHandler({
@@ -430,6 +437,7 @@ test("worktree commands are set globally and per repository, and cleared when em
     repositories: {},
     workspace_auto_sync: {},
     custom: {},
+    ui: {},
   };
   const messages: any[] = [];
   // Repository keys belong to one connection.
@@ -539,4 +547,35 @@ test("worktree commands are set globally and per repository, and cleared when em
   });
   expect(messages.at(-1).error.message).toContain("another connection");
   expect(settings.repositories["local:/repo"]).toBeUndefined();
+});
+
+test("server-wide interface preferences can be read, stored and cleared", async () => {
+  let settings: GuiSettings = {
+    version: 1,
+    repositories: {},
+    workspace_auto_sync: {},
+    custom: {},
+    ui: {},
+  };
+  const handler = createUiSettingsRpcHandler({
+    readSettings: async () => settings,
+    updateSettings: async (update) => (settings = await update(settings)),
+  });
+  expect(await handler("bridge.ui_settings.get", {})).toEqual({ ui: {} });
+  const value = { version: 1, active: "mine", presets: [] };
+  expect(
+    await handler("bridge.ui_settings.update", {
+      key: "keyboardShortcuts",
+      value,
+    }),
+  ).toEqual({ key: "keyboardShortcuts", value });
+  expect(settings.ui.keyboardShortcuts).toEqual(value);
+  expect(
+    await handler("bridge.ui_settings.update", { key: "keyboardShortcuts" }),
+  ).toEqual({ key: "keyboardShortcuts", value: null });
+  expect(settings.ui).toEqual({});
+  await expect(
+    handler("bridge.ui_settings.update", { key: "../escape", value: 1 }),
+  ).rejects.toThrow("require key");
+  expect(settings.repositories).toEqual({});
 });

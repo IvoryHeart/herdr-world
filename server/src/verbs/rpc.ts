@@ -108,6 +108,8 @@ export const rpcVerbs = [
   rpc("bridge.pause_others", "reconcilable", "world"),
   rpc("bridge.ping", "read", "world", object()),
   rpc("bridge.status", "read", "world"),
+  rpc("bridge.ui_settings.get", "read", "world"),
+  rpc("bridge.ui_settings.update", "reconcilable", "world"),
   rpc("connections.connect", "reconcilable", "world"),
   rpc("connections.create", "reconcilable", "world"),
   rpc("connections.disconnect", "reconcilable", "world"),

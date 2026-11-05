@@ -73,6 +73,10 @@ export type RpcServices = {
   ): boolean;
   snapshotAdmission: WorldSnapshotAdmission;
   townMoveQueues: Map<string, ReturnType<typeof createMoveQueue>>;
+  /** Server-wide interface preferences (bridge.ui_settings.*). */
+  uiSettings: ReturnType<
+    typeof import("../bridge/settings-rpc").createUiSettingsRpcHandler
+  >;
   worldWatchlist: WorldWatchlistRegistry;
   /** The agent bin; absent without World storage's effect outbox. */
   bin?: import("../service/bin-service").BinService;
