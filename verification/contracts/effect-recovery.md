@@ -125,7 +125,7 @@ Put back; a direct store.add labelled desk is not its UI consumer.
 
 I2's `bin-observers.test.ts` composes the registry with Town's production scene,
 without private trajectory maps: a reset one active second before the
-geometry-derived final-stop arrival, a 60-second hold, and one further active
+timetable-derived final-stop arrival, a 60-second hold, and one further active
 second preserve position, speed and early arrival.
 Town's bus browser case fully remounts the component/layer from service-shaped
 trip-clock samples after an approach reset, while held, and after a parked reset.
@@ -167,10 +167,22 @@ Registry/RPC ownership tests release one browser socket without resetting time
 or another socket's hold; explicit Resume ends all holds. Native close authority,
 intent timing and the maintained M5 recovery proof remain independent.
 
-The focused route cases judge a late join against the drawn eased position,
-including the final brake. If no earlier rider remains, the approved replay
-places the late rider at home before assigning subsequent riders. The real layer
-consumer covers that orphan's leaver-then-fade and equality with a fresh observer.
-The registry/scene observer also checks overlapping trips: the edge chip targets
-the same departure whose countdown it displays. These are presentation/geometry
-consumers; they add no service history, admission or native-close authority.
+The route consumers cover the evening every-stop timetable: positive dwell at
+all stops, including empty streets through the final stop, exact approach-time
+budget, fixed cruise from layout and original trip duration, continuous ramps,
+and a rigid convoy. Late joins use the approved order: orphan at home, final
+waiting lock after `leaveMs_F`, home boarding before `leaveMs_home`, then the
+first stop not yet left. Joining while the final stop's normal dwell runs can
+extend the route without a position jump. The orphan's live leaver-then-fade
+still ends equal to a fresh observer. The registry/scene observer also checks
+overlapping trips: the edge chip targets the departure whose clock it displays.
+
+The real layer browser consumer samples arrival, middle and end of each dwell
+with no hold active, checking visible standstill, open doors and home boarding.
+Its approach/hit and remount samples derive from the production timetable, not
+from distance divided by cruise speed; earlier dwells must be included. The
+departure fixture advances both the remaining countdown and active trip clock
+to a service-coherent departure. Original hit, room-move, native and source/stop
+assertions/timeouts remain. These direct geometry/clock consumers add no service
+history, admission or native-close authority; the existing Q49 model and native
+recovery consumers remain required in their original scope.

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { BIN_DEPARTURE_MS, type BinEntry } from "../../../../../shared/bin";
 import { BUS_SEATS, BUS_W } from "../townBusGeometry";
 import { layoutTown, TOWN_TILE as T, TownGround } from "../townLayout";
-import { BUS_BRAKE, busApproachMs } from "./townBusRoute";
+import { townBusRoute, townBusTimetable } from "./townBusRoute";
 import {
   inTownBusDropZone,
   townBusAt,
@@ -104,11 +104,10 @@ const TOTAL = 30_000 + BIN_DEPARTURE_MS;
 const HALF_GONE = BIN_DEPARTURE_MS / 2;
 const arrivalMs = (duration = 30_000) => {
   const { layout } = scene([]);
-  const finalAt = layout.busStop.x * T + T / 2 - 4;
-  return (
-    ((finalAt + BUS_BRAKE / 2) / (layout.width * T + BUS_W)) *
-    busApproachMs(duration)
-  );
+  return townBusTimetable(
+    townBusRoute([layout.busStop], layout.width * T),
+    duration,
+  ).stops[0]!.arriveMs;
 };
 
 test("a bus follows its fixed route clock, waits at the occupied stop and leaves by close", () => {

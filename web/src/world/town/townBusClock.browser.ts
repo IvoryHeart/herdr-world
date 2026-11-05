@@ -1,10 +1,10 @@
 import { TOWN_TILE as T } from "./townLayout";
 import {
-  BUS_BRAKE,
+  townBusAt as timetableAt,
   townBusPlan,
   townBusPosition,
   townBusRoute,
-  townBusSpeed,
+  townBusTimetable,
 } from "./scene/townBusRoute";
 
 /** Pick an approach/arrival sample from the actual rendered stop geometry. */
@@ -35,8 +35,20 @@ export function townBusClockSample(host: HTMLElement) {
       Math.abs(s.footY - (Number.parseFloat(rider.style.top) + 4)) < 0.01,
   );
   if (!stop) throw new Error("waiting rider does not identify a rendered stop");
-  const speed = townBusSpeed(route, 30_000);
-  const arrival = Math.ceil((stop.at + BUS_BRAKE / 2) / speed);
+  const timetable = townBusTimetable(route, 30_000);
+  const arrival = Math.ceil(
+    timetable.stops.find((s) => s.id === stop.id)!.arriveMs,
+  );
+  // Invert the monotone source timetable to enter this street. A bare
+  // distance/cruise conversion omits every earlier ramp and dwell.
+  const legStart = stop.leg * route.legLength;
+  let lo = 0,
+    hi = arrival;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (timetableAt(timetable, mid).at < legStart) lo = mid;
+    else hi = mid;
+  }
   const plan = townBusPlan({
     route,
     tripDurationMs: 30_000,
@@ -48,8 +60,10 @@ export function townBusClockSample(host: HTMLElement) {
     stops: route.stops.map((s) => s.id),
     position: (elapsed: number) => townBusPosition(plan, elapsed),
     before: Math.max(
-      Math.ceil((stop.leg * route.legLength) / speed) + 1,
-      arrival - 1_000,
+      Math.ceil(hi) + 1,
+      // The final brake stays beside the stop that the real chip flew to;
+      // earlier cruise can be behind Town chrome on the left.
+      Math.floor(arrival - Math.min(1_000, timetable.rampMs / 2)),
     ),
     arrival,
   };

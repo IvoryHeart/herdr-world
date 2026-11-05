@@ -7,9 +7,8 @@ import {
 } from "../../../web/src/world/town/townLayout";
 import { townBusScene } from "../../../web/src/world/town/scene/townBus";
 import {
-  BUS_BRAKE,
   townBusRoute,
-  townBusSpeed,
+  townBusTimetable,
 } from "../../../web/src/world/town/scene/townBusRoute";
 import {
   townBusChipStop,
@@ -74,8 +73,9 @@ test("I2: new observers and remounted layers reconstruct a reset and held trip f
   const finalFounder = { ...rider("", TOTAL).entry, workspace_id: "w2" };
   registry.add(finalFounder);
   const route = townBusRoute(layout.busStops, layout.width * T);
-  const speed = townBusSpeed(route, 30_000);
-  const arrival = Math.ceil((route.stops.at(-1)!.at + BUS_BRAKE / 2) / speed);
+  const arrival = Math.ceil(
+    townBusTimetable(route, 30_000).stops.at(-1)!.arriveMs,
+  );
   now = arrival - 1_000;
   const before = scene(registry.list().entries).scene.buses[0]!;
   expect(before.phase).toBe("arriving");

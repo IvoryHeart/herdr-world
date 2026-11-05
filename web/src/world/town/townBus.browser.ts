@@ -307,9 +307,13 @@ export async function checkTownBus(
     () => host.querySelector(".town-bus-held .world-bin-resume") !== null,
     "a held bus offers no Resume",
   );
-  // Resume with the countdown over: the bus drives away.
-  for (const entry of bin.state.entries)
+  // Resume at a coherent service sample: countdown over, active trip clock
+  // past the approach. Changing just remaining_ms would depart from a bus
+  // still at its incoming position, which the real service cannot publish.
+  for (const entry of bin.state.entries) {
     entry.remaining_ms = BIN_DEPARTURE_MS - 300;
+    entry.trip_elapsed_ms = 30_000 + 300;
+  }
   host
     .querySelector<HTMLButtonElement>(".town-bus-held .world-bin-resume")!
     .click();

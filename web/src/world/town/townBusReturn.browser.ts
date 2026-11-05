@@ -2,7 +2,7 @@ import { BIN_DEPARTURE_MS, type BinEntry } from "../../../../shared/bin";
 import { TownBusLayer, BUS_FADE_MS } from "./townBusLayer";
 import { BUS_H, BUS_W } from "./townBusGeometry";
 import { townRoomStops } from "./townBusStop";
-import { BUS_BRAKE, townBusRoute, townBusSpeed } from "./scene/townBusRoute";
+import { townBusRoute, townBusTimetable } from "./scene/townBusRoute";
 import { layoutTown } from "./townLayout";
 
 /** Exercise the real Pixi layer on an injected observation clock in Chrome. */
@@ -58,18 +58,20 @@ function checkReturnLayer(
     trip_joined_ms: 0,
   });
   const route = townBusRoute(layout.busStops, layout.width * 16);
-  const finalAt = route.stops.find((s) => s.id === last[1])!.at;
-  const joined = (finalAt + BUS_BRAKE / 2) / townBusSpeed(route, 30_000) + 500;
+  const timetable = townBusTimetable(route, 30_000);
+  const final = timetable.stops.find((s) => s.id === last[1])!;
+  const joined = final.leaveMs + 500;
   const earlier = { ...entry("earlier"), trip_joined_ms: orphan ? joined : 0 };
   let entries = [entry("final"), earlier];
   let now = 0;
+  let paused = true;
   const make = () =>
     new TownBusLayer({
       layout: () => layout,
       entries: () => entries,
       remaining: (e) => e.remaining_ms,
       elapsed: (e) => e.trip_elapsed_ms!,
-      paused: () => true,
+      paused: () => paused,
       agent: () => undefined,
       roomOf: (id) => (id === "earlier" ? first[0] : last[0]),
       now: () => now,
@@ -91,8 +93,42 @@ function checkReturnLayer(
     }));
   const observations: unknown[] = [];
   const sample = () =>
-    observations.push({ now, pose: pose(layer), sprites: sprites() });
+    observations.push({
+      now,
+      activeElapsed: entries[0]?.trip_elapsed_ms,
+      pose: pose(layer),
+      sprites: sprites(),
+    });
   try {
+    if (!orphan) {
+      paused = false;
+      for (const stop of timetable.stops.filter((s) => s.at <= final.at)) {
+        for (const elapsed of [
+          stop.arriveMs,
+          (stop.arriveMs + stop.leaveMs) / 2,
+          stop.leaveMs - 0.001,
+        ]) {
+          entries = entries.map((e) => ({ ...e, trip_elapsed_ms: elapsed }));
+          layer.update(false);
+          const bus = layer.scene!.buses[0];
+          check(
+            !!bus &&
+              Math.abs(bus.at - stop.at) < 0.01 &&
+              bus.speed === 0 &&
+              bus.doorsOpen,
+            `all-stops: missing visible doors-open standstill at ${stop.id}, elapsed=${elapsed}`,
+          );
+          if (stop.id === first[1])
+            check(
+              bus?.riders.some((r) => r.entryId === "earlier") === true,
+              "all-stops: the rider must board during its intermediate home dwell",
+            );
+          sample();
+        }
+      }
+      entries = entries.map((e) => ({ ...e, trip_elapsed_ms: 30_000 }));
+      paused = true;
+    }
     layer.update(false);
     const old = layer.scene!.buses[0]!;
     check(
