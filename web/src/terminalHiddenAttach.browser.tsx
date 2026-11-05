@@ -4,7 +4,7 @@
 // shown, the terminal fits its container and resizes as before.
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { bridge, type ConnectionClient, type TerminalPush } from "./api";
+import { bridge, type ConnectionClient } from "./api";
 import { __storeTesting, store, type State } from "./store";
 import { TerminalView } from "./components/TerminalView";
 import type { Pane, PaneLayout } from "./types";
@@ -49,26 +49,7 @@ const client: ConnectionClient = {
 };
 let current = client;
 bridge.connection = () => current;
-const terminalListeners = new Set<(frame: TerminalPush) => void>();
-bridge.onTerminal = (listener) => {
-  terminalListeners.add(listener);
-  return () => terminalListeners.delete(listener);
-};
-/** A frame from Herdr at the terminal's actual size. */
-const push = (width: number, height: number) =>
-  flushSync(() => {
-    for (const listener of terminalListeners)
-      listener({
-        connection_id: client.connectionId,
-        connection_generation: 1,
-        terminal_id: pane.terminal_id,
-        width,
-        height,
-        full: true,
-        mouse_reporting: false,
-        bytes: btoa("x"),
-      });
-  });
+bridge.onTerminal = () => () => {};
 
 const pane: Pane = {
   pane_id: "pane",
@@ -277,69 +258,16 @@ try {
     `the shown terminal did not claim its size: ${order.join(", ")}`,
   );
 
-  // While it stays shown, another client (an older World page) attaches at
-  // 13×1: Herdr's frames arrive squeezed. The view claims its size back once,
-  // not per frame, and re-arms only after an unsqueezed frame.
+  // A click on the shown terminal claims its size too (pointerdown focus):
+  // with Herdr, the client that focused a terminal last sizes it.
   calls.length = 0;
-  push(12, 2);
-  push(12, 2);
-  push(12, 2);
+  host
+    .querySelector(".xterm-screen")!
+    .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
   await frame();
   check(
     of("terminal.focus").length === 1,
-    `a shown terminal did not reclaim a squeeze exactly once: ${of("terminal.focus").length}`,
-  );
-  push(80, 24);
-  push(12, 2);
-  await frame();
-  check(
-    of("terminal.focus").length === 2,
-    "a later squeeze, after a healthy frame, was not reclaimed",
-  );
-  push(40, 12);
-  await frame();
-  check(
-    of("terminal.focus").length === 2,
-    "a usable smaller size from another viewer was fought over",
-  );
-
-  // Hidden now: a background page keeps its geometry, and a container can be
-  // hidden before ResizeObserver runs. Neither claims (rev-sol on #650).
-  push(80, 24);
-  calls.length = 0;
-  const visibility = Object.getOwnPropertyDescriptor(
-    document,
-    "visibilityState",
-  );
-  Object.defineProperty(document, "visibilityState", {
-    configurable: true,
-    get: () => "hidden",
-  });
-  push(12, 2);
-  await frame();
-  check(of("terminal.focus").length === 0, "a background page claimed");
-  if (visibility)
-    Object.defineProperty(document, "visibilityState", visibility);
-  else delete (document as { visibilityState?: unknown }).visibilityState;
-  const shownStyle = host.style.cssText;
-  host.style.display = "none";
-  push(12, 2);
-  await frame();
-  check(
-    of("terminal.focus").length === 0,
-    "a container hidden before ResizeObserver claimed",
-  );
-  host.style.cssText = shownStyle;
-  // Shown again it claims as any reveal does; then the squeeze is still
-  // claimed once, since the hidden frames spent nothing.
-  await until(() => of("terminal.focus").length > 0, "claim on reveal");
-  for (let index = 0; index < 3; index += 1) await frame();
-  calls.length = 0;
-  push(12, 2);
-  await frame();
-  check(
-    of("terminal.focus").length === 1,
-    "a squeeze after being hidden was not claimed",
+    `a click on the shown terminal did not claim it: ${of("terminal.focus").length}`,
   );
 
   // A split tab shown after Chat: every pane fits, but only the selected
@@ -404,6 +332,40 @@ try {
   check(
     claims.length === 1 && claims[0] === pane.terminal_id,
     `a shown split claimed for ${JSON.stringify(claims)}, not only the selected pane`,
+  );
+  // G2: revealed while the document is hidden (a background page whose
+  // container gets a size), it does not claim. Once visible, a squeeze from
+  // another client is still claimed.
+  flushSync(() => {
+    __storeTesting.replaceState({ ...store.get(), panes: [pane], layout });
+  });
+  mountHidden(layout);
+  await hiddenAttach("hidden before reveal");
+  for (let index = 0; index < 10; index += 1) await frame();
+  calls.length = 0;
+  const g2Visibility = Object.getOwnPropertyDescriptor(
+    document,
+    "visibilityState",
+  );
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => "hidden",
+  });
+  host.style.cssText = "position:fixed;display:flex;width:60vw;height:50vh";
+  for (let index = 0; index < 10; index += 1) await frame();
+  check(
+    of("terminal.focus").length === 0,
+    "a terminal revealed in a background page claimed",
+  );
+  if (g2Visibility)
+    Object.defineProperty(document, "visibilityState", g2Visibility);
+  else delete (document as { visibilityState?: unknown }).visibilityState;
+  // Visible again, its pending claim is made at the next fit.
+  host.style.width = "62vw";
+  await until(() => of("terminal.focus").length > 0, "claim once visible");
+  check(
+    of("terminal.focus").length === 1,
+    "a background reveal's claim was not made once visible",
   );
 } catch (error) {
   failures.push(String(error));

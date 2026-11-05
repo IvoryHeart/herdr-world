@@ -23,8 +23,6 @@ const layout = (width: number, height: number): PaneLayout => ({
   ],
 });
 const xterm = { cols: 13, rows: 1 };
-/** A displayed container (the live visibility check before a claim). */
-const shown = { clientWidth: 600, clientHeight: 400 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** A client whose pane.layout answers come from `answers`, in order. */
@@ -215,20 +213,6 @@ test("a replacement runtime never reuses the retired runtime's good size", () =>
   expect(replacement.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
 });
 
-test("a shown terminal reclaims a squeeze once, re-armed by a healthy frame", () => {
-  const one = client([]);
-  const view = hiddenView(one.value);
-  expect(view.size.squeezedFrame(12, 2, shown)).toBe(false); // not shown yet
-  view.size.fitted({ cols: 96, rows: 27 });
-  expect(view.size.squeezedFrame(96, 27, shown)).toBe(false);
-  expect(view.size.squeezedFrame(12, 2, shown)).toBe(true);
-  expect(view.size.squeezedFrame(12, 2, shown)).toBe(false);
-  expect(view.size.squeezedFrame(60, 20, shown)).toBe(false); // usable: theirs
-  expect(view.size.squeezedFrame(12, 2, shown)).toBe(true);
-  view.size.hide();
-  expect(view.size.squeezedFrame(12, 2, shown)).toBe(false);
-});
-
 /** A tab of `count` panes side by side (or stacked), sized like Herdr's. */
 const split = (
   width: number,
@@ -274,30 +258,6 @@ test("only the selected pane claims its size", () => {
   view.refs.paneLayoutRef.current = layout(120, 40);
   view.resolve();
   expect(view.size.fitted({ cols: 96, rows: 27 })).toBe(false);
-  expect(view.size.squeezedFrame(12, 2, shown)).toBe(false);
-});
-
-test("a squeezed frame claims only when the tab it implies is squeezed", () => {
-  // Found by rev-opus on #650: the selected pane of a legitimately split
-  // 90-column tab is 27 columns wide; its frames must not claim.
-  const one = client([]);
-  const view = hiddenView(one.value);
-  view.refs.paneLayoutRef.current = split(90, 40, 3);
-  view.resolve();
-  view.size.fitted({ cols: 27, rows: 38 });
-  expect(view.size.squeezedFrame(27, 38, shown)).toBe(false);
-  expect(view.size.squeezedFrame(1, 1, shown)).toBe(true); // implies 12×3
-});
-
-test("a hidden container neither claims nor spends the claim", () => {
-  const one = client([]);
-  const view = hiddenView(one.value);
-  view.refs.paneLayoutRef.current = layout(120, 40);
-  view.resolve();
-  view.size.fitted({ cols: 96, rows: 27 });
-  const gone = { clientWidth: 0, clientHeight: 0 };
-  expect(view.size.squeezedFrame(12, 2, gone)).toBe(false);
-  expect(view.size.squeezedFrame(12, 2, shown)).toBe(true);
 });
 
 test("a tiny shown fit is never the hidden fallback for a squeezed tab", () => {
@@ -331,4 +291,19 @@ test("a tiny shown fit is never the fallback for a failed read", async () => {
   view.resolve();
   await settle();
   expect(view.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
+});
+
+test("a read that settles after the view is gone neither retries nor stays", async () => {
+  // TerminalView's teardown clears desiredTerminalRef; the settle checks it.
+  const held = Promise.withResolvers<unknown>();
+  const one = client([held.promise]);
+  const view = hiddenView(one.value);
+  view.resolve();
+  view.refs.desiredTerminalRef.current = null; // unmounted
+  held.resolve({ layout: layout(120, 40) });
+  await settle();
+  expect(view.retries()).toBe(0);
+  view.refs.desiredTerminalRef.current = "terminal";
+  expect(view.resolve()).toBeNull(); // a fresh read, not the settled one
+  expect(one.reads).toHaveLength(2);
 });

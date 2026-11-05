@@ -26,6 +26,9 @@ const impliedTab = (
   layout: PaneLayout | null | undefined,
   paneId: string | undefined,
 ) => terminalEndpointViewportSize(size, layout, paneId) ?? size;
+/** The page is visible: a background page never claims a size. */
+const pageVisible = () =>
+  typeof document === "undefined" || document.visibilityState !== "hidden";
 const sizeKey = (client: ConnectionClient, terminalId: string) =>
   `${client.connectionId}\0${client.serverRuntimeGeneration}\0${terminalId}`;
 /** One pane.layout read, valid only for the client and pane that made it. */
@@ -48,16 +51,16 @@ type LayoutRead = {
  *
  * Herdr sizes a terminal by the client that attached or focused it last, so
  * World never adopts a squeezed size: below the floor a hidden terminal uses
- * the last good size, or the default. And a terminal shown after being hidden
- * claims its fitted size (`fitted`), healing a pane another client squeezed.
+ * the last good size, or the default. And the selected pane, shown after
+ * being hidden, claims its fitted size (`fitted`), healing a pane another
+ * client squeezed; a click claims it too (TerminalView's pointerdown focus).
+ * Herdr's frames arrive at each viewer's own size, so a squeeze while shown
+ * is not observable from them.
  */
 export class TerminalAttachSize {
   private read: LayoutRead | null = null;
   private waiting = false;
   private hidden = false;
-  /** The size this view is shown at, while shown. */
-  private shownAt: TerminalSize | null = null;
-  private claimedSqueeze = false;
 
   constructor(
     private readonly view: {
@@ -177,7 +180,6 @@ export class TerminalAttachSize {
   /** The terminal is not displayed (its container has no size). */
   hide() {
     this.hidden = true;
-    this.shownAt = null;
   }
 
   /**
@@ -191,45 +193,10 @@ export class TerminalAttachSize {
         sizeKey(this.view.currentClientRef.current, terminalId),
         size,
       );
+    // In a background page the claim waits for the next visible fit.
+    if (!pageVisible()) return false;
     const claim = this.hidden && this.view.isActivePaneRef.current;
     this.hidden = false;
-    this.shownAt = size;
     return claim;
-  }
-
-  /**
-   * A frame from Herdr at `width`×`height`. Returns whether it shows another
-   * client squeezed this shown terminal, so it must claim its size again:
-   * once per squeeze, re-armed by the next unsqueezed frame. A smaller but
-   * usable size from another viewer is theirs to keep (last focus wins).
-   */
-  squeezedFrame(
-    width: number,
-    height: number,
-    container: { clientWidth: number; clientHeight: number },
-  ) {
-    if (!this.view.isActivePaneRef.current) return false;
-    // Hidden now (a background page, or hidden before ResizeObserver runs):
-    // neither claim nor spend the one claim a later recovery needs.
-    if (
-      (typeof document !== "undefined" &&
-        document.visibilityState === "hidden") ||
-      !container.clientWidth ||
-      !container.clientHeight
-    )
-      return false;
-    const { paneLayoutRef, paneTabIdRef, paneIdRef } = this.view;
-    const stored = paneLayoutRef.current;
-    const layout = stored?.tab_id === paneTabIdRef.current ? stored : null;
-    const tab = (size: TerminalSize) =>
-      impliedTab(size, layout, paneIdRef.current);
-    if (!this.shownAt || terminalSqueezed(tab(this.shownAt))) return false;
-    if (!terminalSqueezed(tab({ cols: width, rows: height }))) {
-      this.claimedSqueeze = false;
-      return false;
-    }
-    if (this.claimedSqueeze) return false;
-    this.claimedSqueeze = true;
-    return true;
   }
 }

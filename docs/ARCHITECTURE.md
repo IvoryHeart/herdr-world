@@ -344,10 +344,12 @@ attached or focused it, so a hidden terminal never adopts a squeezed size: when
 its tab's area is below 30×5 (`shared/terminalSize.ts`; observed squeezes are
 12–24 columns by 1–3 rows, while split panes and narrow viewers are legitimately
 small), it uses this browser's last good size for it in that runtime, or 100×30.
-The selected pane, shown after being hidden or receiving frames whose implied
-tab is squeezed while it is displayed, sends its fitted size and focuses the
-pane once, claiming the size back. A remembered size is a fallback only if its
-implied tab is not squeezed.
+The selected pane, shown after being hidden while the page is visible, sends
+its fitted size and focuses the pane once, claiming the size back; a click on a
+shown terminal claims it the same way. Herdr's frames arrive at each viewer's
+own size, so a squeeze by another client while a terminal stays shown is not
+observable from them: reveal or a click heals it. A remembered size is a
+fallback only if its implied tab is not squeezed.
 Other panes only resize, since Herdr's focus is also the tab's cursor.
 The service's popup observer is an app client and
 connects at the session's current app size (`pane.layout` area plus offset;

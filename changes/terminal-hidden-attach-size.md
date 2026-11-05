@@ -8,4 +8,5 @@
   Chat can read them.
 - A terminal another client squeezed (for example an older World page) is
   never kept that small by World: a hidden terminal uses its last good size
-  instead, and showing the Terminal view gives the agent its full size back.
+  instead, and showing or clicking the Terminal view gives the agent its full
+  size back.
