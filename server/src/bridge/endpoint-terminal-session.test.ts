@@ -487,6 +487,67 @@ test("popup identity updates without any attached pane viewer", async () => {
   }
 });
 
+test.each([
+  [
+    "the session's current size",
+    async () => ({ cols: 120, rows: 40 }),
+    120,
+    40,
+  ],
+  [
+    "80×24 only when that size cannot be read",
+    async () => {
+      throw new Error("pane.layout failed");
+    },
+    80,
+    24,
+  ],
+] as const)(
+  "the popup observer connects at %s",
+  async (_label, appViewportSize, cols, rows) => {
+    // Herdr resizes the session to every app client's handshake: a hidden
+    // observer started by a page load must not shrink the agents' panes.
+    let surface = null as { cols: number; rows: number } | null;
+    const socketPath = await startSessionServer({
+      initialSurface: {
+        frame: {
+          cells: [cell("x")],
+          width: 1,
+          height: 1,
+          cursor: null,
+          hyperlinks: [],
+        },
+        panes: [],
+      },
+      onHello: (hello) => {
+        surface = hello.surface_size;
+      },
+    });
+    const bridge = createTerminalBridge({
+      clientSocketPath: socketPath,
+      herdrProtocol: async () => 22,
+      lookupPaneId: async () => null,
+      appViewportSize,
+      broadcast: () => {},
+      safeSend: () => true,
+      clientLabel: () => "test",
+      markRpcError: () => {},
+    });
+    try {
+      await bridge.handleTerminalRpc(
+        {} as ServerWebSocket<unknown>,
+        "watch",
+        "terminal.watch_popup",
+        {},
+      );
+      await settleUntil(() => surface !== null);
+      expect(surface).toEqual({ cols, rows });
+    } finally {
+      bridge.dispose();
+    }
+  },
+);
+
 test.each(["cursor only", "other split pane"])(
   "restores a hidden cursor when a patch updates %s",
   async (update) => {

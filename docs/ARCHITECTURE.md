@@ -334,7 +334,14 @@ remains available for cropping and cursor delivery. Each patch replaces the
 complete cursor state, including `null` to clear it. Pane topology changes
 require a full surface; patches naming unknown panes are discarded.
 
-`terminal.attach` carries pane content dimensions in `cols`/`rows`. When layout
+`terminal.attach` carries pane content dimensions in `cols`/`rows`. Herdr
+applies every attach's size to the pane for all of its viewers, so a terminal
+that is not displayed (World's parked creation endpoint, or a window showing
+Chat) attaches at the pane's current size from the tab layout, or from one
+`pane.layout` read, instead of its unfitted xterm size; it resizes the pane
+only once shown and fitted. The service's popup observer is an app client and
+connects at the session's current app size (`pane.layout` area plus offset),
+since an app client's handshake resizes every pane. When layout
 is available, the browser also supplies `surface_cols`/`surface_rows` for the
 complete tab, including pane borders but excluding app sidebar/tab-bar insets.
 The bridge validates this optional pair as integers in 1..65535 and uses it in

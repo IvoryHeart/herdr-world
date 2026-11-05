@@ -358,6 +358,27 @@ export function createLegacyConnectionRuntime(args: {
         )?.workspace_id ?? null
       );
     },
+    appViewportSize: async () => {
+      const panes = (await herdr.call("pane.list", {}, 5000))?.panes;
+      const pane = Array.isArray(panes)
+        ? (panes.find((item: { focused?: boolean }) => item?.focused) ??
+          panes[0])
+        : null;
+      if (typeof pane?.pane_id !== "string") return null;
+      const area = (
+        await herdr.call("pane.layout", { pane_id: pane.pane_id }, 5000)
+      )?.layout?.area;
+      const cols = Number(area?.x) + Number(area?.width);
+      const rows = Number(area?.y) + Number(area?.height);
+      return Number.isInteger(cols) &&
+        Number.isInteger(rows) &&
+        cols > 0 &&
+        rows > 0 &&
+        cols <= 65_535 &&
+        rows <= 65_535
+        ? { cols, rows }
+        : null;
+    },
     lookupPaneId: async (terminalId) => {
       try {
         const result = await herdr.call("pane.list", {}, 5000);

@@ -1,0 +1,217 @@
+// A terminal that is not shown (World parks the selected pane's terminal for
+// creation readiness; a window on Chat hides its terminal) must not resize
+// the Herdr pane: Herdr applies every attach's size for every viewer. Once
+// shown, the terminal fits its container and resizes as before.
+import { createRoot } from "react-dom/client";
+import { flushSync } from "react-dom";
+import { bridge, type ConnectionClient } from "./api";
+import { __storeTesting, store, type State } from "./store";
+import { TerminalView } from "./components/TerminalView";
+import type { Pane, PaneLayout } from "./types";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/layout/app.css";
+
+const failures: string[] = [];
+const check = (condition: boolean, message: string) => {
+  if (!condition) failures.push(message);
+};
+const frame = () =>
+  new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
+const until = async (condition: () => boolean, message: string) => {
+  const deadline = performance.now() + 5000;
+  while (!condition()) {
+    if (performance.now() > deadline) throw new Error(`Timed out: ${message}`);
+    await frame();
+  }
+};
+
+const calls: { method: string; params: Record<string, unknown> }[] = [];
+// What Herdr answers to `pane.layout` in the current scenario.
+let paneLayoutReply: () => Promise<unknown> = async () => ({});
+const client: ConnectionClient = {
+  connectionId: "hidden-attach-test",
+  generation: 1,
+  serverRuntimeGeneration: 1,
+  isCurrent: () => true,
+  acceptsServerGeneration: () => true,
+  call: async (method, params = {}) => {
+    calls.push({ method, params: params as Record<string, unknown> });
+    if (method === "pane.layout") return paneLayoutReply();
+    return {};
+  },
+};
+bridge.connection = () => client;
+bridge.onTerminal = () => () => {};
+
+const pane: Pane = {
+  pane_id: "pane",
+  terminal_id: "terminal",
+  workspace_id: "workspace",
+  tab_id: "tab",
+  focused: true,
+  agent_status: "idle",
+  revision: 1,
+};
+// Herdr's current geometry: another viewer sized the tab to 160×45.
+const layout: PaneLayout = {
+  workspace_id: pane.workspace_id,
+  tab_id: pane.tab_id,
+  zoomed: false,
+  splits: [],
+  area: { x: 0, y: 0, width: 160, height: 45 },
+  focused_pane_id: pane.pane_id,
+  panes: [
+    {
+      pane_id: pane.pane_id,
+      focused: true,
+      rect: { x: 0, y: 0, width: 160, height: 45 },
+    },
+  ],
+};
+
+const host = document.createElement("div");
+host.className = "workspace-terminal-surface";
+// Parked like `.world-terminal-parking`: mounted, but not displayed.
+host.style.cssText = "position:fixed;inset:0;display:none";
+document.body.append(host);
+const root = createRoot(host);
+const of = (method: string) => calls.filter((call) => call.method === method);
+
+const sized = (width: number, height: number): PaneLayout => ({
+  ...layout,
+  area: { x: 0, y: 0, width, height },
+  panes: [{ ...layout.panes[0]!, rect: { x: 0, y: 0, width, height } }],
+});
+let mountId = 0;
+const mountHidden = (storeLayout: PaneLayout | null) => {
+  calls.length = 0;
+  mountId += 1;
+  host.style.cssText = "position:fixed;inset:0;display:none";
+  flushSync(() => {
+    __storeTesting.replaceState({
+      ...store.get(),
+      status: "connected" as const,
+      connectionPaused: false,
+      activeConnectionId: client.connectionId,
+      connectionGeneration: 1,
+      serverRuntimeGeneration: 1,
+      connections: [
+        {
+          id: client.connectionId,
+          label: "Synthetic terminal",
+          source: "test",
+          is_default: true,
+          state: "ready",
+          generation: 1,
+        },
+      ],
+      panes: [pane],
+      selectedPaneId: pane.pane_id,
+      error: null,
+      pendingFocusWorkspaceId: null,
+      layout: storeLayout,
+    } satisfies State);
+    root.render(
+      <TerminalView
+        key={mountId}
+        paneId={pane.pane_id}
+        terminalTheme={{ background: "#171922", foreground: "#dddddd" }}
+        terminalFontScale={100}
+        showMobileKeys={false}
+      />,
+    );
+  });
+};
+const hiddenAttach = async (label: string) => {
+  await until(
+    () => of("terminal.attach").length > 0,
+    `${label}: hidden attach`,
+  ).catch((error) => {
+    throw new Error(
+      `${error} after ${calls.map((call) => call.method).join(", ")}`,
+    );
+  });
+  return of("terminal.attach")[0]!.params;
+};
+
+try {
+  // The store has the tab's layout: no read, and the pane keeps its size. A
+  // single pane reserves its right-edge column, so the xterm size is 159×45
+  // and the tab surface stays exactly 160×45.
+  mountHidden(layout);
+  let attach = await hiddenAttach("store layout");
+  check(
+    attach.cols === 159 && attach.rows === 45,
+    `hidden attach used the pane's size, got ${attach.cols}×${attach.rows}`,
+  );
+  check(
+    attach.surface_cols === 160 && attach.surface_rows === 45,
+    `hidden attach kept the tab surface, got ${attach.surface_cols}×${attach.surface_rows}`,
+  );
+  check(
+    attach.relay_cols === undefined ||
+      (attach.relay_cols === 160 && attach.relay_rows === 45),
+    `hidden attach kept the relay size, got ${attach.relay_cols}×${attach.relay_rows}`,
+  );
+  check(of("pane.layout").length === 0, "a known layout was read again");
+  for (let index = 0; index < 10; index += 1) await frame();
+  check(of("terminal.resize").length === 0, "a hidden terminal sent a resize");
+
+  // The store has no layout for the tab yet (a page still loading): one
+  // pane.layout read gives the pane's size before the attach.
+  paneLayoutReply = async () => ({ layout: sized(120, 40) });
+  mountHidden(null);
+  attach = await hiddenAttach("read layout");
+  check(
+    of("pane.layout").length === 1 &&
+      of("pane.layout")[0]!.params.pane_id === pane.pane_id,
+    "the hidden terminal did not read its pane's layout once",
+  );
+  check(
+    attach.cols === 119 &&
+      attach.rows === 40 &&
+      attach.surface_cols === 120 &&
+      attach.surface_rows === 40,
+    `the read layout did not size the attach, got ${attach.cols}×${attach.rows} (${attach.surface_cols}×${attach.surface_rows})`,
+  );
+
+  // An unreadable layout still attaches, so the endpoint is never withheld.
+  paneLayoutReply = async () => {
+    throw new Error("pane.layout failed");
+  };
+  mountHidden(null);
+  await hiddenAttach("failed read");
+  for (let index = 0; index < 10; index += 1) await frame();
+  check(of("terminal.resize").length === 0, "a hidden terminal sent a resize");
+
+  // Shown: it fits its container and resizes the pane to what is visible.
+  host.style.display = "flex";
+  host.style.inset = "auto";
+  host.style.width = "60vw";
+  host.style.height = "50vh";
+  await until(() => of("terminal.resize").length > 0, "shown resize");
+  const resizes = of("terminal.resize");
+  const resize = resizes[resizes.length - 1]!.params;
+  const screen = host.querySelector(".xterm-screen")!.getBoundingClientRect();
+  check(
+    typeof resize.cols === "number" &&
+      typeof resize.rows === "number" &&
+      resize.cols < 159 &&
+      resize.rows < 45 &&
+      resize.cols > 4 &&
+      resize.rows > 2,
+    `the shown terminal did not fit its container, got ${resize.cols}×${resize.rows}`,
+  );
+  check(
+    screen.width <= host.getBoundingClientRect().width + 1,
+    "the shown terminal overflows its container",
+  );
+} catch (error) {
+  failures.push(String(error));
+} finally {
+  flushSync(() => root.unmount());
+  await fetch("/result", { method: "POST", body: JSON.stringify(failures) });
+}
