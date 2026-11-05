@@ -1178,7 +1178,7 @@
         "server/src/agent/asked-questions.test.ts",
         "server/src/agent/trust-prompt.test.ts",
         "server/src/agent/conversation-questions.test.ts",
-        "web/src/world/QuestionCards.browser.test.ts",
+        "web/src/world/NeedsYouCard.browser.test.ts",
         "server/src/agent/prompt-answer.test.ts",
         "web/src/promptAnswers.test.ts",
         "server/src/agent/command-menu.test.ts",
