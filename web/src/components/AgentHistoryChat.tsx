@@ -18,9 +18,12 @@ import {
   ChevronRight,
   CircleSlash,
   Copy,
+  Square,
+  Volume2,
   Wrench,
   X,
 } from "lucide-react";
+import { useChatSpeech } from "../useChatSpeech";
 import { copyTextWithFeedback } from "../copyText";
 import { formatUiDateTime } from "../uiLocale";
 import { HISTORY_PREVIEW_CHARS } from "./AgentHistoryCard";
@@ -69,6 +72,7 @@ const ChatBubble = memo(function ChatBubble({
   matched = null,
   decorate,
   decorationToken,
+  speech,
   onOpen,
   from = null,
   fromKind = "agent",
@@ -86,6 +90,7 @@ const ChatBubble = memo(function ChatBubble({
   matched?: "words" | "order" | null;
   decorate?: HistoryDecorator;
   decorationToken?: unknown;
+  speech: ReturnType<typeof useChatSpeech>;
   onOpen: (entry: HistoryEntry) => void;
 }) {
   // A compaction summary is long and written by Claude Code, not the user:
@@ -128,6 +133,18 @@ const ChatBubble = memo(function ChatBubble({
         ) : null}
       </article>
     );
+  const playback = speech.state?.messageId === entry.id ? speech.state : null;
+  const speaking = playback?.status === "speaking";
+  const status =
+    playback?.status === "failed"
+      ? playback.error
+      : playback?.status === "completed"
+        ? "Speech completed"
+        : playback?.status === "stopped"
+          ? "Speech stopped"
+          : speaking
+            ? "Speaking"
+            : "";
   return (
     <article
       className={[
@@ -220,6 +237,32 @@ const ChatBubble = memo(function ChatBubble({
         >
           <Copy size={12} />
         </button>
+        {entry.role === "assistant" ? (
+          <button
+            type="button"
+            className={`agent-history-copy agent-history-speak${speaking ? " is-speaking" : ""}`}
+            disabled={!speech.supported || !entry.text.trim()}
+            aria-label={
+              speaking ? "Stop speaking message" : "Speak assistant message"
+            }
+            aria-pressed={speaking}
+            title={
+              !speech.supported
+                ? "Speech is not supported by this browser"
+                : speaking
+                  ? "Stop"
+                  : "Speak"
+            }
+            onClick={() => speech.toggle(entry.id, entry.text)}
+          >
+            {speaking ? <Square size={12} /> : <Volume2 size={12} />}
+          </button>
+        ) : null}
+        {status ? (
+          <span className="agent-history-speech-status" role="status">
+            {status}
+          </span>
+        ) : null}
       </div>
       {decoration?.after}
     </article>
@@ -608,6 +651,8 @@ export function AgentHistoryChat({
   followKey,
   toolLoading = EMPTY_LOADING,
   onLoadTool = noop,
+  speechActive = true,
+  speechScopeKey = "",
   onOpen,
   matchedIds,
   decorate,
@@ -655,8 +700,11 @@ export function AgentHistoryChat({
   // Tool entries whose redacted payload is being fetched.
   toolLoading?: ReadonlySet<string>;
   onLoadTool?: (entry: HistoryEntry) => void;
+  speechActive?: boolean;
+  speechScopeKey?: string;
   onOpen: (entry: HistoryEntry) => void;
 }) {
+  const speech = useChatSpeech(speechActive, speechScopeKey);
   const followRef = useRef(true);
   const rows = useMemo(
     () => (transcript ? chatRows(items, transcript.agents) : null),
@@ -863,6 +911,7 @@ export function AgentHistoryChat({
               decorationToken={decorationTokens?.get(
                 historyDecorationKey(item.entry),
               )}
+              speech={speech}
               onOpen={onOpen}
               {...senderProps(rows?.get(item.entry.id), transcript?.agent)}
             />
