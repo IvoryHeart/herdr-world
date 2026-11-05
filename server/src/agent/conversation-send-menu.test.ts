@@ -8,6 +8,7 @@ import { localAgentSessionFiles } from "./session-file-access";
 import { createSessionProjectionCache } from "./session-projection-cache";
 import { createAgentSessionResolverContext } from "./session-resolver";
 import type { HerdrCall } from "./session-types";
+import { TERMINAL_SIZE_FLOOR } from "../../../shared/terminalSize";
 
 // Chat sends by typing into the pane. With a harness menu open, typed text is
 // taken as keys and can pick the menu's options, so Chat must never send then.
@@ -44,22 +45,44 @@ function fakeHerdr() {
     status: "idle",
     screen: promptScreen,
     prompts: [] as string[],
+    rows: 24 as unknown,
+    terminal: "term-1",
+    sizePane: "w1:p1",
+    sequence: 3,
+    sessionFile: transcript,
+    reported: true,
+    agent: "claude",
+    alive: true,
+    onSize: null as (() => void | Promise<void>) | null,
   };
   const agent = () => ({
     pane_id: "w1:p1",
-    agent: "claude",
+    agent: state.agent,
     agent_status: state.status,
-    state_change_seq: 3,
+    state_change_seq: state.sequence,
+    terminal_id: state.terminal,
     terminal_title: "claude",
-    agent_session: {
-      source: "herdr:claude",
-      agent: "claude",
-      kind: "path",
-      value: transcript,
-    },
+    agent_session: state.reported
+      ? {
+          source: "herdr:claude",
+          agent: "claude",
+          kind: "path",
+          value: state.sessionFile,
+        }
+      : undefined,
   });
   const call: HerdrCall = async (method, params) => {
+    if (!state.alive) throw new Error("captured runtime retired");
     if (method === "agent.get") return { agent: agent() };
+    if (method === "pane.get") {
+      await state.onSize?.();
+      return {
+        pane: {
+          pane_id: state.sizePane,
+          scroll: { viewport_rows: state.rows },
+        },
+      };
+    }
     if (method === "pane.read")
       return { read: { pane_id: "w1:p1", text: state.screen } };
     if (method === "agent.prompt") {
@@ -76,6 +99,117 @@ function fakeHerdr() {
   });
   return { state, source };
 }
+
+test("menu size note uses measured rows and the shared floor only after a current command", async () => {
+  const { state, source } = fakeHerdr();
+  try {
+    const target = { pane_id: "w1:p1", menus: true };
+    state.rows = 2;
+    expect((await source.latest(target)).menu_unreadable).toBeUndefined();
+    const shown = await source.latest(target);
+    expect(
+      (
+        await source.send({
+          pane_id: target.pane_id,
+          text: "/model",
+          session_fingerprint: shown.session_fingerprint!,
+        })
+      ).status,
+    ).toBe("sent");
+    state.screen = "Select model\n…";
+    for (const rows of [
+      2,
+      TERMINAL_SIZE_FLOOR.rows,
+      9,
+      24,
+      undefined,
+      null,
+      "2",
+      0,
+      -1,
+      NaN,
+      1.5,
+    ]) {
+      state.rows = rows;
+      expect((await source.latest(target)).menu_unreadable).toEqual(
+        rows === 2 ? { reason: "terminal_too_small", rows: 2 } : undefined,
+      );
+    }
+    state.rows = 2;
+    state.screen = menuScreen;
+    const menu = await source.latest(target);
+    expect(menu.pending_prompt?.menu).toBeTruthy();
+    expect(menu.menu_unreadable).toBeUndefined();
+    state.screen = promptScreen;
+    expect(
+      (
+        await source.send({
+          pane_id: target.pane_id,
+          text: "Continue",
+          session_fingerprint: shown.session_fingerprint!,
+        })
+      ).status,
+    ).toBe("sent");
+    state.screen = "Select model\n…";
+    expect((await source.latest(target)).menu_unreadable).toBeUndefined();
+  } finally {
+    source.dispose();
+  }
+});
+
+test("late size reads cannot describe a changed native witness, session, command or runtime", async () => {
+  for (const change of [
+    "terminal",
+    "pane",
+    "sequence",
+    "session",
+    "unbound",
+    "codex",
+    "command",
+    "runtime",
+    "read-error",
+  ]) {
+    const { state, source } = fakeHerdr();
+    try {
+      const target = { pane_id: "w1:p1", menus: true };
+      const shown = await source.latest(target);
+      const fingerprint = shown.session_fingerprint!;
+      await source.send({
+        pane_id: target.pane_id,
+        text: "/model",
+        session_fingerprint: fingerprint,
+      });
+      state.rows = 2;
+      state.screen = "Select model\n…";
+      state.onSize = async () => {
+        state.onSize = null;
+        if (change === "terminal") state.terminal = "term-2";
+        if (change === "pane") state.sizePane = "w1:p2";
+        if (change === "sequence") state.sequence++;
+        if (change === "session")
+          state.sessionFile = join(root, "replacement.jsonl");
+        if (change === "unbound") state.reported = false;
+        if (change === "codex") {
+          state.agent = "codex";
+          state.reported = false;
+        }
+        if (change === "runtime") state.alive = false;
+        if (change === "read-error") throw new Error("size unavailable");
+        if (change === "command") {
+          state.screen = promptScreen;
+          await source.send({
+            pane_id: target.pane_id,
+            text: "/permissions",
+            session_fingerprint: fingerprint,
+          });
+        }
+      };
+      expect((await source.latest(target)).menu_unreadable).toBeUndefined();
+    } finally {
+      source.dispose();
+    }
+  }
+});
 
 test("an open menu refuses a message and a command; nothing is typed", async () => {
   const { state, source } = fakeHerdr();

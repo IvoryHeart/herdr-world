@@ -2087,6 +2087,16 @@ digit SHALL pick an option only when no longer option number starts with it and
 the menu has no text field. Key buttons SHALL come only from keys the footer or
 an arrow hint names, plus the arrows of a list.
 
+The service MAY report `menu_unreadable` with reason `terminal_too_small` and the
+measured rows only when no prompt/menu was read for the current same-session
+command and `pane.get` reports positive integer viewport rows below the shared
+`TERMINAL_SIZE_FLOOR.rows`. Connection/runtime/pane ownership, native read witness
+and current command SHALL remain qualified across the read. Unknown rows,
+layout dimensions and default sizes SHALL NOT supply a size claim. With no
+prompt, Chat SHALL show “The terminal is too small to show this menu — open or
+click Terminal to fix.” and its existing Open Terminal action for that fact.
+The note SHALL grant no send, press, answer or refusal authority.
+
 Each menu key SHALL carry the session and menu fingerprint Chat showed. The
 service SHALL refuse with nothing sent unless the pane's session matches, the
 pane still shows a menu under those rules, the screen shows that menu, the key is one it names and

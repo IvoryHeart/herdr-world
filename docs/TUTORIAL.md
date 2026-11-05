@@ -458,6 +458,10 @@ text. It works for any agent you open from Town, Board or Desk.
    save location, replaces the card until the menu closes. A field takes one
    line with **Type**; press the menu's **Enter** after checking it. Options
    past 9, and lists with a search field, are reached with the arrows.
+   If Chat says the terminal is too small to show the menu, choose **Open
+   Terminal**, or click Terminal, to restore its size. Chat shows this only
+   after a measured row read for this session's current command; an unknown
+   size does not become a size warning.
    **⋮** also holds the Terminal's key controls (**Esc**, **Tab**, arrows,
    **Ctrl** keys) for anything else; they go to the session Chat shows.
 7. A known pull request named in an agent's **READY** or **opened**

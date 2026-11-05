@@ -303,6 +303,14 @@ export function AgentChat({
   // only when the user picks it. The service checks the agent still shows
   // this same question just before the key goes.
   const prompt = conversation?.pending_prompt ?? null;
+  const latestDelivery =
+    conversation?.deliveries?.[conversation.deliveries.length - 1];
+  const tooSmall =
+    conversation?.status === "ok" &&
+    latestDelivery?.kind === "command" &&
+    latestDelivery.fingerprint === conversation.session_fingerprint
+      ? conversation.menu_unreadable
+      : undefined;
   const [answering, setAnswering] = useState(false);
   // The answer sent for a question, shown in its place until another
   // question appears.
@@ -754,6 +762,7 @@ export function AgentChat({
                 clock={clock}
                 answered={answered}
                 prompt={showAsk ? prompt : null}
+                tooSmall={tooSmall}
                 agent={conversation?.agent ?? "The agent"}
                 answering={answering}
                 notice={

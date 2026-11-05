@@ -132,6 +132,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     that menu and session first; follow-up steps replace the card. **⋮** also
     offers the Terminal's key controls (arrows, Esc, Tab, Enter, Ctrl keys),
     sent to the session Chat shows; paging stays in the Terminal.
+    When a qualified row read shows that the terminal is too short to read the
+    current session's latest command menu, Chat explains this and offers
+    **Open Terminal** to fix its size. Unknown sizes do not produce the note.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.

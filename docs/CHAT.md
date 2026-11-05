@@ -201,6 +201,14 @@ that root; stat metadata cannot redirect the read to a different transcript.
   it (a click included) focus returns to the card, so ↓ ↓ Enter walks a list.
   Focus moved elsewhere, such as the composer, while the key is pending stays
   there, so later typing never reaches the menu.
+  If the latest command belongs to this same session, no menu or question can
+  be read, and a qualified `pane.get` measures fewer rows than the shared
+  terminal-size floor, Chat says: “The terminal is too small to show this menu
+  — open or click Terminal to fix.” **Open Terminal** uses the existing view
+  action so the shown terminal can reclaim its size. Unknown rows are not a
+  measurement; layout rectangles and default sizes cannot supply one. A stale
+  command, session or native read cannot show this note. It grants no input
+  authority and does not change Send or the menu's key checks.
 - Never types into an open menu. A message or slash command goes to the pane
   as typed keys, which an open menu would take as its own keys and could pick
   options with. While Chat shows a menu card, Send is disabled with "A menu is

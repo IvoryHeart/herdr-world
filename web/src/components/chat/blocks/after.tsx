@@ -9,6 +9,7 @@ export function ChatAfterBlocks({
   clock,
   answered,
   prompt,
+  tooSmall,
   agent,
   answering,
   notice,
@@ -32,6 +33,7 @@ export function ChatAfterBlocks({
       > & { question: string[] })
     | null;
   prompt: PendingPrompt | null;
+  tooSmall?: { rows: number };
   agent: string;
   answering: boolean;
   notice: string;
@@ -78,6 +80,23 @@ export function ChatAfterBlocks({
             {answered.question.join(" ")}
           </span>
         </p>
+      ) : null}
+      {!prompt && tooSmall ? (
+        <div
+          className="agent-chat-ask agent-chat-menu"
+          role="status"
+          aria-label="Terminal too small"
+        >
+          <p>
+            The terminal is too small to show this menu — open or click Terminal
+            to fix.
+          </p>
+          {onOpenTerminal ? (
+            <button type="button" onClick={onOpenTerminal}>
+              Open Terminal
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {prompt?.menu && onPress && onType ? (
         <MenuCard

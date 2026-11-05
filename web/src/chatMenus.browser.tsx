@@ -4,7 +4,7 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/vendor.css";
 import { AgentChat } from "./components/AgentChat";
-import type { PendingPrompt } from "./components/chat/types";
+import type { Conversation, PendingPrompt } from "./components/chat/types";
 import { bridge } from "./api";
 import type { Pane } from "./types";
 
@@ -61,6 +61,9 @@ const ruleMenu: PendingPrompt = {
 const requests: { method: string; params: Record<string, unknown> }[] = [];
 let menu: PendingPrompt | null = null;
 let session = "a".repeat(64);
+let unreadable: Conversation["menu_unreadable"];
+let deliveries: NonNullable<Conversation["deliveries"]> = [];
+let terminalOpens = 0;
 let pressReply: (params: Record<string, unknown>) => unknown = () => ({
   status: "sent",
   key: "",
@@ -88,7 +91,8 @@ const client = {
         unavailable: null,
         latest: null,
         pending_prompt: menu,
-        deliveries: [],
+        menu_unreadable: unreadable,
+        deliveries,
       };
     if (method === "agent_history.get")
       return {
@@ -134,7 +138,17 @@ const pane: Pane = {
 };
 const chat = (key = "chat") =>
   act(async () =>
-    root.render(h(AgentChat, { key, pane, active: true, onClose() {} })),
+    root.render(
+      h(AgentChat, {
+        key,
+        pane,
+        active: true,
+        onClose() {},
+        onOpenTerminal() {
+          terminalOpens++;
+        },
+      }),
+    ),
   );
 const button = (text: string) =>
   [...document.querySelectorAll("button")].find((candidate) =>
@@ -495,6 +509,82 @@ try {
   check(
     popover && popover.getBoundingClientRect().right <= window.innerWidth,
     "The key controls fit the viewport",
+  );
+
+  const inputCount = requests.filter((r) =>
+    /\.(send|press|answer)$/.test(r.method),
+  ).length;
+  const sizeNote = () =>
+    document.querySelector('[aria-label="Terminal too small"]');
+  menu = null;
+  unreadable = { reason: "terminal_too_small", rows: 2 };
+  await chat("too-small-without-command");
+  await settle();
+  check(
+    !sizeNote(),
+    "A squeezed idle pane without a command has no menu-size note",
+  );
+  const command = {
+    id: "size-command",
+    kind: "command" as const,
+    text: "/model",
+    sent_at: "2026-10-29T00:00:00Z",
+    transcript_at: "2026-10-29T00:00:00Z",
+    state: "pending" as const,
+    expected: "Synthetic session",
+    fingerprint: session,
+  };
+  deliveries = [command];
+  await chat("too-small-command");
+  await settle();
+  const note = sizeNote();
+  check(
+    note?.querySelector("p")?.textContent ===
+      "The terminal is too small to show this menu — open or click Terminal to fix.",
+    "A current same-session command shows the exact size-note wording",
+  );
+  check(
+    note && note.getBoundingClientRect().right <= innerWidth,
+    "The size note fits the viewport",
+  );
+  await act(async () =>
+    note?.querySelector<HTMLButtonElement>("button")?.click(),
+  );
+  check(
+    terminalOpens === 1,
+    "The note opens Terminal through the existing view action",
+  );
+  check(
+    requests.filter((r) => /\.(send|press|answer)$/.test(r.method)).length ===
+      inputCount,
+    "The read-only note sends no native input",
+  );
+  deliveries = [{ ...command, fingerprint: "f".repeat(64) }];
+  await chat("too-small-other-session");
+  await settle();
+  check(!sizeNote(), "Another session's command cannot show a size note");
+  deliveries = [
+    command,
+    { ...command, id: "ordinary", kind: undefined, text: "Continue" },
+  ];
+  await chat("too-small-newer-message");
+  await settle();
+  check(
+    !sizeNote(),
+    "An old command cannot show a size note after a newer message",
+  );
+  deliveries = [command];
+  unreadable = undefined;
+  await chat("too-small-unknown");
+  await settle();
+  check(!sizeNote(), "Unknown size never produces a size note");
+  unreadable = { reason: "terminal_too_small", rows: 2 };
+  menu = modelMenu;
+  await chat("too-small-parsed-menu");
+  await settle();
+  check(
+    !sizeNote() && !!document.querySelector(".agent-chat-menu"),
+    "A parsed menu keeps its existing card instead of the size note",
   );
 } catch (error) {
   failures.push(String(error));

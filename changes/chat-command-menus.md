@@ -11,3 +11,4 @@
 - Chat refuses text on partial boxed questions and blank-padded menus, checks that the terminal/state still matches its screen observation, and accepts quoted instructions with Claude's message prefix.
 
 - Claude Code's `/model` menu card also shows on a phone-width terminal, where Claude wraps the menu's key line onto two rows.
+- When an actual terminal row read shows it is too small to read the current session's command menu, Chat explains this and offers **Open Terminal**. Unknown or stale observations do not produce a size claim; menu and send authority stay unchanged.

@@ -9,6 +9,7 @@ import {
   sendScreenRefusal,
   submitPrompt,
 } from "./menu-send-guard";
+import { withMenuSize } from "./menu-size";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { basename, join } from "node:path";
@@ -641,7 +642,7 @@ export function createHerdrConversationSource(args: {
       args.context.codexDiscovery.clear();
     },
     read,
-    latest,
+    latest: withMenuSize(args, deliveries, latest),
     steps,
     identity: async ({ pane_id }) => {
       // Watching runs on every Herdr event; it need not search Codex

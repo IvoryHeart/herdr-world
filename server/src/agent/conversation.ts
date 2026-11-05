@@ -82,6 +82,8 @@ export type Conversation = {
    * reports it blocked; null otherwise.
    */
   pending_prompt: PendingPrompt | null;
+  /** Measured size for this session's unreadable command menu; grants no input authority. */
+  menu_unreadable?: { reason: "terminal_too_small"; rows: number };
 } & (
   | { status: "ok"; unavailable: null }
   | {

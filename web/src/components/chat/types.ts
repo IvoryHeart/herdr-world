@@ -47,6 +47,8 @@ export type Conversation = {
   deliveries?: ConversationDelivery[];
   /** The question a blocked agent is waiting on, read from its screen. */
   pending_prompt?: PendingPrompt | null;
+  /** A qualified read-only size fact, never a send/key refusal or authority. */
+  menu_unreadable?: { reason: "terminal_too_small"; rows: number };
 };
 
 export type PendingPrompt = {
