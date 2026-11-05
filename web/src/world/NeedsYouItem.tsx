@@ -1,3 +1,4 @@
+import { MessageSquare, SendHorizontal, X } from "lucide-react";
 import {
   type ReactNode,
   useEffect,
@@ -29,14 +30,18 @@ export const itemName = (item: NeedsYouItem) =>
       ? askerName(item.ask)
       : "";
 
+/** A card's header: its kind's own close action, if any, after Chat. */
+type Head = (close: ReactNode) => ReactNode;
+
 /**
  * One item in Needs you: a question (?), a blocked agent (!) or finished work
- * (✓), as a short message from its agent with its quick reply in place.
- * Chat about this opens the agent's Chat for anything longer.
+ * (✓), as a notification from its agent.
  *
- * Every kind has one anatomy: header (agent, place, age), the message with
- * More, its kind's replies, then one footer row (NeedsYouFooter) with the
- * kind's own action at the start and Chat at the end.
+ * Every kind has one anatomy: a header row (mark, name, place · age, then
+ * the Chat icon and the kind's ✕), the message clipped to two lines with
+ * "more", and quick replies or an answer field only when the agent asked.
+ * ✕ keeps each kind's own action: Dismiss question on a question, Mark
+ * reviewed on finished work; a blocked agent has none.
  */
 export function NeedsYouMessage({
   item,
@@ -69,91 +74,75 @@ export function NeedsYouMessage({
       ? "asks"
       : agentMarkKind(item.kind === "needs" ? "blocked" : "done");
   const cardId = useId();
-  // Hover (or ⓘ on touch) shows the agent's card beside the item.
-  const [card, setCard] = useState<"hover" | "pinned" | null>(null);
-  // Chat about this, at the end of every card's footer.
-  const chat = leaf ? (
-    <button
-      type="button"
-      className="needs-you-chat"
-      aria-label={`${item.kind === "done" ? "Follow up with" : "Chat with"} ${name} about this`}
-      onClick={() => onChat(leaf.id)}
-    >
-      {item.kind === "done" ? "Follow up…" : "Chat about this"}
-    </button>
-  ) : null;
+  // Hovering the name shows the agent's card beside the item.
+  const [card, setCard] = useState(false);
+  const at = item.kind === "asks" ? item.ask.at : leaf?.lastActivityAt;
+  const meta = [
+    leaf ? (leaf.spaceLabel ?? leaf.hostLabel) : "",
+    typeof at === "number" ? townAgo(at, now) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const done = item.kind === "done";
+  const head: Head = (close) => (
+    <header>
+      <AgentMark kind={kind} />
+      {leaf ? (
+        // The name opens the agent's window, as on every item: its Chat
+        // holds the context behind a question or a report.
+        <button
+          type="button"
+          className="needs-you-name"
+          aria-label={`Open ${name}'s window`}
+          title={`Open ${name}'s window`}
+          aria-describedby={card ? cardId : undefined}
+          onPointerEnter={(event) =>
+            event.pointerType === "mouse" && setCard(true)
+          }
+          onPointerLeave={() => setCard(false)}
+          onClick={() => onChat(leaf.id)}
+        >
+          {name}
+        </button>
+      ) : (
+        <b className="needs-you-name">{name}</b>
+      )}
+      {unverified ? (
+        <span className="needs-you-tag" title="World could not check this pane">
+          unverified
+        </span>
+      ) : null}
+      <small className="needs-you-meta">{meta}</small>
+      {leaf ? (
+        <button
+          type="button"
+          className="needs-you-icon needs-you-chat"
+          aria-label={
+            done ? `Follow up with ${name}` : `Chat with ${name} about this`
+          }
+          title={done ? "Follow up in Chat" : "Open in Chat"}
+          onClick={() => onChat(leaf.id)}
+        >
+          <MessageSquare size={16} aria-hidden="true" />
+        </button>
+      ) : null}
+      {close}
+    </header>
+  );
   return (
     <article
       className={`needs-you-item is-${item.kind}${focused ? " is-focused" : ""}`}
       data-needs-you-item={item.key}
       aria-label={`${who}: ${item.kind === "asks" ? "asks you" : item.kind === "needs" ? "needs you" : "done, not reviewed"}`}
     >
-      <header>
-        <AgentMark kind={kind} />
-        {leaf ? (
-          // The name opens the agent's window, as on every item: its Chat
-          // holds the context behind a question or a report.
-          <button
-            type="button"
-            className="needs-you-name"
-            aria-label={`Open ${name}'s window`}
-            title={`Open ${name}'s window`}
-            aria-describedby={card ? cardId : undefined}
-            onPointerEnter={(event) =>
-              event.pointerType === "mouse" && setCard("hover")
-            }
-            onPointerLeave={() =>
-              setCard((current) => (current === "hover" ? null : current))
-            }
-            onClick={() => onChat(leaf.id)}
-          >
-            {name}
-          </button>
-        ) : (
-          <b className="needs-you-name">{name}</b>
-        )}
-        {unverified ? (
-          <span
-            className="needs-you-tag"
-            title="World could not check this pane"
-          >
-            unverified
-          </span>
-        ) : null}
-        <small>
-          {leaf ? leafWhere(leaf) : ""}
-          {item.kind === "asks" ? ` · ${townAgo(item.ask.at, now)}` : ""}
-        </small>
-        {leaf ? (
-          <button
-            type="button"
-            className="needs-you-info"
-            aria-label={`About ${name}`}
-            aria-expanded={card === "pinned"}
-            onClick={() =>
-              setCard((current) => (current === "pinned" ? null : "pinned"))
-            }
-          >
-            ⓘ
-          </button>
-        ) : null}
-      </header>
-      {card && leaf ? (
-        <AgentHoverCard
-          id={cardId}
-          leaf={leaf}
-          name={name}
-          where={leafWhere(leaf)}
-          floating={card === "hover"}
-        />
-      ) : null}
       {item.kind === "asks" ? (
         <NeedsYouAsk
           ask={item.ask}
+          name={name}
           who={who}
+          head={head}
           onAnswer={onAnswer}
           onDismiss={onDismiss}
-          chat={chat}
         />
       ) : (
         <NeedsYouAgent
@@ -161,20 +150,30 @@ export function NeedsYouMessage({
           name={name}
           kind={item.kind}
           stop={stop}
+          head={head}
           onOpenTerminal={() => onOpenTerminal(item.leaf.id)}
           onReviewed={onReviewed}
-          chat={chat}
         />
       )}
+      {card && leaf ? (
+        <AgentHoverCard
+          id={cardId}
+          leaf={leaf}
+          name={name}
+          where={leafWhere(leaf)}
+          floating
+        />
+      ) : null}
     </article>
   );
 }
 
 /**
- * An item's message, clipped to its first lines with More while it runs
- * longer. Tapping the clipped text (not a link in it) or More shows all of it
- * in place; Less clips it again. Only this box re-renders: the message is
- * passed in as children, so toggling never re-renders the markdown.
+ * An item's message, clipped to two lines with "more" on the last line while
+ * it runs longer. Tapping the clipped text (not a link in it) or "more"
+ * shows all of it in place; "less", at its end, clips it again. Only this
+ * box re-renders: the message is passed in as children, so toggling never
+ * re-renders the markdown.
  */
 export function NeedsYouText({
   id,
@@ -190,8 +189,8 @@ export function NeedsYouText({
   const [clipped, setClipped] = useState(false);
   const clippedNow = useRef(clipped);
   clippedNow.current = clipped;
-  // Measured before paint, so More arrives with the text, never after it.
-  // A clamped box keeps its height when its text changes, so watch both.
+  // Measured before paint, so "more" arrives with the text, never after it.
+  // A clipped box keeps its height when its text changes, so watch both.
   // Only a change renders: a resize elsewhere (the list's scrollbar) must
   // not re-render every card.
   useLayoutEffect(() => {
@@ -219,31 +218,34 @@ export function NeedsYouText({
     };
   }, [expanded]);
   return (
-    <>
-      <div
-        ref={box}
-        id={textId}
-        className={`needs-you-text${expanded ? " is-expanded" : clipped ? " is-clipped" : ""}`}
-        onFocus={(event) => {
-          // Tab can reach links below the clamp. Reveal keyboard focus before
-          // the user activates it; pointer clicks on visible links stay put.
-          if (!expanded && clipped && event.target.matches(":focus-visible"))
-            setExpanded(true);
-        }}
-        onClick={(event) => {
-          if (expanded || !clipped) return;
-          // A link opens; a drag selects; neither expands.
-          if (
-            event.target instanceof Element &&
-            event.target.closest("a, button, input")
-          )
-            return;
-          if (window.getSelection()?.toString()) return;
+    <div
+      ref={box}
+      id={textId}
+      className={`needs-you-text${expanded ? " is-expanded" : clipped ? " is-clipped" : ""}`}
+      onFocus={(event) => {
+        // Tab can reach links below the clip. Reveal keyboard focus before
+        // the user activates it; pointer clicks on visible links stay put.
+        if (
+          !expanded &&
+          clipped &&
+          event.target.matches(":focus-visible") &&
+          !event.target.matches(".needs-you-more-text")
+        )
           setExpanded(true);
-        }}
-      >
-        {children}
-      </div>
+      }}
+      onClick={(event) => {
+        if (expanded || !clipped) return;
+        // A link opens; a drag selects; neither expands.
+        if (
+          event.target instanceof Element &&
+          event.target.closest("a, button, input")
+        )
+          return;
+        if (window.getSelection()?.toString()) return;
+        setExpanded(true);
+      }}
+    >
+      {children}
       {expanded || clipped ? (
         <button
           type="button"
@@ -252,61 +254,45 @@ export function NeedsYouText({
           aria-controls={textId}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? "Less" : "More"}
+          {expanded ? "less" : "more"}
         </button>
       ) : null}
-    </>
+    </div>
   );
 }
 
 /**
- * A card's last row, the same on every kind: its own action at the start
- * (Dismiss, Mark reviewed), Chat at the end, and any notice below them.
+ * An owner question: its options as quick replies (the first one primary,
+ * then "Other…" for a typed answer), or one answer field when it offers
+ * none. ✕ dismisses it without answering.
  */
-function NeedsYouFooter({
-  start,
-  chat,
-  notice,
-}: {
-  start?: ReactNode;
-  chat: ReactNode;
-  notice?: ReactNode;
-}) {
-  if (!start && !chat && !notice) return null;
-  return (
-    <>
-      {start || chat ? (
-        <div className="needs-you-footer">
-          {start}
-          {chat}
-        </div>
-      ) : null}
-      {notice}
-    </>
-  );
-}
-
-/** An owner question: its options, a typed answer, or Dismiss. */
 function NeedsYouAsk({
   ask,
+  name,
   who,
+  head,
   onAnswer,
   onDismiss,
-  chat,
 }: {
   ask: WorldAsk;
+  name: string;
   who: string;
+  head: Head;
   onAnswer(text: string): Promise<string | null>;
   onDismiss(): Promise<string | null>;
-  /** Chat about this, at the footer's end. */
-  chat: ReactNode;
 }) {
   const { question, options } = ask;
   const deliveryMessage = askDeliveryMessage(ask);
   const questionId = useId();
   const [draft, setDraft] = useState("");
+  const [typing, setTyping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const field = useRef<HTMLInputElement | null>(null);
+  // "Other…" swaps the replies for the field and moves focus into it.
+  useEffect(() => {
+    if (typing) field.current?.focus();
+  }, [typing]);
   const act = async (close: () => Promise<string | null>) => {
     if (busy) return;
     setBusy(true);
@@ -316,15 +302,21 @@ function NeedsYouAsk({
   };
   const send = (text: string) =>
     text.trim() ? act(() => onAnswer(text.trim())) : Promise.resolve();
+  const notice = error ?? deliveryMessage;
   return (
-    <form
-      className="needs-you-answer"
-      aria-label={`Question from ${who}`}
-      onSubmit={(event) => {
-        event.preventDefault();
-        void send(draft);
-      }}
-    >
+    <>
+      {head(
+        <button
+          type="button"
+          className="needs-you-icon"
+          aria-label={`Dismiss ${who}'s question without answering`}
+          title="Dismiss question"
+          disabled={busy}
+          onClick={() => void act(onDismiss)}
+        >
+          <X size={16} aria-hidden="true" />
+        </button>,
+      )}
       <NeedsYouText id={questionId}>
         <MarkdownPreview
           text={question}
@@ -332,12 +324,17 @@ function NeedsYouAsk({
           breaks
         />
       </NeedsYouText>
-      {options.length ? (
-        <div className="needs-you-options">
+      {options.length && !typing ? (
+        <div
+          className="needs-you-replies"
+          role="group"
+          aria-label={`Answers to ${who}`}
+        >
           {options.map((option, index) => (
             <button
               key={`${index}:${option}`}
               type="button"
+              className={index === 0 ? "is-primary" : undefined}
               aria-describedby={questionId}
               disabled={busy}
               onClick={() => void send(option)}
@@ -345,41 +342,51 @@ function NeedsYouAsk({
               {option}
             </button>
           ))}
-        </div>
-      ) : null}
-      <div className="needs-you-reply">
-        <input
-          value={draft}
-          aria-label={`Your answer to ${who}`}
-          aria-describedby={questionId}
-          placeholder={options.length ? "Or type an answer" : "Your answer"}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <button type="submit" disabled={busy || !draft.trim()}>
-          Answer
-        </button>
-      </div>
-      <NeedsYouFooter
-        start={
           <button
             type="button"
-            aria-label={`Dismiss the question from ${who} without answering`}
+            className="ghost"
+            aria-label="Type another answer"
+            title="Type another answer"
             disabled={busy}
-            onClick={() => void act(onDismiss)}
+            onClick={() => setTyping(true)}
           >
-            Dismiss
+            Other…
           </button>
-        }
-        chat={chat}
-        notice={
-          error || deliveryMessage ? (
-            <small role={error ? "alert" : "status"}>
-              {error ?? deliveryMessage}
-            </small>
-          ) : null
-        }
-      />
-    </form>
+        </div>
+      ) : (
+        <form
+          className="needs-you-field"
+          aria-label={`Question from ${who}`}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send(draft);
+          }}
+        >
+          <input
+            ref={field}
+            value={draft}
+            aria-label={`Your answer to ${who}`}
+            aria-describedby={questionId}
+            placeholder={`Answer ${name}…`}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <button
+            type="submit"
+            className="needs-you-icon"
+            aria-label="Send answer"
+            title="Send answer"
+            disabled={busy || !draft.trim()}
+          >
+            <SendHorizontal size={16} aria-hidden="true" />
+          </button>
+        </form>
+      )}
+      {notice ? (
+        <small className="needs-you-notice" role={error ? "alert" : "status"}>
+          {notice}
+        </small>
+      ) : null}
+    </>
   );
 }
 
@@ -390,27 +397,26 @@ type Answered = Pick<
 
 /**
  * A blocked or finished agent's latest message, as Chat reads it. A blocked
- * agent's question is answered with Chat's checked answer and receipt;
- * finished work is marked reviewed in the one reviewed record, for the stop
- * whose report is shown.
+ * agent's question is answered with Chat's checked answer and receipt, its
+ * options as quick replies; finished work is marked reviewed (✕) in the one
+ * reviewed record, for the stop whose report is shown.
  */
 function NeedsYouAgent({
   leaf,
   name,
   kind,
   stop,
+  head,
   onOpenTerminal,
   onReviewed,
-  chat,
 }: {
   leaf: WorldLeafObject;
   name: string;
   kind: "needs" | "done";
   stop: string | null;
+  head: Head;
   onOpenTerminal(): void;
   onReviewed(stop: string): Promise<boolean>;
-  /** Chat about this (Follow up… on finished work), at the footer's end. */
-  chat: ReactNode;
 }) {
   // Read again when the stop moves on, so the report and the mark agree.
   const read = useConversationRead(leaf, true, stop);
@@ -464,9 +470,39 @@ function NeedsYouAgent({
   const stale = !conversation || read.readFor !== stop;
   const current = stop !== null && !stale;
   const unread = read.failed && stale;
+  // A question still waiting is the message; its options are the replies.
+  const asking =
+    prompt && prompt.fingerprint !== answered?.fingerprint ? prompt : null;
   return (
     <>
-      {latest ? (
+      {head(
+        kind === "done" ? (
+          <button
+            type="button"
+            className="needs-you-icon"
+            aria-label={`Mark ${name}'s work reviewed`}
+            title={
+              current
+                ? "Mark reviewed"
+                : unread
+                  ? "Mark reviewed: the latest report could not be read"
+                  : "Mark reviewed: reading the latest report…"
+            }
+            disabled={marking || !current}
+            onClick={() => {
+              if (!current || stop === null) return;
+              setMarking(true);
+              setMarkError(false);
+              void onReviewed(stop)
+                .then((saved) => setMarkError(!saved))
+                .finally(() => setMarking(false));
+            }}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        ) : null,
+      )}
+      {asking ? null : latest ? (
         <NeedsYouText>
           <MarkdownPreview
             text={latest.text}
@@ -486,8 +522,10 @@ function NeedsYouAgent({
         </p>
       )}
       {unread ? (
-        <div className="needs-you-options">
-          <small role="alert">Could not read the latest report.</small>
+        <div className="needs-you-replies">
+          <small className="needs-you-notice" role="alert">
+            Could not read the latest report.
+          </small>
           <button type="button" onClick={read.retry}>
             Retry
           </button>
@@ -502,9 +540,7 @@ function NeedsYouAgent({
             ? answered
             : null
         }
-        prompt={
-          prompt && prompt.fingerprint !== answered?.fingerprint ? prompt : null
-        }
+        prompt={asking}
         agent={name}
         answering={answering}
         notice={notice}
@@ -512,49 +548,18 @@ function NeedsYouAgent({
         onOpenTerminal={onOpenTerminal}
       />
       {answered && !answered.acknowledged ? (
-        <div className="needs-you-options">
+        <div className="needs-you-replies">
           <button type="button" onClick={onOpenTerminal}>
             Open Terminal
           </button>
         </div>
       ) : null}
-      <NeedsYouFooter
-        start={
-          kind === "done" ? (
-            <button
-              type="button"
-              className="is-primary"
-              disabled={marking || !current}
-              title={
-                current
-                  ? undefined
-                  : unread
-                    ? "The latest report could not be read"
-                    : "Reading the latest report…"
-              }
-              onClick={() => {
-                if (!current || stop === null) return;
-                setMarking(true);
-                setMarkError(false);
-                void onReviewed(stop)
-                  .then((saved) => setMarkError(!saved))
-                  .finally(() => setMarking(false));
-              }}
-            >
-              Mark reviewed
-            </button>
-          ) : null
-        }
-        chat={chat}
-        notice={
-          markError ? (
-            <small role="alert">
-              Could not save the review mark. Try again when the connection is
-              ready.
-            </small>
-          ) : null
-        }
-      />
+      {markError ? (
+        <small className="needs-you-notice" role="alert">
+          Could not save the review mark. Try again when the connection is
+          ready.
+        </small>
+      ) : null}
     </>
   );
 }

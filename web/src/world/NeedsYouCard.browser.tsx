@@ -162,13 +162,13 @@ async function run() {
   const link = text.querySelector<HTMLAnchorElement>("a")!;
   check(
     toggle?.getAttribute("aria-expanded") === "false",
-    "long question starts collapsed with More",
+    "long question starts collapsed with more",
   );
   check(
     !document.querySelector(
       '[data-needs-you-item="ask:q-short"] .needs-you-more-text',
     ),
-    "short question needs no More",
+    "short question needs no more",
   );
   check(
     !!document.querySelector(
@@ -189,17 +189,45 @@ async function run() {
   toggle.click();
   await frame();
   check(
-    text.classList.contains("is-expanded") && toggle.textContent === "Less",
-    "More reveals the question",
+    text.classList.contains("is-expanded") && toggle.textContent === "less",
+    "more reveals the question",
   );
   toggle.click();
   await frame();
   check(
-    !text.classList.contains("is-expanded") && toggle.textContent === "More",
-    "Less collapses the question",
+    !text.classList.contains("is-expanded") && toggle.textContent === "more",
+    "less collapses the question",
   );
   card.querySelector<HTMLButtonElement>(".needs-you-name")!.click();
   check(chats.join() === "atlas", "asker name opens its window");
+  card.querySelector<HTMLButtonElement>('[title="Open in Chat"]')!.click();
+  check(chats.join() === "atlas,atlas", "Chat icon opens its window");
+  // ✕ dismisses a question; a blocked agent has no ✕ (it is still waiting).
+  check(
+    !!card.querySelector('button[title="Dismiss question"]') &&
+      !document.querySelector(
+        '[data-needs-you-item="leaf:beacon"] button[title^="Mark reviewed"], [data-needs-you-item="leaf:beacon"] button[title="Dismiss question"]',
+      ),
+    "only a question offers Dismiss",
+  );
+  // Quick replies only for the question; "Other…" swaps them for one field.
+  check(
+    !card.querySelector(".needs-you-field") &&
+      !document.querySelector(
+        '[data-needs-you-item="leaf:beacon"] .needs-you-replies',
+      ),
+    "replies only where asked",
+  );
+  card
+    .querySelector<HTMLButtonElement>('[aria-label="Type another answer"]')!
+    .click();
+  await frame();
+  const field = card.querySelector<HTMLInputElement>(".needs-you-field input");
+  check(
+    !card.querySelector(".needs-you-replies") &&
+      document.activeElement === field,
+    "Other… opens the answer field with focus",
+  );
   check(
     !document.querySelector(
       '[data-needs-you-item="ask:q-short"] button.needs-you-name',
@@ -209,12 +237,12 @@ async function run() {
   const counters = document.querySelectorAll(".fixture-bar .needs-you-counter");
   check(
     counters[0]?.getAttribute("aria-label") === "Needs you, 1" &&
-      counters[0].querySelector(".needs-you-badge")?.textContent === "1",
+      counters[0].querySelector(".world-hosts-count")?.textContent === "1",
     "phone counter names and badges its count",
   );
   check(
     counters[1]?.getAttribute("aria-label") === "Needs you, 0" &&
-      !counters[1].querySelector(".needs-you-badge"),
+      !counters[1].querySelector(".world-hosts-count"),
     "zero counter has no badge",
   );
 }

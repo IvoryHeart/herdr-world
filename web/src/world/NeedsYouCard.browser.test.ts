@@ -144,7 +144,8 @@ test.skipIf(!chrome)(
       await evaluate(`${card}.querySelector('.needs-you-more-text').click()`);
       // Traverse from before the text, including the link hidden below the clamp.
       await evaluate(`${card}.querySelector('.needs-you-name').focus()`);
-      await key("Tab", 9); // About.
+      await key("Tab", 9); // Chat.
+      await key("Tab", 9); // Dismiss.
       await key("Tab", 9); // First link.
       expect(await state()).toMatchObject({
         expanded: "true",
@@ -152,7 +153,7 @@ test.skipIf(!chrome)(
       });
       await key("Tab", 9); // Late link.
       expect((await state()).href).toBe("https://example.com/runs/7");
-      await key("Tab", 9); // Less.
+      await key("Tab", 9); // "less".
       await key(" ", 32);
       expect(await state()).toMatchObject({ expanded: "false", toggle: true });
       await key("Tab", 9, true); // Re-enter the late link after collapse.
@@ -161,9 +162,9 @@ test.skipIf(!chrome)(
         href: "https://example.com/runs/7",
       });
       await key("Tab", 9);
-      await key("Enter", 13); // Less.
+      await key("Enter", 13); // "less".
       expect(await state()).toMatchObject({ expanded: "false", toggle: true });
-      await key("Enter", 13); // More.
+      await key("Enter", 13); // "more".
       expect((await state()).expanded).toBe("true");
     } finally {
       connection?.close();

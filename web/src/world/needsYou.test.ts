@@ -129,11 +129,16 @@ test("each item names its agent, marks unverified asks and answers in place", ()
     "3 waiting on you",
   );
   expect(document.querySelector("strong")?.textContent).toBe("the fix");
+  // Its options are the replies; "Other…" opens the typed answer.
+  const replies = document.querySelector(
+    '[role="group"][aria-label="Answers to w1:asker (unverified)"]',
+  );
   expect(
-    document.querySelector(
-      'input[aria-label="Your answer to w1:asker (unverified)"]',
+    [...(replies?.querySelectorAll("button") ?? [])].map(
+      (button) => button.textContent,
     ),
-  ).not.toBeNull();
+  ).toEqual(["Ship", "Wait", "Other…"]);
+  expect(document.querySelector(".needs-you-field")).toBeNull();
   const names = [...document.querySelectorAll(".needs-you-name")];
   expect(names).toHaveLength(6);
   expect(
@@ -142,14 +147,23 @@ test("each item names its agent, marks unverified asks and answers in place", ()
   expect(
     document.querySelector('button[aria-label="Open early-blocked\'s window"]'),
   ).not.toBeNull();
-  const buttons = [...document.querySelectorAll("button")].map(
-    (button) => button.textContent,
+  const buttons = [...document.querySelectorAll("button")];
+  const titled = (title: string) =>
+    buttons.filter((button) => button.getAttribute("title") === title);
+  expect(buttons.map((button) => button.textContent)).toContain("Ship");
+  // ✕ keeps each kind's own action: Dismiss on a question, Mark reviewed on
+  // finished work, none on a blocked agent.
+  expect(titled("Dismiss question")).toHaveLength(1);
+  expect(titled("Open in Chat")).toHaveLength(2);
+  expect(titled("Follow up in Chat")).toHaveLength(3);
+  expect(
+    buttons.filter((button) =>
+      button.getAttribute("title")?.startsWith("Mark reviewed"),
+    ),
+  ).toHaveLength(3);
+  expect(titled("Dismiss question")[0]?.getAttribute("aria-label")).toBe(
+    "Dismiss w1:asker (unverified)'s question without answering",
   );
-  expect(buttons).toContain("Ship");
-  expect(buttons.filter((text) => text === "Dismiss")).toHaveLength(1);
-  expect(buttons.filter((text) => text === "Chat about this")).toHaveLength(2);
-  expect(buttons.filter((text) => text === "Follow up…")).toHaveLength(3);
-  expect(buttons.filter((text) => text === "Mark reviewed")).toHaveLength(3);
 });
 
 test("an opener's item past the limit opens at its page, and the others stay a page away", () => {
