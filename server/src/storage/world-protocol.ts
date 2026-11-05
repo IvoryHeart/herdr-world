@@ -261,6 +261,7 @@ export type WorkerRequest =
   | { type: "close" };
 export type StorageSnapshot = {
   terminalMarks?: import("./terminal-marks").SavedTerminalMark[];
+  legacyReviewArchive?: import("./legacy-review-archive").LegacyReviewArchiveState;
   board?: import("../world/board-store").BoardDocument;
   runtimeStatus?: Record<string, import("./runtime-status").AutoSyncRunStatus>;
   profiles?: import("../agent/profile-store").ProfilesDocument;

@@ -27,7 +27,7 @@ const binding = (policy: BindingPolicy): SourceBinding => ({
 });
 
 test("terminal-mark declarations exhaust complete/fence/ambiguity/session/absence combinations", () => {
-  for (const policy of ["desk", "watchlist", "completion-seen"] as const)
+  for (const policy of ["desk", "watchlist"] as const)
     for (const knownSession of [false, true])
       for (const complete of [false, true])
         for (const fresh of [false, true])

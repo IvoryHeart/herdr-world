@@ -19,7 +19,6 @@ import type { WorldSnapshotService } from "../world/snapshot";
 import type { FocusedAcquisition } from "../world/focused-acquisition";
 import type { AgentActivityCache } from "../world/agent-activity-cache";
 import type { DeskWatches } from "../world/desk-watches";
-import type { WorldCompletionSeenRegistry } from "../world/completion-seen";
 import type { WorldWatchlistRegistry } from "../world/watchlist";
 import type { createWorldCliService } from "../world/world-cli-service";
 
@@ -59,7 +58,6 @@ export type RpcServices = {
   publishBoardChanged(revision: number): void;
   publishProfilesChanged(revision: number): void;
   publishWatchlistChanged(revision: number): void;
-  publishCompletionSeenChanged(revision: number): void;
   publishWorldInvalidation(
     connectionId: string,
     connectionGeneration: number,
@@ -76,11 +74,11 @@ export type RpcServices = {
   worldWatchlist: WorldWatchlistRegistry;
   /** The agent bin; absent without World storage's effect outbox. */
   bin?: import("../service/bin-service").BinService;
-  worldCompletionSeen: WorldCompletionSeenRegistry;
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null;
+  worldUsage?: import("../usage/service").WorldUsageService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

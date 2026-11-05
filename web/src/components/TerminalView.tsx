@@ -201,6 +201,8 @@ import {
   TerminalFileLinkMenu,
   type TerminalFileLinkMenuState,
 } from "./TerminalFileLinkMenu";
+import { TerminalAttachSize } from "../terminalAttachSize";
+import { withTimeout } from "../withTimeout";
 import "./TerminalView.css";
 
 function focusTerminalEndpoint(
@@ -294,29 +296,6 @@ function isSafariBrowser() {
 
 function trimCopiedLinePadding(text: string) {
   return text.replace(/[ \t]+(?=\r?\n|$)/g, "");
-}
-
-function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  errorMessage: string,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error(errorMessage));
-    }, timeoutMs);
-
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (err) => {
-        window.clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
 }
 
 export type TerminalWorkspaceFileRequest = {
@@ -727,6 +706,19 @@ export function TerminalView({
   const paneIdRef = useRef(pane?.pane_id);
   const paneTabIdRef = useRef(pane?.tab_id);
   const paneLayoutRef = useRef(s.layout);
+  const [sizeRead, setSizeRead] = useState(0);
+  const [attachSize] = useState(
+    () =>
+      new TerminalAttachSize({
+        paneIdRef,
+        paneTabIdRef,
+        paneLayoutRef,
+        isActivePaneRef,
+        currentClientRef,
+        desiredTerminalRef,
+        retry: setSizeRead,
+      }),
+  );
   useLayoutEffect(() => {
     isActivePaneRef.current = isActivePane;
   }, [isActivePane]);
@@ -942,11 +934,11 @@ export function TerminalView({
     return { cols: term.cols, rows: term.rows };
   }, [container]);
   const relayViewportFor = useCallback(
-    (size: { cols: number; rows: number }) => {
+    (size: { cols: number; rows: number }, layout = paneLayoutRef.current) => {
       if (!isActivePaneRef.current) return null;
       const relaySize = terminalRelayViewportSize(
         size,
-        paneLayoutRef.current,
+        layout,
         paneIdRef.current,
       );
       const tabId = paneTabIdRef.current;
@@ -1677,8 +1669,12 @@ export function TerminalView({
       }
       selectionBounds = bounds;
       const size = fitVisibleTerminal();
-      if (!size) return;
-      resizeSync.schedule(size);
+      if (!size) return attachSize.hide();
+      if (attachSize.shown()) return setSizeRead((value) => value + 1);
+      if (!attachSize.fitted(size)) return resizeSync.schedule(size);
+      // Shown after being hidden: claim the size (Herdr follows the last focus).
+      resizeSync.sendNow(size);
+      focusTerminalEndpoint(connectionClient, attachedRef.current ?? undefined);
     });
     ro.observe(container);
 
@@ -3216,6 +3212,7 @@ export function TerminalView({
     };
   }, [
     termInstance,
+    attachSize,
     detachOwnedTerminal,
     closeTerminalInput,
     store,
@@ -3290,6 +3287,9 @@ export function TerminalView({
     // defer the attach until the page is shown; the visibility recovery below
     // retries the desired terminal when it is neither attached nor attaching.
     if (document.visibilityState === "hidden") return;
+    const size = attachSize.resolve(terminalId, fitVisibleTerminal(), term);
+    if (!size) return;
+    const { cols, rows } = size;
     if (attachTimeoutTerminalRef.current !== terminalId) {
       attachTimeoutTerminalRef.current = terminalId;
       recoveryBudgetRef.current.reset();
@@ -3298,15 +3298,10 @@ export function TerminalView({
     setTerminalLoading(true);
     setTerminalAttachError("");
     const attachAttempt = attachWatchdogRef.current!.begin();
-    const fitSize = fitVisibleTerminal();
-    const cols = fitSize?.cols ?? term.cols;
-    const rows = fitSize?.rows ?? term.rows;
-    const relaySize = relayViewportFor({ cols, rows });
+    const relaySize = relayViewportFor({ cols, rows }, size.relayLayout);
     const surfaceSize = terminalEndpointViewportSize(
       { cols, rows },
-      paneLayoutRef.current?.tab_id === paneTabIdRef.current
-        ? paneLayoutRef.current
-        : null,
+      size.layout,
       paneIdRef.current,
     );
     // Keep the current buffer when re-attaching the same terminal (watchdog
@@ -3422,6 +3417,8 @@ export function TerminalView({
     creationDemand,
     connectionClient,
     termInstance,
+    attachSize,
+    sizeRead,
   ]);
 
   useEffect(() => {

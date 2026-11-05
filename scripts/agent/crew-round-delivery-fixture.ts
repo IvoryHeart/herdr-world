@@ -5,7 +5,11 @@ import { crewPass } from "./crew";
 import type { Deps } from "./crew/deps";
 import { config, input, NOW, SHA } from "./gate/cases";
 import { evaluate, type GateInput } from "./gate/predicate";
-import { SETTINGS_DEFAULTS, type RosterEntry } from "./crew/plan";
+import {
+  SETTINGS_DEFAULTS,
+  type RosterEntry,
+  type CrewSettings,
+} from "./crew/plan";
 import { saveCycle } from "./crew/round-policy-store";
 import { openCrewStore, openLock, roundFor } from "./crew/store";
 
@@ -20,6 +24,8 @@ export function setup(
     seedCycle?: boolean;
     roster?: Record<string, RosterEntry>;
     neverPrompt?: string[];
+    settings?: Partial<CrewSettings>;
+    scope?: number[];
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "crew-round-delivery-"));
@@ -37,6 +43,7 @@ export function setup(
       visionary: { model: "claude-opus-5-5" },
       ...options.roster,
     },
+    ...options.settings,
   };
   const gateConfig = {
     ...config,
@@ -126,7 +133,7 @@ export function setup(
       }),
       configPath,
       dir,
-      prs: [],
+      prs: options.scope ?? [],
       dryRun: false,
       now,
       deps,

@@ -41,11 +41,6 @@ import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { useDeskState } from "./useDeskState";
 import { AgentState } from "../components/AgentMark";
 import { needsYouLeafKey, openNeedsYou } from "./needsYou";
-import {
-  completionSeenKey,
-  completionSeenStore,
-  useCompletionSeen,
-} from "./completionSeenState";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
 import { DeskOtherHosts } from "./DeskOtherHosts";
@@ -73,8 +68,6 @@ export function partitionDesk(
   stops: Map<string, number> = new Map(),
   stopIds: ReadonlyMap<string, string> = new Map(),
   asks: ReadonlyMap<string, WorldAsk> = new Map(),
-  /** A terminal's completion check, which also counts as reviewed. */
-  checked: (leaf: WorldLeafObject) => boolean = () => false,
 ) {
   const needs: Item[] = [];
   const review: Item[] = [];
@@ -114,7 +107,7 @@ export function partitionDesk(
       });
     } else if (
       leaf.status === "done" ||
-      (leaf.status === "idle" && (handled.has(id) || checked(leaf))) ||
+      (leaf.status === "idle" && handled.has(id)) ||
       isRecent(receipt, now) ||
       (stoppedAt !== undefined && now - stoppedAt <= IDLE_WINDOW_MS)
     ) {
@@ -124,7 +117,7 @@ export function partitionDesk(
         receipt,
         handoffId: id,
         pending,
-        handled: handled.has(id) || checked(leaf),
+        handled: handled.has(id),
         since,
       });
     } else quiet.push(leaf);
@@ -280,13 +273,6 @@ export function DeskBoard({
   const rootRef = useRef<HTMLDivElement | null>(null);
   useDrawReadiness("desk", rootRef);
 
-  // Town's and Needs you's check of work Desk names no stop for.
-  const seen = useCompletionSeen();
-  const checked = (leaf: WorldLeafObject) =>
-    seen.terminals.has(leaf.terminalId) &&
-    seen.identities.has(
-      completionSeenKey(leaf.connectionId, leaf.generation, leaf.terminalId),
-    );
   const { needs, review, working, quiet } = partitionDesk(
     agents,
     receiptFor,
@@ -295,7 +281,6 @@ export function DeskBoard({
     stops,
     stopIds,
     asking,
-    checked,
   );
   const pendingReview = review.filter((item) => !item.handled);
   const matches = (item: Item) =>
@@ -424,26 +409,12 @@ export function DeskBoard({
       focusCard(focusedId);
   });
   const toggleReviewed = async (item: Item) => {
-    // A completion check ends when the agent works or asks again.
-    if (item.handled && checked(item.leaf)) return;
     const activeBefore = document.activeElement;
     const hadFocus = rootRef.current?.contains(activeBefore);
     const index = order.findIndex((entry) => entry.leaf.id === item.leaf.id);
     const neighbour =
       index >= 0 ? (order[index + 1] ?? order[index - 1]) : undefined;
-    // Work Desk names no stop for takes the terminal's completion check, as
-    // in Town and Needs you (useReviewedWork); the service ends that check.
-    const key = receiptIdentity(item.leaf);
-    const stopKnown =
-      stopIds.has(key) || stops.has(key) || item.leaf.lastActivityAt != null;
-    const saved =
-      !item.handled && !stopKnown
-        ? await completionSeenStore.markTerminal(
-            item.leaf.connectionId,
-            item.leaf.generation,
-            item.leaf.terminalId,
-          )
-        : await mark(item.handoffId, !item.handled);
+    const saved = await mark(item.handoffId, !item.handled);
     if (!saved) {
       setError(
         "Could not save the review mark. Try again when the connection is ready.",
@@ -738,13 +709,9 @@ export function DeskBoard({
           {item.lane === "review" ? (
             <button
               type="button"
-              disabled={item.pending || (item.handled && checked(leaf))}
+              disabled={item.pending}
               title={
-                item.pending
-                  ? "Waiting for this turn's receipt"
-                  : item.handled && checked(leaf)
-                    ? "Checked; it opens again when the agent works or asks"
-                    : undefined
+                item.pending ? "Waiting for this turn's receipt" : undefined
               }
               onClick={() => toggleReviewed(item)}
             >

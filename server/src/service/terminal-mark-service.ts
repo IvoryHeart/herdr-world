@@ -15,6 +15,7 @@ type Options = Pick<PersistentOptions, "incarnation" | "lease" | "now"> & {
   invalidate(connectionId: string, generation: number): void;
   stop(): Promise<void>;
   logger: Logger;
+  scheduler?: PersistentOptions["scheduler"];
 };
 /** The root owns one set of registries, projections and committed notices. */
 export function createSharedTerminalMarks(options: Options) {
@@ -29,10 +30,10 @@ export function createSharedTerminalMarks(options: Options) {
         incarnation: options.incarnation,
         lease: options.lease,
         now: options.now,
+        scheduler: options.scheduler,
         registries: {
           desk: desk.registry,
           watchlist: marks.worldWatchlist,
-          seen: marks.worldCompletionSeen,
         },
         changed(kind, revision, connectionId, generation) {
           if (kind === "desk") desk.publish(revision);
@@ -40,7 +41,7 @@ export function createSharedTerminalMarks(options: Options) {
             marks.publishWatchlistChanged(revision);
             if (connectionId !== undefined && generation !== undefined)
               options.invalidate(connectionId, generation);
-          } else marks.publishCompletionSeenChanged(revision);
+          }
         },
         failed(error) {
           options.logger.error(

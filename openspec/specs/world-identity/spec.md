@@ -220,23 +220,26 @@ Several claims SHALL coexist for one field.
 Each kind of World record SHALL declare what happens when its binding ends: archive,
 clear, keep unresolved, or move to "Needs a home". Durable identity alone SHALL NOT
 extend a record's lifetime. The owner-approved terminal-mark persistence changes
-Desk marks/recent opens, watchlist and completion seen to the following lifetimes:
+Desk marks/recent opens and watchlist to the following lifetimes:
 
 - Watchlist follows its witnessed terminal on its original source, including a
   uniquely observed terminal move. Complete current absence clears it.
-- Desk metadata and completion seen also require a captured session when known;
-  explicit unknown session binds to terminal. Complete current terminal absence
-  or a positive different known session clears them. Missing session evidence
-  remains unresolved or unconfirmed and never silently retargets a saved mark.
-- Offline, partial, stale and duplicate observations preserve saved records but
-  attach nothing. Restart and runtime replacement hide the qualified projection
-  until a new complete unambiguous observation verifies the same evidence.
-- Fresh working/blocked evidence ends completion seen. Later native progress
-  ends a checked completion even if World missed the intervening work; older
-  progress cannot erase a newer check. Desk retains its exact-stop Undo,
-  bounded recency and stop-display expiry rules.
-- An explicit user mark may replace an unresolved capture for that terminal;
-  the old record is cleared, never inherited by the new identity.
+- Desk metadata requires its captured known session. Complete current terminal
+  absence or a replacement ends the capture as bounded unassociated history.
+  Missing known-session evidence never silently retargets a saved mark.
+- Unknown-session Desk captures require process-local live ownership; terminal
+  reuse cannot carry review through World/runtime restart or null-to-known
+  ownership. A later returning known fingerprint cannot inherit an intervening
+  owner's review. No durable runtime/incarnation identity is invented.
+- Offline, partial, stale and duplicate observations attach nothing. Known
+  restart captures remain unresolved/protected until fresh complete source
+  classification or confirmed unavailability. Fresh native progress names a new
+  Desk stop; older progress cannot erase a newer mark. Exact Undo and bounded
+  recency/display expiry retain their existing behavior.
+- Retired completion receipts remain in a private draining archive under the
+  storage contract. Only fresh same-source/terminal/known-session/unchanged native
+  sequence evidence can convert one into Desk. Unknown receipts never resolve;
+  neither a name nor terminal-only evidence establishes continuity.
 
 #### Scenario: Watchlist after a restart
 - **WHEN** World restarts and then verifies the original terminal in a complete,

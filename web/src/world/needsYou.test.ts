@@ -124,28 +124,46 @@ test("each item names its agent, marks unverified asks and answers in place", ()
       deskStore,
     }),
   );
-  expect(html).toContain("3 waiting on you");
-  // The ask: Markdown, options, a typed answer and Dismiss, its asker
-  // named from the ledger and marked unverified.
-  expect(html).toContain("<strong>the fix</strong>");
-  expect(html).toContain(">Ship</button>");
-  // An unverified asker World could not place is named by the pane it claimed.
-  expect(html).toContain('aria-label="Your answer to w1:asker (unverified)"');
-  expect(html).toContain(">unverified</span>");
-  expect(html.match(/>Dismiss</g)).toHaveLength(1);
-  // Blocked and finished agents: their Herdr names, Chat about this (Follow
-  // up for finished work), the hover card's ⓘ, and Mark reviewed only on
-  // finished work.
-  expect(html).toContain(">early-blocked</b>");
-  expect(html).toContain('aria-label="Follow up with new-done about this"');
-  expect(html).toContain('aria-label="Chat with early-blocked about this"');
-  expect(html.match(/>Chat about this</g)).toHaveLength(2);
-  expect(html.match(/>Follow up…</g)).toHaveLength(3);
-  expect(html.match(/>ⓘ</g)).toHaveLength(5);
-  expect(html.match(/>Mark reviewed</g)).toHaveLength(3);
-  expect(html).toContain('data-mark="asks"');
-  expect(html).toContain('data-mark="needs"');
-  expect(html).toContain('data-mark="done"');
+  const document = new DOMParser().parseFromString(html, "text/html");
+  expect(document.querySelector(".needs-you-count")?.textContent).toContain(
+    "3 waiting on you",
+  );
+  expect(document.querySelector("strong")?.textContent).toBe("the fix");
+  // Its options are the replies; "Other…" opens the typed answer.
+  const replies = document.querySelector(
+    '[role="group"][aria-label="Answers to w1:asker (unverified)"]',
+  );
+  expect(
+    [...(replies?.querySelectorAll("button") ?? [])].map(
+      (button) => button.textContent,
+    ),
+  ).toEqual(["Ship", "Wait", "Other…"]);
+  expect(document.querySelector(".needs-you-field")).toBeNull();
+  const names = [...document.querySelectorAll(".needs-you-name")];
+  expect(names).toHaveLength(6);
+  expect(
+    names.find((name) => name.textContent === "w1:asker")?.closest("button"),
+  ).toBeNull();
+  expect(
+    document.querySelector('button[aria-label="Open early-blocked\'s window"]'),
+  ).not.toBeNull();
+  const buttons = [...document.querySelectorAll("button")];
+  const titled = (title: string) =>
+    buttons.filter((button) => button.getAttribute("title") === title);
+  expect(buttons.map((button) => button.textContent)).toContain("Ship");
+  // ✕ keeps each kind's own action: Dismiss on a question, Mark reviewed on
+  // finished work, none on a blocked agent.
+  expect(titled("Dismiss question")).toHaveLength(1);
+  expect(titled("Open in Chat")).toHaveLength(2);
+  expect(titled("Follow up in Chat")).toHaveLength(3);
+  expect(
+    buttons.filter((button) =>
+      button.getAttribute("title")?.startsWith("Mark reviewed"),
+    ),
+  ).toHaveLength(3);
+  expect(titled("Dismiss question")[0]?.getAttribute("aria-label")).toBe(
+    "Dismiss w1:asker (unverified)'s question without answering",
+  );
 });
 
 test("an opener's item past the limit opens at its page, and the others stay a page away", () => {

@@ -255,8 +255,6 @@ export const rpcVerbs = [
     object({ ops: Type.Array(Type.Unknown()) }),
   ),
   rpc("world.chimes.save", "reconcilable", "world"),
-  rpc("world.completion_seen.list", "read", "world"),
-  rpc("world.completion_seen.mark", "reconcilable", "world"),
   rpc("world.desk.get", "read", "world"),
   rpc("world.desk.observe", "reconcilable", "world"),
   rpc("world.desk.open", "reconcilable", "world"),
@@ -266,6 +264,16 @@ export const rpcVerbs = [
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),
   rpc("world.snapshot", "read", "world"),
+  rpc(
+    "world.usage.get",
+    "read",
+    "world",
+    object({
+      window: Type.Optional(
+        Type.Union([Type.Literal("today"), Type.Literal("7d")]),
+      ),
+    }),
+  ),
   rpc("world.town_master.set", "reconcilable", "world"),
   rpc("world.watchlist.list", "read", "world"),
   rpc("world.watchlist.pin", "reconcilable", "world"),

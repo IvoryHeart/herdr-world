@@ -214,13 +214,19 @@ hosts stay usable.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it.
    [Chat with an agent](#chat) explains reading, replying and answering there.
-   **Needs you** in the top bar (in the view picker in Zen and on a phone)
-   counts the questions and blocked agents waiting on you, in every view. Tap
-   it to open the **Needs you** tab on the left: each question, blocked agent
-   and finished task is a short message from its agent with its quick reply in
-   place, and **Chat about this** opens the agent's Chat. Hover an agent's name
-   (or tap **ⓘ**) for its card. The tab stays open or closed on this device;
-   **‹** (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
+   **Needs you** in the top bar (in the view picker in Zen and on a phone,
+   where outside Zen it is an inbox icon with a count badge after the view's
+   name) counts the questions and blocked agents waiting on you, in every view.
+   Tap it to open the **Needs you** tab on the left: each question, blocked
+   agent and finished task is a compact notification from its agent. When the
+   agent asked something, tap a quick reply (or **Other…** to type), or type in
+   the answer field and press Enter. Tap a long message (or **more**) to read
+   all of it, links included; **less** shortens it again. Tabbing into a
+   message reveals its links. The agent's name and the chat icon open the
+   agent's Chat for the context behind it. **✕** dismisses a question, or marks
+   finished work reviewed; its tooltip says which. Hover an agent's name for
+   its card. The tab stays open or closed on this device; **✕** in its header
+   (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a
    small preview card: its latest message as **Chat** shows it, never terminal
    text; when the conversation cannot be read, it says why. It highlights a
@@ -378,7 +384,11 @@ of marks, each with one glyph, colour and word: **•** Working, **!** Needs you
 **Mark reviewed** acknowledges that completion in one record on this World
 service, so Town, Desk, Needs you, your phone and your desktop agree. World saves the mark across
 restarts. It reappears after World verifies the same terminal and known agent
-session; a replacement session or later completion needs review again.
+session; a replacement session or later completion needs review again. Old
+separate completion checks transfer only with the same known session and native
+completion sequence. Work without session proof may need review once after an
+upgrade. If World cannot yet verify its Desk stop, retry Mark reviewed when the
+connection is ready.
 Opening a finished agent's terminal also clears its reception stop; neither action proves the result
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
@@ -643,7 +653,12 @@ on your phone and desktop.
    working on it; tap one to close Work and jump to its card. **Merged**
    groups the week's pull requests you opened by the day they merged, with
    today open; tap a day to open
-   it, and change how many days it covers in **Settings → Sources**. Escape or a
+   it, and change how many days it covers in **Settings → Sources**. History
+   has a 400-PR bound and shares a one-minute refresh deadline with open work
+   and action details, which are read first. If Sources says history was
+   shortened, shorten the window there and refresh. World keeps its last
+   complete list; the reported merge date is only the oldest valid date
+   observed, not proof that every merge since that date was read. Escape or a
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull

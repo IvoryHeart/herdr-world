@@ -18,8 +18,8 @@ import {
 /**
  * GitHub through the service user's `gh` sign-in: open pull requests the user
  * authored, was asked to review or is assigned, recently merged ones, and
- * assigned issues. One bounded GraphQL request per refresh, plus a page of
- * 100 for each further hundred merged in the window.
+ * assigned issues. Separate bounded open searches, then action details,
+ * then up to eight pages of fifty pull requests merged in the window.
  */
 
 export type ProcessResult = { code: number; stdout: string; stderr: string };
@@ -36,9 +36,15 @@ const TIMEOUT_MS = 20_000;
 /** One refresh, every page included. */
 const DEADLINE_MS = 60_000;
 const PAGE = 50;
-const MERGED_PAGE = 100;
-/** GitHub's search answers at most 1,000 results. */
-const MERGED_PAGES = 10;
+/**
+ * GitHub stops a GraphQL request after ten seconds, and each merged pull
+ * request carries its check contexts: a hundred of them in one request, or
+ * beside the open searches, ran past that limit (HTTP 504).
+ */
+const MERGED_PAGE = 50;
+/** Keep history inside the shared refresh budget. */
+const MERGED_LIMIT = 400;
+const MERGED_PAGES = MERGED_LIMIT / MERGED_PAGE;
 export const DEFAULT_MERGED_DAYS = 7;
 export const MAX_MERGED_DAYS = 90;
 const MAX_TITLE = 300;
@@ -50,6 +56,20 @@ export const GITHUB_SIGNED_OUT =
   "Sign in with gh auth login as the user that runs World, then refresh.";
 const GITHUB_FAILED =
   "GitHub did not answer. World keeps the last pull requests and tries again shortly.";
+
+class RefreshDeadline extends Error {}
+
+function shortenedHistory(oldest: number | undefined): SourceRefresh {
+  const witness =
+    oldest === undefined
+      ? "GitHub history was shortened before a merge date could be confirmed."
+      : `GitHub history was shortened; oldest confirmed merge: ${new Date(oldest).toISOString().slice(0, 10)}.`;
+  return {
+    ok: false,
+    state: "error",
+    detail: `${witness} World keeps the last complete list. Shorten the merged window in Settings > Sources.`,
+  };
+}
 
 /** Contexts read with each PR's rollup, to leave the crew's marks out of it. */
 const ROLLUP_CONTEXTS = 100;
@@ -85,30 +105,35 @@ function mergedQuery(now: number, days: number) {
   return `is:pr is:merged author:@me merged:>=${since}`;
 }
 
-export function githubQuery(now: number, mergedDays = DEFAULT_MERGED_DAYS) {
+const OPEN_SEARCHES = {
+  authored: "is:pr is:open author:@me archived:false",
+  reviewing: "is:pr is:open review-requested:@me archived:false",
+  assigned: "is:pr is:open assignee:@me archived:false",
+};
+
+/** One open PR search; assigned issues travel with the assigned PRs. */
+export function githubQuery(alias: keyof typeof OPEN_SEARCHES) {
   const issue = `nodes { ... on Issue { number title url updatedAt repository { nameWithOwner } } }`;
   return `query {
-  ${search("authored", "is:pr is:open author:@me archived:false", PAGE, OPEN_NODES)}
-  ${search("reviewing", "is:pr is:open review-requested:@me archived:false", PAGE, OPEN_NODES)}
-  ${search("assigned", "is:pr is:open assignee:@me archived:false", PAGE, OPEN_NODES)}
-  ${search("merged", mergedQuery(now, mergedDays), MERGED_PAGE, MERGED_NODES)}
-  ${search("issues", "is:issue is:open assignee:@me archived:false", PAGE, issue)}
+  ${search(alias, OPEN_SEARCHES[alias], PAGE, OPEN_NODES)}
+  ${alias === "assigned" ? search("issues", "is:issue is:open assignee:@me archived:false", PAGE, issue) : ""}
 }`;
 }
 
-/** The next hundred merged pull requests after `cursor`. */
+/** A page of pull requests merged in the window, after `cursor` if given. */
 export function mergedPageQuery(
   now: number,
   mergedDays: number,
-  cursor: string,
+  cursor?: string,
 ) {
-  return `query {
-  ${search(
+  const page = search(
     "merged",
     mergedQuery(now, mergedDays),
     MERGED_PAGE,
-    MERGED_NODES,
-  ).replace("first: ", `after: ${JSON.stringify(cursor)}, first: `)}
+    `${cursor === undefined ? "issueCount " : ""}${MERGED_NODES}`,
+  );
+  return `query {
+  ${cursor === undefined ? page : page.replace("first: ", `after: ${JSON.stringify(cursor)}, first: `)}
 }`;
 }
 
@@ -142,11 +167,18 @@ export async function refreshGitHub(
     return { ok: false, state: "not_connected", detail: GITHUB_SIGNED_OUT };
   const query = async (text: string) => {
     const remaining = Math.min(TIMEOUT_MS, deadline - clock());
-    if (remaining <= 0) throw new Error("GitHub refresh ran out of time");
-    const result = await run(
-      ["gh", "api", "graphql", "-f", `query=${text}`],
-      remaining,
-    );
+    if (remaining <= 0) throw new RefreshDeadline();
+    let result: ProcessResult;
+    try {
+      result = await run(
+        ["gh", "api", "graphql", "-f", `query=${text}`],
+        remaining,
+      );
+    } catch (error) {
+      if (clock() >= deadline) throw new RefreshDeadline();
+      throw error;
+    }
+    if (clock() >= deadline) throw new RefreshDeadline();
     if (result.code !== 0 || result.stdout.length > MAX_OUTPUT)
       throw new Error("GitHub request failed");
     const response = record(JSON.parse(result.stdout));
@@ -154,30 +186,50 @@ export async function refreshGitHub(
       throw new Error("GitHub returned a partial response");
     return record(response.data);
   };
+  let historyStarted = false;
+  let oldest: number | undefined;
   try {
-    const data = await query(githubQuery(now, mergedDays));
-    // Every pull request merged in the window, a hundred at a time. A
-    // failed page fails the refresh, so the last successful list stays.
-    const merged = [...nodes(data.merged)];
-    let mergedRowsKnown = Array.isArray(record(data.merged).nodes);
-    let page = record(record(data.merged).pageInfo);
-    for (
-      let pages = 1;
-      pages < MERGED_PAGES && page.hasNextPage === true;
-      pages++
-    ) {
-      if (typeof page.endCursor !== "string" || !page.endCursor) break;
+    const data: Record<string, unknown> = {};
+    for (const alias of ["authored", "reviewing", "assigned"] as const) {
+      const answer = await query(githubQuery(alias));
+      data[alias] = answer[alias];
+      if (alias === "assigned") data.issues = answer.issues;
+    }
+    // Actions get their bounded detail budget before display-only history.
+    await readDetails(parseGitHubResponse({ data }), details, query, now);
+    // A failed or shortened history never replaces the last successful list.
+    const merged: Record<string, unknown>[] = [];
+    let mergedRowsKnown = true;
+    let page: Record<string, unknown> = {};
+    let cursor: string | undefined;
+    for (let pages = 0; pages < MERGED_PAGES; pages++) {
+      historyStarted = true;
       const next = record(
-        (await query(mergedPageQuery(now, mergedDays, page.endCursor))).merged,
+        (await query(mergedPageQuery(now, mergedDays, cursor))).merged,
       );
       mergedRowsKnown &&= Array.isArray(next.nodes);
-      merged.push(...nodes(next));
+      const rows = nodes(next);
+      merged.push(...rows);
+      for (const row of rows) {
+        const date = pullRequestItem(row)?.finishedAt;
+        if (date !== undefined) oldest = Math.min(oldest ?? date, date);
+      }
+      if (
+        pages === 0 &&
+        Number.isSafeInteger(next.issueCount) &&
+        (next.issueCount as number) > MERGED_LIMIT
+      )
+        return shortenedHistory(oldest);
       page = record(next.pageInfo);
+      if (page.hasNextPage !== true) break;
+      if (pages + 1 === MERGED_PAGES) return shortenedHistory(oldest);
+      if (typeof page.endCursor !== "string" || !page.endCursor) break;
+      cursor = page.endCursor;
     }
     const items = parseGitHubResponse({
       data: { ...data, merged: { nodes: merged } },
     });
-    await readDetails(items, details, query, now);
+    attachDetails(items, details, now);
     const complete =
       mergedRowsKnown &&
       page.hasNextPage === false &&
@@ -187,7 +239,9 @@ export async function refreshGitHub(
           record(record(data[alias]).pageInfo).hasNextPage === false,
       );
     return { ok: true, items, pullRequestsComplete: complete };
-  } catch {
+  } catch (error) {
+    if (historyStarted && error instanceof RefreshDeadline)
+      return shortenedHistory(oldest);
     return { ok: false, state: "error", detail: GITHUB_FAILED };
   }
 }
@@ -232,7 +286,21 @@ async function readDetails(
       else failed(item);
     }
   }
-  for (const item of own) {
+}
+
+/** Attach only to final open observations; a later merge retires that detail. */
+function attachDetails(
+  items: WorkItem[],
+  cache: Map<string, CachedDetail>,
+  now: number,
+) {
+  for (const item of items) {
+    if (
+      item.kind !== "pull_request" ||
+      item.lane === "merged" ||
+      !item.roles.includes("author")
+    )
+      continue;
     const known = cache.get(item.key);
     const matching = known?.stamp === detailStamp(item) ? known : undefined;
     if (matching) item.pr = matching.detail;
@@ -272,6 +340,9 @@ export function parseGitHubResponse(value: unknown): WorkItem[] {
       const role = ROLE_OF[alias]!;
       if (known) {
         if (!known.roles.includes(role)) known.roles.push(role);
+        // The merged request can observe a merge after the open-work read.
+        if (known.lane !== "merged" && item.lane === "merged")
+          items.set(item.key, { ...item, roles: known.roles });
       } else items.set(item.key, { ...item, roles: [role] });
     }
   }

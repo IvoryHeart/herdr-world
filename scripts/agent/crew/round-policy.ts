@@ -10,6 +10,7 @@ export {
   reviewClaimCounts,
 } from "./round-actions";
 import { adoptCycles } from "./round-adoption";
+import { reviewRound } from "./review-boundary";
 import type { Database } from "bun:sqlite";
 import type { GateInput } from "../gate/predicate";
 import type { Deps } from "./deps";
@@ -72,6 +73,11 @@ function auxiliary(
     kind,
     target,
     text,
+    ...(kind === "judgment" &&
+    target === "owner" &&
+    evaluation.process === "owner"
+      ? { ownerDecision: true as const }
+      : {}),
   };
 }
 
@@ -118,7 +124,13 @@ export function roundPolicy(context: RoundContext): Action[] {
   ];
   if (!last) {
     if (reviews.length && !dryRun) {
-      const round = roundFor(crew, input.number, head, now);
+      const round = reviewRound(
+        crew,
+        input.number,
+        head,
+        now,
+        settings.reviewStarts[String(input.number)],
+      );
       saveCycle(crew, {
         pr: input.number,
         head,
@@ -167,6 +179,8 @@ export function roundPolicy(context: RoundContext): Action[] {
     ];
   }
   if (!dryRun) deleteMeta(crew, failureKey);
+  const start = settings.reviewStarts[String(input.number)];
+  if (start) facts.posts = facts.posts.filter((post) => post.at >= start.at);
   const findings = withReplies(
     openFindings(input, facts.posts),
     facts.posts,
