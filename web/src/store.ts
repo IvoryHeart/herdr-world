@@ -319,6 +319,7 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 let initialized = false;
+let initialConnectionSelectionPending = true;
 let catalogRequestSeq = 0;
 export function nextCatalogRequest() {
   return ++catalogRequestSeq;
@@ -345,6 +346,44 @@ function reportTaskNotificationFailure(error: unknown, version: number) {
   worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
 }
 
+/** The connection this browser was last on, opened again on load. */
+const LAST_CONNECTION_KEY = "lastConnection";
+
+/**
+ * The connection to open when none is active: the one this browser was last
+ * on while the catalog still has it, else the server's default.
+ */
+function preferredConnectionId(defaultConnectionId: string): string {
+  let last: string | null;
+  try {
+    last = worldLocalStorage.getItem(LAST_CONNECTION_KEY);
+  } catch {
+    last = null;
+  }
+  return last &&
+    (state.connections.length === 0 ||
+      state.connections.some((connection) => connection.id === last))
+    ? last
+    : defaultConnectionId;
+}
+
+function handleBridgeHello(hello: { default_connection_id: string }) {
+  const defaultConnectionId = hello.default_connection_id;
+  set({ defaultConnectionId });
+  if (initialConnectionSelectionPending) {
+    initialConnectionSelectionPending = false;
+    const preferred = preferredConnectionId(defaultConnectionId);
+    if (
+      state.activeConnectionId === STARTUP_DEFAULT_CONNECTION_ID &&
+      preferred !== state.activeConnectionId
+    )
+      selectConnectionNow(preferred, false);
+  }
+  if (state.status === "connected" && !state.connectionPaused) {
+    void refreshConnectionCatalog();
+  }
+}
+
 function selectConnectionNow(connectionId: string, refresh = true): boolean {
   if (!connectionId || connectionId === state.activeConnectionId) return false;
   if (
@@ -358,6 +397,14 @@ function selectConnectionNow(connectionId: string, refresh = true): boolean {
     typeof localStorage !== "undefined"
   ) {
     copyStartupProfileStorage(worldLocalStorage, connectionId);
+  }
+  // Roamgate #529: the connection this browser is on opens again on its next
+  // load. It is only the initial selection (S7); it never retargets an
+  // operation, and the phone still opens on Town.
+  try {
+    worldLocalStorage.setItem(LAST_CONNECTION_KEY, connectionId);
+  } catch {
+    // Storage may be unavailable; a reload then opens the default.
   }
   const generation = bridge.setActiveConnection(connectionId);
   state = activateConnectionState(state, connectionId, generation);
@@ -518,7 +565,8 @@ export function applyConnectionCatalog(
     defaultConnectionId === state.defaultConnectionId
   ) {
     if (readinessChanged) set({ catalogueReady: true });
-    if (!nextActive) selectConnectionNow(defaultConnectionId);
+    if (!nextActive)
+      selectConnectionNow(preferredConnectionId(defaultConnectionId));
     return true;
   }
 
@@ -531,7 +579,8 @@ export function applyConnectionCatalog(
     sessionsByConnectionId: stableSessions,
   };
   emit();
-  if (!nextActive) selectConnectionNow(defaultConnectionId);
+  if (!nextActive)
+    selectConnectionNow(preferredConnectionId(defaultConnectionId));
   return true;
 }
 
@@ -961,19 +1010,7 @@ export const store = {
     initialized = true;
     void store.restoreTaskNotifications();
     subscribeLocalStorage(handlePreferenceStorageChange);
-    bridge.onHello((hello) => {
-      const defaultConnectionId = hello.default_connection_id;
-      set({ defaultConnectionId });
-      if (
-        state.activeConnectionId === STARTUP_DEFAULT_CONNECTION_ID &&
-        defaultConnectionId !== state.activeConnectionId
-      ) {
-        selectConnectionNow(defaultConnectionId, false);
-      }
-      if (state.status === "connected" && !state.connectionPaused) {
-        void refreshConnectionCatalog();
-      }
-    });
+    bridge.onHello(handleBridgeHello);
     bridge.onStatus((s) => {
       if (s !== "connected") {
         catalogReadyForConnection = false;
@@ -2849,19 +2886,21 @@ export const store = {
         if (!message.includes("popup_not_open")) throw error;
       }
       if (!leaseIsCurrent(lease)) return;
-      // Herdr opens a popup in whichever Space it has focused, and a plugin
-      // handed a different one declines: herdr-float reports "Space changed"
-      // and exits successfully, so the key looks dead. Match Herdr's focus to
-      // the Space the action is invoked for.
+      // Herdr opens a popup in whichever Space it has focused, and the
+      // observer that reports popup state watches that same Space, so a
+      // mismatch opens a popup nobody sees and the key looks dead. Always
+      // align Herdr with the Space the action is invoked for: browser-local
+      // navigation keeps its selection in this browser, and Herdr's own
+      // focus can sit on another Space entirely. This cannot be skipped by
+      // comparing against `workspaces[].focused`, which browser-local
+      // navigation projects to this browser's selection (see
+      // projectBrowserNavigation), making the comparison always agree.
       const workspaceId = context.workspace_id;
       if (typeof workspaceId === "string" && workspaceId) {
-        const focused = store.get().workspaces.find((w) => w.focused);
-        if (focused?.workspace_id !== workspaceId) {
-          await lease.client.call("workspace.focus", {
-            workspace_id: workspaceId,
-          });
-          if (!leaseIsCurrent(lease)) return;
-        }
+        await lease.client.call("workspace.focus", {
+          workspace_id: workspaceId,
+        });
+        if (!leaseIsCurrent(lease)) return;
       }
       await lease.client.call("plugin.action.invoke", {
         plugin_id: pluginId,
@@ -2889,6 +2928,7 @@ export const __storeTesting = {
     herdrUpgradePollMs = ms;
   },
   notifyRangerTask,
+  handleBridgeHello,
   handleBridgeStatus,
   handleHerdrEvent,
   startUpdatePolling,
@@ -2904,6 +2944,7 @@ export const __storeTesting = {
   rearmTerminalAttachmentsAfterCatalog,
   replaceState(snapshot: State) {
     stopPolling();
+    initialConnectionSelectionPending = true;
     refreshingConnectionKeys.clear();
     gitStatusPushesDuringRefresh.clear();
     queuedConnectionKeys.clear();
