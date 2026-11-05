@@ -34,6 +34,7 @@ import {
   type ScreenRect,
 } from "./townBusReach";
 import { TownBusLayer } from "./townBusLayer";
+import { townBusChipStop, soonestTownBus } from "./townBusChip";
 import { townStopRooms } from "./townBusStop";
 import type { TownLayout } from "./townLayout";
 import type { TownMoveResult } from "./townMoves";
@@ -67,45 +68,18 @@ const viewArea = (camera: TownCamera): ScreenRect => {
   };
 };
 
-/**
- * The stop the chip points at: where the soonest bus waits (the last stop
- * with riders), else the main stop. Its pole's foot, world px.
- */
-const chipStop = (l: TownLayout, scene: TownBusScene | null | undefined) => {
-  const occupied = scene?.stops.filter((stop) => stop.riders > 0).pop();
-  return occupied
-    ? {
-        pole: occupied.box.x + STOP_W / 2,
-        foot: occupied.box.y + occupied.box.h,
-      }
-    : { pole: l.busStop.x * 16 + 8, foot: l.busStop.y * 16 + 16 };
-};
-
 /** That stop, its sign and the bus standing beside it, in screen pixels. */
 const stopBox = (
   camera: TownCamera,
   l: TownLayout,
   scene: TownBusScene | null | undefined,
+  entries: readonly BinEntry[],
+  remaining: (entry: BinEntry) => number,
 ): ScreenRect => {
-  const { pole, foot } = chipStop(l, scene);
+  const { pole, foot } = townBusChipStop(l, scene, entries, remaining);
   const a = camera.toScreen(pole - STOP_W / 2 - BUS_W - 4, foot - STOP_H - 16);
   const b = camera.toScreen(pole + STOP_W, foot + 2 + BUS_H);
   return { left: a.x, top: a.y, right: b.x, bottom: b.y };
-};
-
-/**
- * The soonest bus's clock, from the bin's own state rather than the last
- * drawn frame, so a boarding shows at once: its wait left, or leaving.
- */
-const soonestBus = (
-  entries: readonly BinEntry[],
-  remaining: (entry: BinEntry) => number,
-) => {
-  if (!entries.length) return null;
-  const left = Math.min(
-    ...entries.map((entry) => remaining(entry) - entry.departure_ms),
-  );
-  return { remaining: Math.max(0, left), leaving: left < 0 };
 };
 
 /** The mounted Town's way to send an agent to the stop (the peek's action). */
@@ -322,7 +296,13 @@ export function useTownBus({
           });
           return;
         }
-        const box = stopBox(camera, l, layerRef.current?.scene);
+        const box = stopBox(
+          camera,
+          l,
+          layerRef.current?.scene,
+          latest.current.bin.entries,
+          (entry) => store.remaining(entry),
+        );
         const padX = 72,
           padY = 32;
         const next = insideScreenArea(free, box)
@@ -354,7 +334,13 @@ export function useTownBus({
     const canvas = host.current;
     if (!camera || !l || !canvas) return;
     const free = freeScreenArea(viewArea(camera), townPanels(canvas));
-    const box = stopBox(camera, l, layerRef.current?.scene);
+    const box = stopBox(
+      camera,
+      l,
+      layerRef.current?.scene,
+      latest.current.bin.entries,
+      (entry) => store.remaining(entry),
+    );
     const focus = camera.focusPoint();
     const z = camera.z;
     // The stop box's centre, in world pixels, placed at the free area's centre.
@@ -426,7 +412,7 @@ export function useTownBus({
     const label = projection.rooms.find((r) => r.key === room)?.displayLabel;
     return label ? `at the stop by ${label}` : "at a bus stop";
   };
-  const next = soonestBus(bin.entries, (entry) => store.remaining(entry));
+  const next = soonestTownBus(bin.entries, (entry) => store.remaining(entry));
   const putBack = (entry: BinEntry) => {
     playBinSound("back");
     void store
@@ -594,7 +580,7 @@ function TownBusControls({
   const scene = live() ?? rendered;
   if (!scene || !entries.length) return null;
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const soon = soonestBus(entries, remaining);
+  const soon = soonestTownBus(entries, remaining);
   const riderDown = (id: string, event: ReactPointerEvent) => {
     event.stopPropagation();
     try {

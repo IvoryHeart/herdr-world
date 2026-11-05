@@ -2,7 +2,7 @@
 
 - Close agents with a bin: drop an agent in it and it closes when its countdown
   ends (30 seconds by default; 10 s, 1 min or 2 min in Settings), unless you
-  take it back first. Town's bin is a London bus stop on the top road, where a
+  take it back first. Town's bin has London bus stops at its crossings, where a
   red double-decker drives in, sounds its horn at the stop and collects the
   agents waiting there (a drop from Board, Desk or Town restarts the shared
   countdown for everyone on it, while the bus keeps its original approach
@@ -31,3 +31,6 @@
   its room, the one bus calls only at stops with riders in road order at a
   speed fixed when it sets off, and tapping any stop opens the tray, which
   names each agent's stop.
+- Keep the bus-stop chip aimed at the departure whose clock it shows when
+  trips overlap. Late riders joining during the final brake board at that stop;
+  if every earlier rider is put back, the bus returns with them to their own stop.

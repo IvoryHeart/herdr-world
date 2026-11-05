@@ -124,8 +124,9 @@ browser case also exercises actual Close agent…, card drop, cancellation and
 Put back; a direct store.add labelled desk is not its UI consumer.
 
 I2's `bin-observers.test.ts` composes the registry with Town's production scene,
-without private trajectory maps: a reset at 19 active seconds, a 60-second hold,
-and one further active second preserve position, speed and early arrival.
+without private trajectory maps: a reset one active second before the
+geometry-derived final-stop arrival, a 60-second hold, and one further active
+second preserve position, speed and early arrival.
 Town's bus browser case fully remounts the component/layer from service-shaped
 trip-clock samples after an approach reset, while held, and after a parked reset.
 The service owns original duration and active elapsed time; layout geometry stays
@@ -134,8 +135,9 @@ in Town. These UI consumers do not replace the native source/stop fences.
 The multi-stop route also consumes the optional immutable `trip_joined_ms`
 observation (older services mean zero). Stops and room assignment come from
 the shared layout/road model; joins and Put back do not change the canonical
-cruise speed or the service's close deadline. `bin-observers.test.ts` now removes
-a set-off rider at the final stop and compares the surviving scene with a fresh
+cruise speed. A join restarts the service countdown and close deadline in full
+for that trip; Put back does not reset the remaining riders' deadline.
+`bin-observers.test.ts` now removes a set-off rider at the final stop and compares the surviving scene with a fresh
 observer using only the service sample. It retains the earlier reset/hold checks.
 The `TownCanvas.bus.test.ts` consumer additionally drives the real Pixi bus layer
 in Chrome on an injected observation clock: the old bus leaves before the bus
@@ -164,3 +166,11 @@ tray). Both phone and laptop viewports preserve Resume/countdown assertions.
 Registry/RPC ownership tests release one browser socket without resetting time
 or another socket's hold; explicit Resume ends all holds. Native close authority,
 intent timing and the maintained M5 recovery proof remain independent.
+
+The focused route cases judge a late join against the drawn eased position,
+including the final brake. If no earlier rider remains, the approved replay
+places the late rider at home before assigning subsequent riders. The real layer
+consumer covers that orphan's leaver-then-fade and equality with a fresh observer.
+The registry/scene observer also checks overlapping trips: the edge chip targets
+the same departure whose countdown it displays. These are presentation/geometry
+consumers; they add no service history, admission or native-close authority.

@@ -194,8 +194,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     on it. Board and Desk drops reset that same service countdown. The bus never
     slows for a reset: it arrives early and waits longer. An agent sent after
     the bus passed its stop waits at the next stop ahead. Put back everyone at
-    the last stop and the bus fades out and back in at the last stop that still
-    has riders. Reloading or opening another World
+    the last stop and the bus drives off, then fades in at the last stop that still
+    has riders. If every earlier rider is put back, a late rider returns with the
+    bus to its own room's stop, even if its assigned next stop was still ahead.
+    Reloading or opening another World
     reconstructs that same progress; holds freeze the trip as well as the
     countdown. Desk cards and directory rows offer **Close agent…**, and Desk
     cards can be dropped into its bin. Pinned tabs retain their last pane even

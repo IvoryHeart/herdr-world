@@ -11,6 +11,11 @@ import {
   townBusRoute,
   townBusSpeed,
 } from "../../../web/src/world/town/scene/townBusRoute";
+import {
+  townBusChipStop,
+  soonestTownBus,
+} from "../../../web/src/world/town/townBusChip";
+import { STOP_W } from "../../../web/src/world/town/townBusGeometry";
 const TOTAL = 30_000 + BIN_DEPARTURE_MS;
 let next = 0;
 const rider = (_trip: string, remaining_ms: number) => ({
@@ -108,4 +113,76 @@ test("I2: new observers and remounted layers reconstruct a reset and held trip f
   expect(pose(freshReturned)).toEqual(pose(liveReturned));
   expect(liveReturned.at).toBeLessThan(arrived.at);
   expect(liveReturned.phase).toBe("waiting");
+});
+
+test("the chip follows the departure whose clock it displays when trips overlap", () => {
+  let now = 0;
+  const registry = new WorldBinRegistry({
+    epoch: "synthetic-chip",
+    clock: { now: () => now, monotonic: () => now },
+    scheduler: { schedule: () => ({ cancel() {} }) },
+    commit: async () => {},
+    countdown: () => 30,
+    publish: () => {},
+  });
+  const target = (id: string) => ({
+    connection_id: "synthetic",
+    connection_generation: 1,
+    workspace_id: "workspace",
+    tab_id: id,
+    pane_id: id,
+    terminal_id: id,
+    label: id,
+    view: "town" as const,
+  });
+  registry.add(target("a"));
+  now = 31_000;
+  registry.add(target("b"));
+  const entries = registry.list().entries;
+  expect(entries.map((e) => e.remaining_ms)).toEqual([5_000, 36_000]);
+  expect(new Set(entries.map((e) => e.trip)).size).toBe(2);
+  const { layout } = layoutTown(
+    {
+      hosts: [{ key: "host", displayOrder: 0 }],
+      rooms: [{ key: "room", hostKey: "host", order: 0, deskKeys: ["a", "b"] }],
+    },
+    "wide",
+  );
+  const remaining = (e: (typeof entries)[number]) => e.remaining_ms;
+  const scene = townBusScene({
+    stops: layout.busStops,
+    width: layout.width * 16,
+    entries,
+    homeStop: (e) =>
+      e.tab_id === "a" ? layout.busStops[0]!.id : layout.busStops.at(-1)!.id,
+    remaining,
+    paused: false,
+    reducedMotion: false,
+  });
+  const selected = scene.stops.find(
+    (s) => s.id === scene.stopOf.get(entries[0]!.id),
+  )!;
+  expect(scene.stopOf.get(entries[0]!.id)).not.toBe(
+    scene.stopOf.get(entries[1]!.id),
+  );
+  expect(soonestTownBus(entries, remaining)).toMatchObject({
+    trip: entries[0]!.trip,
+    remaining: 0,
+    leaving: true,
+  });
+  expect(townBusChipStop(layout, scene, entries, remaining)).toEqual({
+    pole: selected.box.x + STOP_W / 2,
+    foot: selected.box.y + selected.box.h,
+  });
+  const single = [entries[1]!];
+  const b = scene.stops.find((s) => s.id === scene.stopOf.get(single[0]!.id))!;
+  expect(townBusChipStop(layout, scene, single, remaining)).toEqual({
+    pole: b.box.x + STOP_W / 2,
+    foot: b.box.y + b.box.h,
+  });
+  expect(soonestTownBus([], remaining)).toBeNull();
+  expect(townBusChipStop(layout, scene, [], remaining)).toEqual({
+    pole: layout.busStop.x * 16 + 8,
+    foot: layout.busStop.y * 16 + 16,
+  });
 });

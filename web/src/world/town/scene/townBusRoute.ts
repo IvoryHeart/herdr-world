@@ -147,11 +147,15 @@ export function townBusPlan(input: {
       const home = byId.get(rider.home) ?? fallback!;
       const d = speed * Math.max(0, rider.joinedMs);
       const final = finalOf();
+      const drawn = townBusEase(d, final?.at ?? null);
       let stop = home;
-      if (final && d >= final.at + BUS_BRAKE / 2) stop = final;
-      else if (home.at <= d)
+      // No earlier remaining rider can reconstruct a late rider's old pickup.
+      // The approved orphan rule places it at home, then replays later joins.
+      if (!occupied.size) stop = home;
+      else if (final && d >= final.at + BUS_BRAKE / 2) stop = final;
+      else if (home.at <= drawn)
         stop =
-          route.stops.find((s) => s.at > d) ??
+          route.stops.find((s) => s.at > drawn) ??
           final ??
           route.stops[route.stops.length - 1]!;
       occupied.add(stop);

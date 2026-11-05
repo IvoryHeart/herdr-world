@@ -4104,7 +4104,9 @@ after the bus has passed its stop SHALL wait at the next stop ahead (or at the
 final stop, including while the bus already waits there). When a Put back leaves
 the last occupied stop behind the bus, the bus SHALL wait at that stop exactly as
 a trip that always ended there; a live view MAY drive the old bus off and fade it
-in there. A late rider that moves the final stop ahead while the bus is braking
+in there. If every rider who joined before it is put back, a late rider SHALL
+wait at its own stop and the bus SHALL return for it. A late rider that moves
+the final stop ahead while the bus is braking
 MAY move it by at most half its braking distance. The bus SHALL sound a short horn
 as it reaches its final stop, under this device's sound setting. An agent sent
 while a bus has not yet pulled away SHALL board it, and the service SHALL restart

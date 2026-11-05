@@ -707,7 +707,9 @@ agent from Board, Desk or Town before the bus pulls away starts the shared
 countdown again for both; the bus never slows down for it, so it arrives early
 and waits longer. An agent sent after the bus has passed its stop waits at the
 next stop ahead instead. If you put back everyone at the bus's last stop, the
-bus fades out and back in at the last stop that still has riders. Reloading or
+bus drives off, then fades back in at the last stop that still has riders. If
+you put back every earlier rider, a late rider returns to its own room's stop
+with the bus, even if its assigned pickup stop was still ahead. Reloading or
 opening another World keeps the trip's progress, including time held still. If
 the bus's stop is off screen, the red chip at the screen's edge shows the next
 departure. While you carry an agent, the chip moves near the top of the screen

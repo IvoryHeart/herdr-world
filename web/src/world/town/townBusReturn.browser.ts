@@ -2,11 +2,19 @@ import { BIN_DEPARTURE_MS, type BinEntry } from "../../../../shared/bin";
 import { TownBusLayer, BUS_FADE_MS } from "./townBusLayer";
 import { BUS_H, BUS_W } from "./townBusGeometry";
 import { townRoomStops } from "./townBusStop";
+import { BUS_BRAKE, townBusRoute, townBusSpeed } from "./scene/townBusRoute";
 import { layoutTown } from "./townLayout";
 
 /** Exercise the real Pixi layer on an injected observation clock in Chrome. */
 export function checkTownBusReturnLayer(
   check: (condition: boolean, message: string) => void,
+) {
+  return [false, true].map((orphan) => checkReturnLayer(check, orphan));
+}
+
+function checkReturnLayer(
+  check: (condition: boolean, message: string) => void,
+  orphan: boolean,
 ) {
   const { layout } = layoutTown(
     {
@@ -49,7 +57,11 @@ export function checkTownBusReturnLayer(
     trip_elapsed_ms: 30_000,
     trip_joined_ms: 0,
   });
-  let entries = [entry("earlier"), entry("final")];
+  const route = townBusRoute(layout.busStops, layout.width * 16);
+  const finalAt = route.stops.find((s) => s.id === last[1])!.at;
+  const joined = (finalAt + BUS_BRAKE / 2) / townBusSpeed(route, 30_000) + 500;
+  const earlier = { ...entry("earlier"), trip_joined_ms: orphan ? joined : 0 };
+  let entries = [entry("final"), earlier];
   let now = 0;
   const make = () =>
     new TownBusLayer({
@@ -87,9 +99,22 @@ export function checkTownBusReturnLayer(
       old.phase === "waiting",
       "3prime: initial bus must wait at the final room stop",
     );
+    if (orphan)
+      check(
+        layer.scene!.stopOf.get("earlier") === last[1] &&
+          old.riders.some((r) => r.entryId === "earlier"),
+        "orphan: late rider must board the founder's waiting bus before Put back",
+      );
     entries = entries.filter((e) => e.id === "earlier");
     layer.update(false);
     fresh.update(false);
+    if (orphan)
+      check(
+        layer.scene!.stopOf.get("earlier") === first[1] &&
+          layer.scene!.buses[0]?.phase === "waiting" &&
+          layer.scene!.buses[0]?.riders.some((r) => r.entryId === "earlier"),
+        "orphan: founder Put back must return the bus and boarded rider to its own home",
+      );
     const returned = layer.scene!.buses[0]!;
     check(
       returned.at < old.at,

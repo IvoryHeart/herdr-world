@@ -133,6 +133,58 @@ test("a late rider whose stop the bus has passed waits at the next stop ahead, e
   expect(early.riders.find((r) => r.entryId === "late")?.stop).toBe("30:36");
 });
 
+test("late riders at or behind the final stop join the drawn bus throughout its final brake", () => {
+  const final = "10:36";
+  const founder = rider("a", final);
+  const speed = plan([founder]).speed;
+  for (const d of [at(final), at(final) + 10, at(final) + BUS_BRAKE / 2 - 1]) {
+    expect(townBusEase(d, at(final))).toBeLessThan(at(final));
+    for (const home of [final, "10:10"]) {
+      const p = plan([founder, rider("late", home, d / speed)]);
+      expect(p.riders.find((r) => r.entryId === "late")!.stop).toBe(final);
+      expect(p.final!.id).toBe(final);
+      expect(townBusPosition(p, d / speed)).toEqual(
+        townBusPosition(plan([founder]), d / speed),
+      );
+    }
+  }
+});
+
+test("an orphaned late rider returns to its home after the founder is put back", () => {
+  const founder = rider("a", "10:36");
+  const speed = plan([founder]).speed;
+  const arrival = (at("10:36") + BUS_BRAKE / 2) / speed;
+  const late = rider("c", "10:10", arrival + 500);
+  expect(
+    plan([founder, late]).riders.find((r) => r.entryId === "c")!.stop,
+  ).toBe("10:36");
+  const orphan = plan([late]);
+  expect(orphan.riders[0]!.stop).toBe(late.home);
+  const returned = townBusPosition(orphan, arrival + 2_500);
+  expect(returned).toMatchObject({
+    at: at(late.home),
+    arrived: true,
+    visible: true,
+    atStop: late.home,
+  });
+  expect(
+    townBusPosition(plan(structuredClone([late])), arrival + 2_500),
+  ).toEqual(returned);
+  // Accepted tradeoff: it returns home even if the old assigned stop was ahead.
+  const farFounder = rider("a", "30:36");
+  const between = (at("10:10") + at("10:36")) / 2 / speed;
+  const ahead = rider("c", "10:10", between);
+  expect(
+    plan([farFounder, ahead]).riders.find((r) => r.entryId === "c")!.stop,
+  ).toBe("10:36");
+  expect(plan([ahead]).riders[0]!.stop).toBe(ahead.home);
+  const next = rider("d", "10:36", arrival + 3_000);
+  expect(plan([late, next]).riders.map((r) => r.stop)).toEqual([
+    late.home,
+    late.home,
+  ]);
+});
+
 test("moving the final stop ahead mid-brake moves the bus at most half the brake", () => {
   const finalAt = at("10:36");
   const further = at("30:36");
