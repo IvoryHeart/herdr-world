@@ -164,6 +164,12 @@ export class WorldBinRegistry {
             remaining_ms: remaining,
             deadline,
           });
+    const elapsed = joined
+      ? (joined.trip_elapsed_ms ?? 0) +
+        (joined.trip_started === null
+          ? 0
+          : Math.max(0, now - joined.trip_started))
+      : 0;
     this.entries.set(id, {
       ...target,
       id,
@@ -173,12 +179,8 @@ export class WorldBinRegistry {
       remaining_ms: remaining,
       deadline,
       trip_duration_ms: joined?.trip_duration_ms ?? duration,
-      trip_elapsed_ms: joined
-        ? (joined.trip_elapsed_ms ?? 0) +
-          (joined.trip_started === null
-            ? 0
-            : Math.max(0, now - joined.trip_started))
-        : 0,
+      trip_elapsed_ms: elapsed,
+      trip_joined_ms: elapsed,
       trip_started: this.paused ? null : now,
     });
     this.reservations.set(id, { id, ...target });

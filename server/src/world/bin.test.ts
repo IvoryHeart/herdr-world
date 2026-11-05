@@ -270,6 +270,39 @@ test("the original trip clock survives boarding, holds and new observers", async
   );
 });
 
+test("join samples are immutable active-trip observations through holds and founder removal", async () => {
+  const { registry, advance, committed } = fixture();
+  const founder = registry.add(agent("p1")).entries[0]!;
+  expect(founder.trip_joined_ms).toBe(0);
+  await advance(5_000);
+  registry.add(agent("p2", { view: "town" }));
+  registry.pause();
+  await advance(60_000);
+  registry.add(agent("p3", { view: "desk" }));
+  expect(registry.list().entries.map((e) => e.trip_joined_ms)).toEqual([
+    0, 5_000, 5_000,
+  ]);
+  registry.resume();
+  await advance(2_000);
+  registry.add(agent("p4"));
+  const beforeDuplicate = registry.list();
+  expect(registry.add(agent("p2"))).toEqual(beforeDuplicate);
+  registry.restore(founder.id);
+  const observed = structuredClone(registry.list());
+  expect(observed.entries.map((e) => e.trip_joined_ms)).toEqual([
+    5_000, 5_000, 7_000,
+  ]);
+  expect(observed.entries.map((e) => e.trip_elapsed_ms)).toEqual([
+    7_000, 7_000, 7_000,
+  ]);
+  expect(observed.entries.map((e) => e.remaining_ms)).toEqual([
+    TOTAL,
+    TOTAL,
+    TOTAL,
+  ]);
+  expect(committed).toEqual([]);
+});
+
 test("closing and uncertain entries retain qualified pin reservations", () => {
   const { registry } = fixture();
   const first = registry.add(agent("p1")).entries[0]!;
@@ -296,6 +329,7 @@ test("once the bus has pulled away, a later agent waits for the next one", async
     .add(agent("p2", { view: "town", join: bus.id }))
     .entries.find((e) => e.pane_id === "p2")!;
   expect(late.trip).toBe(late.id);
+  expect(late.trip_joined_ms).toBe(0);
   expect(late.remaining_ms).toBe(TOTAL);
   // The leaving bus keeps its own clock: p1 closes on time, p2 later.
   await advance(BIN_DEPARTURE_MS);

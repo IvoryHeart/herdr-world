@@ -65,6 +65,8 @@ export type BinEntry = BinTarget & {
   trip_duration_ms?: number;
   /** Active trip time at this sample, excluding holds and independent of resets. */
   trip_elapsed_ms?: number;
+  /** Active trip time when this entry joined, set once; older services imply 0. */
+  trip_joined_ms?: number;
 };
 
 export type BinReservation = BinTarget & { id: string };

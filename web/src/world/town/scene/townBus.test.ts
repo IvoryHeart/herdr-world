@@ -26,28 +26,31 @@ const town = (hosts: number) => ({
   })),
 });
 
-test("the stop stands on the topmost street's pavement, right of its last crossing", () => {
+test("the main stop is the central road stop and all stops stand on clear pavement", () => {
   for (const [hosts, shape] of [
     [1, "wide"],
     [3, "wide"],
     [2, "narrow"],
   ] as const) {
     const { layout } = layoutTown(town(hosts), shape);
-    const { busStop, roads, verticalRoads, width } = layout;
-    expect(busStop.road).toBe(Math.min(...roads));
-    expect(layout.ground[busStop.y * width + busStop.x]).toBe(TownGround.walk);
-    const crossings = verticalRoads.filter(
-      (v) => v.y1 === busStop.road || v.y0 === busStop.road + 5,
+    const { busStop, busStops, width, height } = layout;
+    const distance = (s: (typeof busStops)[number]) =>
+      (s.x - width / 2) ** 2 + (s.y - height / 2) ** 2;
+    expect(busStop).toBe(
+      [...busStops].sort(
+        (a, b) => distance(a) - distance(b) || a.order - b.order,
+      )[0]!,
     );
-    if (crossings.length)
-      expect(busStop.x).toBeGreaterThan(Math.max(...crossings.map((v) => v.x)));
-    expect(
-      layout.lamps.some(
-        (lamp) =>
-          Math.abs(lamp.x - busStop.x) <= 2 &&
-          Math.abs(lamp.y - busStop.y) <= 1,
-      ),
-    ).toBe(false);
+    expect(busStops.filter((s) => s.main)).toEqual([busStop]);
+    for (const stop of busStops) {
+      expect(layout.ground[stop.y * width + stop.x]).toBe(TownGround.walk);
+      expect(
+        layout.lamps.some(
+          (lamp) =>
+            Math.abs(lamp.x - stop.x) <= 2 && Math.abs(lamp.y - stop.y) <= 1,
+        ),
+      ).toBe(false);
+    }
   }
 });
 

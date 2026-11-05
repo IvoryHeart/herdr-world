@@ -4102,6 +4102,12 @@ movers, with the approach speed fixed from the road length and set-off countdown
 The service SHALL publish the original trip duration and active elapsed time,
 excluding holds and independent of boarding resets, so a remount or new observer
 reconstructs the same progress without a private previous-trajectory map.
+Each entry SHALL also carry optional `trip_joined_ms`: its active trip time at
+admission, sampled once from the same service clock, with zero for set-off riders.
+Boarding resets, holds and Put back of another rider SHALL NOT change that sample.
+Consumers of an older service that omits the field SHALL treat it as zero.
+This observation SHALL NOT change admission, countdown/departure deadlines,
+pause ownership or native close authority, and the service SHALL NOT need layout data.
 A bus seats eight; more riders
 SHALL take more buses, and buses that cannot stand at the stop SHALL queue
 behind it on the same street, then in further lanes, so every rider has a place

@@ -148,6 +148,20 @@ test("time left runs from the read, and stops while the bin is paused", () => {
   expect(store.remaining(store.get().entries[0]!)).toBe(20_000);
 });
 
+test("the browser retains an observed join time and defaults an older service to zero", () => {
+  const { store, advance } = fixture();
+  store.accept(
+    state("run1", 1, {
+      entries: [
+        entry("bin-run1-1"),
+        { ...entry("bin-run1-2", "p2"), trip_joined_ms: 19_000 },
+      ],
+    }),
+  );
+  advance(10_000);
+  expect(store.get().entries.map((e) => e.trip_joined_ms)).toEqual([0, 19_000]);
+});
+
 test("a refused mutation keeps the state and reports the reason", async () => {
   const { store } = fixture();
   store.accept(state("run1", 1));

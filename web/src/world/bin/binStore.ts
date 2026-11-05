@@ -63,6 +63,9 @@ function parseEntry(value: unknown): BinEntry | null {
       : 0,
     remaining_ms: Math.max(0, v.remaining_ms as number),
     trip: v.trip as string,
+    trip_joined_ms: Number.isFinite(v.trip_joined_ms)
+      ? Math.max(0, v.trip_joined_ms as number)
+      : 0,
     ...(Number.isFinite(v.trip_duration_ms) &&
     Number.isFinite(v.trip_elapsed_ms)
       ? {
