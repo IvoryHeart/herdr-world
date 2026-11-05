@@ -596,6 +596,32 @@ Settings go under `crew` in the gate's `config.json`:
 - `leads` maps each pod to its lead seat.
 - `authors` holds per-PR author overrides.
 - `neverPrompt` lists seats the watcher never prompts.
+- `reviewStarts` optionally records each PR's explicit adoption `{ "head":
+  "<full SHA>", "at": <UTC milliseconds> }`, keyed by PR number. Record both
+  when crew adopts the PR. Earlier RESULTs remain in the gate's auditable history
+  and reviewers can read them, but crew never adopts them as review evidence or
+  outstanding findings. Later results retain their exact-head binding and normal
+  confirmation rules; timestamps never establish a reviewed commit. Existing
+  accepted crew rounds survive the boundary without a repeat review. A future
+  time, unproved ancestry or crew round predating the boundary holds admission
+  for operator reconciliation; changing a boundary cannot silently reset a round.
+  Legacy reviewer actions/runs also establish admission without cycle rows;
+  an empty placeholder round alone does not. Scoped passes preserve unobserved
+  PRs' pending, sent and failed coordinator receipts without rearming them.
+- `reviewJudgmentSeat` names the operator for attribution, adoption, run failures
+  and other review-plumbing judgments. A `reviewStarts` boundary requires this
+  seat. Each cause gets one queued prompt to that named seat, never an owner ask;
+  missing/focused/busy seats wait, and repeated failed prompts stay failed locally.
+  The existing `crew/needs-owner` status also represents these held judgments;
+  its description says "Judgment pending". Explicit evaluator `Process: owner`
+  decisions still use an owner ask. Without these settings, existing behavior
+  remains unchanged. Clear causes retire their coordinator prompts normally.
+- `readyAsk` defaults to `true`. Set it to `false` when a separate steward owns
+  the owner's ready notice: the crew still writes mechanical `crew/merge-ready`
+  marks, but does not generate READY owner asks. Review/fixer work and genuine
+  judgment, timeout and failure escalation remain active. The setting covers
+  every PR in this watcher's scope; keep a pilot explicitly PR-scoped. An
+  existing READY ask is withdrawn on the next pass, as for any retired cause.
 - `maxRuns` (default 3) bounds the runs working at once. A run without its
   completion evidence is stopped after `runTimeoutMinutes` without meaningful
   harness work (default 90, a positive finite duration). Conversation, reasoning,

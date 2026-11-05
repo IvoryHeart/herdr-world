@@ -218,7 +218,7 @@ previous result and a later scheduled run. Runtime field claims remain in memory
 
 ## Requirements
 
-- A supported Linux, macOS, or Windows release, or Bun 1.4.1+ for a source build.
+- A supported Linux, macOS, or Windows release, or Bun 1.4.4+ for a source build.
 - Herdr 0.9.0 / terminal protocol 22 for the current endpoint path. The bridge also
   recognizes the older protocol range covered by its compatibility tests.
 - OpenSSH on Linux or macOS for saved SSH profiles. Windows supports local profiles.

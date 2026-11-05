@@ -86,6 +86,7 @@ import {
 } from "./subscription-loop";
 import { type ConnectionIdentity, STARTUP_DEFAULT_CONNECTION } from "./types";
 import { unixOnlyHandlers } from "./unix-only";
+import { createRuntimeUsage } from "../usage/host";
 
 const DEFAULT_EVENTS = [
   "workspace.created",
@@ -193,6 +194,9 @@ export function createLegacyConnectionRuntime(args: {
     sshHost: config.sshHost,
     runBinaryProcessWithTimeout,
     shQuote,
+  });
+  const usage = createRuntimeUsage({
+    sshHost: config.sshHost,
   });
   // These helper groups run Unix shell commands over SSH.
   const agentSessions = unixOnlyHandlers(
@@ -831,6 +835,7 @@ export function createLegacyConnectionRuntime(args: {
     // Calls still waiting on Herdr belong to this retired runtime: fail them
     // now rather than at their timeout, so their callers can settle.
     herdr.close();
+    const usageStop = usage.close();
     handleTerminalUpload.stopCleanup();
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
@@ -859,6 +864,7 @@ export function createLegacyConnectionRuntime(args: {
       transportStart?.catch(() => undefined) ?? Promise.resolve();
     stopTask = Promise.all([
       forwardStop,
+      usageStop,
       autoSyncStop,
       subscriptionStop,
       agentStatusStop,
@@ -891,6 +897,7 @@ export function createLegacyConnectionRuntime(args: {
     worktreeRemovalRuntime,
     terminalBridge,
     agentSessions,
+    usage,
     agentCheckout,
     agentWorktree,
     recoveryIdentity,

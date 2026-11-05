@@ -54,6 +54,16 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
+  if (method === "world.usage.get") {
+    try {
+      const usage = rpc.services.worldUsage;
+      if (!usage) throw new Error("World usage service is unavailable");
+      sendReply({ id, result: await usage.get(params ?? {}) }, method);
+    } catch {
+      sendError("world-usage-error", new Error("World usage is unavailable"));
+    }
+    return;
+  }
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
