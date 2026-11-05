@@ -97,12 +97,15 @@ export class TerminalAttachSize {
       )
       .finally(() => {
         pending.done = true;
+        if (this.read !== pending) return;
+        // Only the attach still waiting on it may use a read; any other
+        // settles into nothing, so a later attach reads afresh.
         if (
-          this.read === pending &&
           view.desiredTerminalRef.current === terminalId &&
           client.isCurrent()
         )
           view.retry((value) => value + 1);
+        else this.read = null;
       });
     return null;
   }

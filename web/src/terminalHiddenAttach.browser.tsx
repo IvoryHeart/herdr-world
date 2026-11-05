@@ -162,32 +162,8 @@ try {
   for (let index = 0; index < 10; index += 1) await frame();
   check(of("terminal.resize").length === 0, "a hidden terminal sent a resize");
 
-  // The store has no layout for the tab yet (a page still loading): one
-  // pane.layout read gives the pane's size before the attach.
-  paneLayoutReply = async () => ({ layout: sized(120, 40) });
-  mountHidden(null);
-  attach = await hiddenAttach("read layout");
-  check(
-    of("pane.layout").length === 1 &&
-      of("pane.layout")[0]!.params.pane_id === pane.pane_id,
-    "the hidden terminal did not read its pane's layout once",
-  );
-  check(
-    attach.cols === 119 &&
-      attach.rows === 40 &&
-      attach.surface_cols === 120 &&
-      attach.surface_rows === 40,
-    `the read layout did not size the attach, got ${attach.cols}×${attach.rows} (${attach.surface_cols}×${attach.surface_rows})`,
-  );
-
-  // An unreadable layout still attaches, so the endpoint is never withheld.
-  paneLayoutReply = async () => {
-    throw new Error("pane.layout failed");
-  };
-  mountHidden(null);
-  await hiddenAttach("failed read");
-  for (let index = 0; index < 10; index += 1) await frame();
-  check(of("terminal.resize").length === 0, "a hidden terminal sent a resize");
+  // The read and failure orderings are unit tests (terminalAttachSize.test.ts);
+  // this checks TerminalView wires its own client and pane into them.
 
   // The transport reconnects while a read is in flight: the old client's
   // read fails as stale, and the retained view attaches again through a

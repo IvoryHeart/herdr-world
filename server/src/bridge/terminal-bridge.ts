@@ -352,6 +352,7 @@ export function createTerminalBridge(args: {
     try {
       if ((await navigationMode()) !== "browser-local") return;
       const codecs = await (args.surfaceCodecsEnabled?.() ?? true);
+      const size = await args.appViewportSize?.().catch(() => null);
       if (disposed || popupObserver) return;
       const observer = new EndpointClient(args.clientSocketPath, codecs);
       popupObserver = observer;
@@ -379,8 +380,6 @@ export function createTerminalBridge(args: {
         popupChanged(null);
         retryPopupObserver();
       });
-      const size = await args.appViewportSize?.().catch(() => null);
-      if (disposed || popupObserver !== observer) return;
       await observer.connect(size?.cols ?? 80, size?.rows ?? 24);
       refreshPopupObserverFocus();
     } catch (error) {

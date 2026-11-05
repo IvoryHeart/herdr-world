@@ -548,6 +548,59 @@ test.each([
   },
 );
 
+test("a codec refresh while the popup observer reads its size still observes", async () => {
+  // The observer is published only once its size is read: a transport
+  // refresh in that window must not leave a closed observer that its retry
+  // can never replace.
+  let hellos = 0;
+  const socketPath = await startSessionServer({
+    initialSurface: {
+      frame: {
+        cells: [cell("x")],
+        width: 1,
+        height: 1,
+        cursor: null,
+        hyperlinks: [],
+      },
+      panes: [],
+    },
+    onHello: () => {
+      hellos += 1;
+    },
+  });
+  const size = Promise.withResolvers<{ cols: number; rows: number }>();
+  let reads = 0;
+  const bridge = createTerminalBridge({
+    clientSocketPath: socketPath,
+    herdrProtocol: async () => 22,
+    lookupPaneId: async () => null,
+    appViewportSize: () => {
+      reads += 1;
+      return size.promise;
+    },
+    broadcast: () => {},
+    safeSend: () => true,
+    clientLabel: () => "test",
+    markRpcError: () => {},
+  });
+  try {
+    await bridge.handleTerminalRpc(
+      {} as ServerWebSocket<unknown>,
+      "watch",
+      "terminal.watch_popup",
+      {},
+    );
+    await settleUntil(() => reads === 1);
+    bridge.refreshSurfaceCodecs();
+    size.resolve({ cols: 120, rows: 40 });
+    // Longer than the observer's 2 s retry.
+    for (let i = 0; i < 60 && hellos === 0; i++) await Bun.sleep(50);
+    expect(hellos).toBeGreaterThan(0);
+  } finally {
+    bridge.dispose();
+  }
+});
+
 test.each(["cursor only", "other split pane"])(
   "restores a hidden cursor when a patch updates %s",
   async (update) => {
