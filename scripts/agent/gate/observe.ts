@@ -15,6 +15,7 @@ import {
   parseDetails,
   postsOf,
   reviewerResults,
+  uiPath,
   trustedPosts,
 } from "../../../server/src/sources/pullRequestDetail";
 import {
@@ -240,6 +241,13 @@ export function observe(options: {
         expiresAt: now + PULL_REQUEST_DETAIL_MAX_AGE_MS,
       };
       const pr = record(record(data[`p${index}`]).pullRequest);
+      if (
+        (config as GateConfig & { crew?: { convergingReviews?: boolean } }).crew
+          ?.convergingReviews
+      ) {
+        const visible = crewUiChange(record(pr.files));
+        if (visible !== null) item.pr.uiChange = visible;
+      }
       commitsOf.set(
         item.number!,
         list(record(pr.commits).nodes).map((node) => {
@@ -475,4 +483,24 @@ function copies(
 
 function list(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.map(record) : [];
+}
+
+/** Complete current-head paths distinguish fixture-only changes from visible UI. */
+export function crewUiChange(files: Record<string, unknown>): boolean | null {
+  if (
+    !Array.isArray(files.nodes) ||
+    !Number.isSafeInteger(files.totalCount) ||
+    Number(files.totalCount) !== files.nodes.length
+  )
+    return null;
+  const paths = files.nodes.map((node) => record(node).path);
+  if (
+    !paths.every(
+      (path): path is string => typeof path === "string" && path.length > 0,
+    )
+  )
+    return null;
+  return paths.some(
+    (path) => uiPath(path) && !/^web\/src\/(?:world\/)?testing\//u.test(path),
+  );
 }

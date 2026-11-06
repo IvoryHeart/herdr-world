@@ -172,7 +172,9 @@ legacy evaluator/process holds require explicit reconciliation and remain held.
 Without this option the existing evaluator flow below is preserved.
 
 Use `crew.lightPrs` for explicit Light overrides; their capture requests cover
-only changed UI, one phone and one desktop, rather than five viewports.
+only changed UI, one phone and one desktop, rather than five viewports. Complete current-head file inventories also distinguish
+fixture-only web changes from visible UI; incomplete inventories stay unknown,
+and production UI/site changes still need evidence.
 `crew.readyAsk: false` leaves owner Try/Merge/Decide notices with the steward.
 The steward also keeps preview allocation, close-on-merge, disk and genuine
 program exceptions. Reviewers never attach, resize or send input to owner native

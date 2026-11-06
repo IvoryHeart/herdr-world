@@ -112,3 +112,34 @@ test("review brief requires a complete first pass, scoped confirmations and expl
   expect(prompt).toContain("READ-ONLY");
   expect(prompt).not.toContain("herdr-world ask");
 });
+
+test("React/tooling fixture-only paths need no UI captures; actual visible changes and incomplete paths stay conservative", async () => {
+  const { crewUiChange } = await import("./gate/observe");
+  const files = (paths: string[]) => ({
+    totalCount: paths.length,
+    nodes: paths.map((path) => ({ path })),
+  });
+  expect(
+    crewUiChange(
+      files([
+        "docs/react-version.md",
+        "scripts/benchmark-react.ts",
+        "web/src/world/SharedViewCreation.browser.tsx",
+        "web/src/world/testing/browserBundles.ts",
+      ]),
+    ),
+  ).toBe(false);
+  expect(
+    crewUiChange(
+      files([
+        "web/src/world/testing/browserBundles.ts",
+        "web/src/world/WorldLoader.tsx",
+      ]),
+    ),
+  ).toBe(true);
+  expect(crewUiChange(files(["site/index.html"]))).toBe(true);
+  expect(
+    crewUiChange({ totalCount: 2, nodes: [{ path: "docs/guide.md" }] }),
+  ).toBeNull();
+  expect(crewUiChange({ totalCount: 1, nodes: [{}] })).toBeNull();
+});
