@@ -1,12 +1,11 @@
 # World style guide
 
-**Status: proposed, awaiting owner approval.** All rules below are proposals
-unless explicitly described as shipping facts. Mockups may explore these rules
-now; adopting the proposed rules in shipping changes waits for the owner
-decision coordinated by steward-main. Phase 1 is ready for mockups, not
-owner-approved. After approval, apply the approved rules to new UI and code
-you touch. Token and component
-changes come in separate PRs. This guide doesn't change product code.
+**Status: seven design decisions approved; implementation follows separately.**
+The owner approved all seven decisions below in the PR #648 follow-up on
+2026-11-06. Apply those approved directions to new UI and code you touch in
+later implementation PRs. Other detailed proposals remain proposals unless
+explicitly described as shipping facts. Token and component changes come in
+separate PRs. This guide doesn't change product code.
 
 ## What this guide is for
 
@@ -38,13 +37,12 @@ and the product's own Lucide icons, add local styles for the proposed rules,
 and use synthetic names. Specimens are not product screenshots or evidence of
 reusable shipping APIs.
 
-**For the owner's review of PR #648:** start with [World today](#world-today)
-to orient yourself, then compare the linked specimens and recommendations
-below. Check whether you want these rules used in later UI work. The seven
-decisions match the PR description; all remain pending, and the recommendation
-is **yes** for each.
+**Owner decision on PR #648:** “I didn't understand any of your things, but
+consider it approved.” This approves all seven directions below for later UI
+work. Start with [World today](#world-today) to orient yourself, then compare
+the linked specimens. The seven decisions match the PR description.
 
-| # | What to check | Recommendation |
+| # | What to check | Approved direction |
 | --- | --- | --- |
 | 1 | Compare the Shell and Town cards in [Skins](#skins). Should surfaces floating over Town share its Town appearance? | Yes: extend the Town skin to those surfaces. |
 | 2 | Compare the soft and solid buttons in [Dos and don'ts](#dos-and-donts), and the proposed [button set](#button) with Desk's current lane actions. | Yes: one soft-accent primary; reserve solid accent for indicators, including replacing Desk's solid state-coloured action buttons. |
@@ -54,10 +52,10 @@ is **yes** for each.
 | 6 | Review the proposed [state-colour map](#state-colours), especially Working. | Yes: one map across views, with base Working changing from yellow to blue. |
 | 7 | Read principle 6 in [Principles](#principles). | Yes: change Roamgate-derived component CSS only when touched, and offer token fixes upstream. |
 
-Reply in one batch, for example: **“Approve all seven”** or **“Approve 1, 3–7;
-change 2 to …”**. Approval here chooses the direction for later implementation
-PRs. This PR changes only documentation; there is no new product behaviour to
-exercise in a running World instance.
+Approval chooses the direction for later implementation PRs. It does not mean
+the rules are already implemented or that every specimen detail is a shipping
+requirement. This PR changes only documentation; there is no new product
+behaviour to exercise in a running World instance.
 
 ## Contents
 
@@ -138,8 +136,9 @@ proposals.
   [inline count](#badges-and-counters) and the [state map](#state-colours).
 - **Today and the proposal:** the lane actions (Answer, Open and Watch) are
   solid, state-coloured buttons. The proposed [button set](#button) has no such
-  variant, so how Desk's actions look depends on the pending primary-button
-  decision. The tab counts already resemble the proposed inline count.
+  variant. The approved primary-button direction replaces these with the soft
+  primary in later implementation work. The tab counts already resemble the
+  proposed inline count.
 
 On phones, Board and Desk also show the shell's floating controls for the
 selected terminal: Ranger, Tabs, window arrangement and the workspace views
@@ -445,8 +444,9 @@ inner highlight.
    - Colour and text: `--accent` fill, `--bg` text, 9 px/700.
      This inherited pair has a known neutral light-theme contrast gap:
      `#e1e2e7` on `#2e7de9` is 3.1062:1, below 4.5:1 for these small digits.
-     The proposed unification needs an accessible foreground/fill pairing,
-     pending owner approval; this is not an approved colour prescription.
+     The approved contrast repair needs an accessible foreground/fill pairing
+     selected in the later token PR; this inherited pair is not an approved
+     colour prescription.
    - Hidden at 0 and capped at 99+. Its parent must not clip it.
 2. **Inline count in a label** ("Now 32"): 11/600, padding 0 6, 16 px tall,
    radius 999, `color-mix(in srgb, var(--text) 12%, transparent)` fill and
@@ -554,9 +554,10 @@ laptop 1512 × 982, half 1280 × 1440, wide 2560 × 1440 and portrait 1440 × 25
   - Neutral light-theme count digits (`--bg` on `--accent`, `#e1e2e7` on
     `#2e7de9`) reach 3.1062:1. This is a separate gap from accent links on
     `--panel`. An accessible label does not fix the visible digits' contrast.
-  - Token fixes and an accessible badge foreground/fill pairing wait for the
-    owner's decision. Until then, don't use `--muted` for text a person must
-    read to act, or treat the inherited badge pair as contrast-compliant.
+  - The owner approved token fixes and an accessible badge foreground/fill
+    pairing in a separate token PR. Until implemented, don't use `--muted` for
+    text a person must read to act, or treat the inherited badge pair as
+    contrast-compliant.
 - Every control has a visible `:focus-visible` style. Never set
   `outline: none` without a replacement ring.
 - Icon-only buttons have an `aria-label`. Counts are part of the label
@@ -585,10 +586,10 @@ laptop 1512 × 982, half 1280 × 1440, wide 2560 × 1440 and portrait 1440 × 25
 
 ## Checklist for a UI change
 
-For mockup review now, and shipping UI review after owner approval:
+For mockup review and later shipping UI changes:
 
-- [ ] For shipping changes, the applicable owner decisions are approved;
-      proposed rules alone do not authorize implementation.
+- [ ] Apply the seven approved directions within the implementation PR's scope;
+      distinguish remaining detailed proposals from approved decisions.
 - [ ] Colours come from the role tokens. No new hex values and no hex
       fallbacks.
 - [ ] Spacing is from 2, 4, 6, 8, 10, 12, 16 or 24, and type is from 11, 12,
