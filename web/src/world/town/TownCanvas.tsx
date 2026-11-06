@@ -277,6 +277,8 @@ export function TownCanvas({
       void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
   }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
+  /** A table whose card a touch tap opened; touch has no hover to open it. */
+  const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   const latest = useRef({
     chrome,
     model,
@@ -284,6 +286,7 @@ export function TownCanvas({
     teams,
     selectedKey,
     hover,
+    tappedDesk,
     calm,
     completionSeenKeys,
     summonedKeys,
@@ -306,6 +309,7 @@ export function TownCanvas({
     teams,
     selectedKey,
     hover,
+    tappedDesk,
     completionSeenKeys,
     summonedKeys,
     askingKeys,
@@ -608,6 +612,19 @@ export function TownCanvas({
         host.style.cursor = pointer ? "pointer" : "";
       },
       select: (key) => latest.current.onSelect(key),
+      tapCard: (deskKey) => {
+        const { tappedDesk: open, model: m } = latest.current;
+        const roomKey = deskKey ? m.desks.get(deskKey)?.roomKey : undefined;
+        // Only a table drawn with its nameplate has a card; a second tap
+        // on the same table does what a tap always did.
+        const opens =
+          deskKey !== null &&
+          deskKey !== open &&
+          !!roomKey &&
+          hud.visible.tagRooms.has(roomKey);
+        setTappedDesk(opens ? deskKey : null);
+        return opens;
+      },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
       move: (command) => {
@@ -736,7 +753,7 @@ export function TownCanvas({
       host.removeEventListener("pointerleave", leave);
       host.removeEventListener("wheel", wheel);
     };
-  }, [view, scene]);
+  }, [view, scene, hud]);
 
   const keyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!rendererRef.current || event.target !== event.currentTarget) return;
@@ -814,6 +831,11 @@ export function TownCanvas({
             onSelect={onSelect}
             onActivate={onActivateAgent}
             summary={summary}
+            openDeskKey={
+              // A mouse over a table, or a touch tap on one, opens its card.
+              tappedDesk ??
+              (hover !== null && model.desks.has(hover) ? hover : null)
+            }
             onActivateRoom={(key) => {
               onActivateRoom(key);
               zoomToRoomKey(key);

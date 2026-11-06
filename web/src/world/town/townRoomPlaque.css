@@ -226,7 +226,7 @@
   pointer-events: none;
 }
 
-.town-desk-title:is(:hover, :focus-within) {
+.town-desk-title:is(:hover, :focus-within, .is-open) {
   z-index: 6;
 }
 
@@ -249,7 +249,7 @@
   transform-origin: 50% 0;
 }
 
-.town-desk-title:is(:hover, :focus-within) .town-desk-card {
+.town-desk-title:is(:hover, :focus-within, .is-open) .town-desk-card {
   opacity: 1;
   visibility: inherit;
   pointer-events: auto;

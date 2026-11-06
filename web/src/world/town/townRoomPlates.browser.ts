@@ -192,6 +192,51 @@ export async function checkTownRoomPlates(
       "focusing a table's nameplate must show the table's summary under it",
     );
     title.blur();
+    // The table itself, drawn on the canvas: a mouse over its centre, away
+    // from the plate, opens the same card, which leaves the table uncovered.
+    const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+    const tags = title.closest<HTMLElement>(".town-desk-tags")!;
+    const tagsBox = tags.getBoundingClientRect();
+    const centre = {
+      clientX: tagsBox.left + tagsBox.width / 2,
+      clientY: tagsBox.top + (tagsBox.height * 30) / 80,
+    };
+    check(
+      getComputedStyle(deskCard).visibility === "hidden" &&
+        canvas.contains(
+          document.elementFromPoint(centre.clientX, centre.clientY),
+        ),
+      "a table's centre must be the canvas, with its card closed",
+    );
+    canvas.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        pointerId: 71,
+        pointerType: "mouse",
+        ...centre,
+      }),
+    );
+    await waitFor(
+      () =>
+        title.classList.contains("is-open") &&
+        getComputedStyle(deskCard).visibility === "visible",
+      "hovering a table's centre never opened its card",
+    );
+    check(
+      canvas.contains(
+        document.elementFromPoint(centre.clientX, centre.clientY),
+      ) && !!deskCard.querySelector(".town-place-summary .town-summary-counts"),
+      "a table's hover card must show its summary without covering the table",
+    );
+    canvas.dispatchEvent(
+      new PointerEvent("pointerleave", { pointerId: 71, pointerType: "mouse" }),
+    );
+    await waitFor(
+      () =>
+        !title.classList.contains("is-open") &&
+        getComputedStyle(deskCard).visibility === "hidden",
+      "a table's card stayed open after the mouse left the town",
+    );
   }
   plate.blur();
   plate.dispatchEvent(

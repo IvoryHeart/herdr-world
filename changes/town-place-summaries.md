@@ -1,9 +1,10 @@
 ### Added
 
-- Hover a Town room's nameplate, or a table's nameplate, for its card: that
-  place's part of the Town summary (counts, who needs you there and recent
-  finishes, with Answer and Open). A room's card also holds Rename and Close,
-  so one hover shows them all. On a phone, tap the nameplate.
+- Hover a Town room's nameplate, or a table or its nameplate, for its card:
+  that place's part of the Town summary (counts, who needs you there and
+  recent finishes, with Answer and Open). A room's card also holds Rename and
+  Close, so one hover shows them all. On a phone, tap the nameplate; the first
+  tap on a table opens its card, and a second tap opens the table.
 
 ### Fixed
 

@@ -205,8 +205,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (tap on touch screens) for its card below it: the room's part of the Town
     summary (its counts, who needs you there and recent finishes, with
     **Answer** and **Open**), then Rename and Close with 40px targets. A
-    table's nameplate opens the same card for that table on hover, focus or a
-    tap; a click on the plate selects the table and a double click opens it.
+    table, or its nameplate, opens the same card for that table on hover,
+    focus or a tap; a click on the plate selects the table and a double click
+    opens it. On touch screens the first tap on a table opens its card, and a
+    second tap (or a double tap) opens the table.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
     agent from the keyboard). Tables lift from the room-summary zoom in, even

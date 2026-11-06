@@ -1321,7 +1321,10 @@ the room's part of the Town summary (its counts and its needs-you and finished
 items with their actions), then Rename and Close with targets at least 40 CSS
 pixels wide and tall. These controls SHALL NOT reserve name width while hidden.
 A table's nameplate SHALL open the same kind of card for that table on hover,
-focus or a touch, from the same summary read model. The dashed empty-seat **+** inside a room
+focus or a touch, from the same summary read model. Hovering the table itself
+on the canvas SHALL open that card without covering the table; on a touch
+screen, a tap on a table whose card is closed SHALL open the card instead of
+the table, and a second tap SHALL open the table as a tap does. The dashed empty-seat **+** inside a room
 SHALL open the existing launcher with that qualified room selected; Terminal
 SHALL be its first choice for a plain tab, alongside profiles and agent kinds.
 The plate SHALL NOT contain a separate New agent text button. If the selected

@@ -100,11 +100,14 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   pennants,
   signs,
   summary,
+  openDeskKey,
 }: {
   /** The HUD store: the ages clock. */
   hud: TownHud;
   /** The Town summary; room and table cards show their part of it. */
   summary: TownSummary;
+  /** The table under the mouse, or tapped, on the canvas: its card is open. */
+  openDeskKey: string | null;
   signs: TownBuildingSigns;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
@@ -457,6 +460,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                               deskKey={desk.key}
                               label={desk.displayLabel}
                               card={placeCard({ kind: "desk", key: desk.key })}
+                              open={desk.key === openDeskKey}
                               onSelect={onSelect}
                               onActivate={onActivate}
                             >

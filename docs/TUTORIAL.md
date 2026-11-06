@@ -179,8 +179,10 @@ hosts stay usable.
    terminals are excluded from the total. Hover the count for the working/waiting
    breakdown. Hover or focus a plate for the room's card below it: the room's
    counts, who needs you there and recent finishes (with **Answer** and
-   **Open**), then Rename and Close. Hover a table's nameplate for the same
-   card about that table. On a touch screen, tap the plate or nameplate. The dashed **+** seat inside a room
+   **Open**), then Rename and Close. Hover a table or its nameplate for the
+   same card about that table. On a touch screen, tap the plate or nameplate;
+   the first tap on a table opens its card, and a second tap (or a double tap)
+   opens the table as before. The dashed **+** seat inside a room
    opens its launcher with that room selected. Choose **Terminal** for a plain
    tab, a profile, or an agent kind. If the requested room is no longer
    available, choose a current room in the launcher before creating anything.
