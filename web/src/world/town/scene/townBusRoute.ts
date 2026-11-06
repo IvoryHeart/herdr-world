@@ -9,9 +9,11 @@
  * stop it reaches, empty or not, for the same short dwell, braking in and
  * pulling away over the same ramp: one timetable per trip, fixed by the
  * layout and the trip's countdown alone, so no boarding, reset or Put back
- * changes its speed or moves it. Every trip runs the whole route to its last
- * stop, the terminus, and waits there with its doors open until its
- * departure. It is drawn on every street it drives. World px.
+ * changes its speed. Every trip runs the whole route to its last stop, the
+ * terminus, and waits there with its doors open until its departure, unless
+ * a rider joined after the bus left the first stop of its lap: then it goes
+ * round again, so nobody waits at a stop the bus has passed. It is drawn on
+ * every street it drives. World px.
  */
 
 import { TOWN_TILE as T } from "../townLayout";
@@ -200,15 +202,17 @@ export function townBusAt(
 
 export type TownBusRiderInput = {
   entryId: string;
-  /** The stop nearest the rider's room. */
+  /** The stop nearest the rider's room: it waits there. */
   home: string;
   /** Active trip time when it joined (0 for set-off riders). */
   joinedMs: number;
 };
 
 export type TownBusRiderPlan = TownBusRiderInput & {
-  /** Where it waits: its home, or the terminus if the bus had left home. */
+  /** Where it waits until a bus stands there: always its home. */
   stop: string;
+  /** Active trip time it boards: the bus's first stand at home after it joined. */
+  boardMs: number;
 };
 
 export type TownBusPlan = {
@@ -218,33 +222,81 @@ export type TownBusPlan = {
   speed: number;
   dwellMs: number;
   riders: TownBusRiderPlan[];
-  /** The route's last stop: every trip's bus waits there until 0:00. */
+  /** The route's last stop: the bus waits there after its last lap. */
   final: TownBusRouteStop | null;
+  /**
+   * When each lap of the route starts, in active trip time. Lap 0 starts
+   * at 0. A lap follows the previous one straight on, or, when the bus was
+   * already waiting at the terminus, starts with it pulling away.
+   */
+  laps: number[];
 };
 
 /**
- * Who waits where. A rider waits at home unless the bus had already pulled
- * away from home on the timetable when it joined; then it waits at the
- * terminus, where the bus makes its final wait. The riders never change
- * where the bus is.
+ * The trip's laps and who boards when, from its joins alone (a pure
+ * function of the service's entries, so every observer and remount agrees).
+ * Every rider waits at its own stop. A join after the bus has left the
+ * first stop of its current lap buys one more lap, so the bus comes round
+ * to every stop again, wherever the joiner waits. `resetMs` is the trip's
+ * last countdown reset (every join resets it), which outlives a joiner who
+ * was put back, so that rider's lap still runs: a Put back never moves the
+ * bus.
  */
 export function townBusPlan(input: {
   route: TownBusRoute;
   tripDurationMs: number;
   riders: readonly TownBusRiderInput[];
+  resetMs?: number;
 }): TownBusPlan {
   const { route } = input;
   const timetable = townBusTimetable(route, input.tripDurationMs);
-  const leaves = new Map(
-    timetable.stops.map((slot) => [slot.id, slot.leaveMs]),
-  );
-  const byId = new Map(route.stops.map((stop) => [stop.id, stop]));
+  const slots = new Map(timetable.stops.map((slot) => [slot.id, slot]));
   const main = route.stops.find((stop) => stop.main) ?? route.stops[0];
   const final = route.stops[route.stops.length - 1] ?? null;
+  const first = timetable.stops[0];
+  const terminus = timetable.stops[timetable.stops.length - 1];
+  const T = timetable.durationMs;
+  const laps = [0];
+  const joins = [
+    ...new Set([
+      ...input.riders.map((rider) => rider.joinedMs),
+      input.resetMs ?? 0,
+    ]),
+  ]
+    .filter((t) => Number.isFinite(t) && t > 0)
+    .sort((a, b) => a - b);
+  if (first && terminus)
+    for (const t of joins) {
+      const s = laps[laps.length - 1]!;
+      // Every stop of the last lap is still ahead of the bus.
+      if (t < s + first.leaveMs) continue;
+      laps.push(
+        t < s + terminus.leaveMs
+          ? s + T // still on its way: straight on into another lap
+          : t + T - terminus.leaveMs, // waiting at the terminus: pull away now
+      );
+    }
   const riders = input.riders.map((rider) => {
-    const home = byId.get(rider.home) ?? main!;
-    const stop = rider.joinedMs < leaves.get(home.id)! ? home : final!;
-    return { ...rider, stop: stop.id };
+    const home = slots.has(rider.home) ? rider.home : main!.id;
+    const slot = slots.get(home)!;
+    let boardMs = Number.POSITIVE_INFINITY;
+    for (let k = 0; k < laps.length; k += 1) {
+      const s = laps[k]!;
+      const arrive = s + slot.arriveMs;
+      // How long the bus stands there this lap: a dwell, or the terminus
+      // wait until the next lap pulls away (or 0:00).
+      const leave =
+        slot === terminus
+          ? k + 1 < laps.length
+            ? laps[k + 1]! - (T - terminus.leaveMs)
+            : Number.POSITIVE_INFINITY
+          : s + slot.leaveMs;
+      if (leave > rider.joinedMs) {
+        boardMs = Math.max(arrive, rider.joinedMs);
+        break;
+      }
+    }
+    return { ...rider, stop: home, boardMs };
   });
   return {
     route,
@@ -253,42 +305,60 @@ export function townBusPlan(input: {
     dwellMs: timetable.dwellMs,
     riders,
     final,
+    laps,
   };
 }
 
 export type TownBusPosition = {
-  /** Route distance drawn, and the leg it is on. */
+  /** Route distance drawn within its lap, and the leg it is on. */
   at: number;
   leg: number;
   x: number;
   y: number;
   /** Px per ms now (0 standing). */
   speed: number;
-  /** Come to a stand at the terminus. */
+  /** Waiting at the terminus after its last lap (or between laps). */
   arrived: boolean;
   /** On the map: drawn; else between streets, off the map. */
   visible: boolean;
-  /** The stop it stands at, doors open (a dwell or its final wait). */
+  /** The stop it stands at, doors open (a dwell or its terminus wait). */
   atStop: string | null;
 };
 
 /**
- * The trip's bus `elapsedMs` into the trip, from the layout and the trip's
- * countdown alone: it runs the timetable to the terminus and waits there.
+ * The trip's bus `elapsedMs` into the trip: lap by lap on the timetable,
+ * waiting at the terminus between a lap and a later one, and after the
+ * last lap until the countdown ends.
  */
 export function townBusPosition(
   plan: TownBusPlan,
   elapsedMs: number,
 ): TownBusPosition {
-  const { route, final } = plan;
+  const { route, laps, timetable } = plan;
   const t = Math.max(0, elapsedMs);
-  const slot = final
-    ? plan.timetable.stops.find((s) => s.id === final.id)!
-    : null;
-  const now =
-    slot && t >= slot.leaveMs
-      ? { at: slot.at, speed: 0, standing: slot.id }
-      : townBusAt(plan.timetable, t);
+  const terminus = timetable.stops[timetable.stops.length - 1];
+  let k = 0;
+  while (k + 1 < laps.length && laps[k + 1]! <= t) k += 1;
+  const s = laps[k]!;
+  const local = t - s;
+  const next = laps[k + 1];
+  // When it pulls away from the terminus for the next lap (never, after
+  // the last one).
+  const away =
+    terminus === undefined
+      ? Number.POSITIVE_INFINITY
+      : next === undefined
+        ? Number.POSITIVE_INFINITY
+        : next - (timetable.durationMs - terminus.leaveMs);
+  let now: { at: number; speed: number; standing: string | null };
+  let waiting = false;
+  if (!terminus || local < terminus.leaveMs) now = townBusAt(timetable, local);
+  else if (t < away) {
+    now = { at: terminus.at, speed: 0, standing: terminus.id };
+    waiting = true;
+  } else now = townBusAt(timetable, terminus.leaveMs + (t - away));
+  if (terminus && next === undefined && local >= terminus.arriveMs)
+    waiting = true;
   const { at } = now;
   const leg = Math.max(
     0,
@@ -301,7 +371,7 @@ export function townBusPosition(
     x,
     y: route.legs[leg]?.y ?? 0,
     speed: now.speed,
-    arrived: slot !== null && t >= slot.arriveMs,
+    arrived: waiting,
     visible: x < route.width,
     atStop: now.standing,
   };

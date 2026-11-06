@@ -197,13 +197,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the whole route street by street from the left edge, on a timetable fixed
     when it sets off, stopping briefly at every stop (about a second, shorter
     in a big town on a short countdown) whether or not anyone waits; riders
-    board at their stops, and it always ends at the town's last stop, waiting
-    there until 0:00, even when everyone boarded earlier. It seats eight and
+    board at their stops, and it ends at the town's last stop, waiting there
+    until 0:00, even when everyone boarded earlier. It seats eight and
     shows the rest as "+N". An agent who boards before the bus pulls away
     starts the countdown again for everyone on it. Board and Desk drops reset
     that same service countdown. The bus never slows or moves for a reset, a
     new rider or a Put back: it arrives early and waits longer. An agent sent
-    after the bus left its own stop waits at the last stop instead.
+    after the bus left the first stop waits at its own stop, and the bus goes
+    round again (pulling away at once if it was waiting) to pick it up.
     Reloading or opening another World
     reconstructs that same progress; holds freeze the trip as well as the
     countdown. Desk cards and directory rows offer **Close agent…**, and Desk
@@ -220,7 +221,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Closing the holding browser window releases its hold. A bus whose last
     rider is put back drives on off the map rather than vanishing. It shares
     the bin's countdown, refusals and close sound; under reduced motion it
-    stays parked at the last stop for the countdown and the departure time.
+    stays parked at the last stop, and riders wait at their stops, for the
+    countdown and the departure time.
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it

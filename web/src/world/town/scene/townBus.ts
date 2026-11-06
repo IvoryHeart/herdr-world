@@ -6,8 +6,10 @@
  * countdown, drawn on every street it drives, and stands briefly at every
  * stop, doors open (riders there board), until the route's last stop, the
  * terminus, where it waits with its doors open until the countdown ends.
- * Who rides never moves it. Then it pulls away and leaves by the right edge
- * exactly when the close commits (the entry's departure time).
+ * Every rider waits at its own stop until the bus stands there: a join after
+ * the bus left the first stop sends it round again. At 0:00 it pulls away
+ * and leaves by the right edge exactly when the close commits (the entry's
+ * departure time).
  * Until it has left it can still be stopped. World pixels throughout.
  */
 
@@ -166,6 +168,9 @@ export function townBusScene(input: TownBusInput): TownBusScene {
   for (const trip of ordered) {
     const since = trip.duration + trip.departure - trip.remaining;
     const elapsed = trip.serviceElapsed ?? since;
+    // The countdown's end on the trip clock, and its last reset (a join):
+    // shared by every entry, so it outlives a joiner who was put back.
+    const end = elapsed + trip.remaining - trip.departure;
     const plan: TownBusPlan = townBusPlan({
       route,
       tripDurationMs: trip.tripDuration,
@@ -174,16 +179,17 @@ export function townBusScene(input: TownBusInput): TownBusScene {
         home: input.homeStop?.(entry) ?? main.id,
         joinedMs: joinedMs(entry),
       })),
+      resetMs: Math.round(end - trip.duration),
     });
     const stops = new Map(route.stops.map((stop) => [stop.id, stop]));
     const byEntry = new Map(trip.riders.map((entry) => [entry.id, entry]));
-    // Seats fill in route order.
+    // Seats fill in boarding order.
     const seated = plan.riders
       .map((rider) => ({ rider, stop: stops.get(rider.stop)! }))
       .sort(
         (a, b) =>
+          a.rider.boardMs - b.rider.boardMs ||
           a.stop.at - b.stop.at ||
-          a.rider.joinedMs - b.rider.joinedMs ||
           (a.rider.entryId < b.rider.entryId ? -1 : 1),
       );
     for (const { rider, stop } of seated) {
@@ -203,7 +209,8 @@ export function townBusScene(input: TownBusInput): TownBusScene {
           visible: true,
           atStop: final.id,
         }
-      : townBusPosition(plan, elapsed);
+      : // At 0:00 it pulls away from wherever its laps have taken it.
+        townBusPosition(plan, Math.min(elapsed, end));
     let { x } = position;
     let speed = position.speed * 1000;
     let phase: TownBus["phase"] = position.arrived ? "waiting" : "arriving";
@@ -222,7 +229,9 @@ export function townBusScene(input: TownBusInput): TownBusScene {
     let extra = 0;
     for (const { rider, stop } of seated) {
       const entry = byEntry.get(rider.entryId)!;
-      if (departing || position.at >= stop.at - 1) {
+      // Each rider waits at its own stop until the bus stands there; under
+      // reduced motion the bus stays parked and riders wait until 0:00.
+      if (departing || (!input.reducedMotion && elapsed >= rider.boardMs)) {
         const window = BUS_SEATS[riders.length];
         if (!window) {
           extra += 1;

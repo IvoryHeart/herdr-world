@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { BIN_DEPARTURE_MS, type BinEntry } from "../../../../../shared/bin";
 import { BUS_SEATS, BUS_W } from "../townBusGeometry";
 import { layoutTown, TOWN_TILE as T, TownGround } from "../townLayout";
@@ -435,4 +435,166 @@ test("buses still riding, off the map, or under reduced motion never become leav
   const offLeft = scene([rider("trip-o", TOTAL).entry]).scene.buses;
   expect(offLeft[0]!.x + BUS_W).toBeLessThanOrEqual(0);
   expect(townBusLeavers(townBusSeen(offLeft), [], width, 0, false)).toEqual([]);
+});
+
+// Late riders (owner try 2026-11-06): every rider waits at its own stop until
+// the bus stands there; the bus laps again for anyone it has passed.
+describe("late riders wait at their own stop and the bus comes round", () => {
+  const D = 30_000;
+  const { layout } = layoutTown(town(3), "wide");
+  const width = layout.width * T;
+  const route = townBusRoute(layout.busStops, width);
+  const table = townBusTimetable(route, D);
+  const lap = table.durationMs;
+  const slot = (k: number) => table.stops[k]!;
+  const terminus = table.stops[table.stops.length - 1]!;
+  type Ride = { id: string; stop: number; joined: number };
+  /** The scene `e` ms into the trip, as the service would publish it. */
+  const at = (
+    e: number,
+    rides: Ride[],
+    extra: Partial<TownBusInput> & { resetMs?: number } = {},
+  ) => {
+    const reset = Math.max(extra.resetMs ?? 0, ...rides.map((r) => r.joined));
+    return townBusScene({
+      stops: layout.busStops,
+      width,
+      entries: rides.map(
+        (r): BinEntry => ({
+          id: r.id,
+          connection_id: "studio",
+          connection_generation: 1,
+          workspace_id: `w-${r.stop}`,
+          tab_id: r.id,
+          pane_id: r.id,
+          terminal_id: `term-${r.id}`,
+          label: r.id,
+          view: "town",
+          duration_ms: D,
+          departure_ms: BIN_DEPARTURE_MS,
+          // Every join restarts the shared countdown (the service's rule).
+          remaining_ms: D + BIN_DEPARTURE_MS - (e - reset),
+          trip: "trip",
+          trip_duration_ms: D,
+          trip_elapsed_ms: e,
+          trip_joined_ms: r.joined,
+        }),
+      ),
+      homeStop: (entry) => route.stops[Number(entry.workspace_id.slice(2))]!.id,
+      remaining: (entry) => entry.remaining_ms,
+      paused: false,
+      reducedMotion: false,
+      ...extra,
+    });
+  };
+  const waitingAt = (scene: ReturnType<typeof at>, k: number) =>
+    scene.stops[k]!.waiting.map((r) => r.entryId);
+  const aboard = (scene: ReturnType<typeof at>) =>
+    scene.buses.flatMap((bus) => bus.riders.map((r) => r.entryId));
+  const standingAt = (scene: ReturnType<typeof at>, k: number) =>
+    scene.buses[0]?.x === route.stops[k]!.busX &&
+    scene.buses[0]?.y === route.stops[k]!.busY;
+
+  test("1: B, put at stop 3 after the bus passed it, stands there until the bus laps back for it", () => {
+    expect(route.stops.length).toBeGreaterThanOrEqual(4);
+    const joined = slot(3).leaveMs + 50;
+    const rides = [
+      { id: "A", stop: 1, joined: 0 },
+      { id: "B", stop: 3, joined },
+    ];
+    // Right after joining, B stands at stop 3: it never vanishes into the bus.
+    expect(waitingAt(at(joined + 1, rides), 3)).toEqual(["B"]);
+    expect(aboard(at(joined + 1, rides))).toEqual(["A"]);
+    // The bus does not pull away at the terminus: it laps back to stop 3.
+    const pickup = lap + slot(3).arriveMs + 1;
+    expect(at(lap - 1, rides).buses[0]?.phase).not.toBe("departing");
+    const there = at(pickup, rides);
+    expect(standingAt(there, 3)).toBe(true);
+    expect(aboard(there).sort()).toEqual(["A", "B"]);
+    expect(waitingAt(there, 3)).toEqual([]);
+    // Picked up before 0:00, which the join restarted.
+    expect(pickup).toBeLessThan(joined + D);
+  });
+
+  test("2: B, put at stop 3 while the bus waits at the terminus, makes the bus pull away and come round", () => {
+    const joined = terminus.arriveMs + 2_000;
+    const rides = [
+      { id: "A", stop: 1, joined: 0 },
+      { id: "B", stop: 3, joined },
+    ];
+    // Until then the bus waits at the terminus; at the join it is still there.
+    const before = at(joined - 1, [rides[0]!]).buses[0]!;
+    const atJoin = at(joined, rides).buses[0]!;
+    expect(atJoin.y).toBe(before.y);
+    expect(Math.abs(atJoin.x - before.x)).toBeLessThan(0.01);
+    expect(waitingAt(at(joined + 1, rides), 3)).toEqual(["B"]);
+    // It pulls away now, comes round and stands at stop 3 for B.
+    const lapStart = joined + lap - terminus.leaveMs;
+    const pickup = lapStart + slot(3).arriveMs + 1;
+    const there = at(pickup, rides);
+    expect(standingAt(there, 3)).toBe(true);
+    expect(aboard(there).sort()).toEqual(["A", "B"]);
+    expect(pickup).toBeLessThan(joined + D);
+  });
+
+  test("3: three riders at three stops at three times all board within one countdown", () => {
+    const tB = slot(2).leaveMs + 10; // passed stop 2 on lap 0
+    const tC = lap + slot(1).leaveMs + 10; // passed stop 1 on lap 1
+    const rides = [
+      { id: "A", stop: 0, joined: 0 },
+      { id: "B", stop: 2, joined: tB },
+      { id: "C", stop: 1, joined: tC },
+    ];
+    expect(waitingAt(at(tC + 1, rides), 1)).toEqual(["C"]);
+    // B rides from lap 1; C from lap 2.
+    expect(aboard(at(lap + slot(2).arriveMs + 1, rides)).sort()).toEqual([
+      "A",
+      "B",
+    ]);
+    const end = tC + D;
+    const last = 2 * lap + slot(1).arriveMs + 1;
+    expect(last).toBeLessThan(end);
+    expect(aboard(at(last, rides)).sort()).toEqual(["A", "B", "C"]);
+    // At 0:00 everyone is aboard as it pulls away; nobody is left waiting.
+    const leaving = at(end + 1, rides);
+    expect(leaving.buses[0]?.phase).toBe("departing");
+    expect(aboard(leaving).sort()).toEqual(["A", "B", "C"]);
+    expect(leaving.waiting).toEqual([]);
+  });
+
+  test("4: a rider put back during a lap: the bus keeps its lap and only makes its usual pause there", () => {
+    const joined = slot(3).leaveMs + 50;
+    const both = [
+      { id: "A", stop: 1, joined: 0 },
+      { id: "B", stop: 3, joined },
+    ];
+    const onlyA = [both[0]!];
+    // B is put back during the lap; the countdown's reset stays.
+    for (let e = lap; e <= lap + slot(3).leaveMs + 500; e += 50) {
+      const kept = at(e, onlyA, { resetMs: joined }).buses[0];
+      const ridden = at(e, both).buses[0];
+      expect([kept?.x, kept?.y]).toEqual([ridden?.x, ridden?.y]);
+    }
+    // At stop 3 it stands only its usual dwell, empty.
+    const stood = [];
+    for (let e = lap; e <= lap + slot(3).leaveMs + 500; e += 10)
+      if (standingAt(at(e, onlyA, { resetMs: joined }), 3)) stood.push(e);
+    expect(stood.length * 10).toBeLessThanOrEqual(table.dwellMs + 20);
+    expect(stood.length * 10).toBeGreaterThanOrEqual(table.dwellMs - 20);
+  });
+
+  test("5: under reduced motion riders show at their stops and the bus parks", () => {
+    const rides = [
+      { id: "A", stop: 1, joined: 0 },
+      { id: "B", stop: 3, joined: slot(3).leaveMs + 50 },
+    ];
+    const s = at(slot(3).leaveMs + 100, rides, { reducedMotion: true });
+    expect(waitingAt(s, 1)).toEqual(["A"]);
+    expect(waitingAt(s, 3)).toEqual(["B"]);
+    const terminusStop = route.stops[route.stops.length - 1]!;
+    expect([s.buses[0]?.x, s.buses[0]?.y]).toEqual([
+      terminusStop.busX,
+      terminusStop.busY,
+    ]);
+  });
 });

@@ -120,40 +120,69 @@ test("a rider without a join time (older service) counts as a set-off rider", ()
   expect(scene.stopOf.get("a")).toBe("10:10");
 });
 
-test("the bus's place depends only on the layout and the trip clock, never on who rides", () => {
+test("riders who need no second lap never change the bus's place; a Put back keeps a lap it bought", () => {
+  // Set-off riders, and joins before the bus leaves the first stop, all
+  // ride one lap: the bus is where the timetable alone puts it.
+  const early = slot("10:10").leaveMs - 1;
   const sets = [
     [rider("a", "10:10")],
     [rider("a", "30:36")],
-    [rider("a", "10:36"), rider("b", "30:10", 9_000)],
-    [rider("b", "30:10", 9_000)],
-    [rider("c", "10:10", 20_000)],
+    [rider("a", "10:36"), rider("b", "30:10", early)],
   ].map(plan);
   for (let t = 0; t <= DURATION + 1; t += 250) {
     const first = townBusPosition(sets[0]!, t);
     for (const p of sets) expect(townBusPosition(p, t)).toEqual(first);
   }
-  // A join or a Put back between two frames never moves the bus.
-  const before = plan([rider("a", "10:36")]);
-  const joined = plan([rider("a", "10:36"), rider("b", "10:10", 12_000)]);
-  const putBack = plan([rider("b", "10:10", 12_000)]);
-  for (const t of [12_000, 12_016, slot("30:36").leaveMs + 50]) {
-    expect(townBusPosition(joined, t)).toEqual(townBusPosition(before, t));
-    expect(townBusPosition(putBack, t)).toEqual(townBusPosition(before, t));
-  }
+  // A join after the first stop buys a second lap; putting that rider back
+  // keeps it (the trip's countdown reset outlives the rider), so the bus
+  // does not move.
+  const late = slot("10:36").leaveMs + 1;
+  const joined = townBusPlan({
+    route,
+    tripDurationMs: DURATION,
+    riders: [rider("a", "30:36"), rider("b", "10:10", late)],
+    resetMs: late,
+  });
+  const putBack = townBusPlan({
+    route,
+    tripDurationMs: DURATION,
+    riders: [rider("a", "30:36")],
+    resetMs: late,
+  });
+  expect(joined.laps).toHaveLength(2);
+  expect(putBack.laps).toEqual(joined.laps);
+  for (let t = late; t <= late + 2 * timetable.durationMs; t += 250)
+    expect(townBusPosition(putBack, t)).toEqual(townBusPosition(joined, t));
 });
 
-test("a late rider waits at home until the bus pulls away from it, then at the terminus", () => {
+test("every rider waits at its own stop and boards the bus's first stand there after it joined", () => {
   const home = slot("10:36");
-  const terminus = route.stops.slice(-1)[0]!.id;
-  expect(plan([]).final?.id).toBe(terminus);
-  for (const joined of [0, home.arriveMs - 1, home.arriveMs, home.leaveMs - 1])
-    expect(plan([rider("late", "10:36", joined)]).riders[0]!.stop).toBe(
-      "10:36",
-    );
-  for (const joined of [home.leaveMs, home.leaveMs + 1, DURATION])
-    expect(plan([rider("late", "10:36", joined)]).riders[0]!.stop).toBe(
-      terminus,
-    );
+  const T = timetable.durationMs;
+  for (const joined of [
+    0,
+    home.arriveMs - 1,
+    home.arriveMs,
+    home.leaveMs - 1,
+  ]) {
+    const p = plan([rider("late", "10:36", joined)]);
+    expect(p.riders[0]!.stop).toBe("10:36");
+    expect(p.riders[0]!.boardMs).toBe(Math.max(home.arriveMs, joined));
+  }
+  // Passed: it still waits at home, and the next lap picks it up.
+  for (const joined of [
+    home.leaveMs,
+    home.leaveMs + 1,
+    slot("30:36").arriveMs,
+  ]) {
+    const p = plan([rider("late", "10:36", joined)]);
+    expect(p.riders[0]!.stop).toBe("10:36");
+    expect(p.laps).toEqual([0, T]);
+    expect(p.riders[0]!.boardMs).toBe(T + home.arriveMs);
+    expect(townBusPosition(p, T + home.arriveMs + 1)).toMatchObject({
+      at: home.at,
+      atStop: "10:36",
+    });
+  }
   // An unknown home is the main stop.
   const main = route.stops.find((stop) => stop.main)!.id;
   expect(plan([rider("x", "nowhere")]).riders[0]!.stop).toBe(main);

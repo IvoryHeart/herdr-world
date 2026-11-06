@@ -144,19 +144,25 @@ larger setting extends the wait. Put back does not reset the remaining riders'
 deadline.
 
 Allowed: every trip's drawn bus is a pure function of the layout, the original
-trip duration and the active trip clock; it stands at every stop and waits at
-the route's last stop (terminus) until 0:00. A rider waits at its room's stop
-when it joined before the bus left it on that timetable, else at the terminus.
-Forbidden: a join, reset, hold or Put back moving or re-speeding the bus; the
-bus passing the terminus before 0:00; a view-private trajectory history.
-Consumers: `townBusRoute.test.ts` checks identical positions for any rider set
-and across a join or Put back, home-before-leave and terminus-after-leave
-assignment, positive bounded dwells within the exact approach budget,
-continuous ramps and no position past the terminus before 0:00.
-`townBus.test.ts` checks the emptied-bus leaver, one bus with "+N" past eight
-seats and reduced-motion parking at the terminus. `bin-observers.test.ts`
-removes the terminus rider through the real registry and checks that the
-bus's pose equals the parked pose and a fresh observer's.
+trip duration, the active trip clock, the entries' join times and the trip's
+last countdown reset; it stands at every stop, goes round again after a join
+that came after it left the first stop, and otherwise waits at the route's
+last stop (terminus) until 0:00. Every rider waits at its own stop until the
+bus stands there after its join.
+Forbidden: a rider shown aboard before the bus stood at its stop; a rider left
+waiting at 0:00; a reset, hold or Put back moving or re-speeding the bus; a
+view-private trajectory history.
+Consumers: `townBusRoute.test.ts` checks unchanged positions for rider sets
+that need one lap and across a Put back of a lap's joiner, boarding at the
+first stand after the join (next lap when passed), positive bounded dwells
+within the exact approach budget and continuous ramps. `townBus.test.ts`
+covers the owner-try cases (a rider put at a passed stop and one put at a stop
+while the bus waits at the terminus are both picked up there; three riders at
+three stops and times all board within one countdown; a Put back during a lap
+keeps the lap with only the usual pause; reduced motion keeps riders at their
+stops and the bus parked), plus the emptied-bus leaver and "+N".
+`bin-observers.test.ts` puts back a rider through the real registry and checks
+that the bus's pose is unchanged and equals a fresh observer's.
 
 The Town bus browser suite drives the real layer against a fixture bin: a
 qualified add, tray opening from the chip, a stop and the bus (keyboard click),

@@ -391,14 +391,15 @@ export async function checkTownBusRemount(
     "I2: bus did not arrive at its expected active-clock boundary",
   );
   const parked = position();
-  // A later reset leaves the parked bus parked, including a full layer remount.
+  // A later reset (a join, held) at the terminus: the bus does not move, it
+  // is now due to go round again, and a full layer remount draws the same.
   for (const entry of bin.state.entries) entry.remaining_ms = 36_000;
   bin.state.revision++;
   await store.refresh();
   await remount();
   await waitFor(
-    () => !!host.querySelector('.town-bus-hold[data-phase="waiting"]'),
-    "I2: parked reset started approaching after remount",
+    () => !!host.querySelector('.town-bus-hold[data-phase="arriving"]'),
+    "I2: a reset at the terminus did not send the bus round again after remount",
   );
   check(
     Math.abs(position() - parked) < 0.01,

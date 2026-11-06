@@ -723,7 +723,8 @@ arrives in time. A bus seats eight and shows any more riders as "+N". Sending
 another agent from Board, Desk or Town before the bus pulls away starts the
 shared countdown again for both. The bus never slows down or moves for it, so
 it arrives early and waits longer. An agent sent after the bus has left its
-own stop waits at the last stop instead. Reloading or
+own stop still waits there: the bus goes round again for it (pulling away at
+once if it was waiting at the last stop). Reloading or
 opening another World keeps the trip's progress, including time held still. If
 the bus's stop is off screen, the red chip at the screen's edge shows the next
 departure. While you carry an agent, the chip moves near the top of the screen

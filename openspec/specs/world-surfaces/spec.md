@@ -4123,20 +4123,25 @@ Every trip's bus SHALL run the whole route: every street with a stop in road
 order, each from the map's left edge to its right edge, standing briefly with
 its doors open at every stop, whether or not anyone waits there, and ending at
 the terminus, where it SHALL wait with its doors open until the countdown ends,
-even when every rider boarded earlier. Its timetable SHALL be fixed by the
+even when every rider boarded earlier. A join after the bus has left the first
+stop of its lap SHALL send it round the whole route again, straight on or, when
+it was waiting at the terminus, pulling away at once, so that it stands at
+every stop after the join. Its timetable SHALL be fixed by the
 layout and the trip's own original countdown alone: the whole route takes the
 approach, which ends with 10 s left, or the first 3 s when the countdown is
 10 s. Each stand SHALL last 1 s, or less when the stops would otherwise take
 more than half the approach (then half the approach shared equally). The bus
 SHALL cruise between stops at the one speed that fits, and its position SHALL
-follow that timetable on the service's active trip time and nothing else: a
-boarding reset, a hold, a join or a Put back SHALL NOT change its speed or move
-it. Then it SHALL pull away and leave the map by the right edge exactly as the
+follow that timetable, lap by lap, on the service's active trip time, the
+entries' join times and the trip's last countdown reset alone: a boarding
+reset, a hold or a Put back SHALL NOT change its speed or move it, and a lap
+bought by a join SHALL still run after that rider is put back. At 0:00 it SHALL
+pull away from where it is and leave the map by the right edge exactly as the
 departure ends, which is when the close commits.
-A rider SHALL wait at the stop nearest its room (ties: road order) when it joins
-before the bus has pulled away from that stop, including while the bus stands
-there, and otherwise at the terminus; riders board when the bus stands at their
-stop. The service SHALL publish the original trip duration, the active elapsed
+A rider SHALL wait at the stop nearest its room (ties: road order) until the
+bus stands there after it joined, and board then; it SHALL never be shown
+aboard a bus that has not stood at its stop. Because a join restarts the
+countdown for at least a lap plus 10 s, every rider boards before 0:00. The service SHALL publish the original trip duration, the active elapsed
 time (excluding holds, independent of boarding resets) and each entry's optional
 `trip_joined_ms` (its active trip time at admission, zero for set-off riders,
 treated as zero when absent), so a remount or new observer draws the same bus
@@ -4170,8 +4175,9 @@ continue from the held time. A browser socket owns the hold it opens; closing
 that window SHALL release its hold, and SHALL NOT release another open owner's
 hold. An explicit Resume SHALL end the shared hold in every observer.
 A close SHALL play World's one bin sound under this device's sound setting.
-Under reduced motion the bus SHALL stay parked at the terminus for the countdown
-and the departure time, then the close commits.
+Under reduced motion the bus SHALL stay parked at the terminus and riders SHALL
+wait at their stops for the countdown; then they board, the bus stays parked for
+the departure time, and the close commits.
 
 #### Scenario: Change of mind
 
@@ -4225,8 +4231,8 @@ and the departure time, then the close commits.
 - **WHEN** boarding resets the clock to 0:30 while a bus is one second from the
   terminus, including after an earlier reset, or another rider is put back
 - **THEN** its speed and position are unchanged, it reaches the terminus about
-  one second later and waits about 29 seconds until 0:00; another reset while
-  parked only extends its wait
+  one second later, and because the new rider joined after the bus left the
+  first stop it goes round again and picks that rider up before 0:00
 
 #### Scenario: Agents wait at the stop nearest their rooms
 
@@ -4249,9 +4255,17 @@ and the departure time, then the close commits.
 
 - **WHEN** an agent is sent after the bus has pulled away from the stop nearest
   its room
-- **THEN** it waits at the terminus, the bus does not move, and a reload shows
-  the same stops, riders and bus position; one sent while the bus stands at that
-  stop boards it there
+- **THEN** it waits at that stop, the bus goes round the route again (pulling
+  away at once if it was waiting at the terminus) and picks it up there before
+  0:00, and a reload shows the same stops, riders and bus position; one sent
+  while the bus stands at that stop boards it there
+
+#### Scenario: A rider who bought a lap is put back
+
+- **WHEN** the bus is going round again for a late rider and that rider is put
+  back
+- **THEN** the bus keeps its lap, making only its usual short stop where the
+  rider waited, and nothing closes
 
 #### Scenario: Catch the leaving bus
 

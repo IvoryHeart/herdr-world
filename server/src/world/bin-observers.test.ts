@@ -208,14 +208,17 @@ test("I2: new observers and remounted layers reconstruct a reset and held trip f
   expect(scene(registry.list().entries).scene.buses[0]!.x).toBe(before.x);
   registry.resume();
   now += 1_000;
+  // At the terminus. The boarding came after the bus left the first stop,
+  // so it stands there only for its dwell and then goes round again.
   const arrived = scene(registry.list().entries).scene.buses[0]!;
-  expect([arrived.phase, arrived.x]).toEqual(["waiting", arrived.home]);
+  expect([arrived.phase, arrived.x, arrived.speed]).toEqual([
+    "arriving",
+    arrived.home,
+    0,
+  ]);
   registry.add(rider("", TOTAL).entry);
   const remountedParked = scene(registry.list().entries).scene.buses[0]!;
-  expect([remountedParked.phase, remountedParked.x]).toEqual([
-    "waiting",
-    arrived.home,
-  ]);
+  expect(pose(remountedParked)).toEqual(pose(arrived));
   // Put back the set-off rider at the terminus: the bus never moves, and a
   // live scene and a completely fresh observer agree.
   registry.restore(
@@ -226,5 +229,4 @@ test("I2: new observers and remounted layers reconstruct a reset and held trip f
   const fresh = scene(structuredClone(afterPutBack)).scene.buses[0]!;
   expect(pose(fresh)).toEqual(pose(live));
   expect(pose(live)).toEqual(pose(remountedParked));
-  expect(live.phase).toBe("waiting");
 });
