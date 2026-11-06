@@ -12,13 +12,32 @@ const calls: WindowArrangementCommand[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-// Commit each synthetic interaction and its effects explicitly. A timer does
-// not guarantee React has committed, especially during a cold browser launch.
-async function interact(action: () => void) {
-  flushSync(action);
-  // Selection restores trigger focus in a microtask.
-  await Promise.resolve();
-}
+// Keep browser task boundaries: startup resize/scroll events must be observable.
+const trace: object[] = [];
+const record = (event: string, target?: EventTarget | null) => {
+  trace.push({
+    event,
+    at: performance.now(),
+    ready: document.readyState,
+    target: target instanceof Element ? target.tagName : String(target),
+    menu: !!document.querySelector('[role="menu"]'),
+    viewport: [window.innerWidth, window.innerHeight],
+    scroll: [window.scrollX, window.scrollY],
+  });
+};
+for (const event of ["resize", "scroll", "focusin", "load"])
+  window.addEventListener(event, (e) => record(event, e.target), true);
+new MutationObserver((records) => {
+  for (const mutation of records)
+    for (const [event, nodes] of [
+      ["mount", mutation.addedNodes],
+      ["unmount", mutation.removedNodes],
+    ] as const)
+      for (const node of nodes)
+        if (node instanceof Element && node.matches('[role="menu"]'))
+          record(event, node);
+}).observe(document.body, { childList: true, subtree: true });
+const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
 
 async function run() {
   const root = createRoot(document.getElementById("root")!);
@@ -40,8 +59,11 @@ async function run() {
     'button[aria-label="Arrange windows"]',
   )!;
   trigger.focus();
-  await interact(() => trigger.click());
+  record("first-open");
+  trigger.click();
+  await settle();
 
+  record("first-query");
   const menu = document.querySelector<HTMLElement>('[role="menu"]');
   const items = [
     ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
@@ -71,39 +93,37 @@ async function run() {
     "unavailable reason must be visible",
   );
 
-  await interact(() =>
-    items[0]?.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        bubbles: true,
-        cancelable: true,
-      }),
-    ),
+  items[0]?.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+      cancelable: true,
+    }),
   );
   check(
     document.activeElement === items[1],
     "ArrowDown must move to the next choice",
   );
-  await interact(() =>
-    items[1]?.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        bubbles: true,
-        cancelable: true,
-      }),
-    ),
+  items[1]?.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+      cancelable: true,
+    }),
   );
   check(
     document.activeElement === items[2],
     "keyboard users must reach unavailable reasons",
   );
-  await interact(() => items[2]?.click());
+  items[2]?.click();
+  await settle();
   check(
     calls.length === 0 && !!document.querySelector('[role="menu"]'),
     "unavailable choice must leave placement unchanged",
   );
 
-  await interact(() => items[1]?.click());
+  items[1]?.click();
+  await settle();
   check(
     calls.join(",") === "cascade",
     "enabled choice must invoke its command once",
@@ -117,16 +137,16 @@ async function run() {
     "choosing a placement must restore trigger focus",
   );
 
-  await interact(() => trigger.click());
-  await interact(() =>
-    document.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Escape",
-        bubbles: true,
-        cancelable: true,
-      }),
-    ),
+  trigger.click();
+  await settle();
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }),
   );
+  await settle();
   check(!document.querySelector('[role="menu"]'), "Escape must close the menu");
   check(
     document.activeElement === trigger,
@@ -135,7 +155,8 @@ async function run() {
 
   document.getElementById("root")!.style.cssText =
     "position:fixed;right:8px;bottom:8px";
-  await interact(() => trigger.click());
+  trigger.click();
+  await settle();
   const floatingMenuBounds = document
     .querySelector<HTMLElement>('[role="menu"]')!
     .getBoundingClientRect();
@@ -145,11 +166,13 @@ async function run() {
     "a menu opened from the mobile floating controls must fit above them",
   );
 
-  await interact(() => trigger.click());
+  trigger.click();
+  await settle();
   document.documentElement.style.zoom = "1.4";
   document.getElementById("root")!.style.cssText =
     "position:fixed;right:8px;top:52px";
-  await interact(() => trigger.click());
+  trigger.click();
+  await settle();
   const zoomedMenu = document.querySelector<HTMLElement>('[role="menu"]');
   const zoomedTriggerBounds = trigger.getBoundingClientRect();
   const zoomedMenuBounds = zoomedMenu?.getBoundingClientRect();
@@ -165,12 +188,17 @@ async function run() {
   const closeAll = [
     ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
   ].find((item) => item.textContent?.includes("Close all terminal windows"));
-  await interact(() => closeAll?.click());
+  closeAll?.click();
+  await settle();
   check(
     calls.join(",") === "cascade,close-all",
     "Close all must dispatch through the shared arrangement control",
   );
 
+  if (failures.length)
+    failures.push(
+      ...trace.map((entry) => `Lifecycle: ${JSON.stringify(entry)}`),
+    );
   await fetch("/result", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

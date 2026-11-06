@@ -76,8 +76,9 @@ baseline/candidate runs and report negligible or negative results honestly.
 
 The diagnostics adapter detaches its WebSocket callbacks before returning so a
 late close event cannot write to a completed or removed log. The arrangement-menu
-browser fixture commits synthetic interactions with `flushSync` and drains focus
-microtasks before asserting; elapsed sleeps do not establish a React commit.
+browser fixture retains task boundaries and attaches mount/unmount, focus,
+resize, scroll, load and first-query traces to failures. Its first-open CI failure
+remains undiagnosed; local passing traces do not establish a cause.
 Worker rejection tests settle the promise before asserting on the error, because
 Bun's asynchronous rejection matcher can block MessagePort delivery.
 
