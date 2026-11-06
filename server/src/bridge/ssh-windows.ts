@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { rmSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { Readable } from "node:stream";
-import { sshCommandArgv } from "./ssh-command";
+import { sshBridgeCommandArgv, sshCommandArgv } from "./ssh-command";
 import {
   classifySshTunnelFailure,
   readBoundedStderr,
@@ -11,13 +11,6 @@ import {
   type SshTunnelConfig,
   type SshTunnelManager,
 } from "./ssh-tunnel";
-
-const SSH_KEEPALIVE_ARGS = [
-  "-o",
-  "ServerAliveInterval=20",
-  "-o",
-  "ServerAliveCountMax=3",
-] as const;
 
 export function powershellCommand(script: string): string {
   return `powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(script, "utf16le").toString("base64")}`;
@@ -118,7 +111,7 @@ export function createWindowsSshTunnel(args: {
     );
     try {
       const { stdout } = await args.runProcess(
-        sshCommandArgv(config.sshHost!, command, SSH_KEEPALIVE_ARGS),
+        sshCommandArgv(config.sshHost!, command),
       );
       const encoded = stdout
         .split(/\r?\n/)
@@ -176,11 +169,7 @@ export function createWindowsSshTunnel(args: {
       }
       sockets.add(socket);
       socket.on("error", () => socket.destroy());
-      const [program, ...argv] = sshCommandArgv(
-        config.sshHost!,
-        command,
-        SSH_KEEPALIVE_ARGS,
-      );
+      const [program, ...argv] = sshBridgeCommandArgv(config.sshHost!, command);
       const child = args.spawnBridge
         ? args.spawnBridge([program, ...argv])
         : spawn(program, argv, {

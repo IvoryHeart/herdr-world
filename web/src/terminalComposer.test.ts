@@ -20,6 +20,8 @@ import {
   terminalComposerScopeGeneration,
   terminalComposerDraftPaneIds,
   terminalComposerInsertAtCaret,
+  sendTerminalComposerText,
+  uploadedPathPieces,
   terminalComposerRequest,
   terminalComposerSubmissionPending,
   terminalComposerUploadCount,
@@ -310,6 +312,144 @@ describe("terminal composer request", () => {
   test("normalizes newlines like terminal paste", () => {
     const request = terminalComposerRequest("p3", "one\r\ntwo\nthree", true);
     expect(request.params.text).toBe("one\rtwo\rthree");
+  });
+
+  test("an uploaded image gets time to attach before Enter", async () => {
+    const calls: unknown[] = [];
+    const waits: number[] = [];
+    const client = {
+      call: async (method: string, params: unknown) => {
+        calls.push([method, params]);
+      },
+    } as Parameters<typeof sendTerminalComposerText>[0];
+    const path = "/tmp/herdr-world-uploads-501/upload-abc/img-1.png";
+    await sendTerminalComposerText(
+      client,
+      "p3",
+      `${path} look`,
+      true,
+      async (ms) => {
+        waits.push(ms);
+        calls.push("wait");
+      },
+    );
+    // The path goes in alone, so Claude Code attaches it, then the words.
+    expect(calls).toEqual([
+      ["pane.send_input", { pane_id: "p3", text: path, keys: [] }],
+      "wait",
+      ["pane.send_input", { pane_id: "p3", text: " look", keys: ["enter"] }],
+    ]);
+    expect(waits[0]).toBeGreaterThan(0);
+
+    // An image alone still gets its pause before Enter.
+    calls.length = 0;
+    await sendTerminalComposerText(client, "p3", path, true, async () => {
+      calls.push("wait");
+    });
+    expect(calls).toEqual([
+      ["pane.send_input", { pane_id: "p3", text: path, keys: [] }],
+      "wait",
+      ["pane.send_input", { pane_id: "p3", text: "", keys: ["enter"] }],
+    ]);
+
+    // Plain text, or an image only typed in, goes in one request.
+    calls.length = 0;
+    await sendTerminalComposerText(client, "p3", "ls", true, async () => {
+      calls.push("wait");
+    });
+    await sendTerminalComposerText(
+      client,
+      "p3",
+      `${path} `,
+      false,
+      async () => {
+        calls.push("wait");
+      },
+    );
+    expect(calls).toEqual([
+      ["pane.send_input", { pane_id: "p3", text: "ls", keys: ["enter"] }],
+      ["pane.send_input", { pane_id: "p3", text: `${path} `, keys: [] }],
+    ]);
+  });
+});
+
+describe("uploaded image paths in composer text", () => {
+  const path = "/tmp/herdr-world-uploads-501/upload-abc/img-1.png";
+  const quoted = "'/tmp/herdr-world-uploads-501/upload-abc/my shot.png'";
+
+  test("are cut out of the words around them", () => {
+    expect(uploadedPathPieces(`what is ${quoted} and ${path}?`)).toEqual([
+      { text: "what is ", path: false },
+      { text: quoted, path: true },
+      { text: " and ", path: false },
+      { text: path, path: true },
+      { text: "?", path: false },
+    ]);
+    expect(uploadedPathPieces("/tmp/shot.png and words")).toEqual([
+      { text: "/tmp/shot.png and words", path: false },
+    ]);
+  });
+
+  test("keeps uploaded paths quoted for apostrophes intact", () => {
+    for (const quotedPath of [
+      '"C:/Users/O\'Brien/AppData/Local/Temp/herdr-world-uploads-501/upload-abc/img.png"',
+      "'/tmp/O'\\''Brien/herdr-world-uploads-501/upload-abc/img.png'",
+      "'C:/Users/O''Brien$/Temp/herdr-world-uploads-501/upload-abc/img.png'",
+    ]) {
+      expect(uploadedPathPieces(`see ${quotedPath} please`)).toEqual([
+        { text: "see ", path: false },
+        { text: quotedPath, path: true },
+        { text: " please", path: false },
+      ]);
+    }
+  });
+
+  test("each image is its own paste, with a pause, before the text goes on", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      call: async (method: string, params: unknown) => {
+        calls.push([
+          method,
+          (params as { text: string; keys: string[] }).text,
+          (params as { keys: string[] }).keys,
+        ]);
+      },
+    } as Parameters<typeof sendTerminalComposerText>[0];
+    await sendTerminalComposerText(
+      client,
+      "p3",
+      `compare ${quoted} with ${path}`,
+      true,
+      async () => {
+        calls.push("wait");
+      },
+    );
+    expect(calls).toEqual([
+      ["pane.send_input", "compare ", []],
+      ["pane.send_input", quoted, []],
+      "wait",
+      ["pane.send_input", " with ", []],
+      ["pane.send_input", path, []],
+      "wait",
+      ["pane.send_input", "", ["enter"]],
+    ]);
+
+    // Typed in without sending, words and images are split the same way.
+    calls.length = 0;
+    await sendTerminalComposerText(
+      client,
+      "p3",
+      `see ${path}`,
+      false,
+      async () => {
+        calls.push("wait");
+      },
+    );
+    expect(calls).toEqual([
+      ["pane.send_input", "see ", []],
+      ["pane.send_input", path, []],
+      "wait",
+    ]);
   });
 });
 

@@ -10,6 +10,7 @@ import {
   Minus,
   MessageSquareText,
   Moon,
+  Option,
   Palette,
   Plus,
   SquareTerminal,
@@ -37,7 +38,12 @@ import {
   type MobileTerminalShortcutRows,
   type MobileTerminalSideShortcuts,
 } from "../mobileTerminalShortcuts";
+import { detectShortcutPlatform } from "../shortcutBindings";
 import { shallowEqual, store, useStoreSelector } from "../store";
+import {
+  setTerminalOptionAsMeta,
+  useTerminalOptionAsMeta,
+} from "../terminalOptionKey";
 import type {
   CustomTerminalTheme,
   TerminalThemeSelection,
@@ -52,6 +58,8 @@ import { CloseButton } from "./CloseButton";
 import { TerminalTransportSettings } from "./TerminalTransportSettings";
 import { ConfigurationLoadingDialog } from "./ConfigurationLoadingDialog";
 import { InstanceNameSettings } from "./InstanceNameSettings";
+import { SpeechSettings } from "./SpeechSettings";
+import { WorktreeCommandSettings } from "./WorktreeCommandSettings";
 import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
 import "./ConfigurationDialog.css";
@@ -88,6 +96,8 @@ export type ConfigurationProps = {
   terminalThemeSelection: TerminalThemeSelection;
   customTerminalThemes: CustomTerminalTheme[];
   onThemeChange: (theme: Theme) => void;
+  blackBackground: boolean;
+  onBlackBackgroundChange: (blackBackground: boolean) => void;
   onAccentColorChange: (accentColor: AccentColor) => void;
   onUiScaleChange: (scale: number) => void;
   onTerminalFontScaleChange: (scale: number) => void;
@@ -135,6 +145,8 @@ export function ConfigurationDialog({
     }),
     shallowEqual,
   );
+  const optionAsMeta = useTerminalOptionAsMeta();
+  const applePlatform = detectShortcutPlatform() === "mac";
   const connectionClient = useConnectionClient();
   const [tab, setTab] = useState<ConfigurationTab>(initialTab);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -303,6 +315,29 @@ export function ConfigurationDialog({
               </div>
               <div className="config-preference-row">
                 <span className="config-item-icon">
+                  <Moon size={15} />
+                </span>
+                <div className="config-item-copy">
+                  <strong>Black background</strong>
+                  <span>Pure black instead of blue-grey in the dark theme</span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Black background"
+                  aria-checked={props.blackBackground}
+                  className={
+                    "settings-switch" + (props.blackBackground ? " is-on" : "")
+                  }
+                  onClick={() =>
+                    props.onBlackBackgroundChange(!props.blackBackground)
+                  }
+                >
+                  <span />
+                </button>
+              </div>
+              <div className="config-preference-row">
+                <span className="config-item-icon">
                   <Palette size={15} />
                 </span>
                 <div className="config-item-copy">
@@ -448,6 +483,7 @@ export function ConfigurationDialog({
                 Preferences apply to this browser. Push delivery preferences
                 apply to this device.
               </p>
+              {tab === "Behavior" ? <SpeechSettings /> : null}
               <div className="config-preference-row">
                 <span className="config-item-icon">
                   <Download size={15} />
@@ -539,6 +575,33 @@ export function ConfigurationDialog({
                     </button>
                   </div>
                 ))}
+              {applePlatform ? (
+                <div className="config-preference-row">
+                  <span className="config-item-icon">
+                    <Option size={15} />
+                  </span>
+                  <div className="config-item-copy">
+                    <strong>Option key as Alt in terminals</strong>
+                    <span>
+                      {optionAsMeta
+                        ? "Option sends Alt-modified keys"
+                        : "Option types characters such as @, [ and ~"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Option key as Alt in terminals"
+                    aria-checked={optionAsMeta}
+                    className={
+                      "settings-switch" + (optionAsMeta ? " is-on" : "")
+                    }
+                    onClick={() => setTerminalOptionAsMeta(!optionAsMeta)}
+                  >
+                    <span />
+                  </button>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="config-menu-item"
@@ -579,7 +642,12 @@ export function ConfigurationDialog({
               aria-labelledby="configuration-tab-Instance"
               hidden={tab !== "Instance"}
             >
-              {tab === "Instance" ? <InstanceNameSettings /> : null}
+              {tab === "Instance" ? (
+                <>
+                  <InstanceNameSettings />
+                  <WorktreeCommandSettings />
+                </>
+              ) : null}
             </section>
             <section
               role="tabpanel"
@@ -638,7 +706,7 @@ export function ConfigurationDialog({
               {tab === "Integrations"
                 ? "Changes require confirmation."
                 : tab === "Instance"
-                  ? "Use Save or Reset to default to apply the instance name."
+                  ? "Use Save to apply instance settings."
                   : "Changes are saved automatically."}
             </span>
             <button type="button" onClick={onClose}>

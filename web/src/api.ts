@@ -1,6 +1,9 @@
+import { createConnectionBackgroundLanes, type RpcLane } from "./rpcLanes";
 import { isBridgeHello } from "./bridgeHello";
 import type { BridgeControlMsg } from "./bridgeControl";
 export type { BridgeControlMsg } from "./bridgeControl";
+import { UncertainRequestError } from "./uncertainRequest";
+import { createUiSettingPushes, type UiSettingPush } from "./uiSettingPush";
 import type { ConnectionClient } from "./connectionClient";
 import { isValidPopupPayload } from "./popupPayload";
 import {
@@ -275,22 +278,9 @@ type Pending = {
   decodeAbort?: AbortController;
 };
 
-/** A dispatched operation may have completed; callers must re-observe before retrying. */
-export class UncertainRequestError extends Error {
-  readonly outcome = "uncertain";
-
-  constructor(
-    readonly method: string,
-    reason: string,
-  ) {
-    super(
-      `${reason}; ${method} outcome is uncertain. Refresh the exact target before retrying.`,
-    );
-    this.name = "UncertainRequestError";
-  }
-}
-
+export { UncertainRequestError } from "./uncertainRequest";
 export type { ConnectionClient } from "./connectionClient";
+export type { UiSettingPush } from "./uiSettingPush";
 
 const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
 const RPC_TIMEOUT_MS = 30000;
@@ -358,6 +348,7 @@ export class Bridge {
   private ws: WebSocket | null = null;
   private seq = 0;
   private pending = new Map<string, Pending>();
+  private backgroundLanes = createConnectionBackgroundLanes();
   private eventHandlers = new Set<(e: HerdrEventMsg) => void>();
   private assistantHandlers = new Set<(snapshot: AssistantSnapshot) => void>();
   private assistantNotificationHandlers = new Set<
@@ -371,6 +362,7 @@ export class Bridge {
     (closed: TerminalClosedPush) => void
   >();
   private popupHandlers = new Set<(popup: PopupStatePush) => void>();
+  private uiSettingPushes = createUiSettingPushes();
   private statusHandlers = new Set<(s: ConnectionStatus) => void>();
   private controlHandlers = new Set<(c: BridgeControlMsg) => void>();
   private helloHandlers = new Set<(hello: BridgeHello) => void>();
@@ -508,45 +500,62 @@ export class Bridge {
       (!requiresRuntimeGeneration() ||
         (serverRuntimeGeneration !== null &&
           value === serverRuntimeGeneration));
+    const send = (
+      method: string,
+      params: Record<string, unknown>,
+      timeoutMs: number | null,
+      options?: Parameters<ConnectionClient["call"]>[3],
+    ): Promise<any> => {
+      if (!this.helloAcceptedForSocket) {
+        return Promise.reject(new Error("bridge hello is unavailable"));
+      }
+      if (
+        transportEpoch !== this.transportEpoch ||
+        (legacyActiveLease &&
+          (generation !== this._clientGeneration ||
+            connectionId !== this._activeConnectionId))
+      ) {
+        return Promise.reject(new Error("connection changed during request"));
+      }
+      if (
+        (!legacyActiveLease &&
+          (!requiresRuntimeGeneration() ||
+            runtimeLease === undefined ||
+            this.runtimeLeases.get(connectionId) !== runtimeLease)) ||
+        (requiresRuntimeGeneration() &&
+          (serverRuntimeGeneration === null ||
+            this.runtimeGenerations.get(connectionId) !==
+              serverRuntimeGeneration))
+      ) {
+        return Promise.reject(
+          new Error("connection runtime generation is unavailable"),
+        );
+      }
+      return this.callScoped(
+        connectionId,
+        generation,
+        serverRuntimeGeneration,
+        method,
+        params,
+        timeoutMs,
+        legacyActiveLease,
+        options?.focusedObservation === true,
+        options?.lane ?? "interactive",
+      );
+    };
     return {
       connectionId,
       generation,
       serverRuntimeGeneration,
       call: (method, params = {}, timeoutMs = RPC_TIMEOUT_MS, options) => {
-        if (!this.helloAcceptedForSocket) {
-          return Promise.reject(new Error("bridge hello is unavailable"));
-        }
-        if (
-          transportEpoch !== this.transportEpoch ||
-          (legacyActiveLease &&
-            (generation !== this._clientGeneration ||
-              connectionId !== this._activeConnectionId))
-        ) {
-          return Promise.reject(new Error("connection changed during request"));
-        }
-        if (
-          (!legacyActiveLease &&
-            (!requiresRuntimeGeneration() ||
-              runtimeLease === undefined ||
-              this.runtimeLeases.get(connectionId) !== runtimeLease)) ||
-          (requiresRuntimeGeneration() &&
-            (serverRuntimeGeneration === null ||
-              this.runtimeGenerations.get(connectionId) !==
-                serverRuntimeGeneration))
-        ) {
-          return Promise.reject(
-            new Error("connection runtime generation is unavailable"),
-          );
-        }
-        return this.callScoped(
+        if (options?.lane !== "background")
+          return send(method, params, timeoutMs, options);
+        return this.backgroundLanes.run(
           connectionId,
-          generation,
-          serverRuntimeGeneration,
+          `${transportEpoch}:${generation}:${serverRuntimeGeneration}:${options.focusedObservation === true}`,
           method,
           params,
-          timeoutMs,
-          legacyActiveLease,
-          options?.focusedObservation === true,
+          () => send(method, params, timeoutMs, options),
         );
       },
       isCurrent,
@@ -772,6 +781,7 @@ export class Bridge {
     const hasClipboard = owns("terminal_clipboard");
     const hasTerminalClosed = owns("terminal_closed");
     const hasPopup = owns("popup");
+    const hasUiSettings = owns("ui_settings");
     const hasControl = owns("control");
     const hasAssistant = owns("assistant");
     const hasAssistantNotification = owns("assistant_notification");
@@ -783,6 +793,7 @@ export class Bridge {
       hasClipboard,
       hasTerminalClosed,
       hasPopup,
+      hasUiSettings,
       hasControl,
       hasAssistant,
       hasAssistantNotification,
@@ -1117,6 +1128,11 @@ export class Bridge {
       return;
     }
 
+    if (hasUiSettings) {
+      this.uiSettingPushes.deliver(msg.ui_settings);
+      return;
+    }
+
     if (
       msg.control &&
       typeof msg.control === "object" &&
@@ -1137,6 +1153,7 @@ export class Bridge {
     timeoutMs: number | null,
     legacyActiveLease = false,
     focusedObservation = false,
+    lane: RpcLane = "interactive",
   ): Promise<any> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -1191,6 +1208,7 @@ export class Bridge {
             id,
             method,
             params,
+            ...(lane === "background" ? { lane } : {}),
             ...(focusedObservation &&
             connectionId !== null &&
             this._hello?.capabilities.world_shared_acquisition === true &&
@@ -1242,6 +1260,7 @@ export class Bridge {
     timeoutMs: number | null,
     legacyActiveLease = false,
     focusedObservation = false,
+    lane: RpcLane = "interactive",
   ): Promise<any> {
     if (isBridgeGlobalMethod(method)) {
       return Promise.reject(
@@ -1257,6 +1276,7 @@ export class Bridge {
       timeoutMs,
       legacyActiveLease,
       focusedObservation,
+      lane,
     );
   }
 
@@ -1268,6 +1288,7 @@ export class Bridge {
     method: string,
     params: Record<string, unknown> = {},
     timeoutMs: number | null = RPC_TIMEOUT_MS,
+    options?: Parameters<ConnectionClient["call"]>[3],
   ): Promise<any> {
     if (isBridgeGlobalMethod(method)) {
       return this.sendCall(
@@ -1294,14 +1315,42 @@ export class Bridge {
         new Error("connection runtime generation is unavailable"),
       );
     }
-    return this.callScoped(
-      this._activeConnectionId,
-      this._clientGeneration,
-      serverRuntimeGeneration,
+    const connectionId = this._activeConnectionId;
+    const clientGeneration = this._clientGeneration;
+    const transportEpoch = this.transportEpoch;
+    const send = () => {
+      if (
+        connectionId !== this._activeConnectionId ||
+        clientGeneration !== this._clientGeneration ||
+        transportEpoch !== this.transportEpoch
+      )
+        return Promise.reject(new Error("connection changed during request"));
+      if (
+        serverRuntimeGeneration !== null &&
+        this.runtimeGenerations.get(connectionId) !== serverRuntimeGeneration
+      )
+        return Promise.reject(
+          new Error("connection runtime generation is unavailable"),
+        );
+      return this.callScoped(
+        connectionId,
+        clientGeneration,
+        serverRuntimeGeneration,
+        method,
+        params,
+        timeoutMs,
+        true,
+        options?.focusedObservation === true,
+        options?.lane ?? "interactive",
+      );
+    };
+    if (options?.lane !== "background") return send();
+    return this.backgroundLanes.run(
+      connectionId,
+      `legacy:${transportEpoch}:${clientGeneration}:${serverRuntimeGeneration}`,
       method,
       params,
-      timeoutMs,
-      true,
+      send,
     );
   }
 
@@ -1372,6 +1421,10 @@ export class Bridge {
     const handler = this.scopedHandler(cb, client);
     this.popupHandlers.add(handler);
     return () => this.popupHandlers.delete(handler);
+  }
+
+  onUiSetting(cb: (push: UiSettingPush) => void): () => void {
+    return this.uiSettingPushes.subscribe(cb);
   }
 
   onTerminalClosed(

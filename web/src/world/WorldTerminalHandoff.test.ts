@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { assetUrlImports } from "./testing/assetUrlImports";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
@@ -156,6 +157,7 @@ test.skipIf(!chrome)(
         target: "browser",
         define: { __HERDR_WORLD_VERSION__: JSON.stringify("9.8.7-test") },
         plugins: [
+          assetUrlImports,
           {
             name: "created-opener-clock-and-completion",
             setup(builder) {

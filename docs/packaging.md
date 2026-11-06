@@ -24,12 +24,15 @@ standalone compiled fixture copied away from its source. It records the SQLite
 version actually linked by each platform; a Bun version alone does not establish
 identical SQLite versions or filesystem durability behavior across platforms.
 
-The web build is limited to 180 files and 13.25 MiB total embedded assets,
-including lazy features such as Ranger, commit history, the diff worker and the
-Town and Board views. Startup limits remain 660 KiB
+The web build is limited to 180 files and 15.25 MiB total embedded assets,
+including lazy features such as Ranger, commit history, the diff worker, the
+Town and Board views and PDF.js with its worker, which load only when a browser
+without a PDF viewer opens a PDF. Startup limits remain 660 KiB
 JavaScript (202 KiB gzip) and 196 KiB CSS. Small highlighting themes share a
 lazy chunk to control file count. `bun run build` enforces these limits, and it
-fails when a static import elsewhere keeps a lazy import in the eager chunk.
+fails when a static import elsewhere keeps a lazy import in the eager chunk,
+when PDF.js reaches the initial load, or when the shipped PDF.js compiles code
+at run time.
 
 From an installed, clean checkout:
 

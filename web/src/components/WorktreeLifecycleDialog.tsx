@@ -5,6 +5,7 @@ import { luckyWorktreeBranchName } from "../luckyName";
 import {
   connectionClientScopeKey,
   useConnectionClient,
+  useConnectionReady,
 } from "../useConnectionClient";
 import { useWorktreePullRequests } from "../useWorktreePullRequests";
 import { useOperationalStore, useStoreSelector } from "../store";
@@ -93,6 +94,7 @@ export function WorktreeLifecycleDialog({
   const workspaces = useStoreSelector((state) => state.workspaces);
   const store = useOperationalStore();
   const connectionClient = useConnectionClient();
+  const ready = useConnectionReady(connectionClient);
   const selectedWorkspace = workspaces.find(
     (workspace) => workspace.workspace_id === workspaceId,
   );
@@ -126,6 +128,9 @@ export function WorktreeLifecycleDialog({
   const [newWorktreeOpen, setNewWorktreeOpen] = useState(false);
   const [openWorktreeOpen, setOpenWorktreeOpen] = useState(false);
   const [hooksOpen, setHooksOpen] = useState(false);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [removeCommandOpen, setRemoveCommandOpen] = useState(false);
   const [removeRow, setRemoveRow] = useState<WorktreeLifecycleRow | null>(null);
   const [openedResourceTargets, setOpenedResourceTargets] = useState<
     Record<string, string>
@@ -151,7 +156,7 @@ export function WorktreeLifecycleDialog({
 
   const load = useCallback(
     async (showLoading: boolean, force = false) => {
-      if (!repositoryWorkspaceId) return;
+      if (!repositoryWorkspaceId || !connectionClient.isCurrent()) return;
       const existingLoad = inFlightLoad.current;
       if (!force && existingLoad?.workspaceId === repositoryWorkspaceId) {
         if (showLoading) setLoading(true);
@@ -262,7 +267,7 @@ export function WorktreeLifecycleDialog({
   );
 
   useEffect(() => {
-    if (!open || !repositoryWorkspaceId) return;
+    if (!ready || !open || !repositoryWorkspaceId) return;
     setListResult(null);
     setHooks(null);
     setAutoSync({});
@@ -279,7 +284,7 @@ export function WorktreeLifecycleDialog({
       operationRunningRef.current = false;
       inFlightLoad.current = null;
     };
-  }, [load, open, repositoryWorkspaceId]);
+  }, [load, ready, open, repositoryWorkspaceId]);
 
   useEffect(() => {
     openedResourceTargetsRef.current = {};
@@ -422,6 +427,49 @@ export function WorktreeLifecycleDialog({
     void runOperation("hooks", "Updating hook policy", () =>
       store.setRepoWorktreeHooksEnabled(hooks.key!, enabled),
     );
+  };
+
+  const setWorktreeCommand = (command: string) => {
+    if (!hooks?.key) return;
+    setCommandOpen(false);
+    void runOperation("command", "Updating worktree command", async () => {
+      const result = await store.setRepoWorktreeCommand(
+        hooks.key!,
+        command.trim(),
+      );
+      await load(false, true);
+      return result;
+    });
+  };
+
+  const setWorktreeRemoveCommand = (command: string) => {
+    if (!hooks?.key) return;
+    setRemoveCommandOpen(false);
+    void runOperation(
+      "remove-command",
+      "Updating worktree remove command",
+      async () => {
+        const result = await store.setRepoWorktreeRemoveCommand(
+          hooks.key!,
+          command.trim(),
+        );
+        await load(false, true);
+        return result;
+      },
+    );
+  };
+
+  const setWorktreeDirectory = (directory: string) => {
+    if (!hooks?.key) return;
+    setDirectoryOpen(false);
+    void runOperation("directory", "Updating worktree location", async () => {
+      const result = await store.setRepoWorktreeDirectory(
+        hooks.key!,
+        directory.trim(),
+      );
+      await load(false, true);
+      return result;
+    });
   };
 
   const openWorktree = (row: WorktreeLifecycleRow, focus = true) => {
@@ -731,6 +779,75 @@ export function WorktreeLifecycleDialog({
                 </button>
               </section>
 
+              <section className="lifecycle-policy">
+                <div className="lifecycle-policy-main">
+                  <span className="lifecycle-policy-icon">
+                    <Settings size={16} />
+                  </span>
+                  <div>
+                    <strong>Worktree location</strong>
+                    <span title={hooks?.worktree_directory ?? undefined}>
+                      {hooks?.worktree_directory
+                        ? hooks.worktree_directory
+                        : "Default (chosen by Herdr)"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={!hooks?.key || operationRunning}
+                  onClick={() => setDirectoryOpen(true)}
+                >
+                  Change
+                </button>
+              </section>
+
+              <section className="lifecycle-policy">
+                <div className="lifecycle-policy-main">
+                  <span className="lifecycle-policy-icon">
+                    <Settings size={16} />
+                  </span>
+                  <div>
+                    <strong>Worktree command</strong>
+                    <span>
+                      {hooks?.worktree_command ||
+                        hooks?.default_worktree_command ||
+                        "Default (Herdr creates it)"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={!hooks?.key || operationRunning}
+                  onClick={() => setCommandOpen(true)}
+                >
+                  Change
+                </button>
+              </section>
+
+              <section className="lifecycle-policy">
+                <div className="lifecycle-policy-main">
+                  <span className="lifecycle-policy-icon">
+                    <Settings size={16} />
+                  </span>
+                  <div>
+                    <strong>Remove command</strong>
+                    <span>
+                      {hooks?.worktree_remove_command ||
+                        hooks?.default_worktree_remove_command ||
+                        "Default (Herdr removes it)"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={!hooks?.key || operationRunning}
+                  onClick={() => setRemoveCommandOpen(true)}
+                >
+                  Change
+                </button>
+              </section>
+
               {error ? <p className="modal-error">{error}</p> : null}
               <div className="lifecycle-list" role="list">
                 {rows.map((row) => {
@@ -779,6 +896,36 @@ export function WorktreeLifecycleDialog({
         submitLabel="Create"
         onClose={() => setNewWorktreeOpen(false)}
         onSubmit={createWorktree}
+      />
+      <TextInputDialog
+        open={directoryOpen}
+        title="Worktree Location"
+        label="Directory (empty for default)"
+        initialValue={hooks?.worktree_directory ?? ""}
+        placeholder="/path/to/worktrees"
+        submitLabel="Save"
+        onClose={() => setDirectoryOpen(false)}
+        onSubmit={setWorktreeDirectory}
+      />
+      <TextInputDialog
+        open={commandOpen}
+        title="Worktree Command"
+        label="Command, with {path} {branch} {base} {repo} (empty for default)"
+        initialValue={hooks?.worktree_command ?? ""}
+        placeholder="git recworktree add {path} --branch {branch} --base {base}"
+        submitLabel="Save"
+        onClose={() => setCommandOpen(false)}
+        onSubmit={setWorktreeCommand}
+      />
+      <TextInputDialog
+        open={removeCommandOpen}
+        title="Worktree Remove Command"
+        label="Command, with {path} {repo} {force} (empty for default)"
+        initialValue={hooks?.worktree_remove_command ?? ""}
+        placeholder="git recworktree remove {path} {force}"
+        submitLabel="Save"
+        onClose={() => setRemoveCommandOpen(false)}
+        onSubmit={setWorktreeRemoveCommand}
       />
       <WorktreeOpenDialog
         open={openWorktreeOpen}

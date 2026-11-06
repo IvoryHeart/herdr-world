@@ -22,8 +22,8 @@ import type {
   FileListResult,
   FilePreviewResult,
   FileUploadResult,
+  RunBinaryProcessWithTimeout,
 } from "./file-types";
-import { runBinaryProcessWithTimeout } from "./process";
 import { decodePreviewBuffer, previewLimitForPath } from "./preview";
 import { fileDownloadRange, type FileDownloadOptions } from "./file-download";
 import { renameFileExclusive } from "./atomic-file-move";
@@ -141,6 +141,7 @@ export async function readLocalFile(
 export async function downloadLocalFile(
   rootPath: string,
   requestedPath: string,
+  runBinaryProcessWithTimeout: RunBinaryProcessWithTimeout,
   options: FileDownloadOptions = {},
 ): Promise<FileDownloadResult> {
   const rootReal = await realpath(rootPath);

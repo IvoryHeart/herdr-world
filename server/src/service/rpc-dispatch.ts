@@ -32,12 +32,19 @@ import { handleFilesRpc } from "../rpc/files";
 import { handleGitRpc } from "../rpc/git";
 import { handleLauncherRpc } from "../rpc/launcher";
 import { handleWorldRpc } from "../rpc/world";
-import { inspectWorkspacePath } from "../workspace/path";
+import { inspectRuntimeWorkspacePath } from "../workspace/path";
 import { readFocusedList } from "../world/focused-lists";
 import {
   FOCUSED_METHODS,
   type FocusedMethod,
 } from "../world/focused-acquisition";
+
+/** Composer input sent through Herdr's pane API rather than terminal.input. */
+const PANE_INPUT_METHODS = new Set([
+  "pane.send_input",
+  "pane.send_text",
+  "pane.send_keys",
+]);
 
 type RpcRequest = ConnectionRpcRequest;
 type LegacyRoutingLogger = ReturnType<typeof createLegacyRoutingLogger>;
@@ -317,14 +324,39 @@ async function handleRpc(
   }
   const { sshHost, herdr, handleSettingsRpc, terminalBridge } = connection;
 
+  if (method.startsWith("forward.")) {
+    try {
+      recheck();
+      if (
+        req.connection_id === undefined ||
+        req.connection_generation === undefined
+      )
+        throw new Error(
+          "Port forwarding requires an explicit connection and runtime generation",
+        );
+      if (!connection.handleForwardRpc)
+        throw new Error("Port forwarding is unavailable");
+      return await connection.handleForwardRpc(
+        ws,
+        id,
+        method,
+        params ?? {},
+        requestIsCurrent,
+      );
+    } catch (error) {
+      sendError("forward-error", error);
+      return;
+    }
+  }
+
   if (
     method === "workspace.path" ||
     (method === "workspace.create" && params?.cwd != null && params.cwd !== "")
   ) {
     try {
-      const info = await inspectWorkspacePath(
+      const info = await inspectRuntimeWorkspacePath(
+        connection,
         method === "workspace.path" ? params?.path : params?.cwd,
-        { host: sshHost(), remotePlatform: connection.remotePlatform },
         method === "workspace.path",
       );
       if (method === "workspace.path") {
@@ -359,9 +391,9 @@ async function handleRpc(
             params?.cwd != null &&
             params.cwd !== ""
           ) {
-            const info = await inspectWorkspacePath(
+            const info = await inspectRuntimeWorkspacePath(
+              connection,
               params.cwd,
-              { host: sshHost(), remotePlatform: connection.remotePlatform },
               false,
             );
             if (info.error) throw new Error(`${info.error} ${info.path}`);
@@ -422,7 +454,30 @@ async function handleRpc(
       sendReply({ id, result }, method);
       return;
     }
-    const rawResult = await herdr.call(method, params ?? {}, 8000, recheck);
+    // Roamgate #526: a clipboard write made by a command the composer sent
+    // returns to the browser that sent it. Resolve the recipient terminal on
+    // this connection before input can produce one; a failed lookup never
+    // blocks input. The bridge binds the target to this runtime, the viewing
+    // socket and the terminal.
+    let inputTerminalId: string | undefined;
+    if (PANE_INPUT_METHODS.has(method) && typeof params?.pane_id === "string") {
+      try {
+        const pane = await herdr.call(
+          "pane.get",
+          { pane_id: params.pane_id },
+          2000,
+        );
+        if (typeof pane?.pane?.terminal_id === "string")
+          inputTerminalId = pane.pane.terminal_id;
+      } catch {
+        // Input still goes; only its clipboard routing is unknown.
+      }
+    }
+    const rawResult = await herdr.call(method, params ?? {}, 8000, () => {
+      recheck();
+      if (inputTerminalId)
+        terminalBridge.noteTerminalInput(ws, inputTerminalId);
+    });
     if (verb.recovery !== "read")
       evidence.record({
         stage: "sent",
@@ -435,6 +490,7 @@ async function handleRpc(
       connection.remotePlatform !== "windows"
     ) {
       result = await enrichIntegrationVersions(result, {
+        run: connection.runProcessWithCodeTimeout,
         sshHost: sshHost(),
         ping: () => herdr.ping(),
       });

@@ -1,3 +1,7 @@
+import {
+  runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
+} from "./process";
 import { expect, test } from "bun:test";
 import {
   mkdir,
@@ -40,6 +44,9 @@ async function fixture(
 
 function handlers(workspace: string) {
   return createFileHandlers({
+    runBinaryProcessWithTimeout,
+    bindProcess: (argv) => argv,
+    runProcessWithInputTimeout,
     herdr: {
       call: async (method: string) => {
         expect(method).toBe("workspace.get");

@@ -6,6 +6,7 @@ import {
   isAssistantMentions,
   type AssistantMention,
   type AssistantMentionCatalog,
+  type AssistantShow,
   type AssistantSnapshot,
   type AssistantConfig,
   type AssistantWorkspaceCatalog,
@@ -55,6 +56,52 @@ function publish(patch: Partial<AssistantClientState>) {
   for (const listener of listeners) listener();
 }
 
+/** The questions this browser sent: a reply showing a session switches it. */
+const ownRequests = new Set<string>();
+/** Shows this browser already followed, by reply and target. */
+const followed = new Set<string>();
+/** Both sets keep only recent ids: a long-lived tab must not grow them. */
+const REMEMBERED_IDS = 200;
+
+function remember(ids: Set<string>, id: string) {
+  ids.add(id);
+  for (const oldest of ids) {
+    if (ids.size <= REMEMBERED_IDS) break;
+    ids.delete(oldest);
+  }
+}
+
+/** Goes where a reply to this browser's question showed, once. */
+function followShows(snapshot: AssistantSnapshot) {
+  for (const message of snapshot.messages) {
+    const show = message.show;
+    if (!show || !ownRequests.has(show.request_id)) continue;
+    // A reply showing a second target follows that one too, once.
+    const key = JSON.stringify([
+      message.id,
+      show.connection_id,
+      show.runtime_generation,
+      show.workspace_id,
+      show.pane_id ?? null,
+    ]);
+    if (followed.has(key)) continue;
+    remember(followed, key);
+    showHandler?.(show);
+  }
+}
+
+let showHandler: ((show: AssistantShow) => void) | null = null;
+
+/** What following a reply's show does: switching panes is the app's. */
+export function onAssistantShow(
+  handler: (show: AssistantShow) => void,
+): () => void {
+  showHandler = handler;
+  return () => {
+    if (showHandler === handler) showHandler = null;
+  };
+}
+
 function acceptSnapshot(value: unknown, requestVersion?: number) {
   if (!isAssistantSnapshot(value)) {
     throw new Error("Invalid Ranger state received from the bridge.");
@@ -67,7 +114,13 @@ function acceptSnapshot(value: unknown, requestVersion?: number) {
     // A delayed reply cannot replace a newer pushed bridge instance.
     if (requestVersion !== undefined && requestVersion !== snapshotVersion)
       return;
-    if (current) retiredInstances.add(current.instance_id);
+    if (current) {
+      retiredInstances.add(current.instance_id);
+      // A recovered service can repeat saved replies with generation numbers
+      // reused after restart. Only fresh questions may navigate this window.
+      ownRequests.clear();
+      followed.clear();
+    }
   }
   snapshotVersion++;
   let draft = state.draft;
@@ -85,6 +138,7 @@ function acceptSnapshot(value: unknown, requestVersion?: number) {
     draft,
     draftMentions,
   });
+  followShows(value);
 }
 
 export function readAssistantState() {
@@ -482,6 +536,7 @@ export async function sendAssistant(
   ]);
   if (submission?.key !== key)
     submission = { key, requestId: crypto.randomUUID() };
+  remember(ownRequests, submission.requestId);
   sending = true;
   try {
     await callAssistant("send", {
@@ -525,6 +580,9 @@ export function __resetAssistantForTests() {
   retiredInstances.clear();
   submission = null;
   sending = false;
+  ownRequests.clear();
+  followed.clear();
+  showHandler = null;
   drafts.clear();
   draftHistory.clear();
   state = {

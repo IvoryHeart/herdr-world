@@ -5,6 +5,7 @@ import { useStoreSelector } from "../store";
 import {
   connectionClientScopeKey,
   useConnectionClient,
+  useConnectionReady,
 } from "../useConnectionClient";
 import { useWorktreePullRequests } from "../useWorktreePullRequests";
 import type { ExistingWorktree, WorktreeList } from "../types";
@@ -49,6 +50,7 @@ export function WorktreeOpenDialog({
 }) {
   const store = useOperationalStore();
   const connectionClient = useConnectionClient();
+  const ready = useConnectionReady(connectionClient);
   const workspace = useStoreSelector((state) =>
     state.workspaces.find((entry) => entry.workspace_id === workspaceId),
   );
@@ -80,24 +82,27 @@ export function WorktreeOpenDialog({
     setActionError(null);
     setListState({ scope, list: null, error: "" });
 
-    connectionClient.call("worktree.list", { workspace_id: workspaceId }).then(
-      (result) => {
-        if (cancelled || !connectionClient.isCurrent()) return;
-        setListState({
-          scope,
-          list: result as WorktreeList,
-          error: "",
-        });
-      },
-      (err) => {
-        if (cancelled || !connectionClient.isCurrent()) return;
-        setListState({
-          scope,
-          list: null,
-          error: (err as Error).message,
-        });
-      },
-    );
+    if (ready)
+      connectionClient
+        .call("worktree.list", { workspace_id: workspaceId })
+        .then(
+          (result) => {
+            if (cancelled || !connectionClient.isCurrent()) return;
+            setListState({
+              scope,
+              list: result as WorktreeList,
+              error: "",
+            });
+          },
+          (err) => {
+            if (cancelled || !connectionClient.isCurrent()) return;
+            setListState({
+              scope,
+              list: null,
+              error: (err as Error).message,
+            });
+          },
+        );
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCloseEvent();
@@ -107,7 +112,7 @@ export function WorktreeOpenDialog({
       cancelled = true;
       window.removeEventListener("keydown", onKey);
     };
-  }, [connectionClient, open, workspaceId, scope, onCloseEvent]);
+  }, [connectionClient, ready, open, workspaceId, scope, onCloseEvent]);
 
   const currentListState = listState?.scope === scope ? listState : null;
   const list = currentListState?.list ?? null;

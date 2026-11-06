@@ -3,10 +3,13 @@ import {
   activePaneIdForSnapshot,
   paneCanClose,
   paneJumpEntries,
+  paneJumpEntryKey,
   paneJumpTargetId,
   paneSearchEntries,
+  serverPaneSearchEntries,
 } from "./paneJump";
 import type { Pane, Tab, Workspace } from "./types";
+import type { ServerAgentPane } from "./useAllServerAgentSessions";
 
 function workspace(workspaceId: string, label: string): Workspace {
   return {
@@ -266,5 +269,70 @@ describe("pane search projection", () => {
     expect(entries.map((entry) => entry.paneId)).toEqual(["p3", "p2", "p1"]);
     expect(entries[0].current).toBe(true);
     expect(entries[1].current).toBe(false);
+  });
+});
+
+describe("cross-server pane search", () => {
+  function serverPane(
+    connectionId: string,
+    serverLabel: string,
+    paneId: string,
+    workspaceLabel: string,
+  ): ServerAgentPane {
+    return {
+      ...pane(paneId, "w1", "t1", "claude"),
+      connectionId,
+      runtimeGeneration: 3,
+      serverLabel,
+      workspaceKey: JSON.stringify([connectionId, 3, "w1"]),
+      workspaceLabel,
+      tabLabel: "2026-10-27",
+    };
+  }
+  const panes = [
+    serverPane("local", "Local", "p1", "rozkminy"),
+    serverPane("box", "agentbox", "p1", "linkediner"),
+    serverPane("box", "agentbox", "p2", "ranger"),
+  ];
+
+  test("skips the active server and keeps the given order", () => {
+    const entries = serverPaneSearchEntries(panes, "", "local");
+
+    expect(entries.map((entry) => entry.title)).toEqual([
+      "linkediner",
+      "ranger",
+    ]);
+    expect(entries[0]).toMatchObject({
+      serverLabel: "agentbox",
+      tabLabel: "2026-10-27",
+      current: false,
+      source: { connectionId: "box", runtimeGeneration: 3, workspaceId: "w1" },
+    });
+  });
+
+  test("matches server, workspace and tab terms", () => {
+    const titles = (query: string) =>
+      serverPaneSearchEntries(panes, query, "local").map(
+        (entry) => entry.title,
+      );
+
+    expect(titles("agentbox rang")).toEqual(["ranger"]);
+    expect(titles("2026-10-27 linked")).toEqual(["linkediner"]);
+    expect(titles("rozkminy")).toEqual([]);
+  });
+
+  test("labels active-server entries and keeps keys unique across servers", () => {
+    const snapshot = {
+      panes: [pane("p1", "w1", "t1", "claude")],
+      recentPaneIds: [],
+      tabs: [tab("t1", "w1")],
+      workspaces: [workspace("w1", "rozkminy")],
+    };
+    const local = paneSearchEntries(snapshot, "local", null, "Local");
+    const remote = serverPaneSearchEntries(panes, "", "local");
+
+    expect(local.map((entry) => entry.serverLabel)).toEqual(["Local"]);
+    const keys = [...local, ...remote].map(paneJumpEntryKey);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
