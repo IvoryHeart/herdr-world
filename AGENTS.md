@@ -20,6 +20,8 @@ invent abstractions or process without a concrete need.
   needs a decision. Update one coherent change when direction changes rather than
   creating a document per implementation tranche.
 
+Agent work is dispatched by the separate herdr-crew dispatcher; this repo only defines how code is built, tested and delivered.
+
 Use [the knowledge map](docs/knowledge-map.md) when locating contracts, source,
 tests or runbooks. Read [agent development](docs/agent-development.md) for
 agent-workflow changes or process investigations. Current contracts are in
@@ -122,8 +124,8 @@ one verification at a time, two unit lanes; static checks bypass the queue); run
 `bun run test <path>` so they queue too. A queued gate prints whom it waits for, so wait rather
 than bypass the hook.
 CI runs documentation checks for ordinary Markdown-only PR diffs. PRs limited
-to `scripts/agent/**`, `docs/agent-development.md`, `docs/crew-runbook.md`,
-`docs/dispatch-runbook.md` and `changes/<slug>.md` use the shared tooling mode:
+to `scripts/agent/**`, `docs/agent-development.md` and `changes/<slug>.md` use
+the shared tooling mode:
 static checks and affected unit tests, without World suites, behavioral
 verification or native installers. `Delivery checks` and both protected macOS
 reports remain required. Other classified PRs run affected unit and nearest browser suites, verification

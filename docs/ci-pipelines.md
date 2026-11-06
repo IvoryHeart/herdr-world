@@ -79,8 +79,7 @@ cancellation and missing reports still fail delivery.
 
 Tooling-only PRs use `scripts/validation-scope.ts` in CI and pre-push. The complete
 diff must contain only `scripts/agent/**` (including tests),
-`docs/agent-development.md`, `docs/crew-runbook.md`, `docs/dispatch-runbook.md` and
-`changes/<slug>.md`. Empty diffs and any other code path retain ordinary scope.
+`docs/agent-development.md` and `changes/<slug>.md`. Empty diffs and any other code path retain ordinary scope.
 Both sides of renames count. The mode runs the complete static lane and affected
 unit tests (or the agent test inventory for uncovered agent modules), and skips
 World browser suites, behavioral verification, Windows installation and installer

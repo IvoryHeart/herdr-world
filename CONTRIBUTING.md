@@ -102,8 +102,8 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
 | Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
 
-The agent-tooling exception from #484 still covers `scripts/agent/**`, the named
-agent/crew/dispatch runbooks and `changes/<slug>.md`: static checks and affected
+The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
+helper), the agent development guide and `changes/<slug>.md`: static checks and affected
 unit tests, with the agent test inventory for uncovered modules. It skips heavy
 suites even though the inventory's broad scripts owner would otherwise apply.
 Contributor docs and skill Markdown run documentation checks or named consumer

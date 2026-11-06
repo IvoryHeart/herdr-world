@@ -25,12 +25,10 @@ import { selectedCITests } from "./ci-tests";
 
 test("only the explicit agent tooling paths qualify", () => {
   const allowed = [
-    "scripts/agent/crew.ts",
-    "scripts/agent/crew.test.ts",
-    "scripts/agent/gate/rules.test.ts",
+    "scripts/agent/worktree.mjs",
+    "scripts/agent/worktree.test.ts",
+    "scripts/agent/example/rules.test.ts",
     "docs/agent-development.md",
-    "docs/crew-runbook.md",
-    "docs/dispatch-runbook.md",
     "changes/482.md",
   ];
   expect(isToolingOnlyChange(allowed)).toBe(true);
@@ -40,6 +38,7 @@ test("only the explicit agent tooling paths qualify", () => {
     "shared/pullRequest.ts",
     "scripts/check-delivery.ts",
     "scripts/agent.ts",
+    "docs/crew-runbook.md",
     "scripts/validation-scope.ts",
     "scripts/ci-workflow.test.ts",
     ".github/workflows/ci.yml",

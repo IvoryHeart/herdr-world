@@ -1,6 +1,0 @@
-{
-  "roster": {
-    "builder": { "model": "gpt-6.1-sol", "effort": "xhigh" },
-    "reviewer": { "model": "gpt-6-astra", "effort": "high" }
-  }
-}

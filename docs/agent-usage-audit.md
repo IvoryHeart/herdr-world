@@ -1,5 +1,8 @@
 # Per-PR agent usage
 
+> Historical: the `agent:usage` tooling this describes was removed on 2026-11-06,
+> when crew dispatch moved to the separate herdr-crew dispatcher.
+
 Account for agent usage when each PR becomes READY, then refresh the same comment
 at merge. This is routine milestone accounting, not a pre-PR gate. Do not edit a
 PR body solely for usage totals. Comments do not start the PR CI workflow.
