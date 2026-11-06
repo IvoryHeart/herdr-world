@@ -281,7 +281,11 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         );
         const viewed =
           inspectorView && reconciled.availableViews.includes(inspectorView)
-            ? { ...reconciled, view: inspectorView }
+            ? {
+                ...reconciled,
+                view: observed.view,
+                awaitChatSession: observed.awaitChatSession,
+              }
             : reconciled;
         const admitted = { ...viewed, chatFocusIntent };
         windowCommand({ type: "focus", id: worldInspectorWindowId(admitted) });
@@ -994,7 +998,11 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       );
       const viewed =
         requestedView && reconciled.availableViews.includes(requestedView)
-          ? { ...reconciled, view: requestedView }
+          ? {
+              ...reconciled,
+              view: observed.view,
+              awaitChatSession: observed.awaitChatSession,
+            }
           : reconciled;
       const currentConversation = focusTarget
         ? { ...viewed, chatFocusIntent }

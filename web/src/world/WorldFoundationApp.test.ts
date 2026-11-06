@@ -38,6 +38,7 @@ import { worldNodeOpenView } from "./worldInspectorSelection";
 import { worldPathNeedsCanonical } from "./worldViewRouting";
 import {
   reconcileWorldInspectorConversation,
+  launchedWorldLeaf,
   retainWorldInspectorConversations,
   upsertWorldInspectorConversation,
   worldInspectorForNode,
@@ -704,6 +705,18 @@ describe("World view preference", () => {
       "host-a",
     );
     const agent = world.leaves.find(({ kind }) => kind === "agent")!;
+    const receipt = {
+      connectionId: agent.connectionId,
+      runtimeGeneration: agent.generation,
+      terminalId: agent.terminalId,
+    };
+    expect(launchedWorldLeaf(world, receipt)).toBe(agent);
+    expect(
+      launchedWorldLeaf(world, {
+        ...receipt,
+        runtimeGeneration: receipt.runtimeGeneration + 1,
+      }),
+    ).toBeUndefined();
     const terminal = world.leaves.find(({ kind }) => kind === "terminal")!;
 
     expect(worldIntentViews(world.hosts[0])).toEqual([]);
@@ -722,9 +735,8 @@ describe("World view preference", () => {
     expect(worldIntentInitialView(agent, null)).toBe("terminal");
     expect(worldIntentInitialView(agent, "changes")).toBe("changes");
     expect(worldIntentInitialView(terminal, "history")).toBe("terminal");
-    // Opening a node anywhere: an agent Chat can read opens on Chat unless
-    // Agents open says Terminal; a shell, or a harness Chat cannot read,
-    // opens its terminal; a workspace opens its files.
+    // This chooses the opening intent; the window checks actual Chat availability.
+    // A shell opens Terminal and a workspace opens Files.
     expect(worldNodeOpenView(agent, "chat")).toBe("history");
     expect(worldNodeOpenView(agent, "terminal")).toBe("terminal");
     for (const harness of [
@@ -753,7 +765,15 @@ describe("World view preference", () => {
         { ...agent, pane: { ...agent.pane, agent: "gemini" } },
         "chat",
       ),
-    ).toBe("terminal");
+    ).toBe("history");
+    const opening = worldInspectorForNode(
+      { ...agent, agentSessionFingerprint: "reported-session" },
+      "history",
+      worldIntentViews(agent),
+      worldInspectorContext(agent)!,
+      { dock: "right", expanded: false, size: 520 },
+    );
+    expect(opening).toMatchObject({ view: "terminal", awaitChatSession: true });
     expect(worldNodeOpenView(world.spaces[0], "chat")).toBe("files");
     expect(worldNodeOpenView(world.hosts[0], "chat")).toBeNull();
     expect(worldInspectorContext(agent)).toMatchObject({
@@ -1723,4 +1743,146 @@ test("presentation retention follows exact catalogue owners regardless of host r
   expect(retainWorldInspectorConversations(retained, owners.slice(1))).toEqual([
     beta,
   ]);
+});
+
+test("a reported session alone cannot select Chat; manual views and replacements stay fenced", () => {
+  const waiting = { ...inspectorConversation(0), awaitChatSession: true };
+  const arrived = {
+    ...waiting,
+    view: "history" as const,
+    resourceIdentity: "session",
+    agentSessionFingerprint: "session",
+  };
+  expect(reconcileWorldInspectorConversation(waiting, arrived)).toMatchObject({
+    view: "terminal",
+    awaitChatSession: true,
+  });
+  expect(
+    reconcileWorldInspectorConversation(
+      { ...waiting, view: "files", awaitChatSession: false },
+      arrived,
+    ).view,
+  ).toBe("files");
+  // A replacement terminal is observed as the factory opens it: Terminal.
+  const replaced = reconcileWorldInspectorConversation(waiting, {
+    ...arrived,
+    view: "terminal",
+    terminalId: "replacement",
+  });
+  expect(replaced).toMatchObject({ view: "terminal", awaitChatSession: false });
+  expect(
+    reconcileWorldInspectorConversation(replaced, {
+      ...arrived,
+      terminalId: "replacement",
+      resourceIdentity: "next",
+    }).view,
+  ).toBe("terminal");
+});
+
+test("an opening window's manual view resets when its session, terminal or harness is replaced", () => {
+  const leaf = (patch: Record<string, unknown>, session?: string) =>
+    buildWorldObject(
+      [
+        {
+          connectionId: "local",
+          label: "Local",
+          source: "startup-config",
+          isDefault: true,
+          state: "ready",
+          generation: 4,
+          snapshotGeneration: 4,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "room",
+                number: 1,
+                label: "Room",
+                focused: true,
+                pane_count: 1,
+                tab_count: 1,
+                agent_status: "idle",
+              },
+            ],
+            tabs: [
+              {
+                tab_id: "tab",
+                workspace_id: "room",
+                number: 1,
+                label: "Agent",
+                focused: true,
+                pane_count: 1,
+                agent_status: "idle",
+              },
+            ],
+            panes: [
+              {
+                pane_id: "pane",
+                workspace_id: "room",
+                tab_id: "tab",
+                terminal_id: "terminal-a",
+                focused: true,
+                agent: "claude",
+                agent_status: "idle",
+                revision: 1,
+                ...(session
+                  ? {
+                      agent_session: {
+                        source: "herdr:claude",
+                        agent: "claude",
+                        kind: "id",
+                        value: session,
+                      },
+                    }
+                  : {}),
+                ...patch,
+              },
+            ],
+            agents: [],
+          },
+        },
+      ] as Parameters<typeof buildWorldObject>[0],
+      "local",
+    ).leaves[0]!;
+  const open = (node: ReturnType<typeof leaf>, view: "terminal" | "history") =>
+    worldInspectorForNode(
+      node,
+      view,
+      worldIntentViews(node),
+      worldInspectorContext(node)!,
+      { dock: "right", expanded: false, size: 520 },
+    )!;
+  for (const session of [undefined, "session-a"]) {
+    const opened = open(leaf({}, session), "history");
+    expect([opened.view, opened.awaitChatSession]).toEqual(["terminal", true]);
+    for (const view of ["files", "history"] as const) {
+      // The owner's choice landed before (`false`) or after (no flag) the
+      // Chat read; either way a replacement opens on its own view.
+      for (const awaitChatSession of [false, undefined]) {
+        const manual = { ...opened, view, awaitChatSession };
+        const replacements = [
+          leaf({ terminal_id: "terminal-b" }, session),
+          leaf({ agent: "codex" }, session),
+          ...(session ? [leaf({}, "session-b")] : []),
+        ];
+        for (const replacement of replacements) {
+          const observed = open(replacement, "terminal");
+          expect(observed.resourceIdentity).not.toBe(manual.resourceIdentity);
+          expect(
+            reconcileWorldInspectorConversation(manual, observed).view,
+          ).toBe("terminal");
+        }
+      }
+      if (session) continue;
+      // The same choice still survives the session's first arrival.
+      const arrival = open(leaf({}, "session-a"), "terminal");
+      expect(
+        reconcileWorldInspectorConversation(
+          { ...opened, view, awaitChatSession: false },
+          arrival,
+        ).view,
+      ).toBe(view);
+    }
+  }
 });

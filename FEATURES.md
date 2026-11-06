@@ -97,7 +97,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     windows and phones keep bubbles. Explicitly opening or returning to Chat
     focuses its message input when available; Desk previews keep focus in the
     queue. Reopening or redocking the window keeps the
-    conversation. In Town it
+    conversation. A new agent without a session shows **No messages yet**;
+    missing or unreadable reported transcripts still show their error. A window
+    opens on Terminal whenever Chat cannot show its conversation, including
+    when a reported record cannot be read. It switches once Chat is available,
+    unless you choose a view by hand. While a new window waits, a line under its
+    header says Chat is not available yet and offers **Stay on Terminal**. Unavailable messages appear when you
+    pick Chat yourself. Chat describes startup
+    or a question plainly and offers Open Terminal; integration guidance waits
+    while the agent is starting or waiting for you in Terminal. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.
     Drag its inner edge to resize it; Town remembers the width. It can be
@@ -126,6 +134,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     not checked** until transcript evidence. Native working-state admission
     shows queued message bubbles with the recipient and time; blocked sends
     preserve the draft and the refusal reason.
+  - Harness command menus, such as Claude Code's and Codex's `/model` and
+    `/permissions`, appear as a menu card: numbered options, the cursor, the
+    footer's keys as buttons and any text field. Each key is checked against
+    that menu and session first; follow-up steps replace the card. **⋮** also
+    offers the Terminal's key controls (arrows, Esc, Tab, Enter, Ctrl keys),
+    sent to the session Chat shows; paging stays in the Terminal.
+    When a qualified row read shows that the terminal is too short to read the
+    current session's latest command menu, Chat explains this and offers
+    **Open Terminal** to fix its size. Unknown sizes do not produce the note.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
@@ -260,7 +277,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   creates an agent's tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
   harness stops on a question (such as Claude's folder trust) or exits at
-  once, it says so and offers to open the tab.
+  once, it says so and offers to open the tab. While a start is in flight, the
+  pressed choice stays marked busy and a **Starting …** line says what World is
+  doing; after 10 seconds of real waiting it reads **Taking longer than
+  usual** (there is no progress bar or countdown, and the icon stays still
+  with reduced motion). Progress and outcomes stay in view above the choices. A confirmed start closes the launcher; an uncertain
+  attempt keeps its explanation and disables start choices. Open its existing
+  tab or close the launcher before another attempt. A definite failure lets
+  you retry, log in or edit profiles.
   - The launcher shows whether each harness is installed and logged in on the
     host, asked with the harness's own status command (`claude auth status`,
     `codex login status`; Pi reports only whether it is installed). **Log in**
@@ -359,7 +383,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
-    its terminal.
+    its terminal. Without a conversation yet, an agent starts on Terminal and
+    switches to Chat when its session arrives unless you choose another view.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
     still moves it). On a phone, where the card's terminal covers Board, the
