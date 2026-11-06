@@ -2,14 +2,18 @@ import type { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { shortSha } from "../../../shared/pullRequests";
 import type { Deps } from "./deps";
+import { authorizedTimeoutRetry } from "./operator-retry";
 import {
   addRun,
+  getAction,
+  latestRun,
   roundFor,
   roundPanes,
   setAction,
   setRoundTab,
   setRunPane,
   setRunPid,
+  setMeta,
   type Round,
 } from "./store";
 
@@ -54,6 +58,9 @@ export function launchRun(
   );
   const round = run.round ?? roundFor(crew, pr, head, now);
   const panes = roundPanes(crew, pr, round.round);
+  const action = getAction(crew, run.keys[0]!);
+  const retry =
+    action && authorizedTimeoutRetry(crew, action, latestRun(crew, action.key));
   const id = addRun(
     crew,
     {
@@ -67,6 +74,12 @@ export function launchRun(
     },
     now,
   );
+  if (retry)
+    setMeta(
+      crew,
+      `operator-retry:${retry.priorRun}`,
+      JSON.stringify({ ...retry, retryRun: id, startedAt: now }),
+    );
   for (const key of run.keys)
     setAction(crew, key, "running", now, `run ${id}`, true);
   Bun.write(log, "");

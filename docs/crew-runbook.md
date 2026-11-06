@@ -33,6 +33,12 @@ explicitly rearms that same identity and round; the hold never retries itself,
 forks a session or rotates reviewers. Crew rechecks ownership immediately before
 launch and again before harness resume. A prior timeout remains recorded with
 its original exit status and cannot be erased by that handoff.
+For an explicitly authorized retry, the operator records a single-use grant in
+the crew store, pinned to the failed run, action, head, session and round.
+Rearming the action alone is insufficient: settlement retains its timeout hold
+unless that exact unused grant matches. Normal launch consumes the grant and
+records the new run's link to the original timeout; it does not create a new
+review cohort, change quiet time or reset attempt counts.
 
 The watcher reserves a slot when it records a run. Every reviewer, fixer,
 evaluator and selected process has the configured `crew.runTimeoutMinutes`

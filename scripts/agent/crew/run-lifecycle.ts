@@ -5,6 +5,7 @@ import type { Deps } from "./deps";
 import type { Action, CrewSettings } from "./plan";
 import { checkoutOf } from "./review";
 import { postedResult } from "./run-results";
+import { authorizedTimeoutRetry } from "./operator-retry";
 import {
   activeRuns,
   actionsIn,
@@ -172,6 +173,7 @@ export function settleRuns(
     const last = runFor(crew, running);
     if (!last || last.finishedAt === null) continue;
     if (last.exitCode === RUN_TIMEOUT_EXIT_CODE) {
+      if (authorizedTimeoutRetry(crew, running, last)) continue;
       setAction(crew, running.key, "failed", now, `run ${last.id}`);
       say(
         `#${running.pr} run ${last.id} for ${running.target} timed out; slot released without retry`,
