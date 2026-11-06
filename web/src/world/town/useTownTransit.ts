@@ -20,6 +20,7 @@ export function useTownTransit(
     const riders = new Set<string>();
     const departed = new Set<string>();
     const entries = [...bin.entries, ...(bin.closing_entries ?? [])];
+    const stops = new Map<string, TownBusStop | null>();
     for (const agent of model.agents.values()) {
       const entry = entries.find(
         (entry) =>
@@ -29,14 +30,19 @@ export function useTownTransit(
           entry.terminal_id === agent.currentTerminalRef.nativeId,
       );
       if (!entry) continue;
-      const room = layout.buildings
-        .flatMap((building) => building.rooms)
-        .find((room) => room.key === agent.roomKey);
-      if (!room) continue;
-      const stop = nearestTownStop(route, {
-        x: room.x + room.w / 2,
-        y: room.y + room.h / 2,
-      });
+      const building = layout.buildings.find(
+        (building) => building.hostKey === agent.hostKey,
+      );
+      if (!building) continue;
+      if (!stops.has(building.hostKey))
+        stops.set(
+          building.hostKey,
+          nearestTownStop(layout, route, {
+            x: building.entryX,
+            y: building.y - 1,
+          }),
+        );
+      const stop = stops.get(building.hostKey);
       if (stop) waiting.set(agent.key, stop);
       if (entry.boarded) riders.add(agent.key);
       if (bin.closing.includes(entry.id)) departed.add(agent.key);

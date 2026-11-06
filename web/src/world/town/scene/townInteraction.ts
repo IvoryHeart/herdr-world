@@ -58,6 +58,7 @@ export type TownStage = {
 
 /** A drop World carries out; it resolves how the move ended. */
 export type TownMoveCommand =
+  | { kind: "bin"; agentKey: string }
   | { kind: "agent"; agentKey: string; deskKey: string }
   | { kind: "desk"; deskKey: string; roomKey: string }
   | { kind: "group"; deskKey: string; targetDeskKey: string }
@@ -83,6 +84,8 @@ export type TownInteractionPorts = {
   select(key: string): void;
   activateAgent(key: string): void;
   activateRoom(roomKey: string): void;
+  /** A screen-space bin target supplied by the browser adapter. */
+  binAt?(at: Point): boolean;
   move(command: TownMoveCommand): Promise<TownMoveResult>;
   /** The label that follows a carry: shown on lift, aimed as it moves. */
   ghost: {
@@ -351,7 +354,7 @@ export class TownInteraction {
   /** How far a carry at canvas point `at` pans the town each frame. */
   private edgePush(at: Point) {
     const stage = this.ports.stage();
-    if (!stage) return { dx: 0, dy: 0 };
+    if (!stage || this.ports.binAt?.(at)) return { dx: 0, dy: 0 };
     const { width, height, inset } = stage.camera.viewport;
     const push = (p: number, low: number, high: number) =>
       p < low + EDGE
@@ -411,14 +414,23 @@ export class TownInteraction {
     const stage = this.ports.stage();
     if (!this.carrying || !stage) return;
     const { model, teams } = this.ports.world();
-    const target = townDropTarget(
-      this.carrying,
-      hit,
-      model,
-      teams.deskTeams,
-      this.magnet?.on ? this.magnet.key : null,
-      teams.groupedDesks,
-    );
+    const target = this.ports.binAt?.(at)
+      ? {
+          key: this.carrying.kind === "agent" ? this.carrying.key : null,
+          label:
+            this.carrying.kind === "agent"
+              ? "Put in bin"
+              : "Only agents go in the bin",
+          action: "bin" as const,
+        }
+      : townDropTarget(
+          this.carrying,
+          hit,
+          model,
+          teams.deskTeams,
+          this.magnet?.on ? this.magnet.key : null,
+          teams.groupedDesks,
+        );
     this.carrying.target = target;
     this.ports.ghost.aim(
       target.label,
@@ -427,7 +439,12 @@ export class TownInteraction {
       at,
     );
     const world = stage.camera.toWorld(at.x, at.y);
-    stage.moveDrag(world.x, world.y, target.key, target.action === "group");
+    stage.moveDrag(
+      world.x,
+      world.y,
+      target.action === "bin" ? null : target.key,
+      target.action === "group",
+    );
   }
 
   /* ---------- what the gesture machine decided ---------- */
@@ -455,6 +472,8 @@ export class TownInteraction {
 
   private drop(drag: TownDrag, targetKey: string): TownMoveCommand {
     const action = drag.target?.action;
+    if (action === "bin" && drag.kind === "agent")
+      return { kind: "bin", agentKey: drag.key };
     if (drag.kind === "agent")
       return { kind: "agent", agentKey: drag.key, deskKey: targetKey };
     if (action === "group")

@@ -1,27 +1,21 @@
 .town-bus-stop {
   position: absolute;
-  width: 22px;
-  height: 28px;
+  width: 24px;
+  height: 38px;
   padding: 0;
   transform: translate(-50%, -100%);
   background: transparent;
   border: 0;
-  border-bottom: 3px solid #d9c88f;
   border-radius: 0;
   color: #fff5cf;
   cursor: pointer;
   pointer-events: auto;
   z-index: 5;
 }
-.town-bus-stop span {
+.town-bus-stop svg {
   display: block;
-  width: 18px;
-  height: 19px;
-  margin: 0 auto 6px;
-  background: #285d62;
-  border: 2px solid #e4d7a3;
-  border-radius: 3px;
-  font: bold 12px monospace;
+  width: 24px;
+  height: 38px;
 }
 .town-bus-stop::after {
   content: "";
@@ -32,15 +26,13 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: 50px;
-  height: 30px;
+  width: 64px;
+  height: 42px;
   padding: 0;
-  border: 2px solid #594a2e;
-  border-radius: 6px;
-  background: #e4b751;
-  color: #263d4a;
-  box-shadow: 0 4px #172330;
-  offset-rotate: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  offset-rotate: 0deg;
   animation-name: town-bus-route;
   animation-timing-function: linear;
   animation-fill-mode: both;
@@ -56,8 +48,14 @@
     offset-distance: 100%;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .town-scheduled-bus {
-    offset-rotate: 0deg;
-  }
+
+.town-scheduled-bus svg {
+  display: block;
+  width: 64px;
+  height: 42px;
+}
+.town-bus-stop:focus-visible,
+.town-scheduled-bus:focus-visible {
+  outline: 2px solid #eed18a;
+  outline-offset: 3px;
 }

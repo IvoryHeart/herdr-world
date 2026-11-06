@@ -52,21 +52,23 @@ for (const shape of Object.values(TOWN_SHAPES)) {
           );
       }
     }
-    for (const building of layout.buildings)
-      for (const room of building.rooms) {
-        const at = { x: room.x + room.w / 2, y: room.y + room.h / 2 };
-        const stop = nearestTownStop(route, at)!;
-        const d = (p: { x: number; y: number }) =>
-          Math.abs(p.x - at.x) + Math.abs(p.y - at.y);
-        expect(d(stop)).toBe(Math.min(...route.stops.map(d)));
-        const path = townOutdoorPath(
-          layout,
-          { x: building.entryX, y: building.y - 1 },
-          stop,
-        );
-        expect(path.length).toBeGreaterThan(0);
-        expect(path[path.length - 1]).toEqual([stop.x, stop.y]);
-      }
+    for (const building of layout.buildings) {
+      const exit = { x: building.entryX, y: building.y - 1 };
+      const stop = nearestTownStop(layout, route, exit)!;
+      const path = townOutdoorPath(layout, exit, stop);
+      expect(path.length).toBeGreaterThan(0);
+      expect(path[path.length - 1]).toEqual([stop.x, stop.y]);
+      const reachable = route.stops
+        .map((candidate) => townOutdoorPath(layout, exit, candidate).length)
+        .filter((length) => length > 0);
+      expect(path.length).toBe(Math.min(...reachable));
+      for (const [x, y] of path)
+        expect([
+          TownGround.building,
+          TownGround.facade,
+          TownGround.lot,
+        ]).not.toContain(layout.ground[y * layout.width + x]);
+    }
     const stop = route.stops[0]!;
     const transit: TownTransit = {
       route,
@@ -96,3 +98,25 @@ for (const shape of Object.values(TOWN_SHAPES)) {
     ).toBe(true);
   });
 }
+
+test("stop selection follows walkable distance from the exit, including detours and unreachable stops", () => {
+  const layout = {
+    width: 7,
+    height: 7,
+    ground: new Uint8Array(49).fill(TownGround.walk),
+  } as ReturnType<typeof layoutTown>["layout"];
+  for (let y = 1; y < 7; y++) layout.ground[y * 7 + 2] = TownGround.building;
+  const near = { key: "near", x: 3, y: 2, roadX: 3, roadY: 2 };
+  const shortWalk = { key: "short", x: 1, y: 5, roadX: 1, roadY: 5 };
+  const route = {
+    stops: [near, shortWalk],
+    points: [],
+    length: 0,
+    pickups: new Map(),
+  };
+  const exit = { x: 1, y: 2 };
+  expect(nearestTownStop(layout, route, exit)).toEqual(shortWalk);
+  layout.ground[2] = TownGround.building;
+  expect(nearestTownStop(layout, route, exit)).toEqual(shortWalk);
+  expect(nearestTownStop(layout, { ...route, stops: [near] }, exit)).toBeNull();
+});

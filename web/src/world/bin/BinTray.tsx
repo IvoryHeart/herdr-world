@@ -79,6 +79,12 @@ export function BinTray({
         ) : null}
         <button
           type="button"
+          data-agent-bin-drop={view === "town" ? "" : undefined}
+          title={
+            view === "town"
+              ? "Drag an agent here to put it in the bin"
+              : undefined
+          }
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
         >

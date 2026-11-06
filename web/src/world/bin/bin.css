@@ -89,3 +89,9 @@
     border-radius: 14px;
   }
 }
+
+body:has(.town-drag-ghost[data-action="bin"][data-valid="true"])
+  [data-agent-bin-drop] {
+  outline: 3px solid #eed18a;
+  background: #465069;
+}

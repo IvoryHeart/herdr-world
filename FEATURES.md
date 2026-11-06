@@ -51,9 +51,11 @@ retired: `/office` opens Town, and `/graph` and `/tree` open Board. Board and
 these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Agent bin and Town bus.** **Put in bin** in Town, Board or Desk holds an
-  agent open. It walks to the nearest intersection's **B** stop in Town. The
-  shared bus arrives every three minutes, collects waiting agents and closes
-  them through World's durable close path after it drives off the map.
+  agent open. In Town, drag an agent onto **Bin**, or hold then drag on a phone.
+  It takes the shortest outdoor walk from its front door to a London-style
+  intersection stop. The red double-decker arrives every three minutes, collects
+  waiting agents and closes them through World's durable close path after it
+  drives off the map.
   **Bin**, a stop or the bus opens the tray on desktop and phone: see the next
   bus, **Put back** before boarding, or **Close now**. Reload retains holds;
   restarting World releases them without closing. Pinned last panes and

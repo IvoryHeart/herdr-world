@@ -50,7 +50,12 @@ function testFrames() {
 }
 
 function setup(
-  options: { level?: TownLevel; zoom?: number; teams?: TownTeams } = {},
+  options: {
+    level?: TownLevel;
+    zoom?: number;
+    teams?: TownTeams;
+    binAt?: (at: Point) => boolean;
+  } = {},
 ) {
   const projection = office({
     alpha: working(3),
@@ -120,6 +125,7 @@ function setup(
     select: (key) => log.push(["select", key]),
     activateAgent: (key) => log.push(["activate", key]),
     activateRoom: (key) => log.push(["room", key]),
+    binAt: options.binAt,
     move: (command) => {
       moves.push(command);
       return result;
@@ -987,4 +993,44 @@ test("a hold through a room card lifts the desk beneath; a tap on the card zooms
   t.time.advance(TOWN_HOLD_MS * 2);
   expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
   t.interaction.up({ id: stray, at, cancel: true });
+});
+
+for (const pointerType of ["mouse", "touch"]) {
+  test(`${pointerType} drops an agent in the screen bin without moving its pane`, () => {
+    const to = { x: 40, y: 860 };
+    const t = setup({ level: "desk", binAt: (at) => at.y > 840 });
+    const cell = t.deskCell(0, 0);
+    const agentKey = agentAt(t, 0, 0);
+    const seat = townSeat(cell, 0);
+    const from = t.screen({
+      x: seat.cx,
+      y: seat.top ? cell.y * T + 10 : cell.y * T + 45,
+    });
+    const pointer = t.press(from, pointerType);
+    if (pointerType === "touch") t.time.advance(TOWN_HOLD_MS);
+    t.moveTo(pointer, offset(from, 20), pointerType);
+    t.moveTo(pointer, to, pointerType);
+    expect(last(t.ghost)).toEqual(["aim", "Put in bin", true, "bin"]);
+    t.frames.step();
+    expect(t.reasons).not.toContain("edge-pan");
+    t.lift(pointer, to);
+    expect(t.moves).toEqual([{ kind: "bin", agentKey }]);
+  });
+}
+
+test("desks cannot be binned and a cancelled agent carry never bins", () => {
+  const to = { x: 40, y: 860 };
+  const t = setup({ level: "desk", binAt: () => true });
+  const cell = t.deskCell(0, 0);
+  carry(t, t.deskCentre(cell), to);
+  expect(t.moves).toEqual([]);
+  const seat = townSeat(cell, 0);
+  const from = t.screen({
+    x: seat.cx,
+    y: seat.top ? cell.y * T + 10 : cell.y * T + 45,
+  });
+  const pointer = t.press(from);
+  t.moveTo(pointer, to);
+  t.interaction.up({ id: pointer, at: to, cancel: true });
+  expect(t.moves).toEqual([]);
 });

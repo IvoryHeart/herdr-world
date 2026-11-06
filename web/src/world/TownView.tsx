@@ -1,3 +1,4 @@
+import { binTownAgent } from "./town/townBin";
 import { AnswerOutboxContext } from "./town/answerOutbox";
 import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
@@ -957,6 +958,7 @@ export default function TownView({
               onUngroupDesk: (deskKey) => teams.runUngroupDesk(deskKey),
               onReorderDesk: (deskKey, ontoKey) =>
                 runDeskReorder(deskKey, ontoKey),
+              onBinAgent: (key) => binTownAgent(world, office, key),
               onDropAgent: (agentKey, deskKey) =>
                 runAgentMove(agentKey, deskKey),
               onMoveDesk: (deskKey) => {

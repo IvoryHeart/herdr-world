@@ -472,10 +472,10 @@ test("bin overrides reception and Put back returns an agent through its door to 
   const actors = new TownActors();
   actors.sync(w.actorWorld, true);
   const route = townBusRoute(w.layout);
-  const room = w.layout.buildings[0]!.rooms[0]!;
-  const stop = nearestTownStop(route, {
-    x: room.x + room.w / 2,
-    y: room.y + room.h / 2,
+  const building = w.layout.buildings[0]!;
+  const stop = nearestTownStop(w.layout, route, {
+    x: building.entryX,
+    y: building.y - 1,
   })!;
   actors.sync(
     w.actorWorld,

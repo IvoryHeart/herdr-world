@@ -1,3 +1,4 @@
+import { binTownAgent } from "./town/townBin";
 import { WindowControls } from "./windows/WindowControls";
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
@@ -22,6 +23,7 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import "./world.css";
 
+window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 const world = buildWorldObject(goldenConnections(), "host-0");
 const leaf = world.leaves.find((leaf) => leaf.kind === "agent")!;
 const controls = new Set<(control: BridgeControlMsg) => void>();
@@ -148,6 +150,7 @@ const roomActions: TownRoomActions = {
   onDropDesk: unavailable,
   onReorderDesk: unavailable,
   onDropAgent: unavailable,
+  onBinAgent: (key) => binTownAgent(world, projection, key),
   onGroupDesk: unavailable,
   onUngroupDesk: unavailable,
 };
@@ -158,7 +161,10 @@ function App() {
     <main style={{ position: "fixed", inset: 0 }}>
       <TownCanvas
         projection={projection}
-        selectedKey={null}
+        selectedKey={
+          projection.roster.find((item) => item.agent.nodeId === leaf.id)!.agent
+            .key
+        }
         completionSeenKeys={new Set()}
         conversationTargets={[]}
         onSelect={(key) =>
@@ -236,14 +242,86 @@ const advance = (ms: number) => {
       timer.run();
     }
 };
+let committedBeforeDrag = 0;
 Object.assign(window, {
   binDebug: () => ({
+    renderer: window.__HERDR_TOWN_RENDERER__,
+    level: document.querySelector(".town-world")?.getAttribute("data-level"),
     bin: sharedBinStore().get(),
     registry: registry.list(),
     leaf,
     html: document.body.textContent?.slice(-1200),
   }),
+  binDragPrepare: async () => {
+    committedBeforeDrag = committed.length;
+    await wait(() =>
+      window.__HERDR_TOWN_RENDERER__?.ready
+        ? document.querySelector("canvas[data-office-canvas]")
+        : null,
+    );
+    const agentKey = projection.roster.find(
+      (item) => item.agent.nodeId === leaf.id,
+    )!.agent.key;
+    const target = [
+      ...document.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="agent"]',
+      ),
+    ].find((node) => node.dataset.targetKey === agentKey)!;
+    target.focus();
+    const initial = target.getBoundingClientRect();
+    const host = document.querySelector<HTMLElement>(".town-canvas-host")!;
+    host.dispatchEvent(
+      new WheelEvent("wheel", {
+        deltaY: -2000,
+        clientX: initial.left + initial.width / 2,
+        clientY: initial.top + initial.height / 2,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    await wait(() => document.querySelector('.town-world[data-level="desk"]'));
+    const current = [
+      ...document.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="agent"]',
+      ),
+    ].find((node) => node.dataset.targetKey === agentKey)!;
+    current.blur();
+    current.focus();
+    await wait(() =>
+      !window.__HERDR_TOWN_RENDERER__!.flying &&
+      current.getBoundingClientRect().left >= 0
+        ? current
+        : null,
+    );
+    const box = current.getBoundingClientRect();
+    const bin = document
+      .querySelector<HTMLElement>("[data-agent-bin-drop]")!
+      .getBoundingClientRect();
+    const from = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    const to = { x: bin.left + bin.width / 2, y: bin.top + bin.height / 2 };
+    return { from, to };
+  },
+  binDragCheck: async () => {
+    await wait(() => button("Put back"));
+    const entry = registry.list().entries[0];
+    const valid =
+      entry?.connection_id === leaf.connectionId &&
+      entry?.connection_generation === leaf.generation &&
+      entry?.pane_id === leaf.pane.pane_id &&
+      committed.length === committedBeforeDrag;
+    button("Put back")!.click();
+    await wait(() =>
+      !registry.list().entries.length
+        ? document.querySelector(".world-bin-tray")
+        : null,
+    );
+    closeTray();
+    return valid;
+  },
   binPreview: async () => {
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Show the whole town"]')
+      ?.click();
     await putInBin(leaf, world, "town");
     await wait(() => document.querySelector(".world-bin-tray li"));
   },

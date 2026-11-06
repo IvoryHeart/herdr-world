@@ -78,14 +78,17 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
   add({ x: -4, y: first.roadY });
   return { stops, points, length, pickups };
 }
-export function nearestTownStop(route: TownBusRoute, point: TownPoint) {
-  return route.stops.reduce<TownBusStop | null>(
-    (nearest, stop) =>
-      !nearest || distance(stop, point) < distance(nearest, point)
-        ? stop
-        : nearest,
-    null,
+/** The first reachable stop on a shortest outdoor walk from the front door. */
+export function nearestTownStop(
+  layout: TownLayout,
+  route: TownBusRoute,
+  exit: TownPoint,
+) {
+  const stops = new Map(
+    route.stops.map((stop) => [stop.y * layout.width + stop.x, stop]),
   );
+  const { end } = outdoorSearch(layout, exit, new Set(stops.keys()));
+  return stops.get(end) ?? null;
 }
 export function townBusProgress(transit: TownTransit, now: number) {
   return transit.bus?.driving
@@ -120,17 +123,33 @@ export function townOutdoorPath(
   from: TownPoint,
   to: TownPoint,
 ): [number, number][] {
+  const { came, end, start } = outdoorSearch(
+    layout,
+    from,
+    new Set([to.y * layout.width + to.x]),
+  );
+  if (end < 0) return [];
+  const path: [number, number][] = [];
+  for (let at = end; at !== start; at = came[at]!)
+    path.push([at % layout.width, Math.floor(at / layout.width)]);
+  return path.reverse();
+}
+
+function outdoorSearch(
+  layout: TownLayout,
+  from: TownPoint,
+  targets: ReadonlySet<number>,
+) {
   const { width, height, ground } = layout;
-  const start = from.y * width + from.x,
-    end = to.y * width + to.x;
+  const start = from.y * width + from.x;
   const came = new Int32Array(width * height).fill(-1);
-  if (start < 0 || end < 0 || start >= came.length || end >= came.length)
-    return [];
+  if (start < 0 || start >= came.length) return { came, start, end: -1 };
   const queue = [start];
   came[start] = start;
-  for (let i = 0; i < queue.length && came[end] === -1; i++) {
-    const at = queue[i]!,
-      x = at % width,
+  for (let i = 0; i < queue.length; i++) {
+    const at = queue[i]!;
+    if (targets.has(at)) return { came, start, end: at };
+    const x = at % width,
       y = Math.floor(at / width);
     for (const [nx, ny] of [
       [x - 1, y],
@@ -151,9 +170,5 @@ export function townOutdoorPath(
       queue.push(next);
     }
   }
-  if (came[end] === -1) return [];
-  const path: [number, number][] = [];
-  for (let at = end; at !== start; at = came[at]!)
-    path.push([at % width, Math.floor(at / width)]);
-  return path.reverse();
+  return { came, start, end: -1 };
 }

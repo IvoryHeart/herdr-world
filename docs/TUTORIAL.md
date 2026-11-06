@@ -163,13 +163,15 @@ hosts stay usable.
 
 Select an agent in Town, Board or Desk, then choose **Put in bin** at the lower
 left or from its window's **⋯** menu. Desk cards also offer it.
-The agent stays open and walks to the **B** stop nearest its room. Open **Bin**
-to see the shared countdown; on a phone, tapping a stop or the bus opens the
-same tray.
+In Town, you can also zoom in to an agent and drag it onto **Bin**; on a
+phone, hold the agent until it lifts, then drag. The agent stays open and walks
+through its front door to the London-style stop with the shortest outdoor
+walk from that exit. Open **Bin** to see the shared countdown; on a phone,
+tapping a stop or the bus opens the same tray.
 
 Try **Put back** before boarding: the agent returns to its desk and stays open.
-Bin it again and wait for the bus, which arrives every three minutes and tours
-the roads for thirty seconds. Everyone already waiting boards that run; agents
+Bin it again and wait for the red double-decker bus, which arrives every three
+minutes and tours the roads for thirty seconds. Everyone already waiting boards that run; agents
 binned during the drive wait for the next bus. Once the bus leaves the map,
 World closes its riders. **Close now** uses the same close path immediately.
 The tray stays usable while the schedule runs. Reloading keeps holds; a World

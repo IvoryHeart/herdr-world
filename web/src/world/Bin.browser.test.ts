@@ -84,10 +84,58 @@ test.skipIf(!chrome)(
               `${expression}: ${error}: ${JSON.stringify(debug.result?.value)}`,
             );
           });
-        if (result.exceptionDetails)
-          throw new Error(JSON.stringify(result.exceptionDetails));
+        if (result.exceptionDetails) {
+          const debug = await cdp!.command("Runtime.evaluate", {
+            expression: "window.binDebug()",
+            returnByValue: true,
+          });
+          throw new Error(
+            `${expression}: ${JSON.stringify(result.exceptionDetails)} ${JSON.stringify(debug.result?.value)}`,
+          );
+        }
         return result.result.value;
       };
+      for (const width of [1440, 390]) {
+        await cdp.command("Emulation.setDeviceMetricsOverride", {
+          width,
+          height: 844,
+          deviceScaleFactor: 1,
+          mobile: width === 390,
+        });
+        const points = (await evaluate("window.binDragPrepare()")) as {
+          from: { x: number; y: number };
+          to: { x: number; y: number };
+        };
+        await cdp.command("Input.dispatchMouseEvent", {
+          type: "mousePressed",
+          ...points.from,
+          button: "left",
+          buttons: 1,
+          clickCount: 1,
+        });
+        await cdp.command("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          x: points.from.x + 20,
+          y: points.from.y,
+          button: "left",
+          buttons: 1,
+        });
+        await cdp.command("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          ...points.to,
+          button: "left",
+          buttons: 1,
+        });
+        await cdp.command("Input.dispatchMouseEvent", {
+          type: "mouseReleased",
+          ...points.to,
+          button: "left",
+          buttons: 0,
+          clickCount: 1,
+        });
+        expect(await evaluate("window.binDragCheck()")).toBe(true);
+        expect(await evaluate("window.binChecks()")).toEqual([]);
+      }
       if (Bun.env.WORLD_BIN_CAPTURE_DIR) {
         await evaluate("window.binPreview()");
         await captureResumeViewports(
@@ -99,15 +147,6 @@ test.skipIf(!chrome)(
             content: { selector: ".world-bin-tray", scope: "document" },
           },
         );
-      }
-      for (const width of [1440, 390]) {
-        await cdp.command("Emulation.setDeviceMetricsOverride", {
-          width,
-          height: 844,
-          deviceScaleFactor: 1,
-          mobile: width === 390,
-        });
-        expect(await evaluate("window.binChecks()")).toEqual([]);
       }
     } finally {
       cdp?.close();

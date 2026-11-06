@@ -140,17 +140,18 @@ entry ID until a read settles it.
 ## Agent bin and Town bus
 
 Select an agent in Town, Board or Desk and choose **Put in bin** at the lower
-left, in its window's **⋯** menu, or on a Desk card. This holds
-it open; it does not stop the agent's work. Town shows it walking through its
-building's front door to the road intersection nearest its room. Every
-intersection has a **B** stop. Click a stop, the bus, or **Bin** to open the tray,
-including on a phone. The tray shows the time to the next shared bus and each
+left, in its window's **⋯** menu, or on a Desk card. In Town you can also
+zoom in and drag an agent onto **Bin**; on a phone, hold until it lifts, then
+drag. This holds it open; it does not stop the agent's work. Town shows it
+walking through its building's front door to the stop reached by the shortest walkable outdoor
+route from that exit. Every intersection has a London-style roundel stop. Click
+a stop, the bus, or **Bin** to open the tray, including on a phone. The tray shows the time to the next shared bus and each
 held agent's **Put back** and **Close now** controls.
 
 The service starts a fixed three-minute schedule. At arrival, everyone already
 waiting boards that run; new holds wait for the next bus. Boarding ends
-**Put back**. The bus tours every intersection over thirty seconds, then leaves
-the map. Only then are its riders recorded as durable close intents. Opening
+**Put back**. The red double-decker tours every intersection over thirty
+seconds, then leaves the map. Only then are its riders recorded as durable close intents. Opening
 the tray does not pause or change the schedule. **Put back** returns a waiting
 agent to its desk and leaves its pane open; **Close now** records its durable
 close immediately.

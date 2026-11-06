@@ -107,6 +107,7 @@ export type TownRoomActions = {
   ): Promise<TownMoveResult>;
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
+  onBinAgent?(agentKey: string): Promise<TownMoveResult>;
   /** Reveal the next group of desks, or fold the room back to 24. */
   onToggleFold?(roomKey: string, nextLimit?: number): void;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */
@@ -601,9 +602,21 @@ export function TownCanvas({
       select: (key) => latest.current.onSelect(key),
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
+      binAt: (at) => {
+        if (!latest.current.roomActions.onBinAgent) return false;
+        const rect = host.getBoundingClientRect();
+        return !!document
+          .elementFromPoint(at.x + rect.left, at.y + rect.top)
+          ?.closest("[data-agent-bin-drop]");
+      },
       move: (command) => {
         const actions = latest.current.roomActions;
         switch (command.kind) {
+          case "bin":
+            return (
+              actions.onBinAgent?.(command.agentKey) ??
+              Promise.resolve("returned")
+            );
           case "agent":
             return actions.onDropAgent(command.agentKey, command.deskKey);
           case "group":
