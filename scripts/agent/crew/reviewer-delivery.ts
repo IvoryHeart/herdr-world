@@ -2,7 +2,10 @@ import type { Database } from "bun:sqlite";
 import type { Deps } from "./deps";
 import { launchRun } from "./launch";
 import type { Action, CrewSettings } from "./plan";
-import { reviewerSessionAdmission } from "./reviewer-session";
+import {
+  reviewerSessionAdmission,
+  reviewerCompletionWait,
+} from "./reviewer-session";
 import { FRESH_KINDS } from "./round-policy";
 import { evaluations, reviewCycles } from "./round-policy-store";
 import { activeRuns, openRounds, type StoredAction } from "./store";
@@ -19,6 +22,8 @@ export function startReviewers(
   let slots = settings.maxRuns - activeRuns(crew).length;
   for (const entry of pending) {
     if (!FRESH_KINDS.has(entry.kind) || slots <= 0) continue;
+    if (reviewerCompletionWait(crew, settings, entry, context.deps.run))
+      continue;
     // Recheck immediately before reserving a run, including queued actions.
     const blocked = reviewerSessionAdmission(
       crew,
@@ -52,6 +57,7 @@ export function startReviewers(
         name: entry.target,
         branch: item?.branch,
         ...(round ? { round } : {}),
+        ...(cycle ? { reviewOrdinal: cycle.ordinal } : {}),
       },
       (id) => [
         ...context.worker,

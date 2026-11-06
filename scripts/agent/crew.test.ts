@@ -948,7 +948,10 @@ describe("delivery", () => {
       });
       expect(killed).toEqual([]);
       expect(getAction(crew, step!.key)!.state).toBe("superseded");
-      expect(spawned.slice(1)).toEqual([]);
+      // Without legacy adoption, the non-converging gate schedules its ordinary
+      // review actions after publication, not an inferred historical cycle.
+      expect(spawned.slice(1)).toHaveLength(3);
+      expect(spawned.slice(1).every((argv) => argv[2] === "review")).toBe(true);
     });
 
     test("a blocked author's steps go to a fixer without asking the owner", () => {

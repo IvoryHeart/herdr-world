@@ -161,6 +161,7 @@ export function crewPass(context: PassContext) {
       settings,
       loadConfig(configPath),
       now,
+      crew,
     );
     const live = seatInventory(deps.run);
     const names = [
@@ -219,19 +220,16 @@ export function crewPass(context: PassContext) {
         url: check.url!,
         minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
       }));
-      const boundaryError =
-        settings.convergingReviews &&
-        input.state === "OPEN" &&
-        settings.reviewStarts[String(input.number)]
-          ? "Converging reviews retain every historical obligation; legacy reviewStarts requires operator reconciliation before any new review."
-          : reviewStartError(
-              input,
-              settings.reviewStarts[String(input.number)],
-              now,
-              crew,
-              deps.run,
-              join(dir, "mirror.git"),
-            );
+      const boundaryError = settings.convergingReviews
+        ? null
+        : reviewStartError(
+            input,
+            settings.reviewStarts[String(input.number)],
+            now,
+            crew,
+            deps.run,
+            join(dir, "mirror.git"),
+          );
       if (boundaryError) {
         verdict.conditions.push({
           id: "crew-review-boundary",
@@ -276,7 +274,9 @@ export function crewPass(context: PassContext) {
           : actions;
       const effective = crewVerdict(crew, verdict, input);
       if (effective.state !== "READY")
-        due = due.filter((entry) => entry.kind !== "ready");
+        due = due.filter(
+          (entry) => entry.kind !== "ready" || entry.target !== "owner",
+        );
       else if (!due.some((entry) => entry.kind === "ready"))
         due.push(
           ...plan(effective, input, settings, names).filter(

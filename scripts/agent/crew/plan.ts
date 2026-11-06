@@ -3,6 +3,7 @@ import { shortSha } from "../../../shared/pullRequests";
 import { type GateInput, latestChecks, type Verdict } from "../gate/predicate";
 import { harnessOf } from "./worker";
 import { validateReviewSettings, type ReviewStart } from "./review-boundary";
+import { uiTrialAction, uiTrialReady } from "./ui-trial";
 
 /**
  * What the crew watcher does about one pull request's verdict, and its
@@ -26,6 +27,8 @@ export type CrewSettings = {
   neverPrompt: string[];
   /** Whether READY generates an owner ask; mechanical marks remain independent. */
   readyAsk: boolean;
+  /** Steward receiving clean UI handoffs; it alone raises the owner's Try. */
+  readySeat?: string;
   /** Complete first pass, stable reviewer sessions, at most three rounds. */
   convergingReviews?: boolean;
   /** Retained manual reviewer sessions, keyed by PR and canonical role. */
@@ -267,12 +270,14 @@ export function marks(
           revokes: true,
         };
   const owner: Mark =
-    watched && causes.length
+    watched && (causes.length || uiTrialReady(verdict, input, settings))
       ? {
           context: NEEDS_OWNER,
           state: "pending",
           description: short(
-            `${settings.reviewJudgmentSeat ? "Judgment pending" : "Needs the owner"}: ${causes[0]}${causes.length > 1 ? ` (+${causes.length - 1} more)` : ""}`,
+            causes.length
+              ? `${settings.reviewJudgmentSeat ? "Judgment pending" : "Needs the owner"}: ${causes[0]}${causes.length > 1 ? ` (+${causes.length - 1} more)` : ""}`
+              : `Owner Try via ${settings.readySeat}`,
           ),
         }
       : {
@@ -322,6 +327,7 @@ export function plan(
     text,
     ...(extra.since ? { since: extra.since } : {}),
   });
+  const trial = uiTrialAction(verdict, input, settings);
   if (verdict.state === "READY")
     return settings.readyAsk
       ? [
@@ -331,9 +337,11 @@ export function plan(
             `READY #${pr} at ${at}: ${input.item?.title ?? ""}`.trim(),
           ),
         ]
-      : [];
+      : trial
+        ? [trial]
+        : [];
 
-  const actions: Action[] = [];
+  const actions: Action[] = trial ? [trial] : [];
   const judgments: string[] = [];
   const author = authorOf(pr, input.item?.branch, settings, seats);
   const toAuthor = (kind: ActionKind, text: string, cause?: string) => {
@@ -473,6 +481,13 @@ export function loadSettings(path: string): CrewSettings {
   };
   if (typeof settings.readyAsk !== "boolean")
     throw new Error("crew.readyAsk must be a boolean");
+  if (
+    settings.readySeat !== undefined &&
+    (typeof settings.readySeat !== "string" ||
+      !settings.readySeat.trim() ||
+      settings.readySeat === "owner")
+  )
+    throw new Error("crew.readySeat must name the steward seat");
   if (
     settings.convergingReviews !== undefined &&
     typeof settings.convergingReviews !== "boolean"

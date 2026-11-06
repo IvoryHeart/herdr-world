@@ -126,7 +126,7 @@ test("a supplied excluded observation cannot complete its retained manual review
   expect(f.killed).toEqual([]);
 });
 
-test("crewPass holds a legacy adoption boundary without hiding an earlier open RESULT or launching a replacement", () => {
+test("legacy boundaries and old findings start one complete current-head review instead of adoption", () => {
   const f = setup({
     seedCycle: false,
     settings: {
@@ -134,55 +134,38 @@ test("crewPass holds a legacy adoption boundary without hiding an earlier open R
       readyAsk: false,
       reviewJudgmentSeat: "steward",
       reviewStarts: { "7": { head: SHA.reviewed, at: NOW - 100 } },
-      reviewerSessions: { "7": { rev2: "original-session" } },
+      reviewerSessions: { "7": { rev2: "old-session" } },
     },
   });
   const actions = f.pass(SHA.fixed, NOW + QUIET_MS);
-  expect(f.spawned).toHaveLength(0);
-  expect(
-    actions.some((action) => ["review", "confirm"].includes(action.kind)),
-  ).toBe(false);
-  expect(
-    actions.some(
-      (action) =>
-        action.kind === "judgment" &&
-        action.text.includes("legacy reviewStarts"),
-    ),
-  ).toBe(true);
-  expect(reviewCycles(f.crew, 7)).toHaveLength(0);
+  expect(f.spawned).toHaveLength(1);
+  expect(f.spawned[0]).toContain("review");
+  expect(f.spawned[0]).not.toContain("--since");
+  expect(actions.some((action) => action.kind === "judgment")).toBe(false);
+  expect(reviewCycles(f.crew, 7)[0]).toMatchObject({
+    ordinal: 1,
+    head: SHA.fixed,
+    freshStart: NOW + QUIET_MS,
+  });
 });
 
-test.each([false, true])(
-  "three same-head manual rounds stay held even with an already undercounted cycle: %s",
-  (existing) => {
-    const f = fixture(1, {
-      convergingReviews: true,
-      reviewerSessions: { "7": { rev2: "original-session" } },
-    });
-    if (!existing) f.db.exec("DELETE FROM review_cycle");
-    const value = input({
-      head: SHA.reviewed,
-      posts: [
-        "0/0 resolved, 1 new",
-        "0/1 resolved, 0 new",
-        "0/1 resolved, 0 new",
-      ].map((result) => ({ reviewer: "rev2", commit: SHA.reviewed, result })),
-    });
-    const actions = f.pass(value, NOW + QUIET_MS);
-    expect(
-      actions.some((action) =>
-        ["review", "confirm", "evaluate"].includes(action.kind),
-      ),
-    ).toBe(false);
-    expect(
-      actions.some(
-        (action) =>
-          action.kind === "judgment" && action.text.includes("round count"),
-      ),
-    ).toBe(true);
-    expect(reviewCycles(f.db, 7)).toHaveLength(existing ? 1 : 0);
-  },
-);
+test("three historical same-head manual RESULTs do not become crew cycles", () => {
+  const f = fixture(1, { convergingReviews: true });
+  f.db.exec("DELETE FROM review_cycle");
+  const value = input({
+    head: SHA.reviewed,
+    posts: [
+      "0/0 resolved, 1 new",
+      "0/1 resolved, 0 new",
+      "0/1 resolved, 0 new",
+    ].map((result) => ({ reviewer: "rev2", commit: SHA.reviewed, result })),
+  });
+  const actions = f.pass(value, NOW + QUIET_MS);
+  expect(actions.every((action) => action.kind === "review")).toBe(true);
+  expect(actions.some((action) => action.since)).toBe(false);
+  expect(reviewCycles(f.db, 7)).toHaveLength(1);
+  expect(reviewCycles(f.db, 7)[0]?.ordinal).toBe(1);
+});
 
 test("worker resumes persist a baseline and report only the session increment", async () => {
   const f = fixture();

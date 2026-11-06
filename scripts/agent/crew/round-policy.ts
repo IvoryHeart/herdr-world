@@ -9,8 +9,9 @@ export {
   preserveRoundAction,
   reviewClaimCounts,
 } from "./round-actions";
-import { adoptCycles } from "./round-adoption";
+import { freshReview } from "./fresh-review";
 import { reviewRound } from "./review-boundary";
+import { confirmationException } from "./confirmation-exception";
 import type { Database } from "bun:sqlite";
 import type { GateInput } from "../gate/predicate";
 import type { Deps } from "./deps";
@@ -29,6 +30,7 @@ import {
 import {
   type Evaluation,
   evaluations,
+  reviewCycles,
   recordPush,
   saveCycle,
   saveEvaluation,
@@ -102,18 +104,7 @@ export function roundPolicy(context: RoundContext): Action[] {
         text: `NEEDS-OWNER #${input.number}: non-main base ${input.item.pr.baseRef} requires explicit stack reconciliation; no review or fixer launched.`,
       },
     ];
-  if (settings.convergingReviews && settings.reviewStarts[String(input.number)])
-    return [
-      {
-        pr: input.number,
-        head,
-        kind: "judgment",
-        target: "owner",
-        key: `${input.number}:${head}:judgment:owner:review-boundary`,
-        text: `NEEDS-OWNER #${input.number}: legacy reviewStarts requires reconciliation; full historical findings and original reviewer continuity remain held.`,
-      },
-    ];
-  const { cycles, ambiguous } = adoptCycles(context);
+  const cycles = reviewCycles(crew, input.number);
   const last = cycles.at(-1);
   const reviews = context.actions.filter((action) =>
     REVIEW_KINDS.has(action.kind),
@@ -121,6 +112,28 @@ export function roundPolicy(context: RoundContext): Action[] {
   const other = context.actions.filter(
     (action) => !REVIEW_KINDS.has(action.kind) && action.kind !== "fix",
   );
+  if (!last) {
+    if (settings.convergingReviews)
+      return settings.maxRuns > 0 ? freshReview(context) : [];
+    if (reviews.length && settings.maxRuns > 0 && !dryRun) {
+      const round = reviewRound(
+        crew,
+        input.number,
+        head,
+        now,
+        settings.reviewStarts[String(input.number)],
+      );
+      saveCycle(crew, {
+        pr: input.number,
+        head,
+        round: round.round,
+        ordinal: 1,
+        reviewers: context.requiredReviewers,
+        trigger: { replies: [], quietSince: now, reason: "first full review" },
+      });
+    }
+    return context.actions;
+  }
   const observeKey = `review-observation:${input.number}`;
   const prior = getMeta(crew, observeKey);
   const observed = prior
@@ -149,10 +162,6 @@ export function roundPolicy(context: RoundContext): Action[] {
       text: `NEEDS-OWNER #${input.number}: ${reason}`,
     },
   ];
-  if (ambiguous)
-    return judgment(
-      "Repeated manual RESULTs on the same reviewed SHA do not establish unambiguous review cohorts or round count; hold for operator reconciliation instead of another round.",
-    );
   if (
     settings.convergingReviews &&
     input.history.some(
@@ -162,35 +171,6 @@ export function roundPolicy(context: RoundContext): Action[] {
     return judgment(
       "Existing review attribution or RESULT is incomplete; preserve original sources and reconcile their real reviewers before any new review.",
     );
-  if (
-    settings.convergingReviews &&
-    !last &&
-    input.history.length &&
-    reviews.length
-  )
-    return judgment(
-      "Existing reviews do not establish the required reviewer cohort; reconcile its original identity and obligations, without launching a duplicate cohort.",
-    );
-  if (!last) {
-    if (reviews.length && !dryRun) {
-      const round = reviewRound(
-        crew,
-        input.number,
-        head,
-        now,
-        settings.reviewStarts[String(input.number)],
-      );
-      saveCycle(crew, {
-        pr: input.number,
-        head,
-        round: round.round,
-        ordinal: 1,
-        reviewers: context.requiredReviewers,
-        trigger: { replies: [], quietSince, reason: "first full review" },
-      });
-    }
-    return context.actions;
-  }
   const previousEvaluation = evaluations(crew, input.number).at(-1);
   if (
     last.head === head &&
@@ -228,7 +208,12 @@ export function roundPolicy(context: RoundContext): Action[] {
     ];
   }
   if (!dryRun) deleteMeta(crew, failureKey);
-  const start = settings.reviewStarts[String(input.number)];
+  const start =
+    cycles[0]?.freshStart === undefined
+      ? !settings.convergingReviews
+        ? settings.reviewStarts[String(input.number)]
+        : undefined
+      : { at: cycles[0].freshStart };
   if (start) facts.posts = facts.posts.filter((post) => post.at >= start.at);
   const findings = withReplies(
     openFindings(input, facts.posts),
@@ -238,11 +223,15 @@ export function roundPolicy(context: RoundContext): Action[] {
   );
   let evaluation = evaluations(crew, input.number).at(-1);
   const claims = completed(input, last);
+  const exception = settings.convergingReviews
+    ? confirmationException(context, last)
+    : null;
   if (
     settings.convergingReviews &&
     claims &&
     last.ordinal >= 3 &&
-    findings.length
+    findings.length &&
+    !exception
   ) {
     return [
       {
@@ -478,6 +467,7 @@ export function roundPolicy(context: RoundContext): Action[] {
         )
       : [];
   if (!nextReviews.length) return other;
+  if (settings.maxRuns <= 0) return other;
   if (settings.convergingReviews) {
     const changed = nextReviews.some(
       (action) => !last.reviewers.includes(action.target),
@@ -516,6 +506,12 @@ export function roundPolicy(context: RoundContext): Action[] {
       ...(mandatory ? { scope: mandatory } : {}),
     });
     recordPush(crew, input.number, head, now, null);
+    if (exception)
+      setMeta(
+        crew,
+        exception.key,
+        JSON.stringify({ ...exception.grant, usedCycle: last.ordinal + 1 }),
+      );
   }
   return [
     ...other.filter((action) => action.kind !== "fix"),

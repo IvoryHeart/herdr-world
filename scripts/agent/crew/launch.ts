@@ -46,6 +46,8 @@ export function launchRun(
     branch: string | undefined;
     /** Evaluator/process seats join the triggering review's existing tab. */
     round?: Round;
+    /** Display the review cycle count, independent of fixer-only containers. */
+    reviewOrdinal?: number;
   },
   argv: (id: number) => string[],
 ) {
@@ -83,7 +85,7 @@ export function launchRun(
   for (const key of run.keys)
     setAction(crew, key, "running", now, `run ${id}`, true);
   Bun.write(log, "");
-  const label = roundLabel(pr, run.branch, round.round);
+  const label = roundLabel(pr, run.branch, run.reviewOrdinal ?? round.round);
   const started = deps.spawn(argv(id), log, {
     tab: round.tab,
     after: panes.at(-1) ?? null,

@@ -19,6 +19,8 @@ export type ReviewCycle = {
   pr: number;
   round: number;
   ordinal: number;
+  /** New full crew admission; earlier posts remain readable history only. */
+  freshStart?: number;
   head: string;
   since?: string;
   reviewers: string[];

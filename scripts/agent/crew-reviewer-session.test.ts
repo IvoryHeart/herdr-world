@@ -22,6 +22,9 @@ import {
   getRun,
   setAction,
   setRunSession,
+  setRunPid,
+  setRunPane,
+  setMeta,
 } from "./crew/store";
 import { SETTINGS_DEFAULTS, type Action } from "./crew/plan";
 
@@ -67,6 +70,92 @@ const processes = (name = "codex") =>
   });
 const locked = (argv: string[]) =>
   result(argv.includes("process-info") ? processes() : owners());
+
+test("normal tracked completion between planning and delivery waits without creating a handoff", () => {
+  const f = setup({
+    settings: {
+      convergingReviews: true,
+      readyAsk: false,
+      reviewJudgmentSeat: "steward",
+      reviewerSessions: settings.reviewerSessions,
+    },
+  });
+  const old = {
+    ...action,
+    key: "previous-review",
+    head: SHA.reviewed,
+    kind: "review" as const,
+    since: undefined,
+  };
+  addAction(f.crew, old, NOW - 120_000);
+  const id = addRun(
+    f.crew,
+    {
+      actionKey: old.key,
+      reviewer: "rev2",
+      pr: 7,
+      head: SHA.reviewed,
+      round: 1,
+      log: "stdout",
+    },
+    NOW - 120_000,
+  );
+  setRunPid(f.crew, id, 9001);
+  setRunPane(f.crew, id, "pane-original", "tab-original");
+  setRunSession(f.crew, id, "codex", "gpt-6.1-sol", "saved-reviewer");
+  setAction(f.crew, old.key, "running", NOW - 120_000);
+  setMeta(
+    f.crew,
+    "review-observation:7",
+    JSON.stringify({ head: SHA.reviewed, at: NOW }),
+  );
+  f.comment(`[builder]\nrev2:101:1 fixed in ${SHA.reviewed}`, NOW + 1);
+  const run = f.deps.run;
+  let alive = true;
+  f.deps.run = (argv) =>
+    argv.join(" ") === "herdr agent list"
+      ? result(alive ? owners() : '{"result":{"agents":[]}}')
+      : argv.includes("process-info")
+        ? result(
+            JSON.stringify({
+              result: {
+                process_info: {
+                  foreground_processes: [
+                    {
+                      name: "bun",
+                      pid: 9001,
+                      argv: [
+                        "bun",
+                        "/synthetic/crew.ts",
+                        "review",
+                        "--run",
+                        String(id),
+                      ],
+                    },
+                    {
+                      name: "codex",
+                      pid: 9002,
+                      argv: ["codex", "resume", "saved-reviewer"],
+                    },
+                  ],
+                },
+              },
+            }),
+          )
+        : run(argv);
+  f.pass(SHA.reviewed, NOW + QUIET_MS + 2);
+  expect(getRun(f.crew, id)?.exitCode).toBe(0);
+  expect(f.spawned).toHaveLength(0);
+  expect(
+    actionsIn(f.crew, ["pending", "sent"]).some((a) =>
+      a.key.includes("session-owner"),
+    ),
+  ).toBe(false);
+  alive = false;
+  f.pass(SHA.reviewed, NOW + QUIET_MS + 3);
+  expect(f.spawned).toHaveLength(1);
+  expect(f.spawned[0]).toContain("--since");
+});
 
 test("idle exact session owner blocks; same alias with another session does not", () => {
   expect(reviewerSessionOwner(locked, "codex", "saved-reviewer")).toContain(

@@ -12,10 +12,13 @@ The crew itself, its marks and its watcher are described in
 
 When a separate steward owns the owner's ready-to-try notice, set
 `crew.readyAsk: false` in the local gate config before starting the scoped crew.
-This suppresses only READY owner asks; mechanical readiness marks, review/fixer
-work and genuine judgment/timeout escalation are unchanged. The default is
-`true`. It applies to every PR in scope, so retain the pilot's explicit `--pr`
-selection. A mechanical mark alone does not establish UI trial acceptance.
+Pair it with `crew.readySeat: "steward-main"`: clean current UI reviews send one
+keyed handoff to that seat so it raises the owner's Try through its preview flow.
+Pending CI or proof stays explicit and still blocks merge; the handoff does not
+ask the owner directly. The owner mark says Try is pending, rather than that
+nothing waits on the owner. Without a ready seat, `false` remains silent; the
+default `true` retains direct READY asks. Mechanical marks and real judgments
+remain independent, and a mark alone never establishes UI trial acceptance.
 
 Every CI failure is real and blocks readiness for that head, including a
 failure followed by a green rerun or a failed aggregate job. Diagnose its cause
@@ -32,9 +35,12 @@ reviewer must finish its own cleanup and release the session. An operator then
 explicitly rearms that same identity and round; the hold never retries itself,
 forks a session or rotates reviewers. Crew rechecks ownership immediately before
 launch and again before harness resume. A prior timeout remains recorded with
-its original exit status and cannot be erased by that handoff.
+its original exit status and cannot be erased by that handoff. A tracked crew worker
+whose RESULT is recorded but whose harness is still exiting is a completion
+wait, not an external-owner handoff: no persistent hold or manual rearm is made.
 For an explicitly authorized retry, the operator records a single-use grant in
-the crew store, pinned to the failed run, action, head, session and round.
+the crew store, pinned to the failed run, action, head and round. The retry uses the currently configured
+reviewer session; historical session fields in old grants are not a session pin.
 Rearming the action alone is insufficient: settlement retains its timeout hold
 unless that exact unused grant matches. Normal launch consumes the grant and
 records the new run's link to the original timeout; it does not create a new
@@ -78,15 +84,13 @@ starting it or resuming stopped sessions requires an explicit owner instruction.
 
 ## Review rounds and evaluation
 
-When adopting a PR from hand-run reviewers, record its full adoption head and
-UTC millisecond time under `crew.reviewStarts["<PR>"]` and set
-`crew.reviewJudgmentSeat` to the operating steward. Pre-boundary RESULTs stay
-readable history, never evidence for crew adoption/readiness. Keep the same
-boundary through fix rounds; do not move it to hide an unresolved finding or
-re-review a crew head already accepted. This is a crew projection, not a gate
-waiver or a rewrite of the original posts. Every later finding still blocks.
+A new PR admission with old review history starts one full crew review at its
+current head as round 1. Old posts stay readable history; they are not adopted
+as evidence, findings or a reconstructed round count. Existing recorded crew
+cycles continue unchanged. Legacy `reviewStarts` settings do not select or waive
+history in the converging flow.
 
-Attribution/adoption gaps and review-plumbing failures prompt the configured
+Attribution gaps in managed reviews and review-plumbing failures prompt the configured
 steward once per cause. They do not create owner questions. Missing/unavailable
 operators hold locally without an owner fallback. Only an explicit evaluator
 `Process: owner` decision keeps its owner ask. Preserve existing keyed ask/send
@@ -157,9 +161,9 @@ round on the same head after that quiet period.
 Each admitted round records its finding replies, quiet-period start and trigger
 in `review_cycle`; each observed push and each skip reason are retained in
 `review_push` and `review_skip` in the local crew SQLite store. These records
-survive watcher restarts. Existing stores adopt their recorded reviewer rounds;
-fixer and evaluator sessions do not count as review rounds. Migration preserves
-queued reviewers, their existing action keys, and their full first reviews. Only
+survive watcher restarts. Existing recorded crew cycles stay intact; fixer and
+evaluator sessions do not count as review cycles. New admissions always start
+with a complete current-head pass. Only
 review/confirm actions consume RESULT evidence; auxiliary seats require their
 checkpoint-specific verdict or process report.
 
@@ -172,19 +176,13 @@ regressions. New findings outside that delta are excluded unless P1; explain
 why the first pass missed such a P1. No size cap or size-driven split applies.
 
 Each assigned reviewer resumes its same saved harness session in a fresh round
-tab. Its earlier reviews and signed finding replies are durable notes. Existing
-manual sessions can be pinned with
-`crew.reviewerSessions["<PR>"]["<canonical reviewer>"] = "<saved session UUID>"`.
-Only pin an independently verified original session. Missing identity or an
-unmatched historical cohort holds confirmation for the review coordinator;
-it never launches a replacement cohort. Existing histories and findings remain
-binding. Adoption of an older manual review still requires signed replies to
-every finding and ten genuinely observed quiet minutes.
+tab. A new admission records the start of its first full crew review and uses
+that cohort's actual saved sessions for later confirmations. Pre-existing
+manual sessions and RESULTs are not adopted. Already recorded cycles and their
+configured `crew.reviewerSessions` overrides remain usable without rewriting
+history or resetting rounds. Review tab labels show the review-cycle ordinal;
+fixer-only containers do not advance it.
 
-Converging mode retains full historical obligations: an active PR's legacy
-`reviewStarts` boundary is held for explicit reconciliation rather than filtering
-its earlier findings. Repeated manual RESULTs on one SHA are held when the
-recorded cohorts do not establish how many rounds occurred; a SHA is not a round.
 Resumed reviewer usage records a durable pre-resume session baseline and reports
 only that run's increment in worker and watcher completion paths. An unavailable
 baseline is unknown usage, never a fabricated zero or the full session charge;
@@ -195,7 +193,12 @@ A completed third round with unresolved findings sends the actual finding list
 to `firstmate-2` and holds further rounds. Ensure that seat is not in
 `crew.neverPrompt`. This mode never starts an automatic evaluator; retained
 legacy evaluator/process holds require explicit reconciliation and remain held.
-Without this option the existing evaluator flow below is preserved.
+A separately recorded firstmate-2 exception can authorize one scoped confirmation
+for an exact reviewed head, repair head, ordinal and reviewer cohort; normal
+reply/quiet guards remain, admission consumes it once, and an unresolved result
+escalates again rather than creating another cycle. There is no default fourth
+review or cycle five. Setting `crew.maxRuns: 0` holds new review admissions as
+well as launches. Without convergence the evaluator flow below is preserved.
 
 Use `crew.lightPrs` for explicit Light overrides; their capture requests cover
 only changed UI, one phone and one desktop, rather than five viewports. Complete current-head file inventories also distinguish

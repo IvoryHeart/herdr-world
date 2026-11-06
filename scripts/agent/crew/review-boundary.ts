@@ -8,6 +8,7 @@ import {
 import type { Run } from "../gate/observe";
 import type { CrewSettings } from "./plan";
 import { roundFor } from "./store";
+import { reviewCycles } from "./round-policy-store";
 
 export type ReviewStart = { head: string; at: number };
 
@@ -69,6 +70,7 @@ export function reviewObservation(
   settings: CrewSettings,
   config: GateConfig,
   now: number,
+  crew?: Database,
 ) {
   const inputs = observed.inputs
     .filter((input) => !settings.excludePrs?.includes(input.number))
@@ -76,7 +78,13 @@ export function reviewObservation(
       reviewInput(
         input,
         settings.convergingReviews
-          ? undefined
+          ? crew &&
+            reviewCycles(crew, input.number)[0]?.freshStart !== undefined
+            ? {
+                head: reviewCycles(crew!, input.number)[0]!.head,
+                at: reviewCycles(crew!, input.number)[0]!.freshStart!,
+              }
+            : undefined
           : settings.reviewStarts[String(input.number)],
       ),
     );
@@ -85,8 +93,10 @@ export function reviewObservation(
     .map((verdict) => {
       const input = inputs.find((input) => input.number === verdict.number);
       return input &&
-        !settings.convergingReviews &&
-        settings.reviewStarts[String(input.number)]
+        (settings.convergingReviews
+          ? crew &&
+            reviewCycles(crew, input.number)[0]?.freshStart !== undefined
+          : settings.reviewStarts[String(input.number)])
         ? evaluate(input, config, now)
         : verdict;
     });

@@ -2,7 +2,8 @@ import type { Database } from "bun:sqlite";
 import type { Run } from "../gate/observe";
 import { basename } from "node:path";
 import type { Action, CrewSettings } from "./plan";
-import { activeRuns, getAction, runsOf } from "./store";
+import { activeRuns, getAction, runsOf, type StoredRun } from "./store";
+import { reviewCycles } from "./round-policy-store";
 import { harnessOf } from "./worker";
 import { routeJudgment } from "./review-judgments";
 
@@ -12,11 +13,15 @@ export function sessionActions(
   actions: Action[],
   run: Run,
 ) {
-  return actions.map((action) =>
-    routeJudgment(
-      reviewerSessionAdmission(crew, settings, action, run) ?? action,
-      settings,
-    ),
+  return actions.flatMap((action) =>
+    reviewerCompletionWait(crew, settings, action, run)
+      ? []
+      : [
+          routeJudgment(
+            reviewerSessionAdmission(crew, settings, action, run) ?? action,
+            settings,
+          ),
+        ],
   );
 }
 
@@ -30,9 +35,11 @@ export function retainedReviewer(
 ) {
   const model = settings.roster[reviewer];
   const harness = model && (harnessOf(model) ?? "codex");
+  const freshStart = reviewCycles(crew, pr)[0]?.freshStart;
   const run = runsOf(crew, pr).find(
     (run) =>
       run.id !== excludeRun &&
+      (freshStart === undefined || run.startedAt >= freshStart) &&
       run.reviewer === reviewer &&
       !run.cwd &&
       run.session &&
@@ -43,7 +50,9 @@ export function retainedReviewer(
   return {
     harness,
     session:
-      settings.reviewerSessions?.[String(pr)]?.[reviewer] ?? run?.session,
+      freshStart === undefined
+        ? (settings.reviewerSessions?.[String(pr)]?.[reviewer] ?? run?.session)
+        : run?.session,
     run,
   };
 }
@@ -53,6 +62,7 @@ export function reviewerSessionOwner(
   run: Run,
   harness: string,
   session: string,
+  finishing: StoredRun[] = [],
 ): string | null {
   const result = run(["herdr", "agent", "list"]);
   const unreadable = "Reviewer session ownership inventory is unreadable";
@@ -94,12 +104,62 @@ export function reviewerSessionOwner(
         )
       )
         continue;
+      if (
+        finishing.some(
+          (r) =>
+            r.pane === agent.pane_id &&
+            processes.some(
+              (p) =>
+                p.pid === r.pid &&
+                p.argv.some(
+                  (a: string) => a.endsWith("/crew.ts") || a === "crew.ts",
+                ) &&
+                p.argv[p.argv.indexOf("--run") + 1] === String(r.id),
+            ),
+        )
+      )
+        return CREW_COMPLETION_WAIT;
       return `Retained reviewer session is still owned by ${agent.name ?? "an unnamed reviewer"} in ${agent.tab_id ?? agent.pane_id ?? "a live tab"}; original-owner cleanup and explicit operator rearm are required`;
     }
     return null;
   } catch {
     return unreadable;
   }
+}
+
+export const CREW_COMPLETION_WAIT =
+  "Tracked reviewer worker is completing its normal exit";
+
+export function reviewerCompletionWait(
+  crew: Database,
+  settings: CrewSettings,
+  action: Action,
+  run: Run,
+) {
+  if (!settings.convergingReviews || action.kind !== "confirm") return false;
+  const retained = retainedReviewer(crew, settings, action.pr, action.target);
+  const finishing = runsOf(crew, action.pr).filter(
+    (r) =>
+      r.reviewer === action.target &&
+      r.session === retained.session &&
+      r.finishedAt !== null &&
+      r.exitCode === 0 &&
+      r.result &&
+      !r.cwd &&
+      r.pid &&
+      r.pane,
+  );
+  return Boolean(
+    retained.session &&
+      retained.harness &&
+      finishing.length &&
+      reviewerSessionOwner(
+        run,
+        retained.harness,
+        retained.session,
+        finishing,
+      ) === CREW_COMPLETION_WAIT,
+  );
 }
 
 /** Same check in dry runs and real passes; a recorded handoff never self-rearms. */

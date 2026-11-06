@@ -30,9 +30,6 @@ export function authorizedTimeoutRetry(
       grant.head === last.head &&
       grant.reviewer === action.target &&
       grant.reviewer === last.reviewer &&
-      typeof grant.session === "string" &&
-      grant.session.length > 0 &&
-      grant.session === last.session &&
       grant.round === last.round &&
       grant.maxRetries === 1 &&
       grant.retryRun === null &&

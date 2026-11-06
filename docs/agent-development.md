@@ -596,21 +596,15 @@ Settings go under `crew` in the gate's `config.json`:
 - `leads` maps each pod to its lead seat.
 - `authors` holds per-PR author overrides.
 - `neverPrompt` lists seats the watcher never prompts.
-- `reviewStarts` optionally records each PR's explicit adoption `{ "head":
-  "<full SHA>", "at": <UTC milliseconds> }`, keyed by PR number. Record both
-  when crew adopts the PR. Earlier RESULTs remain in the gate's auditable history
-  and reviewers can read them, but crew never adopts them as review evidence or
-  outstanding findings. Later results retain their exact-head binding and normal
-  confirmation rules; timestamps never establish a reviewed commit. Existing
-  accepted crew rounds survive the boundary without a repeat review. A future
-  time, unproved ancestry or crew round predating the boundary holds admission
-  for operator reconciliation; changing a boundary cannot silently reset a round.
-  Legacy reviewer actions/runs also establish admission without cycle rows;
-  an empty placeholder round alone does not. Scoped passes preserve unobserved
-  PRs' pending, sent and failed coordinator receipts without rearming them.
+- `convergingReviews: true` starts new admissions with a full current-head crew
+  review as cycle 1. Earlier review posts remain readable history and are not
+  adopted as evidence or counted as crew rounds. Already recorded crew cycles
+  continue unchanged. `reviewStarts` remains only for retained legacy flows;
+  the converging flow ignores those old adoption boundaries. Scoped passes
+  preserve unobserved coordinator receipts without rearming them.
 - `reviewJudgmentSeat` names the operator for attribution, adoption, run failures
-  and other review-plumbing judgments. A `reviewStarts` boundary requires this
-  seat. Each cause gets one queued prompt to that named seat, never an owner ask;
+  and other review-plumbing judgments. A legacy `reviewStarts` boundary requires
+  this seat. Each cause gets one queued prompt to that named seat, never an owner ask;
   missing/focused/busy seats wait, and repeated failed prompts stay failed locally.
   The existing `crew/needs-owner` status also represents these held judgments;
   its description says "Judgment pending". Explicit evaluator `Process: owner`
@@ -620,9 +614,13 @@ Settings go under `crew` in the gate's `config.json`:
   the owner's ready notice: the crew still writes mechanical `crew/merge-ready`
   marks, but does not generate READY owner asks. Review/fixer work and genuine
   judgment, timeout and failure escalation remain active. The setting covers
-  every PR in this watcher's scope; keep a pilot explicitly PR-scoped. An
-  existing READY ask is withdrawn on the next pass, as for any retired cause.
-- `maxRuns` (default 3) bounds the runs working at once. A run without its
+  every PR in this watcher's scope. An existing READY ask is withdrawn on the
+  next pass, as for any retired cause. Pair `false` with `readySeat: "steward-main"`:
+  clean current UI reviews then hand off the owner's Try once to that steward,
+  even while CI/proof remains pending. The steward owns the preview and owner
+  notice; crew does not send a second owner ask or waive pending merge gates.
+- `maxRuns` (default 3) bounds the runs working at once; zero also holds new
+  review-cycle admission. A run without its
   completion evidence is stopped after `runTimeoutMinutes` without meaningful
   harness work (default 90, a positive finite duration). Conversation, reasoning,
   tool calls/results and owner replies renew the window at their actual event

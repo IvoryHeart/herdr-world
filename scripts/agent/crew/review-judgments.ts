@@ -45,7 +45,7 @@ export function deliverReviewJudgments(
 ) {
   for (const entry of actionsIn(crew, ["pending"])) {
     if (
-      entry.kind !== "judgment" ||
+      !["judgment", "ready"].includes(entry.kind) ||
       entry.target === "owner" ||
       entry.target === "github" ||
       !deliverable(entry)
@@ -55,7 +55,9 @@ export function deliverReviewJudgments(
     if (
       !seat ||
       seat.focused ||
-      !["idle", "done"].includes(seat.status) ||
+      !(
+        entry.kind === "ready" ? ["idle", "done", "working"] : ["idle", "done"]
+      ).includes(seat.status) ||
       settings.neverPrompt.includes(seat.name)
     )
       continue;

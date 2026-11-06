@@ -12,6 +12,7 @@ import { SETTINGS_DEFAULTS } from "./crew/plan";
 import { authorizedTimeoutRetry } from "./crew/operator-retry";
 import { settleRuns } from "./crew/run-lifecycle";
 import { startReviewers } from "./crew/reviewer-delivery";
+import { retainedReviewer } from "./crew/reviewer-session";
 import {
   addAction,
   addRun,
@@ -85,31 +86,26 @@ test("rearming a timed-out action without explicit authorization remains held", 
   expect(getAction(f.crew, f.action.key)?.state).toBe("failed");
   expect(getRun(f.crew, f.id)?.exitCode).toBe(-124);
 });
-test.each([
-  "head",
-  "session",
-  "round",
-  "priorRun",
-  "actionKey",
-  "maxRetries",
-  "retryRun",
-])("retry grant cannot cross its pinned %s", (field) => {
-  const f = fixture();
-  setMeta(
-    f.crew,
-    "operator-retry:" + f.id,
-    JSON.stringify({ ...f.grant, [field]: "different" }),
-  );
-  expect(
-    authorizedTimeoutRetry(
+test.each(["head", "round", "priorRun", "actionKey", "maxRetries", "retryRun"])(
+  "retry grant cannot cross its pinned %s",
+  (field) => {
+    const f = fixture();
+    setMeta(
       f.crew,
-      getAction(f.crew, f.action.key)!,
-      getRun(f.crew, f.id),
-    ),
-  ).toBeNull();
-  f.settle();
-  expect(getAction(f.crew, f.action.key)?.state).toBe("failed");
-});
+      "operator-retry:" + f.id,
+      JSON.stringify({ ...f.grant, [field]: "different" }),
+    );
+    expect(
+      authorizedTimeoutRetry(
+        f.crew,
+        getAction(f.crew, f.action.key)!,
+        getRun(f.crew, f.id),
+      ),
+    ).toBeNull();
+    f.settle();
+    expect(getAction(f.crew, f.action.key)?.state).toBe("failed");
+  },
+);
 test("one explicit retry survives settlement, consumes its grant on normal launch, and retains the original timeout", () => {
   const f = fixture();
   const dir = mkdtempSync(join(tmpdir(), "crew-operator-retry-"));
@@ -141,4 +137,39 @@ test("one explicit retry survives settlement, consumes its grant on normal launc
   f.settle();
   expect(getAction(f.crew, f.action.key)?.state).toBe("failed");
   expect(f.spawned).toHaveLength(1);
+});
+
+test("a retry uses the configured session rather than promising its historical grant session", () => {
+  const f = fixture();
+  const dir = mkdtempSync(join(tmpdir(), "crew-configured-retry-"));
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  setMeta(
+    f.crew,
+    "operator-retry:" + f.id,
+    JSON.stringify({ ...f.grant, session: "historical-unused-session" }),
+  );
+  f.settle();
+  const settings = {
+    ...SETTINGS_DEFAULTS,
+    maxRuns: 1,
+    convergingReviews: true,
+    roster: { rev2: { model: "gpt-6.1-sol" } },
+    reviewerSessions: { "7": { rev2: "configured-session" } },
+  };
+  expect(retainedReviewer(f.crew, settings, 7, "rev2").session).toBe(
+    "configured-session",
+  );
+  startReviewers(
+    f.crew,
+    { now: NOW + 3, dir, deps: f.deps, worker: ["bun", "crew.ts"] },
+    settings,
+    actionsIn(f.crew, ["pending"]),
+    new Map(),
+    () => {},
+    () => {},
+  );
+  expect(f.spawned).toHaveLength(1);
+  expect(JSON.parse(getMeta(f.crew, "operator-retry:" + f.id)!).retryRun).toBe(
+    f.id + 1,
+  );
 });

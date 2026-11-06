@@ -11,22 +11,16 @@ const settings = {
   reviewerSessions: { "7": { rev2: "retained-session" } },
 };
 
-test("adopting an older manual RESULT cannot bypass replies or the real quiet period", () => {
+test("old manual RESULTs get one full current-head crew review without adopting their ordinal", () => {
   const f = fixture(1, settings);
   f.db.exec("DELETE FROM review_cycle");
-  expect(f.pass().some((action) => action.kind === "confirm")).toBe(false);
-  expect(reviewCycles(f.db, 7)[0]?.head).toBe(SHA.reviewed);
-  f.reply();
-  expect(
-    f
-      .pass(undefined, NOW + QUIET_MS - 1)
-      .some((action) => action.kind === "confirm"),
-  ).toBe(false);
-  expect(
-    f
-      .pass(undefined, NOW + QUIET_MS)
-      .some((action) => action.kind === "confirm"),
-  ).toBe(true);
+  const actions = f.pass();
+  expect(actions.some((action) => action.kind === "review")).toBe(true);
+  expect(actions.some((action) => action.kind === "confirm")).toBe(false);
+  expect(reviewCycles(f.db, 7)[0]).toMatchObject({
+    head: SHA.fixed,
+    ordinal: 1,
+  });
 });
 
 test("round two admits a scoped third round without a fresh evaluator", () => {
