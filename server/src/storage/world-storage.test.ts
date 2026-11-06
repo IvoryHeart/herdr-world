@@ -94,9 +94,17 @@ test("committed answers survive reopen without an unconsumed pane-send backlog",
 test("one worker owns a database; independent roots and close/reopen share nothing", async () => {
   const target = paths();
   const first = await open(target);
-  await expect(openWorldLedger(target, ports)).rejects.toThrow(
-    /locked|writer/i,
+  // Let the worker deliver its rejection before entering Bun's synchronous
+  // rejection matcher, which can otherwise starve MessagePort delivery.
+  const refusal = await openWorldLedger(target, ports).then(
+    (unexpected) => {
+      opened.push(unexpected);
+      return null;
+    },
+    (error: unknown) => error,
   );
+  expect(refusal).toBeInstanceOf(Error);
+  expect((refusal as Error).message).toMatch(/locked|writer/i);
   const other = await open();
   await first.ledger.update((doc) => doc.asks.push(ask("q-owned")));
   expect(other.ledger.get().asks).toEqual([]);

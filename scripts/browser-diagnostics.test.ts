@@ -164,6 +164,57 @@ test("browser diagnostics require explicit configuration", async () => {
   );
 });
 
+test("diagnostic completion releases observer callbacks before its log can be removed", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "diagnostic-observer-"));
+  const socket = {
+    send: () => {},
+    close: () => {},
+    onopen: null,
+    onmessage: null,
+    onerror: null,
+    onclose: null,
+  } as Pick<
+    WebSocket,
+    "send" | "close" | "onopen" | "onmessage" | "onerror" | "onclose"
+  >;
+  const exit = Promise.withResolvers<number>();
+  const connected = Promise.withResolvers<void>();
+  try {
+    const result = runBrowserDiagnostics(
+      { executable: "synthetic", directory, args: [] },
+      {
+        spawn: () =>
+          fakeChrome(
+            exit.promise,
+            "DevTools listening on ws://fixture.example.test/\n",
+          ),
+        writeStderr: () => {},
+        connect: () => {
+          connected.resolve();
+          return socket;
+        },
+      },
+    );
+    await connected.promise;
+    exit.resolve(7);
+    expect(await result).toBe(7);
+    await rm(directory, { recursive: true, force: true });
+    // The peer may finish its close handshake after the caller removes the log.
+    expect(() =>
+      socket.onclose?.call(socket as WebSocket, new CloseEvent("close")),
+    ).not.toThrow();
+    expect([
+      socket.onopen,
+      socket.onmessage,
+      socket.onerror,
+      socket.onclose,
+    ]).toEqual([null, null, null, null]);
+  } finally {
+    exit.resolve(7);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("stderr control mode preserves existing debugging flags without attaching an observer", async () => {
   const directory = await mkdtemp(
     join(tmpdir(), "browser-diagnostics-control-"),
