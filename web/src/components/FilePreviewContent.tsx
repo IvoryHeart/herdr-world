@@ -10,7 +10,6 @@ import {
   isHtmlPath,
 } from "../../../shared/filePreview";
 import {
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -41,7 +40,7 @@ import {
 } from "./AnnotationComposerPopover";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { ImagePreview } from "./ImagePreview";
-import { lazyWithReload } from "../lazyWithReload";
+import { PdfPreview } from "./PdfPreview";
 import {
   handlePreviewEditorCopy,
   isEditablePreviewTarget,
@@ -147,20 +146,6 @@ function isMarkdownPath(path: string) {
 function isMermaidPath(path: string) {
   const lower = path.toLowerCase();
   return lower.endsWith(".mmd") || lower.endsWith(".mermaid");
-}
-
-// PDF.js only loads when a PDF is shown by it.
-const PdfPages = lazyWithReload("pdf-pages", () => import("./PdfPages"));
-
-/**
- * Whether the browser shows a PDF in a frame itself. Chrome on Android and
- * Safari on iOS do not: their PDFs are drawn with PDF.js instead.
- */
-function framesShowPdf() {
-  return (
-    navigator.pdfViewerEnabled === true &&
-    !window.matchMedia("(pointer: coarse)").matches
-  );
 }
 
 function isPdfPath(path: string) {
@@ -653,25 +638,10 @@ function FilePreviewBody({
           hasPdfPreview &&
           !pdfTooLarge &&
           inlinePreviewUrl ? (
-            framesShowPdf() ? (
-              <iframe
-                className="file-preview-pdf"
-                src={inlinePreviewUrl}
-                title={`PDF preview: ${entry?.name ?? previewPath}`}
-              />
-            ) : (
-              <Suspense
-                fallback={
-                  <div className="file-preview-state">Loading the PDF...</div>
-                }
-              >
-                <PdfPages
-                  key={inlinePreviewUrl}
-                  url={inlinePreviewUrl}
-                  name={entry?.name ?? previewPath}
-                />
-              </Suspense>
-            )
+            <PdfPreview
+              url={inlinePreviewUrl}
+              name={entry?.name ?? previewPath}
+            />
           ) : null}
           {!loading && !error && pdfTooLarge ? (
             <div className="file-preview-state">

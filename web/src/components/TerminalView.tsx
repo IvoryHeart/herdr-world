@@ -186,10 +186,12 @@ import { TerminalSelectionDragGuard } from "../terminalSelectionGuard";
 import {
   createEchoProbe,
   latencyDebugEnabled,
+  logEchoSample,
   logLatency,
 } from "../latencyDebug";
 import { applyTerminalTheme } from "../terminalThemes";
-import { useTerminalOptionAsMeta } from "../terminalOptionKey";
+import { useTerminalOptionAsMetaRef } from "../terminalOptionKey";
+import { withTimeout } from "../promiseTimeout";
 import {
   TerminalTouchSelection,
   terminalSelectedText,
@@ -300,29 +302,6 @@ function isSafariBrowser() {
 
 function trimCopiedLinePadding(text: string) {
   return text.replace(/[ \t]+(?=\r?\n|$)/g, "");
-}
-
-function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  errorMessage: string,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error(errorMessage));
-    }, timeoutMs);
-
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (err) => {
-        window.clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
 }
 
 export type TerminalWorkspaceFileRequest = {
@@ -520,8 +499,7 @@ export function TerminalView({
   const [termInstance, setTermInstance] = useState<Terminal | null>(null);
   // Theme changes update xterm in place without recreating the terminal.
   const terminalThemeRef = useRef(terminalTheme);
-  const optionAsMeta = useTerminalOptionAsMeta();
-  const optionAsMetaRef = useRef(optionAsMeta);
+  const optionAsMetaRef = useTerminalOptionAsMetaRef(termInstance);
   const terminalFontFamilyRef = useRef(terminalFontFamily);
   const terminalFontScaleRef = useRef(terminalFontScale);
   const fitRef = useRef<FitAddon | null>(null);
@@ -1146,8 +1124,6 @@ export function TerminalView({
     const renderer = createTerminalRenderer(
       container,
       {
-        // macOS composes Option+<key> into a character (Option+F types "ƒ"),
-        // so Alt bindings never reach the shell unless the user opts in.
         macOptionIsMeta: optionAsMetaRef.current,
         fontFamily: terminalFontFamilyRef.current,
         ...terminalDensity(terminalFontScaleRef.current),
@@ -1173,14 +1149,8 @@ export function TerminalView({
           }),
       },
       {
-        written: () => {
-          const echoMs = echoProbeRef.current?.presented() ?? null;
-          if (echoMs !== null)
-            logLatency("terminal echo", {
-              terminal: desiredTerminalRef.current ?? undefined,
-              input_to_frame_ms: echoMs,
-            });
-        },
+        written: () =>
+          logEchoSample(echoProbeRef.current, desiredTerminalRef.current),
       },
     );
     termRef.current = renderer.term;
@@ -1197,7 +1167,7 @@ export function TerminalView({
       renderedTerminalRef.current = null;
       setTermInstance(null);
     };
-  }, [container, terminalIdentity, pane?.terminal_id]);
+  }, [container, terminalIdentity, pane?.terminal_id, optionAsMetaRef]);
 
   // Rebind transport work and input handlers to one captured client at a time.
   useEffect(() => {
@@ -3480,11 +3450,6 @@ export function TerminalView({
     terminalThemeRef.current = terminalTheme;
     if (termInstance) applyTerminalTheme(termInstance, terminalTheme);
   }, [terminalTheme, termInstance]);
-
-  useEffect(() => {
-    optionAsMetaRef.current = optionAsMeta;
-    if (termInstance) termInstance.options.macOptionIsMeta = optionAsMeta;
-  }, [optionAsMeta, termInstance]);
 
   // Mobile browsers freeze the page while hidden: the socket can die
   // silently, rendering pauses, and composited content may come back blank.

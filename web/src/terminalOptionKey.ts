@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { worldLocalStorage, subscribeLocalStorage } from "./browserStorage";
 
 /**
@@ -74,4 +74,22 @@ export function terminalOptionAsMeta() {
 
 export function useTerminalOptionAsMeta() {
   return useSyncExternalStore(subscribe, terminalOptionAsMeta, () => false);
+}
+
+/**
+ * The choice for one terminal: a ref for xterm's creation options, kept
+ * current on the live terminal. macOS composes Option+<key> into a character
+ * (Option+F types "ƒ"), so Alt bindings never reach the shell unless the user
+ * opts in.
+ */
+export function useTerminalOptionAsMetaRef(
+  term: { options: { macOptionIsMeta?: boolean } } | null,
+) {
+  const optionAsMeta = useTerminalOptionAsMeta();
+  const ref = useRef(optionAsMeta);
+  useEffect(() => {
+    ref.current = optionAsMeta;
+    if (term) term.options.macOptionIsMeta = optionAsMeta;
+  }, [optionAsMeta, term]);
+  return ref;
 }

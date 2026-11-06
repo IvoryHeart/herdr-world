@@ -285,20 +285,6 @@
   white-space: nowrap;
 }
 
-.pane-jump-search-field {
-  position: relative;
-  margin: 10px 10px 4px;
-}
-
-.pane-jump-search-field > svg {
-  position: absolute;
-  top: 50%;
-  left: 12px;
-  color: var(--muted);
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
 .pane-jump-search {
   width: 100%;
   height: 38px;
@@ -456,18 +442,6 @@
   margin-left: auto;
   font-size: 11px;
   text-transform: capitalize;
-}
-
-.pane-jump-server-badge {
-  flex: 0 0 auto;
-  padding: 2px 6px;
-  border: 1px solid var(--viewer-border);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
 }
 
 .pane-jump-current-badge {

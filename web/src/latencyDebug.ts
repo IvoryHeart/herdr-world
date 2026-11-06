@@ -79,6 +79,19 @@ export function isTypedCharacter(data: string) {
  */
 const ECHO_SAMPLE_MAX_MS = 5000;
 
+/** Log a typed key's time to the frame that answered it, when one is pending. */
+export function logEchoSample(
+  probe: ReturnType<typeof createEchoProbe> | null,
+  terminal: string | null,
+) {
+  const echoMs = probe?.presented() ?? null;
+  if (echoMs !== null)
+    logLatency("terminal echo", {
+      terminal: terminal ?? undefined,
+      input_to_frame_ms: echoMs,
+    });
+}
+
 export function createEchoProbe(now: () => number = () => performance.now()) {
   let sentAt: number | null = null;
   return {

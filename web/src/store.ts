@@ -157,6 +157,11 @@ import {
   type WorktreeRemovalCleanup,
   worktreeRemovalCompletionNotice,
 } from "./store/worktree";
+import { createWorktree, updateRepoSettings } from "./store/worktreeActions";
+import {
+  preferredConnectionId,
+  rememberLastConnection,
+} from "./store/lastConnection";
 import { prepareTaskNotifications } from "./taskNotifications";
 import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
 import {
@@ -346,33 +351,12 @@ function reportTaskNotificationFailure(error: unknown, version: number) {
   worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
 }
 
-/** The connection this browser was last on, opened again on load. */
-const LAST_CONNECTION_KEY = "lastConnection";
-
-/**
- * The connection to open when none is active: the one this browser was last
- * on while the catalog still has it, else the server's default.
- */
-function preferredConnectionId(defaultConnectionId: string): string {
-  let last: string | null;
-  try {
-    last = worldLocalStorage.getItem(LAST_CONNECTION_KEY);
-  } catch {
-    last = null;
-  }
-  return last &&
-    (state.connections.length === 0 ||
-      state.connections.some((connection) => connection.id === last))
-    ? last
-    : defaultConnectionId;
-}
-
 function handleBridgeHello(hello: { default_connection_id: string }) {
   const defaultConnectionId = hello.default_connection_id;
   set({ defaultConnectionId });
   if (initialConnectionSelectionPending) {
     initialConnectionSelectionPending = false;
-    const preferred = preferredConnectionId(defaultConnectionId);
+    const preferred = preferredConnectionId(defaultConnectionId, state);
     if (
       state.activeConnectionId === STARTUP_DEFAULT_CONNECTION_ID &&
       preferred !== state.activeConnectionId
@@ -398,14 +382,7 @@ function selectConnectionNow(connectionId: string, refresh = true): boolean {
   ) {
     copyStartupProfileStorage(worldLocalStorage, connectionId);
   }
-  // Roamgate #529: the connection this browser is on opens again on its next
-  // load. It is only the initial selection (S7); it never retargets an
-  // operation, and the phone still opens on Town.
-  try {
-    worldLocalStorage.setItem(LAST_CONNECTION_KEY, connectionId);
-  } catch {
-    // Storage may be unavailable; a reload then opens the default.
-  }
+  rememberLastConnection(connectionId);
   const generation = bridge.setActiveConnection(connectionId);
   state = activateConnectionState(state, connectionId, generation);
   emit();
@@ -566,7 +543,7 @@ export function applyConnectionCatalog(
   ) {
     if (readinessChanged) set({ catalogueReady: true });
     if (!nextActive)
-      selectConnectionNow(preferredConnectionId(defaultConnectionId));
+      selectConnectionNow(preferredConnectionId(defaultConnectionId, state));
     return true;
   }
 
@@ -580,7 +557,7 @@ export function applyConnectionCatalog(
   };
   emit();
   if (!nextActive)
-    selectConnectionNow(preferredConnectionId(defaultConnectionId));
+    selectConnectionNow(preferredConnectionId(defaultConnectionId, state));
   return true;
 }
 
@@ -1916,86 +1893,7 @@ export const store = {
     );
   },
 
-  createWorktree(
-    workspaceId: string,
-    branch: string,
-    client?: ConnectionClient,
-  ) {
-    const navigation = connectionSnapshot(
-      state,
-      client?.connectionId ?? state.activeConnectionId,
-    ).browserNavigation;
-    return action(
-      async (lease) => {
-        setForConnection(lease, {
-          notice: {
-            kind: "info",
-            message: "Creating worktree",
-            detail: `Updating origin's default branch before creating ${branch}.`,
-            loading: true,
-          },
-        });
-        const result = await lease.client.call(
-          "worktree.create",
-          {
-            workspace_id: workspaceId,
-            branch,
-            focus: leaseSnapshot(lease).navigationMode !== "browser-local",
-          },
-          // A configured worktree command may run for minutes; the server
-          // bounds it, and a disconnect still ends the wait.
-          null,
-        );
-        if (browserSelectionIsCurrent(navigation, lease))
-          adoptBrowserTarget(lease, result);
-        const setupHook = result?.setup_hook as
-          | WorktreeHookRunResult
-          | undefined;
-        const setupNotice = setupHook
-          ? summarizeDirectHookResult(setupHook)
-          : null;
-        const fallback =
-          typeof result?.command_fallback === "string"
-            ? result.command_fallback
-            : null;
-        if (setupNotice) {
-          setForConnection(lease, { notice: setupNotice });
-        } else if (fallback) {
-          setForConnection(lease, {
-            notice: {
-              kind: "info",
-              message: "Worktree created without the worktree command",
-              detail: fallback,
-            },
-          });
-        } else {
-          const commit = String(result?.base_sync?.commit ?? "").slice(0, 12);
-          const base = String(
-            result?.base_sync?.base ?? "origin's default branch",
-          );
-          setForConnection(lease, {
-            notice: {
-              kind: "success",
-              message: "Worktree created",
-              detail: commit
-                ? `${branch} starts from ${base} at ${commit}.`
-                : `${branch} starts from the latest ${base}.`,
-              autoDismissMs: 5000,
-            },
-          });
-        }
-        return result;
-      },
-      {
-        client,
-        failureNotice: (error) => ({
-          kind: "error",
-          message: "Failed to create worktree",
-          detail: error.message,
-        }),
-      },
-    );
-  },
+  createWorktree,
 
   openWorktree(
     workspaceId: string,
@@ -2177,47 +2075,19 @@ export const store = {
   },
 
   setRepoWorktreeHooksEnabled(key: string, enabled: boolean) {
-    return action(async (lease) => {
-      const result = await lease.client.call("settings.update_repo", {
-        key,
-        settings: { worktree_hooks_enabled: enabled },
-      });
-      await refreshNow(lease);
-      return result;
-    });
+    return updateRepoSettings(key, { worktree_hooks_enabled: enabled });
   },
 
   setRepoWorktreeDirectory(key: string, directory: string) {
-    return action(async (lease) => {
-      const result = await lease.client.call("settings.update_repo", {
-        key,
-        settings: { worktree_directory: directory },
-      });
-      await refreshNow(lease);
-      return result;
-    });
+    return updateRepoSettings(key, { worktree_directory: directory });
   },
 
   setRepoWorktreeCommand(key: string, command: string) {
-    return action(async (lease) => {
-      const result = await lease.client.call("settings.update_repo", {
-        key,
-        settings: { worktree_command: command },
-      });
-      await refreshNow(lease);
-      return result;
-    });
+    return updateRepoSettings(key, { worktree_command: command });
   },
 
   setRepoWorktreeRemoveCommand(key: string, command: string) {
-    return action(async (lease) => {
-      const result = await lease.client.call("settings.update_repo", {
-        key,
-        settings: { worktree_remove_command: command },
-      });
-      await refreshNow(lease);
-      return result;
-    });
+    return updateRepoSettings(key, { worktree_remove_command: command });
   },
 
   setWorkspaceAutoSyncEnabled(workspaceId: string, enabled: boolean) {

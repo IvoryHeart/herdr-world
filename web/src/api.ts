@@ -2,6 +2,8 @@ import { createConnectionBackgroundLanes, type RpcLane } from "./rpcLanes";
 import { isBridgeHello } from "./bridgeHello";
 import type { BridgeControlMsg } from "./bridgeControl";
 export type { BridgeControlMsg } from "./bridgeControl";
+import { UncertainRequestError } from "./uncertainRequest";
+import { createUiSettingPushes, type UiSettingPush } from "./uiSettingPush";
 import type { ConnectionClient } from "./connectionClient";
 import { isValidPopupPayload } from "./popupPayload";
 import {
@@ -259,16 +261,6 @@ export interface TerminalClosedPush {
   reason?: string;
 }
 
-/**
- * One interface preference, pushed when any browser changes it. Carries no
- * connection envelope: preferences belong to the Roamgate server, not to a
- * Herdr connection. A null value means the preference was cleared.
- */
-export interface UiSettingPush {
-  key: string;
-  value: unknown;
-}
-
 type Pending = {
   resolve: (v: any) => void;
   reject: (e: Error) => void;
@@ -286,22 +278,9 @@ type Pending = {
   decodeAbort?: AbortController;
 };
 
-/** A dispatched operation may have completed; callers must re-observe before retrying. */
-export class UncertainRequestError extends Error {
-  readonly outcome = "uncertain";
-
-  constructor(
-    readonly method: string,
-    reason: string,
-  ) {
-    super(
-      `${reason}; ${method} outcome is uncertain. Refresh the exact target before retrying.`,
-    );
-    this.name = "UncertainRequestError";
-  }
-}
-
+export { UncertainRequestError } from "./uncertainRequest";
 export type { ConnectionClient } from "./connectionClient";
+export type { UiSettingPush } from "./uiSettingPush";
 
 const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
 const RPC_TIMEOUT_MS = 30000;
@@ -331,14 +310,6 @@ export async function logoutBrowserSession(): Promise<void> {
 function wsUrl(): string {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   return `${proto}://${location.host}/ws`;
-}
-
-function parseUiSettingPush(value: unknown): UiSettingPush | null {
-  if (!value || typeof value !== "object") return null;
-  const push = value as Record<string, unknown>;
-  return typeof push.key === "string" && push.key.length > 0
-    ? { key: push.key, value: push.value ?? null }
-    : null;
 }
 
 function scopedPayload<T extends object>(
@@ -391,7 +362,7 @@ export class Bridge {
     (closed: TerminalClosedPush) => void
   >();
   private popupHandlers = new Set<(popup: PopupStatePush) => void>();
-  private uiSettingsHandlers = new Set<(push: UiSettingPush) => void>();
+  private uiSettingPushes = createUiSettingPushes();
   private statusHandlers = new Set<(s: ConnectionStatus) => void>();
   private controlHandlers = new Set<(c: BridgeControlMsg) => void>();
   private helloHandlers = new Set<(hello: BridgeHello) => void>();
@@ -1158,10 +1129,7 @@ export class Bridge {
     }
 
     if (hasUiSettings) {
-      // Accepted regardless of the active Herdr connection: the preference
-      // belongs to the Roamgate server that served this page.
-      const push = parseUiSettingPush(msg.ui_settings);
-      if (push) this.uiSettingsHandlers.forEach((handler) => handler(push));
+      this.uiSettingPushes.deliver(msg.ui_settings);
       return;
     }
 
@@ -1456,8 +1424,7 @@ export class Bridge {
   }
 
   onUiSetting(cb: (push: UiSettingPush) => void): () => void {
-    this.uiSettingsHandlers.add(cb);
-    return () => this.uiSettingsHandlers.delete(cb);
+    return this.uiSettingPushes.subscribe(cb);
   }
 
   onTerminalClosed(

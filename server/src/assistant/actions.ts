@@ -6,10 +6,6 @@ import type {
   AssistantWorkspace,
 } from "../../../shared/assistant";
 import { isRecord } from "../agent/session-utils";
-import {
-  workspaceRepoSettingsKey,
-  worktreeCommandFor,
-} from "../config/gui-settings";
 import { validateConnectionId } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { assertUnixHost } from "../connections/unix-only";
@@ -17,6 +13,7 @@ import { inspectRuntimeWorkspacePath } from "../workspace/path";
 import { checkoutPath } from "../workspace/utils";
 import { worktreeCheckoutPath } from "../worktree/create";
 import { surfaceAssistantUserError } from "./errors";
+import { readWorktreeHookState } from "./worktree-hook-state";
 
 export type AssistantActionPreview = Omit<
   AssistantAction,
@@ -307,33 +304,8 @@ export async function prepareAssistantAction(args: {
   }
   const occupant = (paneId: string) =>
     readAssistantPaneOccupant(call, target.workspace_id, paneId);
-  async function hookState(current: Record<string, unknown>, root: string) {
-    const source = { ...current, cwd: checkoutPath(current) || root };
-    const hooks = await read(() =>
-      runtime.worktreeHooks.readWorktreeHooks(source.cwd),
-    );
-    const command = hooks?.config.setup ?? null;
-    if (
-      command !== null &&
-      (typeof command !== "string" || command.length > 20_000)
-    )
-      throw new Error("Cannot preview this setup hook");
-    const key = workspaceRepoSettingsKey(
-      source,
-      runtime.sshHost(),
-      target.connection_id,
-    );
-    const enabled = await read(() => runtime.worktreeHooks.hooksEnabled(key));
-    // The repository's worktree location decides the new checkout's path,
-    // and the configured command, if any, creates it instead of Herdr. Both
-    // come from the owning runtime's settings, read once.
-    const settings = await read(() => runtime.readSettings());
-    const directory =
-      (key ? settings.repositories[key]?.worktree_directory : undefined) ??
-      null;
-    const worktreeCommand = worktreeCommandFor(settings, key) ?? null;
-    return { command, enabled, directory, worktreeCommand };
-  }
+  const hookState = (current: Record<string, unknown>, root: string) =>
+    readWorktreeHookState(runtime, read, target.connection_id, current, root);
 
   try {
     const current = await workspace();

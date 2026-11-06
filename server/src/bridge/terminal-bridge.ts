@@ -19,15 +19,20 @@ import {
 } from "./protocol-compat";
 import { EndpointTerminalSession } from "./endpoint-terminal-session";
 import { EndpointClient } from "./endpoint-client";
-import type { Popup, SurfaceBaseline } from "./endpoint-surface";
-import { frameToAnsi } from "./frame-to-ansi";
+import type { SurfaceBaseline } from "./endpoint-surface";
 import { isTerminalClipboardPayload } from "./terminal-clipboard";
-
-type TerminalSession = {
-  terminalId: string | null;
-  cols: number;
-  rows: number;
-};
+import {
+  clipboardInputTarget,
+  type ClipboardTarget,
+  createWarmTerminals,
+  formatBytes,
+  type PopupIdentity,
+  recentClipboardTarget,
+  type SharedTerminalSession,
+  type TerminalFrame,
+  terminalFrameMessage,
+  type TerminalSession,
+} from "./terminal-sessions";
 
 type ViewerViewport = {
   cols: number;
@@ -39,54 +44,10 @@ type ViewerViewport = {
   revision: number;
 };
 
-type SharedTerminalSession = {
-  thin: ThinClient | EndpointTerminalSession;
-  connecting: Promise<void> | null;
-  firstFrame: Promise<boolean>;
-  resolveFirstFrame: ((seen: boolean) => void) | null;
-  terminalId: string;
-  cols: number;
-  rows: number;
-  viewers: Set<ServerWebSocket<unknown>>;
-  frames: number;
-  bytes: number;
-  firstFrameLogged: boolean;
-  lastFrameLogAt: number;
-  /** Last error Herdr reported on the stream, e.g. a takeover notice. */
-  lastError: string | null;
-  /** Latest full endpoint frame, replayed to a viewer returning to a warm stream. */
-  lastFrame: TerminalFrame | null;
-  /** The stream has no viewers and is kept warm for a quick return. */
-  idle: boolean;
-  /** Closes the warm stream once nobody has come back to it for a while. */
-  idleTimer: ReturnType<typeof setTimeout> | null;
-};
-
-type TerminalFrame = Parameters<
-  Parameters<EndpointTerminalSession["on"]>[1]
->[0];
-
-type ClipboardTarget = {
-  ws: ServerWebSocket<unknown>;
-  terminalId: string;
-  inputAt: number;
-  session: SharedTerminalSession;
-};
-
-const CLIPBOARD_INPUT_WINDOW_MS = 30_000;
 const CLIPBOARD_RELAY_READY_WAIT_MS = 500;
 const TERMINAL_FIRST_FRAME_WAIT_MS = 20_000;
-// Switching back to a recently viewed pane reuses its endpoint stream instead
-// of reconnecting and waiting for Herdr's first snapshot. The least recently
-// viewed streams beyond this count close, and so does any stream nobody has
-// returned to within the TTL: a warm stream keeps receiving every surface
-// Herdr sends, over SSH too, so it should not outlive its usefulness.
-const IDLE_TERMINAL_MAX = 20;
-const IDLE_TERMINAL_TTL_MS = 10 * 60_000;
 const STANDARD_BASE64_RE =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
-
-type PopupIdentity = Pick<Popup, "terminalId" | "title" | "width" | "height">;
 
 export function createTerminalBridge(args: {
   connectionId?: string;
@@ -234,12 +195,6 @@ export function createTerminalBridge(args: {
     return !disposed && lifecycleRevision === revision;
   }
 
-  function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KiB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)}MiB`;
-  }
-
   function forwardClipboard(data: string, terminalId?: string) {
     if (disposed) return;
     if (!isTerminalClipboardPayload(data)) {
@@ -249,19 +204,12 @@ export function createTerminalBridge(args: {
       return;
     }
 
-    const now = Date.now();
-    const recentTarget =
-      clipboardTarget &&
-      now - clipboardTarget.inputAt <= CLIPBOARD_INPUT_WINDOW_MS &&
-      !clipboardTarget.session.thin.isClosed &&
-      sharedTerminals.get(clipboardTarget.terminalId) ===
-        clipboardTarget.session &&
-      terminalViewers
-        .get(clipboardTarget.ws)
-        ?.has(clipboardTarget.terminalId) &&
-      (!terminalId || clipboardTarget.terminalId === terminalId)
-        ? clipboardTarget
-        : null;
+    const recentTarget = recentClipboardTarget(
+      clipboardTarget,
+      terminalId,
+      sharedTerminals,
+      terminalViewers,
+    );
     if (!recentTarget) {
       logger.warn("dropped terminal clipboard without recent input", {
         connection: args.connectionId ?? "legacy-default",
@@ -773,53 +721,27 @@ export function createTerminalBridge(args: {
     t: TerminalFrame,
     payloads = new Map<string, string>(),
   ): boolean {
-    const terminalId = shared.terminalId;
-    const viewport = terminalViewers.get(viewer)?.get(terminalId);
+    const viewport = terminalViewers.get(viewer)?.get(shared.terminalId);
     if (!viewport) return false;
-    const width = t.frame ? Math.min(t.width, viewport.cols) : t.width;
-    const height = t.frame ? Math.min(t.height, viewport.rows) : t.height;
-    const key = `${width}x${height}`;
-    let payload = payloads.get(key);
-    if (!payload) {
-      const bytes =
-        t.frame && (width !== t.width || height !== t.height)
-          ? frameToAnsi(t.frame, viewport)
-          : t.bytes;
-      payload = serialize({
-        terminal: {
-          terminal_id: terminalId,
-          width,
-          height,
-          full: t.full,
-          ...(t.linkFrame ? { link_frame: t.linkFrame } : {}),
-          ...(typeof t.mouseReporting === "boolean"
-            ? { mouse_reporting: t.mouseReporting }
-            : {}),
-          ...(t.history && width === t.history.cols && height === t.history.rows
-            ? { history: t.history }
-            : {}),
-          bytes: Buffer.from(bytes).toString("base64"),
-        },
-      });
-      payloads.set(key, payload);
-    }
+    const frame = terminalFrameMessage(shared.terminalId, t, viewport);
+    const payload = payloads.get(frame.key) ?? serialize(frame.message());
+    payloads.set(frame.key, payload);
     // Only endpoint streams always repaint the full surface. Holding even
     // a full legacy frame lets later incremental frames overtake their base.
+    const full = shared.thin instanceof EndpointTerminalSession && t.full;
     args.safeSend(
       viewer,
       payload,
       "terminal-frame",
-      shared.thin instanceof EndpointTerminalSession && t.full
-        ? terminalCoalesceKey(terminalId)
-        : undefined,
+      full ? terminalCoalesceKey(shared.terminalId) : undefined,
     );
     return true;
   }
 
-  const idleTerminals = new Map<string, SharedTerminalSession>();
+  const warmTerminals = createWarmTerminals(closeSharedTerminal);
 
   function closeSharedTerminal(shared: SharedTerminalSession) {
-    wakeSharedTerminal(shared);
+    warmTerminals.wake(shared);
     shared.thin.close();
     if (sharedTerminals.get(shared.terminalId) === shared)
       sharedTerminals.delete(shared.terminalId);
@@ -841,24 +763,7 @@ export function createTerminalBridge(args: {
       closeSharedTerminal(shared);
       return;
     }
-    wakeSharedTerminal(shared);
-    shared.idle = true;
-    shared.idleTimer = setTimeout(() => {
-      if (shared.idle) closeSharedTerminal(shared);
-    }, IDLE_TERMINAL_TTL_MS);
-    idleTerminals.set(shared.terminalId, shared);
-    for (const oldest of idleTerminals.values()) {
-      if (idleTerminals.size <= IDLE_TERMINAL_MAX) break;
-      closeSharedTerminal(oldest);
-    }
-  }
-
-  function wakeSharedTerminal(shared: SharedTerminalSession) {
-    shared.idle = false;
-    if (shared.idleTimer) clearTimeout(shared.idleTimer);
-    shared.idleTimer = null;
-    if (idleTerminals.get(shared.terminalId) === shared)
-      idleTerminals.delete(shared.terminalId);
+    warmTerminals.keep(shared);
   }
 
   async function getSharedTerminal(
@@ -891,11 +796,11 @@ export function createTerminalBridge(args: {
       );
     const existing = sharedTerminals.get(terminalId);
     if (existing && !existing.thin.isClosed) {
-      wakeSharedTerminal(existing);
+      warmTerminals.wake(existing);
       return existing;
     }
     if (existing) {
-      wakeSharedTerminal(existing);
+      warmTerminals.wake(existing);
       for (const viewer of existing.viewers)
         args.dropCoalesced?.(viewer, terminalCoalesceKey(terminalId));
       existing.thin.close();
@@ -1010,7 +915,7 @@ export function createTerminalBridge(args: {
       });
     });
     thin.on("close", () => {
-      wakeSharedTerminal(shared);
+      warmTerminals.wake(shared);
       if (clipboardTarget?.session === shared) clipboardTarget = null;
       const resolve = shared.resolveFirstFrame;
       if (resolve) {
@@ -1625,15 +1530,10 @@ export function createTerminalBridge(args: {
     restoreClipboardRelaySize(ws);
   }
 
-  /**
-   * Records input a browser sent to one of its terminals another way than
-   * terminal.input (the composer types through Herdr's pane API), so a
-   * clipboard write the command makes goes back to that browser.
-   */
   function noteTerminalInput(ws: ServerWebSocket<unknown>, terminalId: string) {
-    const session = sharedTerminals.get(terminalId);
-    if (!session || !terminalViewers.get(ws)?.has(terminalId)) return;
-    clipboardTarget = { ws, terminalId, inputAt: Date.now(), session };
+    clipboardTarget =
+      clipboardInputTarget(ws, terminalId, sharedTerminals, terminalViewers) ??
+      clipboardTarget;
   }
 
   function viewedTerminals(ws: ServerWebSocket<unknown>): string[] {
@@ -1641,8 +1541,7 @@ export function createTerminalBridge(args: {
   }
 
   function endpointAvailability() {
-    // Warm streams without viewers are an implementation detail, not
-    // attachments a browser can act on.
+    // Warm streams without viewers are not attachments a browser can use.
     return Object.fromEntries(
       Array.from(sharedTerminals)
         .filter(([, session]) => !session.idle)
@@ -1681,10 +1580,7 @@ export function createTerminalBridge(args: {
     popupObserver?.close();
     closeClipboardRelay();
     for (const ws of terminalViewers.keys()) detachTerminalViewer(ws);
-    for (const shared of sharedTerminals.values()) {
-      wakeSharedTerminal(shared);
-      shared.thin.close();
-    }
+    for (const shared of sharedTerminals.values()) closeSharedTerminal(shared);
     sharedTerminals.clear();
     terminalViewers.clear();
     relayViewports.clear();
