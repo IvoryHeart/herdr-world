@@ -77,7 +77,6 @@ test("normal tracked completion between planning and delivery waits without crea
       convergingReviews: true,
       readyAsk: false,
       reviewJudgmentSeat: "steward",
-      reviewerSessions: settings.reviewerSessions,
     },
   });
   const old = {

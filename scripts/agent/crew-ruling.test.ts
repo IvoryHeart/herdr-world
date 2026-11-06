@@ -77,7 +77,15 @@ test("historical clean current-head evidence cannot finish a fresh full review o
     f.calls.some((a) => a.join(" ").startsWith("herdr agent prompt steward ")),
   ).toBe(false);
   setRunSession(f.crew, 1, "codex", "gpt-6.1-sol", "fresh-managed-session");
-  // A configured old manual pin is not adopted into the new managed cohort.
+  expect(
+    retainedReviewer(
+      f.crew,
+      { ...SETTINGS_DEFAULTS, roster: { rev2: { model: "gpt-6.1-sol" } } },
+      7,
+      "rev2",
+    ).session,
+  ).toBe("fresh-managed-session");
+  // A configured identity override does not adopt any historical evidence.
   const selected = retainedReviewer(
     f.crew,
     {
@@ -88,8 +96,7 @@ test("historical clean current-head evidence cannot finish a fresh full review o
     7,
     "rev2",
   );
-  // Selection happens after completion, never by silently reusing the old pin.
-  expect(selected.session).toBeUndefined();
+  expect(selected.session).toBe("historical-session");
   expect(reviewCycles(f.crew, 7)).toHaveLength(1);
 });
 test("an explicit scoped-confirm exception consumes one cycle and cannot authorize cycle five", () => {

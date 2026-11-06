@@ -177,10 +177,11 @@ why the first pass missed such a P1. No size cap or size-driven split applies.
 
 Each assigned reviewer resumes its same saved harness session in a fresh round
 tab. A new admission records the start of its first full crew review and uses
-that cohort's actual saved sessions for later confirmations. Pre-existing
-manual sessions and RESULTs are not adopted. Already recorded cycles and their
-configured `crew.reviewerSessions` overrides remain usable without rewriting
-history or resetting rounds. Review tab labels show the review-cycle ordinal;
+that cohort's actual saved session for later confirmations. Explicit
+`crew.reviewerSessions` identity overrides are honoured, including for the
+first complete pass; choosing an identity never adopts its earlier RESULTs
+or reconstructs old review counts. Existing cycles stay intact. Review tab
+labels show the review-cycle ordinal;
 fixer-only containers do not advance it.
 
 Resumed reviewer usage records a durable pre-resume session baseline and reports

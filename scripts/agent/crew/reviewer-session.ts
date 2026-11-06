@@ -44,15 +44,12 @@ export function retainedReviewer(
       !run.cwd &&
       run.session &&
       run.harness === harness &&
-      run.model === model?.model &&
-      run.finishedAt !== null,
+      run.model === model?.model,
   );
   return {
     harness,
     session:
-      freshStart === undefined
-        ? (settings.reviewerSessions?.[String(pr)]?.[reviewer] ?? run?.session)
-        : run?.session,
+      settings.reviewerSessions?.[String(pr)]?.[reviewer] ?? run?.session,
     run,
   };
 }
@@ -136,7 +133,15 @@ export function reviewerCompletionWait(
   action: Action,
   run: Run,
 ) {
-  if (!settings.convergingReviews || action.kind !== "confirm") return false;
+  if (
+    !settings.convergingReviews ||
+    (action.kind !== "confirm" &&
+      !(
+        action.kind === "review" &&
+        settings.reviewerSessions?.[String(action.pr)]?.[action.target]
+      ))
+  )
+    return false;
   const retained = retainedReviewer(crew, settings, action.pr, action.target);
   const finishing = runsOf(crew, action.pr).filter(
     (r) =>
@@ -169,7 +174,15 @@ export function reviewerSessionAdmission(
   action: Action,
   run: Run,
 ): Action | null {
-  if (!settings.convergingReviews || action.kind !== "confirm") return null;
+  if (
+    !settings.convergingReviews ||
+    (action.kind !== "confirm" &&
+      !(
+        action.kind === "review" &&
+        settings.reviewerSessions?.[String(action.pr)]?.[action.target]
+      ))
+  )
+    return null;
   // A timed-out attempt has its own durable hold, owned by the operator.
   if (getAction(crew, action.key)?.state === "failed") return null;
   const key = `${action.key}|session-owner`;

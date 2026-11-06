@@ -218,7 +218,8 @@ export async function review(options: Options, dir: string, deps: Deps) {
       `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model}); type here to steer it`,
     );
     const continuity =
-      settings.convergingReviews && options.since
+      settings.convergingReviews &&
+      (options.since || settings.reviewerSessions?.[String(pr)]?.[reviewer])
         ? retainedReviewer(crew, settings, pr, reviewer, runId)
         : undefined;
     const retainedRun = continuity?.run;
