@@ -60,7 +60,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Agents go by the name Herdr gives them (`firstmate`), else their harness
   (`claude`); window and Inspector titles put the name first
   (`firstmate · claude`).
-  - The Town board counts agents working and finished, plus **items** needing
+  - Hover or focus a room name for its summary alongside Rename and Close;
+    hover a table or its name for that table's summary. On phones, tap the
+    room or table name. These cards reuse the board's status counts and lists
+    of waiting agents, questions and unreviewed finishes, scoped to that place.
+  - The Town board counts agents across every building in the current Hosts
+    filter, including rooms beyond scene admission: working and finished, plus **items** needing
     you: blocked agents and open questions, matching the reception tray and
     **Needs you**. A blocked agent with an open question contributes two items.
     It shows spend when a metrics provider

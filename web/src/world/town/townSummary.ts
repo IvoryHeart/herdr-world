@@ -5,6 +5,7 @@ import type {
 import type { OfficeObservability } from "../officeObservability";
 import type { TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
+import type { TownAsker } from "./townAskers";
 import { officeReadModel, type OfficeStatusCounts } from "../officeReadModel";
 
 /**
@@ -83,6 +84,16 @@ const topologies = new WeakMap<
   { hosts: TownSummaryHost[]; working: number }
 >();
 
+function summaryCounts(raw: OfficeStatusCounts): TownSummaryCounts {
+  return {
+    needsYou: raw.blocked,
+    working: raw.working,
+    finished: raw.done,
+    quiet: raw.idle,
+    unknown: raw.unknown,
+  };
+}
+
 function summaryTopology(office: HerdrOfficeProjection) {
   const previous = topologies.get(office);
   if (previous) return previous;
@@ -93,15 +104,7 @@ function summaryTopology(office: HerdrOfficeProjection) {
     const raw = read.roomCounts.get(room.key);
     let counts = raw ? roomContributions.get(raw) : undefined;
     if (!counts) {
-      counts = raw
-        ? {
-            needsYou: raw.blocked,
-            working: raw.working,
-            finished: raw.done,
-            quiet: raw.idle,
-            unknown: raw.unknown,
-          }
-        : emptyCounts();
+      counts = raw ? summaryCounts(raw) : emptyCounts();
       if (raw) roomContributions.set(raw, counts);
     }
     working += counts.working;
@@ -126,6 +129,61 @@ function summaryTopology(office: HerdrOfficeProjection) {
   const result = { hosts, working };
   topologies.set(office, result);
   return result;
+}
+
+/** A place reads the board's counts and attention lists, including hidden seats. */
+export function townPlaceSummary(
+  office: HerdrOfficeProjection,
+  summary: TownSummary,
+  key: string,
+  askers: ReadonlyMap<string, TownAsker>,
+): (TownSummary & { label: string; agentCounts: TownSummaryCounts }) | null {
+  const room = office.roomRoster.find((room) => room.key === key);
+  const desk = room
+    ? undefined
+    : office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
+  if (!room && !desk) return null;
+  const includes = (agent: OfficeAgent) =>
+    room ? agent.roomKey === key : agent.deskKey === key;
+  const read = officeReadModel(office);
+  let agentCounts: TownSummaryCounts;
+  if (room) {
+    const raw = read.roomCounts.get(key);
+    agentCounts = raw ? summaryCounts(raw) : emptyCounts();
+  } else {
+    const raw = { blocked: 0, working: 0, done: 0, idle: 0, unknown: 0 };
+    for (const { agent } of office.roster)
+      if (includes(agent)) raw[agent.semanticStatus] += 1;
+    agentCounts = summaryCounts(raw);
+  }
+  const needsYou = summary.needsYou.filter(({ agent }) => includes(agent));
+  const finished = summary.finished.filter(({ agent }) => includes(agent));
+  const asks = summary.asks.filter((ask) => {
+    // The board already resolves current owner/generation/session admission.
+    const nodeId = askers.get(ask.id)?.key;
+    if (!nodeId) return false;
+    const entry = office.paneRoster.find(
+      ({ device }) => device.nodeId === nodeId,
+    );
+    return (
+      !!entry &&
+      (room ? entry.device.roomKey === key : entry.device.deskKey === key)
+    );
+  });
+  return {
+    label: room?.displayLabel ?? desk!.displayLabel,
+    agentCounts,
+    counts: {
+      needsYou: needsYou.length + asks.length,
+      working: agentCounts.working,
+      finished: finished.length,
+    },
+    needsYou,
+    finished,
+    asks,
+    hosts: [],
+    spend: { available: false },
+  };
 }
 
 export function townSummary(

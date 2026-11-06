@@ -177,8 +177,13 @@ hosts stay usable.
    hover the name for its full text. The colour, active/total agent count and
    blocked badge stay visible. Active means working or waiting on you; plain
    terminals are excluded from the total. Hover the count for the working/waiting
-   breakdown. Hover or focus a plate to reveal Rename and Close below it;
-   on a touch screen, tap the plate first. The dashed **+** seat inside a room
+   breakdown. Hover or focus a plate to reveal Rename and Close below it,
+   plus that room's summary. Hover a table or its name for that table's
+   summary; tap the table's name to keep it open. On a touch screen, tap the
+   room name or table name to read the same summaries. They use the Town
+   board's status counts, waiting agents, questions and unreviewed finishes,
+   limited to that place, including agents away from their seats. Close a
+   summary with **×**, **Escape**, or a tap outside it. The dashed **+** seat inside a room
    opens its launcher with that room selected. Choose **Terminal** for a plain
    tab, a profile, or an agent kind. If the requested room is no longer
    available, choose a current room in the launcher before creating anything.
@@ -188,7 +193,9 @@ hosts stay usable.
    the bar in the building's bottom corner. These locations visualize
    status; they do not move the underlying pane or change its host. For the
    whole picture, press **Summary** on the Town board (on a phone, tap the
-   counts chip under the search bar): the **Town summary** window lists who
+   counts chip under the search bar): totals cover every building in the
+   current Hosts filter, including rooms outside the scene's display limit.
+   The **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts, and spend. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and

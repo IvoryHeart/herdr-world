@@ -1,0 +1,57 @@
+.town-place-summary {
+  position: fixed;
+  z-index: 200;
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 16px));
+  max-height: min(440px, calc(100dvh - 16px));
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border, #7a5536);
+  border-radius: 10px;
+  background: var(--surface, #211d18);
+  color: var(--text, #f1efe6);
+  box-shadow: 0 8px 24px #0006;
+  font-size: 13px;
+  pointer-events: auto;
+}
+.town-place-summary header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.town-place-summary header strong {
+  overflow-wrap: anywhere;
+}
+.town-place-summary header button {
+  flex: 0 0 40px;
+  height: 40px;
+  border: 1px solid var(--border, #7a5536);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+.town-place-summary .town-summary {
+  padding: 12px 0 0;
+  gap: 12px;
+}
+.town-place-summary .town-summary-item strong {
+  overflow-wrap: anywhere;
+}
+.town-desk-tag .town-desk-name[data-town-place-summary-trigger] {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+@media (pointer: coarse) {
+  .town-desk-tag .town-desk-name[data-town-place-summary-trigger] {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}

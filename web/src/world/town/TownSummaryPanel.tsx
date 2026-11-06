@@ -3,6 +3,7 @@ import { ConnectedAnswerDeliveries } from "./AnswerDeliveries";
 import { useAnswerDeliveryCounts } from "../worldAnswerDeliveries";
 import {
   useCallback,
+  useId,
   useEffect,
   useMemo,
   useState,
@@ -47,6 +48,7 @@ export function TownSummaryPanel({
   askActions,
   groups,
   deliveries,
+  compact = false,
 }: {
   summary: TownSummaryModel;
   now: number;
@@ -57,11 +59,14 @@ export function TownSummaryPanel({
   askActions: TownAskActions;
   groups?: ReactNode;
   deliveries?: ReactNode;
+  compact?: boolean;
 }) {
+  const instance = useId();
+  const prefix = compact ? instance : "town-summary";
   return (
     <div className="town-summary">
-      <section aria-labelledby="town-summary-needs">
-        <h3 id="town-summary-needs">
+      <section aria-labelledby={`${prefix}-needs`}>
+        <h3 id={`${prefix}-needs`}>
           Needs you <span>{summary.counts.needsYou}</span>
         </h3>
         {summary.asks.length > 0 ? (
@@ -92,8 +97,8 @@ export function TownSummaryPanel({
         )}
       </section>
       {deliveries}
-      <section aria-labelledby="town-summary-finished">
-        <h3 id="town-summary-finished">
+      <section aria-labelledby={`${prefix}-finished`}>
+        <h3 id={`${prefix}-finished`}>
           Done, not reviewed <span>{summary.counts.finished}</span>
         </h3>
         {summary.finished.length ? (
@@ -118,59 +123,63 @@ export function TownSummaryPanel({
           <p className="town-summary-empty">Nothing new has finished.</p>
         )}
       </section>
-      <section aria-labelledby="town-summary-hosts">
-        <h3 id="town-summary-hosts">Hosts and rooms</h3>
-        <div className="town-summary-hosts">
-          {summary.hosts.map((host) => (
-            <div key={host.key} className="town-summary-host">
-              <div className="town-summary-host-name">
-                <strong>{host.label}</strong>
-                {host.stale ? <small>Offline · stale</small> : null}
-                <Counts counts={host.counts} />
+      {compact ? null : (
+        <section aria-labelledby={`${prefix}-hosts`}>
+          <h3 id={`${prefix}-hosts`}>Hosts and rooms</h3>
+          <div className="town-summary-hosts">
+            {summary.hosts.map((host) => (
+              <div key={host.key} className="town-summary-host">
+                <div className="town-summary-host-name">
+                  <strong>{host.label}</strong>
+                  {host.stale ? <small>Offline · stale</small> : null}
+                  <TownSummaryStatusCounts counts={host.counts} />
+                </div>
+                {host.rooms.map((room) => (
+                  <button
+                    key={room.key}
+                    type="button"
+                    className="town-summary-room"
+                    aria-label={`Show room ${room.label} in Town`}
+                    onClick={() => onShowRoom(room.key)}
+                  >
+                    <span>{room.label}</span>
+                    <TownSummaryStatusCounts counts={room.counts} />
+                  </button>
+                ))}
               </div>
-              {host.rooms.map((room) => (
-                <button
-                  key={room.key}
-                  type="button"
-                  className="town-summary-room"
-                  aria-label={`Show room ${room.label} in Town`}
-                  onClick={() => onShowRoom(room.key)}
-                >
-                  <span>{room.label}</span>
-                  <Counts counts={room.counts} />
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
       {groups}
-      <section aria-labelledby="town-summary-spend">
-        <h3 id="town-summary-spend">Spend</h3>
-        {summary.spend.available ? (
-          <>
-            <p className="town-summary-spend-total">
-              {formatOfficeCost(summary.spend.totalUsd)}
+      {compact ? null : (
+        <section aria-labelledby={`${prefix}-spend`}>
+          <h3 id={`${prefix}-spend`}>Spend</h3>
+          {summary.spend.available ? (
+            <>
+              <p className="town-summary-spend-total">
+                {formatOfficeCost(summary.spend.totalUsd)}
+              </p>
+              <ul className="town-summary-models">
+                {summary.spend.models.map((model) => (
+                  <li key={model.model}>
+                    <span>{formatOfficeModelName(model.model)}</span>
+                    <b>{formatOfficeCost(model.costUsd)}</b>
+                  </li>
+                ))}
+              </ul>
+              <p className="town-summary-provenance">
+                from {summary.spend.providerId ?? "metrics"} ·{" "}
+                {townSummaryAge(summary.spend.observedAt, now)}
+              </p>
+            </>
+          ) : (
+            <p className="town-summary-empty">
+              No cost data. Configure a metrics provider in settings.
             </p>
-            <ul className="town-summary-models">
-              {summary.spend.models.map((model) => (
-                <li key={model.model}>
-                  <span>{formatOfficeModelName(model.model)}</span>
-                  <b>{formatOfficeCost(model.costUsd)}</b>
-                </li>
-              ))}
-            </ul>
-            <p className="town-summary-provenance">
-              from {summary.spend.providerId ?? "metrics"} ·{" "}
-              {townSummaryAge(summary.spend.observedAt, now)}
-            </p>
-          </>
-        ) : (
-          <p className="town-summary-empty">
-            No cost data. Configure a metrics provider in settings.
-          </p>
-        )}
-      </section>
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -218,7 +227,11 @@ const COUNT_LABELS: [keyof TownSummaryCounts, string][] = [
   ["unknown", "unknown"],
 ];
 
-function Counts({ counts }: { counts: TownSummaryCounts }) {
+export function TownSummaryStatusCounts({
+  counts,
+}: {
+  counts: TownSummaryCounts;
+}) {
   const shown = COUNT_LABELS.filter(([key]) => counts[key] > 0);
   return (
     <span className="town-summary-counts">

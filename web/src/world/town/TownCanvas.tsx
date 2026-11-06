@@ -35,6 +35,7 @@ import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownInteraction } from "./scene/townInteraction";
 import { townBrowserClock, townBrowserFrames } from "./townBrowserClock";
 import type { TownSummary } from "./townSummary";
+import type { ShowTownPlaceSummary } from "./TownPlaceSummary";
 import {
   createTownRenderer,
   nextTownTask,
@@ -144,6 +145,7 @@ export function TownCanvas({
   observability,
   summaryCounts,
   onOpenSummary,
+  onPlaceSummary,
   roomFocus = null,
   calm = false,
   terminalColors = NO_COLORS,
@@ -165,6 +167,7 @@ export function TownCanvas({
   summaryCounts?: TownSummary["counts"];
   /** Open the Town summary window from the board sign or the phone chip. */
   onOpenSummary?: () => void;
+  onPlaceSummary?: ShowTownPlaceSummary;
   /** A room to move the camera to (a new `seq` asks again), as from the summary. */
   roomFocus?: { roomKey: string; seq: number } | null;
   /** Town's event trace (development builds only; see world/devtools). */
@@ -790,6 +793,7 @@ export function TownCanvas({
             layout={layout}
             visible={visible}
             signs={signs}
+            onPlaceSummary={onPlaceSummary}
             onHoverEntry={hoverEntry}
             selectedKey={selectedKey}
             blockedSince={blockedSince}

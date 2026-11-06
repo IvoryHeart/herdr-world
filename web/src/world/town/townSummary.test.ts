@@ -6,17 +6,21 @@ import {
   createOfficeProjector,
   TOWN_PRESENTATION_BOUNDS,
 } from "../herdrOfficeProjection";
-import type { OfficeAgent } from "../herdrOfficeProjection";
+import type {
+  HerdrOfficeProjection,
+  OfficeAgent,
+} from "../herdrOfficeProjection";
 import type { OfficeObservability } from "../officeObservability";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject } from "../worldObject";
 import { worldObjectForHosts } from "../worldFilters";
 import { officeReadModel } from "../officeReadModel";
+import { townAskers } from "./townAskers";
 import { withTownFinished } from "./townFinished";
 import { townFoldedActivity } from "./townFoldedActivity";
 import { townCalls, type TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
-import { townSummary, townSummaryAge } from "./townSummary";
+import { townPlaceSummary, townSummary, townSummaryAge } from "./townSummary";
 
 /** One synthetic host: two rooms, one agent per tab, with given statuses. */
 function office(statuses: Record<string, string[]>) {
@@ -82,6 +86,169 @@ function office(statuses: Record<string, string[]>) {
   };
   return Object.assign(projection, { activityOf, world, connection });
 }
+
+test("Summary counts and lists agents in every building with colliding native IDs", async () => {
+  const { connection } = office({ alpha: ["blocked", "working", "done"] });
+  const world = buildWorldObject(
+    [
+      connection,
+      { ...connection, connectionId: "other", label: "Other building" },
+    ],
+    "studio",
+  );
+  await prepareWorldOffice(world);
+  const projection = projectWorldOffice(
+    world,
+    1,
+    null,
+    TOWN_PRESENTATION_BOUNDS,
+  );
+  const summary = townSummary(projection, callsOf(projection), NO_METRICS);
+  expect(summary.counts).toEqual({ needsYou: 2, working: 2, finished: 2 });
+  expect(summary.needsYou.map(({ hostLabel }) => hostLabel).sort()).toEqual([
+    "Other building",
+    "studio",
+  ]);
+  expect(summary.finished).toHaveLength(2);
+  expect(summary.hosts.map(({ counts }) => counts.working)).toEqual([1, 1]);
+});
+
+test("Town board counts the complete town even when scene admission shows only one building", async () => {
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { TownBoard } = await import("./TownBoard");
+  const { townModelFromProjection } = await import("./townModel");
+  const { connection } = office({ alpha: ["working", "blocked", "done"] });
+  const world = buildWorldObject(
+    [connection, { ...connection, connectionId: "other" }],
+    "studio",
+  );
+  await prepareWorldOffice(world);
+  const projection = projectWorldOffice(world, 1, null, {
+    ...TOWN_PRESENTATION_BOUNDS,
+    rooms: 1,
+  });
+  const model = townModelFromProjection(projection);
+  expect(
+    new Set([...model.agents.values()].map(({ hostKey }) => hostKey)).size,
+  ).toBe(1);
+  const html = renderToStaticMarkup(
+    createElement(TownBoard, { model, observability: NO_METRICS }),
+  );
+  expect(html).toContain("Town board: 2 working, 2 need you, 2 done");
+});
+
+test("room and table summaries reuse board statuses and lists without crossing places or hosts", async () => {
+  const { connection } = office({
+    alpha: ["working", "blocked", "done", "idle", "unknown", "blocked"],
+    beta: ["working"],
+  });
+  const snapshot = connection.snapshot!;
+  // Six agent panes share one table; a plain terminal contributes no agent.
+  const panes = snapshot.panes.map((pane) =>
+    pane.workspace_id === "alpha" ? { ...pane, tab_id: "alpha:t0" } : pane,
+  );
+  panes.push({
+    ...panes[0]!,
+    pane_id: "shell",
+    terminal_id: "shell",
+    agent: "",
+    agent_status: "",
+  });
+  const first = {
+    ...connection,
+    snapshot: {
+      ...snapshot,
+      panes,
+      tabs: snapshot.tabs.filter(
+        (tab) => tab.workspace_id !== "alpha" || tab.tab_id === "alpha:t0",
+      ),
+    },
+  };
+  const world = buildWorldObject(
+    [first, { ...first, connectionId: "other" }],
+    "studio",
+  );
+  await prepareWorldOffice(world);
+  const projection = projectWorldOffice(
+    world,
+    1,
+    null,
+    TOWN_PRESENTATION_BOUNDS,
+  );
+  const room = projection.rooms.find(
+    (room) =>
+      room.workspaceRef.connectionId === "studio" &&
+      room.displayLabel === "alpha",
+  )!;
+  const desk = room.desks[0]!;
+  expect(desk.paneDevices).toHaveLength(4);
+  const ask = (id: string, host: string, terminal = "shell"): WorldAsk => ({
+    id,
+    at: 1,
+    actor: {
+      label: "Synthetic asker",
+      verified: true,
+      connection_id: host,
+      connection_generation: 1,
+      pane_id: "shell",
+      terminal_id: terminal,
+    },
+    question: "Continue?",
+    options: [],
+    owner_only: true,
+  });
+  const oldGeneration = ask("old-generation", "studio");
+  oldGeneration.actor.connection_generation = 0;
+  const asks = [
+    ask("local", "studio"),
+    ask("other", "other"),
+    ask("old", "studio", "retired"),
+    oldGeneration,
+    {
+      ...ask("unverified", "studio"),
+      actor: { verified: false, label: "Unverified" },
+    },
+  ];
+  const summary = townSummary(
+    projection,
+    callsOf(projection),
+    NO_METRICS,
+    undefined,
+    asks,
+  );
+  const askers = townAskers(asks, world, projection);
+  const localRoom = townPlaceSummary(projection, summary, room.key, askers)!;
+  const localDesk = townPlaceSummary(projection, summary, desk.key, askers)!;
+  expect(localRoom.agentCounts).toEqual({
+    working: 1,
+    needsYou: 2,
+    finished: 1,
+    quiet: 1,
+    unknown: 1,
+  });
+  expect(localDesk.agentCounts).toEqual(localRoom.agentCounts);
+  expect(localDesk.counts).toEqual({ working: 1, needsYou: 3, finished: 1 });
+  expect(localDesk.asks.map(({ id }) => id)).toEqual(["local"]);
+  expect(localDesk.needsYou).toEqual(localRoom.needsYou);
+  expect(localDesk.finished).toEqual(localRoom.finished);
+  expect(
+    localDesk.needsYou.every(
+      ({ agent }) => agent.currentPaneRef.connectionId === "studio",
+    ),
+  ).toBe(true);
+  expect(localDesk.hosts).toEqual([]);
+  expect(localDesk.spend.available).toBe(false);
+  expect(
+    townPlaceSummary(projection, summary, "removed-place", askers),
+  ).toBeNull();
+  const otherRoom = projection.rooms.find(
+    (room) => room.displayLabel === "beta",
+  )!;
+  expect(
+    townPlaceSummary(projection, summary, otherRoom.key, askers)!.counts,
+  ).toEqual({ working: 1, needsYou: 0, finished: 0 });
+});
 
 test("Summary reads prepared room totals without rescanning agents for asks or spend", async () => {
   const { world } = office({ alpha: ["working", "blocked"], beta: ["idle"] });
@@ -413,7 +580,7 @@ const NO_METRICS: OfficeObservability = {
 };
 
 /** The call rail's calls for an office: blocked agents and finished ones. */
-function callsOf(projection: ReturnType<typeof office>): TownCall[] {
+function callsOf(projection: HerdrOfficeProjection): TownCall[] {
   return projection.roster.flatMap((entry): TownCall[] =>
     entry.agent.semanticStatus === "blocked" ||
     entry.agent.semanticStatus === "done"

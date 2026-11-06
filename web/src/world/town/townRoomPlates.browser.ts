@@ -126,7 +126,38 @@ export async function checkTownRoomPlates(
     );
   };
   const width = plate.getBoundingClientRect().width;
+  plate.dispatchEvent(
+    new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }),
+  );
+  await waitFor(
+    () => document.querySelector(".town-place-summary") !== null,
+    "hovering a room name did not show its summary",
+  );
+  document
+    .querySelector<HTMLButtonElement>('[aria-label="Close place summary"]')!
+    .click();
+  await waitFor(
+    () => document.querySelector(".town-place-summary") === null,
+    "hovered room summary did not close",
+  );
   plate.focus();
+  await waitFor(
+    () => document.querySelector(".town-place-summary") !== null,
+    "focusing a room name did not show its summary",
+  );
+  const roomSummary = document.querySelector<HTMLElement>(
+    ".town-place-summary",
+  )!;
+  check(
+    roomSummary.textContent?.includes("Needs you") === true &&
+      roomSummary.textContent?.includes("Done, not reviewed") === true,
+    "room summary must reuse the board's attention sections",
+  );
+  check(
+    !roomSummary.textContent?.includes("Spend") &&
+      !roomSummary.textContent?.includes("Hosts and rooms"),
+    "place summary must omit town-wide spend and topology",
+  );
   check(
     !!actions &&
       getComputedStyle(actions).visibility === "visible" &&
@@ -151,7 +182,88 @@ export async function checkTownRoomPlates(
     !!actions && getComputedStyle(actions).visibility === "visible",
     "a touch on the room plate must reveal its management controls",
   );
+  await waitFor(
+    () => document.querySelector(".town-place-summary") !== null,
+    "a touch on the room name did not show its summary",
+  );
+  document
+    .querySelector<HTMLButtonElement>('[aria-label="Close place summary"]')!
+    .click();
+  await waitFor(
+    () => document.querySelector(".town-place-summary") === null,
+    "room summary did not close",
+  );
   plate.blur();
+  const tableName = host.querySelector<HTMLButtonElement>(
+    '[data-town-place-summary-trigger="desk"]',
+  )!;
+  tableName.dispatchEvent(
+    new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }),
+  );
+  await waitFor(
+    () => document.querySelector(".town-place-summary") !== null,
+    "hovering a table name did not show its summary",
+  );
+  document
+    .querySelector<HTMLButtonElement>('[aria-label="Close place summary"]')!
+    .click();
+  await waitFor(
+    () => document.querySelector(".town-place-summary") === null,
+    "hovered table summary did not close",
+  );
+  const tableTarget = [
+    ...host.querySelectorAll<HTMLElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].find(
+    (target) => target.dataset.targetKey === tableName.dataset.townDeskKey,
+  )!;
+  const tableBox = tableTarget.getBoundingClientRect();
+  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+  canvas.dispatchEvent(
+    new PointerEvent("pointermove", {
+      bubbles: true,
+      pointerType: "mouse",
+      clientX: tableBox.left + tableBox.width / 2,
+      clientY: tableBox.top + tableBox.height / 2,
+    }),
+  );
+  await waitFor(
+    () =>
+      document
+        .querySelector(".town-place-summary")
+        ?.getAttribute("aria-label") === `Summary of ${tableName.textContent}`,
+    "hovering the canvas table did not show its summary",
+  );
+  document
+    .querySelector<HTMLButtonElement>('[aria-label="Close place summary"]')!
+    .click();
+  await waitFor(
+    () => document.querySelector(".town-place-summary") === null,
+    "canvas table summary did not close",
+  );
+  tableName.click();
+  await waitFor(
+    () => document.querySelector(".town-place-summary") !== null,
+    "tapping a table name did not show its summary",
+  );
+  const card = document.querySelector<HTMLElement>(".town-place-summary")!;
+  const cardBox = card.getBoundingClientRect();
+  check(
+    card.getAttribute("aria-label") === `Summary of ${tableName.textContent}` &&
+      cardBox.left >= 0 &&
+      cardBox.right <= window.innerWidth &&
+      cardBox.top >= 0 &&
+      cardBox.bottom <= window.innerHeight,
+    "the table's own summary must fit the viewport",
+  );
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await waitFor(
+    () => document.querySelector(".town-place-summary") === null,
+    "Escape did not close the place summary",
+  );
   const seat = host.querySelector<HTMLButtonElement>(
     '.town-new-seat[aria-label^="New agent or terminal in "]',
   );

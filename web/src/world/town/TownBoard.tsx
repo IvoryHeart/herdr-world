@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   formatOfficeCost,
   formatOfficeModelNames,
@@ -6,7 +6,8 @@ import {
   type OfficeObservability,
 } from "../officeObservability";
 import type { TownModel } from "./townModel";
-import type { TownSummary } from "./townSummary";
+import { townSummary, type TownSummary } from "./townSummary";
+import { townCalls } from "./TownRail";
 
 export function TownBoard({
   model,
@@ -19,14 +20,29 @@ export function TownBoard({
   summaryCounts?: TownSummary["counts"];
   onOpenSummary?: () => void;
 }) {
-  const counts = { working: 0, blocked: 0, done: 0, idle: 0, unknown: 0 };
-  for (const agent of model.agents.values()) counts[agent.semanticStatus] += 1;
-  // The shared summary's counts, when Town provides them (see townSummary).
-  if (summaryCounts) {
-    counts.working = summaryCounts.working;
-    counts.blocked = summaryCounts.needsYou;
-    counts.done = summaryCounts.finished;
-  }
+  // Scene admission and camera visibility must never narrow the Town board.
+  const totals = useMemo(() => {
+    if (summaryCounts) return summaryCounts;
+    const office = model.projection;
+    const entries = new Map(
+      office.roster.map((entry) => [entry.agent.key, entry]),
+    );
+    const calls = townCalls(
+      office.roster,
+      new Map(),
+      office.roster
+        .filter(({ agent }) => agent.semanticStatus === "done" && !agent.stale)
+        .map(({ agent }) => agent),
+      (key) => entries.get(key),
+      office.generatedAt,
+    );
+    return townSummary(office, calls, observability).counts;
+  }, [model.projection, summaryCounts, observability]);
+  const counts = {
+    working: totals.working,
+    blocked: totals.needsYou,
+    done: totals.finished,
+  };
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   // Phones show a compact chip; it opens the full board in place.

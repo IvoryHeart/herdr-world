@@ -29,6 +29,7 @@ import type { TownRendererHandle } from "./townRenderer";
 import type { TownTarget } from "./townTargets";
 import type { TownTeams } from "./townTeams";
 import type { TownVisible } from "./townVisibleHosts";
+import type { ShowTownPlaceSummary } from "./TownPlaceSummary";
 
 /** Team walls and connectors, under the world layer's cards. */
 export const TownTeamsLayer = memo(function TownTeamsLayer({
@@ -93,10 +94,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   renderer,
   pennants,
   signs,
+  onPlaceSummary,
 }: {
   /** The HUD store: the ages clock. */
   hud: TownHud;
   signs: TownBuildingSigns;
+  onPlaceSummary?: ShowTownPlaceSummary;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
   onActivateAsk?: (nodeId: string) => void;
@@ -439,12 +442,37 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                               </span>
                             ) : null}
                             <span className="town-desk-tag">
-                              <span
+                              <button
+                                type="button"
                                 className="town-desk-name"
-                                aria-hidden="true"
+                                data-town-place-summary-trigger="desk"
+                                data-town-desk-key={desk.key}
+                                aria-label={`Summary of table ${desk.displayLabel}`}
+                                aria-haspopup="dialog"
+                                onPointerEnter={(event) =>
+                                  onPlaceSummary?.(
+                                    desk.key,
+                                    event.currentTarget.getBoundingClientRect(),
+                                  )
+                                }
+                                onPointerLeave={() => onPlaceSummary?.(null)}
+                                onFocus={(event) =>
+                                  onPlaceSummary?.(
+                                    desk.key,
+                                    event.currentTarget.getBoundingClientRect(),
+                                    true,
+                                  )
+                                }
+                                onClick={(event) =>
+                                  onPlaceSummary?.(
+                                    desk.key,
+                                    event.currentTarget.getBoundingClientRect(),
+                                    true,
+                                  )
+                                }
                               >
                                 {desk.displayLabel}
-                              </span>
+                              </button>
                               <DeskWorkBadge
                                 badge={deskBadges.get(desk.key)}
                                 deskLabel={desk.displayLabel}
@@ -509,6 +537,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       }
                     }
                     actions={roomActions}
+                    onSummary={onPlaceSummary}
                   />
                   {roomActions.showCreateSeat(room.key) && seatCell ? (
                     <>

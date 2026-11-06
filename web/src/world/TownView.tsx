@@ -16,6 +16,10 @@ import { worldLocalStorage } from "../browserStorage";
 import { useStoreSelector } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
+import {
+  TownPlaceSummaryCard,
+  useTownPlaceSummary,
+} from "./town/TownPlaceSummary";
 import { useTownOffice } from "./town/useTownOffice";
 import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
@@ -55,10 +59,8 @@ import {
 import { useNow } from "./handoffs";
 import type {
   WorldCanvasAnchor,
-  WorldCanvasHover,
   WorldConversationAnchors,
 } from "./worldConnectorGeometry";
-import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
 export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
 import type { OfficeAgent } from "./herdrOfficeProjection";
 import {
@@ -66,7 +68,7 @@ import {
   fetchOfficeObservability,
   type OfficeObservability,
 } from "./officeObservability";
-import { officeCalloutForKey, officePresentationKey } from "./officeSelection";
+import { officePresentationKey } from "./officeSelection";
 import {
   readOfficePreferences,
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
@@ -165,7 +167,6 @@ export default function TownView({
   // sees only reviewed records, so the service's stop notices do not
   // re-render a busy Town.
   const work = useReviewedWork(undefined, false);
-  const [sceneHover, setSceneHover] = useState<WorldCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
     EMPTY_OFFICE_OBSERVABILITY,
   );
@@ -385,6 +386,12 @@ export default function TownView({
     openTerminal: (id) => void onOpenTerminal(id).catch(() => undefined),
     showRoom: focusRoom,
   });
+  const placeSummary = useTownPlaceSummary(
+    office,
+    townSummary.summary,
+    townSummary.askActions.askers,
+  );
+  useSystemBack(placeSummary.target !== null, placeSummary.close, "popup");
   // Needs you's Outbox row opens Town's Summary at the saved answers.
   const openOutbox = townSummary.openOutbox;
   useEffect(() => offerNeedsYouOutbox(openOutbox), [openOutbox]);
@@ -918,17 +925,9 @@ export default function TownView({
             onActivateRoom={() => {
               // In the town a room tap only zooms; it never opens an Inspector.
             }}
-            onHover={(hover) => {
-              if (hover)
-                lastPointer.current = { x: hover.clientX, y: hover.clientY };
-              if (hover && agentByKey.has(hover.key)) {
-                setSceneHover(null);
-                hoverAgent(hover.key, { x: hover.clientX, y: hover.clientY });
-              } else {
-                setSceneHover(hover);
-                hoverAgent(null);
-              }
-            }}
+            onHover={(hover) =>
+              placeSummary.hover(hover, lastPointer, hoverAgent)
+            }
             onSelectedAnchorChange={onSelectedAnchorChange}
             onAnchorChange={(anchors: WorldConversationAnchors | null) => {
               onConversationNodeAnchorsChange?.(
@@ -946,6 +945,7 @@ export default function TownView({
             observability={observability}
             summaryCounts={townSummary.summary.counts}
             onOpenSummary={townSummary.open}
+            onPlaceSummary={placeSummary.show}
             roomFocus={roomFocus}
             calm={preferences.townCalm}
             chrome={TOWN_CHROME}
@@ -976,13 +976,13 @@ export default function TownView({
             }}
           />
         </div>
-        {sceneHover && sceneHover.key !== selectedKey ? (
-          <OfficeCanvasCallout
-            callout={officeCalloutForKey(office, sceneHover.key)}
-            left={sceneHover.clientX}
-            top={sceneHover.clientY}
-          />
-        ) : null}
+        <TownPlaceSummaryCard
+          selectedKey={selectedKey}
+          preview={placeSummary}
+          now={now}
+          onOpenAgent={openChat}
+          askActions={townSummary.askActions}
+        />
         <TownRoomDialogs
           dialog={roomDialog}
           setDialog={setRoomDialog}
