@@ -1,4 +1,5 @@
 import { createTerminalMarkWriter, readTerminalMarks } from "./terminal-marks";
+import { readLegacyReviewArchiveState } from "./legacy-review-archive";
 import {
   recordAnswerAttempt,
   answerAttemptEvidence,
@@ -39,7 +40,11 @@ import { dirname } from "node:path";
 import { assertSafeDataPath } from "../config/data-paths";
 import type { LedgerAsk, LedgerDocument } from "../world/world-ledger";
 import { importLegacyLedger } from "./world-import";
-import { migrateWorldDatabase, worldDatabaseVersion } from "./world-schema";
+import {
+  migrateWorldDatabase,
+  worldDatabaseVersion,
+  worldMigrations,
+} from "./world-schema";
 import {
   attentionFinished,
   attentionRetryDelay,
@@ -115,7 +120,7 @@ export function openWorldWriter(
     db.exec(
       "PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA wal_autocheckpoint=1000;",
     );
-    migrateWorldDatabase(db, path);
+    migrateWorldDatabase(db, path, worldMigrations, at);
     db.exec("PRAGMA busy_timeout=5000");
     importLegacyLedger(db, legacy, at);
     if (legacyProfiles !== undefined)
@@ -198,6 +203,7 @@ export function openWorldWriter(
     return {
       document,
       terminalMarks: readTerminalMarks(db),
+      legacyReviewArchive: readLegacyReviewArchiveState(db),
       ...(profiles ? { profiles } : {}),
       ...(board ? { board } : {}),
       ...(runtimeStatus ? { runtimeStatus } : {}),

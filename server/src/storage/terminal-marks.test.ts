@@ -79,13 +79,8 @@ function orders<T>(values: readonly T[]): T[][] {
       )
     : [[]];
 }
-test("all 24 independent-family/refusal orders preserve only complete accepted record/binding pairs", () => {
-  for (const order of orders([
-    "desk",
-    "watchlist",
-    "completion-seen",
-    "refused",
-  ] as const)) {
+test("all 6 independent-family/refusal orders preserve only complete accepted record/binding pairs", () => {
+  for (const order of orders(["desk", "watchlist", "refused"] as const)) {
     const root = mkdtempSync(join(tmpdir(), "mark-orders-"));
     roots.push(root);
     const path = join(root, "world.sqlite"),
@@ -116,11 +111,7 @@ test("all 24 independent-family/refusal orders preserve only complete accepted r
     for (const [i, kind] of order.entries())
       expect(Boolean(results[i]!.error)).toBe(kind === "refused");
     const rows = writer.read().terminalMarks!;
-    expect(rows.map((row) => row.kind).sort()).toEqual([
-      "completion-seen",
-      "desk",
-      "watchlist",
-    ]);
+    expect(rows.map((row) => row.kind).sort()).toEqual(["desk", "watchlist"]);
     expect(rows.every((row) => row.binding.record_id === row.id)).toBe(true);
     writer.close();
     const again = openWorldWriter(path, ledger, 2000, "new-incarnation");

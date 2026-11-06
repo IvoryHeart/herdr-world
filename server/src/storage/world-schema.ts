@@ -19,6 +19,10 @@ import { runtimeStatusMigration } from "./runtime-status";
 import { worldProfilesMigration } from "./world-profiles";
 import { worldBindingsMigration } from "./world-bindings";
 import { assertSafeDataPath } from "../config/data-paths";
+import { systemClock } from "../service/ports";
+import { migrateLegacyCompletionReviews } from "./legacy-review-migration";
+
+export type WorldMigration = string | ((db: Database, at: number) => void);
 
 export const WORLD_APPLICATION_ID = 0x574f524c;
 const migration1 = `
@@ -91,6 +95,7 @@ export const worldMigrations = [
   effectsMigration,
   worldBoardMigration,
   terminalMarksMigration,
+  migrateLegacyCompletionReviews,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */
@@ -144,7 +149,7 @@ function backupMigration(db: Database, path: string, version: number) {
 /** Validate ownership/version before changing journaling or file permissions. */
 export function worldDatabaseVersion(
   db: Database,
-  migrations: readonly string[] = worldMigrations,
+  migrations: readonly WorldMigration[] = worldMigrations,
 ) {
   const application = (
     db.query("PRAGMA application_id").get() as { application_id: number }
@@ -164,7 +169,8 @@ export function worldDatabaseVersion(
 export function migrateWorldDatabase(
   db: Database,
   path: string,
-  migrations: readonly string[] = worldMigrations,
+  migrations: readonly WorldMigration[] = worldMigrations,
+  at = systemClock.now(),
 ) {
   const version = worldDatabaseVersion(db, migrations);
   const backup =
@@ -173,8 +179,11 @@ export function migrateWorldDatabase(
       : undefined;
   db.exec("BEGIN EXCLUSIVE");
   try {
-    for (let index = version; index < migrations.length; index++)
-      db.exec(migrations[index]!);
+    for (let index = version; index < migrations.length; index++) {
+      const migration = migrations[index]!;
+      if (typeof migration === "string") db.exec(migration);
+      else migration(db, at);
+    }
     db.exec(
       `PRAGMA application_id=${WORLD_APPLICATION_ID}; PRAGMA user_version=${migrations.length}`,
     );

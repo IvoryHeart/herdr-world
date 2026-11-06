@@ -9,6 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AssistantActionKind } from "../../../shared/assistant";
+import {
+  type GuiSettings,
+  workspaceRepoSettingsKey,
+} from "../config/gui-settings";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import * as processUtils from "../utils/process-utils";
 import { createWorkspaceWorktree } from "../worktree/create";
@@ -18,6 +22,16 @@ const fixtureDirectory = realpathSync(
   mkdtempSync(join(tmpdir(), "ranger-actions-")),
 );
 afterAll(() => rmSync(fixtureDirectory, { recursive: true, force: true }));
+
+// World reads worktree settings from the owning runtime; each fixture owns its
+// settings, without a command or location unless a test sets one.
+const emptySettings = (): GuiSettings => ({
+  version: 1,
+  repositories: {},
+  workspace_auto_sync: {},
+  custom: {},
+  ui: {},
+});
 
 const ref = { connection_id: "local", workspace_id: "w1" };
 function deferred<T>() {
@@ -35,6 +49,7 @@ function fixture(paneId = "w1:p1") {
   };
   let generation = 7;
   let setup: string | null = null;
+  let settings = emptySettings();
   const workspaces: Record<string, any>[] = [
     {
       workspace_id: ref.workspace_id,
@@ -237,12 +252,14 @@ function fixture(paneId = "w1:p1") {
     workspace: workspaces[0],
   }));
   const runtime = {
+    identity: { id: ref.connection_id },
     runProcessWithCodeTimeout: (
       ...args: Parameters<typeof processUtils.runProcessWithCodeTimeout>
     ) => processUtils.runProcessWithCodeTimeout(...args),
     herdr: { call },
     files: { resolveWorkspaceGitRoot },
     worktreeHooks: { readWorktreeHooks, hooksEnabled: async () => true },
+    readSettings: async () => settings,
     sshHost: () => undefined,
   } as unknown as LegacyConnectionRuntime;
   const createWorktree = mock(
@@ -304,6 +321,9 @@ function fixture(paneId = "w1:p1") {
     createWorktree,
     resolveWorkspaceGitRoot,
     readWorktreeHooks,
+    updateSettings: (update: (current: GuiSettings) => GuiSettings) => {
+      settings = update(settings);
+    },
     setSetup: (value: string | null) => {
       setup = value;
     },
@@ -448,6 +468,17 @@ describe("confirmed Ranger action targets", () => {
               };
             },
             beforeDispatch,
+            // Not this machine's settings: a configured worktree command
+            // there would replace worktree.create.
+            {
+              readSettings: async (): Promise<GuiSettings> => ({
+                version: 1,
+                repositories: {},
+                workspace_auto_sync: {},
+                custom: {},
+                ui: {},
+              }),
+            },
           ),
       );
       const original = f.call.getMockImplementation()!;
@@ -1009,10 +1040,78 @@ describe("confirmed Ranger action targets", () => {
       expected_setup_hook: "bun install",
       expected_hooks_enabled: true,
       expected_source_root: fixtureDirectory,
+      expected_worktree_command: null,
     });
     expect(
       f.call.mock.calls.some(([method]) => method === "worktree.create"),
     ).toBe(false);
+  });
+
+  test("worktree preview shows the location's path, and a changed location blocks dispatch", async () => {
+    const f = fixture();
+    const locate = (key: string | null, directory: string) =>
+      f.updateSettings((current) => ({
+        ...current,
+        repositories: { [key!]: { worktree_directory: directory } },
+      }));
+    // A host-only key is not this connection's: the location is not used.
+    locate(
+      workspaceRepoSettingsKey({ cwd: fixtureDirectory }, undefined, undefined),
+      "/srv/other",
+    );
+    const unset = await f.prepare("create_worktree", {
+      branch: "feature/ranger",
+    });
+    expect(unset.preview.params.path).toBe(
+      "(Herdr's default worktree location)",
+    );
+    const key = workspaceRepoSettingsKey(
+      { cwd: fixtureDirectory },
+      undefined,
+      "local",
+    );
+    locate(key, "/srv/trees");
+    const prepared = await f.prepare("create_worktree", {
+      branch: "feature/ranger",
+    });
+    expect(prepared.preview.params.path).toBe("/srv/trees/feature-ranger");
+    expect((await prepared.execute()).status).toBe("succeeded");
+    expect(f.createWorktree.mock.calls[0]?.[1]?.path).toBe(
+      "/srv/trees/feature-ranger",
+    );
+
+    const moved = await f.prepare("create_worktree", {
+      branch: "feature/ranger",
+    });
+    locate(key, "/elsewhere");
+    expect((await moved.execute()).status).toBe("failed");
+    expect(f.createWorktree).toHaveBeenCalledTimes(1);
+  });
+
+  test("worktree preview shows the worktree command and a changed command blocks dispatch", async () => {
+    const f = fixture();
+    const setCommand = (command: string) =>
+      f.updateSettings((current) => ({
+        ...current,
+        worktree_command: command,
+      }));
+    setCommand("mk {path} {branch}");
+    const prepared = await f.prepare("create_worktree", {
+      branch: "feature/ranger",
+    });
+    expect(prepared.preview.params.worktree_command).toBe("mk {path} {branch}");
+    setCommand("other {path}");
+    const result = await prepared.execute();
+    expect(result.status).toBe("failed");
+    expect(f.createWorktree).not.toHaveBeenCalled();
+
+    const next = await f.prepare("create_worktree", {
+      branch: "feature/ranger",
+    });
+    expect((await next.execute()).status).toBe("succeeded");
+    expect(f.createWorktree.mock.calls[0]?.[1]?.expected_worktree_command).toBe(
+      "other {path}",
+    );
   });
 
   test("worktree source hook changes block dispatch and target hook guards report partial failure", async () => {

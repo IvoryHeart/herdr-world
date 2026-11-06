@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import { elapsed } from "./now";
 import { AskCard, UNCONFIRMED } from "./ask";
+import { MenuCard } from "./menu";
 import type { AnswerResult, PendingPrompt } from "../types";
 
 /** Only live step/prompt content trails the transcript. Sends stay at their time. */
@@ -8,11 +10,16 @@ export function ChatAfterBlocks({
   clock,
   answered,
   prompt,
+  tooSmall,
   agent,
   answering,
   notice,
   onAnswer,
+  pressing = false,
+  onPress,
+  onType,
   onOpenTerminal,
+  renderPromptMessage,
 }: {
   running: {
     id: string;
@@ -28,11 +35,17 @@ export function ChatAfterBlocks({
       > & { question: string[] })
     | null;
   prompt: PendingPrompt | null;
+  tooSmall?: { rows: number };
   agent: string;
   answering: boolean;
   notice: string;
   onAnswer: (key: string, text?: string) => void;
+  /** A command menu's keys, checked against that menu before each one. */
+  pressing?: boolean;
+  onPress?: (key: string) => void;
+  onType?: (text: string) => void;
   onOpenTerminal?: () => void;
+  renderPromptMessage?: (message: ReactNode) => ReactNode;
 }) {
   return (
     <>
@@ -71,7 +84,37 @@ export function ChatAfterBlocks({
           </span>
         </p>
       ) : null}
-      {prompt ? (
+      {!prompt && tooSmall ? (
+        <div
+          className="agent-chat-ask agent-chat-menu"
+          role="status"
+          aria-label="Terminal too small"
+        >
+          <p>
+            The terminal is too small to show this menu — open or click Terminal
+            to fix.
+          </p>
+          {onOpenTerminal ? (
+            <button type="button" onClick={onOpenTerminal}>
+              Open Terminal
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {prompt?.menu && onPress && onType ? (
+        <MenuCard
+          // One card for the menu's steps, so keyboard focus survives each
+          // redraw; the scope above remounts it for another session.
+          key="menu"
+          agent={agent}
+          prompt={{ ...prompt, menu: prompt.menu }}
+          pressing={pressing}
+          notice={notice}
+          onPress={onPress}
+          onType={onType}
+          onOpenTerminal={onOpenTerminal}
+        />
+      ) : prompt && !prompt.menu ? (
         <AskCard
           key={prompt.fingerprint}
           agent={agent}
@@ -80,6 +123,7 @@ export function ChatAfterBlocks({
           notice={notice}
           onAnswer={onAnswer}
           onOpenTerminal={onOpenTerminal}
+          renderMessage={renderPromptMessage}
         />
       ) : notice ? (
         <p className="agent-chat-ask-notice" role="alert">

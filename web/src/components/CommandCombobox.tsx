@@ -12,7 +12,6 @@ import {
   FolderOpen,
   FolderPlus,
   GitBranch,
-  GitCommitHorizontal,
   Keyboard,
   LayoutGrid,
   Maximize2,
@@ -71,7 +70,9 @@ import {
 } from "./WindowArrangementMenu";
 import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
 import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
+import { WorktreeLocationDialog } from "./WorktreeLocationDialog";
 import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
+import { worktreeCommandActions } from "./worktreeCommandActions";
 
 type TextAction =
   | { type: "rename-workspace"; workspace: Workspace }
@@ -304,6 +305,9 @@ function OwnedCommandCombobox({
   const [worktreeHooksWorkspaceId, setWorktreeHooksWorkspaceId] = useState<
     string | null
   >(null);
+  const [locationWorkspaceId, setLocationWorkspaceId] = useState<string | null>(
+    null,
+  );
   const [lifecycleWorkspaceId, setLifecycleWorkspaceId] = useState<
     string | null
   >(null);
@@ -551,58 +555,15 @@ function OwnedCommandCombobox({
     });
   }
   if (focusedWorkspace) {
-    // Herdr resolves the repository from the workspace on demand, so this
-    // works for a plain workspace in a Git checkout too (see ContextMenu).
-    currentActions.push({
-      key: "current-open-worktree",
-      icon: <FolderOpen size={15} />,
-      title: "Open worktree",
-      detail: workspaceName(focusedWorkspace),
-      keywords: ["existing worktree", "open existing", "checkout", "branch"],
-      run: () => setOpenWorktreeWorkspaceId(focusedWorkspace.workspace_id),
-    });
-  }
-  if (focusedWorkspace?.worktree) {
-    currentActions.push({
-      key: "current-worktree-lifecycle",
-      icon: <GitCommitHorizontal size={15} />,
-      title: "Open worktree lifecycle",
-      detail: focusedWorkspace.worktree.repo_name,
-      keywords: [
-        "worktree center",
-        "manage worktrees",
-        "repository lifecycle",
-        "git worktree status",
-        "hooks auto sync",
-      ],
-      run: () => setLifecycleWorkspaceId(focusedWorkspace.workspace_id),
-    });
-    currentActions.push({
-      key: "current-worktree-hooks",
-      icon: <GitBranch size={15} />,
-      title: "Worktree hooks",
-      detail: focusedWorkspace.worktree.repo_name,
-      keywords: ["hook config", "hooks config", "paseo", "setup teardown"],
-      run: () => setWorktreeHooksWorkspaceId(focusedWorkspace.workspace_id),
-    });
-    if (focusedWorkspace.worktree.is_linked_worktree) {
-      currentActions.push({
-        key: "current-remove-worktree",
-        icon: <X size={15} />,
-        title: "Remove worktree",
-        detail: focusedWorkspace.worktree.checkout_path,
-        keywords: [
-          "delete worktree",
-          "close worktree",
-          "teardown worktree",
-          "remove branch",
-          workspaceName(focusedWorkspace),
-          focusedWorkspace.worktree.repo_name,
-        ],
-        danger: true,
-        run: () => setPendingRemoveWorktree(focusedWorkspace),
-      });
-    }
+    currentActions.push(
+      ...worktreeCommandActions(focusedWorkspace, workspaceName, {
+        worktree: setOpenWorktreeWorkspaceId,
+        location: setLocationWorkspaceId,
+        lifecycle: setLifecycleWorkspaceId,
+        hooks: setWorktreeHooksWorkspaceId,
+        remove: setPendingRemoveWorktree,
+      }),
+    );
   }
   if (activeTab && focusedWorkspace) {
     currentActions.push({
@@ -1291,6 +1252,11 @@ function OwnedCommandCombobox({
         open={operationalShortcutsEnabled && !!worktreeHooksWorkspaceId}
         workspaceId={worktreeHooksWorkspaceId ?? undefined}
         onClose={() => setWorktreeHooksWorkspaceId(null)}
+      />
+      <WorktreeLocationDialog
+        open={!!locationWorkspaceId}
+        workspaceId={locationWorkspaceId}
+        onClose={() => setLocationWorkspaceId(null)}
       />
       <WorktreeLifecycleDialog
         open={operationalShortcutsEnabled && !!lifecycleWorkspaceId}

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { assetUrlImports } from "./testing/assetUrlImports";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
@@ -41,6 +42,9 @@ test.skipIf(!chrome).each([1440, 390])(
             socket!.onerror = () => reject(new Error("CDP connection failed"));
           });
           const driver = new InputDriver(socket);
+          await driver.call("Emulation.setEmulatedMedia", {
+            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+          });
           await driver.call("Emulation.setDeviceMetricsOverride", {
             width,
             height: width === 390 ? 844 : 1000,
@@ -77,6 +81,7 @@ test.skipIf(!chrome).each([1440, 390])(
         outdir: dir,
         target: "browser",
         plugins: [
+          assetUrlImports,
           {
             name: "raw-svg",
             setup(builder) {

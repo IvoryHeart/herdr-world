@@ -7,6 +7,7 @@ import {
   rememberTerminalRelayViewport,
   terminalAttachWatchdogMs,
   terminalEndpointViewportSize,
+  terminalPaneSize,
   terminalRelayViewportForTab,
   terminalRelayViewportSize,
 } from "./terminalResize";
@@ -288,6 +289,51 @@ describe("endpoint initial viewport", () => {
           area: { ...layout.area, width: 0 },
         },
         "left",
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("terminal pane size", () => {
+  const area = { x: 2, y: 1, width: 160, height: 45 };
+  const single = {
+    area,
+    panes: [{ pane_id: "a", rect: { width: 160, height: 45 } }],
+  };
+  const split = {
+    area,
+    panes: [
+      { pane_id: "a", rect: { width: 80, height: 45 } },
+      { pane_id: "b", rect: { width: 80, height: 45 } },
+    ],
+  };
+
+  test("is the size whose surface is the tab as it is now", () => {
+    for (const [layout, expected] of [
+      [single, { cols: 159, rows: 45 }],
+      [split, { cols: 77, rows: 43 }],
+      [
+        { ...split, zoomed: true },
+        { cols: 79, rows: 45 },
+      ],
+    ] as const) {
+      const size = terminalPaneSize(layout, "a");
+      expect(size).toEqual(expected);
+      expect(terminalEndpointViewportSize(size!, layout, "a")).toEqual({
+        cols: 160,
+        rows: 45,
+      });
+    }
+  });
+
+  test("is unknown without the pane, or for a degenerate rect", () => {
+    expect(terminalPaneSize(null, "a")).toBeNull();
+    expect(terminalPaneSize(single, null)).toBeNull();
+    expect(terminalPaneSize(single, "missing")).toBeNull();
+    expect(
+      terminalPaneSize(
+        { area, panes: [{ pane_id: "a", rect: { width: 1, height: 1 } }] },
+        "a",
       ),
     ).toBeNull();
   });

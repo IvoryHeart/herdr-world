@@ -16,6 +16,7 @@ import {
   parseCustomTerminalThemes,
   serializeCustomTerminalThemes,
   TERMINAL_ANSI_COLOR_KEYS,
+  TERMINAL_THEME_PRESETS,
 } from "../terminalThemes";
 import { TerminalThemeDialog } from "./TerminalThemeDialog";
 
@@ -207,7 +208,9 @@ async function run() {
     "Arrow navigation lost focus after selection",
   );
   check(
-    selection.dark === "solarized-dark",
+    selection.dark ===
+      TERMINAL_THEME_PRESETS.filter((preset) => preset.variant === "dark")[1]
+        ?.id,
     "Arrow navigation did not select the next theme",
   );
 

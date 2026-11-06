@@ -178,5 +178,6 @@ function guiSettings(): GuiSettings {
     repositories: {},
     workspace_auto_sync: {},
     custom: {},
+    ui: {},
   };
 }

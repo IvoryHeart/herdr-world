@@ -157,6 +157,11 @@ import {
   type WorktreeRemovalCleanup,
   worktreeRemovalCompletionNotice,
 } from "./store/worktree";
+import { createWorktree, updateRepoSettings } from "./store/worktreeActions";
+import {
+  preferredConnectionId,
+  rememberLastConnection,
+} from "./store/lastConnection";
 import { prepareTaskNotifications } from "./taskNotifications";
 import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
 import {
@@ -319,6 +324,7 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 let initialized = false;
+let initialConnectionSelectionPending = true;
 let catalogRequestSeq = 0;
 export function nextCatalogRequest() {
   return ++catalogRequestSeq;
@@ -345,6 +351,23 @@ function reportTaskNotificationFailure(error: unknown, version: number) {
   worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
 }
 
+function handleBridgeHello(hello: { default_connection_id: string }) {
+  const defaultConnectionId = hello.default_connection_id;
+  set({ defaultConnectionId });
+  if (initialConnectionSelectionPending) {
+    initialConnectionSelectionPending = false;
+    const preferred = preferredConnectionId(defaultConnectionId, state);
+    if (
+      state.activeConnectionId === STARTUP_DEFAULT_CONNECTION_ID &&
+      preferred !== state.activeConnectionId
+    )
+      selectConnectionNow(preferred, false);
+  }
+  if (state.status === "connected" && !state.connectionPaused) {
+    void refreshConnectionCatalog();
+  }
+}
+
 function selectConnectionNow(connectionId: string, refresh = true): boolean {
   if (!connectionId || connectionId === state.activeConnectionId) return false;
   if (
@@ -359,6 +382,7 @@ function selectConnectionNow(connectionId: string, refresh = true): boolean {
   ) {
     copyStartupProfileStorage(worldLocalStorage, connectionId);
   }
+  rememberLastConnection(connectionId);
   const generation = bridge.setActiveConnection(connectionId);
   state = activateConnectionState(state, connectionId, generation);
   emit();
@@ -518,7 +542,8 @@ export function applyConnectionCatalog(
     defaultConnectionId === state.defaultConnectionId
   ) {
     if (readinessChanged) set({ catalogueReady: true });
-    if (!nextActive) selectConnectionNow(defaultConnectionId);
+    if (!nextActive)
+      selectConnectionNow(preferredConnectionId(defaultConnectionId, state));
     return true;
   }
 
@@ -531,7 +556,8 @@ export function applyConnectionCatalog(
     sessionsByConnectionId: stableSessions,
   };
   emit();
-  if (!nextActive) selectConnectionNow(defaultConnectionId);
+  if (!nextActive)
+    selectConnectionNow(preferredConnectionId(defaultConnectionId, state));
   return true;
 }
 
@@ -961,19 +987,7 @@ export const store = {
     initialized = true;
     void store.restoreTaskNotifications();
     subscribeLocalStorage(handlePreferenceStorageChange);
-    bridge.onHello((hello) => {
-      const defaultConnectionId = hello.default_connection_id;
-      set({ defaultConnectionId });
-      if (
-        state.activeConnectionId === STARTUP_DEFAULT_CONNECTION_ID &&
-        defaultConnectionId !== state.activeConnectionId
-      ) {
-        selectConnectionNow(defaultConnectionId, false);
-      }
-      if (state.status === "connected" && !state.connectionPaused) {
-        void refreshConnectionCatalog();
-      }
-    });
+    bridge.onHello(handleBridgeHello);
     bridge.onStatus((s) => {
       if (s !== "connected") {
         catalogReadyForConnection = false;
@@ -1422,11 +1436,24 @@ export const store = {
     );
   },
 
-  focusWorkspaceSource: (target: WorkspaceSourceTarget) =>
-    store.focusQualifiedTarget({ ...target, paneId: target.paneId ?? null }),
+  /**
+   * `options.fromKnownList`: the target was picked from a list on screen (the
+   * All servers rows), so a pane the connection last listed is shown at once.
+   */
+  focusWorkspaceSource: (
+    target: WorkspaceSourceTarget,
+    options: { fromKnownList?: boolean } = {},
+  ) =>
+    store.focusQualifiedTarget(
+      { ...target, paneId: target.paneId ?? null },
+      options,
+    ),
   loadConnectionSession: (connectionId: string) =>
     refreshNow(captureConnectionLease(connectionId), true),
-  async focusQualifiedTarget(target: QualifiedFocusTarget): Promise<boolean> {
+  async focusQualifiedTarget(
+    target: QualifiedFocusTarget,
+    options: { fromKnownList?: boolean } = {},
+  ): Promise<boolean> {
     if (!qualifiedRuntimeTargetIsCurrent(target)) return false;
     const lease = captureConnectionLease(target.connectionId);
     const navigationRevision = target.navigationRevision;
@@ -1455,7 +1482,23 @@ export const store = {
     return enqueueFocusAction(async () => {
       if (!current()) return false;
       let pane: Pane | null = null;
-      if (target.paneId) {
+      // Picked from a list on screen (Roamgate R#552): in browser-local mode
+      // a matching pane this connection last listed is shown at once, and the
+      // refresh navigateBrowser starts checks it after, not a pane.get first.
+      const listed =
+        options.fromKnownList &&
+        leaseSnapshot(lease).navigationMode === "browser-local"
+          ? leaseSnapshot(lease).panes.find(
+              (each) => each.pane_id === target.paneId,
+            )
+          : undefined;
+      if (
+        target.paneId &&
+        notificationPaneMatches(target, listed) &&
+        typeof listed.tab_id === "string"
+      ) {
+        pane = listed;
+      } else if (target.paneId) {
         const response = await lease.client.call("pane.get", {
           pane_id: target.paneId,
         });
@@ -1850,68 +1893,7 @@ export const store = {
     );
   },
 
-  createWorktree(
-    workspaceId: string,
-    branch: string,
-    client?: ConnectionClient,
-  ) {
-    const navigation = connectionSnapshot(
-      state,
-      client?.connectionId ?? state.activeConnectionId,
-    ).browserNavigation;
-    return action(
-      async (lease) => {
-        setForConnection(lease, {
-          notice: {
-            kind: "info",
-            message: "Creating worktree",
-            detail: `Updating origin's default branch before creating ${branch}.`,
-            loading: true,
-          },
-        });
-        const result = await lease.client.call("worktree.create", {
-          workspace_id: workspaceId,
-          branch,
-          focus: leaseSnapshot(lease).navigationMode !== "browser-local",
-        });
-        if (browserSelectionIsCurrent(navigation, lease))
-          adoptBrowserTarget(lease, result);
-        const setupHook = result?.setup_hook as
-          | WorktreeHookRunResult
-          | undefined;
-        const setupNotice = setupHook
-          ? summarizeDirectHookResult(setupHook)
-          : null;
-        if (setupNotice) {
-          setForConnection(lease, { notice: setupNotice });
-        } else {
-          const commit = String(result?.base_sync?.commit ?? "").slice(0, 12);
-          const base = String(
-            result?.base_sync?.base ?? "origin's default branch",
-          );
-          setForConnection(lease, {
-            notice: {
-              kind: "success",
-              message: "Worktree created",
-              detail: commit
-                ? `${branch} starts from ${base} at ${commit}.`
-                : `${branch} starts from the latest ${base}.`,
-              autoDismissMs: 5000,
-            },
-          });
-        }
-        return result;
-      },
-      {
-        client,
-        failureNotice: (error) => ({
-          kind: "error",
-          message: "Failed to create worktree",
-          detail: error.message,
-        }),
-      },
-    );
-  },
+  createWorktree,
 
   openWorktree(
     workspaceId: string,
@@ -2063,6 +2045,14 @@ export const store = {
         );
         if (completionNotice) {
           setForConnection(lease, { notice: completionNotice });
+        } else if (typeof result?.command_fallback === "string") {
+          setForConnection(lease, {
+            notice: {
+              kind: "info",
+              message: "Worktree removed without the remove command",
+              detail: result.command_fallback,
+            },
+          });
         } else if (!beforeRemoveNotice) {
           setForConnection(lease, {
             notice: {
@@ -2085,14 +2075,19 @@ export const store = {
   },
 
   setRepoWorktreeHooksEnabled(key: string, enabled: boolean) {
-    return action(async (lease) => {
-      const result = await lease.client.call("settings.update_repo", {
-        key,
-        settings: { worktree_hooks_enabled: enabled },
-      });
-      await refreshNow(lease);
-      return result;
-    });
+    return updateRepoSettings(key, { worktree_hooks_enabled: enabled });
+  },
+
+  setRepoWorktreeDirectory(key: string, directory: string) {
+    return updateRepoSettings(key, { worktree_directory: directory });
+  },
+
+  setRepoWorktreeCommand(key: string, command: string) {
+    return updateRepoSettings(key, { worktree_command: command });
+  },
+
+  setRepoWorktreeRemoveCommand(key: string, command: string) {
+    return updateRepoSettings(key, { worktree_remove_command: command });
   },
 
   setWorkspaceAutoSyncEnabled(workspaceId: string, enabled: boolean) {
@@ -2790,19 +2785,21 @@ export const store = {
         if (!message.includes("popup_not_open")) throw error;
       }
       if (!leaseIsCurrent(lease)) return;
-      // Herdr opens a popup in whichever Space it has focused, and a plugin
-      // handed a different one declines: herdr-float reports "Space changed"
-      // and exits successfully, so the key looks dead. Match Herdr's focus to
-      // the Space the action is invoked for.
+      // Herdr opens a popup in whichever Space it has focused, and the
+      // observer that reports popup state watches that same Space, so a
+      // mismatch opens a popup nobody sees and the key looks dead. Always
+      // align Herdr with the Space the action is invoked for: browser-local
+      // navigation keeps its selection in this browser, and Herdr's own
+      // focus can sit on another Space entirely. This cannot be skipped by
+      // comparing against `workspaces[].focused`, which browser-local
+      // navigation projects to this browser's selection (see
+      // projectBrowserNavigation), making the comparison always agree.
       const workspaceId = context.workspace_id;
       if (typeof workspaceId === "string" && workspaceId) {
-        const focused = store.get().workspaces.find((w) => w.focused);
-        if (focused?.workspace_id !== workspaceId) {
-          await lease.client.call("workspace.focus", {
-            workspace_id: workspaceId,
-          });
-          if (!leaseIsCurrent(lease)) return;
-        }
+        await lease.client.call("workspace.focus", {
+          workspace_id: workspaceId,
+        });
+        if (!leaseIsCurrent(lease)) return;
       }
       await lease.client.call("plugin.action.invoke", {
         plugin_id: pluginId,
@@ -2830,6 +2827,7 @@ export const __storeTesting = {
     herdrUpgradePollMs = ms;
   },
   notifyRangerTask,
+  handleBridgeHello,
   handleBridgeStatus,
   handleHerdrEvent,
   startUpdatePolling,
@@ -2845,6 +2843,7 @@ export const __storeTesting = {
   rearmTerminalAttachmentsAfterCatalog,
   replaceState(snapshot: State) {
     stopPolling();
+    initialConnectionSelectionPending = true;
     refreshingConnectionKeys.clear();
     gitStatusPushesDuringRefresh.clear();
     queuedConnectionKeys.clear();

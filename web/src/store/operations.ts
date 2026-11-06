@@ -545,6 +545,21 @@ export function operationalStore(context: OperationalContext) {
         key,
         settings: { worktree_hooks_enabled: enabled },
       }),
+    setRepoWorktreeDirectory: (key: string, directory: string) =>
+      call("settings.update_repo", {
+        key,
+        settings: { worktree_directory: directory },
+      }),
+    setRepoWorktreeCommand: (key: string, command: string) =>
+      call("settings.update_repo", {
+        key,
+        settings: { worktree_command: command },
+      }),
+    setRepoWorktreeRemoveCommand: (key: string, command: string) =>
+      call("settings.update_repo", {
+        key,
+        settings: { worktree_remove_command: command },
+      }),
     setWorkspaceAutoSyncEnabled: (workspaceId: string, enabled: boolean) =>
       call("settings.workspace_auto_sync.update", {
         workspace_id: workspaceId,

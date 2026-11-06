@@ -6,13 +6,14 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: v0.8.8, `b84ccd53db19701308a8bfb4a7002db1e4559490`
-  (22 October 2026). This integration records the exact release commit as a Git
-  merge parent, following `1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376`.
-- Security dependency updates cherry-picked after that source head:
+- Roamgate source: main after v0.8.13, `2b16e991eeb2e90f55c948e249acaef1497d5254`
+  (1 November 2026). This integration records that exact commit as a Git merge
+  parent, following v0.8.8 `b84ccd53db19701308a8bfb4a7002db1e4559490`. Later
+  source, including v0.8.14 and v0.8.15, is not integrated.
+- Security dependency updates cherry-picked earlier,
   [DOMPurify 3.4.17](https://github.com/powerfooI/roamgate/commit/2c67731651ade2592c798687636cd0a486547fb4)
-  and [undici 8.12.3](https://github.com/powerfooI/roamgate/commit/f428337b9ed6b85687d030a60a03adfab32651d8).
-  These focused dependency updates do not advance the full source synchronization point.
+  and [undici 8.12.3](https://github.com/powerfooI/roamgate/commit/f428337b9ed6b85687d030a60a03adfab32651d8),
+  are now inside the recorded source range.
 - Herdr compatibility: Herdr 0.9.5, terminal protocol 22. Windows SSH hosts
   additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
 
@@ -88,6 +89,26 @@ There are no incoming workflow/control edits or React dependency changes. The
 three outstanding workflow/React decisions are reassessed for this frozen source
 in [the follow-up assessment](docs/upstream-follow-ups.md#assessment-for-source-b84ccd53-22-october-2026);
 this integration introduces no new deferral or policy exception.
+
+The refresh through `2b16e991` lands in three reviewed parts: SSH transport and
+port-forward RPCs (#636), Ranger and transcripts (#645), and the web part with the
+ledger merge. The web part adds an All servers Spaces list, Pane Search and tab
+chips read from World's aggregate observation; per-repository worktree locations
+and owner-only create/remove command templates run by the owning runtime; the
+navigator's worktree actions; service-stored keyboard shortcuts; reconnect drafts
+kept in memory only; image path sends; Option as Alt; read aloud with on-device
+voices by default; PR badges cached per connection and stale until checked; PDF.js
+only where a browser has no PDF viewer (web total budget 15.25 MiB); a black
+background; and warm streams and composer clipboard routing per runtime. World
+does not reload a page by itself for a new frontend; StaleBuildToast stays the
+manual offer. Deferred for owner review: the mobile navigation and History input
+changes (#482, #489, #493) for one mobile PR, `@pierre/diffs` 1.6 (#508) for its
+asset cost and #546's browser forwarding controls. Divergent: Chat as the mobile
+entry point (#491), a per-browser Recently opened history (#518) and separate seen
+tracking (#544); #504 stays under World's workflow controls. The ledger classifies
+all 69 commits, and the
+[assessment](docs/upstream-follow-ups.md#assessment-for-source-2b16e991-1-november-2026)
+re-reviews the standing workflow and React divergences.
 
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,

@@ -14,6 +14,87 @@ const storage = resolve(import.meta.dir, "../storage/terminal-marks.test.ts");
 const stops = resolve(import.meta.dir, "review-stop-coverage.test.ts");
 const repairs = resolve(import.meta.dir, "review-stop-review.test.ts");
 const cases = [
+  {
+    name: "positive archive boundary consumers",
+    entry: resolve(import.meta.dir, "legacy-review-boundaries.test.ts"),
+  },
+  {
+    name: "archive savepoint deadline fence",
+    entry: resolve(import.meta.dir, "legacy-review-boundaries.test.ts"),
+    file: "legacy-review-archive.ts",
+    match: /expireLegacyReviews\(db, at\);\s*const terminal/,
+    replacement: "const terminal",
+    assertion:
+      "resolving Desk savepoint enforces original archive deadline at offset 0 after restart true",
+  },
+  {
+    name: "archive actual World activity fence",
+    entry: resolve(import.meta.dir, "legacy-review-boundaries.test.ts"),
+    file: "desk-observation.ts",
+    match: /activityMatchesWorld: activity === displayedActivity/,
+    replacement: "activityMatchesWorld: true",
+    assertion:
+      "activity admission preserves the receipt through Desk open 0 until sparse session agrees with the actual World leaf",
+  },
+  {
+    name: "archive action activity fence",
+    entry: resolve(import.meta.dir, "legacy-review-boundaries.test.ts"),
+    file: "legacy-review-resolution.ts",
+    match: /activityObserved && /,
+    replacement: "",
+    assertion:
+      "activity admission preserves the receipt through Desk open 1 until duplicate rows agrees with the actual World leaf",
+  },
+  {
+    name: "positive browser review consumers",
+    entry: resolve(
+      import.meta.dir,
+      "../../../web/src/world/useReviewedWork.test.ts",
+    ),
+  },
+  {
+    name: "anonymous browser review fence",
+    entry: resolve(
+      import.meta.dir,
+      "../../../web/src/world/useReviewedWork.test.ts",
+    ),
+    file: "useDeskState.ts",
+    match: /stop\?\.startsWith\("stop:\[null,"\)/,
+    replacement: "false",
+    assertion:
+      "a report with only activity cannot claim review after a service stop appears",
+  },
+  {
+    name: "positive archive consumers",
+    entry: resolve(import.meta.dir, "legacy-review-resolution.test.ts"),
+  },
+  {
+    name: "archive known-session fence",
+    entry: resolve(import.meta.dir, "legacy-review-resolution.test.ts"),
+    file: "legacy-review-archive.ts",
+    match: /receipt\.binding\.evidence\.session !== proof\.session/,
+    replacement: "false",
+    assertion:
+      "fresh unknown owner permanently disqualifies the receipt even if its old proof returns after restart",
+  },
+  {
+    name: "archive unchanged-sequence fence",
+    entry: resolve(import.meta.dir, "legacy-review-resolution.test.ts"),
+    file: "legacy-review-archive.ts",
+    match: /receipt\.body\.stateChangeSeq !== proof\.sequence/,
+    replacement: "false",
+    assertion:
+      "archive proof disqualification survives a crash before the Desk checkpoint",
+  },
+  {
+    name: "archive draining deadline",
+    entry: resolve(import.meta.dir, "legacy-review-resolution.test.ts"),
+    file: "legacy-review-archive.ts",
+    match: /WHERE migrated_at<=\?/,
+    replacement: "WHERE migrated_at<=? AND 0",
+    assertion:
+      "archive expiry runs on the service scheduler even without a source observation",
+  },
   { name: "positive service consumers", entry: consumers },
   { name: "positive SQLite consumers", entry: storage },
   {
@@ -113,7 +194,7 @@ const cases = [
     match: /"sessionEnd" in policy &&\s*policy\.sessionEnd/,
     replacement: "false",
     assertion:
-      "a positive session replacement ends Desk and seen, while a watch follows its terminal move",
+      "a positive session replacement ends Desk, while a watch follows its terminal move",
   },
   {
     name: "retired publication",
@@ -131,7 +212,7 @@ const cases = [
     match: /db\s*\.query\(\s*"INSERT INTO terminal_marks/,
     replacement: 'if (false) db.query("INSERT INTO terminal_marks',
     assertion:
-      "all 24 independent-family/refusal orders preserve only complete accepted record/binding pairs",
+      "all 6 independent-family/refusal orders preserve only complete accepted record/binding pairs",
   },
   {
     name: "native admission",
@@ -168,13 +249,13 @@ const cases = [
       "pending unknown Desk RPC refuses replacement followed by the original ownership",
   },
   {
-    name: "completion ownership admission",
+    name: "known Desk ownership admission",
     entry: consumers,
     file: "persistent-terminal-marks.ts",
     match: /guard\.valid &&=/,
     replacement: "guard.valid ||=",
     assertion:
-      "pending completion RPC refuses replacement followed by the original ownership",
+      "pending known Desk RPC refuses replacement followed by the original ownership",
   },
   {
     name: "unavailable saved removal",
@@ -217,7 +298,7 @@ for (const [index, control] of cases.entries())
               if (args.path.endsWith("/world-client.ts"))
                 contents = contents.replace(
                   "new Worker(workerUrl)",
-                  `new Worker(new URL(${JSON.stringify(workerUrl)}))`,
+                  `new Worker(new URL(${JSON.stringify(control.file === "legacy-review-archive.ts" ? pathToFileURL(join(root, `${index}.worker.js`)).href : workerUrl)}))`,
                 );
               if (
                 control.file &&
@@ -240,6 +321,32 @@ for (const [index, control] of cases.entries())
       ],
     });
     if (!built.success) throw new Error(built.logs.map(String).join("\n"));
+    if (control.file === "legacy-review-archive.ts") {
+      const worker = await Bun.build({
+        entrypoints: [resolve(import.meta.dir, "../storage/world-worker.ts")],
+        target: "bun",
+        outdir: root,
+        naming: `${index}.worker.js`,
+        plugins: [
+          {
+            name: "archive-worker-control",
+            setup(build) {
+              build.onLoad(
+                { filter: /legacy-review-archive\.ts$/ },
+                (args) => ({
+                  contents: readFileSync(args.path, "utf8").replace(
+                    control.match!,
+                    control.replacement!,
+                  ),
+                  loader: "ts",
+                }),
+              );
+            },
+          },
+        ],
+      });
+      if (!worker.success) throw new Error(worker.logs.map(String).join("\n"));
+    }
     const command = [
       process.execPath,
       "test",
@@ -256,7 +363,12 @@ for (const [index, control] of cases.entries())
       stdout: "pipe",
       stderr: "pipe",
     });
-    const timeout = setTimeout(() => child.kill(), 30_000);
+    // Positive bundles include 128 real serialized writes; this is a harness
+    // deadline, not a latency assertion.
+    const timeout = setTimeout(
+      () => child.kill(),
+      control.assertion ? 30_000 : 50_000,
+    );
     const [code, stdout, stderr] = await Promise.all([
       child.exited,
       new Response(child.stdout).text(),

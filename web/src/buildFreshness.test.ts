@@ -212,3 +212,49 @@ test("checks report a newer served build and keep it through a failed check", as
   unsubscribe();
   expect(listeners.has("visibilitychange")).toBe(false);
 });
+
+test("a new served build is offered, never taken, when the tab returns (Roamgate #533)", async () => {
+  // World keeps the manual Reload/Later offer (StaleBuildToast) as its only
+  // build-change mechanism: returning to the tab, a page show, a refocus or
+  // coming back online re-check the served build but never reload.
+  const reload = mock(() => {});
+  const handlers = new Map<string, (() => void)[]>();
+  const listen = (type: string, handler: () => void) =>
+    handlers.set(type, [...(handlers.get(type) ?? []), handler]);
+  const fire = (type: string) => {
+    for (const handler of handlers.get(type) ?? []) handler();
+  };
+  const loadedDocument = documentWithEntry("/assets/index-a1.js");
+  (globalThis as { document?: unknown }).document = {
+    ...loadedDocument,
+    visibilityState: "visible",
+    addEventListener: listen,
+    removeEventListener: () => {},
+  };
+  (globalThis as { window?: unknown }).window = {
+    addEventListener: listen,
+    removeEventListener: () => {},
+    location: { reload },
+  };
+  const served = mock(async () => htmlResponse(servedHtml("index-b2")));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = served as unknown as typeof fetch;
+  const stop = subscribeBuildFreshness(() => {});
+  try {
+    for (const type of ["visibilitychange", "pageshow", "focus", "online"])
+      fire(type);
+    await checkServedBuild();
+    expect(isStaleBuild(currentBuildFreshness())).toBe(true);
+    expect(reloadOffer(currentBuildFreshness(), null)).toMatchObject({
+      kind: "build",
+      served: "index-b2",
+    });
+    for (const type of ["visibilitychange", "pageshow", "focus", "online"])
+      fire(type);
+    expect(reload).not.toHaveBeenCalled();
+    expect(served).toHaveBeenCalled();
+  } finally {
+    stop();
+    globalThis.fetch = originalFetch;
+  }
+});

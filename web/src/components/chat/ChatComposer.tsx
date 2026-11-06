@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ChatFocusIntent } from "../../chatFocus";
 import type { ConnectionClient } from "../../api";
 import type { Pane } from "../../types";
@@ -9,6 +9,7 @@ import {
 } from "../../terminalImageUpload";
 import { terminalUploadedPathsText } from "../../terminalFileDrop";
 import { TerminalComposer } from "../TerminalComposer";
+import { chatKeyName, chatKeyRows } from "./chatKeys";
 
 const noop = () => {};
 
@@ -37,6 +38,7 @@ export function ChatComposer({
   focusIntent,
   disabledReason,
   onSubmit,
+  onKey,
   onError,
 }: {
   client: ConnectionClient;
@@ -48,8 +50,13 @@ export function ChatComposer({
   focusIntent: ChatFocusIntent | null;
   disabledReason?: string;
   onSubmit: (text: string) => Promise<void>;
+  /** Press one of the terminal's key controls in the agent's pane. */
+  onKey?: (key: string) => void;
   onError: (message: string) => void;
 }) {
+  // The same key controls as the Terminal, read when Chat opens.
+  const hasKeys = Boolean(onKey);
+  const keyRows = useMemo(() => (hasKeys ? chatKeyRows() : []), [hasKeys]);
   const composerRef = useRef<HTMLDivElement>(null);
   const draftKey = chatComposerDraftKey(client, pane, fingerprint);
   useEffect(() => {
@@ -81,8 +88,11 @@ export function ChatComposer({
         onModeChange={noop}
         onFocusDirect={noop}
         directDisabled
-        shortcutRows={[]}
-        onRunShortcut={noop}
+        shortcutRows={keyRows}
+        onRunShortcut={(shortcut) => {
+          const key = chatKeyName(shortcut.action);
+          if (key) onKey?.(key);
+        }}
         onClose={noop}
         notice={notice}
         disabledReason={disabledReason}

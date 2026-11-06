@@ -42,16 +42,28 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   asks again shortly; a settings save supersedes older responses. A
   failed refresh keeps the last items. There are no webhooks, which would need
   a public endpoint. Links are recomputed at most every 15 seconds.
-- **GitHub through `gh`.** One `gh api graphql` request reads open PRs the
-  user authored, was asked to review or is assigned, the first hundred PRs
-  they authored that were merged in the merged window and assigned issues, each with review decision,
-  mergeability and the head commit's check rollup. Further merged PRs follow
-  a hundred per request until the window is exhausted, at most ten pages
-  (GitHub search's 1,000-result limit), every request under one minute's
-  deadline and the per-request time and output limits; a failed page fails
-  the refresh so the last complete list stays. The window is seven days by
-  default and 1 to 90 days in Sources settings. The owner's existing sign-in
-  is used; World stores no GitHub credentials.
+- **GitHub through `gh`.** Separate `gh api graphql` requests read open PRs
+  the user authored, was asked to review or is assigned, at most fifty per
+  request; assigned issues accompany the assigned PRs. Each PR retains its
+  review decision, mergeability and head commit check contexts. Due action
+  details for the user's own open PRs are read next, before display-only
+  merged history can exhaust the unchanged one-minute refresh deadline.
+  History follows in pages of fifty, at most eight pages (400 PRs). Its first
+  page alone requests the count: over 400 fails immediately after that page.
+  A continuation after eight pages or a history deadline also fails with
+  "GitHub history was shortened" and the oldest valid merge date actually
+  observed, or an explicit no-date fallback. This date is an observed witness,
+  not continuous coverage. The source keeps the last complete list, cannot
+  prove absence or authorize actions from a failed refresh, and asks the user
+  to shorten the window in Settings → Sources. Other failed pages retain the
+  existing generic error and last list. Detail cache reads keep their original
+  head/time qualification even when later history fails. A MERGED observation
+  supersedes an earlier OPEN row for the same key while preserving all roles;
+  open-only detail never attaches to that merged row. Smaller requests reduce
+  timeout risk without promising GitHub's response time. Per-request time and
+  output bounds, refresh cadence and generation fences remain unchanged.
+  The window is seven days by default and 1 to 90 days in Sources settings.
+  The owner's existing sign-in is used; World stores no GitHub credentials.
 - **Lanes.** A PR is Merged when merged; Fixing when changes are requested,
   checks fail or it conflicts; In review when a draft or checks run; Ready to
   merge when approved, or when checks pass and the repository requires no

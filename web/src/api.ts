@@ -2,6 +2,8 @@ import { createConnectionBackgroundLanes, type RpcLane } from "./rpcLanes";
 import { isBridgeHello } from "./bridgeHello";
 import type { BridgeControlMsg } from "./bridgeControl";
 export type { BridgeControlMsg } from "./bridgeControl";
+import { UncertainRequestError } from "./uncertainRequest";
+import { createUiSettingPushes, type UiSettingPush } from "./uiSettingPush";
 import type { ConnectionClient } from "./connectionClient";
 import { isValidPopupPayload } from "./popupPayload";
 import {
@@ -276,22 +278,9 @@ type Pending = {
   decodeAbort?: AbortController;
 };
 
-/** A dispatched operation may have completed; callers must re-observe before retrying. */
-export class UncertainRequestError extends Error {
-  readonly outcome = "uncertain";
-
-  constructor(
-    readonly method: string,
-    reason: string,
-  ) {
-    super(
-      `${reason}; ${method} outcome is uncertain. Refresh the exact target before retrying.`,
-    );
-    this.name = "UncertainRequestError";
-  }
-}
-
+export { UncertainRequestError } from "./uncertainRequest";
 export type { ConnectionClient } from "./connectionClient";
+export type { UiSettingPush } from "./uiSettingPush";
 
 const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
 const RPC_TIMEOUT_MS = 30000;
@@ -373,6 +362,7 @@ export class Bridge {
     (closed: TerminalClosedPush) => void
   >();
   private popupHandlers = new Set<(popup: PopupStatePush) => void>();
+  private uiSettingPushes = createUiSettingPushes();
   private statusHandlers = new Set<(s: ConnectionStatus) => void>();
   private controlHandlers = new Set<(c: BridgeControlMsg) => void>();
   private helloHandlers = new Set<(hello: BridgeHello) => void>();
@@ -791,6 +781,7 @@ export class Bridge {
     const hasClipboard = owns("terminal_clipboard");
     const hasTerminalClosed = owns("terminal_closed");
     const hasPopup = owns("popup");
+    const hasUiSettings = owns("ui_settings");
     const hasControl = owns("control");
     const hasAssistant = owns("assistant");
     const hasAssistantNotification = owns("assistant_notification");
@@ -802,6 +793,7 @@ export class Bridge {
       hasClipboard,
       hasTerminalClosed,
       hasPopup,
+      hasUiSettings,
       hasControl,
       hasAssistant,
       hasAssistantNotification,
@@ -1136,6 +1128,11 @@ export class Bridge {
       return;
     }
 
+    if (hasUiSettings) {
+      this.uiSettingPushes.deliver(msg.ui_settings);
+      return;
+    }
+
     if (
       msg.control &&
       typeof msg.control === "object" &&
@@ -1424,6 +1421,10 @@ export class Bridge {
     const handler = this.scopedHandler(cb, client);
     this.popupHandlers.add(handler);
     return () => this.popupHandlers.delete(handler);
+  }
+
+  onUiSetting(cb: (push: UiSettingPush) => void): () => void {
+    return this.uiSettingPushes.subscribe(cb);
   }
 
   onTerminalClosed(

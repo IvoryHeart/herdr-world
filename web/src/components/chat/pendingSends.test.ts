@@ -25,6 +25,25 @@ test("native queued receipts and unchecked commands never claim delivery", () =>
   expect(command).not.toContain("agent-history-chat-bubble");
 });
 
+test("only a command the service still holds as queued says it is waiting", () => {
+  const html = (extra: Partial<ConversationDelivery>) =>
+    renderToStaticMarkup(
+      placedSends(
+        [delivery({ text: "/permissions", kind: "command", ...extra })],
+        "Mira-claude",
+        () => {},
+      )[0]!.node,
+    );
+  const waiting = html({ queued: true, waiting: true });
+  expect(waiting).toContain("waiting for Mira-claude");
+  expect(waiting).toContain('data-delivery="waiting"');
+  expect(waiting).not.toContain("sent, not checked");
+  // Queued once but retired (another session, or the agent stopped working):
+  // an ordinary unchecked command, whatever the agent is doing now.
+  expect(html({ queued: true })).toContain("sent, not checked");
+  expect(html({})).toContain("sent, not checked");
+});
+
 const delivery = (
   extra: Partial<ConversationDelivery>,
 ): ConversationDelivery => ({

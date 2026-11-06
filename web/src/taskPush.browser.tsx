@@ -90,6 +90,8 @@ async function run() {
           onShowShortcuts={() => {}}
           theme={theme}
           accentColor="blue"
+          blackBackground={false}
+          onBlackBackgroundChange={() => {}}
           uiScale={100}
           terminalFontName=""
           onTerminalFontNameChange={() => {}}

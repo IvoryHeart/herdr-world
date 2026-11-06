@@ -194,7 +194,9 @@ export function sortAgentPanes<
   sort: AgentSort,
 ): T[] {
   if (sort === "workspace") return [...panes];
-  const ordered = orderAgentPanes(panes, preferredPaneIds);
+  const ordered = preferredPaneIds.length
+    ? orderAgentPanes(panes, preferredPaneIds)
+    : [...panes];
   return sort === "attention"
     ? ordered.sort((left, right) => {
         const priority =
@@ -211,7 +213,12 @@ export function sortAgentPanes<
 }
 
 export function groupOrderedAgentPanes<
-  T extends { workspace_id: string; agent?: string; agent_status: string },
+  T extends {
+    workspace_id: string;
+    workspaceKey?: string;
+    agent?: string;
+    agent_status: string;
+  },
 >(
   panes: readonly T[],
   grouping: AgentGrouping,
@@ -223,7 +230,7 @@ export function groupOrderedAgentPanes<
       ATTENTION_STATUSES[agentAttentionPriority(pane.agent_status)];
     const key =
       grouping === "workspace"
-        ? pane.workspace_id
+        ? (pane.workspaceKey ?? pane.workspace_id)
         : grouping === "agent"
           ? pane.agent?.trim().toLowerCase() || "unknown"
           : grouping === "status"

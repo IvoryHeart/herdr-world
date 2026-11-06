@@ -6,8 +6,7 @@ export type BindingPolicy =
   | "tab-colour"
   | "interest"
   | "desk"
-  | "watchlist"
-  | "completion-seen";
+  | "watchlist";
 export type BindingIdentity = {
   adapter: string;
   instance: string;
@@ -79,14 +78,6 @@ export const bindingPolicies = {
     notFound: true,
     listingAbsence: true,
     lifetime: "clear",
-  },
-  "completion-seen": {
-    listingMove: true,
-    close: true,
-    notFound: true,
-    listingAbsence: true,
-    lifetime: "clear",
-    sessionEnd: true,
   },
   "board-string": {
     listingMove: false,

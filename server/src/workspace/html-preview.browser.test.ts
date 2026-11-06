@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { assetUrlImports } from "../../../web/src/world/testing/assetUrlImports";
 import { createFileHandlers } from "./files";
 import { HTML_PREVIEW_CSP } from "./html-preview";
 import { shQuote } from "../utils/process-utils";
@@ -147,6 +148,7 @@ test.skipIf(!chrome)(
         target: "browser",
         outdir: dir,
         plugins: [
+          assetUrlImports,
           {
             name: "raw-assets",
             setup(build) {

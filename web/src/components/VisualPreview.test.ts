@@ -16,6 +16,7 @@ for (const fixture of [
   "VisualPreview",
   "AgentHistoryDrawer",
   "AgentChat",
+  "AgentLaunch",
   "OverlayScrollbarLayer",
   "ShellStyles",
   "StatusBadges",

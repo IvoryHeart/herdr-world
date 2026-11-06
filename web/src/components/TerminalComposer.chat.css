@@ -133,6 +133,33 @@
 .chat-composer-tools-popover button:focus-visible {
   background: var(--accent-soft);
 }
+/* The Terminal's key controls, in the rows the user arranged. */
+.chat-composer-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-soft);
+}
+.chat-composer-key-row {
+  display: grid;
+  grid-auto-columns: minmax(34px, 1fr);
+  grid-auto-flow: column;
+  gap: 4px;
+}
+.chat-composer-keys button {
+  justify-content: center;
+  gap: 0;
+  min-width: 34px;
+  min-height: 40px;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid var(--border-soft);
+}
+.chat-composer-keys button:disabled {
+  opacity: 0.45;
+}
 @media (pointer: coarse) {
   .terminal-composer[data-surface="chat"] {
     --chat-composer-button-size: 44px;

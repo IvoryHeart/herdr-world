@@ -13,10 +13,6 @@ import { type WorldRuntimePriority } from "./runtimeStore";
 import { readOfficePreferences, type TownOpens } from "./officePreferences";
 import { worldLocalStorage } from "../browserStorage";
 import {
-  normalizeAgentName,
-  SESSION_AGENTS,
-} from "../../../server/src/agent/chat-harnesses";
-import {
   type WorldHostObject,
   type WorldObject,
   type WorldObjectNode,
@@ -145,9 +141,9 @@ export function worldIntentInitialView(
 
 /**
  * What opening an agent or terminal shows, wherever it is opened (Town,
- * Board, Desk): an agent's Chat when Chat can read its harness and the Agents
- * open setting chooses Chat, otherwise its terminal. A plain shell opens its
- * terminal.
+ * Board, Desk): prefer Chat when Agents open chooses it. The window stays on
+ * Terminal until its conversation can actually be read. A plain shell opens
+ * Terminal.
  */
 export function worldNodeOpenView(
   node: WorldObjectNode,
@@ -156,7 +152,6 @@ export function worldNodeOpenView(
   if (
     opens === "chat" &&
     node.kind === "agent" &&
-    SESSION_AGENTS.has(normalizeAgentName(node.pane.agent ?? "")) &&
     worldIntentViews(node).includes("history")
   )
     return "history";

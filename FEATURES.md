@@ -97,7 +97,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     windows and phones keep bubbles. Explicitly opening or returning to Chat
     focuses its message input when available; Desk previews keep focus in the
     queue. Reopening or redocking the window keeps the
-    conversation. In Town it
+    conversation. A new agent without a session shows **No messages yet**;
+    missing or unreadable reported transcripts still show their error. A window
+    opens on Terminal whenever Chat cannot show its conversation, including
+    when a reported record cannot be read. It switches once Chat is available,
+    unless you choose a view by hand. While a new window waits, a line under its
+    header says Chat is not available yet and offers **Stay on Terminal**. Unavailable messages appear when you
+    pick Chat yourself. Chat describes startup
+    or a question plainly and offers Open Terminal; integration guidance waits
+    while the agent is starting or waiting for you in Terminal. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.
     Drag its inner edge to resize it; Town remembers the width. It can be
@@ -126,6 +134,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     not checked** until transcript evidence. Native working-state admission
     shows queued message bubbles with the recipient and time; blocked sends
     preserve the draft and the refusal reason.
+  - Harness command menus, such as Claude Code's and Codex's `/model` and
+    `/permissions`, appear as a menu card: numbered options, the cursor, the
+    footer's keys as buttons and any text field. Each key is checked against
+    that menu and session first; follow-up steps replace the card. **⋮** also
+    offers the Terminal's key controls (arrows, Esc, Tab, Enter, Ctrl keys),
+    sent to the session Chat shows; paging stays in the Terminal.
+    When a qualified row read shows that the terminal is too short to read the
+    current session's latest command menu, Chat explains this and offers
+    **Open Terminal** to fix its size. Unknown sizes do not produce the note.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
@@ -160,6 +177,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     reviewed record, shared by Town, Desk, Needs you and every browser of this
     World, without certifying its correctness. They survive a World restart
     and reappear after the same terminal and known session are verified.
+    Upgrading old separate completion checks preserves proven known-session
+    reviews; work without session proof may need review once again. Missing Desk
+    stop metadata is refreshed before marking, and an unavailable stop stays retryable.
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
@@ -253,7 +273,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   creates an agent's tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
   harness stops on a question (such as Claude's folder trust) or exits at
-  once, it says so and offers to open the tab.
+  once, it says so and offers to open the tab. While a start is in flight, the
+  pressed choice stays marked busy and a **Starting …** line says what World is
+  doing; after 10 seconds of real waiting it reads **Taking longer than
+  usual** (there is no progress bar or countdown, and the icon stays still
+  with reduced motion). Progress and outcomes stay in view above the choices. A confirmed start closes the launcher; an uncertain
+  attempt keeps its explanation and disables start choices. Open its existing
+  tab or close the launcher before another attempt. A definite failure lets
+  you retry, log in or edit profiles.
   - The launcher shows whether each harness is installed and logged in on the
     host, asked with the harness's own status command (`claude auth status`,
     `codex login status`; Pi reports only whether it is installed). **Log in**
@@ -352,7 +379,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
-    its terminal.
+    its terminal. Without a conversation yet, an agent starts on Terminal and
+    switches to Chat when its session arrives unless you choose another view.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
     still moves it). On a phone, where the card's terminal covers Board, the
@@ -457,23 +485,35 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
-- **Needs you** in the top bar (in the view picker in Zen, including on a phone) counts
+- **Needs you** in the top bar (in the view picker in Zen, including on a phone;
+  outside Zen a phone shows it as an inbox icon with a count badge, hidden at
+  zero, right after the view's name) counts
   open questions and the blocked agents of the hosts the Hosts filter shows, in
   every view, and opens the **Needs you** tab on the left: beside the view on
   wide landscape screens, over it on narrower ones, full screen with **Back** on a
   phone, where it takes focus, keeps the app behind it out of reach and gives
   focus back when it closes. It stays open or closed per device; while closed and anything waits, a
-  **Needs you** handle sits at the left edge. Each item is a short message from its
-  agent with Chat's formatting and a quick reply in place: **?** questions
-  (options, a typed answer, **Dismiss**, and why an owner alert may not have
-  arrived), **!** blocked agents (the agent's own question, answered and confirmed
-  as Chat does, with **Open Terminal** when the answer could not be confirmed) and
-  **✓** finished work, done agents and idle agents the service saw finish in the
-  last 12 hours (**Mark reviewed** marks the report shown, says so if the mark
-  could not be saved, and offers **Retry** if the report could not be read; Desk's
-  To review lane can also list idle agents from recent transcript turns). Every item names its agent and marks an
-  unverified asker; **Chat about this** (**Follow up…** for finished work) opens
-  the agent's Chat, and hovering the agent's name (or **ⓘ**) shows its card with
+  **Needs you** handle sits at the left edge. Each item is a compact notification
+  from its agent with Chat's formatting: one header row (its mark, name, place
+  and age, then icons), the message, and answer controls only when the agent
+  asked. **?** questions show their options as quick replies (the first
+  highlighted; **Other…** opens a typed answer) or one answer field with a send
+  icon, plus why an owner alert may not have arrived; **!** blocked agents show
+  the agent's own question with its options as quick replies, answered and
+  confirmed as Chat does, with **Open Terminal** when the answer could not be
+  confirmed; **✓** finished work lists done agents and idle agents the service saw
+  finish in the last 12 hours, with no answer row (Desk's To review lane can
+  also list idle agents from recent transcript turns). Every item names its
+  agent and marks an unverified asker; the name and the chat icon (**Open in
+  Chat**, or **Follow up in Chat** for finished work) open the agent's Chat.
+  The **✕** icon keeps each kind's own action: **Dismiss question** on a
+  question, **Mark reviewed** on finished work (it marks the report shown, says
+  so if the mark could not be saved, and the item offers **Retry** if the report
+  could not be read); a blocked agent has none. Every icon has a label and a
+  tooltip. A message longer than two lines shows **more** on its last line: it,
+  or a tap on the text, shows the whole message in place with its links, and
+  **less** clips it again. Keyboard focus entering the message reveals its
+  links. Hovering the agent's name shows its card with
   the latest message. An answered question folds to one line until the tab
   closes. It shows a page of 30 items; **Show … more** and **Show the … before**
   turn the page, and every opener turns to its item's page. Town's reception
@@ -489,6 +529,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   open a labelled Inspector with an explicit Reveal in Hosts action.
 - Open Inspectors, terminal buffers, split geometry and same-runtime Message
   drafts survive browser transport disconnects, including mobile backgrounding.
+  When a connection reconnects to the same destination, an unsent draft moves
+  to the same terminal in the new runtime. Drafts stay in memory only, so a
+  reload starts empty.
   Last observations show a disconnected indicator and stay non-actionable until
   fresh admission. Terminal recovery offers **Retry terminal** and an explicit
   **Reload app**; a no-frame watchdog never reloads the page automatically.
@@ -561,12 +604,16 @@ each source's state, switch it off or configure it.
 
 - **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
   auth login`): open pull requests you opened, were asked to review or are
-  assigned, every pull request you opened that was merged in the last 7 days
+  assigned, pull requests you opened that were merged in the last 7 days
   (change the window in **Settings → Sources**, 1 to 90 days) and issues
   assigned to you, each with review state, checks and mergeability. World
   stores no GitHub credentials. Work's **Merged** and **Done** columns group
   cards by the day each was merged or resolved, newest day open; tap an older
-  day to open it.
+  day to open it. GitHub history is bounded to 400 pull requests and one
+  minute per refresh, after your open PR action details. If history is
+  shortened, World keeps its last complete list, reports the oldest merge
+  date actually observed (or no confirmed date), and asks you to shorten the
+  window in **Settings → Sources**; partial history does not authorize actions.
 - **Jira Cloud** needs a site, your account email and an API token. The token
   stays in World's private storage on the service and is never shown again;
   changing the site or email removes it, so enter the token again with them.
@@ -778,6 +825,16 @@ root and revalidate its qualified binding before acting.
   workspaces and create, rename, colour, switch, or close tabs.
 - Group linked Git worktrees under their repository. Pin workspaces/worktrees
   to the top and collapse groups; preferences stay in this browser.
+- With more than one server connected, the Spaces workspace list's heading
+  switches between **Current** and **All servers**. All servers lists every
+  ready connection's workspaces and agents from World's shared observation,
+  labels each with its server and keeps worktrees nested. Selecting a row opens
+  its server; another server's menu only navigates. Stale hosts stay out, and a
+  failed observation shows its error. World's navigator keeps one tree per host.
+- Workspace rows show numbered tab chips with each tab's agent status, folding
+  extra tabs into **+N**, and keep the server badge in the right column. In
+  Spaces a chip focuses its tab; in World's navigator it selects the workspace
+  without moving Herdr's focus.
 - Split panes right/down, resize boundaries, focus neighbors, zoom, or close.
   Drag a pane handle onto another tab in the same workspace, onto a pane edge
   in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
@@ -825,11 +882,13 @@ macOS preset; see [other platform bindings](#keyboard-shortcuts).
 ### Pane Search
 
 `Alt+K` opens search over every live pane on the selected connection, including
-panes absent from the recent switcher. Filter by workspace, tab, cwd, agent name,
-or status. Search terms can appear in any order and must all match; results
-retain their recent-first order. Use Up/Down or Tab/Shift+Tab to choose, Enter to
-switch, and `Alt+K` or Esc to close. Releasing the opening modifier does not
-commit a search selection. Press K in the recent switcher to convert it to search.
+panes absent from the recent switcher, and agents on the other ready servers;
+choosing one of those opens its server's pane. Filter by workspace, tab, cwd,
+agent name, or status. Search terms can appear in any order and must all match;
+results retain their recent-first order. Use Up/Down or Tab/Shift+Tab to choose,
+Enter to switch, and `Alt+K` or Esc to close. Releasing the opening modifier
+does not commit a search selection. Press K in the recent switcher to convert it
+to search.
 
 ## Full Browser Terminal
 
@@ -854,8 +913,13 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   until cleared, then catches up. Drag past pane edges to scroll and copy
   offscreen rows. Release or blur stops scrolling; if output changes, finish
   the selection before scrolling further. Pixel mouse is unsupported.
+- On macOS, **Menu → Configuration → Behavior → Option key as Alt in terminals**
+  makes Option send Alt-modified keys instead of typing characters such as @,
+  [ and ~. It is off by default and saved in this browser.
 - Paste clipboard images to upload to the Herdr host and insert their paths,
-  including through `--ssh-host`.
+  including through `--ssh-host`. When a composer sends an uploaded image's
+  path, the path goes to the agent on its own and Enter waits for it, so Claude
+  Code attaches the image instead of dropping the message.
 - Native `Ctrl+V` (`⌘V` on macOS) pastes text or files even on plain-HTTP LAN
   addresses. On plain-HTTP addresses, a configured `Ctrl+Shift+V` on Windows
   and Linux also uses the browser's native plain-text paste where supported;
@@ -876,10 +940,17 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   text size: it follows the terminal font size until changed, and its value
   button links it back.
 - Show Herdr session popup panes over the active workspace when a plugin opens
-  a modal interaction.
+  a modal interaction. A plugin popup first focuses Herdr on the Space it was
+  opened for, so it shows where you are looking even when Herdr's own focus
+  was elsewhere.
+- Switch back to a recently viewed pane without waiting: the service keeps up
+  to 20 recently viewed terminal streams open for 10 minutes without viewers.
+  They belong to their connection's runtime and close with it.
 - Relay terminal OSC 52 clipboard writes. Herdr 0.9.0 follows the foreground
   recipient, not proven originating-pane ownership; see
-  [clipboard compatibility](docs/DEPLOYMENT.md#herdr-compatibility).
+  [clipboard compatibility](docs/DEPLOYMENT.md#herdr-compatibility). A write
+  made by a command that a composer sent returns to the browser that sent it,
+  on the same connection and terminal. Clipboard reads stay refused.
 - `Cmd/Ctrl`-click HTTP(S) links to open safely in a new tab, or workspace-relative
   / absolute paths to preview text, Markdown, or images. Wrapped paths remain
   one link, including indented continuations in agent output. Windows drive and
@@ -904,6 +975,11 @@ branch/worktree, and checkout path. Inspector and Annotations leave the primary
 sidebar's visibility unchanged. Workspace rows show the latest PR/MR status while
 keeping workspace names visible; Inspector commit navigation preserves focus and
 refreshes Files after changes. PR/MR refreshes keep the current badge visible.
+Badges also survive reloads and reconnects: the last known status stays visible
+as stale, and not actionable, until a fresh lookup on a ready connection
+replaces it. The browser keeps that cache per connection and destination, with
+only what badges and links show. Badge lookups wait behind interactive
+requests, and identical lookups share one answer.
 A failed refresh leaves the last known result dimmed with its successful check
 time; the status card marks it **Last known**. This fallback belongs to the same
 host, runtime, workspace, checkout and branch; changing targets clears it. A paused branch rebase can retain
@@ -996,6 +1072,13 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   a line and **Send** sends. A working, blocked or unknown agent first requires
   **Send anyway**. This types into the selected terminal and has no Chat receipt.
   The primary Chat tab keeps its session-binding and permission-answer checks.
+- Details' **Chat** view can read an agent reply aloud with **Speak**. Unless
+  you choose a voice in **Menu → Configuration → Behavior → Speech**, only an
+  on-device voice is used. A network voice, labelled there, can send the reply
+  text to the browser vendor and is used only when chosen. A saved voice that
+  disappears falls back to an on-device voice, never a network one, and a
+  browser without one says so instead of speaking. The same settings set the
+  speaking rate; playback may stop while the browser is in the background.
 - Codex launch commands default to `codex --no-daemon`, so integration hooks
   inherit the selected pane's environment. Install the Codex integration on that
   host and resume existing shared-daemon conversations in this mode. See
@@ -1037,14 +1120,31 @@ locally accessible transcripts.
 ## Git Worktree Lifecycle
 
 - Create a linked worktree from freshly fetched `origin/main` without changing
-  the source branch or dirty files; discover/open existing worktrees.
+  the source branch or dirty files; a repository without an `origin` branches
+  from its checked-out commit. Discover/open existing worktrees.
 - See checkout paths, open/closed state, branch status, and uncommitted counts.
 - Focus open worktrees, run `git pull`, or enable per-checkout branch updates.
 - Remove linked worktrees with confirmation, hooks, process cleanup, and recovery
   that preserves residual files when safe removal fails.
 
 Open **Worktree Lifecycle** from a workspace context menu or search
-`worktree lifecycle` in the command menu.
+`worktree lifecycle` in the command menu. In World's navigator, repository
+workspaces offer the same button and create/remove menu entries on desktop and
+phone; a stale or failed host shows them but leaves them inert. The workspace
+list clips long worktree and branch names at the start, so their distinctive
+end stays visible.
+
+Each repository can choose where its new worktrees go with **Worktree
+location** (workspace context menu, command menu or Worktree Lifecycle); empty
+keeps Herdr's default. **Menu → Configuration → Instance** sets a **New
+worktree command** and a **Remove worktree command** that run from the source
+repository on the workspace's host instead of Herdr's own creation and
+removal; after a removal command, Herdr closes the workspace. `{path}`,
+`{branch}`, `{base}` and `{repo}` are replaced shell-quoted, and `{force}`
+becomes `--force` for a forced removal. A repository's own **Worktree
+command** and **Remove command**, set in Worktree Lifecycle, win; leave them
+empty to let Herdr do it. These settings belong to the workspace's connection.
+Ranger can run a configured command but never set one.
 
 ### Paseo Worktree Hooks
 
@@ -1130,8 +1230,10 @@ is open in the current connection.
   leading `/` resolves from the filesystem root.
   External links open a new browser tab.
 - Preview SVG, PNG/APNG, JPEG, GIF, WebP, BMP, ICO, and AVIF images with zoom and
-  Fit controls, plus PDFs and workspace-local Markdown images. Unsupported
-  binaries remain download-only; image decoding depends on the browser.
+  Fit controls, plus PDFs and workspace-local Markdown images. Phones and other
+  browsers without a PDF viewer draw a PDF three pages at a time, with Previous
+  pages and Next pages. Unsupported binaries remain download-only; image
+  decoding depends on the browser.
 - Drag uploads onto the root/directory. Download files or workspace-scoped
   `.tar.gz` directories; copy absolute paths; delete with confirmation.
   Open actions by right-click or touch long-press.
@@ -1258,10 +1360,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 
 ## Remote, Multi-Client, and Operations
 
-- Manage shared local/SSH profiles with independent browser selection. Disconnect
-  does not stop Herdr/workspaces. Linux/macOS `--ssh-host` forwards control and
-  render sockets; Windows supports native local profiles, not SSH forwarding.
-  See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
+- Manage shared local/SSH profiles with independent browser selection. A
+  browser starts on the connection it last used while that connection still
+  exists, otherwise on the service's default; phones still open on Town.
+  Disconnect does not stop Herdr/workspaces. Linux/macOS `--ssh-host` forwards
+  control and render sockets; Windows supports native local profiles, not SSH
+  forwarding. See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
@@ -1296,7 +1400,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   per appearance mode in **Menu → Appearance → Terminal theme**. Built-ins
   include Solarized, Dracula, One Dark, Nord, Tokyo Night, Catppuccin, and GitHub;
   custom themes set base/ANSI colors. Themes apply live to all terminals and save
-  per browser. **Text size** scales the UI from 80% to 150%, including mobile.
+  per browser. **Menu → Configuration → Appearance → Black background** uses
+  pure black instead of blue-grey for the interface and terminals in the dark
+  theme, from the first paint. **Text size** scales the UI from 80% to 150%,
+  including mobile.
 - Manage a user service from the CLI; check releases and run checksum-verified
   one-click standalone updates under a supported supervisor. Probe `/health` or
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
@@ -1326,8 +1433,11 @@ See the [desktop](docs/screenshots/keyboard-shortcuts-desktop.png) and
   an action. Editing built-ins creates a custom copy. Overlapping conflicts are
   rejected while ordinary typing, IME, and dialog dismissal stay available.
 - **Save as** creates named presets; **Active preset** switches them. Edits save
-  immediately and sync to same-origin tabs. **Export/Import** transfers JSON
-  between browsers; deleting a custom preset returns to Automatic.
+  immediately on the World service and follow you to every browser, even
+  while the selected Herdr connection is offline. A custom preset applies only
+  on the platform it was written for; elsewhere that platform's defaults
+  apply. **Export/Import** transfers presets as JSON; deleting a custom preset
+  returns to Automatic.
 - Letter/number bindings use physical keys, unaffected by modifier-produced
   characters. Recording captures only keys the page receives; choose alternatives
   for browser/OS-reserved shortcuts, including macOS tab shortcuts.

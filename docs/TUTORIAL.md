@@ -209,18 +209,26 @@ hosts stay usable.
    it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
+   Without a session yet it opens on Terminal for startup questions, then
+   switches to Chat when the session arrives; a view you choose by hand sticks.
    On a phone, the anchored header dropdown switches between **Chat**, **Terminal**,
    **Files** and **Changes**; the **⋯** menu contains attention settings.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it.
    [Chat with an agent](#chat) explains reading, replying and answering there.
-   **Needs you** in the top bar (in the view picker in Zen and on a phone)
-   counts the questions and blocked agents waiting on you, in every view. Tap
-   it to open the **Needs you** tab on the left: each question, blocked agent
-   and finished task is a short message from its agent with its quick reply in
-   place, and **Chat about this** opens the agent's Chat. Hover an agent's name
-   (or tap **ⓘ**) for its card. The tab stays open or closed on this device;
-   **‹** (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
+   **Needs you** in the top bar (in the view picker in Zen and on a phone,
+   where outside Zen it is an inbox icon with a count badge after the view's
+   name) counts the questions and blocked agents waiting on you, in every view.
+   Tap it to open the **Needs you** tab on the left: each question, blocked
+   agent and finished task is a compact notification from its agent. When the
+   agent asked something, tap a quick reply (or **Other…** to type), or type in
+   the answer field and press Enter. Tap a long message (or **more**) to read
+   all of it, links included; **less** shortens it again. Tabbing into a
+   message reveals its links. The agent's name and the chat icon open the
+   agent's Chat for the context behind it. **✕** dismisses a question, or marks
+   finished work reviewed; its tooltip says which. Hover an agent's name for
+   its card. The tab stays open or closed on this device; **✕** in its header
+   (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a
    small preview card: its latest message as **Chat** shows it, never terminal
    text; when the conversation cannot be read, it says why. It highlights a
@@ -378,7 +386,11 @@ of marks, each with one glyph, colour and word: **•** Working, **!** Needs you
 **Mark reviewed** acknowledges that completion in one record on this World
 service, so Town, Desk, Needs you, your phone and your desktop agree. World saves the mark across
 restarts. It reappears after World verifies the same terminal and known agent
-session; a replacement session or later completion needs review again.
+session; a replacement session or later completion needs review again. Old
+separate completion checks transfer only with the same known session and native
+completion sequence. Work without session proof may need review once after an
+upgrade. If World cannot yet verify its Desk stop, retry Mark reviewed when the
+connection is ready.
 Opening a finished agent's terminal also clears its reception stop; neither action proves the result
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
@@ -450,6 +462,20 @@ text. It works for any agent you open from Town, Board or Desk.
    the option, type a single-line reply and choose **Send text answer**. Chat
    checks the native text editor before submitting. Already-open native text
    editors and unsupported menus stay in the Terminal.
+   Commands such as `/model` and `/permissions` open the harness's own menu;
+   Chat shows it on a menu card with the cursor marked. Pick a numbered
+   option, or use the key buttons the menu names (**↑**/**↓**, **Enter**,
+   **Esc**, **s**, **←**/**→**), or press those keys with the card focused.
+   Each step, such as Codex's effort level or Claude Code's rule field and
+   save location, replaces the card until the menu closes. A field takes one
+   line with **Type**; press the menu's **Enter** after checking it. Options
+   past 9, and lists with a search field, are reached with the arrows.
+   If Chat says the terminal is too small to show the menu, choose **Open
+   Terminal**, or click Terminal, to restore its size. Chat shows this only
+   after a measured row read for this session's current command; an unknown
+   size does not become a size warning.
+   **⋮** also holds the Terminal's key controls (**Esc**, **Tab**, arrows,
+   **Ctrl** keys) for anything else; they go to the session Chat shows.
 7. A known pull request named in an agent's **READY** or **opened**
    announcement, or its current work claim, gets a PR card. Open **Details**
    for CI and reviews. **Ask the author to fix** sends a `↳ #N` message when
@@ -522,6 +548,7 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    opens a small tab and shows the harness's own login command
    (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
    tab**, run it and finish the login there, then **Check again**.
+   The launcher finishes opening a login tab before accepting a start.
    Failed, incomplete or unsupported checks show **unknown**, never “not
    installed” or “logged out”. You can still try a supported harness; use
    **Check again** to retry or **Edit profiles** to review its configuration.
@@ -531,7 +558,19 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question
    first (for example Claude asking whether to trust a new folder), the
-   launcher says so and **Open its tab** lets you answer.
+   launcher says so and **Open its tab** lets you answer. While it starts, the
+   choice you pressed stays marked and **Starting …** says what World is doing;
+   after 10 seconds it says **Taking longer than usual**. Progress and the
+   outcome stay visible above the choices, even with a long readiness list.
+   If the new window opens on Terminal before Chat can read the agent, a line
+   under its header says Chat is not available yet; Chat opens by
+   itself when it can, or choose **Stay on Terminal**.
+   The launcher closes when the start is confirmed. After an uncertain
+   start, its start choices stay disabled: open the existing tab, or
+   close the launcher before deliberately starting another agent. A definite
+   failure lets you retry, log in or edit profiles. Closing it
+   while a launch is pending leaves any created tab in its room; a late reply
+   does not reopen its window or close a new launcher.
 
 The profile assignment follows its terminal when you move it and is shared
 with other Worlds connected to that Herdr. Each World uses its own profile
@@ -643,7 +682,12 @@ on your phone and desktop.
    working on it; tap one to close Work and jump to its card. **Merged**
    groups the week's pull requests you opened by the day they merged, with
    today open; tap a day to open
-   it, and change how many days it covers in **Settings → Sources**. Escape or a
+   it, and change how many days it covers in **Settings → Sources**. History
+   has a 400-PR bound and shares a one-minute refresh deadline with open work
+   and action details, which are read first. If Sources says history was
+   shortened, shorten the window there and refresh. World keeps its last
+   complete list; the reported merge date is only the oldest valid date
+   observed, not proof that every merge since that date was read. Escape or a
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull
@@ -899,7 +943,14 @@ attention, and `done`/`idle` suggest when to return. **Status is not verificatio
 
 Open **Chat** in the Inspector to read the conversation and reply. Chat shows
 user and agent messages, with one line for each run of tool calls, and updates
-while the agent works. If Chat cannot read the conversation it says why and
+while the agent works. A new agent without a session shows **No messages yet.**
+With Chat as the opening preference, its window starts on **Terminal** whenever
+Chat cannot show the conversation: no session, unsupported harness, missing
+integration or an unreadable record. It switches once Chat is available, unless
+you have chosen a view yourself. Pick Chat yourself to see its explanation and
+**Open Terminal**. A missing or unreadable reported transcript keeps its error;
+an agent still starting or waiting is not told to install an integration.
+If Chat cannot read the conversation it says why and
 offers the fix it names, or **Open Terminal**. A message you send shows as
 not yet seen until the transcript has the same words; if it went to another session, a red
 notice names it. Slash commands such as `/compact` work from Chat too (see
@@ -1027,13 +1078,16 @@ steering does not enable high-permission mode or send a prompt to another agent.
 For simultaneous tasks that edit files, use separate worktrees: each has its
 own checkout directory and branch.
 
-1. Confirm that the repository has a fetchable `origin/main`, and inspect
+1. If the repository has an `origin`, confirm that it is fetchable. Inspect
    `paseo.json` if it exists. If you do not trust its commands, disable hooks
    for this repository through **Worktree hooks** before proceeding.
 2. Open **Worktree Lifecycle** from the workspace context menu, or search for
-   `worktree lifecycle` in the command menu.
+   `worktree lifecycle` in the command menu. World's navigator offers the same
+   button and menu entries on desktop and phone. **Worktree location** there
+   chooses where this repository's new worktrees go.
 3. Create and open a documentation worktree. Herdr World starts it from the latest
-   fetched `origin/main`, without carrying over the source workspace's
+   fetched `origin/main` (a repository without an `origin` starts from the
+   checked-out commit), without carrying over the source workspace's
    uncommitted changes.
 4. In the new worktree's terminal, run `pwd` and `git status`. Confirm the
    directory and branch before starting the agent.

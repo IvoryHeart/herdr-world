@@ -5,10 +5,14 @@ import { join } from "node:path";
 import { resolveDataPaths } from "./data-paths";
 import {
   createGuiSettingsStore,
+  normalizeWorktreeDirectory,
+  normalizeWorktreeCommand,
   repoSettingsKey,
   terminalSurfaceCodecsEnabled,
   workspaceAutoSyncSettingsKey,
   workspaceRepoSettingsKey,
+  worktreeCommandFor,
+  worktreeRemoveCommandFor,
 } from "./gui-settings";
 
 test("terminal codec preferences survive a fresh store and default to enabled", async () => {
@@ -147,4 +151,57 @@ test("a pre-migration CLI settings edit preserves legacy run status for the serv
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a repository's worktree directory is kept only when absolute", () => {
+  expect(normalizeWorktreeDirectory("  /srv/trees//  ")).toBe("/srv/trees");
+  expect(normalizeWorktreeDirectory("/")).toBe("/");
+  for (const value of ["", "   ", "trees", "./trees", "~/trees", 3, null])
+    expect(normalizeWorktreeDirectory(value)).toBeUndefined();
+});
+
+test("worktree commands are trimmed templates, and a repository's wins", () => {
+  expect(normalizeWorktreeCommand("  mk {path}\n")).toBe("mk {path}");
+  for (const value of [undefined, 1, "", "  ", "a\0b", "x".repeat(4097)])
+    expect(normalizeWorktreeCommand(value)).toBeUndefined();
+  const settings = {
+    version: 1 as const,
+    worktree_command: "global",
+    repositories: { "local:/a": { worktree_command: "repo" }, "local:/b": {} },
+    workspace_auto_sync: {},
+    custom: {},
+    ui: {},
+  };
+  expect(worktreeCommandFor(settings, "local:/a")).toBe("repo");
+  expect(worktreeCommandFor(settings, "local:/b")).toBe("global");
+  expect(worktreeCommandFor(settings, null)).toBe("global");
+  expect(
+    worktreeCommandFor(
+      { ...settings, worktree_command: undefined },
+      "local:/b",
+    ),
+  ).toBeUndefined();
+});
+
+test("the removal command follows the same rule as creation's", () => {
+  const settings = {
+    version: 1 as const,
+    worktree_command: "add",
+    worktree_remove_command: "global rm",
+    repositories: {
+      "local:/a": { worktree_remove_command: "repo rm" },
+      "local:/b": { worktree_command: "repo add" },
+    },
+    workspace_auto_sync: {},
+    custom: {},
+    ui: {},
+  };
+  expect(worktreeRemoveCommandFor(settings, "local:/a")).toBe("repo rm");
+  expect(worktreeRemoveCommandFor(settings, "local:/b")).toBe("global rm");
+  expect(
+    worktreeRemoveCommandFor(
+      { ...settings, worktree_remove_command: undefined },
+      "local:/b",
+    ),
+  ).toBeUndefined();
 });

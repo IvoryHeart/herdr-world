@@ -157,7 +157,7 @@ export default function TownView({
   );
   const preferencesRef = useRef(preferences);
   const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
-  // The one reviewed record (Desk's, or a terminal's completion check). Town
+  // The one reviewed record, Desk's stop mark. Town
   // sees only reviewed records, so the service's stop notices do not
   // re-render a busy Town.
   const work = useReviewedWork(undefined, false);
