@@ -27,6 +27,11 @@ export function placedSends(
         <CommandReceipt
           text={delivery.text}
           at={delivery.sent_at}
+          waiting={
+            delivery.waiting
+              ? `waiting for ${agent}: it is busy and runs this when it reaches it`
+              : undefined
+          }
           detail={delivery.detail}
           onDismiss={() => onDismiss(delivery.id)}
         />

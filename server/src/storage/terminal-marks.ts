@@ -16,8 +16,18 @@ import type { createBindingWriter } from "./world-bindings";
 import type { createWorldIds } from "./world-ids";
 import type { StorageRequest } from "./world-protocol";
 import { terminalMarkStorageBytes } from "./terminal-mark-budget";
+import {
+  expireLegacyReviews,
+  observeLegacyReviews,
+  readLegacyReviewArchiveState,
+  resolveLegacyReview,
+  type LegacyReviewArchiveState,
+  type LegacyReviewOperation,
+  type LegacyReviewProof,
+  type LegacyReviewResult,
+} from "./legacy-review-archive";
 
-export type MarkKind = "desk" | "watchlist" | "completion-seen";
+export type MarkKind = "desk" | "watchlist";
 export type MarkBody = {
   reviewed_stop?: string | null;
   stopped_at?: number | null;
@@ -41,18 +51,27 @@ export type TerminalMarkPut = {
   target: BindingIdentity;
   event: BindingEvent;
   current: BindingFence;
+  legacy_review?: LegacyReviewProof & { review_changed: boolean };
 };
 export type TerminalMarkOperation =
   | { type: "expire"; at: number }
   | { type: "put"; input: TerminalMarkPut }
   | { type: "end"; id: string; revision: number }
-  | { type: "remove"; id: string; revision: number };
+  | { type: "remove"; id: string; revision: number }
+  | LegacyReviewOperation;
 export type TerminalMarksPort = {
   list(): SavedTerminalMark[];
   put(input: TerminalMarkPut): Promise<SavedTerminalMark>;
   remove(id: string, revision: number): Promise<void>;
   end(id: string, revision: number): Promise<void>;
   expire(at: number): Promise<void>;
+  archiveStatus(): LegacyReviewArchiveState;
+  observeLegacy(
+    connectionId: string,
+    terminals: string[],
+    proofs: LegacyReviewProof[],
+    isCurrent: () => boolean,
+  ): Promise<ReadonlySet<string>>;
 };
 export const terminalMarksMigration = `CREATE TABLE terminal_marks (
  id TEXT PRIMARY KEY REFERENCES world_ids(id),
@@ -95,9 +114,7 @@ function body(kind: MarkKind, input: MarkBody): MarkBody {
           "opened_at",
           "stateChangeSeq",
         ]
-      : kind === "watchlist"
-        ? ["label"]
-        : ["stateChangeSeq"];
+      : ["label"];
   if (Object.keys(input).some((key) => !allowed.includes(key)))
     throw new Error("invalid terminal mark field");
   if (
@@ -140,9 +157,12 @@ export function createTerminalMarkWriter(
   bindings: ReturnType<typeof createBindingWriter>,
 ) {
   return (operation: TerminalMarkOperation, at: number): unknown => {
+    if (operation.type === "legacy-prune" || operation.type === "legacy-proof")
+      return observeLegacyReviews(db, operation, at);
     if (operation.type === "expire") {
       if (!Number.isFinite(operation.at) || operation.at < 0)
         throw new Error("invalid Desk expiry time");
+      expireLegacyReviews(db, operation.at);
       const trimmed: SavedTerminalMark[] = [],
         removed: string[] = [];
       for (const row of readTerminalMarks(db)) {
@@ -169,7 +189,7 @@ export function createTerminalMarkWriter(
           trimmed.push(row);
         }
       }
-      return { trimmed, removed };
+      return { trimmed, removed, archive: readLegacyReviewArchiveState(db) };
     }
 
     const id = operation.type === "put" ? operation.input.id : operation.id;
@@ -200,11 +220,16 @@ export function createTerminalMarkWriter(
     }
     const input = operation.input;
     if (
-      !["desk", "watchlist", "completion-seen"].includes(input.kind) ||
+      !["desk", "watchlist"].includes(input.kind) ||
       (existing && existing.kind !== input.kind)
     )
       throw new Error("invalid terminal mark kind");
-    const value = body(input.kind, input.body);
+    const value = resolveLegacyReview(
+      db,
+      input,
+      body(input.kind, input.body),
+      at,
+    );
     if (
       !existing &&
       readTerminalMarks(db).some(
@@ -232,10 +257,7 @@ export function createTerminalMarkWriter(
     if (input.event.type !== "listing" || !input.event.complete)
       throw new Error("terminal mark requires a complete current listing");
     const recordId =
-      existing?.id ??
-      ids.issue(
-        input.kind === "watchlist" ? "w" : input.kind === "desk" ? "d" : "c",
-      );
+      existing?.id ?? ids.issue(input.kind === "watchlist" ? "w" : "d");
     const binding =
       existing?.binding ??
       (bindings.execute(
@@ -274,8 +296,8 @@ export function createTerminalMarkWriter(
         .query("SELECT count(*) AS count FROM terminal_marks WHERE kind=?")
         .get(input.kind) as { count: number }
     ).count;
-    const limit = input.kind === "watchlist" ? 128 : 4096;
-    if (input.kind !== "desk" && !existing && count >= limit)
+    const limit = 128;
+    if (input.kind === "watchlist" && !existing && count >= limit)
       throw new Error("terminal mark store is full");
     const next = {
       id: recordId,
@@ -345,34 +367,75 @@ export function createTerminalMarkWriter(
           readTerminalMarks(db).filter((row) => row.kind === "desk"),
         ),
       );
-    return { row: next, trimmed, removed };
+    return {
+      row: next,
+      trimmed,
+      removed,
+      archive: readLegacyReviewArchiveState(db),
+    };
   };
 }
 export function createTerminalMarksPort(
   initial: SavedTerminalMark[],
   request: <T>(request: StorageRequest) => Promise<T>,
+  initialArchive: LegacyReviewArchiveState = { count: 0, expires_at: null },
 ): TerminalMarksPort {
   const rows = new Map(initial.map((row) => [row.id, row]));
+  let archive = initialArchive;
   return {
     list: () => structuredClone([...rows.values()]),
+    archiveStatus: () => ({ ...archive }),
+    async observeLegacy(connectionId, terminals, proofs, isCurrent) {
+      const run = async (operation: LegacyReviewOperation) => {
+        if (!isCurrent()) throw new Error("terminal mark runtime retired");
+        const result = await request<LegacyReviewResult>({
+          type: "terminal-mark",
+          operation,
+        });
+        archive = result.archive;
+        if (!isCurrent()) throw new Error("terminal mark runtime retired");
+        return result;
+      };
+      const resolvable = new Set<string>();
+      let result = await run({
+        type: "legacy-prune",
+        connection_id: connectionId,
+        terminals,
+      });
+      if (!result.eligible) return resolvable;
+      for (let index = 0; index < proofs.length; index += 32) {
+        result = await run({
+          type: "legacy-proof",
+          connection_id: connectionId,
+          proofs: proofs.slice(index, index + 32),
+        });
+        for (const terminal of result.resolvable) resolvable.add(terminal);
+        if (!result.eligible) break;
+      }
+      return resolvable;
+    },
     async put(input) {
       const commit = await request<{
         row: SavedTerminalMark;
         trimmed: SavedTerminalMark[];
         removed: string[];
+        archive: LegacyReviewArchiveState;
       }>({ type: "terminal-mark", operation: { type: "put", input } });
       rows.set(commit.row.id, commit.row);
       for (const row of commit.trimmed) rows.set(row.id, row);
       for (const id of commit.removed) rows.delete(id);
+      archive = commit.archive;
       return structuredClone(commit.row);
     },
     async expire(at) {
       const commit = await request<{
         trimmed: SavedTerminalMark[];
         removed: string[];
+        archive: LegacyReviewArchiveState;
       }>({ type: "terminal-mark", operation: { type: "expire", at } });
       for (const row of commit.trimmed) rows.set(row.id, row);
       for (const id of commit.removed) rows.delete(id);
+      archive = commit.archive;
     },
     async remove(id, revision) {
       await request<void>({

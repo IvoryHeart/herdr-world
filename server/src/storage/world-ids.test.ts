@@ -4,7 +4,11 @@ import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldWriter } from "./world-writer";
-import { worldMigrations, WORLD_APPLICATION_ID } from "./world-schema";
+import {
+  migrateWorldDatabase,
+  worldMigrations,
+  WORLD_APPLICATION_ID,
+} from "./world-schema";
 import { openWorldLedger, type WorldLedgerStorage } from "./world-storage";
 import { systemClock, systemScheduler } from "../service/ports";
 import { importLegacyLedger } from "./world-import";
@@ -259,7 +263,7 @@ test("import counts domain records without including reservation-trigger writes"
   const target = fixture();
   const db = new Database(target.database);
   try {
-    db.exec(worldMigrations.join("\n"));
+    migrateWorldDatabase(db, target.database);
     writeFileSync(
       target.ledger,
       JSON.stringify({

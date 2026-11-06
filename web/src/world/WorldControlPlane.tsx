@@ -29,6 +29,7 @@ import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { NeedsYouHost } from "./NeedsYouTab";
+import { launchedWorldLeaf } from "./worldTerminalPresentation";
 import { worldNodeOpenView } from "./worldInspectorSelection";
 import WorldIntentProfile from "./WorldIntentProfile";
 import { WorldConnectionRequired } from "./WorldStatus";
@@ -91,10 +92,10 @@ const ProfileEditor = lazyWithReload("world-profile-editor", () =>
  */
 function AgentDialogs({
   world,
-  onOpenTerminal,
+  onOpenNode,
 }: {
   world: WorldObject;
-  onOpenTerminal(nodeId: string): void;
+  onOpenNode(nodeId: string): void;
 }) {
   const [launch, setLaunch] = useState<
     (Partial<LaunchTarget> & { profileId?: string }) | null
@@ -108,19 +109,16 @@ function AgentDialogs({
   // A launched agent or login terminal opens once World's snapshot shows it.
   const [pendingOpen, setPendingOpen] = useState<{
     connectionId: string;
+    runtimeGeneration: number;
     terminalId: string;
   } | null>(null);
   useEffect(() => {
     if (!pendingOpen) return;
-    const leaf = world.leaves.find(
-      (candidate) =>
-        candidate.connectionId === pendingOpen.connectionId &&
-        candidate.terminalId === pendingOpen.terminalId,
-    );
+    const leaf = launchedWorldLeaf(world, pendingOpen);
     if (!leaf) return;
     setPendingOpen(null);
-    onOpenTerminal(leaf.id);
-  }, [world, pendingOpen, onOpenTerminal]);
+    onOpenNode(leaf.id);
+  }, [world, pendingOpen, onOpenNode]);
   useEffect(() => {
     const onLaunch = (event: Event) =>
       setLaunch({ ...(event as CustomEvent<LaunchTarget>).detail });
@@ -350,7 +348,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     >
       <AgentDialogs
         world={aggregateWorld}
-        onOpenTerminal={(nodeId) => void openTerminalById(nodeId)}
+        onOpenNode={(nodeId) => void openNodeById(nodeId)}
       />
       <GroupsWindow
         world={aggregateWorld}
@@ -441,6 +439,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <TownView
                         world={presentedWorld}
+                        aggregate={aggregateWorld}
                         onOpenInspectorView={stableOpenInspectorView}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}

@@ -24,8 +24,9 @@ floating windows and trays. This guide says how they all look like one product.
 
 - [Scope](#scope-every-surface) lists every surface, how it looks today and the
   rules that matter most there.
-- [World today](#world-today) shows Town, Board and Desk as they ship.
-- [Icons](#icons) explains every icon and state mark World uses.
+- [World today](#world-today) shows captured Town, Board and Desk components,
+  with their source revision recorded below.
+- [Icons](#icons) explains the view, shell and agent-state icons.
 - The sections from [Principles](#principles) on are the rules. Each says
   whether it describes shipping World or a proposal.
 
@@ -62,7 +63,7 @@ reusable shipping APIs.
 | **Desk** | Count tiles; Now, Agents and Reviewed tabs with counts; Find; and three lanes of cards with action buttons and key hints. | [Card](#card), [Button](#button), [Badges](#badges-and-counters), [State colours](#state-colours) |
 | **Spaces** | The terminal workspace: workspaces, tabs and terminal windows, much of it Roamgate-derived (`web/src/components/`). | [Principle 6](#principles), [Panel and tray](#panel-and-tray) |
 | **Windows** | Agent and Inspector windows with Chat, Terminal, Files and Changes views and More, Maximize and Close controls. Over Town they wear the Town skin. | [Skins](#skins), [Panel and tray](#panel-and-tray) |
-| **Needs you** | A side tray, or a sheet on phones, of questions and blocked agents. Each item has an answer row, Dismiss and Chat. An Outbox lists answers to check. | [Card](#card), [Inline input](#inline-input-with-action), [Panel and tray](#panel-and-tray) |
+| **Needs you** | A side tray, or a sheet on phones, of questions, blocked agents and finished work. Cards have a Chat icon in the header; an X dismisses a question or marks finished work reviewed. Blocked agents have no dismiss action. Questions offer quick replies or an answer field. An Outbox lists answers to check. | [Card](#card), [Inline input](#inline-input-with-action), [Panel and tray](#panel-and-tray) |
 | **Menus, dialogs and settings** | The Actions menu, the Hosts list and Menu; `.modal` dialogs; the shared close button. | [Dialogs](#dialogs), [Button](#button), [Radius](#radius-and-control-heights) |
 
 Principles, tokens, motion and accessibility apply on every surface. Rules are
@@ -70,11 +71,12 @@ proposals unless they say they describe shipping World.
 
 ## World today
 
-These captures show shipping production components with synthetic data: two
-hosts, atlas and nova; four rooms; and agents claude, codex and pi. Desktop is
-the 1512 × 982 laptop viewport and the phone is 390 × 844. Every view opens in
-Zen, World's default. They show where each rule lands; they are not mockups of
-the proposals.
+These captures record production components at guide revision `6847c781`,
+before the later Needs you card refresh, with synthetic data: two hosts, atlas
+and nova; four rooms; and agents claude, codex and pi. Desktop is the
+1512 × 982 laptop viewport and the phone is 390 × 844. Every view opens in Zen,
+World's default. They show where each rule lands; they are not mockups of the
+proposals.
 
 ### Town
 
@@ -137,6 +139,12 @@ plain text glyphs.
 
 ![World's icons: the views, agent state marks, shell bar controls, window, Board and Town controls, and text glyphs](images/icons.png)
 
+The legend image records guide revision `6847c781`, before the Needs you card
+refresh. Its `ⓘ` agent-information control has since been replaced: hovering
+the agent name shows that card, and clicking the name opens Chat. The table
+below describes current controls. The card specimens retain `ⓘ` as a proposed
+optional action, not a shipping Needs you control.
+
 | Icon | Means | Where today |
 | --- | --- | --- |
 | `Castle`, `StickyNote`, `LayoutDashboard`, `PanelsTopLeft` | Town, Board, Desk, Spaces | Zen view picker, phone view button and nav |
@@ -151,16 +159,17 @@ plain text glyphs.
 | `PanelTop` | Show or hide Workspaces | phone workspace shortcut |
 | `Search` | Search this view | view toolbar |
 | `ArrowLeft`; `ChevronLeft` | Back | phone detail bar; a window opened from another surface |
-| `X` | Close a window, dialog or search; hide mobile controls | windows, dialogs, search; phone floating controls |
+| `X` | Close a window, dialog or search; hide mobile controls; dismiss a question or mark finished work reviewed | windows, dialogs, search; phone floating controls; Needs you card headers |
 | `MoreHorizontal`; `EllipsisVertical` | More actions; more or settings | windows; Board, Town and phones |
 | `MessagesSquare`, `SquareTerminal`, `FolderTree`, `FileDiff` | Chat, Terminal, Files, Changes | agent window views |
+| `MessageSquare`; `SendHorizontal` | Open Chat; send an answer | Needs you card headers; answer fields |
 | `MessageSquareText` | Review Annotations | phone workspace views |
 | `GitBranch` | Workspace Commits | phone workspace views |
 | `History` | Agent message History | phone workspace views |
 | `GitPullRequest`, `Sparkles`, `Minus`, `Plus` | Work, tidy, zoom out, zoom in or new | Board dock, Town |
 | `Pencil`; `Trash2` | Rename room; close room or delete | Town room plaques, Board |
 | Agent marks `•` `!` `?` `✓` `×` `–` `~` | Working, Needs you, Asks you, Done, Offline, Idle or Reviewed, No signal | Needs you, agent hover cards and Town's peek; Desk shows the `?` mark |
-| Text `ⓘ`, `‹`, `↵`, `E` | About an agent; hide Needs you; open; mark reviewed | Needs you items and tab, Desk key hints |
+| Text `‹`, `↵`, `E` | Hide Needs you; open; mark reviewed | Needs you tab, Desk key hints |
 
 The same meaning still has more than one form today. Back is `ArrowLeft` on
 phone bars, `ChevronLeft` in windows and the text `‹ Back` in the Needs you

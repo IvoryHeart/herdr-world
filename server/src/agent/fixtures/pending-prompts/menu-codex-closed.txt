@@ -1,0 +1,7 @@
+  >_ OpenAI Codex (v0.164.0)
+     /project/demo
+
+› Ask Codex to do anything
+
+  GPT-6.1-Sol high · weekly 62% left · Context 0% used · /project/demo…
+  ? for shortcuts

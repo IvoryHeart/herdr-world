@@ -1,5 +1,8 @@
 # Per-PR agent usage
 
+> Historical: the `agent:usage` tooling this describes was removed on 2026-11-06,
+> when crew dispatch moved to the separate herdr-crew dispatcher.
+
 Account for agent usage when each PR becomes READY, then refresh the same comment
 at merge. This is routine milestone accounting, not a pre-PR gate. Do not edit a
 PR body solely for usage totals. Comments do not start the PR CI workflow.
@@ -132,7 +135,7 @@ Herdr; `model` is required and `effort` is optional:
 }
 ```
 
-[The example fragment](../scripts/agent/usage-config.example.json) contains
+The former example configuration fragment contained
 synthetic seats. Expectations come from the operator's assigned roster, rather
 than the model currently observed in a response. Gate tooling can read the same
 field when its consumer is added; usage tooling owns no gate tables or decisions.

@@ -234,26 +234,27 @@ describe("Pi agent sessions", () => {
     });
   });
 
-  test("shows the official integration command when Pi has no session", async () => {
+  test("shows startup guidance when Pi has not yet reported a session", async () => {
     const result = await readAgentMessageHistory(
       { pane_id: "p1", agent: "pi" },
       async () => ({ agent: { agent: "pi" } }),
     );
 
     expect(result.status).toBe("missing_session");
-    expect(result.command).toBe("herdr integration install pi");
+    expect(result.command).toBeUndefined();
+    expect(result.detail).toContain("Terminal");
   });
 
-  test("explains how to identify a Codex pane's conversation", async () => {
+  test("directs an unidentified Codex pane to Terminal before integration advice", async () => {
     const result = await readAgentMessageHistory(
       { pane_id: "p1", agent: "codex" },
       async () => ({ agent: { agent: "codex" } }),
     );
 
     expect(result.status).toBe("missing_session");
-    expect(result.detail).toContain("/title");
-    expect(result.detail).toContain("--no-daemon");
-    expect(result.command).toBe("herdr integration install codex");
+    expect(result.detail).toContain("Terminal");
+    expect(result.detail).not.toContain("--no-daemon");
+    expect(result.command).toBeUndefined();
   });
 
   test("binds Herdr and file access inside each runtime handler bundle", async () => {

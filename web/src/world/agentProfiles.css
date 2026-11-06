@@ -35,8 +35,27 @@
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 
-.agent-launcher {
+.modal.agent-launcher {
   width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.agent-launcher > .modal-head,
+.agent-launcher-status {
+  flex-shrink: 0;
+}
+.agent-launcher-status {
+  max-height: min(240px, 40dvh);
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.agent-launcher-status:empty {
+  display: none;
+}
+.agent-launcher-choices {
+  min-height: 0;
+  overflow-y: auto;
 }
 .agent-launcher-section-head {
   display: flex;
@@ -102,6 +121,11 @@ button.profile-primary {
   border-radius: 8px;
   font: inherit;
   cursor: pointer;
+}
+/* The pressed choice stays legible while the start is in flight. */
+.agent-launcher button[aria-busy="true"]:disabled {
+  opacity: 1;
+  border-color: var(--accent);
 }
 .agent-launcher-card:not(:disabled):hover {
   border-color: var(--accent);

@@ -81,6 +81,9 @@ async function receiver() {
     answer: async () => {
       throw new Error("unused");
     },
+    press: async () => {
+      throw new Error("unused");
+    },
     async send(target) {
       if (!(await target.beforeSubmit?.()) || !target.guard?.(native))
         return {

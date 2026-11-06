@@ -18,11 +18,7 @@ export function isToolingPath(path: string): boolean {
     return false;
   return (
     path.startsWith("scripts/agent/") ||
-    [
-      "docs/agent-development.md",
-      "docs/crew-runbook.md",
-      "docs/dispatch-runbook.md",
-    ].includes(path) ||
+    path === "docs/agent-development.md" ||
     /^changes\/[a-z0-9][a-z0-9-]*\.md$/.test(path)
   );
 }

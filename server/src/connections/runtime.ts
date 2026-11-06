@@ -1,4 +1,8 @@
 import type { Clock, Scheduler } from "../service/ports";
+import {
+  TERMINAL_DEFAULT_SIZE,
+  terminalSqueezed,
+} from "../../../shared/terminalSize";
 import { createAgentWorktree } from "../agent/worktree";
 import { createWorktreeGit } from "../agent/worktree-git";
 import {
@@ -357,6 +361,35 @@ export function createLegacyConnectionRuntime(args: {
           (workspace: { focused?: boolean }) => workspace.focused,
         )?.workspace_id ?? null
       );
+    },
+    appViewportSize: async () => {
+      const panes = (await herdr.call("pane.list", {}, 5000))?.panes;
+      const pane = Array.isArray(panes)
+        ? (panes.find((item: { focused?: boolean }) => item?.focused) ??
+          panes[0])
+        : null;
+      if (typeof pane?.pane_id !== "string") return null;
+      const area = (
+        await herdr.call("pane.layout", { pane_id: pane.pane_id }, 5000)
+      )?.layout?.area;
+      // A squeezed area is never the observer's size: keep the app offsets
+      // around the default area instead.
+      const [width, height] = terminalSqueezed({
+        cols: Number(area?.width),
+        rows: Number(area?.height),
+      })
+        ? [TERMINAL_DEFAULT_SIZE.cols, TERMINAL_DEFAULT_SIZE.rows]
+        : [Number(area?.width), Number(area?.height)];
+      const cols = Number(area?.x) + width;
+      const rows = Number(area?.y) + height;
+      return Number.isInteger(cols) &&
+        Number.isInteger(rows) &&
+        cols > 0 &&
+        rows > 0 &&
+        cols <= 65_535 &&
+        rows <= 65_535
+        ? { cols, rows }
+        : null;
     },
     lookupPaneId: async (terminalId) => {
       try {

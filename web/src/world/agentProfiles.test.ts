@@ -102,7 +102,11 @@ describe("Agent profiles in the browser", () => {
     expect(outcome).toEqual({
       message: "It may still be starting.",
       failed: false,
-      terminal: { connectionId: "host-a", terminalId: "term_7" },
+      terminal: {
+        connectionId: "host-a",
+        runtimeGeneration: 2,
+        terminalId: "term_7",
+      },
     });
     expect(retainedOutcome(hostA, { status: "failed" })).toEqual({
       message: "",

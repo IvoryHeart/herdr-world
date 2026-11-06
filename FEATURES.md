@@ -97,7 +97,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     windows and phones keep bubbles. Explicitly opening or returning to Chat
     focuses its message input when available; Desk previews keep focus in the
     queue. Reopening or redocking the window keeps the
-    conversation. In Town it
+    conversation. A new agent without a session shows **No messages yet**;
+    missing or unreadable reported transcripts still show their error. A window
+    opens on Terminal whenever Chat cannot show its conversation, including
+    when a reported record cannot be read. It switches once Chat is available,
+    unless you choose a view by hand. While a new window waits, a line under its
+    header says Chat is not available yet and offers **Stay on Terminal**. Unavailable messages appear when you
+    pick Chat yourself. Chat describes startup
+    or a question plainly and offers Open Terminal; integration guidance waits
+    while the agent is starting or waiting for you in Terminal. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.
     Drag its inner edge to resize it; Town remembers the width. It can be
@@ -126,6 +134,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     not checked** until transcript evidence. Native working-state admission
     shows queued message bubbles with the recipient and time; blocked sends
     preserve the draft and the refusal reason.
+  - Claude's questions show from its own record: every question, header,
+    option and description, and whether several can be picked. Answer buttons
+    appear only when the terminal shows that same question; otherwise the card
+    keeps the whole question with **Answer in the Terminal** and the reason.
+    An unrecognised prompt is shown as the terminal draws it. Before Claude
+    has a session, its folder-trust question shows **No, exit** and **Yes, I
+    trust this folder**. With pre-approved grants the decline choice can be
+    **No, continue without these permissions**, which continues without those
+    grants instead of exiting. Chat and Needs you show the folder, full safety
+    text and warnings above the choices. A click is checked against that
+    question and Claude process, then moves Claude's selection and presses Enter.
+  - Harness command menus, such as Claude Code's and Codex's `/model` and
+    `/permissions`, appear as a menu card: numbered options, the cursor, the
+    footer's keys as buttons and any text field. Each key is checked against
+    that menu and session first; follow-up steps replace the card. **⋮** also
+    offers the Terminal's key controls (arrows, Esc, Tab, Enter, Ctrl keys),
+    sent to the session Chat shows; paging stays in the Terminal.
+    When a qualified row read shows that the terminal is too short to read the
+    current session's latest command menu, Chat explains this and offers
+    **Open Terminal** to fix its size. Unknown sizes do not produce the note.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
@@ -160,6 +188,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     reviewed record, shared by Town, Desk, Needs you and every browser of this
     World, without certifying its correctness. They survive a World restart
     and reappear after the same terminal and known session are verified.
+    Upgrading old separate completion checks preserves proven known-session
+    reviews; work without session proof may need review once again. Missing Desk
+    stop metadata is refreshed before marking, and an unavailable stop stays retryable.
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
@@ -227,7 +258,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     follows its tab when the tab moves to another room and goes when it closes.
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
-    reception and Board's host label. Transient local socket failures and SSH outages keep retrying with
+    reception and Board's host label. When the local connection is failing and
+    no host is ready, Town's stage also offers **Set up Herdr** if Herdr is
+    missing or installed but stopped; it installs or starts Herdr only after you
+    confirm, and never appears during a normal start or after you disconnect.
+    Transient local socket failures and SSH outages keep retrying with
     capped backoff; explicit disconnect/removal and permanent failures stop
     recovery. Cached work never becomes current until a fresh runtime snapshot
     is admitted. Search and Hosts
@@ -253,7 +288,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   creates an agent's tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
   harness stops on a question (such as Claude's folder trust) or exits at
-  once, it says so and offers to open the tab.
+  once, it says so and offers to open the tab. While a start is in flight, the
+  pressed choice stays marked busy and a **Starting …** line says what World is
+  doing; after 10 seconds of real waiting it reads **Taking longer than
+  usual** (there is no progress bar or countdown, and the icon stays still
+  with reduced motion). Progress and outcomes stay in view above the choices. A confirmed start closes the launcher; an uncertain
+  attempt keeps its explanation and disables start choices. Open its existing
+  tab or close the launcher before another attempt. A definite failure lets
+  you retry, log in or edit profiles.
   - The launcher shows whether each harness is installed and logged in on the
     host, asked with the harness's own status command (`claude auth status`,
     `codex login status`; Pi reports only whether it is installed). **Log in**
@@ -352,7 +394,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
-    its terminal.
+    its terminal. Without a conversation yet, an agent starts on Terminal and
+    switches to Chat when its session arrives unless you choose another view.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
     still moves it). On a phone, where the card's terminal covers Board, the
@@ -457,23 +500,36 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
-- **Needs you** in the top bar (in the view picker in Zen, including on a phone) counts
+- **Needs you** in the top bar (in the view picker in Zen, including on a phone;
+  outside Zen a phone shows it as an inbox icon with a count badge, hidden at
+  zero, right after the view's name) counts
   open questions and the blocked agents of the hosts the Hosts filter shows, in
   every view, and opens the **Needs you** tab on the left: beside the view on
   wide landscape screens, over it on narrower ones, full screen with **Back** on a
   phone, where it takes focus, keeps the app behind it out of reach and gives
   focus back when it closes. It stays open or closed per device; while closed and anything waits, a
-  **Needs you** handle sits at the left edge. Each item is a short message from its
-  agent with Chat's formatting and a quick reply in place: **?** questions
-  (options, a typed answer, **Dismiss**, and why an owner alert may not have
-  arrived), **!** blocked agents (the agent's own question, answered and confirmed
-  as Chat does, with **Open Terminal** when the answer could not be confirmed) and
-  **✓** finished work, done agents and idle agents the service saw finish in the
-  last 12 hours (**Mark reviewed** marks the report shown, says so if the mark
-  could not be saved, and offers **Retry** if the report could not be read; Desk's
-  To review lane can also list idle agents from recent transcript turns). Every item names its agent and marks an
-  unverified asker; **Chat about this** (**Follow up…** for finished work) opens
-  the agent's Chat, and hovering the agent's name (or **ⓘ**) shows its card with
+  **Needs you** handle sits at the left edge. Each item is a compact notification
+  from its agent with Chat's formatting: one header row (its mark, name, place
+  and age, then icons), the message, and answer controls only when the agent
+  asked. **?** questions show their options as quick replies (the first
+  highlighted; **Other…** opens a typed answer) or one answer field with a send
+  icon, plus why an owner alert may not have arrived; **!** blocked agents show
+  the agent's own question with its options as quick replies, answered and
+  confirmed as Chat does (the same card, including Claude's recorded questions
+  and its folder-trust choices), with **Open Terminal** when the answer could
+  not be confirmed; **✓** finished work lists done agents and idle agents the service saw
+  finish in the last 12 hours, with no answer row (Desk's To review lane can
+  also list idle agents from recent transcript turns). Every item names its
+  agent and marks an unverified asker; the name and the chat icon (**Open in
+  Chat**, or **Follow up in Chat** for finished work) open the agent's Chat.
+  The **✕** icon keeps each kind's own action: **Dismiss question** on a
+  question, **Mark reviewed** on finished work (it marks the report shown, says
+  so if the mark could not be saved, and the item offers **Retry** if the report
+  could not be read); a blocked agent has none. Every icon has a label and a
+  tooltip. A message longer than two lines shows **more** on its last line: it,
+  or a tap on the text, shows the whole message in place with its links, and
+  **less** clips it again. Keyboard focus entering the message reveals its
+  links. Hovering the agent's name shows its card with
   the latest message. An answered question folds to one line until the tab
   closes. It shows a page of 30 items; **Show … more** and **Show the … before**
   turn the page, and every opener turns to its item's page. Town's reception
@@ -561,12 +617,16 @@ each source's state, switch it off or configure it.
 
 - **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
   auth login`): open pull requests you opened, were asked to review or are
-  assigned, every pull request you opened that was merged in the last 7 days
+  assigned, pull requests you opened that were merged in the last 7 days
   (change the window in **Settings → Sources**, 1 to 90 days) and issues
   assigned to you, each with review state, checks and mergeability. World
   stores no GitHub credentials. Work's **Merged** and **Done** columns group
   cards by the day each was merged or resolved, newest day open; tap an older
-  day to open it.
+  day to open it. GitHub history is bounded to 400 pull requests and one
+  minute per refresh, after your open PR action details. If history is
+  shortened, World keeps its last complete list, reports the oldest merge
+  date actually observed (or no confirmed date), and asks you to shorten the
+  window in **Settings → Sources**; partial history does not authorize actions.
 - **Jira Cloud** needs a site, your account email and an API token. The token
   stays in World's private storage on the service and is never shown again;
   changing the site or email removes it, so enter the token again with them.

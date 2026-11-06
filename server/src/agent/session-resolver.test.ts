@@ -21,6 +21,29 @@ afterEach(async () => {
 });
 
 describe("agent session resolver context", () => {
+  test("startup guidance follows reported readiness without a timer", async () => {
+    for (const [state, ready] of [
+      [{ agent_status: "unknown" }, false],
+      [{ agent_status: "blocked" }, false],
+      [{ agent_status: "idle" }, false],
+      [{ agent_status: "working", launch_pending: true }, false],
+      [{ agent_status: "working" }, true],
+      [{ agent_status: "idle", interactive_ready: true }, true],
+    ] as const) {
+      const resolved = await resolveAgentSession(
+        { pane_id: "p1" },
+        async () => ({ agent: { agent: "claude", ...state } }),
+        localAgentSessionFiles,
+        createAgentSessionResolverContext(),
+      );
+      expect(resolved.status).toBe("missing_session");
+      expect(resolved.detail.includes("integration")).toBe(ready);
+      expect(Boolean(resolved.command)).toBe(ready);
+      if (state.agent_status === "blocked")
+        expect(resolved.detail).toContain("waiting for you in Terminal");
+    }
+  });
+
   test("keeps session path caches isolated per connection context", async () => {
     const root = await mkdtemp(join(tmpdir(), "herdr-gui-session-cache-"));
     tempDirectories.push(root);
@@ -244,13 +267,13 @@ describe("Codex thread from the pane title", () => {
     expect(resolved.path).toContain(threadA);
   });
 
-  test("without a title ID or report, says how to turn it on", async () => {
+  test("without a title ID or report, explains startup without premature integration advice", async () => {
     await codexHome([threadA]);
     const resolved = await resolveTitle("project");
     expect(resolved.status).toBe("missing_session");
-    expect(resolved.detail).toContain("/title");
-    expect(resolved.detail).toContain("--no-daemon");
-    expect(resolved.command).toBe("herdr integration install codex");
+    expect(resolved.detail).toContain("Terminal");
+    expect(resolved.detail).not.toContain("--no-daemon");
+    expect(resolved.command).toBeUndefined();
   });
 
   test("searches the remote host, not this machine, over SSH", async () => {

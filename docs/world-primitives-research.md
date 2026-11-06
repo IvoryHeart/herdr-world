@@ -8,11 +8,11 @@ follows once a second workflow has run on the same pieces (see
 World should describe how agents work as a few composable primitives: goals,
 workflows, loops, skills, personas, templates and policies. Each can attach at
 any level of the world, from World down to a pane and the agent in it, and
-levels below inherit it. The [`agent:crew`](../scripts/agent/crew.ts) watcher
-([guide](agent-development.md#act-on-readiness-with-agentcrew)), merged in
-[#443](https://github.com/IvoryHeart/herdr-world/pull/443), is the first
+levels below inherit it. The former crew watcher, merged in
+[#443](https://github.com/IvoryHeart/herdr-world/pull/443), was the first
 instance: a review workflow, run by a loop, pursuing the goal "this PR is
-READY" with three reviewer personas and one review skill.
+READY" with three reviewer personas and one review skill. It was retired on
+2026-11-06.
 
 The thesis: primitives are data that attaches to places, World is the runtime
 that interprets them, and the harnesses and models underneath are

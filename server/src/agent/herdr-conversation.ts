@@ -1,8 +1,18 @@
 import { AgentClaims } from "./agent-claims";
-import { createPromptAnswerer } from "./prompt-answer";
+import { createPromptActions } from "./prompt-answer";
+import {
+  createSendGuard,
+  guardSource,
+  inputWitness,
+  lastAgentMessage,
+  readScreenText as screenText,
+  sendScreenRefusal,
+  submitPrompt,
+} from "./menu-send-guard";
+import { withMenuSize } from "./menu-size";
 import { isSlashCommand } from "../../../shared/conversationInput";
-import { existsSync, type FSWatcher, watch } from "node:fs";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
+import { createCodexSessionWatch } from "./codex-session-watch";
 import {
   conversationMessages,
   runningTool,
@@ -20,12 +30,16 @@ import {
   type DeliveryView,
 } from "./conversation-delivery";
 import {
+  menuQuoted,
+  parseCommandMenu,
   parsePendingPrompt,
   PROMPT_SCREEN_LINES,
   type PendingPrompt,
 } from "./pending-prompt";
+import { askedQuestions, withAskedQuestions } from "./asked-questions";
+import { createTrustPrompts } from "./trust-prompt";
 import { stepsFromEntries, type ConversationStep } from "./conversation-steps";
-import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
+import type { AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
   SESSION_AGENTS,
@@ -44,6 +58,12 @@ import {
   type CodexInferenceBatch,
 } from "./codex-daemon-binding";
 export { paneBinding, sessionLabel } from "./conversation-binding";
+
+/** Herdr states in which a harness's own command menu can be open. */
+const MENU_STATUSES = new Set(["idle", "done"]);
+/** An unreadable transcript, or one with a call still open, may be asking. */
+const hasOpenTool = (shown: Conversation) =>
+  shown.status !== "ok" || shown.running_tool !== null;
 
 export const CODEX_DAEMON_ISSUE =
   "https://github.com/IvoryHeart/herdr-world/issues/250";
@@ -74,6 +94,8 @@ export function createHerdrConversationSource(args: {
 }): ConversationSource & { dispose(): void } {
   const deliveries = createDeliveryLedger();
   const claims = new AgentClaims();
+  const sendGuard = createSendGuard();
+  const { reservations, dispatched } = sendGuard;
   // Sessions this pane has shown, so a sent message can still be checked in
   // its own transcript after the pane moves on, and in the ones it moved to.
   const sessions = new Map<
@@ -117,66 +139,7 @@ export function createHerdrConversationSource(args: {
     (timer as { unref?: () => void }).unref?.();
     deadlines.add(timer);
   };
-  // Change detection may reuse a remembered Codex title match only while
-  // every Codex session root is watched: any created or removed transcript
-  // can change which transcripts a title prefix matches, so it forgets them
-  // all. Remote hosts and unwatchable roots always search.
-  let codexWatch: { ok: boolean; close(): void } | null = null;
-  const watchCodexSessions = () => {
-    if (args.files.remote) return false;
-    if (codexWatch) return codexWatch.ok;
-    const watchers: FSWatcher[] = [];
-    let ok = true;
-    const forget = () => {
-      args.context.codexTitles.clear();
-      args.onCodexSessionsChanged?.();
-    };
-    const home = codexHome();
-    const roots = ["sessions", "archived_sessions"];
-    for (const name of roots) {
-      const root = join(home, name);
-      if (!existsSync(root)) continue;
-      try {
-        const watcher = watch(
-          root,
-          { recursive: true, persistent: false },
-          (type) => {
-            if (type === "rename") forget();
-          },
-        );
-        watcher.on("error", () => {
-          watcher.close();
-          if (codexWatch) codexWatch.ok = false;
-          args.context.codexTitles.clear();
-        });
-        watchers.push(watcher);
-      } catch {
-        ok = false;
-      }
-    }
-    // A root created later (Codex archives a thread for the first time) is
-    // seen through the home directory, and the roots are watched afresh.
-    try {
-      const watcher = watch(home, { persistent: false }, (_type, name) => {
-        if (!roots.includes(String(name))) return;
-        codexWatch?.close();
-        codexWatch = null;
-        forget();
-      });
-      watcher.on("error", () => {
-        watcher.close();
-        if (codexWatch) codexWatch.ok = false;
-      });
-      watchers.push(watcher);
-    } catch {
-      ok = false;
-    }
-    codexWatch = {
-      ok,
-      close: () => watchers.forEach((watcher) => watcher.close()),
-    };
-    return ok;
-  };
+  const codexSessions = createCodexSessionWatch(args);
 
   const agentInfo = async (paneId: string) => {
     let result: unknown;
@@ -190,6 +153,11 @@ export function createHerdrConversationSource(args: {
     }
     return isRecord(result) && isRecord(result.agent) ? result.agent : null;
   };
+  const trustPrompts = createTrustPrompts({
+    herdrCall: args.herdrCall,
+    agentInfo,
+    active: sendGuard.active,
+  });
 
   const unavailable = (
     base: Omit<Conversation, "status" | "unavailable">,
@@ -447,39 +415,124 @@ export function createHerdrConversationSource(args: {
       strip_ansi: true,
     });
     const text = screenText(result);
-    return text === null
-      ? null
-      : parsePendingPrompt(
-          normalizeAgentName(stringValue(info?.agent)),
-          text,
-          promptContext(info),
-        );
+    const agent = normalizeAgentName(stringValue(info?.agent));
+    if (text === null) return null;
+    const shown = parsePendingPrompt(agent, text, promptContext(info));
+    // Claude records the questions it asks: only the pane's reported
+    // session, read for this same agent record, supplies them.
+    let step: Awaited<ReturnType<typeof resolve>> | null = null;
+    try {
+      step = agent === "claude" && info ? await resolve(paneId) : null;
+      const bound = paneBinding(agent, info ?? {}, args.context)?.fingerprint;
+      if (!step || !("resolved" in step) || !step.resolved.file || !bound)
+        return shown;
+      if (step.base.session_fingerprint !== bound) return shown;
+      const { entries } = await args.cache.get(step.resolved);
+      return withAskedQuestions(shown, askedQuestions(entries));
+    } catch {
+      if (step && "resolved" in step) args.cache.invalidate(step.resolved);
+      // Keep the screen question visible, but a failed transcript check must
+      // never grant the keys that an unsupported or mismatched ask would lose.
+      return shown
+        ? {
+            ...shown,
+            options: [],
+            unanswerable:
+              "Chat could not check this question against Claude's transcript. Answer it in the Terminal.",
+          }
+        : null;
+    }
+  };
+
+  /**
+   * A command menu the harness shows. Herdr reports it idle or done, or
+   * blocked when its screen rules take the menu for a form (Claude Code's
+   * `/permissions` list). A blocked pane shows a menu only when the prompt
+   * parser reads no question there and the transcript has no open tool call:
+   * questions, approvals and plans are tool calls; command menus are not.
+   */
+  const readMenu = async (
+    paneId: string,
+    info: Record<string, unknown> | null,
+    shown?: Conversation,
+  ): Promise<PendingPrompt | null> => {
+    const status = stringValue(info?.agent_status);
+    if (!MENU_STATUSES.has(status) && status !== "blocked") return null;
+    const text = screenText(
+      await args.herdrCall("pane.read", {
+        pane_id: paneId,
+        source: "recent",
+        lines: PROMPT_SCREEN_LINES,
+        format: "text",
+        strip_ansi: true,
+      }),
+    );
+    if (text === null) return null;
+    const agent = normalizeAgentName(stringValue(info?.agent));
+    const context = promptContext(info);
+    let seen = shown;
+    const transcript = async () => (seen ??= await readShown(paneId));
+    if (status === "blocked") {
+      if (parsePendingPrompt(agent, text, context)?.options.length) return null;
+      if (hasOpenTool(await transcript())) return null;
+    }
+    const menu = parseCommandMenu(agent, text, context);
+    if (menu?.menu?.overlay) {
+      const conversation = await transcript();
+      let said: string | null = conversation.status === "ok" ? "" : null;
+      for (const message of conversation.messages ?? [])
+        if (message.role === "assistant" && message.kind === "message")
+          said = message.text;
+      if (menuQuoted(menu, said)) return null;
+    }
+    return menu;
   };
 
   const read = async ({
     pane_id,
+    menus = false,
   }: {
     pane_id: string;
+    menus?: boolean;
   }): Promise<Conversation> => {
+    const observedAt = reservations.beginObservation();
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
-    // A blocked agent's question is on its screen, not in its transcript.
+    const status = shown.agent_status ?? "";
+    // Before Claude has a session, only its folder-trust question is read,
+    // under its pre-session witness. A blocked agent's question is on its
+    // screen, and so is a command menu, which Chat asks for.
+    const trust =
+      shown.agent === "claude" && shown.unavailable?.reason === "no_session"
+        ? await trustPrompts.read(pane_id).catch(() => null)
+        : null;
     const pending_prompt =
-      shown.agent_status === "blocked" &&
+      trust ??
+      ((status === "blocked" || (menus && MENU_STATUSES.has(status))) &&
       shown.session_binding !== "guessed" &&
       (shown.agent !== "codex" || Boolean(shown.session_fingerprint))
         ? await agentInfo(pane_id)
-            .then((info) =>
-              stringValue(info?.agent_status) === "blocked"
-                ? readPrompt(pane_id, info)
-                : null,
-            )
+            .then(async (info) => {
+              const asked =
+                stringValue(info?.agent_status) === "blocked"
+                  ? await readPrompt(pane_id, info)
+                  : null;
+              if (asked?.options.length || !menus || !shown.session_fingerprint)
+                return asked;
+              return (await readMenu(pane_id, info, shown)) ?? asked;
+            })
             .catch(() => null)
-        : null;
-    return { ...shown, deliveries: deliveries.list(pane_id), pending_prompt };
+        : null);
+    const list = reservations.deliveries(
+      pane_id,
+      shown,
+      deliveries,
+      observedAt,
+    );
+    return { ...shown, deliveries: list, pending_prompt };
   };
 
-  const latest = async (target: { pane_id: string }) =>
+  const latest = async (target: { pane_id: string; menus?: boolean }) =>
     withoutMessages(await read(target));
 
   // Steps per projection, so repeated asks while nothing changed do not
@@ -535,35 +588,42 @@ export function createHerdrConversationSource(args: {
     return results;
   };
 
-  return {
+  const source: ConversationSource & { dispose(): void } = {
     id: "herdr",
-    answer: createPromptAnswerer({
+    trust: trustPrompts.choose,
+    ...createPromptActions({
+      active: sendGuard.active,
       herdrCall: args.herdrCall,
       agentInfo,
       readPrompt,
+      readMenu,
       isCodexBound: async (paneId) => {
         const step = await resolve(paneId);
         return "resolved" in step && Boolean(step.base.session_fingerprint);
+      },
+      sessionFingerprint: async (paneId) => {
+        const step = await resolve(paneId);
+        return "resolved" in step ? step.base.session_fingerprint : null;
       },
     }),
     dismiss: ({ pane_id, delivery_id }) =>
       deliveries.dismiss(pane_id, delivery_id),
     dispose: () => {
+      trustPrompts.close();
       claims.clear();
       for (const timer of deadlines) clearTimeout(timer);
       deadlines.clear();
-      codexWatch?.close();
-      codexWatch = null;
+      codexSessions.close();
       args.context.codexDiscovery.clear();
     },
     read,
-    latest,
+    latest: withMenuSize(args, deliveries, latest),
     steps,
     identity: async ({ pane_id }) => {
       // Watching runs on every Herdr event; it need not search Codex
       // transcripts again for a title it already resolved, while creations
       // and removals of Codex transcripts are being watched.
-      const step = await resolve(pane_id, watchCodexSessions());
+      const step = await resolve(pane_id, codexSessions.watch());
       // Every branch carries the receipts' states, so a check that ends
       // with no agent in the pane still reaches the browsers showing it.
       const receipts = deliveries
@@ -596,6 +656,8 @@ export function createHerdrConversationSource(args: {
           base.session_binding,
           base.session_fingerprint,
           resolved.reason ?? null,
+          resolved.detail,
+          resolved.command ?? null,
           resolved.session?.value ?? null,
           file?.path ?? null,
           file?.mtimeMs ?? null,
@@ -717,15 +779,17 @@ export function createHerdrConversationSource(args: {
         },
       );
     },
-    send: async ({
-      pane_id,
-      text,
-      session_fingerprint,
-      baseline,
-      beforeSubmit,
-      guard,
-      submitted,
-    }) => {
+    send: async (target) => {
+      dispatched.delete(target);
+      const {
+        pane_id,
+        text,
+        session_fingerprint,
+        baseline,
+        beforeSubmit,
+        guard,
+        submitted,
+      } = target;
       if (!text.trim())
         return {
           status: "refused",
@@ -757,7 +821,7 @@ export function createHerdrConversationSource(args: {
           "The conversation in this pane changed. Nothing was sent; check it and send again.",
       } as const;
       // What Chat showed is the baseline a delivery is checked against. Over
-      // SSH the browser's own read is used rather than reading again.
+      // SSH the browser supplies those IDs; quote context is read below.
       let shown: Conversation | null = null;
       if (!(args.files.remote && baseline)) {
         shown = await read({ pane_id });
@@ -814,12 +878,20 @@ export function createHerdrConversationSource(args: {
         info = await agentInfo(pane_id);
       }
       const agent = normalizeAgentName(stringValue(info?.agent));
-      const bound =
-        info && SESSION_AGENTS.has(agent)
-          ? paneBinding(agent, info, args.context, verified)
+      // The session this native observation ties to the pane, if any.
+      const bindingOf = (seen: Record<string, unknown> | null) => {
+        const name = normalizeAgentName(stringValue(seen?.agent));
+        return seen && SESSION_AGENTS.has(name)
+          ? paneBinding(name, seen, args.context, verified)
           : null;
+      };
+      const bound = bindingOf(info);
       if (!bound?.fingerprint)
-        return { status: "refused", reason: "unavailable", message: notBound };
+        return {
+          status: "refused",
+          reason: "unavailable",
+          message: notBound,
+        };
       if (bound.fingerprint !== session_fingerprint) return changed;
       // Claude Code runs “!” as a shell command and “#” as a memory note.
       if (agent === "claude" && /^[!#]/.test(text.trimStart()))
@@ -834,12 +906,7 @@ export function createHerdrConversationSource(args: {
         // The durable admission awaited a commit. Read the native session again
         // so no earlier observation spans that await into an agent.prompt.
         info = await agentInfo(pane_id);
-        const freshAgent = normalizeAgentName(stringValue(info?.agent));
-        const fresh =
-          info && SESSION_AGENTS.has(freshAgent)
-            ? paneBinding(freshAgent, info, args.context, verified)
-            : null;
-        if (!fresh?.fingerprint || fresh.fingerprint !== session_fingerprint)
+        if (bindingOf(info)?.fingerprint !== session_fingerprint)
           return changed;
         if (deliveries.full(pane_id))
           return {
@@ -849,25 +916,26 @@ export function createHerdrConversationSource(args: {
               "Chat is still checking earlier messages. Nothing was sent.",
           };
       }
+      // After every preparation await: no menu where the text goes, then the
+      // agent once more with no await before the prompt (#4764 remains).
+      // Browser baseline IDs cannot supply authority for quoted screen text.
+      shown ??= await readShown(pane_id);
+      if (shown.session_fingerprint !== session_fingerprint) return changed;
+      const screenWitness = inputWitness(info);
+      const unsafe = await sendScreenRefusal(args.herdrCall, pane_id, {
+        agent,
+        context: promptContext(info),
+        said: lastAgentMessage(shown),
+      });
+      if (unsafe) return unsafe;
+      info = await agentInfo(pane_id);
+      if (inputWitness(info) !== screenWitness) return changed;
+      if (bindingOf(info)?.fingerprint !== session_fingerprint) return changed;
       if (guard && (!info || !guard(info))) return changed;
-      let result: unknown;
       const startedAt = Date.now();
-      try {
-        result = await args.herdrCall("agent.prompt", {
-          target: pane_id,
-          text,
-        });
-      } catch (error) {
-        // Herdr rejects a blocked agent before submitting any input.
-        if (error instanceof Error && /^agent_blocked:/.test(error.message))
-          return {
-            status: "refused",
-            reason: "blocked",
-            message:
-              "The agent is waiting on a question; answer it first. Nothing was sent.",
-          };
-        throw error;
-      }
+      const submission = await submitPrompt(args.herdrCall, target, dispatched);
+      if (!("result" in submission)) return submission;
+      const { result } = submission;
       const endedAt = Date.now();
       const sent =
         isRecord(result) && isRecord(result.agent) ? result.agent : null;
@@ -904,15 +972,5 @@ export function createHerdrConversationSource(args: {
       return { status: "sent", delivery };
     },
   };
-}
-
-/** The text of a `pane.read` reply, wherever Herdr nests it. */
-function screenText(result: unknown): string | null {
-  if (!isRecord(result)) return null;
-  if (typeof result.text === "string") return result.text;
-  for (const value of Object.values(result)) {
-    const nested = screenText(value);
-    if (nested !== null) return nested;
-  }
-  return null;
+  return guardSource(source, sendGuard);
 }

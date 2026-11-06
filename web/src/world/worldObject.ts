@@ -1,4 +1,5 @@
 export { worldObjectWithWatches } from "./worldWatches";
+import { agentActivityAt } from "../../../shared/agentMetadata";
 import { sha256 } from "./worldDigest";
 import { roomInputCache } from "./worldRoomCache";
 import {
@@ -731,8 +732,8 @@ function* constructHost(
         ? admittedAgentSessionFingerprint(pane, agentMetadata)
         : undefined;
       const lastActivityAt = isAgent
-        ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)
-        : undefined;
+        ? agentActivityAt(pane, agentMetadata)
+        : null;
       const child: WorldLeafObject = {
         id: worldObjectId(
           connection.connectionId,

@@ -74,6 +74,7 @@ import {
 } from "./officePreferences";
 import { worldNodeOpenView } from "./worldInspectorSelection";
 import { useTownMaster } from "./town/useTownMaster";
+import { TownHerdrSetupOffer, TownNoHosts } from "./WorldStatus";
 import {
   TownRoomDialogs,
   useTownRoomActions,
@@ -106,6 +107,7 @@ function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
 
 export default function TownView({
   world,
+  aggregate = world,
   toolbarPortal = null,
   selectedId,
   onSelect,
@@ -125,6 +127,8 @@ export default function TownView({
     focus?: boolean,
   ) => void;
   world: WorldObject;
+  /** Unfiltered connection observation for local setup admission. */
+  aggregate?: WorldObject;
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string, signal?: AbortSignal): void | Promise<boolean>;
@@ -157,7 +161,7 @@ export default function TownView({
   );
   const preferencesRef = useRef(preferences);
   const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
-  // The one reviewed record (Desk's, or a terminal's completion check). Town
+  // The one reviewed record, Desk's stop mark. Town
   // sees only reviewed records, so the service's stop notices do not
   // re-render a busy Town.
   const work = useReviewedWork(undefined, false);
@@ -775,15 +779,7 @@ export default function TownView({
     };
   };
 
-  if (!world.hosts.length) {
-    return (
-      <div className="world-empty" role="status">
-        <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
-        <h2>No connected spaces yet</h2>
-        <p>Add or connect a local or SSH Herdr profile from Spaces.</p>
-      </div>
-    );
-  }
+  if (!world.hosts.length) return <TownNoHosts />;
 
   const toolbar = (
     <WorldViewToolbar
@@ -900,6 +896,7 @@ export default function TownView({
           ))}
         </div>
         <div className="town-stage">
+          <TownHerdrSetupOffer world={world} aggregate={aggregate} />
           <TownCanvas
             trace={trace}
             projection={office}

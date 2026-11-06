@@ -143,7 +143,11 @@ export type LaunchOutcome = {
 export type RetainedOutcome = {
   message: string;
   failed: boolean;
-  terminal: { connectionId: string; terminalId: string } | null;
+  terminal: {
+    connectionId: string;
+    runtimeGeneration: number;
+    terminalId: string;
+  } | null;
   /** A login's command, for the user to copy and run in that terminal. */
   command?: string;
 };
@@ -159,7 +163,11 @@ export const retainedOutcome = (
   message: result.message ?? "",
   failed: result.status === "failed",
   terminal: result.terminal_id
-    ? { connectionId: target.connectionId, terminalId: result.terminal_id }
+    ? {
+        connectionId: target.connectionId,
+        runtimeGeneration: target.generation,
+        terminalId: result.terminal_id,
+      }
     : null,
   ...(result.command ? { command: result.command } : {}),
 });

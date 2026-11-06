@@ -30,7 +30,6 @@ import {
   type BridgeControlMsg,
   type ConnectionClient,
 } from "../../api";
-import { completionSeenStore } from "../completionSeenState";
 import { NeedsYouCounter } from "../NeedsYouTab";
 import { needsYouLeafKey, needsYouState } from "../needsYou";
 import { worldSourcesStore } from "../worldSources";
@@ -610,16 +609,6 @@ const publishAnswerDeliveries = () => {
     });
 };
 const askDismissals: string[] = [];
-/** The service's in-memory completion marks, as one World holds them. */
-const completionSeen = {
-  revision: 0,
-  records: [] as {
-    connection_id: string;
-    connection_generation: number;
-    terminal_id: string;
-    revision: number;
-  }[],
-};
 /**
  * The service's Desk review record: one record per agent identity, a mark
  * naming the stop it reviewed. Undo clears only the exact mark it names.
@@ -663,27 +652,6 @@ worldBridge.call = async (method, params) => {
     desk.revision++;
     for (const handler of controls) handler({ type: "world_desk_changed" });
     return structuredClone(desk);
-  }
-  if (method.startsWith("world.completion_seen.")) {
-    const identity = params as {
-      connection_id: string;
-      connection_generation: number;
-      terminal_id: string;
-    };
-    const index = completionSeen.records.findIndex(
-      (record) =>
-        record.connection_id === identity.connection_id &&
-        record.connection_generation === identity.connection_generation &&
-        record.terminal_id === identity.terminal_id,
-    );
-    if (method === "world.completion_seen.mark" && index < 0)
-      completionSeen.records.push({
-        connection_id: identity.connection_id,
-        connection_generation: identity.connection_generation,
-        terminal_id: identity.terminal_id,
-        revision: ++completionSeen.revision,
-      });
-    return structuredClone(completionSeen);
   }
   if (method === "world.ask.deliveries.get")
     return structuredClone({
@@ -964,7 +932,34 @@ async function groupTwoDesks(
 }
 
 function worldFor(connections: WorldRuntimeConnection[]) {
-  return buildWorldObject(connections, "local");
+  const world = buildWorldObject(connections, "local");
+  // The merged service names every stopped agent, including its first read.
+  for (const leaf of world.leaves) {
+    if (
+      leaf.kind !== "agent" ||
+      !["done", "idle", "blocked"].includes(leaf.status)
+    )
+      continue;
+    const identity = {
+      connection_id: leaf.connectionId,
+      connection_generation: leaf.generation,
+      terminal_id: leaf.terminalId,
+      agent_session_fingerprint: leaf.agentSessionFingerprint ?? null,
+    };
+    if (
+      !desk.records.some((record) => deskKeyOf(record) === deskKeyOf(identity))
+    ) {
+      desk.records.push({
+        ...identity,
+        reviewed_stop: null,
+        stopped_at: null,
+        observed_stop_id: `fixture-stop-${leaf.terminalId}`,
+        opened_at: null,
+      });
+      desk.revision++;
+    }
+  }
+  return world;
 }
 
 const phone = window.innerWidth < 640;
@@ -2467,7 +2462,6 @@ async function run() {
   const [, , finishedDesk, finishedRoom, finishedHost] = finishedAgent!
     .getAttribute("aria-label")!
     .split(", ");
-  const seenBefore = [...completionSeenStore.get().identities].sort().join();
   const reviewsBefore = deskReviews.length;
   [
     ...host.querySelectorAll<HTMLButtonElement>(
@@ -2499,8 +2493,7 @@ async function run() {
     "Terminal mode did not bring the agent to its desk",
   );
   check(
-    [...completionSeenStore.get().identities].sort().join() === seenBefore &&
-      deskReviews.length === reviewsBefore,
+    deskReviews.length === reviewsBefore,
     "Terminal mode marked the finished agent reviewed",
   );
   writeOfficePreferences(worldLocalStorage, {

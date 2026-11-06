@@ -1,3 +1,7 @@
+import {
+  agentActivityAt,
+  agentListRecord,
+} from "../../../shared/agentMetadata";
 import { createHash } from "node:crypto";
 import {
   validDeskIdentity,
@@ -40,7 +44,13 @@ export function admittedAgentPanes(
   agents: readonly Record<string, unknown>[] = [],
 ) {
   const agentByPane = new Map<string, Record<string, unknown> | null>();
+  const displayByPane = new Map<string, Record<string, unknown>[]>();
   for (const agent of agents) {
+    if (typeof agent.pane_id === "string") {
+      const rows = displayByPane.get(agent.pane_id) ?? [];
+      rows.push(agent);
+      displayByPane.set(agent.pane_id, rows);
+    }
     if (
       typeof agent.pane_id !== "string" ||
       typeof agent.terminal_id !== "string"
@@ -61,6 +71,8 @@ export function admittedAgentPanes(
     session: string | null;
     status: ReturnType<typeof observedAgentStatus>;
     sequence: unknown;
+    lastActivityAt: number | null;
+    activityMatchesWorld: boolean;
   }[] = [];
   for (const pane of panes) {
     if (
@@ -77,6 +89,20 @@ export function admittedAgentPanes(
     const agentSession = deskSessionFingerprint(candidate?.agent_session);
     const agent =
       candidate && agentSession === paneSession ? candidate : undefined;
+    const activity = agentActivityAt(pane, agent);
+    const displayedActivity = agentActivityAt(
+      pane,
+      agentListRecord(
+        typeof pane.pane_id === "string"
+          ? (displayByPane.get(pane.pane_id) ?? [])
+          : [],
+        {
+          pane_id: pane.pane_id,
+          terminal_id: pane.terminal_id,
+          agent: pane.agent,
+        },
+      ),
+    );
     admitted.push({
       terminalId: pane.terminal_id,
       session: paneSession,
@@ -86,6 +112,10 @@ export function admittedAgentPanes(
           : pane.agent_status,
       ),
       sequence: agent?.state_change_seq ?? pane.state_change_seq,
+      lastActivityAt: activity,
+      // Display metadata cannot authorize identity/progress. Defer migration
+      // when its activity differs from the strict, session-qualified proof.
+      activityMatchesWorld: activity === displayedActivity,
     });
   }
   return admitted;
