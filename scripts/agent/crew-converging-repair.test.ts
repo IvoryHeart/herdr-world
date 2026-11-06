@@ -12,6 +12,11 @@ import {
   finishRun,
   setRunUsageBaseline,
   setRunSession,
+  setRunPid,
+  addAction,
+  getAction,
+  setAction,
+  actionsIn,
 } from "./crew/store";
 import { completeManualReviews } from "./crew/run-lifecycle";
 import { spend } from "./crew/status";
@@ -19,6 +24,106 @@ import { spend } from "./crew/status";
 afterEach(() => {
   cleanupDeliveries();
   cleanupFixtures();
+});
+
+test("a pass observing another PR preserves excluded runs and actions while settling admitted work", () => {
+  const f = setup({ settings: { excludePrs: [7], readyAsk: false } });
+  const seed = (pr: number, name: string, state: "active" | "finished") => {
+    const action = {
+      key: `${pr}:head:review:${name}`,
+      pr,
+      head: SHA.fixed,
+      kind: "review" as const,
+      target: name,
+      text: "review",
+    };
+    addAction(f.crew, action, NOW);
+    const id = addRun(
+      f.crew,
+      {
+        actionKey: action.key,
+        pr,
+        head: SHA.fixed,
+        reviewer: name,
+        log: "stdout",
+      },
+      NOW,
+    );
+    setRunPid(f.crew, id, 8000 + id);
+    if (state === "finished") finishRun(f.crew, id, -124, null, NOW + 1);
+    setAction(
+      f.crew,
+      action.key,
+      state === "active" ? "running" : "pending",
+      NOW,
+      `run ${id}`,
+    );
+    return { id, key: action.key };
+  };
+  const parked = seed(7, "parked", "active");
+  const parkedFinished = seed(7, "parked-finished", "finished");
+  const admitted = seed(8, "admitted", "active");
+  const before = [
+    getRun(f.crew, parked.id),
+    getRun(f.crew, parkedFinished.id),
+    getAction(f.crew, parked.key),
+    getAction(f.crew, parkedFinished.key),
+  ];
+  const reads: number[] = [];
+  f.deps.progress = (run) => {
+    reads.push(run.pr);
+    return null;
+  };
+  f.passInput(
+    { ...input({ head: SHA.fixed, posts: [] }), number: 8 },
+    NOW + 91 * 60_000,
+  );
+  expect([
+    getRun(f.crew, parked.id),
+    getRun(f.crew, parkedFinished.id),
+    getAction(f.crew, parked.key),
+    getAction(f.crew, parkedFinished.key),
+  ]).toEqual(before);
+  expect(reads).not.toContain(7);
+  expect(f.killed).toEqual([8000 + admitted.id]);
+  expect(getRun(f.crew, admitted.id)?.exitCode).toBe(-124);
+  expect(
+    f.calls.some(
+      (argv) => argv.includes("worktree") && argv.includes("remove"),
+    ),
+  ).toBe(false);
+  expect(
+    actionsIn(f.crew, ["pending", "sent", "failed"]).filter(
+      (action) => action.pr === 7 && action.kind === "judgment",
+    ),
+  ).toEqual([]);
+});
+
+test("a supplied excluded observation cannot complete its retained manual reviewer", () => {
+  const f = setup({ settings: { excludePrs: [7], readyAsk: false } });
+  const id = addRun(
+    f.crew,
+    {
+      actionKey: "manual:7:retained:rev2",
+      pr: 7,
+      head: SHA.fixed,
+      reviewer: "rev2",
+      log: "stdout",
+    },
+    NOW - 120_000,
+  );
+  const before = getRun(f.crew, id);
+  f.passInput(
+    input({
+      head: SHA.fixed,
+      posts: [
+        { reviewer: "rev2", commit: SHA.fixed, result: "0/0 resolved, 0 new" },
+      ],
+    }),
+    NOW + 1,
+  );
+  expect(getRun(f.crew, id)).toEqual(before);
+  expect(f.killed).toEqual([]);
 });
 
 test("crewPass holds a legacy adoption boundary without hiding an earlier open RESULT or launching a replacement", () => {

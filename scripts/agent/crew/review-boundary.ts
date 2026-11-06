@@ -70,22 +70,26 @@ export function reviewObservation(
   config: GateConfig,
   now: number,
 ) {
-  const inputs = observed.inputs.map((input) =>
-    reviewInput(
-      input,
-      settings.convergingReviews
-        ? undefined
-        : settings.reviewStarts[String(input.number)],
-    ),
-  );
-  const verdicts = observed.verdicts.map((verdict) => {
-    const input = inputs.find((input) => input.number === verdict.number);
-    return input &&
-      !settings.convergingReviews &&
-      settings.reviewStarts[String(input.number)]
-      ? evaluate(input, config, now)
-      : verdict;
-  });
+  const inputs = observed.inputs
+    .filter((input) => !settings.excludePrs?.includes(input.number))
+    .map((input) =>
+      reviewInput(
+        input,
+        settings.convergingReviews
+          ? undefined
+          : settings.reviewStarts[String(input.number)],
+      ),
+    );
+  const verdicts = observed.verdicts
+    .filter((verdict) => !settings.excludePrs?.includes(verdict.number))
+    .map((verdict) => {
+      const input = inputs.find((input) => input.number === verdict.number);
+      return input &&
+        !settings.convergingReviews &&
+        settings.reviewStarts[String(input.number)]
+        ? evaluate(input, config, now)
+        : verdict;
+    });
   return { inputs, verdicts };
 }
 

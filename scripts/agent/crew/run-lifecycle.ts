@@ -118,6 +118,7 @@ export function settleRuns(
   say: (text: string) => void,
 ) {
   for (const active of activeRuns(crew)) {
+    if (settings.excludePrs?.includes(active.pr)) continue;
     const progress = deps.progress?.(
       active,
       active.cwd ?? checkoutOf(dir, active),
@@ -170,6 +171,7 @@ export function settleRuns(
     finishRun(crew, active.id, -1, null, now);
   }
   for (const running of actionsIn(crew, ["pending", "running"])) {
+    if (settings.excludePrs?.includes(running.pr)) continue;
     const last = runFor(crew, running);
     if (!last || last.finishedAt === null) continue;
     if (last.exitCode === RUN_TIMEOUT_EXIT_CODE) {

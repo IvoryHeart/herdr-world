@@ -210,6 +210,9 @@ Park stale PRs with `crew.excludePrs: [<PR numbers>]`. Exclusions override posit
 scope, filter details/history before fetching, and prevent prompts, comments and
 implicit cleanup of their retained worktrees; they do not waive findings or
 delete review history. Only the owner can authorize their revival.
+Lifecycle settlement also skips excluded runs and action updates, including
+progress reads, timeout signals and completion; observing another active PR
+does not authorize changing a parked PR's retained state or worker.
 Run the sole watcher in a visible `crew-watch` Herdr tab, with conservative
 full/busy intervals; do not run a second hidden controller or tight GitHub loop.
 
