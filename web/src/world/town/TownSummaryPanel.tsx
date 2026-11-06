@@ -28,6 +28,7 @@ import { sharedAsksStore, useWorldAsks } from "../worldAsks";
 import {
   townSummary,
   townSummaryAge,
+  type TownPlaceSummary,
   type TownSummary as TownSummaryModel,
   type TownSummaryCounts,
   type TownSummaryItem,
@@ -77,11 +78,7 @@ export function TownSummaryPanel({
               <SummaryItem
                 key={item.agent.key}
                 item={item}
-                detail={
-                  townSummaryAge(item.since, now) === "just now"
-                    ? "waiting under a minute"
-                    : `waiting ${townSummaryAge(item.since, now).replace(" ago", "")}`
-                }
+                detail={waitingDetail(item, now)}
                 action="Answer"
                 onOpen={onOpenAgent}
               />
@@ -102,13 +99,7 @@ export function TownSummaryPanel({
               <SummaryItem
                 key={item.agent.key}
                 item={item}
-                // Herdr reports the session's last activity, not the moment
-                // it finished, so the age says so.
-                detail={
-                  item.since === null
-                    ? "done"
-                    : `last active ${townSummaryAge(item.since, now)}`
-                }
+                detail={finishedDetail(item, now)}
                 action="Open"
                 onOpen={onOpenAgent}
               />
@@ -175,16 +166,99 @@ export function TownSummaryPanel({
   );
 }
 
+function waitingDetail(item: TownSummaryItem, now: number) {
+  const age = townSummaryAge(item.since, now);
+  return age === "just now"
+    ? "waiting under a minute"
+    : `waiting ${age.replace(" ago", "")}`;
+}
+
+/**
+ * Herdr reports the session's last activity, not the moment it finished, so
+ * the age says so.
+ */
+function finishedDetail(item: TownSummaryItem, now: number) {
+  return item.since === null
+    ? "done"
+    : `last active ${townSummaryAge(item.since, now)}`;
+}
+
+/** Items a room or table card lists before pointing to the full summary. */
+const PLACE_ITEMS = 3;
+
+/**
+ * A room's or table's part of the Town summary (townPlaceSummary), in the
+ * card its name opens: the summary's counts, then who needs you and recent
+ * finishes there, with the same Answer and Open actions.
+ */
+export function TownPlaceSummaryCard({
+  place,
+  now,
+  onOpenAgent,
+}: {
+  place: TownPlaceSummary;
+  now: number;
+  onOpenAgent(agentKey: string): void;
+}) {
+  const needsYou = place.needsYou.slice(0, PLACE_ITEMS);
+  const finished = place.finished.slice(
+    0,
+    Math.max(0, PLACE_ITEMS - needsYou.length),
+  );
+  const more =
+    place.needsYou.length +
+    place.finished.length -
+    needsYou.length -
+    finished.length;
+  return (
+    <div className="town-place-summary">
+      <Counts counts={place.counts} />
+      {needsYou.length || finished.length ? (
+        <ul>
+          {needsYou.map((item) => (
+            <SummaryItem
+              key={item.agent.key}
+              item={item}
+              detail={waitingDetail(item, now)}
+              action="Answer"
+              onOpen={onOpenAgent}
+              located={false}
+            />
+          ))}
+          {finished.map((item) => (
+            <SummaryItem
+              key={item.agent.key}
+              item={item}
+              detail={finishedDetail(item, now)}
+              action="Open"
+              onOpen={onOpenAgent}
+              located={false}
+            />
+          ))}
+        </ul>
+      ) : null}
+      {more > 0 ? (
+        <small className="town-place-summary-more">
+          {more} more in the Town summary
+        </small>
+      ) : null}
+    </div>
+  );
+}
+
 function SummaryItem({
   item,
   detail,
   action,
   onOpen,
+  located = true,
 }: {
   item: TownSummaryItem;
   detail: string;
   action: string;
   onOpen(agentKey: string): void;
+  /** Whether to name the item's room and host (a place card is there). */
+  located?: boolean;
 }) {
   return (
     <li className="town-summary-item">
@@ -195,9 +269,7 @@ function SummaryItem({
             ? ` · blocked: ${item.agent.stateLabels.blocked?.trim() || "needs you"}`
             : ""}
         </strong>
-        <small>
-          {townLocation(item)} · {detail}
-        </small>
+        <small>{located ? `${townLocation(item)} · ${detail}` : detail}</small>
       </div>
       <button
         type="button"

@@ -944,7 +944,7 @@ export default function TownView({
             }}
             selectedRoomKey={selectedRoomKey}
             observability={observability}
-            summaryCounts={townSummary.summary.counts}
+            summary={townSummary.summary}
             onOpenSummary={townSummary.open}
             roomFocus={roomFocus}
             calm={preferences.townCalm}

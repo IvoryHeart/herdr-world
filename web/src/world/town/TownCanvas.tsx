@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -34,7 +35,8 @@ import { TownHudContext, useTownHud } from "./useTownHud";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownInteraction } from "./scene/townInteraction";
 import { townBrowserClock, townBrowserFrames } from "./townBrowserClock";
-import type { TownSummary } from "./townSummary";
+import { townSummary, type TownSummary } from "./townSummary";
+import { townCalls } from "./TownRail";
 import {
   createTownRenderer,
   nextTownTask,
@@ -142,7 +144,7 @@ export function TownCanvas({
   roomActions,
   selectedRoomKey,
   observability,
-  summaryCounts,
+  summary: givenSummary,
   onOpenSummary,
   roomFocus = null,
   calm = false,
@@ -159,10 +161,12 @@ export function TownCanvas({
   };
   observability: OfficeObservability;
   /**
-   * The Town summary's shared counts (townSummary.ts): the board sign shows
-   * the same needs-you and finished counts as the call rail and reception.
+   * The Town summary (townSummary.ts): the board counts the whole town from
+   * it, with the same needs-you and finished items as the call rail, and the
+   * room and table cards show their part of it. Without one, Town summarises
+   * the projection itself.
    */
-  summaryCounts?: TownSummary["counts"];
+  summary?: TownSummary;
   /** Open the Town summary window from the board sign or the phone chip. */
   onOpenSummary?: () => void;
   /** A room to move the camera to (a new `seq` asks again), as from the summary. */
@@ -252,6 +256,18 @@ export function TownCanvas({
     semantics;
   // A desk just pinned keeps the cell it has; save it so it stays there.
   const deskPinned = model.deskPins;
+  const fallbackSummary = useMemo(
+    () =>
+      givenSummary
+        ? null
+        : townSummary(
+            projection,
+            townCalls(projection.roster, new Map(), [], () => undefined),
+            observability,
+          ),
+    [givenSummary, projection, observability],
+  );
+  const summary = givenSummary ?? fallbackSummary!;
   useEffect(() => {
     for (const { pinKey, cell } of scene.pinPlacements(
       deskPinned,
@@ -797,6 +813,7 @@ export function TownCanvas({
             selectedRoomKey={selectedRoomKey}
             onSelect={onSelect}
             onActivate={onActivateAgent}
+            summary={summary}
             onActivateRoom={(key) => {
               onActivateRoom(key);
               zoomToRoomKey(key);
@@ -814,9 +831,8 @@ export function TownCanvas({
         </TownHudContext.Provider>
       </div>
       <TownBoard
-        model={model}
+        counts={summary.counts}
         observability={observability}
-        summaryCounts={summaryCounts}
         onOpenSummary={onOpenSummary}
       />
       <div className="town-zoom" role="group" aria-label="Camera">

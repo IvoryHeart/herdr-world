@@ -136,13 +136,63 @@ export async function checkTownRoomPlates(
           button.getBoundingClientRect().height >= 39.5 &&
           receivesPointer(button),
       ) &&
-      Math.abs(plate.getBoundingClientRect().width - width) < 1 &&
-      actions.getBoundingClientRect().left >=
-        plate.getBoundingClientRect().left - 1 &&
-      actions.getBoundingClientRect().right <=
-        plate.getBoundingClientRect().right + 1,
+      Math.abs(plate.getBoundingClientRect().width - width) < 1,
     "keyboard focus must reveal 40px room actions without widening the name plate",
   );
+  // One card holds the room's summary and its actions, hung from the plate.
+  const card = plate.querySelector<HTMLElement>(".town-room-plaque-card");
+  // The card builds its summary when it first opens.
+  await waitFor(
+    () => !!card?.querySelector(".town-place-summary"),
+    "the room's card never built its summary",
+  );
+  check(
+    !!card &&
+      card.contains(actions) &&
+      getComputedStyle(card).visibility === "visible" &&
+      !!card.querySelector(".town-place-summary .town-summary-counts") &&
+      Math.abs(
+        card.getBoundingClientRect().left - plate.getBoundingClientRect().left,
+      ) < 3 &&
+      card.getBoundingClientRect().top >=
+        plate.getBoundingClientRect().bottom - 3,
+    "the room's card must show its summary with the actions, under the plate",
+  );
+  // A table's nameplate takes its own pointer and opens the table's card.
+  plate.blur();
+  const title = plate
+    .closest(".town-room")!
+    .querySelector<HTMLElement>(".town-desk-title");
+  const tag = title?.querySelector<HTMLElement>(".town-desk-tag");
+  const deskCard = title?.querySelector<HTMLElement>(".town-desk-card");
+  check(
+    !!tag && !!deskCard && getComputedStyle(deskCard).visibility === "hidden",
+    "a table's card must start hidden under its nameplate",
+  );
+  if (title && tag && deskCard) {
+    const tagBox = tag.getBoundingClientRect();
+    check(
+      tag.contains(
+        document.elementFromPoint(
+          tagBox.left + tagBox.width / 2,
+          tagBox.top + tagBox.height / 2,
+        ),
+      ),
+      "a table's nameplate must receive its native pointer hit",
+    );
+    title.focus();
+    await waitFor(
+      () => !!deskCard.querySelector(".town-place-summary"),
+      "the table's card never built its summary",
+    );
+    check(
+      getComputedStyle(deskCard).visibility === "visible" &&
+        !!deskCard.querySelector(".town-place-summary .town-summary-counts") &&
+        deskCard.getBoundingClientRect().top >= tagBox.bottom - 3,
+      "focusing a table's nameplate must show the table's summary under it",
+    );
+    title.blur();
+  }
   plate.blur();
   plate.dispatchEvent(
     new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }),

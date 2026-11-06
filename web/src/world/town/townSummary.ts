@@ -1,11 +1,13 @@
 import type {
   HerdrOfficeProjection,
   OfficeAgent,
+  OfficeRosterEntry,
 } from "../herdrOfficeProjection";
 import type { OfficeObservability } from "../officeObservability";
 import type { TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
 import { officeReadModel, type OfficeStatusCounts } from "../officeReadModel";
+import type { WorldAgentStatus } from "../worldObject";
 
 /**
  * The Town summary: one read model behind the Town board sign, the phone
@@ -16,7 +18,12 @@ import { officeReadModel, type OfficeStatusCounts } from "../officeReadModel";
  * includes them as separate items.
  */
 export type TownSummary = {
-  counts: { needsYou: number; working: number; finished: number };
+  /**
+   * Whole-town totals for the board and chip. Needs you and finished are the
+   * rail's items; working, quiet and unknown add up every room of every
+   * building, and `agents` is every agent in the town.
+   */
+  counts: TownSummaryCounts & { agents: number; buildings: number };
   needsYou: readonly TownSummaryItem[];
   asks: readonly WorldAsk[];
   /**
@@ -77,10 +84,30 @@ const emptyCounts = (): TownSummaryCounts => ({
   unknown: 0,
 });
 
+const COUNT_KEYS = Object.keys(emptyCounts()) as (keyof TownSummaryCounts)[];
+
+/** Herdr's statuses in the summary's display set. */
+const COUNT_OF: Readonly<Record<WorldAgentStatus, keyof TownSummaryCounts>> = {
+  blocked: "needsYou",
+  working: "working",
+  done: "finished",
+  idle: "quiet",
+  unknown: "unknown",
+};
+
+function addCounts(into: TownSummaryCounts, from: TownSummaryCounts) {
+  for (const key of COUNT_KEYS) into[key] += from[key];
+}
+
+/** Every agent a set of counts holds. */
+export function townSummaryAgents(counts: TownSummaryCounts): number {
+  return COUNT_KEYS.reduce((sum, key) => sum + counts[key], 0);
+}
+
 const roomContributions = new WeakMap<OfficeStatusCounts, TownSummaryCounts>();
 const topologies = new WeakMap<
   HerdrOfficeProjection,
-  { hosts: TownSummaryHost[]; working: number }
+  { hosts: TownSummaryHost[]; totals: TownSummaryCounts }
 >();
 
 function summaryTopology(office: HerdrOfficeProjection) {
@@ -88,23 +115,19 @@ function summaryTopology(office: HerdrOfficeProjection) {
   if (previous) return previous;
   const read = officeReadModel(office);
   const byHost = new Map<string, TownSummaryHost["rooms"][number][]>();
-  let working = 0;
+  const totals = emptyCounts();
   for (const room of office.roomRoster) {
     const raw = read.roomCounts.get(room.key);
     let counts = raw ? roomContributions.get(raw) : undefined;
     if (!counts) {
-      counts = raw
-        ? {
-            needsYou: raw.blocked,
-            working: raw.working,
-            finished: raw.done,
-            quiet: raw.idle,
-            unknown: raw.unknown,
-          }
-        : emptyCounts();
-      if (raw) roomContributions.set(raw, counts);
+      counts = emptyCounts();
+      if (raw) {
+        for (const status of Object.keys(COUNT_OF) as WorldAgentStatus[])
+          counts[COUNT_OF[status]] += raw[status];
+        roomContributions.set(raw, counts);
+      }
     }
-    working += counts.working;
+    addCounts(totals, counts);
     let rooms = byHost.get(room.hostKey);
     if (!rooms) byHost.set(room.hostKey, (rooms = []));
     rooms.push({ key: room.key, label: room.displayLabel, counts });
@@ -112,9 +135,7 @@ function summaryTopology(office: HerdrOfficeProjection) {
   const hosts = office.hosts.map((host): TownSummaryHost => {
     const rooms = byHost.get(host.key) ?? [];
     const counts = emptyCounts();
-    for (const room of rooms)
-      for (const key of Object.keys(counts) as (keyof TownSummaryCounts)[])
-        counts[key] += room.counts[key];
+    for (const room of rooms) addCounts(counts, room.counts);
     return {
       key: host.key,
       label: host.accessibleLabel ?? host.displayLabel,
@@ -123,7 +144,7 @@ function summaryTopology(office: HerdrOfficeProjection) {
       rooms,
     };
   });
-  const result = { hosts, working };
+  const result = { hosts, totals };
   topologies.set(office, result);
   return result;
 }
@@ -152,14 +173,18 @@ export function townSummary(
     .sort((left, right) => (right.since ?? 0) - (left.since ?? 0));
   // Complete room contributions were counted cooperatively before publication.
   // Asks, metrics and the display clock do not recount raw agent topology.
-  const { hosts, working } = summaryTopology(office);
+  const { hosts, totals } = summaryTopology(office);
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   return {
     counts: {
       needsYou: needsYou.length + asks.length,
-      working,
+      working: totals.working,
       finished: finished.length,
+      quiet: totals.quiet,
+      unknown: totals.unknown,
+      agents: townSummaryAgents(totals),
+      buildings: hosts.length,
     },
     needsYou,
     asks,
@@ -177,6 +202,71 @@ export function townSummary(
           })),
         }
       : { available: false },
+  };
+}
+
+/** One room's or table's summary: its counts and its rail items. */
+export type TownPlaceSummary = {
+  counts: TownSummaryCounts;
+  needsYou: readonly TownSummaryItem[];
+  finished: readonly TownSummaryItem[];
+};
+
+export type TownPlace = { kind: "room" | "desk"; key: string };
+
+const roomIndexes = new WeakMap<
+  readonly TownSummaryHost[],
+  ReadonlyMap<string, TownSummaryCounts>
+>();
+const deskIndexes = new WeakMap<
+  readonly OfficeRosterEntry[],
+  ReadonlyMap<string, TownSummaryCounts>
+>();
+
+/**
+ * A room's or table's part of the Town summary, for its hover card: the
+ * room counts the summary lists, or one pass over the roster by table, and
+ * the summary's own needs-you and finished items there.
+ */
+export function townPlaceSummary(
+  summary: TownSummary,
+  office: HerdrOfficeProjection,
+  place: TownPlace,
+): TownPlaceSummary {
+  let counts: TownSummaryCounts | undefined;
+  if (place.kind === "room") {
+    let index = roomIndexes.get(summary.hosts);
+    if (!index) {
+      index = new Map(
+        summary.hosts.flatMap((host) =>
+          host.rooms.map((room) => [room.key, room.counts] as const),
+        ),
+      );
+      roomIndexes.set(summary.hosts, index);
+    }
+    counts = index.get(place.key);
+  } else {
+    let index = deskIndexes.get(office.roster);
+    if (!index) {
+      const desks = new Map<string, TownSummaryCounts>();
+      for (const { agent } of office.roster) {
+        if (agent.deskKey === null) continue;
+        let desk = desks.get(agent.deskKey);
+        if (!desk) desks.set(agent.deskKey, (desk = emptyCounts()));
+        desk[COUNT_OF[agent.semanticStatus]] += 1;
+      }
+      deskIndexes.set(office.roster, (index = desks));
+    }
+    counts = index.get(place.key);
+  }
+  const here = (item: TownSummaryItem) =>
+    place.kind === "room"
+      ? item.roomKey === place.key
+      : item.agent.deskKey === place.key;
+  return {
+    counts: counts ?? emptyCounts(),
+    needsYou: summary.needsYou.filter(here),
+    finished: summary.finished.filter(here),
   };
 }
 

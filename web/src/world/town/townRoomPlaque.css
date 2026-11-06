@@ -107,29 +107,158 @@
   cursor: not-allowed;
 }
 
-.town-room-plaque-actions {
+/* A place's card: a room's or table's summary, in the plaque's wood and cream.
+   A room's card also holds Rename and Close, so one hover shows them all. */
+.town-place-card {
   position: absolute;
-  right: -2px;
-  top: calc(100% - 1px);
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
   gap: 4px;
   box-sizing: border-box;
-  max-width: calc(100% + 4px);
-  padding: 4px;
+  width: max-content;
+  max-width: 260px;
+  padding: 5px 6px;
+  color: #ffe9c2;
   background: #6e4a2e;
   border: 2px solid #3b2414;
   border-radius: 0 0 5px 5px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  font:
+    600 11px / 1.3 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  text-align: left;
+  white-space: normal;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
 
-.town-room-plaque:is(:hover, :focus-within) .town-room-plaque-actions {
+.town-room-plaque-card {
+  left: -2px;
+  top: calc(100% - 1px);
+  min-width: calc(100% + 4px);
+}
+
+.town-room-plaque:is(:hover, :focus-within) {
+  z-index: 6;
+}
+
+.town-room-plaque:is(:hover, :focus-within) .town-place-card {
   opacity: 1;
   visibility: inherit;
   pointer-events: auto;
+}
+
+.town-room-plaque-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.town-place-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+}
+
+.town-place-summary .town-summary-counts {
+  color: #e7c48a;
+  font-size: 11px;
+}
+
+.town-place-summary .town-summary-counts [data-count="needsYou"] {
+  color: #ffb547;
+}
+
+.town-place-summary ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-place-summary .town-summary-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 4px 3px 6px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 233, 194, 0.18);
+  border-radius: 4px;
+}
+
+.town-place-summary .town-summary-item div {
+  display: grid;
+  min-width: 0;
+}
+
+.town-place-summary .town-summary-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.town-place-summary .town-summary-item small,
+.town-place-summary-more {
+  color: #e7c48a;
+  font-size: 10px;
+}
+
+.town-place-summary .town-summary-item button {
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 0 7px;
+  color: #ffe9c2;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* A table's nameplate takes the pointer; its card opens below it. */
+.town-desk-title {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.town-desk-title:is(:hover, :focus-within) {
+  z-index: 6;
+}
+
+.town-desk-title .town-desk-tag {
+  pointer-events: auto;
+  cursor: default;
+}
+
+.town-desk-title:focus-visible .town-desk-tag {
+  outline: 2px solid #ffd166;
+}
+
+/* The desk tags scale up to 1.6x when zoomed out; the card keeps the room
+   plaques' constant size and starts just under the plate. */
+.town-desk-card {
+  left: 32px;
+  top: calc(44px + 10px * clamp(1, var(--iz), 1.6));
+  border-radius: 5px;
+  transform: translateX(-50%) scale(var(--iz));
+  transform-origin: 50% 0;
+}
+
+.town-desk-title:is(:hover, :focus-within) .town-desk-card {
+  opacity: 1;
+  visibility: inherit;
+  pointer-events: auto;
+}
+
+@media (pointer: coarse) {
+  .town-place-summary .town-summary-item button {
+    min-height: 40px;
+  }
 }
 
 .town-room-plaque:focus-visible {

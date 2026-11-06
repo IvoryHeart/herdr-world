@@ -95,7 +95,15 @@ test("Summary distinguishes loading, unavailable and an observed empty Pod roste
 
 test("Town places Pods after Hosts and before Spend without changing reception", () => {
   const summary: TownSummary = {
-    counts: { needsYou: 0, working: 0, finished: 0 },
+    counts: {
+      needsYou: 0,
+      working: 0,
+      finished: 0,
+      quiet: 0,
+      unknown: 0,
+      agents: 0,
+      buildings: 0,
+    },
     needsYou: [],
     asks: [],
     finished: [],

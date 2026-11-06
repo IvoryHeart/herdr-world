@@ -79,7 +79,15 @@ function Fixture({ world }: { world: WorldObject }) {
       {summaryOpen && (
         <TownSummaryPanel
           summary={{
-            counts: { needsYou: 0, working: 0, finished: 0 },
+            counts: {
+              needsYou: 0,
+              working: 0,
+              finished: 0,
+              quiet: 0,
+              unknown: 0,
+              agents: 0,
+              buildings: 0,
+            },
             needsYou: [],
             asks: [],
             finished: [],

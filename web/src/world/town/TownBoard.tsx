@@ -5,28 +5,21 @@ import {
   formatOfficeUsage,
   type OfficeObservability,
 } from "../officeObservability";
-import type { TownModel } from "./townModel";
 import type { TownSummary } from "./townSummary";
 
+/**
+ * The Town board counts the whole town from the Town summary (townSummary.ts):
+ * every building's agents, whichever rooms and desks the scene has admitted.
+ */
 export function TownBoard({
-  model,
+  counts,
   observability,
-  summaryCounts,
   onOpenSummary,
 }: {
-  model: TownModel;
+  counts: TownSummary["counts"];
   observability: OfficeObservability;
-  summaryCounts?: TownSummary["counts"];
   onOpenSummary?: () => void;
 }) {
-  const counts = { working: 0, blocked: 0, done: 0, idle: 0, unknown: 0 };
-  for (const agent of model.agents.values()) counts[agent.semanticStatus] += 1;
-  // The shared summary's counts, when Town provides them (see townSummary).
-  if (summaryCounts) {
-    counts.working = summaryCounts.working;
-    counts.blocked = summaryCounts.needsYou;
-    counts.done = summaryCounts.finished;
-  }
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   // Phones show a compact chip; it opens the full board in place.
@@ -37,7 +30,8 @@ export function TownBoard({
       setOpen(false);
     }
   };
-  const summary = `${counts.working} working, ${counts.blocked} need you, ${counts.done} done`;
+  const population = `${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} in ${counts.buildings} ${counts.buildings === 1 ? "building" : "buildings"}`;
+  const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}`;
   return (
     <>
       <button
@@ -61,8 +55,8 @@ export function TownBoard({
         onKeyDown={closeOnEscape}
       >
         <span data-status="working">{counts.working}</span>
-        <span data-status="blocked">!{counts.blocked}</span>
-        <span data-status="done">✓{counts.done}</span>
+        <span data-status="blocked">!{counts.needsYou}</span>
+        <span data-status="done">✓{counts.finished}</span>
       </button>
       <div
         id="town-board"
@@ -91,13 +85,21 @@ export function TownBoard({
           </div>
           <div>
             <dt>Need you</dt>
-            <dd>{counts.blocked}</dd>
+            <dd>{counts.needsYou}</dd>
           </div>
           <div>
             <dt>Done</dt>
-            <dd>{counts.done}</dd>
+            <dd>{counts.finished}</dd>
+          </div>
+          <div>
+            <dt>Quiet</dt>
+            <dd>{counts.quiet}</dd>
           </div>
         </dl>
+        <p className="town-board-population">
+          {population}
+          {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
+        </p>
         <div className="town-board-economy">
           <span>ECONOMY</span>
           {available ? (

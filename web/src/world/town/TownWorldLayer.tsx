@@ -12,7 +12,13 @@ import { TownBuildingSign } from "./TownBuildingSign";
 import type { TownBuildingSigns } from "./townBuildingSigns";
 import type { TownRoomActions } from "./TownCanvas";
 import { ReceptionEntry, portrait } from "./TownReceptionEntry";
-import { TownRoomPlaque } from "./TownRoomPlaque";
+import { TownRoomPlaque, type TownPlaceCardContent } from "./TownRoomPlaque";
+import { TownDeskTitle } from "./TownDeskTitle";
+import {
+  townPlaceSummary,
+  type TownPlace,
+  type TownSummary,
+} from "./townSummary";
 import { TownFoldIndicators } from "./TownFoldIndicators";
 import { TownTargets } from "./TownAccessibleTargets";
 import type { TownDeskBadge } from "./townBadges";
@@ -93,9 +99,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   renderer,
   pennants,
   signs,
+  summary,
 }: {
   /** The HUD store: the ages clock. */
   hud: TownHud;
+  /** The Town summary; room and table cards show their part of it. */
+  summary: TownSummary;
   signs: TownBuildingSigns;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
@@ -155,6 +164,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
       ? townCarpetOf(TERMINAL_COLOR_HEX[chosen])
       : townCarpetFor(roomKey);
   };
+  /** A room's or table's card: its part of the summary, made on first open. */
+  const placeCard = (place: TownPlace): TownPlaceCardContent => ({
+    summary: () => townPlaceSummary(summary, model.projection, place),
+    now,
+    onOpenAgent: onActivate,
+  });
   const newRoomBuilding =
     layout.buildings.find((b) => b.hostKey === selectedHost) ??
     layout.buildings[0];
@@ -438,7 +453,13 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                 {desk.appearanceStatus}
                               </span>
                             ) : null}
-                            <span className="town-desk-tag">
+                            <TownDeskTitle
+                              deskKey={desk.key}
+                              label={desk.displayLabel}
+                              card={placeCard({ kind: "desk", key: desk.key })}
+                              onSelect={onSelect}
+                              onActivate={onActivate}
+                            >
                               <span
                                 className="town-desk-name"
                                 aria-hidden="true"
@@ -449,7 +470,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                 badge={deskBadges.get(desk.key)}
                                 deskLabel={desk.displayLabel}
                               />
-                            </span>
+                            </TownDeskTitle>
                             {desk.observedPaneCount >
                             desk.paneDevices.length ? (
                               <button
@@ -509,6 +530,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       }
                     }
                     actions={roomActions}
+                    card={placeCard({ kind: "room", key: room.key })}
                   />
                   {roomActions.showCreateSeat(room.key) && seatCell ? (
                     <>

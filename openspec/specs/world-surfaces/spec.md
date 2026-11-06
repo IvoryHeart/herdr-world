@@ -1315,10 +1315,13 @@ as active. Needs-you items such as open asks SHALL NOT add to either agent count
 The counter SHALL explain its working/waiting breakdown in a tooltip and accessible
 label. Its numerals SHALL be tabular, its total fraction muted, and its whole count
 muted when ACTIVE is zero; it SHALL stay fixed ahead of the blocked badge while
-only the room name truncates. Rename and Close SHALL
-appear below the plate on hover or keyboard focus, and on a touch of the plate,
-with targets at least 40 CSS pixels wide and tall. These controls SHALL NOT
-reserve name width while hidden. The dashed empty-seat **+** inside a room
+only the room name truncates. One card SHALL
+appear below the plate on hover or keyboard focus, and on a touch of the plate:
+the room's part of the Town summary (its counts and its needs-you and finished
+items with their actions), then Rename and Close with targets at least 40 CSS
+pixels wide and tall. These controls SHALL NOT reserve name width while hidden.
+A table's nameplate SHALL open the same kind of card for that table on hover,
+focus or a touch, from the same summary read model. The dashed empty-seat **+** inside a room
 SHALL open the existing launcher with that qualified room selected; Terminal
 SHALL be its first choice for a plain tab, alongside profiles and agent kinds.
 The plate SHALL NOT contain a separate New agent text button. If the selected
@@ -1883,9 +1886,11 @@ show the same attention items and needs-you count as the reception tray and
 the Needs you counter. Needs-you SHALL count blocked agents plus open questions as separate
 items, including when one blocked agent also raised a question. Reception as
 a place continues to seat agents. Host and room counts describe agents;
-questions SHALL NOT acquire a guessed host or room. The board sign SHALL show
-agents working and finished, items needing the user, and spend when a metrics
-provider reports it. Its Summary action, and
+questions SHALL NOT acquire a guessed host or room. The board sign SHALL count
+the whole town, every building, from that read model and never from the
+scene's admitted rooms or desks: agents working, finished and quiet, items
+needing the user, every agent in the town with its number of buildings, and
+spend when a metrics provider reports it. Its Summary action, and
 on phones its counts chip, SHALL open a Town summary window in the shared
 window frame. Launching an already-open Summary SHALL restore and raise it
 through the shared window manager. It lists, in this order: open questions using the shared Ask
