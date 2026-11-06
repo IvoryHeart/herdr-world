@@ -139,8 +139,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     keeps the whole question with **Answer in the Terminal** and the reason.
     An unrecognised prompt is shown as the terminal draws it. Before Claude
     has a session, its folder-trust question shows **No, exit** and **Yes, I
-    trust this folder**; a click is checked against that question and Claude
-    process, then moves Claude's selection and presses Enter.
+    trust this folder**. With pre-approved grants the decline choice can be
+    **No, continue without these permissions**, which continues without those
+    grants instead of exiting. Chat and Needs you show the folder, full safety
+    text and warnings above the choices. A click is checked against that
+    question and Claude process, then moves Claude's selection and presses Enter.
   - Harness command menus, such as Claude Code's and Codex's `/model` and
     `/permissions`, appear as a menu card: numbered options, the cursor, the
     footer's keys as buttons and any text field. Each key is checked against

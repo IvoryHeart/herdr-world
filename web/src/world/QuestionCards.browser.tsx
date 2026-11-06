@@ -83,6 +83,7 @@ let trustPrompt: PendingPrompt = {
   question: [
     "Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what's in this folder first.",
     "Claude Code will be able to read, edit, and execute files here.",
+    "This folder pre-approves 3 tool permissions in its settings. Review these permissions before continuing.",
   ],
   request: ["Accessing workspace:", "/work/example"],
   options: [
@@ -560,6 +561,60 @@ async function run() {
   check(
     document.querySelector(".needs-you-tab .agent-chat-trust"),
     "Needs you shows the trust card",
+  );
+  const needsTrust = document.querySelector<HTMLElement>(
+    ".needs-you-tab .agent-chat-trust",
+  )!;
+  check(
+    needsTrust && !needsTrust.querySelector(".needs-you-text"),
+    "trust safety text is never behind the Needs you more clamp",
+  );
+  const safety = [...needsTrust.querySelectorAll("p")].filter(
+    (node) =>
+      node.textContent?.includes("Quick safety check") ||
+      node.textContent?.includes("pre-approves 3 tool permissions"),
+  );
+  const buttons = needsTrust.querySelector<HTMLElement>(
+    ".agent-chat-ask-options",
+  )!;
+  needsTrust.scrollIntoView({ block: "center" });
+  await frame();
+  check(
+    safety.length === 2,
+    "Needs you includes the safety question and grant warning",
+  );
+  for (const line of safety) {
+    const range = document.createRange();
+    range.selectNodeContents(line);
+    const bounds = range.getBoundingClientRect();
+    check(
+      bounds.height > 0 &&
+        bounds.top >= 0 &&
+        bounds.bottom <= window.innerHeight &&
+        bounds.bottom <= buttons.getBoundingClientRect().top,
+      "the full safety question and warning are visible above the trust buttons",
+    );
+    for (
+      let parent = line.parentElement;
+      parent && parent !== document.body;
+      parent = parent.parentElement
+    ) {
+      if (
+        ["hidden", "clip", "auto", "scroll"].includes(
+          getComputedStyle(parent).overflowY,
+        )
+      ) {
+        const clip = parent.getBoundingClientRect();
+        check(
+          bounds.top >= clip.top && bounds.bottom <= clip.bottom,
+          "no ancestor clips the trust safety text",
+        );
+      }
+    }
+  }
+  check(
+    buttons.getBoundingClientRect().bottom <= window.innerHeight,
+    "the trust buttons are visible beside the safety text",
   );
   check(
     document.documentElement.scrollWidth <= window.innerWidth,

@@ -34,6 +34,7 @@ const EDGE = /^\s*(?:[─━▔]{3,}|╭─+╮)\s*$/u;
 
 type ParsedTrust = {
   shown: string[];
+  menu: string[];
   request: string[];
   question: string[];
   options: { label: string; choice: TrustChoice; cursor: boolean }[];
@@ -68,15 +69,33 @@ export function parseTrustPrompt(screen: string): ParsedTrust | null {
   if (quick < 0 || !QUICK.test(lines[quick]!)) return null;
   let top = quick - 1;
   while (top >= Math.max(0, quick - 12) && !EDGE.test(lines[top]!)) top -= 1;
-  const start = top >= 0 && EDGE.test(lines[top]!) ? top + 1 : quick;
+  if (top < 0 || !EDGE.test(lines[top]!)) return null;
+  const start = top + 1;
   const body = lines.slice(quick, row - 1);
   if (body.some((line) => FOOTER.test(line) || /^\s*❯/u.test(line)))
     return null;
   const trim = (part: string[]) =>
     part.map((line) => line.trim()).filter(Boolean);
+  const request = trim(lines.slice(start, quick));
+  // Never offer input for an undisclosed folder. Requiring the dialog edge,
+  // heading and absolute folder also rejects a capture starting mid-path.
+  if (
+    request[0] !== "Accessing workspace:" ||
+    request.length < 2 ||
+    !/^(?:\/|[A-Za-z]:[\\/]|\\\\)/u.test(request[1]!) ||
+    !lines[quick]!.replace(QUICK, "").trim()
+  )
+    return null;
+  const shown = lines.slice(start, end + 1);
+  const menu = [...shown];
+  // Only the two parsed choice rows carry a selection cursor. Folder and
+  // question text may themselves contain ❯ and remain exact menu identity.
+  for (const index of [row - 1 - start, row - start])
+    menu[index] = menu[index]!.replace(/^(\s*)❯(?=\s)/u, "$1 ");
   return {
-    shown: lines.slice(start, end + 1),
-    request: trim(lines.slice(start, quick)),
+    shown,
+    menu,
+    request,
     question: trim(body),
     options: options as ParsedTrust["options"],
   };
@@ -225,10 +244,7 @@ export function createTrustPrompts(args: {
         fingerprint: hash(["trust", seen.key, parsed.shown]),
       },
       // The same menu with the cursor anywhere.
-      menu: hash([
-        seen.key,
-        parsed.shown.map((line) => line.replace(/❯/gu, " ")),
-      ]),
+      menu: hash([seen.key, parsed.menu]),
     };
   };
 

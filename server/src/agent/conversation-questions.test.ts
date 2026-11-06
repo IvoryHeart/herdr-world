@@ -335,20 +335,37 @@ test("rejected asks remain Terminal-only through the conversation source", async
   }
 });
 
-test("a failed transcript join keeps the screen prompt and invalidates the cache", async () => {
-  await writeFile(transcript, ask([COLOR]));
-  for (const options of [{ cacheFailure: true }, { resolveFailure: true }]) {
-    const { source, invalidations } = fakeHerdr(options);
-    const read = await source.read({ pane_id: "w1:p1" });
-    expect(read.pending_prompt!.question).toEqual([COLOR.question]);
-    expect(read.pending_prompt!.options.map((option) => option.key)).toEqual([
-      "1",
-      "2",
-      "3",
-      "4",
-    ]);
-    if (options.cacheFailure) expect(invalidations()).toBeGreaterThan(0);
-    source.dispose();
+test("a failed transcript join keeps the screen card but never answer authority", async () => {
+  for (const question of [
+    COLOR,
+    { ...COLOR, multiSelect: true },
+    {
+      ...COLOR,
+      options: [
+        { label: "Red", description: "x".repeat(2001) },
+        COLOR.options[1],
+      ],
+    },
+    { ...COLOR, question: "A different question?" },
+  ]) {
+    await writeFile(transcript, ask([question]));
+    for (const options of [{ cacheFailure: true }, { resolveFailure: true }]) {
+      const { source, state, invalidations } = fakeHerdr(options);
+      const read = await source.read({ pane_id: "w1:p1" });
+      expect(read.pending_prompt!.question).toEqual([COLOR.question]);
+      expect(read.pending_prompt!.options).toEqual([]);
+      expect(read.pending_prompt!.unanswerable).toContain("transcript");
+      expect(
+        await source.answer({
+          pane_id: "w1:p1",
+          key: "1",
+          prompt_fingerprint: read.pending_prompt!.fingerprint,
+        }),
+      ).toMatchObject({ status: "refused" });
+      expect(state.sent).toEqual([]);
+      if (options.cacheFailure) expect(invalidations()).toBeGreaterThan(0);
+      source.dispose();
+    }
   }
 });
 

@@ -31,6 +31,8 @@ Malformed or oversized recorded questions stay **Terminal-only**: Chat does
 not drop fields or fall back to screen answer keys. Review buttons require the
 whole ordered list of questions to match the recorded call, as well as its
 header chips. Literal wildcard and code contents remain part of the comparison.
+Ambiguous asterisk formatting stays Terminal-only. If the transcript cannot be
+checked, the screen question remains visible without answer keys.
 A failed history read still shows its **Refresh** error beside any question card.
 
 ## What Chat does
@@ -144,10 +146,15 @@ that root; stat metadata cannot redirect the read to a different transcript.
   fingerprint covers the call ID and the recorded questions as well as the
   screen, so an answer is refused if either changes. A guessed conversation
   never supplies questions. Needs you shows the same card.
-- Claude Code's folder-trust question ("Quick safety check: …", the unnumbered
-  choices "No, exit" and "Yes, I trust this folder", the ❯ cursor on one, and
-  "Enter to confirm · Esc to cancel") comes before Claude has a session. Chat
-  shows it as a trust card, in Chat and Needs you, only while Herdr reports
+- Claude Code's folder-trust question (the complete "Accessing workspace:"
+  heading and folder, "Quick safety check: …", the unnumbered choices
+  "No, exit" and "Yes, I trust this folder", the ❯ cursor on one, and
+  "Enter to confirm · Esc to cancel") comes before Claude has a session.
+  For folders with pre-approved tool grants, Claude can instead offer
+  "No, continue without these permissions": declining continues Claude without
+  those grants rather than exiting. Chat preserves that label and action.
+  Chat and Needs you show the full safety question and warnings above the
+  choices without a collapsed preview. Chat shows the card only while Herdr reports
   Claude in that pane with no session. A click on a choice calls
   `agent_conversation.trust` with the card's fingerprint. Without a session,
   the service binds the input to a pre-session witness: its own

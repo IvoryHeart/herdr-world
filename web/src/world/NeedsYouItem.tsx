@@ -551,11 +551,15 @@ function NeedsYouAgent({
             : null
         }
         prompt={asking}
-        renderPromptMessage={(message) => (
-          <NeedsYouText>
+        renderPromptMessage={(message) =>
+          asking?.trust ? (
             <div className="needs-you-markdown">{message}</div>
-          </NeedsYouText>
-        )}
+          ) : (
+            <NeedsYouText>
+              <div className="needs-you-markdown">{message}</div>
+            </NeedsYouText>
+          )
+        }
         agent={name}
         answering={answering}
         notice={notice}

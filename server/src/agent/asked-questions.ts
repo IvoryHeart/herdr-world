@@ -110,28 +110,19 @@ export function askedQuestions(
   }
 }
 
-/** Normalize paired rendering markup; keep literal wildcard and code contents. */
+/** Rendering can remove inline-code delimiters from recorded text. Asterisks
+ * are ambiguous (emphasis or globs), so never discard them to grant keys.
+ * The screen is already rendered: its literal code/glob contents stay intact.
+ */
+const literal = (value: string) => value.replace(/\s+/g, " ").trim();
 const plain = (value: string): string =>
-  value
-    .split(/(`+[^`]+`+)/g)
-    .map((part) =>
-      part.startsWith("`") && /^(`+)([^`]+)\1$/.test(part)
-        ? part.replace(/^(`+)([^`]+)\1$/, "$2")
-        : part
-            .replace(
-              /(^|[\s(])\*\*([^\s*](?:[^*]*[^\s*])?)\*\*(?=$|[\s).,!?])/g,
-              "$1$2",
-            )
-            .replace(
-              /(^|[\s(])\*([^\s*](?:[^*]*[^\s*])?)\*(?=$|[\s).,!?])/g,
-              "$1$2",
-            ),
-    )
-    .join("")
-    .replace(/\s+/g, " ")
-    .trim();
-const optionText = (label: string, description?: string) =>
-  `${plain(label)} ${plain(description ?? "")}`.trim();
+  literal(value.replace(/(`+)([^`]+)\1/g, "$2"));
+const optionText = (
+  label: string,
+  description: string | undefined,
+  recorded = false,
+) =>
+  `${(recorded ? plain : literal)(label)} ${(recorded ? plain : literal)(description ?? "")}`.trim();
 
 export const UNMATCHED =
   "Chat could not match this question to what the terminal shows (it may be cut off, still drawing or changed), so it does not press a key.";
@@ -171,12 +162,12 @@ export function withAskedQuestions(
     };
   const { questions } = asked;
   const headers = questions.map((item) => plain(item.header ?? ""));
-  const steps = screen?.steps?.map((step) => plain(step.label));
+  const steps = screen?.steps?.map((step) => literal(step.label));
   const sameForm =
     questions.length > 1
       ? JSON.stringify(steps) === JSON.stringify(headers)
       : steps === undefined;
-  const shown = plain(screen?.question.join(" ") ?? "");
+  const shown = literal(screen?.question.join(" ") ?? "");
   const current = questions.findIndex((item) => plain(item.question) === shown);
   const match = current >= 0 ? questions[current]! : null;
   const choices = screen?.options.filter((option) => !option.input) ?? [];
@@ -189,6 +180,7 @@ export function withAskedQuestions(
         optionText(
           match.options[index]!.label,
           match.options[index]!.description,
+          true,
         ),
     );
   // The review's full ordered question list must belong to this call.
@@ -197,7 +189,7 @@ export function withAskedQuestions(
         .join(" ")
         .split(/(?:^|\s)●\s+/)
         .slice(1)
-        .map((part) => plain(part.split(/\s+→\s+/)[0]!))
+        .map((part) => literal(part.split(/\s+→\s+/)[0]!))
     : [];
   const sameReview =
     reviewed.length === questions.length &&

@@ -431,7 +431,16 @@ export function createHerdrConversationSource(args: {
       return withAskedQuestions(shown, askedQuestions(entries));
     } catch {
       if (step && "resolved" in step) args.cache.invalidate(step.resolved);
-      return shown;
+      // Keep the screen question visible, but a failed transcript check must
+      // never grant the keys that an unsupported or mismatched ask would lose.
+      return shown
+        ? {
+            ...shown,
+            options: [],
+            unanswerable:
+              "Chat could not check this question against Claude's transcript. Answer it in the Terminal.",
+          }
+        : null;
     }
   };
 

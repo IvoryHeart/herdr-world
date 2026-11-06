@@ -278,6 +278,10 @@ test("literal wildcard, code and punctuation differences never get keys", () => 
     ["Delete *.log", "Delete .log"],
     ["Delete `*.log`", "Delete .log"],
     ["Use a*b", "Use ab"],
+    ["Delete *cache*", "Delete cache"],
+    ["Delete `*cache*`", "Delete cache"],
+    ["Delete cache", "Delete *cache*"],
+    ["Delete **cache**", "Delete cache"],
     ["Use foo_bar", "Use foobar"],
     ["Use --force", "Use force"],
   ]) {
@@ -297,9 +301,9 @@ test("literal wildcard, code and punctuation differences never get keys", () => 
   }
   const marked = {
     ...COLOR,
-    question: "Which **color** should the badge use?",
+    question: "Which `color` should the badge use?",
     options: [
-      { label: "`Red`", description: "*Warm color*" },
+      { label: "`Red`", description: "`Warm color`" },
       COLOR.options[1],
     ],
   };
@@ -309,4 +313,26 @@ test("literal wildcard, code and punctuation differences never get keys", () => 
       askedQuestions([call({ questions: [marked] })]),
     )!.options,
   ).toHaveLength(4);
+});
+
+test("literal paired globs match themselves, including rendered inline code", () => {
+  for (const recorded of [
+    "Delete *cache*",
+    "Delete `*cache*`",
+    "Delete **cache**",
+  ]) {
+    const displayed = recorded.replace(/`/g, "");
+    const changed = {
+      ...COLOR,
+      options: [{ label: recorded, description: recorded }, COLOR.options[1]],
+    };
+    expect(
+      withAskedQuestions(
+        shown(
+          screen.replace("Red", displayed).replace("Warm color", displayed),
+        ),
+        askedQuestions([call({ questions: [changed] })]),
+      )!.options,
+    ).toHaveLength(4);
+  }
 });

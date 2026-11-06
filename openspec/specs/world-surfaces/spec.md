@@ -2122,15 +2122,23 @@ unrecognized prompt SHALL be shown as its whole bottom block, with the reason,
 never as a clipped tail, with its final row initially in view and after updates.
 Supplied transcript fields SHALL be validated atomically. A rejected pending ask
 SHALL remain Terminal-only without retaining screen keys. Literal wildcard and
-code contents SHALL remain significant when matching. A form review SHALL match
+code contents SHALL remain significant when matching. Ambiguous asterisk markup
+SHALL NOT be discarded to grant keys. A failed transcript check SHALL preserve
+the screen question without answer keys. A form review SHALL match
 its complete ordered question list as well as its headers before keeping keys.
 History read errors SHALL remain visible alongside question cards.
 Needs you SHALL show the same card.
 
 Claude Code's folder-trust question before a session SHALL be recognized only
-as the complete dialog: its "Quick safety check" text, the unnumbered choices
-"No, exit" then "Yes, I trust this folder" with exactly one cursor, and the
-"Enter to confirm · Esc to cancel" footer. Its input SHALL be bound to a
+as the complete dialog: its edge, "Accessing workspace:" heading and absolute
+folder, nonempty "Quick safety check" text, the unnumbered choices "No, exit"
+(or "No, continue without these permissions" for pre-approved tool grants) then
+"Yes, I trust this folder" with exactly one cursor, and the "Enter to confirm ·
+Esc to cancel" footer. The alternate decline choice SHALL continue Claude without
+those grants rather than exiting. Chat and Needs you SHALL display the full
+folder, safety question and warnings above the choices without clamping them.
+Menu identity SHALL ignore only the parsed option cursor, preserving every
+folder and question character. Its input SHALL be bound to a
 service-owned pre-session witness: the source's connection runtime, the pane,
 its terminal, Claude with no reported session, and the pane's foreground
 process group and processes. Every key SHALL follow a fresh read of the witness

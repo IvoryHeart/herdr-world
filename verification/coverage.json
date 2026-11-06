@@ -1155,7 +1155,7 @@
       "area": "History/task/checkout reports",
       "owner": "server/src/agent/",
       "requirement": "openspec/specs/world-surfaces/spec.md",
-      "properties": "Atomic publication and session identity; old reports cannot overwrite newer state; terminal settings require current terminal/lease witnesses, one-time import and convergent master revisions; prompt answers require complete valid transcript fields and the same literal question/options or complete review and screen, and pre-session trust input requires a current pane/terminal/process witness with no session, the exact menu before every key, and the per-pane input lock",
+      "properties": "Atomic publication and session identity; old reports cannot overwrite newer state; terminal settings require current terminal/lease witnesses, one-time import and convergent master revisions; prompt answers require complete valid transcript fields and the same literal question/options (including paired globs and rendered code) or complete review and screen; failed transcript checks retain no answer keys; pre-session trust input requires a current pane/terminal/process witness with no session, complete workspace heading/folder and question, exact menu identity ignoring only the option cursor before every key, and the per-pane input lock; Needs you displays trust safety text and grant warnings unclamped",
       "existingTests": [
         "server/src/agent/worktree.test.ts",
         "server/src/agent/terminal-settings.test.ts",

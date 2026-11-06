@@ -514,3 +514,81 @@ test("a real concurrent trust choice is refused while the input lock is held", a
   expect(await first).toMatchObject({ status: "sent" });
   expect(state.sent).toEqual(["enter"]);
 });
+
+const clippedTrustScreens = [
+  trustScreen().slice(trustScreen().indexOf(" Accessing workspace:")),
+  trustScreen().slice(trustScreen().indexOf(" Quick safety check:")),
+  trustScreen().replace(" Accessing workspace:\n", ""),
+  trustScreen().replace(" /work/example\n", ""),
+  trustScreen().replace(" /work/example", " example"),
+  trustScreen().replace(
+    " Quick safety check: Is this a project you created or one you trust?",
+    " Quick safety check:",
+  ),
+];
+test("clipped workspace headings, paths and questions never grant trust authority", async () => {
+  for (const screen of clippedTrustScreens) {
+    expect(parseTrustPrompt(screen)).toBeNull();
+    const { state, trust } = fakeHerdr();
+    const shown = await fingerprint(trust);
+    state.screen = screen;
+    expect(await trust.read("w1:p1")).toBeNull();
+    expect(
+      await trust.choose({
+        pane_id: "w1:p1",
+        prompt_fingerprint: shown,
+        choice: "confirm",
+      }),
+    ).toMatchObject({ status: "refused" });
+    expect(state.sent).toEqual([]);
+    const during = fakeHerdr();
+    const before = await fingerprint(during.trust);
+    during.state.onKey = () => {
+      during.state.screen = screen;
+    };
+    expect(
+      await during.trust.choose({
+        pane_id: "w1:p1",
+        prompt_fingerprint: before,
+        choice: "confirm",
+      }),
+    ).toMatchObject({ status: "refused" });
+    expect(during.state.sent).toEqual(["down"]);
+  }
+});
+test("cursor glyphs in the folder and question remain part of menu identity", async () => {
+  for (const field of ["/work/example", "project you created"]) {
+    const { state, trust } = fakeHerdr();
+    state.screen = trustScreen().replace(field, field + "❯example");
+    const shown = await fingerprint(trust);
+    state.onKey = () => {
+      state.screen = trustScreen("confirm").replace(field, field + " example");
+    };
+    expect(
+      await trust.choose({
+        pane_id: "w1:p1",
+        prompt_fingerprint: shown,
+        choice: "confirm",
+      }),
+    ).toMatchObject({ status: "refused" });
+    expect(state.sent).toEqual(["down"]);
+  }
+});
+test("pre-approved grants can be declined without exiting Claude", async () => {
+  const label = "No, continue without these permissions";
+  const { state, trust } = fakeHerdr();
+  state.screen = trustScreen().replace("No, exit", label);
+  expect(parseTrustPrompt(state.screen)?.options[0]).toEqual({
+    label,
+    choice: "cancel",
+    cursor: true,
+  });
+  expect(
+    await trust.choose({
+      pane_id: "w1:p1",
+      prompt_fingerprint: await fingerprint(trust),
+      choice: "cancel",
+    }),
+  ).toMatchObject({ status: "sent", choice: "cancel", label });
+  expect(state.sent).toEqual(["enter"]);
+});

@@ -471,7 +471,10 @@ text. It works for any agent you open from Town, Board or Desk.
    draws it, never as a clipped last line.
    Before Claude starts its session it may ask whether to trust the folder.
    Chat and **Needs you** show that question with **No, exit** and **Yes, I
-   trust this folder**, the one under Claude's cursor marked. Your click is
+   trust this folder**, the one under Claude's cursor marked. The full folder,
+   safety question and warnings appear above the choices. For pre-approved tool
+   grants the decline choice may be **No, continue without these permissions**:
+   it continues Claude without those grants instead of exiting. Your click is
    the choice: Chat checks it is still the same question in the same Claude
    process with no session, moves Claude's selection if needed, checks again
    and presses Enter. Chat opens once the session starts.
