@@ -4,6 +4,18 @@ import type { Deps } from "./deps";
 import type { Seat } from "./seats";
 import { actionsIn, setAction, type StoredAction } from "./store";
 
+/** A notice to the operator that belongs to another action. */
+export function notice(parent: Action, suffix: string, text: string): Action {
+  return {
+    key: `${parent.key}|${suffix}`,
+    pr: parent.pr,
+    head: parent.head,
+    kind: "judgment",
+    target: "owner",
+    text,
+  };
+}
+
 /** Review plumbing goes to its operator; an explicit owner decision keeps its ask. */
 export function routeJudgment(action: Action, settings: CrewSettings): Action {
   const seat = settings.reviewJudgmentSeat;

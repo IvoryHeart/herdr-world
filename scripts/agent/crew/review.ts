@@ -10,6 +10,7 @@ import { loadSettings, type RosterEntry } from "./plan";
 import { evaluatorPrompt, processPrompt } from "./evaluator";
 import { evaluations, cycleForRun } from "./round-policy-store";
 import { fixerWorktree } from "./fixer";
+import { retainedReviewer, reviewerSessionOwner } from "./reviewer-session";
 import {
   addChat,
   addRun,
@@ -216,28 +217,20 @@ export async function review(options: Options, dir: string, deps: Deps) {
     show(
       `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model}); type here to steer it`,
     );
-    const retainedRun =
+    const continuity =
       settings.convergingReviews && options.since
-        ? runsOf(crew, pr).find(
-            (run) =>
-              run.id !== runId &&
-              run.reviewer === reviewer &&
-              !run.cwd &&
-              run.session &&
-              run.harness === harness &&
-              run.model === model.model &&
-              run.finishedAt !== null,
-          )
+        ? retainedReviewer(crew, settings, pr, reviewer, runId)
         : undefined;
-    const retained =
-      settings.convergingReviews && options.since
-        ? (settings.reviewerSessions?.[String(pr)]?.[reviewer] ??
-          retainedRun?.session)
-        : undefined;
+    const retainedRun = continuity?.run;
+    const retained = continuity?.session;
     if (settings.convergingReviews && options.since && !retained)
       throw new Error(
         `Retained ${reviewer} session missing for #${pr}; operator reconciliation required, no replacement reviewer launched`,
       );
+    if (retained) {
+      const blocked = reviewerSessionOwner(deps.run, harness, retained);
+      if (blocked) throw new Error(blocked);
+    }
     ({ code, usage } = await runSession(
       crew,
       runId,

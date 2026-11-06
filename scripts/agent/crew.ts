@@ -8,7 +8,11 @@ import {
 import { crewVerdict } from "./crew/round-readiness";
 import { verdictState } from "./gate/predicate";
 import { reviewObservation, reviewStartError } from "./crew/review-boundary";
-import { routeJudgment, deliverReviewJudgments } from "./crew/review-judgments";
+import {
+  routeJudgment,
+  deliverReviewJudgments,
+  notice,
+} from "./crew/review-judgments";
 import { parseOptions, USAGE } from "./crew/options";
 export { parseOptions } from "./crew/options";
 import { reconcileOwnerAsks } from "./crew/owner-asks";
@@ -27,6 +31,7 @@ import {
   reviewClaimCounts,
 } from "./crew/round-policy";
 import { startReviewers } from "./crew/reviewer-delivery";
+import { sessionActions } from "./crew/reviewer-session";
 import { REVIEW_KINDS } from "./crew/round-actions";
 import { type Deps, realDeps } from "./crew/deps";
 import {
@@ -278,7 +283,7 @@ export function crewPass(context: PassContext) {
             (entry) => entry.kind === "ready",
           ),
         );
-      planned.push(...due.map((action) => routeJudgment(action, settings)));
+      planned.push(...sessionActions(crew, settings, due, deps.run));
     }
     if (dryRun) {
       deps.out(`plan: ${planned.length} action(s) for ${authors.size} PR(s)`);
@@ -311,18 +316,6 @@ export function crewPass(context: PassContext) {
     return planned;
   };
   return dryRun ? pass() : holdLock(context.lock, pass);
-}
-
-/** A notice to the owner that belongs to another action: `<parent>|<suffix>`. */
-function notice(parent: Action, suffix: string, text: string): Action {
-  return {
-    key: `${parent.key}|${suffix}`,
-    pr: parent.pr,
-    head: parent.head,
-    kind: "judgment",
-    target: "owner",
-    text,
-  };
 }
 
 function act(
@@ -580,7 +573,9 @@ function act(
   const keys = new Set(planned.map((entry) => entry.key));
   const deliverable = (entry: StoredAction) =>
     !settings.excludePrs?.includes(entry.pr) &&
-    (keys.has(entry.key.split("|")[0]!) ||
+    (keys.has(entry.key) ||
+      keys.has(entry.key.replace(/\|github$/u, "")) ||
+      keys.has(entry.key.split("|")[0]!) ||
       entry.key.split("|")[1] === "timeout");
   for (const entry of actionsIn(crew, ["pending", "sent", "failed"]))
     if (
@@ -778,7 +773,7 @@ function deliver(
     }
   }
 
-  startReviewers(crew, context, settings, pending(), authors, say);
+  startReviewers(crew, context, settings, pending(), authors, say, record);
   deliverReviewJudgments(crew, now, deps, live, settings, deliverable, say);
 
   // Each owner notice's signed comment, once, so GitHub shows what the PR

@@ -24,6 +24,16 @@ and the watcher sends the author the retained failure evidence.
 
 ## Run lifecycle
 
+Before a scoped confirmation, crew checks the exact saved reviewer session
+against Herdr's live session ownership, including idle reviewers. A live owner
+or unreadable inventory holds admission immediately and routes the handoff to
+`crew.reviewJudgmentSeat`; it allocates no waiting reviewer run. The original
+reviewer must finish its own cleanup and release the session. An operator then
+explicitly rearms that same identity and round; the hold never retries itself,
+forks a session or rotates reviewers. Crew rechecks ownership immediately before
+launch and again before harness resume. A prior timeout remains recorded with
+its original exit status and cannot be erased by that handoff.
+
 The watcher reserves a slot when it records a run. Every reviewer, fixer,
 evaluator and selected process has the configured `crew.runTimeoutMinutes`
 inactivity limit (default 90). Fresh timestamped conversation, reasoning, tool
