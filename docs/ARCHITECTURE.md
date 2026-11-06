@@ -92,7 +92,7 @@ Bun bridge serves the frontend, authenticates browsers, and connects to Herdr:
 Browser (React + Vite)
    |  same-origin HTTP / WebSocket
    v
-Bridge (Bun + TypeScript) -- node:net --> Herdr sockets
+Bridge (Bun + TypeScript) -- Bun.connect / node:net --> Herdr sockets
 ```
 
 `herdr.sock` carries NDJSON control requests; `herdr-client.sock` carries binary
@@ -420,6 +420,11 @@ history requests and preserves the already captured selection.
 Input waits for attachment readiness and revalidates the attachment, session,
 and routing lease. It is never replayed into a detached or replaced terminal.
 Disconnect rejects pending endpoint requests and invalidates clipboard ownership.
+A clipboard write caused by a composer's `pane.send_input`, `pane.send_text` or
+`pane.send_keys` returns to the browser socket that sent the command. World's
+verb dispatcher notes that recipient in the same before-send step as its
+request recheck, bound to the runtime, socket and terminal; a failed pane lookup
+never blocks input, and OSC 52 reads stay refused.
 
 Mermaid file previews and Markdown fences share a lazy renderer and independent
 zoomable viewports. Source wrappers and leading metadata/comments are removed
@@ -495,8 +500,10 @@ A bridge-global `ConnectionManager` owns shared profiles and independent
 `ConnectionRuntime` instances. Each runtime owns its transport, clients, viewers,
 clipboard relay, subscriptions, services, caches, and reconnect lifecycle.
 Browser selection does not start or stop other runtimes; render streams open
-only while viewed. Disconnect/removal disposes the bridge runtime and SSH tunnel,
-not Herdr or its workspaces.
+while viewed, and the runtime keeps up to 20 recently viewed streams warm for
+10 minutes so switching back is immediate. Warm streams are keyed by the owning
+runtime and close with it. Disconnect/removal disposes the bridge runtime and SSH
+tunnel, not Herdr or its workspaces.
 
 Downstream RPC/HTTP requires an immutable connection ID, runtime generation, and
 request-local ready-runtime lease. Replies, errors, events, terminal frames, and
@@ -592,21 +599,81 @@ UI so opening a terminal does not load the file-search matcher or browser contro
 
 ## SSH transport
 
-Each SSH runtime supervises one OpenSSH process forwarding both sockets into a
-private temporary directory. Readiness requires control `ping` and a render
-handshake. Transient failures use cancellable backoff capped at 30 seconds and
-six attempts, resetting after 30 seconds stable-ready; authentication, host-key,
-and permanent protocol failures do not retry. Post-ready exit retires the runtime
-generation before retry. CLI SSH uses the same validation/probes but does not
-persist or automatically retry.
+Each SSH runtime supervises its own OpenSSH socket tunnel and a separate private
+command master. The control/render tunnel never shares the command master's
+session budget. Runtime process boundaries bind commands to that runtime's private
+control path; matching a destination alone never selects another runtime's master.
+A missing master uses a fresh connection to the same configured destination.
+Only explicitly read-only commands may retry once after their master dies;
+mutating commands are never replayed. The master drains active command sessions
+before stopping, and startup sweeps only private, current-user directories with a
+dead recorded owner. `HERDR_WORLD_DISABLE_SSH_MASTER=1` disables the command master.
+
+Readiness requires control `ping` and a render handshake. Transient failures use
+cancellable capped recovery; authentication, host-key and permanent protocol
+failures require intervention. Post-ready exit retires the runtime generation
+before retry. Keepalives bound established sessions that stop responding; the
+remote-home probe also has a deadline. CLI SSH uses the same validation/probes
+without persisting a profile. The first terminal attach reuses its resolved protocol.
+One-shot control calls use Bun sockets on Unix and retain node:net on Windows;
+subscriptions remain long-lived node:net connections. UTF-8 request lines over
+Herdr's 1 MiB limit are refused before connecting; the browser frame limit remains
+1 MiB. Runtime stop cancels pending calls on either socket implementation.
+
+Host commands retain at most eight SSH sessions per destination, with at most five
+held by background reads. Interactive work is admitted first; each queue is bounded
+to 64 waiters; queueing, recovery health checks and safe read retries spend the
+caller's deadline. Runtime retirement aborts queued commands before process dispatch
+and cancels active command/upload children without affecting another runtime.
+Workspace Files uploads, streamed file search, remote path checks and worktree base
+synchronization receive that runtime capability explicitly; remote path checks
+refuse a missing owner rather than using a global process helper.
+Ignore detection, local directory archives, launcher probes and integration-version
+enrichment also require their caller's runner; no transitive helper supplies a
+global default. The [required call-site audit](reviews/roamgate-runner-audit.md)
+records production injection sites and the shared retirement controls. Browser
+background calls run at most four per connection and share identical in-flight
+reads within their captured transport/runtime scope. Scheduled focused-list reads
+use the background lane. Git status returns cached values, refreshing stale entries
+in the background and pushing changed checkout statuses. A first read waits at most
+300 ms; transport failures retain previous status and stopped runtimes publish
+nothing. Qualified browser stores retain newer pushes over older catalogue replies,
+including for inactive hosts. Untracked line counts use 100-file shell batches;
+above 500 untracked files, Changes lists files without those counts.
 
 Only an OpenSSH alias or `user@host` is accepted, passed after `--` with fixed
 options. Host-key checking stays enabled; service authentication is noninteractive.
 Credentials/options remain in the service user's OpenSSH configuration. Stderr is
-bounded and sanitized, not relayed as raw banners. Cleanup removes owned paths
-only after confirmed child exit; unconfirmed termination preserves paths and
-reports failure. Remote file, Git, hook, and supported session operations use the
-same runtime host boundary. See [connection setup](./DEPLOYMENT.md#local-and-ssh-connections).
+bounded and sanitized. Cleanup removes owned paths only after confirmed child
+exit; a failed startup retains its unconfirmed child and prevents socket unlink
+or replacement. Unconfirmed termination preserves paths and reports failure.
+
+### On-demand SSH port forwarding
+
+The service owns a shared, memory-only registry of at most 32 live forwards.
+`forward.list`, `forward.open`, `forward.close` and `forward.candidates` are browser
+RPCs requiring login, an explicit current connection ID and runtime generation. They never fall through to Herdr or the default profile.
+List, close and runtime shutdown are scoped to the captured owner; retiring an old
+generation cannot close a replacement's forward. No forward is restored automatically.
+As upstream, the web offers forwarding controls only on a page served over loopback,
+because listeners bind on the server's machine. Authentication remains the access
+boundary; there is no additional forwarding-specific WebSocket-peer gate.
+An authenticated terminal can already run forwarding commands.
+Retiring runtimes await their forward children, escalate termination within a bounded
+deadline and report unconfirmed exits; closing children still consume the live-process
+budget. Each forward has an independent supervised OpenSSH process, so opening one never
+restarts the Herdr transport. Readiness requires an accepting local listener or
+OpenSSH's remote-forward acknowledgement. Scans are requested explicitly, coalesce
+per direction and runtime, expire after 10 seconds and return at most 64 owned ports.
+
+Local forwards request a loopback listener and the remote service's `localhost`.
+Reverse forwards request remote loopback and expose a local service to processes
+on that host; an SSH server with `GatewayPorts yes` can override that requested
+bind and expose it to its network. OpenSSH policy controls that remote boundary.
+World refuses reverse forwarding its own actual listener port and, in development,
+the Vite proxy port. The web controls are delivered in the later integration part;
+these service RPCs do not change the current connection or terminal controls.
+See [connection setup](./DEPLOYMENT.md#local-and-ssh-connections).
 
 ## Distribution model
 
@@ -692,3 +759,27 @@ once, and rechecks runtime authority before the reporting RPC. Herdr does not
 provide an atomic process-and-link operation; see [History limits](HISTORY.md#chat-and-explicit-codex-links).
 World retains React 18 callback freshness and screen/panel/navigation/popup Back
 priority, with navigation between Inspector details below transient menus.
+
+## Ranger engines and session navigation
+
+The service-owned Ranger driver selects Pi-backed providers or the service account's
+Claude Code CLI. Each driver owns its MCP listener, turn tokens and teardown;
+there is no process-global listener shared across World services. Both engines use
+the same captured workspace reads, proposed actions, approvals and task tools.
+Engine-specific checkpoints cannot be resumed by the other engine. Semantic
+configuration comparison preserves recovery across equivalent serialized key order.
+
+A show tool publishes the originating request ID, connection ID, captured runtime
+generation, workspace and optional pane. Only the browser that sent that request
+follows it through the shared Inspector admission handler. Replayed snapshots are
+deduplicated; a service-instance change retires earlier navigation requests. The
+service reports a request to show, rather than claiming the browser rendered it.
+Scheduled runs have no show handler. All-workspace task intent selects current
+permitted membership at each admission; each admitted run then uses its own stable
+identity and generation fences. Existing fixed-scope recovery is unchanged.
+
+Claude continuation/queue projection is isolated from common ATIF construction.
+Remote append caching keeps World's 32 MiB text budget and existing full bounded
+trajectory/Quest consumers, rather than adopting a larger upstream cache or
+removing their trajectory data. Native/platform and long-session resource evidence
+remain separate from protocol and synthetic consumer results.

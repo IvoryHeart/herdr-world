@@ -9,7 +9,10 @@ export interface ConnectionClient {
     method: string,
     params?: Record<string, unknown>,
     timeoutMs?: number | null,
-    options?: { focusedObservation?: boolean },
+    options?: {
+      focusedObservation?: boolean;
+      lane?: "interactive" | "background";
+    },
   ): Promise<any>;
   isCurrent(): boolean;
   acceptsServerGeneration(value: unknown): boolean;

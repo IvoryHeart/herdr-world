@@ -15,16 +15,12 @@ import type {
   AssistantActionKind,
   AssistantConfig,
   AssistantMessage,
-  AssistantMention,
   AssistantMentionCatalog,
   AssistantMentionTarget,
-  AssistantSessionSummary,
   AssistantSnapshot,
   AssistantTaskDetail,
   AssistantTaskNotification,
   AssistantNotificationReceipt,
-  AssistantQueuedMessage,
-  AssistantChatSelection,
   AssistantToolActivity,
   AssistantWorkspace,
   AssistantWorkspaceRef,
@@ -33,14 +29,11 @@ import {
   ASSISTANT_MAX_CUSTOM_MODELS,
   ASSISTANT_MAX_MENTIONS,
   ASSISTANT_MAX_QUEUED,
-  ASSISTANT_MAX_THINKING,
-  ASSISTANT_MAX_THINKING_STEPS,
   ASSISTANT_MAX_WORKSPACES,
   isAssistantModelApi,
   isAssistantModelEndpoint,
   isAssistantMentions,
   isAssistantMentionTarget,
-  isAssistantQueue,
   isAssistantSnapshot,
   isAssistantThinkingLevel,
 } from "../../../shared/assistant";
@@ -51,7 +44,8 @@ import {
   AssistantRecoveryNotReadyError,
   type RecoveryTarget,
 } from "./context";
-import { type AssistantDriver, createPiDriver } from "./pi-driver";
+import type { AssistantDriver } from "./pi-driver";
+import { createRangerDriver } from "./ranger-driver";
 import type { PreparedAssistantAction } from "./actions";
 import { AssistantUserError } from "./errors";
 import type { NotificationToolSender } from "./tools";
@@ -61,6 +55,25 @@ import {
   type SavedTaskRun,
   validateTaskInput,
 } from "./tasks";
+import {
+  boundAssistantThinking,
+  type SavedRun,
+  type QueuedMessage,
+  MAX_STEERS,
+  savedSteers,
+  queuedSelection,
+  savedQueue,
+  mentionTargetKey,
+  mentionTargets,
+  restoredMentions,
+  sameAssistantConfig,
+  sessionSummary,
+  string,
+  refs,
+  config,
+  refKey,
+  MAX_CONTEXT_BYTES,
+} from "./assistant-state";
 
 const DEFAULT_CONFIG: AssistantConfig = {
   provider: "",
@@ -70,244 +83,15 @@ const DEFAULT_CONFIG: AssistantConfig = {
 };
 const MAX_TEXT = 32_000;
 const MAX_MESSAGES = 80;
-const MAX_CONTEXT_BYTES = 1_000_000;
+
 const MAX_STATE_BYTES = 3_000_000;
 const jsonBytes = (value: unknown) =>
   Buffer.byteLength(JSON.stringify(value), "utf8");
 
-// Keep the newest reasoning: drop whole early steps, then cut the start of
-// the oldest step that still fits.
-export function boundAssistantThinking(steps: string[]) {
-  const kept: string[] = [];
-  let remaining = ASSISTANT_MAX_THINKING;
-  for (let index = steps.length - 1; index >= 0; index--) {
-    if (remaining <= 0 || kept.length >= ASSISTANT_MAX_THINKING_STEPS) break;
-    const step = steps[index]!;
-    let value = step.length > remaining ? step.slice(-remaining) : step;
-    // Do not start a cut step with the low half of a surrogate pair.
-    if (value !== step && /^[\uDC00-\uDFFF]/.test(value))
-      value = value.slice(1);
-    // A step reduced to nothing by that repair counts as skipped.
-    if (!value) break;
-    kept.unshift(value);
-    // A cut step fills the budget, even after dropping a half pair.
-    remaining = value === step ? remaining - value.length : 0;
-  }
-  const skipped = steps.length - kept.length;
-  return {
-    steps: kept,
-    skipped,
-    truncated: skipped > 0 || kept[0] !== steps[skipped],
-  };
-}
-const refKey = (ref: AssistantWorkspaceRef) =>
-  `${ref.connection_id}\0${ref.workspace_id}`;
 const SESSION_ID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
-
-type SavedRun = {
-  request_id: string;
-  draft_id: string;
-  config: AssistantConfig;
-  text: string;
-  recovery_targets: RecoveryTarget[];
-  mentions?: AssistantMentionTarget[];
-  /** Steers sent to this turn; a placed one has its question and reply. */
-  steers?: SavedSteer[];
-};
-type SavedSteer = {
-  request_id: string;
-  text: string;
-  message_id?: string;
-  draft_id?: string;
-};
-/** The scope stays on the bridge so a follow-up is admitted as it was sent. */
-type QueuedMessage = AssistantQueuedMessage & {
-  scope?: AssistantWorkspaceRef[];
-  selection?: Omit<AssistantChatSelection, "instance_id">;
-};
-const MAX_STEERS = 8;
-
-function savedSteers(value: unknown): SavedSteer[] {
-  if (!Array.isArray(value) || value.length > MAX_STEERS)
-    throw new Error("Invalid saved steers");
-  return value.map((steer) => {
-    if (!steer || typeof steer !== "object")
-      throw new Error("Invalid saved steers");
-    const { message_id, draft_id } = steer as Record<string, unknown>;
-    if ((message_id === undefined) !== (draft_id === undefined))
-      throw new Error("Invalid saved steers");
-    return {
-      request_id: string(steer.request_id, "request identifier"),
-      text: string(steer.text, "saved prompt", MAX_CONTEXT_BYTES),
-      ...(message_id === undefined
-        ? {}
-        : {
-            message_id: string(message_id, "message identifier"),
-            draft_id: string(draft_id, "draft identifier"),
-          }),
-    };
-  });
-}
-
-function queuedSelection(value: unknown): QueuedMessage["selection"] {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("Invalid queued model selection");
-  const selection = value as Record<string, unknown>;
-  if (!["assistant", "pi"].includes(String(selection.credential_source)))
-    throw new Error("Invalid queued credential source");
-  const checked = config({ ...selection, allowed_workspaces: [] });
-  return {
-    provider: checked.provider,
-    model: checked.model,
-    credential_source: checked.credential_source,
-    ...(checked.thinking_level
-      ? { thinking_level: checked.thinking_level }
-      : {}),
-  };
-}
-
-function savedQueue(value: unknown): QueuedMessage[] {
-  if (value === undefined) return [];
-  if (!isAssistantQueue(value)) throw new Error("Invalid saved queue");
-  return value.map((item) => {
-    const scope = (item as QueuedMessage).scope;
-    return {
-      ...item,
-      ...(scope === undefined ? {} : { scope: refs(scope, true) }),
-      selection: queuedSelection((item as QueuedMessage).selection),
-    };
-  });
-}
-
-function mentionTargetKey(target: AssistantMentionTarget) {
-  return JSON.stringify([
-    target.kind,
-    refKey(target),
-    ...(target.kind === "agent"
-      ? [target.pane_id, target.terminal_id, target.agent_identity]
-      : []),
-  ]);
-}
-
-function mentionTargets(
-  mentions: AssistantMention[],
-): AssistantMentionTarget[] {
-  const targets = mentions.map((mention) => {
-    const target: AssistantMentionTarget & { start?: number; end?: number } = {
-      ...mention,
-    };
-    delete target.start;
-    delete target.end;
-    return target;
-  });
-  return [
-    ...new Map(
-      targets.map((target) => [
-        JSON.stringify([mentionTargetKey(target), target.runtime_generation]),
-        target,
-      ]),
-    ).values(),
-  ];
-}
-
-function restoredMentions(
-  targets: AssistantMentionTarget[],
-  captured: AssistantWorkspace[],
-): AssistantMentionTarget[] {
-  return targets.map((target) => {
-    const workspace = captured.find((ref) => refKey(ref) === refKey(target));
-    if (!workspace)
-      throw new Error("A referenced object is outside the Ranger scope.");
-    return { ...target, runtime_generation: workspace.runtime_generation };
-  });
-}
 
 export function assistantDirectory() {
   return worldEnv("ASSISTANT_DIR") ?? join(dataRoot(), "assistant");
-}
-
-function sessionSummary(
-  id: string = randomUUID(),
-  messages: AssistantMessage[] = [],
-): AssistantSessionSummary {
-  const first = messages.find((message) => message.role === "user");
-  const now = new Date().toISOString();
-  return {
-    id,
-    title:
-      first?.text.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 72) ||
-      "New chat",
-    created_at:
-      first && Number.isFinite(Date.parse(first.sent_at)) ? first.sent_at : now,
-    updated_at: now,
-    message_count: messages.length,
-  };
-}
-
-function string(value: unknown, name: string, max = 500): string {
-  if (typeof value !== "string" || !value.trim() || value.length > max)
-    throw new Error(`Invalid ${name}`);
-  return value;
-}
-
-function refs(value: unknown, transient = false): AssistantWorkspaceRef[] {
-  if (!Array.isArray(value) || value.length > ASSISTANT_MAX_WORKSPACES)
-    throw new Error("Invalid workspace scope");
-  const result = value.map((entry) => {
-    if (!entry || typeof entry !== "object")
-      throw new Error("Invalid workspace scope");
-    if (
-      transient &&
-      (!Number.isSafeInteger(entry.runtime_generation) ||
-        entry.runtime_generation < 0)
-    )
-      throw new Error("Refresh the Ranger workspace scope before sending");
-    return {
-      ...(transient ? { runtime_generation: entry.runtime_generation } : {}),
-      connection_id: string(entry.connection_id, "connection identifier"),
-      workspace_id: string(entry.workspace_id, "workspace identifier"),
-    };
-  });
-  if (new Set(result.map(refKey)).size !== result.length)
-    throw new Error("Duplicate workspace scope");
-  return result;
-}
-
-function config(value: Record<string, unknown>): AssistantConfig {
-  if (
-    value.credential_source !== "assistant" &&
-    value.credential_source !== "pi"
-  )
-    throw new Error("Invalid credential source");
-  if (
-    value.approval_mode !== undefined &&
-    value.approval_mode !== "manual" &&
-    value.approval_mode !== "auto"
-  )
-    throw new Error("Invalid approval mode");
-  if (value.workspace_scope !== undefined && value.workspace_scope !== "all")
-    throw new Error("Invalid workspace permission mode");
-  if (
-    value.thinking_level !== undefined &&
-    !isAssistantThinkingLevel(value.thinking_level)
-  )
-    throw new Error("Invalid thinking effort");
-  return {
-    ...(value.thinking_level !== undefined
-      ? { thinking_level: value.thinking_level }
-      : {}),
-    provider: value.provider === "" ? "" : string(value.provider, "provider"),
-    model: value.model === "" ? "" : string(value.model, "model"),
-    credential_source: value.credential_source,
-    allowed_workspaces: refs(value.allowed_workspaces),
-    ...(value.workspace_scope === "all"
-      ? { workspace_scope: "all" as const }
-      : {}),
-    ...(value.approval_mode !== undefined
-      ? { approval_mode: value.approval_mode }
-      : {}),
-  };
 }
 
 function authUrl(value: string): string | undefined {
@@ -363,7 +147,7 @@ export function createAssistantService(options: {
   const driver =
     options.driver ??
     options.createDriver?.(directory, directory) ??
-    createPiDriver(directory);
+    createRangerDriver(directory);
   let tasks: ReturnType<typeof createAssistantTasks> | undefined;
   const taskConfirmations = new Set<{ id: string; sessionId: string }>();
   const baseContext = options.context;
@@ -744,7 +528,7 @@ export function createAssistantService(options: {
   }
   if (
     options.taskRun &&
-    JSON.stringify(state.config) !== JSON.stringify(options.taskRun.config)
+    !sameAssistantConfig(state.config, options.taskRun.config)
   ) {
     activeRun = undefined;
     awaitingRecovery = false;
@@ -1755,6 +1539,9 @@ export function createAssistantService(options: {
     const turnConfig = pending.config;
     // Each placed steer starts a new reply; output always goes to the newest.
     let draft = state.messages.find((item) => item.id === pending.draft_id)!;
+    // The request the newest reply answers: the browser that sent it is the
+    // one a show_in_roamgate call switches.
+    let draftRequest = pending.request_id;
     const drafts = [draft];
     activeScope = captured;
     async function guardReferencedAgent(
@@ -1874,12 +1661,63 @@ export function createAssistantService(options: {
               }
             }
             draft = next;
+            draftRequest = requestId ?? draftRequest;
             if (!drafts.includes(next)) drafts.push(next);
             finalizedText = "";
             streamedText = "";
             publish(true);
           },
           recover,
+          // A scheduled run has no browser to show anything in.
+          show: options.taskRun
+            ? undefined
+            : async (target, signal) => {
+                const combined = signal
+                  ? AbortSignal.any([signal, controller.signal])
+                  : controller.signal;
+                combined.throwIfAborted();
+                if (disposed || activeRun !== pending || !state.running)
+                  throw new Error("This Ranger turn is no longer active.");
+                if (
+                  !captured.some(
+                    (ref) =>
+                      ref.connection_id === target.connection_id &&
+                      ref.workspace_id === target.workspace_id,
+                  )
+                )
+                  throw new AssistantUserError(
+                    "That workspace is outside this question's authorized scope.",
+                  );
+                assertScopeAllowed(captured);
+                await context.read(
+                  "status",
+                  captured,
+                  {
+                    connection_id: target.connection_id,
+                    workspace_id: target.workspace_id,
+                  },
+                  combined,
+                );
+                combined.throwIfAborted();
+                if (disposed || activeRun !== pending || !state.running)
+                  throw new Error("This Ranger turn is no longer active.");
+                const owner = captured.find(
+                  (ref) =>
+                    ref.connection_id === target.connection_id &&
+                    ref.workspace_id === target.workspace_id,
+                )!;
+                draft.show = {
+                  runtime_generation: owner.runtime_generation,
+                  connection_id: target.connection_id,
+                  workspace_id: target.workspace_id,
+                  ...(target.pane_id ? { pane_id: target.pane_id } : {}),
+                  request_id: draftRequest,
+                };
+                publish(true);
+                return {
+                  text: "Requested in the originating World window.",
+                };
+              },
           notify:
             options.taskRun && options.sendNotification
               ? async (notification, signal) => {
@@ -2151,10 +1989,12 @@ export function createAssistantService(options: {
               "The model request failed. Check the provider connection and try again.";
           },
         });
-      } catch {
+      } catch (error) {
         if (!disposed && !controller.signal.aborted)
           state.error =
-            "The Ranger request failed. Check the provider connection and try again.";
+            error instanceof AssistantUserError
+              ? error.message
+              : "The Ranger request failed. Check the provider connection and try again.";
       } finally {
         if (!disposed) {
           activeRun = undefined;
@@ -2510,12 +2350,59 @@ export function createAssistantService(options: {
     await validatePreparedTask(prepared, signal);
     return prepared;
   }
+  /**
+   * A task over all workspaces, prepared again over every workspace Ranger
+   * may use now (its settings' grant), as its first run was: those whose
+   * connection cannot run scheduled tasks are left out rather than failing
+   * the run.
+   */
+  async function rescopeTask(prepared: PreparedTask, signal?: AbortSignal) {
+    await workspaceCatalog();
+    signal?.throwIfAborted();
+    if (!context.recoveryScope)
+      throw new AssistantUserError(
+        "These workspace connections do not support safe scheduled tasks.",
+      );
+    const listed = new Set((workspaceInventory?.workspaces ?? []).map(refKey));
+    const granted = effectiveScope();
+    const usable = granted.filter(
+      (ref) => listed.has(refKey(ref)) && workspaceAllowed(ref),
+    );
+    const allowed = usable.slice(0, ASSISTANT_MAX_WORKSPACES);
+    // Past the limit, in the grant or in a listing, workspaces are left out.
+    const cut =
+      usable.length > allowed.length ||
+      (!!workspaceInventory?.truncated &&
+        (allWorkspaces() || usable.length < granted.length));
+    const captured = await context.captureScope(allowed, signal);
+    const supported = new Set(
+      (await context.recoveryScope(captured, signal)).map(refKey),
+    );
+    const scope = allowed.filter((ref) => supported.has(refKey(ref)));
+    if (!scope.length)
+      throw new AssistantUserError(
+        "No workspace Ranger may use is available for this task.",
+      );
+    const inScope = new Set(scope.map(refKey));
+    const { mentions, ...input } = prepared.input;
+    const kept = mentions?.filter((mention) => inScope.has(refKey(mention)));
+    const rescoped: PreparedTask & { notice?: string } = await prepareTask(
+      { ...input, scope, ...(kept?.length ? { mentions: kept } : {}) },
+      signal,
+      captured.filter((workspace) => inScope.has(refKey(workspace))),
+      prepared.config,
+    );
+    if (cut)
+      rescoped.notice = `Ranger uses at most ${ASSISTANT_MAX_WORKSPACES} workspaces at once: this run may have left out some it may use.`;
+    return rescoped;
+  }
   if (!options.taskRun) {
     tasks = createAssistantTasks({
       directory,
       publish: publishTaskChanges,
       notify: options.notify,
       validate: validatePreparedTask,
+      rescope: rescopeTask,
       validateCleanup: async (prepared, signal) => {
         await workspaceCatalog();
         signal?.throwIfAborted();
@@ -2546,7 +2433,7 @@ export function createAssistantService(options: {
             tasks!.notificationHistory(taskRun.task_id, taskRun.id),
           driver:
             options.createDriver?.(childDirectory, directory) ??
-            createPiDriver(childDirectory, undefined, directory),
+            createRangerDriver(childDirectory, directory),
           publish: onSnapshot,
         });
         return {
@@ -3228,3 +3115,5 @@ export function createAssistantService(options: {
     },
   };
 }
+
+export { boundAssistantThinking, sameAssistantConfig } from "./assistant-state";

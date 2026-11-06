@@ -1,6 +1,10 @@
 import { normalizeSearchText } from "./searchText";
 import { shortId } from "./utils";
 import type { Pane, PaneLayout, Tab, Workspace } from "./types";
+import type {
+  ServerAgentPane,
+  ServerSessionSource,
+} from "./useAllServerAgentSessions";
 
 export type PaneJumpEntry = {
   paneId: string;
@@ -11,7 +15,18 @@ export type PaneJumpEntry = {
   agent?: string;
   agentStatus?: string;
   current: boolean;
+  /** Set when results span several servers. */
+  serverLabel?: string;
+  /** Set for panes that live on a server other than the active one. */
+  source?: ServerSessionSource & { workspaceId: string };
 };
+
+/** Pane IDs are only unique per server, so remote entries add the server. */
+export function paneJumpEntryKey(entry: PaneJumpEntry): string {
+  return entry.source
+    ? JSON.stringify([entry.source.connectionId, entry.paneId])
+    : entry.paneId;
+}
 
 type ActivePaneSnapshot = {
   selectedPaneId?: string | null;
@@ -70,8 +85,53 @@ export function paneSearchEntries(
   snapshot: PaneJumpSnapshot,
   query: string,
   activePaneId?: string | null,
+  serverLabel?: string,
 ): PaneJumpEntry[] {
   const entries = orderedPaneJumpEntries(snapshot, activePaneId, true);
+  return filterPaneSearchEntries(
+    serverLabel ? entries.map((entry) => ({ ...entry, serverLabel })) : entries,
+    query,
+  );
+}
+
+/**
+ * Agent panes from the other ready servers, for the same search. The caller
+ * passes them already ordered; panes of the active server are skipped because
+ * the live snapshot covers them.
+ */
+export function serverPaneSearchEntries(
+  panes: readonly ServerAgentPane[],
+  query: string,
+  activeConnectionId: string | null | undefined,
+): PaneJumpEntry[] {
+  return filterPaneSearchEntries(
+    panes
+      .filter((pane) => pane.connectionId !== activeConnectionId)
+      .map((pane) => ({
+        paneId: pane.pane_id,
+        paneLabel: `Pane ${shortId(pane.pane_id)}`,
+        title: pane.workspaceLabel,
+        tabLabel: pane.tabLabel || pane.tab_id,
+        cwd: pane.foreground_cwd ?? pane.cwd ?? "",
+        agent: pane.agent,
+        agentStatus: pane.agent ? pane.agent_status : undefined,
+        current: false,
+        serverLabel: pane.serverLabel,
+        source: {
+          connectionId: pane.connectionId,
+          runtimeGeneration: pane.runtimeGeneration,
+          serverLabel: pane.serverLabel,
+          workspaceId: pane.workspace_id,
+        },
+      })),
+    query,
+  );
+}
+
+function filterPaneSearchEntries(
+  entries: PaneJumpEntry[],
+  query: string,
+): PaneJumpEntry[] {
   const tokens = normalizeSearchText(query).split(" ").filter(Boolean);
   if (tokens.length === 0) return entries;
   return entries.filter((entry) => {
@@ -118,6 +178,7 @@ function orderedPaneJumpEntries(
 function paneSearchValue(entry: PaneJumpEntry): string {
   return [
     entry.title,
+    entry.serverLabel,
     entry.tabLabel,
     entry.cwd,
     entry.paneLabel,

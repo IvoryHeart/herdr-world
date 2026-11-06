@@ -845,3 +845,78 @@ its existing model contract is unchanged. Full required verification and the
 independent revised consumer-mapping review remain required.
 Whole-host observation age is checked before native ownership/absence admission
 and again when queued work runs, preserving newer accepted review authority.
+
+### Roamgate transport candidate (Q03, Q05, Q33, Q40)
+
+The existing runtime-leases/control/drain models retain their accepted bounds.
+Candidate direct consumers add same-destination master isolation, generation-scoped
+forward list/close/retirement and attempt replacement, authenticated explicit owner
+admission without a forwarding-specific peer gate, bounded interactive/background
+queues, deadlines, retry-safe reads and no replay of mutations. Maintained direct
+consumers exercise an actual runtime's queued file mutation across retirement and
+same-destination peer continuation, actual workspace Files uploads, streamed searches,
+remote path inspection and the shared worktree synchronization adapter. Allowed
+current, forbidden retired and independent sibling controls cross session acquisition
+and spawn for each of those adapters. Consumers also cover queued terminal
+upload/cleanup cancellation, retained
+failed-start child ownership and health-check abort/deadline slot release. A single 14-path table also reaches transitive ignore marking after its directory
+read, both forwarding scan directions, launcher readiness/skills and integration
+version enrichment; it checks current dispatch, queued-owner retirement and an
+independent already-queued sibling. Required runner call sites are recorded in the
+[bounded audit](../docs/reviews/roamgate-runner-audit.md). The independent lifecycle
+and direct-adapter repros also pass; these claims remain consumer-level,
+not new abstract-model or native-platform acceptance. Real OpenSSH `-G` resolves the generated policy; a controlled
+SSH executable checks process execution and retry, not a live remote server.
+Herdr framing fixtures exercise UTF-8 and the exact 1 MiB boundary on Bun.connect
+and node:net while retaining runtime-stop cancellation. The store consumer checks
+inactive-host status pushes, obsolete generations and an overlapping older catalogue.
+
+Direct protocol/process/consumer fixtures answer these new concrete boundaries more
+accurately than adding SSH or byte parsers to a lifecycle model. They do not establish
+all OS/OpenSSH behavior, arbitrary scheduler interleavings, live remote forwarding,
+GatewayPorts enforcement or native agent acceptance. Those remain platform and
+isolated integration evidence in the [whole-system plan](../docs/reviews/roamgate-sync-test-plan.md).
+Full applicable CI and independent consumer review are required; this candidate
+extends evidence, not the historical promotion approval.
+
+### Ranger and transcript integration candidate (Q25–Q28)
+
+Direct transcript consumers check Claude continuation provenance, remote append and
+replacement, Pi/OMP records and Pi directory inference. World retains the 32 MiB
+text-cache budget, bounded full trajectory consumers and lazy older history; this
+is not a claim of upstream peak-memory parity. Native send/answer/session fences
+remain mandatory for inferred history.
+
+The existing Ranger recovery/authority models retain their stated run-local
+capture and recovery bounds. Driver/MCP tests exercise token/tool isolation and
+teardown; actual service consumers check captured show scope, cancellation across
+awaited reads and interrupted Claude recovery. The browser client rejects foreign,
+repeated and old-service show requests, and shared Inspector Chrome checks exercise
+current and stale-generation navigation. All-workspace task consumers select fresh
+membership for each new run while retaining fixed-scope recovery controls. These
+are concrete adapter claims; they do not promote arbitrary catalogue churn,
+provider behavior, native CLI/SSH or whole-system resource acceptance.
+
+The Ranger/transcript repair adds direct Q25/Q27 consumers for structured, bounded
+Claude continuation provenance and current remote UUID/path validation, local
+process retirement/cancellation, SQLite schema migration, dynamic proposal
+confirmation, restart admission and completed-run omission notices. Existing
+manual per-workspace grants remain the permission fence. These consumers do not
+extend the abstract models to filesystem/provider semantics or establish native
+SSH, local configured-root parity, UI smoothness or final integration acceptance.
+
+### Roamgate web candidate (Q06, Q09, Q34, Q42, Q43)
+
+PR3 ports Roamgate's web changes through `2b16e991` with direct consumers and
+changes no model. The terminal-attachment model keeps its accepted bounds. The
+production dispatcher test makes the browser that typed through the pane API the
+clipboard owner, and bridge tests keep at most 20 recently viewed streams warm,
+close one nobody returns to within ten minutes and reuse warm streams on a split
+reattach. Warm streams live in the per-runtime bridge; no new ordering claim
+across generation retirement is made. Worktree consumers run command templates
+with hostile values through a real sh and bind Ranger's preview to the displayed
+location and command. Composer, preference, cache and rendering consumers are
+listed under Q09, Q42 and Q43; the navigator worktree browser case covers
+desktop, phone and an inert stale host. These do not establish phone smoothness,
+real speech engines, native PDF viewers or live multi-server acceptance, which
+remain in the [whole-system plan](../docs/reviews/roamgate-sync-test-plan.md).

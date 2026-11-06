@@ -9,6 +9,8 @@ export function handleBridgeRpc(
     !(
       method === "bridge.ping" ||
       method === "bridge.status" ||
+      method === "bridge.ui_settings.get" ||
+      method === "bridge.ui_settings.update" ||
       method.startsWith("bridge.assistant.") ||
       method === "bridge.pause_others"
     )
@@ -28,6 +30,24 @@ async function dispatchBridgeRpc(rpc: BridgeRpcContext): Promise<false | void> {
   } = rpc.services;
   if (method === "bridge.ping") {
     sendReply({ id, result: { ok: true } }, "bridge-ping");
+    return;
+  }
+  if (
+    method === "bridge.ui_settings.get" ||
+    method === "bridge.ui_settings.update"
+  ) {
+    try {
+      const result = await rpc.services.uiSettings(method, params ?? {});
+      if (method === "bridge.ui_settings.update") {
+        // Other browsers follow the change without reloading.
+        const line = JSON.stringify({ ui_settings: result });
+        for (const client of clients)
+          if (client !== ws) safeSend(client, line, "ui-settings");
+      }
+      sendReply({ id, result }, "ui-settings");
+    } catch (error) {
+      sendError("ui-settings-error", error);
+    }
     return;
   }
   if (method === "bridge.status") {

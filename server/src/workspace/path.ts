@@ -1,12 +1,14 @@
+import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { access, readdir, realpath, stat } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { WorkspacePathInfo } from "../../../shared/workspacePath";
-import { sshCommandArgv } from "../bridge/ssh-command";
+import { sshReadCommandArgv } from "../bridge/ssh-command";
 import { powershellCommand } from "../bridge/ssh-windows";
 import type { RemotePlatform } from "../connections/unix-only";
-import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
+import { shQuote } from "../utils/process-utils";
+import type { RunProcessWithCodeTimeout } from "./file-types";
 
 const DIRECTORY_LIMIT = 50;
 
@@ -21,7 +23,11 @@ async function realDirectoryPath(path: string): Promise<string> {
 
 export async function inspectWorkspacePath(
   value: unknown,
-  connection: { host?: string; remotePlatform?: RemotePlatform },
+  connection: {
+    host?: string;
+    remotePlatform?: RemotePlatform;
+    runProcessWithCodeTimeout?: RunProcessWithCodeTimeout;
+  },
   suggestions = true,
 ): Promise<WorkspacePathInfo> {
   if (
@@ -43,6 +49,11 @@ export async function inspectWorkspacePath(
     throw new Error("Use an absolute path or a path starting with ~/.");
 
   if (connection.host) {
+    const runProcessWithCodeTimeout = connection.runProcessWithCodeTimeout;
+    if (!runProcessWithCodeTimeout)
+      throw new Error(
+        "Remote path inspection requires an owning runtime process",
+      );
     const command = windows
       ? powershellCommand(`
 $ErrorActionPreference = 'Stop'
@@ -95,7 +106,7 @@ if [ ${suggestions ? "1" : "0"} = 1 ]; then
 fi
 `)}`;
     const result = await runProcessWithCodeTimeout(
-      sshCommandArgv(connection.host, command),
+      sshReadCommandArgv(connection.host, command, [], "workspace.path"),
       8000,
     );
     if (result.code !== 0)
@@ -163,4 +174,24 @@ fi
     }
   }
   return info;
+}
+
+/** The browser and Ranger share the captured runtime's remote process authority. */
+export function inspectRuntimeWorkspacePath(
+  runtime: Pick<
+    LegacyConnectionRuntime,
+    "sshHost" | "remotePlatform" | "runProcessWithCodeTimeout"
+  >,
+  value: unknown,
+  suggestions = true,
+) {
+  return inspectWorkspacePath(
+    value,
+    {
+      host: runtime.sshHost(),
+      remotePlatform: runtime.remotePlatform,
+      runProcessWithCodeTimeout: runtime.runProcessWithCodeTimeout,
+    },
+    suggestions,
+  );
 }

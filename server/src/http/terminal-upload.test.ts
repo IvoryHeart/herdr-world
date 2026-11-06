@@ -19,6 +19,13 @@ import {
   terminalUploadRequestBodyLimit,
 } from "./terminal-upload";
 
+import {
+  acquireSshSession,
+  registerSshMaster,
+  unregisterSshMaster,
+  SSH_SESSION_LIMIT,
+} from "../bridge/ssh-sessions";
+
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -281,7 +288,7 @@ test("HTTP uploads honor a configured cap above Bun's default body limit", async
   }
 });
 
-test.each(["abort", "timeout"] as const)(
+test.each(["abort", "timeout", "retirement"] as const)(
   "SSH upload %s terminates the process and removes local staging",
   async (reason) => {
     const temp = await root();
@@ -306,8 +313,10 @@ test.each(["abort", "timeout"] as const)(
       return child;
     }) as typeof Bun.spawn);
     const controller = new AbortController();
+    const runtimeAbort = new AbortController();
     const handle = createTerminalUploadHandler({
       sshHost: () => "test-host",
+      runtimeSignal: runtimeAbort.signal,
       tempRoot: () => temp,
       uploadTimeoutMs: reason === "timeout" ? 25 : 5_000,
     });
@@ -322,6 +331,7 @@ test.each(["abort", "timeout"] as const)(
       );
       await started;
       if (reason === "abort") controller.abort();
+      if (reason === "retirement") runtimeAbort.abort();
       expect((await pending).status).toBe(502);
       expect(child?.signalCode).toBe("SIGKILL");
       expect(
@@ -371,6 +381,65 @@ test.each([undefined, "upload.example"])(
       expect(spawn).not.toHaveBeenCalled();
     } finally {
       spawn.mockRestore();
+    }
+  },
+);
+
+test.each(["upload", "cleanup"])(
+  "retirement cancels a queued remote %s without spawning or retaining staging",
+  async (operation) => {
+    const temp = await root();
+    const destination = "queued-upload.example";
+    const held = await Promise.all(
+      Array.from({ length: SSH_SESSION_LIMIT }, () =>
+        acquireSshSession(destination),
+      ),
+    );
+    const reached = Promise.withResolvers<void>();
+    const owner = {};
+    const controller = new AbortController();
+    const controlPath = "/synthetic/upload/m.ctl";
+    registerSshMaster(owner, {
+      destination,
+      controlPath,
+      isListening: () => {
+        reached.resolve();
+        return true;
+      },
+      isAlive: async () => true,
+    });
+    const handle = createTerminalUploadHandler({
+      sshHost: () => destination,
+      sshControlPath: controlPath,
+      runtimeSignal: controller.signal,
+      tempRoot: () => temp,
+    });
+    const spawn = spyOn(Bun, "spawn");
+    const pending = (
+      operation === "upload"
+        ? handle(request("payload"), "sample.txt")
+        : handle.startCleanup()
+    ).catch((error) => error);
+    try {
+      await reached.promise;
+      controller.abort(new Error("runtime retired"));
+      held[0]();
+      const result = await pending;
+      if (result instanceof Response)
+        expect(await result.json()).toEqual({ error: "runtime retired" });
+      else expect(result).toBeInstanceOf(Error);
+      expect(spawn).not.toHaveBeenCalled();
+      expect(
+        await readdir(
+          join(temp, `herdr-world-uploads-${process.getuid?.() ?? "user"}`),
+        ),
+      ).toEqual([]);
+    } finally {
+      for (const release of held) release();
+      await pending;
+      handle.stopCleanup();
+      spawn.mockRestore();
+      unregisterSshMaster(owner);
     }
   },
 );

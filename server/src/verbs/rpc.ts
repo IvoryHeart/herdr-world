@@ -25,6 +25,10 @@ const rpc = (
 
 /** Static reviewed inventory; never generated from a live adapter or its capabilities. */
 export const rpcVerbs = [
+  rpc("forward.list", "read", "runtime"),
+  rpc("forward.candidates", "read", "runtime"),
+  rpc("forward.open", "reconcilable", "runtime"),
+  rpc("forward.close", "reconcilable", "runtime", object({ id: text })),
   rpc("agent.list", "read", "runtime"),
   rpc("agent_checkout.get", "read", "runtime"),
   rpc(
@@ -116,6 +120,8 @@ export const rpcVerbs = [
   rpc("bridge.pause_others", "reconcilable", "world"),
   rpc("bridge.ping", "read", "world", object()),
   rpc("bridge.status", "read", "world"),
+  rpc("bridge.ui_settings.get", "read", "world"),
+  rpc("bridge.ui_settings.update", "reconcilable", "world"),
   rpc("connections.connect", "reconcilable", "world"),
   rpc("connections.create", "reconcilable", "world"),
   rpc("connections.disconnect", "reconcilable", "world"),
@@ -181,6 +187,8 @@ export const rpcVerbs = [
   rpc("settings.workspace_auto_sync.list", "read", "runtime"),
   rpc("settings.workspace_auto_sync.update", "reconcilable", "runtime"),
   rpc("settings.workspace_auto_sync.update_key", "reconcilable", "runtime"),
+  rpc("settings.worktree_command.update", "reconcilable", "runtime"),
+  rpc("settings.worktree_directory.get", "read", "runtime"),
   rpc("settings.worktree_hooks.get", "read", "runtime"),
   rpc("tab.close", "reconcilable", "runtime"),
   rpc("tab.create", "reconcilable", "runtime"),

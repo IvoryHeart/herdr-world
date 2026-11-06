@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { assetUrlImports } from "./testing/assetUrlImports";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
@@ -163,6 +164,7 @@ test.skipIf(!chrome).each([1440, 390])(
         outdir: dir,
         target: "browser",
         plugins: [
+          assetUrlImports,
           {
             name: "vite-raw-svg",
             setup(builder) {

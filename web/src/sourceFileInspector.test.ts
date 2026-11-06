@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { assetUrlImports } from "./world/testing/assetUrlImports";
 import { stopChrome, waitForBrowserFixture } from "./browserChrome";
 
 const chrome =
@@ -46,6 +47,7 @@ for (const width of [1280, 390])
           outdir: dir,
           target: "browser",
           plugins: [
+            assetUrlImports,
             {
               name: "raw-assets",
               setup(builder) {

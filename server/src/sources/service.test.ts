@@ -433,6 +433,7 @@ describe("World sources service", () => {
       repositories: {},
       workspace_auto_sync: {},
       custom: { other: 1 },
+      ui: {},
     };
     const next = withSourceSettings(base, {
       github: { enabled: false, mergedDays: 30 },

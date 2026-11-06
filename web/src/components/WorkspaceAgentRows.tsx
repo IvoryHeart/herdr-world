@@ -7,7 +7,11 @@ import {
   keyboardContextMenuPoint,
   treeKeyboardAction,
 } from "./treeKeyboard";
-import { useOperationalStore, useStoreSelector } from "../store";
+import {
+  store as sessionStore,
+  useOperationalStore,
+  useStoreSelector,
+} from "../store";
 import type { Pane } from "../types";
 import { agentClass, basename, shortId } from "../utils";
 import {
@@ -18,7 +22,12 @@ import { AgentStatusIcon } from "./AgentStatusIcon";
 import { hasAgentIcon } from "./AgentIcon";
 import { observeClampedContextMenu } from "./contextMenuPosition";
 import { TREE_DEPTH_INDENT } from "./treeIndent";
+import {
+  isServerSourceAvailable,
+  type ServerSessionSource,
+} from "../useAllServerAgentSessions";
 import "./WorkspaceAgentRows.css";
+import "./ContextMenu.css";
 
 const LONG_PRESS_MS = 550;
 const LONG_PRESS_MOVE_PX = 10;
@@ -27,6 +36,7 @@ export interface AgentMenuState {
   pane: Pane;
   x: number;
   y: number;
+  source?: ServerSessionSource;
 }
 
 type AgentContextMenuItem = {
@@ -100,6 +110,9 @@ export function AgentRow({
   variant = "nested",
   workspaceLabel,
   focusOnSelect = true,
+  serverLabel,
+  tabLabel: sourceTabLabel,
+  onActivate,
   onSelect,
   onOpenMenu,
   drag,
@@ -111,8 +124,11 @@ export function AgentRow({
   variant?: "nested" | "standalone";
   workspaceLabel?: string;
   focusOnSelect?: boolean;
+  serverLabel?: string;
+  tabLabel?: string;
+  onActivate?: () => void;
   onSelect?: (pane: Pane) => void;
-  onOpenMenu: (x: number, y: number) => void;
+  onOpenMenu?: (x: number, y: number) => void;
   drag?: {
     isDragging: boolean;
     dropPosition: "before" | "after" | null;
@@ -125,13 +141,15 @@ export function AgentRow({
   const store = useOperationalStore();
   const rawTabLabel = useStoreSelector(
     (state) =>
+      sourceTabLabel ??
       state.tabs
         .find(
           (tab) =>
             tab.tab_id === pane.tab_id &&
             tab.workspace_id === pane.workspace_id,
         )
-        ?.label.trim() ?? "",
+        ?.label.trim() ??
+      "",
   );
   const tabLabel = meaningfulTabLabel(rawTabLabel);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -147,7 +165,14 @@ export function AgentRow({
   useEffect(() => clearLongPressTimer, []);
 
   const openMenu = (x: number, y: number) => {
-    onOpenMenu(x, y);
+    onOpenMenu?.(x, y);
+  };
+  const activate = () => {
+    if (onActivate) onActivate();
+    else {
+      if (focusOnSelect) void store.focusPane(pane.pane_id);
+      onSelect?.(pane);
+    }
   };
   const showStatus = shouldShowAgentStatusLabel(pane.agent_status);
   const nested = variant === "nested";
@@ -192,8 +217,7 @@ export function AgentRow({
           e.stopPropagation();
           return;
         }
-        if (focusOnSelect) void store.focusPane(pane.pane_id);
-        onSelect?.(pane);
+        activate();
       }}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -219,18 +243,18 @@ export function AgentRow({
           return;
         }
         if (action !== "activate" && action !== "context-menu") return;
+        if (action === "context-menu" && !onOpenMenu) return;
         event.preventDefault();
         event.stopPropagation();
         if (action === "activate") {
-          if (focusOnSelect) void store.focusPane(pane.pane_id);
-          onSelect?.(pane);
+          activate();
         } else {
           const point = keyboardContextMenuPoint(event.currentTarget);
           openMenu(point.x, point.y);
         }
       }}
       onPointerDown={(e) => {
-        if (e.pointerType === "mouse") return;
+        if (e.pointerType === "mouse" || !onOpenMenu) return;
         longPressTriggered.current = false;
         longPressStart.current = { x: e.clientX, y: e.clientY };
         clearLongPressTimer();
@@ -261,19 +285,25 @@ export function AgentRow({
         clearLongPressTimer();
         longPressStart.current = null;
       }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        openMenu(e.clientX, e.clientY);
-      }}
+      onContextMenu={
+        onOpenMenu
+          ? (e) => {
+              e.preventDefault();
+              openMenu(e.clientX, e.clientY);
+            }
+          : undefined
+      }
       title={
         nested
           ? details
-          : [pane.pane_id, tabLabel, pane.cwd].filter(Boolean).join(" · ")
+          : [serverLabel, pane.pane_id, tabLabel, pane.cwd]
+              .filter(Boolean)
+              .join(" · ")
       }
       aria-label={
         nested
           ? details
-          : `${paneAgentTitle(pane) || "Agent"} pane${tabLabel ? `, tab ${tabLabel}` : ""}, status ${pane.agent_status}`
+          : `${serverLabel ? `${serverLabel}, ` : ""}${paneAgentTitle(pane) || "Agent"} pane${tabLabel ? `, tab ${tabLabel}` : ""}, status ${pane.agent_status}`
       }
     >
       <AgentStatusIcon agent={pane.agent} status={pane.agent_status} />
@@ -305,6 +335,7 @@ export function AgentRow({
         </div>
         {!nested ? (
           <div className="agent-sub muted">
+            {serverLabel ? `${serverLabel} · ` : ""}
             {paneAgentTitle(pane) || "Terminal"}
             {pane.cwd ? ` · ${basename(pane.cwd)}` : ""}
           </div>
@@ -361,54 +392,67 @@ export function AgentContextMenu({
     });
   }, [state]);
 
-  if (!state) return null;
+  if (!state || (state.source && !isServerSourceAvailable(state.source)))
+    return null;
+  const remote =
+    !!state.source &&
+    state.source.connectionId !== sessionStore.get().activeConnectionId;
 
-  const groups: AgentContextMenuGroup[] = [
-    {
-      label: "Open",
-      items: [
-        { label: "Open terminal", action: () => onFocus(state.pane) },
+  const groups: AgentContextMenuGroup[] = remote
+    ? [
         {
-          label: paneHasAgentHistory(state.pane)
-            ? "Browse files at agent CWD"
-            : "Browse files at terminal CWD",
-          action: () => onBrowseFiles?.(state.pane),
+          label: state.source!.serverLabel,
+          items: [
+            { label: "Open terminal", action: () => onFocus(state.pane) },
+          ],
         },
+      ]
+    : [
         {
-          label: "Review workspace changes",
-          action: () => onReviewChanges?.(state.pane),
+          label: "Open",
+          items: [
+            { label: "Open terminal", action: () => onFocus(state.pane) },
+            {
+              label: paneHasAgentHistory(state.pane)
+                ? "Browse files at agent CWD"
+                : "Browse files at terminal CWD",
+              action: () => onBrowseFiles?.(state.pane),
+            },
+            {
+              label: "Review workspace changes",
+              action: () => onReviewChanges?.(state.pane),
+            },
+          ],
         },
-      ],
-    },
-    ...(paneHasAgentHistory(state.pane)
-      ? [
-          {
-            label: "Session",
-            items: [
+        ...(paneHasAgentHistory(state.pane)
+          ? [
               {
-                label: "View agent history",
-                action: () => onViewHistory?.(state.pane),
+                label: "Session",
+                items: [
+                  {
+                    label: "View agent history",
+                    action: () => onViewHistory?.(state.pane),
+                  },
+                  {
+                    label: "Export session",
+                    action: () => onExportSession(state.pane),
+                  },
+                ],
               },
-              {
-                label: "Export session",
-                action: () => onExportSession(state.pane),
-              },
-            ],
-          },
-        ]
-      : []),
-    {
-      label: "Pane",
-      danger: true,
-      items: [
+            ]
+          : []),
         {
-          label: "Close pane",
+          label: "Pane",
           danger: true,
-          action: () => onClosePane(state.pane),
+          items: [
+            {
+              label: "Close pane",
+              danger: true,
+              action: () => onClosePane(state.pane),
+            },
+          ],
         },
-      ],
-    },
-  ];
+      ];
   const style: React.CSSProperties = {
     position: "fixed",
     left: state.x,
@@ -440,6 +484,14 @@ export function AgentContextMenu({
               className={`context-menu-item ${item.danger ? "is-danger" : ""}`}
               onClick={() => {
                 onClose();
+                if (
+                  state.source &&
+                  (!isServerSourceAvailable(state.source) ||
+                    (!remote &&
+                      sessionStore.get().activeConnectionId !==
+                        state.source.connectionId))
+                )
+                  return;
                 item.action();
               }}
             >
