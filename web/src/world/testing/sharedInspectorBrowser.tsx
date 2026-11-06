@@ -90,6 +90,7 @@ export async function runSharedInspectorChecks(
   };
   let stopAssistant: (() => void) | undefined;
   let surfaceCalls = 0;
+  const surfaceSelections: WorkspaceSurfaceSelection[] = [];
   const results: Array<Promise<boolean>> = [];
   const showHandler: {
     current:
@@ -104,6 +105,7 @@ export async function runSharedInspectorChecks(
     showHandler.current = handler
       ? (selection) => {
           surfaceCalls++;
+          surfaceSelections.push(selection);
           const result = handler(selection);
           results.push(result);
           return result;
@@ -260,14 +262,21 @@ export async function runSharedInspectorChecks(
       "the originating Ranger browser reaches the actual shared Inspector handler",
     );
     check(
+      surfaceSelections[0]?.view === "history",
+      "Ranger requests History through the shared Inspector handler",
+    );
+    // This controller-only probe does not mount the conversation reader that
+    // confirms readability. Keep main's pending Chat intent on Terminal.
+    check(
       controller!.inspectorConversations.some(
         (c) =>
           c.connectionId === leaf.connectionId &&
           c.runtimeGeneration === generation &&
           c.paneId === leaf.pane.pane_id &&
-          c.view === "history",
+          c.view === "terminal" &&
+          c.awaitChatSession === true,
       ),
-      "Ranger opens only its captured runtime's session in History",
+      "Ranger opens only its captured runtime's session and waits for readable History",
     );
     await sendAssistant("Show after replacement", [scope]);
     const count = controller!.inspectorConversations.length;
