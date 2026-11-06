@@ -227,3 +227,16 @@
   .workspace-inspector-head.is-docked-window-drag-handle {
   cursor: grabbing;
 }
+
+/* Town's local Herdr setup offer: top centre inside the stage, under windows. */
+.town-herdr-setup {
+  position: absolute;
+  z-index: 7;
+  top: 16px;
+  left: 50%;
+  width: min(420px, 100% - 32px);
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  transform: translateX(-50%);
+  overscroll-behavior: contain;
+}
