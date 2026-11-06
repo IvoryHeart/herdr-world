@@ -49,6 +49,7 @@ function guardRemovedToastClick(point: { x: number; y: number; at: number }) {
     "dblclick",
   ] as const;
   const held = new Set<number>();
+  const releasePoint = { x: point.x, y: point.y };
   const cleanup = () => {
     for (const type of events) window.removeEventListener(type, guard, true);
     window.removeEventListener("blur", cleanup);
@@ -62,7 +63,13 @@ function guardRemovedToastClick(point: { x: number; y: number; at: number }) {
       (event.type === "click" && event.detail === 0) ||
       (!held.has(pointerId) &&
         (event.button !== 0 ||
-          Math.hypot(event.clientX - point.x, event.clientY - point.y) > 24 ||
+          Math.min(
+            Math.hypot(event.clientX - point.x, event.clientY - point.y),
+            Math.hypot(
+              event.clientX - releasePoint.x,
+              event.clientY - releasePoint.y,
+            ),
+          ) > 24 ||
           (event.target instanceof Element && event.target.closest(".toast"))))
     )
       return;
@@ -72,6 +79,11 @@ function guardRemovedToastClick(point: { x: number; y: number; at: number }) {
       held.add(pointerId);
       window.clearTimeout(timer);
     } else if (event.type === "pointerup" || event.type === "pointercancel") {
+      // The compatibility click follows the release coordinates after a drag.
+      if (event.type === "pointerup") {
+        releasePoint.x = event.clientX;
+        releasePoint.y = event.clientY;
+      }
       held.delete(pointerId);
       if (!held.size) timer = window.setTimeout(cleanup, REPEAT_DISMISS_MS);
     }

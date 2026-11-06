@@ -321,7 +321,9 @@ async function checkDismissPointerIsolation() {
         underlay.style.transform = `translate(${r.x + r.width / 2 - u.x - u.width / 2}px, ${r.y + r.height / 2 - u.y - u.height / 2}px)`;
         const point = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
         let underlyingDowns = 0;
+        let underlyingClicks = 0;
         underlay.addEventListener("pointerdown", () => underlyingDowns++);
+        underlay.addEventListener("click", () => underlyingClicks++);
         check(
           document.elementFromPoint(point.x, point.y) === close,
           `${kind}: X not hit-testable before input`,
@@ -399,18 +401,34 @@ async function checkDismissPointerIsolation() {
             touchPoints: [],
           });
         } else {
-          for (const type of ["mousePressed", "mouseReleased"])
-            await input("Input.dispatchMouseEvent", {
-              ...point,
-              type,
-              button: "left",
-              clickCount: 2,
-            });
+          await input("Input.dispatchMouseEvent", {
+            ...point,
+            type: "mousePressed",
+            button: "left",
+            clickCount: 2,
+          });
+          await input("Input.dispatchMouseEvent", {
+            x: point.x - 30,
+            y: point.y,
+            type: "mouseMoved",
+            buttons: 1,
+          });
+          await input("Input.dispatchMouseEvent", {
+            x: point.x - 30,
+            y: point.y,
+            type: "mouseReleased",
+            button: "left",
+            clickCount: 2,
+          });
         }
         await frame();
         check(
           underlyingDowns === 0,
           `${kind}: repeat pointerdown reached Needs you`,
+        );
+        check(
+          underlyingClicks === 0,
+          `${kind}: repeat release clicked the underlying card`,
         );
         check(
           dismissals === 0,
