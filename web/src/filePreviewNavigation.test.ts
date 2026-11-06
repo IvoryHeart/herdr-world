@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { assetUrlImports } from "./world/testing/assetUrlImports";
 import { stopChrome } from "./browserChrome";
 
 const chrome =
@@ -64,6 +65,7 @@ for (const narrow of [false, true])
           outdir: dir,
           target: "browser",
           plugins: [
+            assetUrlImports,
             {
               name: "vite-raw-test-assets",
               setup(build) {

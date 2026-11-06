@@ -126,7 +126,9 @@ test("RPC dispatch distinguishes acknowledged native effects from uncertain inpu
   const uncertain = setup();
   uncertain.loseAck();
   await uncertain.run("pane.send_text", { pane_id: "w1:p1", text: "Example" });
-  expect(uncertain.calls).toEqual(["pane.send_text"]);
+  // Roamgate #526: composer input first looks up its terminal so a clipboard
+  // write returns to the sender; a failed lookup never blocks the input.
+  expect(uncertain.calls).toEqual(["pane.get", "pane.send_text"]);
   expect(uncertain.replies.at(-1)?.command_evidence).toEqual({
     stage: "uncertain",
     connection_id: "example",

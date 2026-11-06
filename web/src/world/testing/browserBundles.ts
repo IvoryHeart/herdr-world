@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { assetUrlImports } from "./assetUrlImports";
 
 export type WorldBrowserEntry =
   | "HostsFilter"
@@ -22,6 +23,7 @@ export async function buildWorldBrowserBundle(
     outdir: directory,
     target: "browser",
     plugins: [
+      assetUrlImports,
       {
         name: "world-raw-svg",
         setup(builder) {
