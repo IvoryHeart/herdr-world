@@ -7,6 +7,7 @@ export function confirmationException(
   context: RoundContext,
   last: ReviewCycle,
 ) {
+  if (last.ordinal !== 3) return null;
   const key = `confirmation-exception:${context.input.number}:${last.ordinal}`;
   const raw = getMeta(context.crew, key);
   if (!raw) return null;

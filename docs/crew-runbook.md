@@ -194,7 +194,7 @@ to `firstmate-2` and holds further rounds. Ensure that seat is not in
 `crew.neverPrompt`. This mode never starts an automatic evaluator; retained
 legacy evaluator/process holds require explicit reconciliation and remain held.
 A separately recorded firstmate-2 exception can authorize one scoped confirmation
-for an exact reviewed head, repair head, ordinal and reviewer cohort; normal
+after cycle three for an exact reviewed head, repair head and reviewer cohort; normal
 reply/quiet guards remain, admission consumes it once, and an unresolved result
 escalates again rather than creating another cycle. There is no default fourth
 review or cycle five. Setting `crew.maxRuns: 0` holds new review admissions as

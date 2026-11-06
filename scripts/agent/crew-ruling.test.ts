@@ -127,6 +127,19 @@ test("an explicit scoped-confirm exception consumes one cycle and cannot authori
       { reviewer: "rev2", commit: SHA.fixed, result: "0/1 resolved, 0 new" },
     ],
   });
+  setMeta(
+    f.db,
+    "confirmation-exception:7:4",
+    JSON.stringify({
+      authorizedBy: "firstmate-2",
+      permission: "one-scoped-confirmation",
+      afterOrdinal: 4,
+      reviewedHead: SHA.fixed,
+      targetHead: SHA.other,
+      reviewers: ["rev2"],
+      usedCycle: null,
+    }),
+  );
   const next = f.pass(after, NOW + 2 * QUIET_MS);
   expect(
     next.some(
