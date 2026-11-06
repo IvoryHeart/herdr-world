@@ -1,18 +1,12 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { deskKey, type DeskRecord } from "../../../shared/deskState";
-import { deskIdentity } from "./useDeskState";
+import { deskIdentity, qualifiedReviewRecord } from "./useDeskState";
 import {
   sharedDeskStore,
   useSharedDeskStore,
   type DeskStoreState,
   type WorldDeskStore,
 } from "./deskStateStore";
-import {
-  completionSeenKey,
-  completionSeenStore,
-  useCompletionSeen,
-  type CompletionSeenStore,
-} from "./completionSeenState";
 import { handoffId, IDLE_WINDOW_MS } from "./handoffs";
 import type { WorldLeafObject } from "./worldObject";
 
@@ -31,18 +25,11 @@ export function reviewStop(
   return stop;
 }
 
-/**
- * Whether Desk's review record can name this stop: the service saw it end,
- * or Herdr reports when the agent was last active. Otherwise the mark goes
- * to the terminal's completion check until the service names every stop.
- */
+/** The service has a qualified record naming the stop. */
 export const reviewStopKnown = (
-  leaf: WorldLeafObject,
+  _leaf: WorldLeafObject,
   record: DeskRecord | undefined,
-) =>
-  record?.observed_stop_id != null ||
-  record?.stopped_at != null ||
-  leaf.lastActivityAt != null;
+) => record?.observed_stop_id != null || record?.stopped_at != null;
 
 /** Whether the agent's current stop is the one marked reviewed. */
 export const isReviewedStop = (
@@ -51,9 +38,6 @@ export const isReviewedStop = (
 ) =>
   record?.reviewed_stop != null &&
   record.reviewed_stop === reviewStop(leaf, record);
-
-const seenKey = (leaf: WorldLeafObject) =>
-  completionSeenKey(leaf.connectionId, leaf.generation, leaf.terminalId);
 
 /**
  * Finished work waiting for review, as Desk's review lane counts it: an agent
@@ -64,36 +48,25 @@ export const awaitsReview = (
   leaf: WorldLeafObject,
   record: DeskRecord | undefined,
   now: number,
-  checked = false,
 ) =>
   (leaf.status === "done" ||
     (leaf.status === "idle" &&
       record?.stopped_at != null &&
       now - record.stopped_at <= IDLE_WINDOW_MS)) &&
-  !checked &&
   !isReviewedStop(leaf, record);
 
 /**
  * Marks an agent's finished work reviewed; true once the service saved it.
  * A caller that showed one stop's report marks that stop, not a newer one;
  * otherwise the current stop, read from the store at the moment of marking.
- * Work Desk cannot name a stop for takes the terminal's completion check,
- * whatever stop the caller showed (that stop names nothing).
  */
-export function markReviewed(
-  store: Pick<WorldDeskStore, "get" | "mutate">,
-  seenStore: Pick<CompletionSeenStore, "markTerminal">,
+export async function markReviewed(
+  store: Pick<WorldDeskStore, "get" | "mutate" | "refresh">,
   leaf: WorldLeafObject,
   stop?: string,
 ): Promise<boolean> {
-  const key = deskKey(deskIdentity(leaf));
-  const current = store.get().records.find((record) => deskKey(record) === key);
-  if (!reviewStopKnown(leaf, current))
-    return seenStore.markTerminal(
-      leaf.connectionId,
-      leaf.generation,
-      leaf.terminalId,
-    );
+  const current = await qualifiedReviewRecord(store, deskIdentity(leaf), stop);
+  if (!current) return false;
   return store.mutate("world.desk.review", deskIdentity(leaf), {
     stop_id: stop ?? reviewStop(leaf, current),
     reviewed: true,
@@ -136,9 +109,8 @@ const NO_RECORDS: ReviewView = { records: [], verified: false };
 
 /**
  * One reviewed record for Town, Desk and Needs you. Desk's service record,
- * keyed by the agent and its current stop, is the record; a terminal's
- * completion check still counts as reviewed, and takes the mark when Desk
- * cannot name the stop. Lookups run only for the agents asked about, so a
+ * keyed by the agent and its current stop. Lookups run only for the agents
+ * asked about, so a
  * dense World pays nothing per update. With `stops` false (Town) the caller
  * sees only reviewed records, so the service's frequent stop observations do
  * not re-render it; `toReview` then knows done agents only.
@@ -146,10 +118,8 @@ const NO_RECORDS: ReviewView = { records: [], verified: false };
 export function useReviewedWork(
   store: WorldDeskStore = sharedDeskStore(),
   stops = true,
-  seenStore: CompletionSeenStore = completionSeenStore,
 ) {
   useSharedDeskStore(store);
-  const seen = useCompletionSeen(seenStore);
   const cache = useRef<{ state: DeskStoreState | null; key: string }>({
     state: null,
     key: "",
@@ -179,15 +149,9 @@ export function useReviewedWork(
     (leaf: WorldLeafObject) => records.get(deskKey(deskIdentity(leaf))),
     [records],
   );
-  const checked = useCallback(
-    (leaf: WorldLeafObject) =>
-      seen.terminals.has(leaf.terminalId) && seen.identities.has(seenKey(leaf)),
-    [seen],
-  );
   const reviewed = useCallback(
-    (leaf: WorldLeafObject) =>
-      checked(leaf) || isReviewedStop(leaf, recordOf(leaf)),
-    [checked, recordOf],
+    (leaf: WorldLeafObject) => isReviewedStop(leaf, recordOf(leaf)),
+    [recordOf],
   );
   const stopOf = useCallback(
     (leaf: WorldLeafObject) => reviewStop(leaf, recordOf(leaf)),
@@ -195,19 +159,18 @@ export function useReviewedWork(
   );
   const toReview = useCallback(
     (leaf: WorldLeafObject, now: number) =>
-      awaitsReview(leaf, recordOf(leaf), now, checked(leaf)),
-    [checked, recordOf],
+      awaitsReview(leaf, recordOf(leaf), now),
+    [recordOf],
   );
   const mark = useCallback(
-    (leaf: WorldLeafObject, stop?: string) =>
-      markReviewed(store, seenStore, leaf, stop),
-    [store, seenStore],
+    (leaf: WorldLeafObject, stop?: string) => markReviewed(store, leaf, stop),
+    [store],
   );
   return {
     reviewed,
     stopOf,
     toReview,
     mark,
-    verified: shown.verified && seen.verified,
+    verified: shown.verified,
   };
 }

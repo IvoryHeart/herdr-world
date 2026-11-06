@@ -83,13 +83,15 @@ Card positions, pins, folds, and workspace/host colours remain native-keyed layo
 preferences. They carry no binding and are inherited on ID reuse. Profiles and chimes now use the
 [SQLite storage port](DEPLOYMENT.md#agent-profile-storage); their existing
 browser record-creation protocol remains unchanged. Store-issued profile and
-remaining JSON-owned ID creation are separate work. Desk marks, watchlists and
-completion seen state now use the [durable terminal-mark family](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
+remaining JSON-owned ID creation are separate work. Desk marks and watchlists use the [durable terminal-mark family](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
 Watch replies carry the World record's `watch_id` for exact removal even while
 unresolved; a runtime-qualified tuple alone cannot distinguish a reused capture.
 Pending agent commands use separate process-local ownership tokens, including
 explicit unknown identities. These tokens fence admission without extending any
-saved record's lifetime.
+saved record's lifetime. Schema-9 completion receipts migrate into a private
+draining archive; only fresh same-source/terminal/known-session/unchanged-sequence
+proof converts them into the current Desk review. Unknown receipts never confer
+continuity. See the [upgrade rules](DEPLOYMENT.md#upgrade-from-separate-completion-checks).
 
 The [identity contract](../verification/contracts/world-identity.md) maps M4,
 mutation controls and mandatory consumers. The complete `verification:gate`

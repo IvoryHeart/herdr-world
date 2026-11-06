@@ -162,6 +162,7 @@ function fakeHerdr(initial: Record<string, unknown>) {
     prompts: [] as unknown[],
   };
   const call: HerdrCall = async (method, params) => {
+    if (method === "pane.read") return { read: { text: "❯ " } };
     if (method === "agent.get") return { agent: state.current };
     if (method === "agent.prompt") {
       state.prompts.push(params);

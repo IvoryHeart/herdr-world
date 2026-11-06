@@ -14,14 +14,28 @@ queue. Transcript, session and connection updates do not move your focus. If
 you move to another input or window while a conversation loads, its delayed
 reply box leaves focus where you put it.
 
+When agents are set to open on Chat, their windows start on **Terminal** until
+Chat can show the conversation. This includes agents without sessions,
+unsupported harnesses, missing integrations and unreadable records. The window
+switches to **Chat** once the conversation is readable, unless you chose a view
+by hand. Replacing the terminal or harness cancels that automatic switch.
+
+If you pick Chat yourself, an agent without a conversation shows **No messages
+yet**, explains that it is starting or waiting, and offers **Open Terminal**.
+Other unavailable conversations show their explanation and **Open Terminal**;
+missing or unreadable named records keep their error. While an agent is
+starting or waiting, Chat points you to Terminal rather than suggesting an
+integration install. Send still needs an identified conversation.
+
 ## What Chat does
 
 On Unix SSH hosts, Claude Code sessions reported by Herdr as UUIDs are resolved
 in that host's `~/.claude/projects/<project>/<UUID>.jsonl`. The transcript is read
 through the captured connection's SSH file adapter. Missing files, duplicate UUID
 matches and SSH errors never use a local transcript. A readable, reported session
-can use the same session-checked Send as a local conversation; missing integration
-metadata still shows the integration instructions.
+can use the same session-checked Send as a local conversation. When no session
+has been reported, Chat stays empty; use **Details** for session and integration
+information.
 The projects root is resolved on that host, including when it is a symlink.
 Discovered paths must name the requested UUID directly inside one project under
 that root; stat metadata cannot redirect the read to a different transcript.
@@ -166,6 +180,106 @@ that root; stat metadata cannot redirect the read to a different transcript.
   that evidence it gives `no_progress`; closing the menu or queuing the text
   alone does not prove the reply was accepted. Chat answers only when you
   pick an option.
+- Completes the harness's own command menus. `/model`, `/permissions` and
+  their follow-up steps open menus that Herdr usually reports as `idle`
+  (Claude Code) or `done` (Codex). Herdr's screen rules report Claude Code's
+  `/permissions` list as `blocked` once its cursor is on a rule; a blocked
+  pane shows a menu only when the prompt parser reads no question there and
+  the transcript has no open tool call (questions, approvals and plans are
+  tool calls; a transcript Chat cannot read counts as one). Chat asks for menus
+  (`agent_conversation.latest` with `menus: true`; Town never does) and
+  rereads 0.7 and 1.8 seconds after sending a slash command, since Herdr has
+  no event for a menu opening. Recognised shapes, captured from Claude Code
+  2.1.312 (full-screen and inline) and Codex 0.164.0:
+  - Claude Code: a panel between a `▔` or `─` top edge and a footer of
+    `<key> to <action>` segments joined by ` · `, one of them `Esc`. Its
+    first line is the title; tab rows, notes and a boxed search or entry
+    field are shown as they are.
+  - Codex: a title paragraph directly above a block of numbered options, and
+    a footer such as `enter select · esc back`, at the bottom of the screen or
+    directly above the idle composer (the full-access confirmation). Codex
+    draws its own messages in that place too, so a menu above the composer is
+    not offered when the agent's last message quotes its title or footer, or
+    when the transcript cannot be read.
+  The menu card shows the title, the other lines, each numbered option with
+  the harness's cursor marked, the field's contents and one button per key
+  the footer names (plus `↑`/`↓` for a list and `←`/`→` where a line says
+  `←/→ to …`). Unknown footer keys, such as `ctrl+g`, give no button. A digit
+  picks an option only when it cannot start a longer option number (in a
+  13-model list, `1` could start `10`) and the menu has no text field, which
+  would take the digit as text; those options are reached with the arrows.
+  Field text is one line of at most 500 characters without control
+  characters, typed without Enter so the next screen shows it before the
+  menu's own Enter submits it. The card's keys also work while it has focus;
+  the card stays in place across the menu's steps, and after a key sent from
+  it (a click included) focus returns to the card, so ↓ ↓ Enter walks a list.
+  Focus moved elsewhere, such as the composer, while the key is pending stays
+  there, so later typing never reaches the menu.
+  If the latest command belongs to this same session, no menu or question can
+  be read, and a qualified `pane.get` measures fewer rows than the shared
+  terminal-size floor, Chat says: “The terminal is too small to show this menu
+  — open or click Terminal to fix.” **Open Terminal** uses the existing view
+  action so the shown terminal can reclaim its size. Unknown rows are not a
+  measurement; layout rectangles and default sizes cannot supply one. A stale
+  command, session or native read cannot show this note. It grants no input
+  authority and does not change Send or the menu's key checks.
+- Never types into an open menu. A message or slash command goes to the pane
+  as typed keys, which an open menu would take as its own keys and could pick
+  options with. While Chat shows a menu card, Send is disabled with "A menu is
+  open in the terminal". The service decides on its own, failing closed: after
+  every await of its own preparation (Codex discovery, durable admission) it
+  reads the screen, whatever status Herdr reports, and refuses (`menu`) with
+  nothing typed when the read fails or is malformed, when it shows a command
+  menu or a question, or when its last lines show a menu-like footer or a
+  cursor on a numbered option, including options in a partial box. Blank
+  padding cannot hide menu evidence. A footer the agent's own last message
+  quotes remains ordinary prose, including Claude's `●` message prefix.
+  Over SSH, quote text comes from that same bound session even
+  when the browser supplies the delivery baseline. It then reads the agent
+  once more and requires the same terminal, session, state sequence and other
+  captured native identity before prompting with no await in between. An
+  observed replacement refuses; a change after that final read is still not
+  caught (as #4764).
+- Answers, menu keys and sends to one pane are one World input at a time; a
+  second while one is in flight is refused (`busy`).
+- A slash command is reserved for its pane, session and text before any
+  await, so two sends of it cannot both reach the agent (`duplicate`). The
+  reservation is dropped when nothing reached the pane, including native
+  `agent_not_ready`, `agent_not_found` and `agent_blocked` refusals. A command admitted
+  while the agent was working, or whose acknowledgement was lost, stays
+  reserved until a successful, session-qualified read begun after dispatch
+  shows another session or an idle/done status. Unknown, failed, blocked and
+  older reads keep it reserved. While reserved, its
+  receipt then says "waiting for <agent>: it is busy and runs this when it
+  reaches it" instead of "sent, not checked". Dismissing the receipt only
+  hides the notice: the command stays reserved. Waiting means World has not
+  seen the agent reach it, not that it ran.
+- Each menu key calls `agent_conversation.press` with the session and the
+  menu's fingerprint. The service checks that the session is the one Chat
+  showed, the pane still shows a menu by the rules above, the screen shows that exact
+  menu and the key is one it names; then it reads the pane again (agent,
+  session, terminal, title, revision and state sequence) and presses the key.
+  It rereads for up to about half a second until the screen changes and
+  returns the next menu, or none when it closed; Chat also rereads 0.3 and
+  0.9 seconds after any key, since a changed menu does not trigger the
+  conversation watch. Any difference refuses with
+  nothing sent and returns the menu now shown. A new connection, runtime, pane
+  or session retires the card and its notice. Answers and keys to one pane
+  never interleave. The same gap as answers remains: Herdr cannot make the key
+  conditional on the menu ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)).
+  Claude Code's `/model` saves a digit or Enter as the default for new
+  sessions, as its footer says; use `s` for this session only.
+- The composer's **⋮** menu holds the Terminal's key controls, in the rows
+  arranged in Settings, on desktop and phone. Each press calls
+  `agent_conversation.press` without a menu fingerprint: the service checks
+  the session and Herdr's key name (`ctrl+c`, `alt+up`, `shift+tab`, `esc`,
+  `f5`, one character), then the pane again, and presses it. A custom
+  combination sends what the Terminal sends: Shift makes a printable key its
+  shifted character (Shift+1 is `!`, Shift+A is `A`), Ctrl+Shift keeps Shift
+  on letters (`ctrl+shift+x`), and combinations the Terminal refuses or sends
+  as their own key code (Ctrl+Shift+1, Alt+[) are disabled. Page Up/Down
+  scroll the Terminal and Herdr names no Home, End, Insert or Delete, so those
+  buttons are disabled in Chat. The popover stays open to walk a menu.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - In Town, Board and Desk, opens local source references in the same
@@ -285,10 +399,11 @@ compression does not grant a stronger binding or enable Send for a guess.
 | RPC | Parameters | Reply |
 | --- | --- | --- |
 | `agent_conversation.get` | `pane_id` | A conversation |
-| `agent_conversation.latest` | `pane_id`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }` |
+| `agent_conversation.latest` | `pane_id` and optional `menus`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }`; with `menus: true`, a command menu (see above) is its `pending_prompt`, with `menu` |
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
+| `agent_conversation.press` | `pane_id`, `key`, `session_fingerprint`, optional `menu_fingerprint` and `text` (a menu field's line) | `{ status: "sent", key, text?, menu }` (the menu after the key, or null) or `{ status: "refused", reason, message, menu }` |
 | `agent_conversation.steps` | `pane_id`, `call_ids` (at most 500) | `{ steps }`: the step model for those tool calls, by the harness's call ID; calls it cannot find are left out |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 | `agent_worktree.get` | qualified `subject` (connection, generation, pane/terminal, session), optional `refresh` | Worktree observation with revision/time, candidates and attributed evidence; selected candidate plus subject/revision is submitted with resource requests |

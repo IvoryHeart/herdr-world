@@ -504,11 +504,13 @@ describe("GitHub refresh with detail", () => {
       "rev4",
     ]);
     expect(first.items.find((entry) => entry.number === 8)!.pr).toBeUndefined();
-    expect(queries).toHaveLength(2);
+    const detailReads = () =>
+      queries.filter((query) => query.includes("pullRequest(number:"));
+    expect(detailReads()).toHaveLength(1);
     // Comment text stays in the service.
     expect(JSON.stringify(first.items)).not.toContain("Fix confirmation");
     const second = await refreshGitHub(run, 2_000, 7, Date.now, cache);
-    expect(queries).toHaveLength(3);
+    expect(detailReads()).toHaveLength(1);
     expect(second.ok && second.items[0]!.pr).toBeTruthy();
   });
 

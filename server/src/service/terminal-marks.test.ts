@@ -69,11 +69,7 @@ test("two real browser sockets agree before and after restarting the real servic
       ...identity,
       agent_session_fingerprint: deskSessionFingerprint(pane.agent_session),
     };
-    const events = [
-      "world_desk_changed",
-      "world_watchlist_changed",
-      "world_completion_seen_changed",
-    ];
+    const events = ["world_desk_changed", "world_watchlist_changed"];
     for (const [index, method, params] of [
       [
         0,
@@ -81,7 +77,6 @@ test("two real browser sockets agree before and after restarting the real servic
         { ...desk, reviewed: true, stop_id: "synthetic-stop" },
       ],
       [1, "world.watchlist.pin", { ...identity, label: "Synthetic watch" }],
-      [2, "world.completion_seen.mark", identity],
     ] as const) {
       const notice = clients[1]!.next(
         (control) => control.type === events[index],
@@ -102,9 +97,6 @@ test("two real browser sockets agree before and after restarting the real servic
       ]),
     });
     expect(await clients[1]!.call("world.watchlist.list")).toMatchObject({
-      records: [{ terminal_id: pane.terminal_id }],
-    });
-    expect(await clients[1]!.call("world.completion_seen.list")).toMatchObject({
       records: [{ terminal_id: pane.terminal_id }],
     });
     const incarnation = (await clients[0]!.hello).service_incarnation;
@@ -141,9 +133,6 @@ test("two real browser sockets agree before and after restarting the real servic
         ]),
       });
       expect(await client.call("world.watchlist.list")).toMatchObject({
-        records: [{ terminal_id: pane.terminal_id }],
-      });
-      expect(await client.call("world.completion_seen.list")).toMatchObject({
         records: [{ terminal_id: pane.terminal_id }],
       });
     }

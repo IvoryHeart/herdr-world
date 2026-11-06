@@ -17,7 +17,7 @@ function stopAt() {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
   throw new Error("crash guard resumed");
 }
-const kinds = ["desk", "watchlist", "completion-seen"] as const;
+const kinds = ["desk", "watchlist"] as const;
 if (phase === "worker-ack" || phase === "worker-drain") {
   const store = await openWorldLedger(paths, {
     clock: systemClock,

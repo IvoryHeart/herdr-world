@@ -60,6 +60,8 @@ export function createTerminalBridge(args: {
   lookupPaneId?: (terminalId: string) => Promise<string | null>;
   /** Popup surfaces follow this connection's focused Space, not the shell default. */
   focusedWorkspaceId?: () => Promise<string | null>;
+  /** The session's app size now: a hidden app client must not resize it. */
+  appViewportSize?: () => Promise<{ cols: number; rows: number } | null>;
   surfaceCodecsEnabled?: () => Promise<boolean>;
   validateCreationSource?: (source: EndpointCreationSource) => Promise<void>;
   createEmptyWorkspace?: (
@@ -315,6 +317,7 @@ export function createTerminalBridge(args: {
     try {
       if ((await navigationMode()) !== "browser-local") return;
       const codecs = await (args.surfaceCodecsEnabled?.() ?? true);
+      const size = await args.appViewportSize?.().catch(() => null);
       if (disposed || popupObserver) return;
       const observer = new EndpointClient(args.clientSocketPath, codecs);
       popupObserver = observer;
@@ -342,7 +345,7 @@ export function createTerminalBridge(args: {
         popupChanged(null);
         retryPopupObserver();
       });
-      await observer.connect(80, 24);
+      await observer.connect(size?.cols ?? 80, size?.rows ?? 24);
       refreshPopupObserverFocus();
     } catch (error) {
       logger.warn("popup observer connect failed", {

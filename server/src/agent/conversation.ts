@@ -82,6 +82,8 @@ export type Conversation = {
    * reports it blocked; null otherwise.
    */
   pending_prompt: PendingPrompt | null;
+  /** Measured size for this session's unreadable command menu; grants no input authority. */
+  menu_unreadable?: { reason: "terminal_too_small"; rows: number };
 } & (
   | { status: "ok"; unavailable: null }
   | {
@@ -164,7 +166,13 @@ export type ConversationSendResult =
         | "unavailable"
         | "empty"
         | "command"
-        | "unsettled";
+        | "unsettled"
+        /** A harness menu is open: typed text would go into it as keys. */
+        | "menu"
+        /** The same command already waits for the busy agent to reach it. */
+        | "duplicate"
+        /** Another World input to this pane is in flight. */
+        | "busy";
       message: string;
     };
 
@@ -215,10 +223,33 @@ export type ConversationAnswerResult =
       pending_prompt: PendingPrompt | null;
     };
 
+export type ConversationKeyResult =
+  | {
+      /** The key, or the field's text, was sent to the pane. */
+      status: "sent";
+      key: string;
+      text?: string;
+      /** The command menu shown after the key, or null once it closed. */
+      menu: PendingPrompt | null;
+    }
+  | {
+      status: "refused";
+      reason: "changed" | "unknown_option" | "invalid_text" | "busy";
+      message: string;
+      /** The command menu now shown, if any. */
+      menu: PendingPrompt | null;
+    };
+
 export interface ConversationSource {
   readonly id: string;
   read(target: ConversationTarget): Promise<Conversation>;
-  latest(target: ConversationTarget): Promise<ConversationLatest>;
+  /**
+   * With `menus`, a command menu shown while the agent is idle or done is
+   * read from its screen into `pending_prompt` (Chat asks; Town does not).
+   */
+  latest(
+    target: ConversationTarget & { menus?: boolean },
+  ): Promise<ConversationLatest>;
   /** A cheap key for change notification, without reading the transcript. */
   identity(target: ConversationTarget): Promise<ConversationIdentity>;
   /** Latest for the named panes, or for every agent the source sees. */
@@ -262,6 +293,19 @@ export interface ConversationSource {
       text?: string;
     },
   ): Promise<ConversationAnswerResult>;
+  /**
+   * Press one key in the pane for the Chat session that asked: a key the
+   * shown command menu names (with `menu_fingerprint`), text for that menu's
+   * field, or one of the composer's key controls.
+   */
+  press(
+    target: ConversationTarget & {
+      key: string;
+      session_fingerprint: string;
+      menu_fingerprint?: string;
+      text?: string;
+    },
+  ): Promise<ConversationKeyResult>;
 }
 
 function plural(name: string, calls: number) {

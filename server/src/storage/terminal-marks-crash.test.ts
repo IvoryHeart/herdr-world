@@ -44,7 +44,7 @@ for (const compiled of [false, true])
           );
           try {
             const rows = store.terminalMarks.list();
-            expect(rows).toHaveLength(phase === "before-commit" ? 0 : 3);
+            expect(rows).toHaveLength(phase === "before-commit" ? 0 : 2);
             for (const row of rows) {
               expect(row.binding.record_id).toBe(row.id);
               expect(row.binding.state).toBe("unresolved");

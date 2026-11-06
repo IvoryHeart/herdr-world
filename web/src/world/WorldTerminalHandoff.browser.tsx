@@ -172,6 +172,12 @@ const tabs: Tab[] = [
     agent_status: "idle",
   },
 ];
+const initialReviewerSession = {
+  source: "herdr:claude",
+  agent: "claude",
+  kind: "id",
+  value: "review-a",
+};
 const panes: Pane[] = [
   {
     pane_id: "builder-pane",
@@ -194,6 +200,8 @@ const panes: Pane[] = [
     // harness is one Chat cannot read, so it opens its terminal.
     agent: "claude",
     display_agent: "Reviewer",
+    // Match the native session already advertised by this fixture's agent list.
+    agent_session: initialReviewerSession,
     agent_status: "idle",
     revision: 1,
   },
@@ -232,7 +240,7 @@ let agents: Record<string, unknown>[] = [
     pane_id: "reviewer-pane",
     terminal_id: "reviewer-terminal",
     agent: "claude",
-    agent_session: { agent: "claude", kind: "id", value: "review-a" },
+    agent_session: initialReviewerSession,
   },
 ];
 const terminalListeners = new Set<(push: TerminalPush) => void>();
@@ -336,6 +344,7 @@ function currentWorldCoverage() {
   };
 }
 
+let heldConversationRead: Promise<void> | undefined;
 let client: ConnectionClient = {
   connectionId: "local",
   generation: 1,
@@ -583,6 +592,34 @@ let client: ConnectionClient = {
           "Agent checkout unavailable: this session has not reported a valid checkout.",
       };
     }
+    // This fixture already exposes readable History. Its summary admits a
+    // read-only conversation without inventing a native session or Send authority.
+    if (method === "agent_conversation.latest") {
+      await heldConversationRead;
+      const readable =
+        panes.find((pane) => pane.pane_id === params.pane_id)?.agent ===
+        "claude";
+      return {
+        conversation_version: 1,
+        source: "synthetic",
+        pane_id: String(params.pane_id),
+        agent: "claude",
+        agent_status: "idle",
+        session_binding: "guessed",
+        session_fingerprint: null,
+        session_label: "Synthetic readable conversation",
+        status: readable ? "ok" : "unavailable",
+        unavailable: readable
+          ? null
+          : {
+              reason: "unsupported_agent",
+              detail:
+                "This synthetic harness has no Chat support. Open Terminal.",
+            },
+        messages: [],
+        latest: null,
+      };
+    }
     if (method === "agent_history.get") {
       return {
         status: "ok",
@@ -670,6 +707,7 @@ const opensOn = (label: string) =>
  */
 async function openAgent(label: string) {
   const target = agentTarget(label)!;
+  const before = calls.length;
   flushSync(() => {
     target.click();
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
@@ -683,6 +721,22 @@ async function openAgent(label: string) {
       ),
     `${label} window on ${opensOn(label) === "history" ? "Chat" : "its terminal"}`,
   );
+  // A window on Chat hides its terminal: its attach keeps the agent's Herdr
+  // pane at the tab's current size, and nothing resizes it before Terminal.
+  const terminalId = `${label.toLowerCase()}-terminal`;
+  if (opensOn(label) === "history")
+    check(
+      calls
+        .slice(before)
+        .every(
+          ({ method, params }) =>
+            params.terminal_id !== terminalId ||
+            (method !== "terminal.resize" &&
+              (method !== "terminal.attach" ||
+                (params.surface_cols === 160 && params.surface_rows === 48))),
+        ),
+      `${label} window on Chat resized its Herdr pane`,
+    );
   flushSync(() =>
     document
       .querySelector<HTMLButtonElement>(
@@ -886,6 +940,23 @@ async function run() {
         )!,
       ).cursor === "pointer",
     "Town did not establish one parked creation endpoint without opening an Inspector",
+  );
+  // Herdr resizes a pane to every attach, for every viewer: the parked,
+  // undisplayed endpoint attaches at the tab's current 160×48 surface.
+  check(
+    calls.some(
+      ({ method, params }) =>
+        method === "terminal.attach" &&
+        params.terminal_id === "builder-terminal",
+    ) &&
+      calls.every(
+        ({ method, params }) =>
+          method !== "terminal.attach" ||
+          params.terminal_id !== "builder-terminal" ||
+          (params.surface_cols === 160 && params.surface_rows === 48),
+      ) &&
+      !calls.some(({ method }) => method === "terminal.resize"),
+    "the parked creation endpoint resized the Herdr pane",
   );
   check(
     !calls.some(
@@ -4328,6 +4399,12 @@ async function run() {
     "restored desktop layout",
   );
   await until(() => boardTarget("Reviewer"), "Reviewer before retirement");
+  // CI's order: the owner picks Files before the reopened window's Chat read
+  // returns, then the session is replaced.
+  let releaseConversationRead = () => {};
+  heldConversationRead = new Promise<void>(
+    (resolve) => (releaseConversationRead = resolve),
+  );
   flushSync(() => boardTarget("Reviewer")!.click());
   await until(
     () => reviewerInspectorActive(),
@@ -4344,6 +4421,13 @@ async function run() {
   await until(
     () => reviewerInspector.getAttribute("data-view") === "files",
     "Reviewer Files state before session replacement",
+  );
+  heldConversationRead = undefined;
+  releaseConversationRead();
+  await settle();
+  check(
+    reviewerInspector.getAttribute("data-view") === "files",
+    "a late Chat read overrode the owner's Files choice",
   );
   const worktreeBeforeReplacement = calls.length;
   const replacementSession = {
@@ -5688,6 +5772,12 @@ async function run() {
     !reuseWindow.querySelector('[role="tab"][aria-label="Chat"]'),
     "shell window unexpectedly offers Chat before the agent appears",
   );
+  const reuseSession = {
+    source: "herdr:claude",
+    agent: "claude",
+    kind: "id",
+    value: "open-rule-session",
+  };
   const reuseAgent: Pane = {
     ...reuseShell,
     pane_id: "open-rule-agent",
@@ -5696,13 +5786,13 @@ async function run() {
     agent_name: "Open Rule Agent",
     display_agent: "Open Rule Agent",
     agent_status: "idle",
-    agent_session: { value: "open-rule-session" },
+    agent_session: reuseSession,
   };
   panes.push(reuseAgent);
   reuseTab.pane_count = 2;
   agents.push({
     ...reuseAgent,
-    agent_session: { agent: "claude", kind: "id", value: "open-rule-session" },
+    agent_session: reuseSession,
   });
   worldRevision += 1;
   await worldRuntimeStore.refresh();

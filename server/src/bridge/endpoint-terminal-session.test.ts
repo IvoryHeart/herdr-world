@@ -27,6 +27,10 @@ import {
   sendWebSocketMessage,
   WS_COALESCE_LIMIT_BYTES,
 } from "./websocket-send";
+import { createLegacyConnectionRuntime } from "../connections/runtime";
+import { createGuiSettingsStore } from "../config/gui-settings";
+import { systemClock, systemScheduler } from "../service/ports";
+import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 
 const servers: net.Server[] = [];
 
@@ -484,6 +488,186 @@ test("popup identity updates without any attached pane viewer", async () => {
       "floating",
       null,
     ]);
+  } finally {
+    bridge.dispose();
+  }
+});
+
+test.each([
+  [
+    "the session's current size",
+    async () => ({ cols: 120, rows: 40 }),
+    120,
+    40,
+  ],
+  [
+    "80×24 only when that size cannot be read",
+    async () => {
+      throw new Error("pane.layout failed");
+    },
+    80,
+    24,
+  ],
+] as const)(
+  "the popup observer connects at %s",
+  async (_label, appViewportSize, cols, rows) => {
+    // Herdr resizes the session to every app client's handshake: a hidden
+    // observer started by a page load must not shrink the agents' panes.
+    let surface = null as { cols: number; rows: number } | null;
+    const socketPath = await startSessionServer({
+      initialSurface: {
+        frame: {
+          cells: [cell("x")],
+          width: 1,
+          height: 1,
+          cursor: null,
+          hyperlinks: [],
+        },
+        panes: [],
+      },
+      onHello: (hello) => {
+        surface = hello.surface_size;
+      },
+    });
+    const bridge = createTerminalBridge({
+      clientSocketPath: socketPath,
+      herdrProtocol: async () => 22,
+      lookupPaneId: async () => null,
+      appViewportSize,
+      broadcast: () => {},
+      safeSend: () => true,
+      clientLabel: () => "test",
+      markRpcError: () => {},
+    });
+    try {
+      await bridge.handleTerminalRpc(
+        {} as ServerWebSocket<unknown>,
+        "watch",
+        "terminal.watch_popup",
+        {},
+      );
+      await settleUntil(() => surface !== null);
+      expect(surface).toEqual({ cols, rows });
+    } finally {
+      bridge.dispose();
+    }
+  },
+);
+
+test("the popup observer never adopts a squeezed session size", async () => {
+  // Found by rev-sol on #650, through the real runtime callback: a 13×1 area
+  // at offset 11,2 used to give the observer a 24×3 handshake.
+  let hello = null as { cols: number; rows: number } | null;
+  const socketPath = await startSessionServer({
+    initialSurface: {
+      frame: {
+        cells: [cell("x")],
+        width: 1,
+        height: 1,
+        cursor: null,
+        hyperlinks: [],
+      },
+      panes: [],
+    },
+    onHello: (h) => {
+      hello = h.surface_size;
+    },
+  });
+  const dir = mkdtempSync(path.join(tmpdir(), "popup-floor-"));
+  const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings: createGuiSettingsStore(path.join(dir, "settings.json")),
+    identity: {
+      id: "synthetic-connection",
+      label: "Synthetic",
+      source: "test",
+    },
+    config: {
+      socketPath: path.join(dir, "unused-control.sock"),
+      clientSocketPath: socketPath,
+      hasExplicitSocketPath: true,
+      hasExplicitClientSocketPath: true,
+    },
+    safeSend: () => true,
+    clientLabel: () => "synthetic",
+    markRpcError: () => {},
+    onEvent: () => {},
+    onError: () => {},
+  });
+  runtime.herdr.call = (async (method: string) =>
+    method === "ping"
+      ? { protocol: 22 }
+      : method === "pane.list"
+        ? { panes: [{ pane_id: "pane", focused: true }] }
+        : method === "pane.layout"
+          ? { layout: { area: { x: 11, y: 2, width: 13, height: 1 } } }
+          : { workspaces: [] }) as typeof runtime.herdr.call;
+  try {
+    await runtime.terminalBridge.handleTerminalRpc(
+      {} as ServerWebSocket<unknown>,
+      "watch",
+      "terminal.watch_popup",
+      {},
+    );
+    await settleUntil(() => hello !== null);
+    // The default area, keeping the app's sidebar and tab-bar offsets.
+    expect(hello).toEqual({ cols: 111, rows: 32 });
+  } finally {
+    await runtime.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a codec refresh while the popup observer reads its size still observes", async () => {
+  // The observer is published only once its size is read: a transport
+  // refresh in that window must not leave a closed observer that its retry
+  // can never replace.
+  let hellos = 0;
+  const socketPath = await startSessionServer({
+    initialSurface: {
+      frame: {
+        cells: [cell("x")],
+        width: 1,
+        height: 1,
+        cursor: null,
+        hyperlinks: [],
+      },
+      panes: [],
+    },
+    onHello: () => {
+      hellos += 1;
+    },
+  });
+  const size = Promise.withResolvers<{ cols: number; rows: number }>();
+  let reads = 0;
+  const bridge = createTerminalBridge({
+    clientSocketPath: socketPath,
+    herdrProtocol: async () => 22,
+    lookupPaneId: async () => null,
+    appViewportSize: () => {
+      reads += 1;
+      return size.promise;
+    },
+    broadcast: () => {},
+    safeSend: () => true,
+    clientLabel: () => "test",
+    markRpcError: () => {},
+  });
+  try {
+    await bridge.handleTerminalRpc(
+      {} as ServerWebSocket<unknown>,
+      "watch",
+      "terminal.watch_popup",
+      {},
+    );
+    await settleUntil(() => reads === 1);
+    bridge.refreshSurfaceCodecs();
+    size.resolve({ cols: 120, rows: 40 });
+    // Longer than the observer's 2 s retry.
+    for (let i = 0; i < 60 && hellos === 0; i++) await Bun.sleep(50);
+    expect(hellos).toBeGreaterThan(0);
   } finally {
     bridge.dispose();
   }

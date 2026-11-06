@@ -1,0 +1,67 @@
+.world-loader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+}
+.world-loader.is-longer {
+  border-color: var(--warning-text);
+}
+.world-loader-spinner {
+  flex: 0 0 auto;
+  color: var(--accent);
+  animation: row-spinner 0.8s linear infinite;
+}
+.world-loader.is-longer .world-loader-spinner,
+.world-loader.is-longer .world-loader-copy b {
+  color: var(--warning-text);
+}
+.world-loader-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.world-loader-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.world-loader > button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .world-loader {
+    flex-wrap: wrap;
+  }
+  .world-loader > button {
+    min-height: 44px;
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-loader-spinner {
+    animation: none;
+  }
+}
+
+/* A window waiting for its Chat: a line under the header, never over Terminal. */
+.world-inspector-chat-wait {
+  margin: 6px 8px 0;
+  flex: 0 0 auto;
+}

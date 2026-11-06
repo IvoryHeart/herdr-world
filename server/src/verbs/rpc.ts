@@ -46,6 +46,12 @@ export const rpcVerbs = [
   rpc("agent_conversation.get", "read", "runtime", object({ pane_id: text })),
   rpc("agent_conversation.latest", "read", "runtime"),
   rpc(
+    "agent_conversation.press",
+    "opaque",
+    "runtime",
+    object({ pane_id: text }),
+  ),
+  rpc(
     "agent_conversation.send",
     "opaque",
     "runtime",
@@ -262,8 +268,6 @@ export const rpcVerbs = [
     object({ ops: Type.Array(Type.Unknown()) }),
   ),
   rpc("world.chimes.save", "reconcilable", "world"),
-  rpc("world.completion_seen.list", "read", "world"),
-  rpc("world.completion_seen.mark", "reconcilable", "world"),
   rpc("world.desk.get", "read", "world"),
   rpc("world.desk.observe", "reconcilable", "world"),
   rpc("world.desk.open", "reconcilable", "world"),
