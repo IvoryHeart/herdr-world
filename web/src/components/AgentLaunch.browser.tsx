@@ -199,12 +199,6 @@ async function run() {
       b = host.querySelector(".agent-launcher-status")!.getBoundingClientRect();
     return b.height > 0 && b.top >= a.top && b.bottom <= a.bottom;
   };
-  // Only the pressed choice is busy, and only until World answers.
-  const pending = () =>
-    Array.from(host.querySelectorAll('.agent-launcher [aria-busy="true"]'));
-  const loaderText = () =>
-    host.querySelector(".agent-launcher-status .world-loader")?.textContent ??
-    "";
   const reopen = async () => {
     button('[aria-label="Close new agent"]').click();
     await settle();
@@ -230,23 +224,6 @@ async function run() {
         starts === before + 1 && choice.disabled && visibleStatus(),
         `${status}: one pending submit with visible progress`,
       );
-      const label = status === "uncertain" ? "Reviewer" : "Codex";
-      check(
-        !host
-          .querySelector(".agent-launcher-status")!
-          .closest('[aria-busy="true"]'),
-        `${status}: launch announcements remain outside busy content`,
-      );
-      check(
-        pending().filter((element) => element.tagName === "BUTTON").length ===
-          1 &&
-          pending().includes(choice) &&
-          getComputedStyle(choice).opacity === "1" &&
-          loaderText().includes(`Starting ${label}…`) &&
-          !loaderText().includes("Taking longer") &&
-          opened.length === 0,
-        `${status}: the pressed ${label} is busy and says it is starting`,
-      );
       answer.resolve({
         status,
         terminal_id: "new-terminal",
@@ -254,10 +231,6 @@ async function run() {
       });
       await settle();
       const confirmed = status === "started" || status === "sent";
-      check(
-        pending().length === 0 && !loaderText(),
-        `${status}: the answer ends the starting line`,
-      );
       check(
         !!host.querySelector(".agent-launcher") === !confirmed,
         `${status}: close only confirmed starts`,
@@ -328,17 +301,7 @@ async function run() {
         kind === "agent" ? ".agent-launcher-kind" : ".agent-launcher-card",
       ).click();
       await settle();
-      check(
-        loaderText().includes(
-          kind === "agent" ? "Starting Codex…" : "Creating a Terminal tab…",
-        ),
-        `${kind}: the pressed choice says what it is doing`,
-      );
       await reopen();
-      check(
-        pending().length === 0 && !loaderText(),
-        `${kind}: a reopened launcher does not inherit the pending line`,
-      );
       if (kind === "agent")
         answer.resolve({ status: "started", terminal_id: "old-terminal" });
       else terminal.resolve();

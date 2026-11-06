@@ -122,11 +122,6 @@ button.profile-primary {
   font: inherit;
   cursor: pointer;
 }
-/* The pressed choice stays legible while the start is in flight. */
-.agent-launcher button[aria-busy="true"]:disabled {
-  opacity: 1;
-  border-color: var(--accent);
-}
 .agent-launcher-card:not(:disabled):hover {
   border-color: var(--accent);
 }

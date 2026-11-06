@@ -41,9 +41,6 @@ test.skipIf(!chrome).each([1440, 390])(
             socket!.onerror = () => reject(new Error("CDP connection failed"));
           });
           const driver = new InputDriver(socket);
-          await driver.call("Emulation.setEmulatedMedia", {
-            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-          });
           await driver.call("Emulation.setDeviceMetricsOverride", {
             width,
             height: width === 390 ? 844 : 1000,

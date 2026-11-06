@@ -30,7 +30,6 @@ import { HarnessReadinessSummary } from "./HarnessReadinessSummary";
 import { ProfileSprite } from "./ProfileSprite";
 import type { WorldObject } from "./worldObject";
 import { store } from "../store";
-import { WorldLoader } from "./WorldLoader";
 import "./agentProfiles.css";
 
 /**
@@ -130,11 +129,6 @@ export function AgentLauncherDialog({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [checks, setChecks] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
-  // Presentation only: which choice was pressed and when, for its own
-  // busy state and the honest "taking longer" line.
-  const [pressed, setPressed] = useState<{ key: string; since: number } | null>(
-    null,
-  );
   const [attempted, setAttempted] = useState(false);
   // Fence synchronous clicks as well as retries after an uncertain outcome.
   const attempt = useRef(false);
@@ -193,10 +187,6 @@ export function AgentLauncherDialog({
         : trimmed
       : trimmed;
     setBusy(label);
-    setPressed({
-      key: profile ? `profile:${profile.id}` : `kind:${choice.kind}`,
-      since: Date.now(),
-    });
     setOutcome(null);
     setError(null);
     try {
@@ -233,7 +223,6 @@ export function AgentLauncherDialog({
       if (mounted.current) {
         operation.current = false;
         setBusy(null);
-        setPressed(null);
       }
     }
   };
@@ -245,7 +234,6 @@ export function AgentLauncherDialog({
     attempt.current = true;
     setAttempted(true);
     setBusy("Terminal");
-    setPressed({ key: "terminal", since: Date.now() });
     setOutcome(null);
     setError(null);
     try {
@@ -265,7 +253,6 @@ export function AgentLauncherDialog({
       if (mounted.current) {
         operation.current = false;
         setBusy(null);
-        setPressed(null);
       }
     }
   };
@@ -330,26 +317,11 @@ export function AgentLauncherDialog({
           {loginBusy ? (
             <p>Opening a login tab for {harnessLabel(loginBusy)}…</p>
           ) : null}
-          {busy && pressed ? (
-            <WorldLoader
-              live={false}
-              since={pressed.since}
-              label={
-                pressed.key === "terminal"
-                  ? "Creating a Terminal tab…"
-                  : `Starting ${busy}…`
-              }
-              longerLabel={
-                pressed.key === "terminal"
-                  ? "Taking longer than usual: still creating the Terminal tab…"
-                  : `Taking longer than usual: still starting ${busy}…`
-              }
-              detail={
-                pressed.key === "terminal"
-                  ? undefined
-                  : "Creating its tab, starting it and waiting until it is ready."
-              }
-            />
+          {busy ? (
+            <p>
+              Starting {busy}: creating its tab, starting it and waiting until
+              it is ready…
+            </p>
           ) : null}
           {outcome ? (
             <p className={outcome.failed ? "agent-launcher-error" : undefined}>
@@ -458,7 +430,6 @@ export function AgentLauncherDialog({
                 type="button"
                 className="agent-launcher-card"
                 disabled={!target || locked}
-                aria-busy={pressed?.key === "terminal" || undefined}
                 onClick={() => void createTerminal()}
               >
                 <Terminal size={24} aria-hidden="true" />
@@ -488,9 +459,6 @@ export function AgentLauncherDialog({
                       disabled={!target || locked || !catalog || note?.blocked}
                       title={note?.text ?? `Start ${profile.name} here`}
                       aria-label={`Start ${profile.name}`}
-                      aria-busy={
-                        pressed?.key === `profile:${profile.id}` || undefined
-                      }
                       onClick={() => void launch({ profile })}
                     >
                       <ProfileSprite look={profile.look} scale={2} />
@@ -532,7 +500,6 @@ export function AgentLauncherDialog({
                       className="agent-launcher-kind"
                       disabled={!target || locked || note?.blocked}
                       title={note?.text ?? `Start ${harnessLabel(kind)} here`}
-                      aria-busy={pressed?.key === `kind:${kind}` || undefined}
                       onClick={() => void launch({ kind })}
                     >
                       <Play size={12} aria-hidden="true" /> {harnessLabel(kind)}
