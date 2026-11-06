@@ -3,6 +3,7 @@ import { copyFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { removeInstallerFixture } from "../../../../scripts/installer-upgrade";
+import { spawnCrashChild } from "./crash-child";
 
 type Phase = "compile" | "spawn" | "marker" | "kill" | "reopen";
 export type CrashChild = Pick<
@@ -83,14 +84,7 @@ export async function runCrashProcess(options: {
   const { trace, phase } = options;
   const child = await trace.measure(
     "spawn",
-    () =>
-      options.spawn?.() ??
-      Bun.spawn(options.command, {
-        cwd: options.cwd,
-        stdin: "ignore",
-        stdout: "pipe",
-        stderr: "pipe",
-      }),
+    () => options.spawn?.() ?? spawnCrashChild(options.command, options.cwd),
   );
   const reader = child.stdout.getReader();
   // Observe rejection immediately, even while stdout or process exit is pending.
@@ -287,12 +281,7 @@ export function createCrashFixture(options: {
   const compilation = new CrashTrace(options.name);
   const children = new Set<CrashChild>();
   const spawn = (command: string[]): CrashChild => {
-    const child = Bun.spawn(command, {
-      cwd,
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const child = spawnCrashChild(command, cwd);
     children.add(child);
     void child.exited.then(
       () => children.delete(child),

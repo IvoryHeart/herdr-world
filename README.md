@@ -100,7 +100,9 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
    `HERDR_WORLD_SKIP_HERDR=1` to leave yours untouched. With npm or a Windows
    archive, run `herdr-world herdr upgrade --install` once if needed.
    `herdr-world herdr setup` configures future startup as a user service and starts
-   Herdr if down; an already-running server keeps running without a restart.
+   Herdr if down; an already-running server keeps running without a restart. If
+   you open World before Herdr is installed or running, Town offers **Set up
+   Herdr**, which installs or starts it only after you confirm.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash

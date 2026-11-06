@@ -258,7 +258,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     follows its tab when the tab moves to another room and goes when it closes.
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
-    reception and Board's host label. Transient local socket failures and SSH outages keep retrying with
+    reception and Board's host label. When the local connection is failing and
+    no host is ready, Town's stage also offers **Set up Herdr** if Herdr is
+    missing or installed but stopped; it installs or starts Herdr only after you
+    confirm, and never appears during a normal start or after you disconnect.
+    Transient local socket failures and SSH outages keep retrying with
     capped backoff; explicit disconnect/removal and permanent failures stop
     recovery. Cached work never becomes current until a fresh runtime snapshot
     is admitted. Search and Hosts

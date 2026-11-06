@@ -439,6 +439,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <TownView
                         world={presentedWorld}
+                        aggregate={aggregateWorld}
                         onOpenInspectorView={stableOpenInspectorView}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}

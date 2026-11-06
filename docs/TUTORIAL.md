@@ -61,7 +61,9 @@ older World or Roamgate installation.
    first normal World launch; npm and Windows archives leave setup to you.
    Run `herdr-world herdr setup` to install Herdr if needed and configure its user
    service before step 3. It starts Herdr if down; if already running, it registers
-   future startup without restarting the live server. Explicit World updates retain a separate Herdr upgrade
+   future startup without restarting the live server. Alternatively, open World
+   first: while Herdr is missing or stopped, Town offers **Set up Herdr**, and
+   nothing installs or starts until you confirm. Explicit World updates retain a separate Herdr upgrade
    step. See
    [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
