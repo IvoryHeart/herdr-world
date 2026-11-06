@@ -172,3 +172,39 @@ test("the public crew setting reaches the observer through the gate config loade
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("parked PRs override admission and are filtered before detail, history or git reads", async () => {
+  const { inScope, SETTINGS_DEFAULTS } = await import("./crew/plan");
+  const { input } = await import("./gate/cases");
+  const { observe } = await import("./gate/observe");
+  const item = input({ head: SHA.fixed, posts: [] });
+  expect(
+    inScope(item, {
+      ...SETTINGS_DEFAULTS,
+      prs: [item.number],
+      excludePrs: [item.number],
+    }),
+  ).toBe(false);
+  let reads = 0;
+  const result = observe({
+    config: { repo: "example-org/widgets", reviewers: {}, excludePrs: [270] },
+    numbers: [],
+    mirror: "/synthetic/unneeded-mirror",
+    now: NOW,
+    run: () => {
+      if (++reads > 1)
+        throw new Error("parked PR triggered a detail/history/git operation");
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          data: {
+            open: { issueCount: 1, nodes: [{ number: 270, state: "OPEN" }] },
+          },
+        }),
+        stderr: "",
+      };
+    },
+  });
+  expect(result).toEqual([]);
+  expect(reads).toBe(1);
+});

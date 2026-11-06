@@ -213,7 +213,9 @@ export function observe(options: {
   now: number;
 }): GateInput[] {
   const { run, config, numbers, mirror, now } = options;
-  const nodes = listPullRequests(run, config.repo, numbers);
+  const nodes = listPullRequests(run, config.repo, numbers).filter(
+    (node) => !config.excludePrs?.includes(Number(node.number)),
+  );
   const labels = new Map(
     nodes.map((node) => [
       Number(node.number),

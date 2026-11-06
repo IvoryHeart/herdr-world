@@ -119,11 +119,21 @@ export function loadConfig(path: string): GateConfig {
     );
   const value = JSON.parse(
     readFileSync(path, "utf8"),
-  ) as Partial<GateConfig> & { crew?: { convergingReviews?: boolean } };
+  ) as Partial<GateConfig> & {
+    crew?: { convergingReviews?: boolean; excludePrs?: number[] };
+  };
   if (typeof value.repo !== "string" || !/^[\w.-]+\/[\w.-]+$/u.test(value.repo))
     throw new Error("Gate config needs repo as owner/name");
+  const excludePrs = value.crew?.excludePrs;
+  if (
+    excludePrs !== undefined &&
+    (!Array.isArray(excludePrs) ||
+      excludePrs.some((pr) => !Number.isSafeInteger(pr) || pr < 1))
+  )
+    throw new Error("crew.excludePrs needs positive PR numbers");
   return {
     repo: value.repo,
+    ...(excludePrs?.length ? { excludePrs } : {}),
     reviewers: value.reviewers ?? {},
     ...(value.crew?.convergingReviews === true
       ? { excludeUiFixtures: true }

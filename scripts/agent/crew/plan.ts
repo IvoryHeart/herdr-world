@@ -16,6 +16,8 @@ export type CrewSettings = {
   pods: string[];
   /** Pull requests in scope regardless of their labels. */
   prs: number[];
+  /** Explicitly parked PRs, excluded even from a positive scope override. */
+  excludePrs?: number[];
   /** Pod → lead seat, the author of a `batch/<pod>-<n>` branch. */
   leads: Record<string, string>;
   /** PR number → author seat, when the branch doesn't name one. */
@@ -116,6 +118,7 @@ export function digest(text: string) {
 }
 
 export function inScope(input: GateInput, settings: CrewSettings) {
+  if (settings.excludePrs?.includes(input.number)) return false;
   if (settings.prs.includes(input.number)) return true;
   if (!settings.pods.length) return true;
   return input.labels.some(

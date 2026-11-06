@@ -22,6 +22,8 @@ import {
  */
 
 export type GateConfig = {
+  /** Parked PRs are listed only to filter them before any detail or history reads. */
+  excludePrs?: number[];
   /** Crew-owned classification of complete fixture-only web file inventories. */
   excludeUiFixtures?: boolean;
   /** `owner/name`. */

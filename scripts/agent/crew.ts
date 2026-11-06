@@ -331,7 +331,14 @@ function act(
   authors: Map<number, Item>,
   say: (text: string) => void,
 ) {
-  const { prs, now, deps } = context;
+  const { now, deps } = context;
+  // An excluded PR is unobserved, never evidence of closure or permission to clean its tree.
+  if (settings.excludePrs?.length && !inputs.length) return;
+  const prs = context.prs.length
+    ? context.prs.filter((pr) => !settings.excludePrs?.includes(pr))
+    : settings.excludePrs?.length
+      ? inputs.map((input) => input.number)
+      : [];
   // Each PR's causes for the owner that hold this pass: a planned judgment,
   // or a notice raised again because its cause still holds. Local paths
   // stay local in everything GitHub shows.
@@ -567,7 +574,9 @@ function act(
   // alone, and a paused action waits.
   const keys = new Set(planned.map((entry) => entry.key));
   const deliverable = (entry: StoredAction) =>
-    keys.has(entry.key.split("|")[0]!) || entry.key.split("|")[1] === "timeout";
+    !settings.excludePrs?.includes(entry.pr) &&
+    (keys.has(entry.key.split("|")[0]!) ||
+      entry.key.split("|")[1] === "timeout");
   for (const entry of actionsIn(crew, ["pending", "sent", "failed"]))
     if (
       entry.kind === "judgment" &&
@@ -581,7 +590,7 @@ function act(
   reconcileOwnerAsks(
     crew,
     planned,
-    { ...context, escalate: settings.escalate },
+    { ...context, prs, escalate: settings.escalate },
     say,
   );
 

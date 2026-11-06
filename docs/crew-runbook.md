@@ -180,6 +180,10 @@ The steward also keeps preview allocation, close-on-merge, disk and genuine
 program exceptions. Reviewers never attach, resize or send input to owner native
 sessions. An empty `crew.pods` watches every open PR, including future main-based
 integration PRs; `on-hold` labels and explicit gate holds remain binding.
+Park stale PRs with `crew.excludePrs: [<PR numbers>]`. Exclusions override positive
+scope, filter details/history before fetching, and prevent prompts, comments and
+implicit cleanup of their retained worktrees; they do not waive findings or
+delete review history. Only the owner can authorize their revival.
 Run the sole watcher in a visible `crew-watch` Herdr tab, with conservative
 full/busy intervals; do not run a second hidden controller or tight GitHub loop.
 
