@@ -220,12 +220,57 @@ test("legacy active confirmations retain raw receipts while missing resume basel
       NOW,
     );
     setRunSession(db, id, "codex", "gpt-6.1-sol", "saved-session");
+    const first = addRun(
+      db,
+      {
+        actionKey: "first-finished",
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.reviewed,
+        log: "stdout",
+      },
+      1,
+    );
+    setRunSession(db, first, "codex", "gpt-6.1-sol", "other-saved-session");
+    finishRun(db, first, 0, '{"total_tokens":100}', 2);
+    const repeated = addRun(
+      db,
+      {
+        actionKey: "repeated-finished",
+        reviewer: "rev2",
+        pr: 7,
+        head: SHA.fixed,
+        log: "stdout",
+      },
+      3,
+    );
+    setRunSession(db, repeated, "codex", "gpt-6.1-sol", "other-saved-session");
+    finishRun(db, repeated, 0, '{"total_tokens":150}', 4);
     db.close();
     const old = new Database(file);
     old.exec("ALTER TABLE run DROP COLUMN usage_baseline");
     old.close();
     db = openCrewStore(file);
     expect(getRun(db, id)?.usageBaseline).toBe("null");
+    expect(getRun(db, first)?.usageBaseline).toBeUndefined();
+    expect(getRun(db, repeated)?.usageBaseline).toBe("null");
+    expect(getRun(db, repeated)?.usage).toBe('{"total_tokens":150}');
+    const known: string[] = [];
+    spend(
+      [getRun(db, first)!, getRun(db, repeated)!],
+      () => [],
+      24,
+      (line) => known.push(line),
+    );
+    expect(known[0]).toContain("100 known");
+    const laterWindow: string[] = [];
+    spend(
+      [getRun(db, repeated)!],
+      () => [],
+      1,
+      (line) => laterWindow.push(line),
+    );
+    expect(laterWindow[0]).toContain("0 known");
     finishRun(db, id, 0, '{"total_tokens":150}', NOW + 1);
     expect(getRun(db, id)?.usage).toBe('{"total_tokens":150}');
     const output: string[] = [];

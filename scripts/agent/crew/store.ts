@@ -124,8 +124,10 @@ export function openCrewStore(path: string, busyMs = 120_000) {
     if (!columns.includes(name))
       db.exec(`ALTER TABLE run ADD COLUMN ${name} ${type}`);
   if (!columns.includes("usage_baseline"))
-    db.exec(`UPDATE run SET usage_baseline = 'null' WHERE finished_at IS NULL AND session IS NOT NULL
-      AND action_key IN (SELECT key FROM action WHERE kind = 'confirm')`);
+    db.exec(`UPDATE run AS later SET usage_baseline = 'null' WHERE later.session IS NOT NULL AND (
+      (later.finished_at IS NULL AND later.action_key IN (SELECT key FROM action WHERE kind = 'confirm'))
+      OR EXISTS (SELECT 1 FROM run AS earlier WHERE earlier.id < later.id AND earlier.session = later.session
+        AND COALESCE(earlier.harness, '') = COALESCE(later.harness, ''))) `);
   // A pod's rounds: each head reviewed on a PR gets one Herdr tab, which
   // stays until the PR merges or closes.
   db.exec(`

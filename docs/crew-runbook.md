@@ -172,7 +172,8 @@ recorded cohorts do not establish how many rounds occurred; a SHA is not a round
 Resumed reviewer usage records a durable pre-resume session baseline and reports
 only that run's increment in worker and watcher completion paths. An unavailable
 baseline is unknown usage, never a fabricated zero or the full session charge;
-old active confirmations without a captured baseline remain explicitly unknown.
+old active confirmations and unbaselined repeated-session totals remain explicitly
+unknown, with their original raw receipts preserved.
 
 A completed third round with unresolved findings sends the actual finding list
 to `firstmate-2` and holds further rounds. Ensure that seat is not in
