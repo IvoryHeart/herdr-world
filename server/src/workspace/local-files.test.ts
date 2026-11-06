@@ -1,3 +1,4 @@
+import { runBinaryProcessWithTimeout } from "./process";
 import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -124,7 +125,11 @@ describe("local workspace file operations", () => {
       );
       expect(second.overwritten).toBe(true);
 
-      const download = await downloadLocalFile(root, "notes.txt");
+      const download = await downloadLocalFile(
+        root,
+        "notes.txt",
+        runBinaryProcessWithTimeout,
+      );
       expect(download).toMatchObject({
         filename: "notes.txt",
         path: "notes.txt",

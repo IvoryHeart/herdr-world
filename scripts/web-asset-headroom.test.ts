@@ -90,6 +90,7 @@ test("main advancing before the PR's last post cannot leave a stale pass", async
     baseSha: "main-1",
     base,
     delta,
+    budget,
     readTip: async () => tips.shift()!,
     readMainSize: async (sha) => sizes[sha],
     post: async (state) => {

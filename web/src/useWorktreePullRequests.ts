@@ -1,22 +1,104 @@
 import { useEffectCallback } from "./useEffectCallback";
 import { useEffect, useRef, useState } from "react";
-import type { PullRequestSummary } from "../../shared/pullRequest";
+import {
+  pullRequestUnavailable,
+  type PullRequestSummary,
+} from "../../shared/pullRequest";
 import type { ConnectionClient } from "./api";
+import { useStoreSelector } from "./store";
+import {
+  pullRequestConnectionKey,
+  readPullRequestCache,
+  writePullRequestCache,
+} from "./pullRequestCache";
 import type { Workspace, WorktreeList } from "./types";
-import { connectionClientScopeKey } from "./useConnectionClient";
+import {
+  connectionClientScopeKey,
+  useConnectionReady,
+} from "./useConnectionClient";
 
 type SummaryTarget = {
   id: string;
   /** Changes whenever a previous summary must not be shown for this target. */
   association: string;
+  identity: string;
+  persistent: boolean;
+  branch?: string;
+  queryable: boolean;
   params: Record<string, unknown>;
 };
 
+/**
+ * A lookup answered this recently is not asked again: switching connections,
+ * reopening a dialog or remounting the list reuses it. A PR's status changes
+ * on the scale of minutes; the 60 s poll stays the refresh.
+ */
+export const PULL_REQUEST_FRESH_MS = 50_000;
+const freshLookups = new Map<
+  string,
+  { at: number; status: PullRequestSummary }
+>();
+const FRESH_LOOKUPS_KEPT = 500;
+
+/**
+ * Each connection's reconnects so far. A client of a newer generation for
+ * the connection last seen is a reconnect, whose lookups start afresh; one
+ * that comes back after another connection was shown is only a switch.
+ */
+const reconnects = new Map<string, number>();
+let lastClient: { connectionId: string; generation: number } | null = null;
+
+function lookupEpoch(client: ConnectionClient): string {
+  const last = lastClient;
+  if (
+    last?.connectionId === client.connectionId &&
+    client.generation > last.generation
+  )
+    reconnects.set(
+      client.connectionId,
+      (reconnects.get(client.connectionId) ?? 0) + 1,
+    );
+  if (!last || client.generation >= last.generation)
+    lastClient = {
+      connectionId: client.connectionId,
+      generation: client.generation,
+    };
+  return JSON.stringify([
+    client.connectionId,
+    client.serverRuntimeGeneration,
+    reconnects.get(client.connectionId) ?? 0,
+  ]);
+}
+
+/** What a lookup asks, whichever connection client asks it. */
+function lookupQuestion(target: SummaryTarget) {
+  return JSON.stringify([target.identity, target.branch, target.params]);
+}
+
+/** Forgets every recent lookup (tests). */
+export function forgetPullRequestLookups() {
+  freshLookups.clear();
+  reconnects.clear();
+  lastClient = null;
+}
+
 type SummaryEntry = {
   association: string;
+  identity: string;
+  branch?: string;
   status: PullRequestSummary;
   lastGood?: PullRequestSummary;
 };
+
+function useCacheScope(client: ConnectionClient) {
+  return useStoreSelector((state) =>
+    pullRequestConnectionKey(
+      state.connections.find(
+        (connection) => connection.id === client.connectionId,
+      ),
+    ),
+  );
+}
 
 export function useWorktreePullRequests(
   client: ConnectionClient,
@@ -24,28 +106,41 @@ export function useWorktreePullRequests(
   list: WorktreeList | null,
   refresh: number,
 ) {
+  const cacheScope = useCacheScope(client);
   return usePullRequestSummaries(
     client,
-    (workspaceId ? (list?.worktrees ?? []) : []).map(
-      ({ label, open_workspace_id, ...checkout }) => {
-        void label;
-        void open_workspace_id;
-        return {
-          id: checkout.path,
-          association: connectionClientScopeKey(
-            client,
-            workspaceId,
-            list?.source.repo_key,
-            checkout,
-          ),
-          params: {
-            workspace_id: workspaceId,
-            worktree_path: checkout.path,
-            branch: checkout.branch,
-          },
-        };
-      },
-    ),
+    (workspaceId ? (list?.worktrees ?? []) : []).map((checkout) => {
+      const branch = checkout.branch ?? "detached";
+      const identity = JSON.stringify([
+        cacheScope ?? connectionClientScopeKey(client),
+        list?.source.repo_key,
+        checkout.path,
+        "worktree",
+        checkout.is_bare,
+        checkout.is_prunable,
+      ]);
+      return {
+        id: checkout.path,
+        identity,
+        persistent:
+          cacheScope !== null && !checkout.is_bare && !checkout.is_prunable,
+        branch,
+        queryable: true,
+        association: connectionClientScopeKey(
+          client,
+          identity,
+          workspaceId,
+          branch,
+          checkout.is_bare,
+          checkout.is_prunable,
+        ),
+        params: {
+          workspace_id: workspaceId,
+          worktree_path: checkout.path,
+          branch: checkout.branch,
+        },
+      };
+    }),
     refresh,
   );
 }
@@ -54,43 +149,73 @@ export function useWorkspacePullRequests(
   client: ConnectionClient,
   workspaces: Workspace[],
 ) {
+  const cacheScope = useCacheScope(client);
+  const [knownBranches, setKnownBranches] = useState<Record<string, string>>(
+    {},
+  );
+  let observedBranches = knownBranches;
   const targets = workspaces
     .flatMap((workspace) => {
       const worktree = workspace.worktree;
-      const branch = worktree?.git_status?.branch;
-      return worktree && branch && !worktree.git_status?.error
-        ? [
-            {
-              id: workspace.workspace_id,
-              association: connectionClientScopeKey(
-                client,
-                workspace.workspace_id,
-                worktree.repo_key,
-                worktree.checkout_path,
-                branch,
-              ),
-              params: {
-                workspace_id: workspace.workspace_id,
-                branch,
-                latest: true,
-              },
-            },
-          ]
-        : [];
+      if (!worktree) return [];
+      const reportedBranch = worktree.git_status?.error
+        ? undefined
+        : worktree.git_status?.branch;
+      const identity = JSON.stringify([
+        cacheScope ?? connectionClientScopeKey(client),
+        worktree.repo_key,
+        worktree.checkout_path,
+        "workspace",
+      ]);
+      const branchKey = JSON.stringify([workspace.workspace_id, identity]);
+      // Branch identity must survive even when its PR lookup has not succeeded.
+      if (reportedBranch && knownBranches[branchKey] !== reportedBranch)
+        observedBranches = { ...observedBranches, [branchKey]: reportedBranch };
+      const branch = reportedBranch ?? knownBranches[branchKey];
+      return [
+        {
+          id: workspace.workspace_id,
+          identity,
+          persistent: cacheScope !== null,
+          branch,
+          queryable: !!reportedBranch,
+          association: connectionClientScopeKey(
+            client,
+            identity,
+            workspace.workspace_id,
+            branch,
+            !!reportedBranch,
+          ),
+          params: {
+            workspace_id: workspace.workspace_id,
+            branch,
+            latest: true,
+          },
+        },
+      ];
     })
     .sort((left, right) => left.id.localeCompare(right.id));
+  if (observedBranches !== knownBranches) setKnownBranches(observedBranches);
   return usePullRequestSummaries(client, targets, 0, true);
 }
 
 // Summaries are stale-while-revalidate per target: a refresh keeps the last
-// result for an unchanged association visible, and a retryable failure keeps
-// the last successful one marked stale. Any association change hides it.
+// result visible, and unavailable connections/providers keep the last success
+// marked stale. Verified branch/checkout changes never inherit another result.
 function usePullRequestSummaries(
   client: ConnectionClient,
   targets: SummaryTarget[],
   refresh: number,
   poll = false,
 ) {
+  const ready = useConnectionReady(client);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [entries, setEntries] = useState<Record<string, SummaryEntry>>({});
   const [pollRound, setPollRound] = useState(0);
   // The poll round whose due targets have all been requested and settled.
@@ -101,6 +226,8 @@ function usePullRequestSummaries(
   const requested = useRef(
     new Map<string, { association: string; round: string }>(),
   );
+  // What each target last asked, kept across connection switches.
+  const asked = useRef(new Map<string, string>());
   const targetsKey = JSON.stringify(
     targets.map((target) => [target.id, target.association]),
   );
@@ -121,13 +248,16 @@ function usePullRequestSummaries(
         requested.current.delete(id);
     }
     const current = (target: SummaryTarget) =>
+      mounted.current &&
       client.isCurrent() &&
       readTargets().some(
         (next) =>
           next.id === target.id && next.association === target.association,
       );
+    const epoch = lookupEpoch(client);
     const run = async () => {
       const due = readTargets().filter((target) => {
+        if (!target.queryable) return false;
         const last = requested.current.get(target.id);
         return last?.association !== target.association || last.round !== round;
       });
@@ -136,23 +266,56 @@ function usePullRequestSummaries(
         for (const target of queue) {
           if (cancelled || !client.isCurrent()) return;
           if (!current(target)) continue;
+          const last = requested.current.get(target.id);
           const request = { association: target.association, round };
           requested.current.set(target.id, request);
-          const status: PullRequestSummary = await client
-            .call(
-              "git.pull_request",
-              {
-                ...target.params,
-                summary: true,
-              },
-              65_000,
-            )
-            .catch(() => ({
-              state: "error",
-              message: "PR/MR status request failed. Check the connection.",
-              retryable: true,
-              refreshedAt: new Date().toISOString(),
-            }));
+          const question = lookupQuestion(target);
+          const freshKey = JSON.stringify([epoch, question]);
+          const askedKey = `${client.connectionId}\u0000${target.id}`;
+          const askedBefore = asked.current.get(askedKey);
+          asked.current.set(askedKey, question);
+          // The sidebar's polls, a mount and a target that changed (another
+          // branch) ask again; the same rows shown again after another
+          // connection reuse a recent answer.
+          const fresh =
+            poll &&
+            last?.association !== target.association &&
+            askedBefore === question
+              ? freshLookups.get(freshKey)
+              : undefined;
+          // Badges are background work: the host answers what the user is
+          // doing first, and identical lookups in flight are shared.
+          const status: PullRequestSummary =
+            fresh && Date.now() - fresh.at < PULL_REQUEST_FRESH_MS
+              ? fresh.status
+              : await client
+                  .call(
+                    "git.pull_request",
+                    {
+                      ...target.params,
+                      summary: true,
+                    },
+                    65_000,
+                    { lane: "background" },
+                  )
+                  .then((status: PullRequestSummary) => {
+                    if (!pullRequestUnavailable(status)) {
+                      freshLookups.delete(freshKey);
+                      freshLookups.set(freshKey, { at: Date.now(), status });
+                      if (freshLookups.size > FRESH_LOOKUPS_KEPT)
+                        freshLookups.delete(
+                          freshLookups.keys().next().value as string,
+                        );
+                    }
+                    return status;
+                  })
+                  .catch(() => ({
+                    state: "error",
+                    message:
+                      "PR/MR status request failed. Check the connection.",
+                    retryable: true,
+                    refreshedAt: new Date().toISOString(),
+                  }));
           // A reply stays valid for its association even after this effect
           // re-ran; it must never land on a newer association or connection.
           if (!current(target)) {
@@ -160,13 +323,19 @@ function usePullRequestSummaries(
               requested.current.delete(target.id);
             continue;
           }
+          const cached = target.persistent
+            ? readPullRequestCache().get(target.identity)
+            : undefined;
+          if (target.persistent && !pullRequestUnavailable(status))
+            writePullRequestCache(target.identity, target.branch, status);
           setEntries((previous) => ({
             ...previous,
             [target.id]: nextEntry(
-              previous[target.id]?.association === target.association
-                ? previous[target.id]
-                : undefined,
-              target.association,
+              lastGoodForTarget(previous[target.id], target) ??
+                (cached && cached.branch === target.branch
+                  ? cached.status
+                  : undefined),
+              target,
               status,
             ),
           }));
@@ -182,48 +351,91 @@ function usePullRequestSummaries(
     return () => {
       cancelled = true;
     };
-  }, [client, targetsKey, refresh, pollRound, pollKey]);
+  }, [client, ready, targetsKey, refresh, pollRound, pollKey, poll]);
 
   // Polling waits for each round to settle, but target changes that only
   // request their own targets never postpone the next round for the others.
   const hasTargets = targets.length > 0;
   useEffect(() => {
     if (!poll || !hasTargets || settledRound !== pollKey) return;
-    const timer = setTimeout(() => setPollRound((value) => value + 1), 60_000);
-    return () => clearTimeout(timer);
+    const next = () => setPollRound((value) => value + 1);
+    // Out of sight, the next round waits for the page to show again.
+    const onVisible = () => {
+      if (document.hidden) return;
+      document.removeEventListener("visibilitychange", onVisible);
+      next();
+    };
+    const timer = setTimeout(() => {
+      if (!document.hidden) return next();
+      document.addEventListener("visibilitychange", onVisible);
+    }, 60_000);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [poll, hasTargets, settledRound, pollKey]);
 
+  const cache = readPullRequestCache();
   const statuses: Record<string, PullRequestSummary> = {};
-  if (!client.isCurrent()) return statuses;
   for (const target of targets) {
     const entry = entries[target.id];
-    if (entry?.association === target.association)
-      statuses[target.id] = entry.status;
+    const cached = target.persistent ? cache.get(target.identity) : undefined;
+    const status =
+      entry?.association === target.association ? entry.status : undefined;
+    const lastGood =
+      lastGoodForTarget(entry, target) ??
+      (cached && cached.branch === target.branch ? cached.status : undefined);
+    if (status && ready && target.queryable) {
+      statuses[target.id] = status;
+    } else if (lastGood) {
+      statuses[target.id] = {
+        ...lastGood,
+        stale: {
+          message: !ready
+            ? "Waiting for the connection to recover."
+            : !target.queryable
+              ? "Git branch status is temporarily unavailable."
+              : "Refreshing PR/MR status.",
+        },
+      };
+    }
   }
   return statuses;
 }
 
+function lastGoodForTarget(
+  entry: SummaryEntry | undefined,
+  target: SummaryTarget,
+) {
+  return entry?.identity === target.identity &&
+    entry.branch === target.branch &&
+    (target.branch !== "detached" || entry.association === target.association)
+    ? entry.lastGood
+    : undefined;
+}
+
 function nextEntry(
-  previous: SummaryEntry | undefined,
-  association: string,
+  previous: PullRequestSummary | undefined,
+  target: SummaryTarget,
   status: PullRequestSummary,
 ): SummaryEntry {
-  if (status.state === "ready")
-    return { association, status, lastGood: status };
-  // Authoritative results (no_match, detached, branch changes, ...) replace
-  // the last success; only retryable failures fall back to it.
   const lastGood =
-    status.state === "error" && status.retryable
-      ? previous?.lastGood
-      : undefined;
+    status.state === "ready"
+      ? status
+      : pullRequestUnavailable(status)
+        ? previous
+        : undefined;
   return {
-    association,
+    association: target.association,
+    identity: target.identity,
+    branch: target.branch,
     lastGood,
-    status: lastGood
-      ? {
-          ...lastGood,
-          stale: { failedAt: status.refreshedAt, message: status.message },
-        }
-      : status,
+    status:
+      status.state !== "ready" && lastGood
+        ? {
+            ...lastGood,
+            stale: { failedAt: status.refreshedAt, message: status.message },
+          }
+        : status,
   };
 }

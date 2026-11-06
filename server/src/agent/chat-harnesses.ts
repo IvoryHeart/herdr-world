@@ -8,6 +8,7 @@ export const SESSION_AGENTS: ReadonlySet<string> = new Set([
   "kimi",
   "grok",
   "pi",
+  "omp",
   "muse",
   "agy",
 ]);
@@ -16,6 +17,7 @@ export function normalizeAgentName(value: string) {
   const normalized = value.trim().toLowerCase();
   if (normalized === "pi-agent" || normalized === "pi-coding-agent")
     return "pi";
+  if (normalized === "omp" || normalized === "oh-my-pi") return "omp";
   if (normalized === "claude-code") return "claude";
   if (normalized === "muse-code" || normalized === "muse code") return "muse";
   if (normalized === "kimi-code" || normalized === "kimi code") return "kimi";

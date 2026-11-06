@@ -69,6 +69,79 @@ explicit policy decision and passing React DOM/browser evidence for focus, nativ
 blur, IME, qualified editor drafts and independent runtime ownership. Keep this
 entry until a compatible migration or security backport is reviewed and delivered.
 
+## Mobile navigation and History input
+
+Status: deferred to one dedicated mobile PR (firstmate-2 ruling, 5 November 2026),
+proposed for owner review. Source: Roamgate 396d0cb0 (#482), e724e17e (#489) and
+22ee302f (#493), in the b84ccd53..2b16e991 range.
+Owner: the mobile PR's author, with the repository owner's phone try.
+
+These changes consolidate mobile tab and pane navigation, keep mobile History input
+in a bottom bar and compact mobile Ranger around a shared Message input. World ports
+them onto its MobileControls and layer Back order in one PR after the Roamgate web
+part. Acceptance: the owner tries that PR on a phone, comparing upstream's bottom
+bar with World's in-flow Message input, under the phone rules (tabs one tap away,
+one-tap keyboard, no extra bars). Revisit in that PR, otherwise every source sync.
+
+## Mobile entry point
+
+Status: intentional divergence, proposed for owner review. Source: Roamgate
+52cbea92 (#491).
+Owner: repository owner.
+
+Upstream makes Chat the mobile entry point. World keeps Town as the phone's default
+view, with Chat one tap away. Adopting it needs an owner decision to change the
+default view. Revisit every source sync.
+
+## Agent seen tracking
+
+Status: intentional divergence, proposed for owner review. Source: Roamgate
+fd86a13d (#544).
+Owner: repository owner.
+
+Upstream tracks which agents the user has seen, apart from Herdr's focus. World's
+reviewed record and Desk marks are its attention model; a separate seen store would
+add a second, conflicting notion of seen. Revisit every source sync, or when the
+owner changes World's attention model.
+
+## Recently opened agent sort
+
+Status: intentional divergence (firstmate-2 ruling, 5 November 2026), proposed for
+owner review. Source: Roamgate 10546ef8 (#518).
+Owner: repository owner.
+
+Upstream sorts agents by a per-browser history of opens (`agentRecency.v1`). World
+keeps no activity history in the browser: its `agentRecency.ts` is service-backed,
+and the service records no "opened" signal. "Recently opened" could return later if
+the service records owner opens as part of the World model. Revisit every source
+sync and when such a signal exists.
+
+## Diff worker dependency update
+
+Status: deferred (firstmate-2 ruling, 5 November 2026), proposed for owner review.
+Source: Roamgate f4367c30 (#508), `@pierre/diffs` 1.5 to 1.6.
+Owner: the integrator of each source sync.
+
+Pierre 1.6's diff worker bundles both highlighter backends and a second copy of
+World's curated grammars: 56 more asset files and 1.9 MiB more, beyond the 180-file
+limit and the web total budget in [packaging](packaging.md). World stays on 1.5.x,
+and no budget is raised for it. Re-check at every source sync; adopt when the worker
+fits the budgets or the owner changes them.
+
+## Browser port-forward controls
+
+Status: deferred, proposed for owner review. Source: Roamgate e5b399ce (#546).
+Owner: the author of the next web or mobile integration PR.
+
+World #636 adapted the service side of SSH port forwarding: explicit local and
+reverse forward RPCs after login, bound to the selected connection and runtime.
+Upstream's browser controls (`portForwarding.ts`, the Connection switcher and
+command-menu entries, and terminal link offers) are not in World yet, although
+#636 planned them for the web part. Acceptance: the controls use the qualified
+forward RPCs, appear only on a page served over loopback as upstream does, and keep
+World's connection ownership and browser tests. Revisit in the next web or mobile
+integration PR, otherwise every source sync.
+
 ## Assessment for source 57327a0d (20 October 2026)
 
 The carried action-update commit 75f61e36 changes CodeQL init/analyze
@@ -122,3 +195,23 @@ The existing action and React follow-up owners, acceptance and revisit triggers
 remain unchanged; their unmet acceptance stays visible. World release identity,
 asset budgets, top app bar, tab-window restoration and session binding are retained
 through compatible adaptations recorded in UPSTREAM.md and the disposition ledger.
+
+## Assessment for source 2b16e991 (1 November 2026)
+
+The 69 commits from b84ccd53 (v0.8.8) to 2b16e991, after v0.8.13, land in three
+parts: SSH transport (#636), Ranger and transcripts (#645), and the web part with
+this ledger merge. U1's DOMPurify 3.4.17 and undici 8.12.3 are now inside the
+recorded range (#488, #500). Three commits edit workflows: #480's Bun pins are
+adapted through World #644, #499's workflow, dependabot and Copilot edits stay
+World's, and #504 updates Roamgate's CodeQL workflow, which World does not have.
+No new action security fix or platform requirement changes the workflow-control
+decisions. React stays 18.3.1: the range keeps upstream on 19.3.1 without a React
+change, and its new consumers run on 18 (`forwardRef` search input,
+`useStableCallback` for `useEffectEvent`, World's effect-callback adapter). The
+three standing workflow and React divergences are re-reviewed for this source and
+unchanged; their unmet acceptance stays visible.
+
+New proposals for owner review: deferred #482, #489 and #493 (one mobile PR), #508
+(diff worker budget) and #546's browser controls; divergent #491 (mobile entry
+point), #504 (workflow controls), #518 (Recently opened) and #544 (seen tracking).
+Source after 2b16e991, including v0.8.14 and v0.8.15, is not part of this record.

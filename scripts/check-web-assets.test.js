@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   assertLazyGrammarAssets,
+  assertLazyPdfAssets,
+  assertNoRuntimeCode,
   DEVTOOLS_MARKER,
   devtoolsAssets,
   initialAssetFiles,
+  pdfAssetFiles,
 } from "./check-web-assets.mjs";
 import { DEVTOOLS_MARKER as SOURCE_MARKER } from "../web/src/world/devtools/trace";
 
@@ -98,5 +101,79 @@ describe("initial web asset budget", () => {
         app: { isEntry: true, file: "app.js", imports: ["missing"] },
       }),
     ).toThrow("Missing Vite manifest chunk");
+  });
+});
+
+describe("PDF.js loads only when a PDF is opened", () => {
+  // The shape of the production manifest: PdfPages is a lazy feature chunk of
+  // the lazy file preview, and the worker is an asset only it references.
+  const manifest = () => ({
+    "index.html": {
+      file: "assets/index.js",
+      isEntry: true,
+      imports: ["_shared.js"],
+      dynamicImports: ["src/components/FilePreviewContent.tsx"],
+    },
+    "_shared.js": { file: "assets/shared.js" },
+    "src/components/FilePreviewContent.tsx": {
+      file: "assets/FilePreviewContent.js",
+      name: "FilePreviewContent",
+      isDynamicEntry: true,
+      imports: ["_shared.js"],
+      dynamicImports: ["src/components/PdfPages.tsx"],
+    },
+    "src/components/PdfPages.tsx": {
+      file: "assets/PdfPages.js",
+      name: "PdfPages",
+      isDynamicEntry: true,
+      imports: ["_shared.js"],
+      css: ["assets/PdfPages.css"],
+      assets: ["assets/pdf.worker.min.mjs"],
+    },
+    "../node_modules/pdfjs-dist/build/pdf.worker.min.mjs": {
+      file: "assets/pdf.worker.min.mjs",
+    },
+  });
+
+  test("passes while PdfPages and its worker stay lazy", () => {
+    expect(pdfAssetFiles(manifest())).toEqual([
+      "assets/PdfPages.js",
+      "assets/pdf.worker.min.mjs",
+    ]);
+    expect(() => assertLazyPdfAssets(manifest())).not.toThrow();
+  });
+
+  test("fails when the initial load imports PdfPages", () => {
+    const eager = manifest();
+    eager["index.html"].imports.push("src/components/PdfPages.tsx");
+    expect(() => assertLazyPdfAssets(eager)).toThrow(
+      "The initial load includes PDF.js: assets/PdfPages.js",
+    );
+  });
+
+  test("fails when an initial chunk references the worker", () => {
+    const eager = manifest();
+    eager["_shared.js"].assets = ["assets/pdf.worker.min.mjs"];
+    expect(() => assertLazyPdfAssets(eager)).toThrow(
+      "The initial load includes PDF.js: assets/pdf.worker.min.mjs",
+    );
+  });
+
+  test("fails when PDF.js is no longer a lazy chunk", () => {
+    const merged = manifest();
+    delete merged["src/components/PdfPages.tsx"];
+    expect(() => assertLazyPdfAssets(merged)).toThrow(
+      "Missing lazy Vite feature chunk: PdfPages",
+    );
+  });
+
+  test("refuses code compiled at run time", () => {
+    expect(() => assertNoRuntimeCode("a.js", "f=new Function('x')")).toThrow(
+      "a.js compiles code at run time",
+    );
+    expect(() => assertNoRuntimeCode("a.js", "x=eval(y)")).toThrow();
+    expect(() =>
+      assertNoRuntimeCode("a.js", "new FunctionBasedShading(a);vm.eval(b)"),
+    ).not.toThrow();
   });
 });

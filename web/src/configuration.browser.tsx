@@ -286,6 +286,8 @@ function Harness() {
       onShowShortcuts={() => {}}
       theme={theme}
       accentColor="blue"
+      blackBackground={false}
+      onBlackBackgroundChange={() => {}}
       uiScale={scale}
       terminalFontName=""
       onTerminalFontNameChange={() => {}}

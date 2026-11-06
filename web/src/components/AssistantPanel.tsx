@@ -83,6 +83,7 @@ import { AssistantQueue } from "./AssistantQueue";
 import { assistantMentionKey } from "../assistantMentions";
 import { detectShortcutPlatform } from "../shortcutBindings";
 import "./AssistantPanel.css";
+import { credentialStatus } from "../assistantModels";
 
 const altEnter =
   detectShortcutPlatform() === "mac" ? "Option+Enter" : "Alt+Enter";
@@ -163,15 +164,6 @@ function connectionReady(snapshot: AssistantSnapshot) {
         model.id === snapshot.config.model,
     )
   );
-}
-
-function credentialStatus(provider: AssistantSnapshot["providers"][number]) {
-  if (!provider.configured) return "No saved credentials";
-  return provider.credential_method === "oauth"
-    ? "Saved login (OAuth)"
-    : provider.credential_method === "api_key"
-      ? "API key saved"
-      : "Credentials saved";
 }
 
 function endpointHost(url: string) {

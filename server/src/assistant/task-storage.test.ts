@@ -270,7 +270,7 @@ test("SQLite round trips queryable plans and keeps admissions only for unfinishe
     expect(db.query("PRAGMA journal_mode").get()).toEqual({
       journal_mode: "wal",
     });
-    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 4 });
     expect(db.query("SELECT id, status, title FROM tasks").get()).toEqual({
       id: saved.tasks[0]!.task.id,
       status: "active",
@@ -310,7 +310,7 @@ test("version one migrates every table and retains the default notification beha
   expect(loaded).toEqual(expected);
   expect(loaded.tasks[0]!.notifications).toBeUndefined();
   inspect(path, (db) => {
-    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 4 });
     expect(
       db.query("SELECT notification_mode, notifications FROM tasks").get(),
     ).toEqual({ notification_mode: null, notifications: "[]" });
@@ -379,7 +379,7 @@ test("version two retains existing plans, admissions, proposals and notification
   expect(loaded.proposals).toEqual(saved.proposals);
   expect(loaded.requests).toEqual(saved.requests);
   inspect(path, (db) => {
-    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 4 });
     expect(db.query("SELECT mentions FROM tasks").get()).toEqual({
       mentions: null,
     });
@@ -553,7 +553,7 @@ test("deleting every plan preserves an authoritative initialized empty database"
   storage.close();
   expect(open(path).load()).toEqual(empty());
   inspect(path, (db) =>
-    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 3 }),
+    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 4 }),
   );
 });
 
@@ -568,6 +568,8 @@ test.each([
   "notification-receipt",
   "mention-json",
   "mention-identity",
+  "membership-intent",
+  "proposal-membership",
 ] as const)(
   "%s SQLite data fails closed without clearing the database",
   (damage) => {
@@ -583,21 +585,25 @@ test.each([
       storage.close();
       inspect(path, (db) =>
         db.exec(
-          damage === "future-version"
-            ? "PRAGMA user_version = 4"
-            : damage === "missing-table"
-              ? "DROP TABLE requests"
-              : damage === "notification-mode"
-                ? "UPDATE tasks SET notification_mode = 'invalid'"
-                : damage === "notification-json"
-                  ? "UPDATE tasks SET notifications = 'not JSON'"
-                  : damage === "notification-receipt"
-                    ? "UPDATE tasks SET notifications = '[{}]'"
-                    : damage === "mention-json"
-                      ? "UPDATE tasks SET mentions = 'not JSON'"
-                      : damage === "mention-identity"
-                        ? "UPDATE tasks SET mentions = '[{}]'"
-                        : "UPDATE runs SET admission = NULL WHERE status = 'running'",
+          damage === "proposal-membership"
+            ? "UPDATE proposals SET input = json_set(input, '$.all_workspaces', 0)"
+            : damage === "membership-intent"
+              ? "PRAGMA ignore_check_constraints = ON; UPDATE tasks SET all_workspaces = 2"
+              : damage === "future-version"
+                ? "PRAGMA user_version = 5"
+                : damage === "missing-table"
+                  ? "DROP TABLE requests"
+                  : damage === "notification-mode"
+                    ? "UPDATE tasks SET notification_mode = 'invalid'"
+                    : damage === "notification-json"
+                      ? "UPDATE tasks SET notifications = 'not JSON'"
+                      : damage === "notification-receipt"
+                        ? "UPDATE tasks SET notifications = '[{}]'"
+                        : damage === "mention-json"
+                          ? "UPDATE tasks SET mentions = 'not JSON'"
+                          : damage === "mention-identity"
+                            ? "UPDATE tasks SET mentions = '[{}]'"
+                            : "UPDATE runs SET admission = NULL WHERE status = 'running'",
         ),
       );
     }
@@ -739,3 +745,42 @@ test.each([
     expect(statSync(outside).mode & 0o777).toBe(0o644);
   },
 );
+
+test("version three upgrades fixed plans without widening membership", () => {
+  const path = directory();
+  const saved = state();
+  createVersionOne(path, saved);
+  inspect(path, (db) =>
+    db.exec(`
+    ALTER TABLE tasks ADD COLUMN notification_mode TEXT;
+    ALTER TABLE tasks ADD COLUMN notifications TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE tasks ADD COLUMN mentions TEXT;
+    PRAGMA user_version = 3;
+  `),
+  );
+  const loaded = open(path).load();
+  expect(loaded.tasks[0]!.input).toEqual(saved.tasks[0]!.input);
+  expect(loaded.tasks[0]!.input.all_workspaces).toBeUndefined();
+  expect(loaded.tasks[0]!.runs[1]!.notice).toBeUndefined();
+  inspect(path, (db) =>
+    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 4 }),
+  );
+});
+
+test("dynamic intent, proposal intent and completed omission notices survive reopen", () => {
+  const path = directory();
+  const saved = state();
+  saved.tasks[0]!.input.all_workspaces = true;
+  saved.tasks[0]!.runs[1]!.notice = "Some permitted workspaces were omitted.";
+  saved.proposals[0]!.proposal.all_workspaces = true;
+  saved.proposals[0]!.prepared.input.all_workspaces = true;
+  const storage = open(path);
+  storage.save(saved);
+  storage.close();
+  const loaded = open(path).load();
+  expect(loaded.tasks[0]!.input.all_workspaces).toBe(true);
+  expect(loaded.tasks[0]!.runs[1]!.notice).toBe(
+    saved.tasks[0]!.runs[1]!.notice,
+  );
+  expect(loaded.proposals).toEqual(saved.proposals);
+});

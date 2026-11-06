@@ -163,6 +163,22 @@
   opacity: 1;
 }
 
+.agent-history-chat-meta .agent-history-speak {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.agent-history-chat-meta .agent-history-speak.is-speaking {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.agent-history-speech-status {
+  max-width: 220px;
+  overflow-wrap: anywhere;
+}
+
 .agent-history-chat-tools {
   min-width: 0;
   max-width: min(88%, 680px);
@@ -440,7 +456,7 @@
     max-width: 92%;
   }
 
-  /* Touch devices cannot hover to reveal the copy button. */
+  /* Touch devices cannot hover to reveal message controls. */
   .agent-history-chat-meta .agent-history-copy {
     opacity: 1;
   }
@@ -659,4 +675,46 @@
     margin-top: 4px;
     margin-bottom: 4px;
   }
+}
+
+/* Where Claude Code compacted the conversation: a divider, not a message. */
+.agent-history-chat-compacted {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 2px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-history-chat-compacted::before,
+.agent-history-chat-compacted::after {
+  content: "";
+  flex: 1 1 24px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.agent-history-chat-compacted button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Sent while the agent works, still waiting in its queue. */
+.agent-history-chat-message.is-queued .agent-history-chat-bubble {
+  border-style: dashed;
+  opacity: 0.7;
+}
+
+.agent-history-chat-queued {
+  padding: 0 5px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--muted);
+  font-weight: 600;
 }
