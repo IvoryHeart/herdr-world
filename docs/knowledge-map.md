@@ -223,21 +223,10 @@ remain beside their owners; launcher and hook tests retain real CLI boundaries.
 
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is
-under [`.hwf/workflows/`](../.hwf/workflows/). Per-PR contributor token accounting
-uses [the usage guide](agent-usage-audit.md), [CLI](../scripts/agent/pr-usage.ts),
-[parsers](../scripts/agent/usage-records.ts), [attribution](../scripts/agent/usage-attribution.ts),
-[reconciliation](../scripts/agent/usage-reconcile.ts), [roster checks](../scripts/agent/usage-roster.ts)
-and [local ledger](../scripts/agent/usage-store.ts);
-[Claude recovery](../scripts/agent/usage-claude.ts) isolates damaged records before attribution;
-focused tests are beside these modules. The report-only readiness gate,
-[`agent:gate`](../scripts/agent/gate/), reuses World's PR detail parser and
-readiness rules. Use synthetic data in tracked evidence.
-The [`agent:crew`](../scripts/agent/crew.ts) watcher acts on the gate's verdicts
-([guide](agent-development.md#act-on-readiness-with-agentcrew)), marks heads
-`crew/merge-ready` or `crew/needs-owner`, and starts roster seats; the
-dispatcher runbook and worker brief template are tracked in the
-[crew runbook](crew-runbook.md). The parked
-[World primitives research](world-primitives-research.md) generalises it into
+under [`.hwf/workflows/`](../.hwf/workflows/). Agent work is dispatched by the separate herdr-crew dispatcher; this repo only defines how code is built, tested and delivered. The
+former usage, readiness-gate and crew-watcher tooling was retired on 2026-11-06;
+[the usage guide](agent-usage-audit.md) is historical. The parked
+[World primitives research](world-primitives-research.md) generalised the old crew process into
 goals, workflows, loops, skills, personas, templates and policies attached at
 each level of the world; it is research, not a contract.
 The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal

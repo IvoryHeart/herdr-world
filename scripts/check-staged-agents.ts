@@ -24,7 +24,7 @@ if (import.meta.main) {
   const refused = refusedAgentPaths(staged);
   if (refused.length) {
     console.error(
-      `check:commit: .agents/ is live agent state; only .agents/skills/ is tracked. Unstage:\n${refused.map((path) => `  ${path}`).join("\n")}\nPropose changes to the dispatcher runbook or brief template in docs/ instead.`,
+      `check:commit: .agents/ is live agent state; only .agents/skills/ is tracked. Unstage:\n${refused.map((path) => `  ${path}`).join("\n")}\nPropose dispatcher changes in the separate herdr-crew project.`,
     );
     process.exit(1);
   }
