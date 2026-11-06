@@ -101,7 +101,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     missing or unreadable reported transcripts still show their error. A window
     opens on Terminal whenever Chat cannot show its conversation, including
     when a reported record cannot be read. It switches once Chat is available,
-    unless you choose a view by hand. Unavailable messages appear when you
+    unless you choose a view by hand. While a new window waits, a line under its
+    header says Chat is not available yet and offers **Stay on Terminal**. Unavailable messages appear when you
     pick Chat yourself. Chat describes startup
     or a question plainly and offers Open Terminal; integration guidance waits
     while the agent is starting or waiting for you in Terminal. In Town it
@@ -283,8 +284,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   creates an agent's tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
   harness stops on a question (such as Claude's folder trust) or exits at
-  once, it says so and offers to open the tab. Progress and outcomes stay in
-  view above the choices. A confirmed start closes the launcher; an uncertain
+  once, it says so and offers to open the tab. While a start is in flight, the
+  pressed choice stays marked busy and a **Starting …** line says what World is
+  doing; after 10 seconds of real waiting it reads **Taking longer than
+  usual** (there is no progress bar or countdown, and the icon stays still
+  with reduced motion). Progress and outcomes stay in view above the choices. A confirmed start closes the launcher; an uncertain
   attempt keeps its explanation and disables start choices. Open its existing
   tab or close the launcher before another attempt. A definite failure lets
   you retry, log in or edit profiles.

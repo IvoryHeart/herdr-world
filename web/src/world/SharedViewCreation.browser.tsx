@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { flushSync } from "react-dom";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
 import {
   __storeTesting,
@@ -14,6 +15,7 @@ import { buildWorldObject, taskSummarySessionFingerprint } from "./worldObject";
 import { projectWorldOffice } from "./herdrOfficeProjection";
 import { worldRuntimeStore } from "./runtimeStore";
 import WorldFoundationApp from "./WorldFoundationApp";
+import { WorldLoader, WORLD_LOADER_LONGER_MS } from "./WorldLoader";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
@@ -543,6 +545,88 @@ async function run() {
       "Return to Town",
     );
   };
+  // While the opening waits on Terminal for Chat it says so; Stay on
+  // Terminal is a manual view choice, so a later readable Chat keeps it.
+  const waitLine = () =>
+    document.querySelector<HTMLElement>(
+      ".workspace-inspector .world-inspector-chat-wait",
+    );
+  // Cross the real timer boundary and retain the same announcer throughout.
+  const timedHost = document.createElement("div");
+  document.body.append(timedHost);
+  const timedRoot = createRoot(timedHost);
+  flushSync(() =>
+    timedRoot.render(
+      <WorldLoader
+        since={Date.now() - WORLD_LOADER_LONGER_MS + 1000}
+        label="Waiting for Chat"
+        longerLabel="Still waiting for Chat"
+      />,
+    ),
+  );
+  const timedStatus = timedHost.querySelector('[role="status"]')!;
+  check(
+    timedStatus.textContent === "Waiting for Chat" &&
+      !timedStatus.closest('[aria-busy="true"]'),
+    "The initial live announcement is outside busy content",
+  );
+  await until(
+    () => timedStatus.textContent === "Still waiting for Chat",
+    "The elapsed wait updates its live announcement",
+  );
+  check(
+    timedHost.querySelector('[role="status"]') === timedStatus &&
+      !timedStatus.closest('[aria-busy="true"]'),
+    "The longer-wait announcement retains a live region outside busy content",
+  );
+  timedRoot.unmount();
+  timedHost.remove();
+  await openAgent();
+  await until(waitLine, "The opening window says it is waiting for Chat");
+  check(
+    !!waitLine()?.textContent?.includes("Chat is not available yet") &&
+      !!waitLine()?.querySelector('[role="status"]') &&
+      !waitLine()!
+        .querySelector('[role="status"]')!
+        .closest('[aria-busy="true"]') &&
+      !waitLine()!.closest(".workspace-inspector-body"),
+    "The Chat-availability status is outside busy content and the Terminal body",
+  );
+  await document.fonts.ready;
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const rowBounds = waitLine()!.getBoundingClientRect();
+  const actionBounds = waitLine()!
+    .querySelector("button")!
+    .getBoundingClientRect();
+  check(
+    rowBounds.left >= 0 &&
+      rowBounds.right <= innerWidth &&
+      actionBounds.left >= rowBounds.left &&
+      actionBounds.right <= rowBounds.right &&
+      (innerWidth > 640 || actionBounds.height >= 44),
+    "The waiting row and Terminal action fit desktop and phone with a phone touch target",
+  );
+  check(
+    matchMedia("(prefers-reduced-motion: reduce)").matches &&
+      getComputedStyle(waitLine()!.querySelector("svg")!).animationName ===
+        "none",
+    "Reduced motion stops the waiting icon",
+  );
+  const stay = Array.from(waitLine()!.querySelectorAll("button")).find(
+    (button) => button.textContent?.includes("Stay on Terminal"),
+  );
+  stay!.click();
+  await until(() => !waitLine(), "Stay on Terminal ends the wait line");
+  chatUnavailable = "";
+  conversationChanged();
+  await worldRuntimeStore.refresh();
+  await settle();
+  check(
+    !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+    "After Stay on Terminal a readable Chat does not switch the window",
+  );
+  chatUnavailable = "missing_integration";
+  await closeAgent();
   await openAgent();
   for (const reason of [
     "no_session",
@@ -560,6 +644,13 @@ async function run() {
       !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
         !document.querySelector(".agent-chat-unavailable"),
       `${reason} stays on Terminal without an automatic error page`,
+    );
+    check(
+      betaPane.agent_status === "idle" &&
+        !!betaPane.agent_session &&
+        !!waitLine()?.textContent?.includes("Chat is not available yet") &&
+        !/starting|answer/i.test(waitLine()?.textContent ?? ""),
+      `${reason} with an existing idle session describes Chat availability without claiming startup or an unanswered request`,
     );
   }
   const manualReply = Promise.withResolvers<void>();
@@ -581,7 +672,8 @@ async function run() {
   );
   await settle();
   check(
-    !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+    !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
+      !waitLine(),
     "A late available reply cannot override a manual view choice",
   );
   chatUnavailable = "read_failed";

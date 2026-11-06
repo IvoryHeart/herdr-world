@@ -1,4 +1,6 @@
 import { watchConversation } from "../conversationWatch";
+import { harnessLabel } from "./agentProfiles";
+import { WorldLoader } from "./WorldLoader";
 import { useEffectCallback } from "../useEffectCallback";
 import type { Conversation } from "../components/chat/types";
 import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
@@ -237,6 +239,12 @@ function InspectorResources({
     Boolean(historyPane) &&
     !openingReplaced;
   const reportedSession = historyPane?.agent_session?.value ?? null;
+  // When this window began waiting for its Chat (presentation only).
+  const [awaitSince, setAwaitSince] = useState(0);
+  if (awaitingChat && !awaitSince) setAwaitSince(Date.now());
+  if (!awaitingChat && awaitSince) setAwaitSince(0);
+  const waitingName =
+    harnessLabel(conversation.context.agent ?? "") || "The agent";
   useLayoutEffect(() => {
     if (conversation.awaitChatSession && openingReplaced) {
       updateChatOpening({ awaitChatSession: false });
@@ -708,6 +716,25 @@ function InspectorResources({
                 workspace={workspace}
                 historyPane={historyPane}
                 historySessionFingerprint={conversation.agentSessionFingerprint}
+                notice={
+                  awaitingChat && awaitSince ? (
+                    <WorldLoader
+                      className="world-inspector-chat-wait"
+                      since={awaitSince}
+                      label="Chat is not available yet: showing Terminal"
+                      longerLabel="Still showing Terminal: Chat is not available yet"
+                      detail={`Chat opens here when ${waitingName}'s conversation can be read.`}
+                      actions={
+                        <button
+                          type="button"
+                          onClick={() => onChange({ view: "terminal" })}
+                        >
+                          Stay on Terminal
+                        </button>
+                      }
+                    />
+                  ) : undefined
+                }
                 chatFocusIntent={conversation.chatFocusIntent}
                 fileSelection={fileSelection}
                 previewRequestRef={previewRequestRef}
