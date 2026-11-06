@@ -29,27 +29,38 @@ export class InputDriver {
   }
 }
 
-export function createDenseSnapshotFixture({ workingInitially = false } = {}) {
-  const ids = [
-    "alpha",
-    "beta",
-    ...Array.from({ length: 62 }, (_, index) => `synthetic-${index}`),
-  ];
-  const workspaces = Array.from({ length: 2014 }, (_, index) => ({
-    workspace_id: `w${index}`,
-    label: `Synthetic space ${index}`,
-  }));
-  const tabs = workspaces.map(({ workspace_id }) => ({
-    workspace_id,
-    tab_id: `${workspace_id}:t1`,
-    label: "Synthetic tab",
-  }));
-  const panes = workspaces.flatMap(({ workspace_id }) =>
+export function createDenseSnapshotFixture({
+  workingInitially = false,
+  maximumScale = false,
+} = {}) {
+  const ids = maximumScale
+    ? ["alpha", "beta", "synthetic-0"]
+    : [
+        "alpha",
+        "beta",
+        ...Array.from({ length: 62 }, (_, index) => `synthetic-${index}`),
+      ];
+  const workspaces = Array.from(
+    { length: maximumScale ? 8 : 2014 },
+    (_, index) => ({
+      workspace_id: `w${index}`,
+      label: `Synthetic space ${index}`,
+    }),
+  );
+  const tabsPerWorkspace = maximumScale ? 15 : 1;
+  const tabs = workspaces.flatMap(({ workspace_id }) =>
+    Array.from({ length: tabsPerWorkspace }, (_, index) => ({
+      workspace_id,
+      tab_id: `${workspace_id}:t${index + 1}`,
+      label: "Synthetic tab",
+    })),
+  );
+  const panes = tabs.flatMap(({ workspace_id, tab_id }, tabIndex) =>
     Array.from({ length: 17 }, (_, index) => ({
       workspace_id,
-      tab_id: `${workspace_id}:t1`,
-      pane_id: `${workspace_id}:p${index}`,
-      terminal_id: `${workspace_id}:p${index}`,
+      tab_id,
+      pane_id: `${workspace_id}:p${(tabIndex % tabsPerWorkspace) * 17 + index}`,
+      terminal_id: `${workspace_id}:p${(tabIndex % tabsPerWorkspace) * 17 + index}`,
       agent: "codex",
       agent_status: workingInitially ? "working" : "idle",
     })),
@@ -59,6 +70,7 @@ export function createDenseSnapshotFixture({ workingInitially = false } = {}) {
     ReturnType<typeof Promise.withResolvers<void>>
   >();
   let attention = false;
+  const stalledIds = maximumScale ? ids.slice(1) : ids.slice(-3);
   const service = new WorldSnapshotService({
     list: () =>
       ids.map((id) => ({
@@ -97,10 +109,11 @@ export function createDenseSnapshotFixture({ workingInitially = false } = {}) {
   });
   return {
     service,
+    hostCount: ids.length,
     startStalledAttentionRefresh() {
       attention = true;
       service.invalidate("alpha");
-      for (const id of ids.slice(-3)) {
+      for (const id of stalledIds) {
         stalls.set(id, Promise.withResolvers<void>());
         service.invalidate(id);
       }
@@ -108,7 +121,7 @@ export function createDenseSnapshotFixture({ workingInitially = false } = {}) {
     release() {
       for (const stall of stalls.values()) stall.resolve();
     },
-    stalledIds: ids.slice(-3),
+    stalledIds,
   };
 }
 

@@ -37,6 +37,7 @@
   white-space: nowrap;
 }
 .board-controls-space .board-control-work,
+.board-controls-space .board-control-next,
 .board-controls-space .board-control-home {
   width: auto;
   padding: 0 10px;
@@ -61,6 +62,16 @@
 }
 .board-controls-space .board-menu {
   max-width: calc(100vw - 24px);
+  max-height: min(75dvh, 520px);
+  overflow-y: auto;
+}
+.board-menu-section {
+  padding: 8px 10px 2px;
+  color: var(--board-soft);
+  font-size: 11px;
+}
+.board-control:disabled {
+  opacity: 0.5;
 }
 .board-controls-space .board-menu .board-control {
   width: 100%;

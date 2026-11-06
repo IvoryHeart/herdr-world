@@ -4,6 +4,11 @@ import { createRoot } from "react-dom/client";
 import { __storeTesting, store } from "../store";
 import type { Pane, Workspace } from "../types";
 import { InspectorPaneMap } from "./InspectorPaneMap";
+import { createInspectorTerminalFocuser } from "../world/inspectorTerminalFocus";
+import {
+  worldInspectorWindowId,
+  type WorldInspectorConversation,
+} from "../world/worldTerminalPresentation";
 import "../styles/tokens.css";
 import "../styles/base.css";
 
@@ -65,6 +70,7 @@ __storeTesting.replaceState({
   connectionGeneration: 1,
   serverRuntimeGeneration: 1,
   lastRefresh: 1,
+  selectedPaneId: "w1:p1",
   workspaces: [workspace],
   tabs: ["w1:t1", "w1:t2"].map((tab_id, index) => ({
     tab_id,
@@ -166,11 +172,61 @@ async function run() {
     `glyph label: ${glyph.getAttribute("aria-label")}`,
   );
 
+  // A terminal handoff queued before keyboard opening must not take focus
+  // from the map when its animation frame finally runs.
+  const terminalHost = document.createElement("div");
+  const terminalCell = document.createElement("div");
+  terminalCell.className = "pane-layout-cell";
+  terminalCell.dataset.paneId = "w1:p1";
+  const terminalInput = document.createElement("textarea");
+  terminalInput.className = "xterm-helper-textarea";
+  terminalCell.append(terminalInput);
+  terminalHost.append(terminalCell);
+  document.body.append(terminalHost);
+  const conversation = {
+    nodeId: "first-agent",
+    connectionId: "local",
+    runtimeGeneration: 1,
+    workspaceId: "w1",
+    tabId: "w1:t1",
+    paneId: "w1:p1",
+    terminalId: "terminal-1",
+    view: "terminal",
+  } as WorldInspectorConversation;
+  const windowId = worldInspectorWindowId(conversation);
+  const focusTerminal = createInspectorTerminalFocuser(
+    { current: 0 },
+    { current: [conversation] },
+    { current: { [windowId]: terminalHost } },
+  );
+  const pendingFocus: FrameRequestCallback[] = [];
+  const frame = window.requestAnimationFrame;
+  window.requestAnimationFrame = (callback) => {
+    pendingFocus.push(callback);
+    return pendingFocus.length;
+  };
+  try {
+    focusTerminal(windowId);
+  } finally {
+    window.requestAnimationFrame = frame;
+  }
+  check(pendingFocus.length === 1, "terminal handoff did not queue its frame");
+  glyph.focus();
+  glyph.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+  );
   glyph.click();
   await settle();
   const map = () =>
     document.querySelector<HTMLElement>('[aria-label="Panes in this tab"]');
   check(!!map(), "one tap does not open the map");
+  pendingFocus.shift()?.(performance.now());
+  await settle();
+  check(!!map(), "queued terminal focus closed the keyboard-opened pane map");
+  check(
+    document.activeElement !== terminalInput,
+    "queued terminal handoff stole focus from the open pane map",
+  );
   const buttons = [
     ...(map()?.querySelectorAll<HTMLButtonElement>(
       ".inspector-pane-map-cell",
@@ -225,6 +281,13 @@ async function run() {
   );
   await settle();
   check(!map(), "Escape does not close the map");
+  focusTerminal(windowId);
+  await settle();
+  check(
+    document.activeElement === terminalInput,
+    "terminal handoff did not resume after the pane map closed",
+  );
+  terminalHost.remove();
 }
 
 void run()

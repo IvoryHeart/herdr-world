@@ -13,7 +13,7 @@ assertions remain in force.
 ## Cause and fix
 
 Closed PR #252 (`fd39a227`) separated ordinary production latency from a
-development-only stall. The stall still reproduces on main `fac6758d7` with
+development-only stall. The stall still reproduces on main `f206391b5` with
 unpatched React 19.3.1, including **without Chrome CPU profiling**.
 
 React DOM's `addObjectDiffToProperties` walks changed props for the development
@@ -25,9 +25,9 @@ bypass the width limit. This work runs synchronously during commit diagnostics,
 after the interruptible render; deferring Board rendering cannot make it yield.
 
 In the unpatched refresh CPU profile, `addObjectDiffToProperties` accounts for
-1,754.8 ms sampled self time and `addValueToProperties` another 260.8 ms. The
-4,250.7 ms long animation frame coincides with the input delay; React's reported
-render duration itself is only 102.7 ms. Profile samples alone are attribution,
+1,684.9 ms sampled self time and `addValueToProperties` another 251.7 ms. The
+4,106.5 ms long animation frame coincides with the input delay; React's reported
+render duration itself is only 96.8 ms. Profile samples alone are attribution,
 but the controlled patch and deterministic traversal test establish the defect:
 the real installed renderer reads all 1,000 changed objects before the fix and
 only the bounded prefix afterward.
@@ -53,20 +53,22 @@ per cell. These are observations on this runner, not a device-independent SLA.
 
 | Installed renderer | Chrome CPU profiling | p95 input acknowledgement | Maximum acknowledgement | Keys |
 | --- | --- | ---: | ---: | ---: |
-| React 18.3.1 | Off | 32 ms | 156 ms | 355 |
-| React 18.3.1 | On | 31 ms | 165 ms | 361 |
-| React 19.3.1, unpatched | Off | 3,353 ms | 4,702 ms | 418 |
-| React 19.3.1, unpatched | On | 2,970 ms | 4,416 ms | 424 |
-| React 19.3.1, patched | Off | 33 ms | 222 ms | 361 |
-| React 19.3.1, patched | On | 33 ms | 225 ms | 361 |
+| React 18.3.1 | Off | 33 ms | 98 ms | 358 |
+| React 18.3.1 | On | 30 ms | 115 ms | 364 |
+| React 19.3.1, unpatched | Off | 2,811 ms | 4,185 ms | 412 |
+| React 19.3.1, unpatched | On | 2,803 ms | 4,193 ms | 416 |
+| React 19.3.1, patched | Off | 29 ms | 174 ms | 356 |
+| React 19.3.1, patched | On | 34 ms | 206 ms | 364 |
 
 The patched refresh profile reduces `addObjectDiffToProperties` self time to
-57.9 ms. Its longest recorded animation frame is 219.4 ms (zero reported blocking
-time); the multi-second task disappears. Maximum input tails are still higher
-than 18 in these single trials; the p95 comparison supports removal of the
+57.1 ms. Its longest recorded animation frame is 214.1 ms (110.5 ms reported
+blocking time); the multi-second task disappears. Maximum input tails are still
+higher than 18 in these single trials; the p95 comparison supports removal of the
 multi-second regression, not a claim that every event is faster.
 
-Raw logs and input/phase receipts are retained locally under `.agents/react-679/`.
+Raw logs and input/phase receipts are retained locally under
+`.agents/react-679/merged/` (the initial pre-merge comparison remains under
+`.agents/react-679/`).
 They are ignored artifacts. The comparison uses development React throughout;
 the fixture's historical name, `ProductionContexts`, refers to the mounted
 production components and transport, not its React build mode. PR #252 already
@@ -76,14 +78,18 @@ found ordinary production input latency similar; that measurement is historical.
 
 Run with each explicitly installed matching React/React DOM version, preserving
 the same fixture. Use the baseline manifest/lockfile for 18 and the candidate for
-patched 19. For a local unpatched-19 negative control, remove the manifest's patch
-entry and reinstall; do not edit shared package-cache files. The installed-renderer
-regression is expected to fail in that negative control.
+patched 19. For a local unpatched-19 negative control, remove the patch entries
+from the manifest and lockfile, then run `bun install --frozen-lockfile --force`
+to replace previously patched installed files; do not edit shared package-cache
+files. The installed-renderer regression is expected to fail in that negative
+control. The matrix also checks the installed renderer's counter placement, so
+a cached patched package cannot be mislabeled as an unpatched control.
 
 ```bash
 mkdir -p .agents/react-679/sample
 WORLD_TIMINGS_ONLY=1 WORLD_TRACE_PREFIX=.agents/react-679/sample/run \
-  bun run test web/src/world/ProductionContexts.board.test.ts --test-name-pattern 1440
+  bun run test web/src/world/ProductionContexts.board.test.ts \
+  --test-name-pattern '"entry":"","width":1440'
 # Repeat the same command with WORLD_PROFILE=1 for the CPU-profile cell.
 bun run test web/src/testing/reactPerformanceTracks.test.ts
 ```
@@ -94,15 +100,21 @@ property reads independently of wall-clock speed. It fails on unpatched 19.3.1.
 Existing Board/Town desktop/phone consumers remain the rendering and interaction
 evidence; Quint authority/recovery models do not model React instrumentation.
 
-The six patched dense Board, Town and animated Town consumers at 1440/390px all
-pass, recording p95 acknowledgements of 31–41 ms. The production Vite build passes
-the unchanged asset budgets (171 files, 14.8 MiB total, 431.3 KiB initial JS /
+Before merging the newer main, all six patched dense Board, Town and animated
+Town consumers at 1440/390px passed, recording p95 acknowledgements of 31–41 ms
+on `fac6758d7`. The comparison above was repeated after merging `f206391b5`.
+The production Vite build passes the unchanged asset budgets (171 files,
+14.8 MiB total, 431.3 KiB initial JS /
 134.9 KiB gzip) and excludes development tools.
 The 25 focused browser checks cover real Vite startup, Board interactions and
 responsive controls, Town rendering/recovery, Chat menus and questions, Needs you,
 and shared window resize/snap/minimize behavior. Focused Chat/composer/ref tests
 and quick type checks pass. README, tutorial and feature instructions remain
 accurate because the migration adds no controls or first-run steps.
+After the main merge, those 25 browser checks and all four dense Board cases
+pass again (29 tests). Board's original 1440/390px cases record p95 27/29 ms;
+the newly merged maximum-scale cases record 34/51 ms. These follow-up timings
+come from a two-file browser run, separate from the sequential comparison above.
 
 Keep the exact-version patch and lockfile together. On a React DOM update, first
 check whether the upstream renderer counts every visited property before early

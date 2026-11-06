@@ -30,7 +30,7 @@
     "web/src/store.ts": 2964,
     "web/src/styles/layout/app.css": 1083,
     "web/src/world/DeskView.tsx": 1139,
-    "web/src/world/board/board.css": 1419,
+    "web/src/world/board/board.css": 1374,
     "web/src/world/town/town.css": 1184,
     "web/src/world/useWorldInspectorController.ts": 1136,
     "web/src/world/worldObject.ts": 1052
