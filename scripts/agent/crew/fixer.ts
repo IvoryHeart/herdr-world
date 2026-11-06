@@ -68,9 +68,9 @@ Rules:
 - Follow AGENTS.md and the candidate-delivery skill (.agents/skills/candidate-delivery/SKILL.md): fix every P1–P3 finding in one pass, with tests and docs as the change needs.
 - Push to ${branch} only. The pre-push hook runs the gate; wait for it and never bypass it. If the push is refused because the branch moved, stop and say so here; don't force-push.
 - Never use git stash: its stack is shared with every worktree.
-- After pushing, post one comment on the PR that starts with \`[fixer #${pr}]\`, then one line per finding or step naming its fixing commit. A step that needs no push gets the same comment saying what you found. Diagnose CI failures and fix their cause; never rerun a job to clear a failure.
+- After pushing, post one comment on the PR that starts with \`[fixer #${pr}]\`, then one line per finding or step naming its fixing commit. A step that needs no push gets the same comment saying what you found. Diagnose CI failures and fix their cause; the owner permits at most one justified rerun after an unrelated terminal failure, never as the fix.
 - When you are done, pushed or not, run \`${task.done}\` so the watcher hands the PR on.
-- To reach the owner, use \`herdr-world ask "QUESTION" --owner-only --wait\` from your own pane; no other channel.
+- Steward owns owner Try/Merge/Decide items and previews; report genuine exceptions in your fix comment, never owner plumbing asks. Owner native sessions are read-only: never attach, resize or send input.
 - Never merge, approve, use --admin, add labels, prompt or message another agent, or post local paths, hosts, usernames or session links.
 - Finish by printing only the comment's URL. Then stay in this session: the owner may ask you about your fix here; answer, but take no further action unless asked.`;
 }

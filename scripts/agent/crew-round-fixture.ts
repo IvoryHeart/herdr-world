@@ -1,7 +1,7 @@
 import { config, input, NOW, SHA } from "./gate/cases";
 import { evaluate } from "./gate/predicate";
 import type { Deps } from "./crew/deps";
-import { plan, SETTINGS_DEFAULTS } from "./crew/plan";
+import { plan, SETTINGS_DEFAULTS, type CrewSettings } from "./crew/plan";
 import type { CrewPost } from "./crew/review-facts";
 import { roundPolicy } from "./crew/round-policy";
 import { saveCycle } from "./crew/round-policy-store";
@@ -36,7 +36,8 @@ export function cleanupFixtures() {
   for (const db of databases.splice(0)) db.close();
 }
 
-export function fixture(ordinal = 1) {
+export function fixture(ordinal = 1, overrides: Partial<CrewSettings> = {}) {
+  const configured = { ...settings, ...overrides };
   const db = openCrewStore(":memory:");
   databases.push(db);
   const round = roundFor(db, 7, SHA.reviewed, NOW - 3_600_000);
@@ -111,10 +112,10 @@ export function fixture(ordinal = 1) {
           NOW,
         ),
         gateInput,
-        settings,
+        configured,
         ["builder"],
       ),
-      settings,
+      settings: configured,
       repo: config.repo,
       dir: "/synthetic/gate",
       now,

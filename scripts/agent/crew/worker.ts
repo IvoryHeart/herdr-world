@@ -22,6 +22,7 @@ export type ReviewTask = {
   author: string | null;
   /** A go verdict limits this round to these finding IDs and their fixes. */
   scope?: string[];
+  converging?: boolean;
 };
 
 export function reviewerPrompt(task: ReviewTask) {
@@ -29,9 +30,10 @@ export function reviewerPrompt(task: ReviewTask) {
   const job = since
     ? `Confirm the earlier findings from the last reviewed head ${since}. Review ONLY the author's delta since that head, excluding changes brought in from main. Walk git log --first-parent --reverse ${since}..${head}; inspect each non-merge with git show, and main merges ONLY with git show --remerge-diff (manual conflict resolutions). Never use the raw endpoint diff as the scope: it includes imported main changes. Check each finding and its replies, the correctness of the fixes, and new problems in that delta. Do not re-review already accepted code.`
     : `Review the pull request at head ${head}. For a batch PR, go commit by commit.`;
-  return `You are ${reviewer}, an independent reviewer of Herdr World pull request #${pr}, started fresh for this one review.
+  return `You are ${reviewer}, an independent reviewer of Herdr World pull request #${pr}, ${task.converging ? "continuing the same reviewer identity and notes in a fresh round tab" : "started fresh for this one review"}.
 
 ${job}
+${task.converging ? `Converging review: the first pass is COMPLETE: report every real finding you can see in ONE RESULT, without saving findings for later. Later rounds verify each finding and only the author fix delta for regressions. A new finding on untouched code is OUT OF SCOPE unless it is P1; for that P1 explain why the first complete pass missed it. Preserve your reviewer identity and own notes across every round, using your earlier GitHub reviews and signed replies as durable notes. After round 3 with unresolved findings, stop for firstmate-2; never initiate round 4 or an automatic evaluator. Build only owner-listed work; flag extras, duplication and speculative code, with no line cap or size-driven split. Judge evidence proportionately by tier; Light needs focused behaviour checks and only changed-UI screenshots. Screen mocks require owner approval before build. Owner native sessions are READ-ONLY: never attach, resize or send input. Steward owns preview ports, owner Try/Merge/Decide items and cleanup; technical plumbing goes to steward, never an owner ask.` : ""}
 ${task.scope ? `\nEvaluator go scope: ${task.scope.join(", ") || "no mandatory findings"}. Check ONLY these findings and their fixes. Dispositioned follow-ups are not open findings on this PR. Read the [evaluator] verdict and follow-up links. Report any new issue within the mandatory fixes.\n` : ""}
 
 Work item:
@@ -43,7 +45,7 @@ Rules:
 - Follow AGENTS.md. Look for correctness bugs, missing tests, documentation gaps, privacy leaks (real hosts, users, paths, sessions, tokens) and contract or verification impact. Grade findings P1, P2 or P3. The owner has every finding fixed, so report only real ones.
 - Read the linked issue in full (gh pr view --json body,closingIssuesReferences, then gh issue view). Flag behaviour the linked issue did not ask for: scope drift.
 - The machine is shared: typecheck and focused unit tests only; a browser suite only through \`bun run test <path>\` when the change needs one. Keep command output bounded.
-- To reach the owner, use \`herdr-world ask "QUESTION" --owner-only --wait\` from your own pane; no other channel. Do not prompt the owner, send Herdr custom notifications, edit shared runbooks/configuration or substitute an issue comment for asking.
+- Do not ask or notify the owner directly; report genuine review decisions in your RESULT for the program and steward. Never edit shared runbooks/configuration or operate owner native sessions.
 - Independence: do not read the other reviewers' reviews or comments for this round before you post yours. Earlier completed rounds and the evaluator's verdict are allowed, including earlier rounds on the same head.
 - Post exactly one formal review with \`gh pr review ${pr} --repo ${repo} --comment --body-file <file>\`. The body starts with exactly these three lines, no text before them:
   Reviewer: ${reviewer}
@@ -83,13 +85,20 @@ export function reviewerArgv(
   entry: SeatEntry,
   prompt: string,
   session: string | null,
+  resume?: string,
+  cwd?: string,
 ): string[] {
   const seat = seatArgv(entry);
   if (!seat) throw new Error(`No harness runs ${entry.model}`);
   return [
     seat.kind,
+    ...(resume && seat.kind === "codex" ? ["resume", resume] : []),
     ...seat.args,
-    ...(seat.kind === "claude" && session ? ["--session-id", session] : []),
+    ...(resume && seat.kind === "codex" && cwd ? ["--cd", cwd] : []),
+    ...(resume && seat.kind === "claude" ? ["--resume", resume] : []),
+    ...(!resume && seat.kind === "claude" && session
+      ? ["--session-id", session]
+      : []),
     prompt,
   ];
 }

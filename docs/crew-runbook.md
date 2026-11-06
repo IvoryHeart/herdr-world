@@ -147,6 +147,42 @@ queued reviewers, their existing action keys, and their full first reviews. Only
 review/confirm actions consume RESULT evidence; auxiliary seats require their
 checkpoint-specific verdict or process report.
 
+### Converging reviews
+
+Set `crew.convergingReviews: true` for the owner-approved crew-led flow.
+The first review reports every visible finding in one complete pass. Later
+rounds verify each finding and review only the author's fix delta for
+regressions. New findings outside that delta are excluded unless P1; explain
+why the first pass missed such a P1. No size cap or size-driven split applies.
+
+Each assigned reviewer resumes its same saved harness session in a fresh round
+tab. Its earlier reviews and signed finding replies are durable notes. Existing
+manual sessions can be pinned with
+`crew.reviewerSessions["<PR>"]["<canonical reviewer>"] = "<saved session UUID>"`.
+Only pin an independently verified original session. Missing identity or an
+unmatched historical cohort holds confirmation for the review coordinator;
+it never launches a replacement cohort. Existing histories and findings remain
+binding. Adoption of an older manual review still requires signed replies to
+every finding and ten genuinely observed quiet minutes.
+
+A completed third round with unresolved findings sends the actual finding list
+to `firstmate-2` and holds further rounds. Ensure that seat is not in
+`crew.neverPrompt`. This mode never starts an automatic evaluator; retained
+legacy evaluator/process holds require explicit reconciliation and remain held.
+Without this option the existing evaluator flow below is preserved.
+
+Use `crew.lightPrs` for explicit Light overrides; their capture requests cover
+only changed UI, one phone and one desktop, rather than five viewports.
+`crew.readyAsk: false` leaves owner Try/Merge/Decide notices with the steward.
+The steward also keeps preview allocation, close-on-merge, disk and genuine
+program exceptions. Reviewers never attach, resize or send input to owner native
+sessions. An empty `crew.pods` watches every open PR, including future main-based
+integration PRs; `on-hold` labels and explicit gate holds remain binding.
+Run the sole watcher in a visible `crew-watch` Herdr tab, with conservative
+full/busy intervals; do not run a second hidden controller or tight GitHub loop.
+
+### Legacy evaluator flow
+
 After round 2, any unresolved earlier finding or new finding starts a fresh
 `evaluator` instead of round 3. The roster entry is:
 

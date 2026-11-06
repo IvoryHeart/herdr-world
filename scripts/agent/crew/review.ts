@@ -209,10 +209,27 @@ export async function review(options: Options, dir: string, deps: Deps) {
               branch: meta.headRefName,
               author: options.author ?? null,
               ...(cycle?.scope ? { scope: cycle.scope } : {}),
+              converging: settings.convergingReviews,
             });
     show(
       `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model}); type here to steer it`,
     );
+    const retained =
+      settings.convergingReviews && options.since
+        ? (runsOf(crew, pr).findLast(
+            (run) =>
+              run.id !== runId &&
+              run.reviewer === reviewer &&
+              !run.cwd &&
+              run.session &&
+              run.harness === harness &&
+              run.model === model.model,
+          )?.session ?? settings.reviewerSessions?.[String(pr)]?.[reviewer])
+        : undefined;
+    if (settings.convergingReviews && options.since && !retained)
+      throw new Error(
+        `Retained ${reviewer} session missing for #${pr}; operator reconciliation required, no replacement reviewer launched`,
+      );
     ({ code, usage } = await runSession(
       crew,
       runId,
@@ -220,7 +237,10 @@ export async function review(options: Options, dir: string, deps: Deps) {
       prompt,
       checkout,
       show,
-      { exitOnResult: options.command !== "process" },
+      {
+        exitOnResult: options.command !== "process",
+        resume: retained ?? undefined,
+      },
     ));
   } catch (error) {
     show(error instanceof Error ? error.message : String(error));
@@ -275,6 +295,7 @@ export async function runSession(
   show: (text: string) => void,
   options: {
     exitOnResult?: boolean;
+    resume?: string;
     spawn?: (
       argv: string[],
       cwd: string,
@@ -282,7 +303,8 @@ export async function runSession(
   } = {},
 ) {
   const harness = harnessOf(model) ?? "codex";
-  const session = harness === "claude" ? randomUUID() : null;
+  const session =
+    options.resume ?? (harness === "claude" ? randomUUID() : null);
   setRunSession(crew, runId, harness, model.model, session);
   const started = Date.now();
   // Ctrl-C in the pane is for the harness; this process waits for it.
@@ -294,9 +316,12 @@ export async function runSession(
         cwd: directory,
         stdio: ["inherit", "inherit", "inherit"],
       }));
-  const child = spawn(reviewerArgv(model, prompt, session), cwd);
+  const child = spawn(
+    reviewerArgv(model, prompt, session, options.resume, cwd),
+    cwd,
+  );
   // Codex names its session itself; find it once its rollout exists.
-  let named = harness !== "codex";
+  let named = Boolean(options.resume) || harness !== "codex";
   let finishing = false;
   let forceStop: ReturnType<typeof setTimeout> | undefined;
   const finding = setInterval(() => {

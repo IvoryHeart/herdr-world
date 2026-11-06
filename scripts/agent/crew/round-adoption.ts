@@ -91,9 +91,10 @@ export function adoptCycles(context: RoundContext) {
   }
   if (
     !cycles.length &&
-    !context.actions.some((action) =>
-      ["review", "confirm"].includes(action.kind),
-    )
+    (context.settings.convergingReviews ||
+      !context.actions.some((action) =>
+        ["review", "confirm"].includes(action.kind),
+      ))
   ) {
     const commits = [
       ...new Set(

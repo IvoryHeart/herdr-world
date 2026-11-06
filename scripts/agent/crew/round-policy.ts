@@ -43,6 +43,7 @@ import {
   setMeta,
   setRunResult,
   deleteMeta,
+  runsOf,
 } from "./store";
 
 export const QUIET_MS = 10 * 60_000;
@@ -86,6 +87,21 @@ export function roundPolicy(context: RoundContext): Action[] {
   const { crew, input, settings, now, dryRun, author, deps } = context;
   const head = input.item?.headSha;
   if (!head || input.state !== "OPEN") return context.actions;
+  if (
+    settings.convergingReviews &&
+    input.item?.pr?.baseRef &&
+    input.item.pr.baseRef !== "main"
+  )
+    return [
+      {
+        pr: input.number,
+        head,
+        kind: "judgment",
+        target: "owner",
+        key: `${input.number}:${head}:judgment:owner:base`,
+        text: `NEEDS-OWNER #${input.number}: non-main base ${input.item.pr.baseRef} requires explicit stack reconciliation; no review or fixer launched.`,
+      },
+    ];
   const cycles = adoptCycles(context);
   const last = cycles.at(-1);
   const reviews = context.actions.filter((action) =>
@@ -122,6 +138,24 @@ export function roundPolicy(context: RoundContext): Action[] {
       text: `NEEDS-OWNER #${input.number}: ${reason}`,
     },
   ];
+  if (
+    settings.convergingReviews &&
+    input.history.some(
+      (claim) => !claim.reviewer || claim.outcome === "unknown",
+    )
+  )
+    return judgment(
+      "Existing review attribution or RESULT is incomplete; preserve original sources and reconcile their real reviewers before any new review.",
+    );
+  if (
+    settings.convergingReviews &&
+    !last &&
+    input.history.length &&
+    reviews.length
+  )
+    return judgment(
+      "Existing reviews do not establish the required reviewer cohort; reconcile its original identity and obligations, without launching a duplicate cohort.",
+    );
   if (!last) {
     if (reviews.length && !dryRun) {
       const round = reviewRound(
@@ -189,10 +223,36 @@ export function roundPolicy(context: RoundContext): Action[] {
   );
   let evaluation = evaluations(crew, input.number).at(-1);
   const claims = completed(input, last);
+  if (
+    settings.convergingReviews &&
+    claims &&
+    last.ordinal >= 3 &&
+    findings.length
+  ) {
+    return [
+      {
+        pr: input.number,
+        head,
+        kind: "judgment",
+        target: "firstmate-2",
+        key: `${input.number}:${last.head}:judgment:firstmate-2:round-${last.ordinal}`,
+        text: `Review round ${last.ordinal} of #${input.number} remains open; no round 4 or evaluator will start. Findings: ${findings.map((finding) => `${finding.id}: ${finding.text} (${finding.url})`).join("; ")}`,
+      },
+    ];
+  }
+  if (
+    settings.convergingReviews &&
+    evaluation &&
+    ["evaluating", "process"].includes(evaluation.status)
+  )
+    return judgment(
+      "An existing evaluator/process hold requires explicit operator reconciliation; convergence never clears historical holds.",
+    );
   const nonconverged = input.item?.pr?.reviewers.some(
     (claim) => claim.outcome === "open",
   );
   if (
+    !settings.convergingReviews &&
     claims &&
     nonconverged &&
     last.ordinal >= (evaluation?.checkpoint ?? 0) + 2 &&
@@ -403,6 +463,22 @@ export function roundPolicy(context: RoundContext): Action[] {
         )
       : [];
   if (!nextReviews.length) return other;
+  if (settings.convergingReviews) {
+    const changed = nextReviews.some(
+      (action) => !last.reviewers.includes(action.target),
+    );
+    const missing = nextReviews.filter(
+      (action) =>
+        !settings.reviewerSessions?.[String(input.number)]?.[action.target] &&
+        !runsOf(crew, input.number).some(
+          (run) => run.reviewer === action.target && run.session && !run.cwd,
+        ),
+    );
+    if (changed || missing.length)
+      return judgment(
+        `Retained reviewer continuity requires reconciliation: ${changed ? "changed reviewer cohort" : missing.map((action) => action.target).join(", ")}; no replacement reviewer launched.`,
+      );
+  }
   if (!dryRun) {
     const round = roundFor(crew, input.number, head, now, last.head === head);
     saveCycle(crew, {

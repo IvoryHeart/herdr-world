@@ -24,6 +24,12 @@ export type CrewSettings = {
   neverPrompt: string[];
   /** Whether READY generates an owner ask; mechanical marks remain independent. */
   readyAsk: boolean;
+  /** Complete first pass, stable reviewer sessions, at most three rounds. */
+  convergingReviews?: boolean;
+  /** Retained manual reviewer sessions, keyed by PR and canonical role. */
+  reviewerSessions?: Record<string, Record<string, string>>;
+  /** Light UI evidence is limited to the changed UI. */
+  lightPrs?: number[];
   /** Explicit per-PR adoption head/time; earlier RESULTs remain history only. */
   reviewStarts: Record<string, ReviewStart>;
   /** Coordinator for review plumbing, distinct from explicit owner decisions. */
@@ -382,7 +388,7 @@ export function plan(
   if (failures.length && settled)
     toAuthor(
       "ci",
-      `ACT #${pr} ci @${at}: ${failures.map((failure) => failure.detail).join("; ")}. Diagnose every CI failure and fix its cause; never rerun to clear a failure.`,
+      `ACT #${pr} ci @${at}: ${failures.map((failure) => failure.detail).join("; ")}. Diagnose every CI failure and fix its cause; after a terminal run, the owner permits at most one justified rerun for an unrelated failure, never as the fix.`,
       [failedJobs, ...failures.map((failure) => failure.detail)].join(" "),
     );
   // A check that never finishes holds every review back; keyed by its job,
@@ -405,7 +411,9 @@ export function plan(
   if (state("screenshots") === "unmet")
     toAuthor(
       "screenshots",
-      `ACT #${pr} screenshots @${at}: add captures for the five owner viewports to the PR.`,
+      settings.lightPrs?.includes(pr)
+        ? `ACT #${pr} screenshots @${at}: add proportionate screenshots of the changed UI (one phone and one desktop); reuse current applicable proof, no five-viewport packet.`
+        : `ACT #${pr} screenshots @${at}: add captures for the five owner viewports to the PR.`,
     );
 
   // Reviewers read the diff, not CI, so they start as soon as a head is
@@ -462,6 +470,11 @@ export function loadSettings(path: string): CrewSettings {
   };
   if (typeof settings.readyAsk !== "boolean")
     throw new Error("crew.readyAsk must be a boolean");
+  if (
+    settings.convergingReviews !== undefined &&
+    typeof settings.convergingReviews !== "boolean"
+  )
+    throw new Error("crew.convergingReviews must be a boolean");
   validateReviewSettings(settings);
   if (
     !Number.isFinite(settings.runTimeoutMinutes) ||
