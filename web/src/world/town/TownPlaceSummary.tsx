@@ -41,6 +41,7 @@ export function useTownPlaceSummary(
     key: string;
     anchor: TownPlaceSummaryAnchor;
     pinned: boolean;
+    source: "label" | "canvas";
   } | null>(null);
   const current = useRef(target);
   current.current = target;
@@ -55,13 +56,18 @@ export function useTownPlaceSummary(
     clearTimeout(timer.current);
     setTarget(null);
   }, []);
-  const show = useCallback<ShowTownPlaceSummary>(
-    (key, anchor, pinned = false) => {
+  const show = useCallback(
+    (
+      key: string | null,
+      anchor?: TownPlaceSummaryAnchor,
+      pinned = false,
+      source: "label" | "canvas" = "label",
+    ) => {
       if (held.current && !pinned) return;
       clearTimeout(timer.current);
       if (key && anchor) {
         if (current.current?.pinned && !pinned) return;
-        setTarget({ key, anchor, pinned });
+        setTarget({ key, anchor, pinned, source });
       } else if (!current.current?.pinned) {
         timer.current = setTimeout(() => setTarget(null), 180);
       }
@@ -114,11 +120,9 @@ export function useTownPlaceSummary(
     hoverAgent: (key: string | null, anchor?: { x: number; y: number }) => void,
   ) => {
     if (held.current) return;
-    // Room labels own their enter/leave lifecycle. The canvas beneath a label
-    // can publish a delayed leave; it must not dismiss or replace that card.
-    const currentKey = current.current?.key;
-    if (currentKey && office.roomRoster.some(({ key }) => key === currentKey))
-      return;
+    // DOM labels own their enter/leave lifecycle. The canvas beneath a room
+    // or table title can publish a delayed leave; it must not replace that card.
+    if (current.current?.source === "label") return;
     const anchor = next ? { x: next.clientX, y: next.clientY } : undefined;
     if (anchor) pointer.current = anchor;
     const agent = next && officeReadModel(office).agentOf(next.key);
@@ -127,12 +131,17 @@ export function useTownPlaceSummary(
       next &&
       office.deskRoster.find(({ desk }) => desk.key === next.key);
     if (desk && next)
-      show(next.key, {
-        left: next.clientX,
-        right: next.clientX,
-        top: next.clientY,
-        bottom: next.clientY,
-      });
+      show(
+        next.key,
+        {
+          left: next.clientX,
+          right: next.clientX,
+          top: next.clientY,
+          bottom: next.clientY,
+        },
+        false,
+        "canvas",
+      );
     else show(null);
     setSceneHover(agent || desk ? null : next);
     hoverAgent(agent && next ? next.key : null, anchor);
@@ -183,7 +192,7 @@ export function TownPlaceSummaryCard({
     );
     const belowSpace = window.innerHeight - target.anchor.bottom - 16;
     const aboveSpace = target.anchor.top - 16;
-    const desired = Math.min(440, card.scrollHeight + 2);
+    const desired = Math.min(440, card.scrollHeight + 4);
     const below = desired <= belowSpace || belowSpace >= aboveSpace;
     const maxHeight = Math.max(
       40,

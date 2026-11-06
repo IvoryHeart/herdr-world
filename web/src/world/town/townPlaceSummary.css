@@ -1,4 +1,10 @@
 .town-place-summary {
+  /* Match the wooden room plaques, including content reused from Summary. */
+  --surface: #6e4a2e;
+  --border: #3b2414;
+  --text: #ffe9c2;
+  --muted: #d9c39b;
+  --s-blocked: #ffb547;
   position: fixed;
   z-index: 200;
   box-sizing: border-box;
@@ -6,12 +12,22 @@
   max-height: min(440px, calc(100dvh - 16px));
   overflow: auto;
   padding: 12px;
-  border: 1px solid var(--border, #7a5536);
-  border-radius: 10px;
-  background: var(--surface, #211d18);
-  color: var(--text, #f1efe6);
-  box-shadow: 0 8px 24px #0006;
-  font-size: 13px;
+  border: 2px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow:
+    0 4px 0 var(--border),
+    0 8px 24px #0006;
+  font: 13px
+    var(
+      --town-ui-font,
+      "Rubik",
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      sans-serif
+    );
   pointer-events: auto;
 }
 .town-place-summary header {
@@ -23,13 +39,20 @@
 }
 .town-place-summary header strong {
   overflow-wrap: anywhere;
+  font:
+    700 12px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 .town-place-summary header button {
   flex: 0 0 40px;
   height: 40px;
-  border: 1px solid var(--border, #7a5536);
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #0004;
   color: inherit;
   font-size: 20px;
   cursor: pointer;
@@ -46,17 +69,31 @@
   gap: 6px;
   min-height: 40px;
   padding: 0 12px;
-  border: 1px solid var(--border, #7a5536);
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #0004;
   color: inherit;
+  font: inherit;
   cursor: pointer;
+}
+.town-place-summary button:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+.town-place-summary button:hover:not(:disabled) {
+  background: #3b2414;
 }
 .town-place-summary-actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .town-place-summary .town-summary {
+  --town-text: var(--text);
+  --town-muted: var(--muted);
+  --town-edge: var(--border);
+  --town-panel: #3b2414;
+  --town-btn: #50331f;
+  --town-term: #2b1c12;
   padding: 12px 0 0;
   gap: 12px;
 }

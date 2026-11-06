@@ -131,6 +131,17 @@ export async function checkTownRoomPlates(
     "hovering a room name did not show its summary",
   );
   const hoverCard = document.querySelector<HTMLElement>(".town-place-summary")!;
+  const cardStyle = getComputedStyle(hoverCard);
+  const plateStyle = getComputedStyle(plate);
+  check(
+    cardStyle.backgroundColor === plateStyle.backgroundColor &&
+      cardStyle.color === plateStyle.color &&
+      cardStyle.borderTopColor === plateStyle.borderTopColor &&
+      getComputedStyle(hoverCard.querySelector("header strong")!).fontFamily ===
+        getComputedStyle(plate.querySelector(".town-room-plaque-name")!)
+          .fontFamily,
+    "place summaries must use the room plaque's wood palette and Town heading font",
+  );
   const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
   canvas.dispatchEvent(
     new PointerEvent("pointerleave", { pointerType: "mouse" }),
@@ -241,12 +252,29 @@ export async function checkTownRoomPlates(
   const tableName = host.querySelector<HTMLButtonElement>(
     '[data-town-place-summary-trigger="desk"]',
   )!;
+  check(
+    receivesPointer(tableName),
+    "the table title must receive native pointer hits",
+  );
   tableName.dispatchEvent(
     new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }),
   );
   await waitFor(
     () => document.querySelector(".town-place-summary") !== null,
     "hovering a table name did not show its summary",
+  );
+  const tableSummary = document.querySelector(".town-place-summary");
+  canvas.dispatchEvent(
+    new PointerEvent("pointerleave", { pointerType: "mouse" }),
+  );
+  const afterTableLabelDelay = performance.now() + 250;
+  await waitFor(
+    () => performance.now() >= afterTableLabelDelay,
+    "table label hover dismiss deadline did not elapse",
+  );
+  check(
+    document.querySelector(".town-place-summary") === tableSummary,
+    "a queued canvas leave must not dismiss the table title's hover summary",
   );
   document
     .querySelector<HTMLButtonElement>('[aria-label="Close place summary"]')!
