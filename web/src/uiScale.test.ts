@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { assetUrlImports } from "./world/testing/assetUrlImports";
 import {
   stopChrome,
   waitForChromePort,
@@ -177,6 +178,7 @@ test.skipIf(!chrome).concurrent.each([
         target: "browser",
         splitting: true,
         plugins: [
+          assetUrlImports,
           {
             name: "vite-raw-test-assets",
             setup(build) {

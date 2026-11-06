@@ -167,9 +167,13 @@ export function useAllServerAgentSessions(enabled: boolean) {
     enabled &&
     connected &&
     (world.status === "idle" || world.status === "loading");
-  const panes = connected
-    ? allServerAgentPanes(state.connections, snapshots)
-    : [];
+  // Stable while its inputs are: Pane Search derives its options from these
+  // panes, and a new array on every render re-ran its selection effects and
+  // undid arrow-key moves.
+  const panes = useMemo(
+    () => (connected ? allServerAgentPanes(state.connections, snapshots) : []),
+    [connected, state.connections, snapshots],
+  );
   const messages = !connected
     ? [state.paused ? "Connection paused." : "Connect to load sessions."]
     : failed

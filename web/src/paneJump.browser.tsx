@@ -346,6 +346,10 @@ async function run() {
         );
         await key("ArrowDown", "ArrowDown");
         checkSearchAccessibility();
+        check(
+          search()!.getAttribute("aria-activedescendant") === originalId,
+          "ArrowDown did not restore accessible focus",
+        );
         await key("Tab", "Tab");
         checkSearchAccessibility();
         await key("Tab", "Tab", 8);

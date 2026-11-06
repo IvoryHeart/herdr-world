@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- Keep Pane Search's selected match when moving through results with arrow keys.
 - Keep unsent Message drafts across a reconnect to the same destination, in
   memory only.
 - Return clipboard writes from composer-sent commands to the sending browser,
