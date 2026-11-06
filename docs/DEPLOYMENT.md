@@ -615,10 +615,11 @@ individual command connections. This does not change your OpenSSH authentication
 or host-key policy. Fixed keepalives end established sessions that stop answering.
 
 The service also supports explicit local and reverse port-forward RPCs after
-login, bound to the selected connection and runtime. As upstream, web forwarding
-controls are offered only on a page served over loopback: the forward binds where
-the World server runs, so a remote browser would address the wrong machine.
-The web controls arrive in the later web/mobile integration part. Authentication
+login, bound to the selected connection and runtime. World does not offer
+upstream's web forwarding controls yet (see the
+[follow-up](upstream-follow-ups.md#browser-port-forward-controls)). As upstream,
+they belong only on a page served over loopback: the forward binds where the World
+server runs, so a remote browser would address the wrong machine. Authentication
 is the access boundary; the service adds no forwarding-specific WebSocket-peer
 restriction. An authenticated terminal can already run forwarding commands.
 A forward ends with its owning runtime and is never automatically reopened.
@@ -928,6 +929,12 @@ latency; SSH command labels, queue/process counts and startup failures; and term
 input-to-next-surface timing. The latter is an upper bound on echo, because unrelated
 output can produce the next surface, and expires after five seconds. These samples
 do not log terminal input or RPC payloads and do not establish a latency guarantee.
+
+Browser latency samples are opt-in per browser: add `?debugLatency` to the World
+URL, or set the local-storage key `herdr-world:foundation-v2:debugLatency` to `1`
+and reload. They go to the console's Verbose level, time a typed key to the next
+written terminal frame and record attach watchdog firings. They carry timings and
+identifiers, never input.
 
 ## User service
 

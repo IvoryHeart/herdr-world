@@ -398,6 +398,11 @@ history requests and preserves the already captured selection.
 Input waits for attachment readiness and revalidates the attachment, session,
 and routing lease. It is never replayed into a detached or replaced terminal.
 Disconnect rejects pending endpoint requests and invalidates clipboard ownership.
+A clipboard write caused by a composer's `pane.send_input`, `pane.send_text` or
+`pane.send_keys` returns to the browser socket that sent the command. World's
+verb dispatcher notes that recipient in the same before-send step as its
+request recheck, bound to the runtime, socket and terminal; a failed pane lookup
+never blocks input, and OSC 52 reads stay refused.
 
 Mermaid file previews and Markdown fences share a lazy renderer and independent
 zoomable viewports. Source wrappers and leading metadata/comments are removed
@@ -473,8 +478,10 @@ A bridge-global `ConnectionManager` owns shared profiles and independent
 `ConnectionRuntime` instances. Each runtime owns its transport, clients, viewers,
 clipboard relay, subscriptions, services, caches, and reconnect lifecycle.
 Browser selection does not start or stop other runtimes; render streams open
-only while viewed. Disconnect/removal disposes the bridge runtime and SSH tunnel,
-not Herdr or its workspaces.
+while viewed, and the runtime keeps up to 20 recently viewed streams warm for
+10 minutes so switching back is immediate. Warm streams are keyed by the owning
+runtime and close with it. Disconnect/removal disposes the bridge runtime and SSH
+tunnel, not Herdr or its workspaces.
 
 Downstream RPC/HTTP requires an immutable connection ID, runtime generation, and
 request-local ready-runtime lease. Replies, errors, events, terminal frames, and

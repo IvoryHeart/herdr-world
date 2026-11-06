@@ -1027,13 +1027,16 @@ steering does not enable high-permission mode or send a prompt to another agent.
 For simultaneous tasks that edit files, use separate worktrees: each has its
 own checkout directory and branch.
 
-1. Confirm that the repository has a fetchable `origin/main`, and inspect
+1. If the repository has an `origin`, confirm that it is fetchable. Inspect
    `paseo.json` if it exists. If you do not trust its commands, disable hooks
    for this repository through **Worktree hooks** before proceeding.
 2. Open **Worktree Lifecycle** from the workspace context menu, or search for
-   `worktree lifecycle` in the command menu.
+   `worktree lifecycle` in the command menu. World's navigator offers the same
+   button and menu entries on desktop and phone. **Worktree location** there
+   chooses where this repository's new worktrees go.
 3. Create and open a documentation worktree. Herdr World starts it from the latest
-   fetched `origin/main`, without carrying over the source workspace's
+   fetched `origin/main` (a repository without an `origin` starts from the
+   checked-out commit), without carrying over the source workspace's
    uncommitted changes.
 4. In the new worktree's terminal, run `pwd` and `git status`. Confirm the
    directory and branch before starting the agent.

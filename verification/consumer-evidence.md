@@ -853,3 +853,19 @@ confirmation, restart admission and completed-run omission notices. Existing
 manual per-workspace grants remain the permission fence. These consumers do not
 extend the abstract models to filesystem/provider semantics or establish native
 SSH, local configured-root parity, UI smoothness or final integration acceptance.
+
+### Roamgate web candidate (Q06, Q09, Q34, Q42, Q43)
+
+PR3 ports Roamgate's web changes through `2b16e991` with direct consumers and
+changes no model. The terminal-attachment model keeps its accepted bounds. The
+production dispatcher test makes the browser that typed through the pane API the
+clipboard owner, and bridge tests keep at most 20 recently viewed streams warm,
+close one nobody returns to within ten minutes and reuse warm streams on a split
+reattach. Warm streams live in the per-runtime bridge; no new ordering claim
+across generation retirement is made. Worktree consumers run command templates
+with hostile values through a real sh and bind Ranger's preview to the displayed
+location and command. Composer, preference, cache and rendering consumers are
+listed under Q09, Q42 and Q43; the navigator worktree browser case covers
+desktop, phone and an inert stale host. These do not establish phone smoothness,
+real speech engines, native PDF viewers or live multi-server acceptance, which
+remain in the [whole-system plan](../docs/reviews/roamgate-sync-test-plan.md).
