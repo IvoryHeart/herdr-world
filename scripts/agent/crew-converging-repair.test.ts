@@ -287,3 +287,20 @@ test("legacy active confirmations retain raw receipts while missing resume basel
     rmSync(path, { recursive: true, force: true });
   }
 });
+
+test("a retained legacy boundary on a merged PR cannot create a new reconciliation ask", () => {
+  const f = setup({
+    seedCycle: false,
+    settings: {
+      convergingReviews: true,
+      readyAsk: false,
+      reviewJudgmentSeat: "steward",
+      reviewStarts: { "7": { head: SHA.reviewed, at: NOW - 100 } },
+    },
+  });
+  const actions = f.passInput(
+    input({ head: SHA.reviewed, state: "MERGED", posts: [] }),
+  );
+  expect(actions).toEqual([]);
+  expect(f.spawned).toHaveLength(0);
+});

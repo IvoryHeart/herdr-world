@@ -216,6 +216,7 @@ export function crewPass(context: PassContext) {
       }));
       const boundaryError =
         settings.convergingReviews &&
+        input.state === "OPEN" &&
         settings.reviewStarts[String(input.number)]
           ? "Converging reviews retain every historical obligation; legacy reviewStarts requires operator reconciliation before any new review."
           : reviewStartError(
