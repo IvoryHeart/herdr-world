@@ -135,7 +135,7 @@ Herdr; `model` is required and `effort` is optional:
 }
 ```
 
-[The example fragment](../scripts/agent/usage-config.example.json) contains
+The former example configuration fragment contained
 synthetic seats. Expectations come from the operator's assigned roster, rather
 than the model currently observed in a response. Gate tooling can read the same
 field when its consumer is added; usage tooling owns no gate tables or decisions.

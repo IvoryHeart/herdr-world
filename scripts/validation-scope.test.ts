@@ -38,7 +38,7 @@ test("only the explicit agent tooling paths qualify", () => {
     "shared/pullRequest.ts",
     "scripts/check-delivery.ts",
     "scripts/agent.ts",
-    "docs/crew-runbook.md",
+    "docs/retired-runbook.md",
     "scripts/validation-scope.ts",
     "scripts/ci-workflow.test.ts",
     ".github/workflows/ci.yml",

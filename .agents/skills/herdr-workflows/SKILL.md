@@ -8,7 +8,7 @@ description: Operate requested visible Herdr Workflows teams in Herdr World, wit
 Use when the owner requests HWF or visible agent collaboration. This skill does
 not authorize starting agents after an owner has stopped them.
 
-Read the optional visible-team section in `docs/agent-development.md`. Use the
+Read `docs/agent-development.md`. Use the
 existing `.hwf/workflows/agent-delivery.yaml` and installed `hwf` help; inspect
 bundled `hwf skills show herdr-workflow-create` before changing recipe syntax.
 Keep one writer, a navigator when requested, and an independent reviewer.
@@ -17,17 +17,14 @@ follow-up prompts into an HWF-owned turn unless intervention is necessary.
 
 ## Block and return
 
-Run foreground commands through the repo helper:
+Run foreground commands directly:
 
 ```sh
-bun run agent:await --log .agents/hwf/check-001.log -- bun run check
-bun run agent:await --log .agents/hwf/team-001.log -- hwf run agent-delivery --input worktree_dir=/path/to/worktree --input agent_profile=codex --input task_brief='Authorized acceptance slice'
+bun run check
+hwf run agent-delivery --input worktree_dir=/path/to/worktree --input agent_profile=codex --input task_brief='Authorized acceptance slice'
 ```
 
-Choose a fresh log path. The helper waits on child exit, stores full output with
-private file permissions, returns an 8 KiB tail and preserves the exit status.
-It forwards SIGINT/SIGTERM to the immediate child; it is not a process-tree cleanup
-tool. HWF failures can leave agent panes open.
+HWF failures can leave agent panes open.
 
 When the execution tool returns a running session, resume its blocking wait with
 empty input. Do not issue concurrent status probes. Tool timeout means the child

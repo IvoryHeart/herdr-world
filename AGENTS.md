@@ -30,7 +30,7 @@ documents under `docs/specs/` are historical context. For multi-step handoffs
 and review repairs, invoke the repo-local
 [candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md).
 For an optional visible two-agent run, use the
-[Herdr Workflows recipe](docs/agent-development.md#run-an-optional-visible-team).
+[Herdr Workflows skill](.agents/skills/herdr-workflows/SKILL.md).
 
 ## Documentation maintenance
 
