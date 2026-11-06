@@ -68,7 +68,7 @@ every suite. Main always runs the full matrix; its integrated result remains the
 broader acceptance boundary. The hook uses `bun run check:docs`
 only if its local report proves a passed code gate on an ancestor and every
 change since then is eligible Markdown documentation. Behavioral contracts,
-OpenSpec, coverage-owned inputs and the named agent/crew/dispatch runbooks receive
+OpenSpec, coverage-owned inputs and the agent development guide receive
 the code gate even for Markdown edits; executable tooling also receives it.
 Eligible AGENTS.md, CONTRIBUTING.md and skill Markdown follow-ups may use
 `check:docs` under the same ancestral-pass rule. CI runs documentation
