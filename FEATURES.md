@@ -65,7 +65,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     room or table name. These cards reuse the board's status counts and lists
     of waiting agents, questions and unreviewed finishes, scoped to that place.
   - The Town board counts agents across every building in the current Hosts
-    filter, including rooms beyond scene admission: working and finished, plus **items** needing
+    filter and pinned-only selection, including rooms beyond scene admission.
+    Choose **All hosts** and, if **Pinned only** is on, use
+    **Actions → Show all panes** for the whole Town.
+    Counts show working and finished agents, plus **items** needing
     you: blocked agents and open questions, matching the reception tray and
     **Needs you**. A blocked agent with an open question contributes two items.
     It shows spend when a metrics provider

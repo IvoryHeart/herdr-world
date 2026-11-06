@@ -1,5 +1,9 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import {
+  checkTownSummaryScope,
+  townSummaryScopeSnapshot,
+} from "./testing/townSummaryScopeAcceptance";
 import { runDeskRevealCancellationAcceptance } from "./testing/deskRevealCancellationAcceptance";
 import { runDeskRevealAcceptance } from "./testing/deskRevealAcceptance";
 import { checkTownIdleDraws } from "./town/townIdleDraws.browser";
@@ -216,6 +220,7 @@ let heldNotificationGet: {
 } | null = null;
 let offline = false;
 let dense = false;
+let summaryScope: ReturnType<typeof townSummaryScopeSnapshot> | null = null;
 const densePanes: Pane[] = Array.from({ length: 40 }, (_, index) => ({
   ...pane,
   pane_id: index === 0 ? "shared" : `shared-${index}`,
@@ -1436,6 +1441,11 @@ async function operationalScenario(unmount: () => void) {
       !globals.some((call) => call.method === "world.watchlist.unpin"),
       "Filtering dispatched an operational watch mutation",
     );
+    if (requestedView === "town") {
+      summaryScope = townSummaryScopeSnapshot();
+      await worldRuntimeStore.refresh();
+      await checkTownSummaryScope({ check, waitFor, invokeCommand });
+    }
     return;
   }
   if (operation === "spaces") {
@@ -2595,7 +2605,7 @@ async function run() {
       if (method === "world.snapshot")
         return operation === "worktree-resource-cold" && resourceWorkspaceOpen
           ? coldObservation.promise
-          : snapshot();
+          : (summaryScope ?? snapshot());
       if (method === "world.watchlist.list")
         return { revision: watches.length, records: watches };
       if (method === "world.watchlist.pin") {

@@ -113,31 +113,6 @@ test("Summary counts and lists agents in every building with colliding native ID
   expect(summary.hosts.map(({ counts }) => counts.working)).toEqual([1, 1]);
 });
 
-test("Town board counts the complete town even when scene admission shows only one building", async () => {
-  const { createElement } = await import("react");
-  const { renderToStaticMarkup } = await import("react-dom/server");
-  const { TownBoard } = await import("./TownBoard");
-  const { townModelFromProjection } = await import("./townModel");
-  const { connection } = office({ alpha: ["working", "blocked", "done"] });
-  const world = buildWorldObject(
-    [connection, { ...connection, connectionId: "other" }],
-    "studio",
-  );
-  await prepareWorldOffice(world);
-  const projection = projectWorldOffice(world, 1, null, {
-    ...TOWN_PRESENTATION_BOUNDS,
-    rooms: 1,
-  });
-  const model = townModelFromProjection(projection);
-  expect(
-    new Set([...model.agents.values()].map(({ hostKey }) => hostKey)).size,
-  ).toBe(1);
-  const html = renderToStaticMarkup(
-    createElement(TownBoard, { model, observability: NO_METRICS }),
-  );
-  expect(html).toContain("Town board: 2 working, 2 need you, 2 done");
-});
-
 test("room and table summaries reuse board statuses and lists without crossing places or hosts", async () => {
   const { connection } = office({
     alpha: ["working", "blocked", "done", "idle", "unknown", "blocked"],

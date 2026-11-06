@@ -194,7 +194,9 @@ hosts stay usable.
    status; they do not move the underlying pane or change its host. For the
    whole picture, press **Summary** on the Town board (on a phone, tap the
    counts chip under the search bar): totals cover every building in the
-   current Hosts filter, including rooms outside the scene's display limit.
+   current Hosts filter and pinned-only selection, including rooms outside
+   the scene's display limit. Choose **All hosts** and, if **Pinned only**
+   is on, use **Actions → Show all panes** to include the whole Town.
    The **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts, and spend. Answer a question from its offered

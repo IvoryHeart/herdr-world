@@ -176,6 +176,14 @@ has a name; unnamed and multi-agent tabs keep the tab label.
 | New agent and agent profiles | [agentProfiles.ts](agentProfiles.ts) holds the profiles store, launcher calls and the events that open [AgentLauncherDialog.tsx](AgentLauncherDialog.tsx) and [ProfileEditor.tsx](ProfileEditor.tsx), which [WorldControlPlane.tsx](WorldControlPlane.tsx) mounts for every view; [ProfileSprite.tsx](ProfileSprite.tsx) draws a profile's look with Town's sprites, and `townRenderer` dresses agents launched from a profile. | [Browser helper tests](agentProfiles.test.ts) |
 | Town settings or the Town board's cost line | [officePreferences.ts](officePreferences.ts) (shared Inspector opening, Town calm motion), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx) (the optional Prometheus cost metrics), displayed by [TownBoard.tsx](town/TownBoard.tsx). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
 
+Town summary scope is characterized through the full World app in
+[the desktop/phone watch acceptance](testing/townSummaryScopeAcceptance.ts),
+run by [HostsFilter.actions.test.ts](HostsFilter.actions.test.ts). All hosts
+counts both buildings regardless of operational selection; Hosts and
+pinned-only filters narrow the same board, chip and Summary lists.
+[useWorldObservation](useWorldObservation.ts) supplies that scope to Town
+before scene admission.
+
 ### Evidence capture
 
 [useDrawReadiness](useDrawReadiness.ts) adapts committed Town/Board/Desk surfaces to
