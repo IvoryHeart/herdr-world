@@ -278,6 +278,68 @@ export function codexUsage(rollout: string): Record<string, number> | null {
   return total;
 }
 
+/** A saved reviewer can resume in a different detached checkout. */
+function existingClaudeTranscript(
+  cwd: string,
+  session: string,
+  home = claudeHome(),
+) {
+  const preferred = claudeTranscript(cwd, session, home);
+  if (existsSync(preferred)) return preferred;
+  const projects = join(home, "projects");
+  if (!existsSync(projects)) return preferred;
+  return (
+    readdirSync(projects)
+      .map((project) => join(projects, project, `${session}.jsonl`))
+      .find((file) => existsSync(file)) ?? preferred
+  );
+}
+
+/** Convert cumulative session counters into one run's consumption. */
+export function usageSince(
+  total: string | null,
+  baseline?: string | null,
+): string | null {
+  if (baseline === undefined || baseline === null) return total;
+  if (total === null) return null;
+  try {
+    const current = JSON.parse(total) as Record<string, unknown> | null;
+    const previous = JSON.parse(baseline) as Record<string, unknown> | null;
+    if (
+      !current ||
+      !previous ||
+      Array.isArray(current) ||
+      Array.isArray(previous) ||
+      ![...Object.values(current), ...Object.values(previous)].every(
+        (value) =>
+          typeof value === "number" && Number.isFinite(value) && value >= 0,
+      )
+    )
+      return null;
+    for (const [key, value] of Object.entries(previous))
+      if (
+        typeof value === "number" &&
+        (typeof current[key] !== "number" || (current[key] as number) < value)
+      )
+        return null;
+    return JSON.stringify(
+      Object.fromEntries(
+        Object.entries(current).map(([key, value]) => [
+          key,
+          typeof value === "number"
+            ? value -
+              (typeof previous[key] === "number"
+                ? (previous[key] as number)
+                : 0)
+            : value,
+        ]),
+      ),
+    );
+  } catch {
+    return null;
+  }
+}
+
 export type SessionRoots = { claude?: string; codex?: string };
 
 /** Read the named harness session; file timestamps are not activity evidence. */
@@ -293,7 +355,7 @@ export function readTranscript(
   try {
     const path =
       run.harness === "claude"
-        ? claudeTranscript(run.cwd, run.session, roots.claude)
+        ? existingClaudeTranscript(run.cwd, run.session, roots.claude)
         : codexRollouts(roots.codex).find((file) =>
             file.endsWith(`-${run.session}.jsonl`),
           );

@@ -2,7 +2,7 @@ import { closeSync, openSync } from "node:fs";
 import { join } from "node:path";
 import { runProcess, type Run } from "../gate/observe";
 import type { StoredRun } from "./store";
-import { readUsage } from "./worker";
+import { readUsage, usageSince } from "./worker";
 import { readProgress } from "./progress";
 
 /**
@@ -108,7 +108,10 @@ export const realDeps: Deps = {
       : null;
   },
   usage: (run, cwd) =>
-    readUsage({ harness: run.harness, session: run.session, cwd }),
+    usageSince(
+      readUsage({ harness: run.harness, session: run.session, cwd }),
+      run.usageBaseline,
+    ),
   progress: readProgress,
   alive(pid) {
     try {

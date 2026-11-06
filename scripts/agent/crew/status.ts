@@ -58,7 +58,7 @@ export function status(
   out("recent runs");
   for (const entry of recentRuns(crew, 10))
     out(
-      `  run ${entry.id}\t#${entry.pr} ${entry.reviewer} @${shortSha(entry.head)} ${entry.finishedAt === null ? "running" : `exit ${entry.exitCode}`}${entry.usage ? ` usage ${entry.usage}` : ""}`,
+      `  run ${entry.id}\t#${entry.pr} ${entry.reviewer} @${shortSha(entry.head)} ${entry.finishedAt === null ? "running" : `exit ${entry.exitCode}`}${entry.usageBaseline === "null" ? " usage unknown (resume baseline unavailable)" : entry.usage ? ` usage ${entry.usage}` : ""}`,
     );
 }
 
@@ -163,7 +163,9 @@ export function spend(
     map.set(key, (map.get(key) ?? 0) + tokens);
   let total = 0;
   for (const entry of runs) {
-    const tokens = runTokens(entry.usage);
+    const tokens = runTokens(
+      entry.usageBaseline === "null" ? null : entry.usage,
+    );
     total += tokens;
     const labels = labelsOf(entry.pr);
     const named = (prefix: string) =>
@@ -179,9 +181,14 @@ export function spend(
       add(groups.track, track, tokens);
   }
   const format = (value: number) => value.toLocaleString("en-US");
+  const unknown = runs.filter((run) => run.usageBaseline === "null").length;
   out(
-    `reviewer tokens, last ${hours} h: ${format(total)} in ${runs.length} run(s)`,
+    `reviewer tokens, last ${hours} h: ${format(total)}${unknown ? " known" : ""} in ${runs.length} run(s)`,
   );
+  if (unknown)
+    out(
+      `  usage unknown for ${unknown} resumed run(s); historical totals preserved`,
+    );
   if (!runs.length) return;
   for (const [name, map] of Object.entries(groups))
     out(

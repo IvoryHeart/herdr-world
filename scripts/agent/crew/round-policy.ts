@@ -102,7 +102,18 @@ export function roundPolicy(context: RoundContext): Action[] {
         text: `NEEDS-OWNER #${input.number}: non-main base ${input.item.pr.baseRef} requires explicit stack reconciliation; no review or fixer launched.`,
       },
     ];
-  const cycles = adoptCycles(context);
+  if (settings.convergingReviews && settings.reviewStarts[String(input.number)])
+    return [
+      {
+        pr: input.number,
+        head,
+        kind: "judgment",
+        target: "owner",
+        key: `${input.number}:${head}:judgment:owner:review-boundary`,
+        text: `NEEDS-OWNER #${input.number}: legacy reviewStarts requires reconciliation; full historical findings and original reviewer continuity remain held.`,
+      },
+    ];
+  const { cycles, ambiguous } = adoptCycles(context);
   const last = cycles.at(-1);
   const reviews = context.actions.filter((action) =>
     REVIEW_KINDS.has(action.kind),
@@ -138,6 +149,10 @@ export function roundPolicy(context: RoundContext): Action[] {
       text: `NEEDS-OWNER #${input.number}: ${reason}`,
     },
   ];
+  if (ambiguous)
+    return judgment(
+      "Repeated manual RESULTs on the same reviewed SHA do not establish unambiguous review cohorts or round count; hold for operator reconciliation instead of another round.",
+    );
   if (
     settings.convergingReviews &&
     input.history.some(

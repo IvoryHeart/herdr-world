@@ -71,11 +71,18 @@ export function reviewObservation(
   now: number,
 ) {
   const inputs = observed.inputs.map((input) =>
-    reviewInput(input, settings.reviewStarts[String(input.number)]),
+    reviewInput(
+      input,
+      settings.convergingReviews
+        ? undefined
+        : settings.reviewStarts[String(input.number)],
+    ),
   );
   const verdicts = observed.verdicts.map((verdict) => {
     const input = inputs.find((input) => input.number === verdict.number);
-    return input && settings.reviewStarts[String(input.number)]
+    return input &&
+      !settings.convergingReviews &&
+      settings.reviewStarts[String(input.number)]
       ? evaluate(input, config, now)
       : verdict;
   });

@@ -64,6 +64,8 @@ export type StoredRun = {
   finishedAt: number | null;
   exitCode: number | null;
   usage: string | null;
+  /** Resume-time cumulative usage; JSON null means an unknown baseline. */
+  usageBaseline?: string | null;
 };
 
 /** `busyMs`: how long a pass waits for another process's pass to finish acting. */
@@ -117,9 +119,13 @@ export function openCrewStore(path: string, busyMs = 120_000) {
     ["result", "TEXT"],
     ["cwd", "TEXT"],
     ["progress_at", "INTEGER"],
+    ["usage_baseline", "TEXT"],
   ])
     if (!columns.includes(name))
       db.exec(`ALTER TABLE run ADD COLUMN ${name} ${type}`);
+  if (!columns.includes("usage_baseline"))
+    db.exec(`UPDATE run SET usage_baseline = 'null' WHERE finished_at IS NULL AND session IS NOT NULL
+      AND action_key IN (SELECT key FROM action WHERE kind = 'confirm')`);
   // A pod's rounds: each head reviewed on a PR gets one Herdr tab, which
   // stays until the PR merges or closes.
   db.exec(`
@@ -273,6 +279,7 @@ type RunRow = {
   finished_at: number | null;
   exit_code: number | null;
   usage: string | null;
+  usage_baseline: string | null;
 };
 
 function run(row: RunRow): StoredRun {
@@ -297,6 +304,9 @@ function run(row: RunRow): StoredRun {
     finishedAt: row.finished_at,
     exitCode: row.exit_code,
     usage: row.usage,
+    ...(row.usage_baseline !== null
+      ? { usageBaseline: row.usage_baseline }
+      : {}),
   };
 }
 
@@ -429,6 +439,18 @@ export function roundClosed(db: Database, pr: number, round: number | null) {
     )
     .get(pr, round ?? -1);
   return row ? row.closed_at !== null : true;
+}
+
+/** Persist before exposing the resumed session, so watcher reads cannot charge old rounds. */
+export function setRunUsageBaseline(
+  db: Database,
+  id: number,
+  usage: string | null,
+) {
+  db.query("UPDATE run SET usage_baseline = ? WHERE id = ?").run(
+    usage ?? "null",
+    id,
+  );
 }
 
 export function setRunResult(db: Database, id: number, result: string) {

@@ -24,6 +24,7 @@ import {
   setRunPid,
   setRunCwd,
   setRunSession,
+  setRunUsageBaseline,
   type StoredRun,
 } from "./store";
 import {
@@ -33,6 +34,7 @@ import {
   readUsage,
   reviewerArgv,
   reviewerPrompt,
+  usageSince,
 } from "./worker";
 
 /**
@@ -214,17 +216,23 @@ export async function review(options: Options, dir: string, deps: Deps) {
     show(
       `${reviewer} ${options.since ? "confirms" : "reviews"} #${pr} at ${shortSha(head)} (${model.model}); type here to steer it`,
     );
-    const retained =
+    const retainedRun =
       settings.convergingReviews && options.since
-        ? (runsOf(crew, pr).findLast(
+        ? runsOf(crew, pr).find(
             (run) =>
               run.id !== runId &&
               run.reviewer === reviewer &&
               !run.cwd &&
               run.session &&
               run.harness === harness &&
-              run.model === model.model,
-          )?.session ?? settings.reviewerSessions?.[String(pr)]?.[reviewer])
+              run.model === model.model &&
+              run.finishedAt !== null,
+          )
+        : undefined;
+    const retained =
+      settings.convergingReviews && options.since
+        ? (settings.reviewerSessions?.[String(pr)]?.[reviewer] ??
+          retainedRun?.session)
         : undefined;
     if (settings.convergingReviews && options.since && !retained)
       throw new Error(
@@ -240,6 +248,9 @@ export async function review(options: Options, dir: string, deps: Deps) {
       {
         exitOnResult: options.command !== "process",
         resume: retained ?? undefined,
+        ...(retainedRun && retainedRun.session === retained
+          ? { baselineCwd: checkoutOf(dir, retainedRun) }
+          : {}),
       },
     ));
   } catch (error) {
@@ -296,6 +307,8 @@ export async function runSession(
   options: {
     exitOnResult?: boolean;
     resume?: string;
+    usage?: typeof readUsage;
+    baselineCwd?: string;
     spawn?: (
       argv: string[],
       cwd: string,
@@ -305,6 +318,13 @@ export async function runSession(
   const harness = harnessOf(model) ?? "codex";
   const session =
     options.resume ?? (harness === "claude" ? randomUUID() : null);
+  const usageReader = options.usage ?? readUsage;
+  if (options.resume)
+    setRunUsageBaseline(
+      crew,
+      runId,
+      usageReader({ harness, session, cwd: options.baselineCwd ?? cwd }),
+    );
   setRunSession(crew, runId, harness, model.model, session);
   const started = Date.now();
   // Ctrl-C in the pane is for the harness; this process waits for it.
@@ -351,7 +371,10 @@ export async function runSession(
   const run = getRun(crew, runId);
   const code =
     options.exitOnResult && run?.result && run.finishedAt !== null ? 0 : exited;
-  const usage = readUsage({ harness, session: run?.session ?? null, cwd });
+  const usage = usageSince(
+    usageReader({ harness, session: run?.session ?? null, cwd }),
+    run?.usageBaseline,
+  );
   show(
     `── session ended (exit ${code}) · ${run?.result ?? (run?.cwd ? "fixer" : "no RESULT posted")}`,
   );

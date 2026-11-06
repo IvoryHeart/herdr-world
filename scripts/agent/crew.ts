@@ -214,14 +214,18 @@ export function crewPass(context: PassContext) {
         url: check.url!,
         minutes: Math.floor((now - (since.get(check.url!) ?? now)) / 60_000),
       }));
-      const boundaryError = reviewStartError(
-        input,
-        settings.reviewStarts[String(input.number)],
-        now,
-        crew,
-        deps.run,
-        join(dir, "mirror.git"),
-      );
+      const boundaryError =
+        settings.convergingReviews &&
+        settings.reviewStarts[String(input.number)]
+          ? "Converging reviews retain every historical obligation; legacy reviewStarts requires operator reconciliation before any new review."
+          : reviewStartError(
+              input,
+              settings.reviewStarts[String(input.number)],
+              now,
+              crew,
+              deps.run,
+              join(dir, "mirror.git"),
+            );
       if (boundaryError) {
         verdict.conditions.push({
           id: "crew-review-boundary",

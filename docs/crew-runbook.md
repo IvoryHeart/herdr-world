@@ -165,6 +165,15 @@ it never launches a replacement cohort. Existing histories and findings remain
 binding. Adoption of an older manual review still requires signed replies to
 every finding and ten genuinely observed quiet minutes.
 
+Converging mode retains full historical obligations: an active PR's legacy
+`reviewStarts` boundary is held for explicit reconciliation rather than filtering
+its earlier findings. Repeated manual RESULTs on one SHA are held when the
+recorded cohorts do not establish how many rounds occurred; a SHA is not a round.
+Resumed reviewer usage records a durable pre-resume session baseline and reports
+only that run's increment in worker and watcher completion paths. An unavailable
+baseline is unknown usage, never a fabricated zero or the full session charge;
+old active confirmations without a captured baseline remain explicitly unknown.
+
 A completed third round with unresolved findings sends the actual finding list
 to `firstmate-2` and holds further rounds. Ensure that seat is not in
 `crew.neverPrompt`. This mode never starts an automatic evaluator; retained

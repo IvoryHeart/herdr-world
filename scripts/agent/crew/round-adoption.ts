@@ -9,11 +9,43 @@ import type { Action } from "./plan";
 import { roundAfterStart, reviewRound } from "./review-boundary";
 
 /** Upgrade old stores from real reviewer runs, excluding fixer/auxiliary runs. */
-export function adoptCycles(context: RoundContext) {
+export function adoptCycles(context: RoundContext): {
+  cycles: ReviewCycle[];
+  ambiguous: boolean;
+} {
   const { crew, input, now, dryRun } = context;
   const start = context.settings.reviewStarts[String(input.number)];
   let cycles = reviewCycles(crew, input.number);
-  if (cycles.length) return cycles;
+  const counts = new Map<string, Set<string>>();
+  for (const claim of input.history) {
+    if (
+      !claim.reviewer ||
+      !claim.commit ||
+      typeof claim.line !== "string" ||
+      !claim.line.trim()
+    )
+      continue;
+    const key = `${claim.reviewer}:${claim.commit}`;
+    const group = counts.get(key) ?? new Set<string>();
+    group.add(claim.url);
+    counts.set(key, group);
+  }
+  const reviewWork = context.actions.some((action) =>
+    ["review", "confirm", "fix"].includes(action.kind),
+  );
+  const ambiguous = Boolean(
+    context.settings.convergingReviews &&
+      reviewWork &&
+      [...counts].some(([key, claims]) => {
+        const represented = cycles.filter((cycle) =>
+          cycle.reviewers.some(
+            (reviewer) => `${reviewer}:${cycle.head}` === key,
+          ),
+        ).length;
+        return claims.size > Math.max(1, represented);
+      }),
+  );
+  if (cycles.length || ambiguous) return { cycles, ambiguous };
   const runs = runsOf(crew, input.number);
   const actions = actionsIn(crew, [
     "pending",
@@ -131,5 +163,5 @@ export function adoptCycles(context: RoundContext) {
       if (!dryRun) saveCycle(crew, cycle);
     }
   }
-  return cycles;
+  return { cycles, ambiguous: false };
 }
