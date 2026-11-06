@@ -1,6 +1,23 @@
 import { type ConnectionClient, UncertainRequestError } from "./api";
 import { store } from "./store";
 
+export function focusTerminalEndpoint(
+  client: ConnectionClient,
+  terminalId: string | undefined,
+) {
+  if (
+    !terminalId ||
+    !client.isCurrent() ||
+    !store
+      .getConnection(client.connectionId)
+      .endpointAvailability[terminalId]?.methods.includes("pane.focus")
+  )
+    return;
+  void client
+    .call("terminal.focus", { terminal_id: terminalId })
+    .catch(() => null);
+}
+
 const reported = new Map<string, number>();
 const NOTICE_INTERVAL_MS = 3000;
 

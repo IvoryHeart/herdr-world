@@ -13,6 +13,8 @@ export function createTerminalRenderer(
     scroll(direction: "up" | "down", lines: number): Promise<unknown>;
     changed(message: string): void;
   },
+  /** `written`: a frame reached the terminal (opt-in echo latency samples). */
+  hooks: { written?: () => void } = {},
 ) {
   let disposed = false;
   const term = new Terminal({
@@ -40,6 +42,7 @@ export function createTerminalRenderer(
     () => term.hasSelection() || historySelection.active,
     (text, parsed, linksChanged) =>
       term.write(text, () => {
+        hooks.written?.();
         parsed();
         if (!disposed && linksChanged) term.refresh(0, term.rows - 1);
       }),

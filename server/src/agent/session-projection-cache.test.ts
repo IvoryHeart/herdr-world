@@ -40,8 +40,17 @@ function fixture(agent = "pi") {
     async findCodexSessionByPrefix() {
       return null;
     },
+    async findPiSessionForCwd() {
+      return null;
+    },
     async findPiSessionById() {
       return file;
+    },
+    async findClaudeSessionById() {
+      return file;
+    },
+    async findClaudeSuccessor() {
+      return null;
     },
     async findCodexSessionById() {
       return file;

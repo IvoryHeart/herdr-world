@@ -556,6 +556,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   open a labelled Inspector with an explicit Reveal in Hosts action.
 - Open Inspectors, terminal buffers, split geometry and same-runtime Message
   drafts survive browser transport disconnects, including mobile backgrounding.
+  When a connection reconnects to the same destination, an unsent draft moves
+  to the same terminal in the new runtime. Drafts stay in memory only, so a
+  reload starts empty.
   Last observations show a disconnected indicator and stay non-actionable until
   fresh admission. Terminal recovery offers **Retry terminal** and an explicit
   **Reload app**; a no-frame watchdog never reloads the page automatically.
@@ -849,6 +852,16 @@ root and revalidate its qualified binding before acting.
   workspaces and create, rename, colour, switch, or close tabs.
 - Group linked Git worktrees under their repository. Pin workspaces/worktrees
   to the top and collapse groups; preferences stay in this browser.
+- With more than one server connected, the Spaces workspace list's heading
+  switches between **Current** and **All servers**. All servers lists every
+  ready connection's workspaces and agents from World's shared observation,
+  labels each with its server and keeps worktrees nested. Selecting a row opens
+  its server; another server's menu only navigates. Stale hosts stay out, and a
+  failed observation shows its error. World's navigator keeps one tree per host.
+- Workspace rows show numbered tab chips with each tab's agent status, folding
+  extra tabs into **+N**, and keep the server badge in the right column. In
+  Spaces a chip focuses its tab; in World's navigator it selects the workspace
+  without moving Herdr's focus.
 - Split panes right/down, resize boundaries, focus neighbors, zoom, or close.
   Drag a pane handle onto another tab in the same workspace, onto a pane edge
   in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
@@ -896,11 +909,13 @@ macOS preset; see [other platform bindings](#keyboard-shortcuts).
 ### Pane Search
 
 `Alt+K` opens search over every live pane on the selected connection, including
-panes absent from the recent switcher. Filter by workspace, tab, cwd, agent name,
-or status. Search terms can appear in any order and must all match; results
-retain their recent-first order. Use Up/Down or Tab/Shift+Tab to choose, Enter to
-switch, and `Alt+K` or Esc to close. Releasing the opening modifier does not
-commit a search selection. Press K in the recent switcher to convert it to search.
+panes absent from the recent switcher, and agents on the other ready servers;
+choosing one of those opens its server's pane. Filter by workspace, tab, cwd,
+agent name, or status. Search terms can appear in any order and must all match;
+results retain their recent-first order. Use Up/Down or Tab/Shift+Tab to choose,
+Enter to switch, and `Alt+K` or Esc to close. Releasing the opening modifier
+does not commit a search selection. Press K in the recent switcher to convert it
+to search.
 
 ## Full Browser Terminal
 
@@ -925,8 +940,13 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   until cleared, then catches up. Drag past pane edges to scroll and copy
   offscreen rows. Release or blur stops scrolling; if output changes, finish
   the selection before scrolling further. Pixel mouse is unsupported.
+- On macOS, **Menu → Configuration → Behavior → Option key as Alt in terminals**
+  makes Option send Alt-modified keys instead of typing characters such as @,
+  [ and ~. It is off by default and saved in this browser.
 - Paste clipboard images to upload to the Herdr host and insert their paths,
-  including through `--ssh-host`.
+  including through `--ssh-host`. When a composer sends an uploaded image's
+  path, the path goes to the agent on its own and Enter waits for it, so Claude
+  Code attaches the image instead of dropping the message.
 - Native `Ctrl+V` (`⌘V` on macOS) pastes text or files even on plain-HTTP LAN
   addresses. On plain-HTTP addresses, a configured `Ctrl+Shift+V` on Windows
   and Linux also uses the browser's native plain-text paste where supported;
@@ -947,10 +967,17 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   text size: it follows the terminal font size until changed, and its value
   button links it back.
 - Show Herdr session popup panes over the active workspace when a plugin opens
-  a modal interaction.
+  a modal interaction. A plugin popup first focuses Herdr on the Space it was
+  opened for, so it shows where you are looking even when Herdr's own focus
+  was elsewhere.
+- Switch back to a recently viewed pane without waiting: the service keeps up
+  to 20 recently viewed terminal streams open for 10 minutes without viewers.
+  They belong to their connection's runtime and close with it.
 - Relay terminal OSC 52 clipboard writes. Herdr 0.9.0 follows the foreground
   recipient, not proven originating-pane ownership; see
-  [clipboard compatibility](docs/DEPLOYMENT.md#herdr-compatibility).
+  [clipboard compatibility](docs/DEPLOYMENT.md#herdr-compatibility). A write
+  made by a command that a composer sent returns to the browser that sent it,
+  on the same connection and terminal. Clipboard reads stay refused.
 - `Cmd/Ctrl`-click HTTP(S) links to open safely in a new tab, or workspace-relative
   / absolute paths to preview text, Markdown, or images. Wrapped paths remain
   one link, including indented continuations in agent output. Windows drive and
@@ -975,6 +1002,11 @@ branch/worktree, and checkout path. Inspector and Annotations leave the primary
 sidebar's visibility unchanged. Workspace rows show the latest PR/MR status while
 keeping workspace names visible; Inspector commit navigation preserves focus and
 refreshes Files after changes. PR/MR refreshes keep the current badge visible.
+Badges also survive reloads and reconnects: the last known status stays visible
+as stale, and not actionable, until a fresh lookup on a ready connection
+replaces it. The browser keeps that cache per connection and destination, with
+only what badges and links show. Badge lookups wait behind interactive
+requests, and identical lookups share one answer.
 A failed refresh leaves the last known result dimmed with its successful check
 time; the status card marks it **Last known**. This fallback belongs to the same
 host, runtime, workspace, checkout and branch; changing targets clears it. A paused branch rebase can retain
@@ -1067,6 +1099,13 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   a line and **Send** sends. A working, blocked or unknown agent first requires
   **Send anyway**. This types into the selected terminal and has no Chat receipt.
   The primary Chat tab keeps its session-binding and permission-answer checks.
+- Details' **Chat** view can read an agent reply aloud with **Speak**. Unless
+  you choose a voice in **Menu → Configuration → Behavior → Speech**, only an
+  on-device voice is used. A network voice, labelled there, can send the reply
+  text to the browser vendor and is used only when chosen. A saved voice that
+  disappears falls back to an on-device voice, never a network one, and a
+  browser without one says so instead of speaking. The same settings set the
+  speaking rate; playback may stop while the browser is in the background.
 - Codex launch commands default to `codex --no-daemon`, so integration hooks
   inherit the selected pane's environment. Install the Codex integration on that
   host and resume existing shared-daemon conversations in this mode. See
@@ -1092,14 +1131,15 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   Inspector offers Timeline, searchable ATIF/raw transcripts, and original-file
   or normalized ATIF export.
 
-Readers exist for **Codex, Claude, Kimi, Grok Build, Pi, Muse Code, Antigravity CLI**; Codex,
+Readers exist for **Codex, Claude, Kimi, Grok Build, Pi, Oh My Pi, Muse Code, Antigravity CLI**; Codex,
 Claude and Pi are checked against real transcripts (see the [harness matrix](docs/CHAT.md#harness-matrix)). Missing Herdr integration metadata shows the integration command.
 Codex 0.157 and later run conversations in a shared background service, so
 Herdr's hook cannot say which pane shows which one. Run `/title` in Codex and
 add Thread ID: History then reads the conversation from the pane's title, and
 shows nothing rather than guess when the title does not identify exactly one.
 With `--ssh-host`, Herdr-reported paths and Claude, Pi and Codex ID lookups read remotely.
-Claude requires a unique session UUID match in that host's `~/.claude/projects/`;
+SSH Claude lookup requires a unique UUID match under that host's
+`CLAUDE_CONFIG_DIR/projects`, or `~/.claude/projects/` when unset;
 missing or ambiguous transcripts never fall back to this machine's files. Other
 ID/directory fallbacks (including Grok Build and Antigravity CLI discovery) remain local and need
 locally accessible transcripts.
@@ -1107,14 +1147,31 @@ locally accessible transcripts.
 ## Git Worktree Lifecycle
 
 - Create a linked worktree from freshly fetched `origin/main` without changing
-  the source branch or dirty files; discover/open existing worktrees.
+  the source branch or dirty files; a repository without an `origin` branches
+  from its checked-out commit. Discover/open existing worktrees.
 - See checkout paths, open/closed state, branch status, and uncommitted counts.
 - Focus open worktrees, run `git pull`, or enable per-checkout branch updates.
 - Remove linked worktrees with confirmation, hooks, process cleanup, and recovery
   that preserves residual files when safe removal fails.
 
 Open **Worktree Lifecycle** from a workspace context menu or search
-`worktree lifecycle` in the command menu.
+`worktree lifecycle` in the command menu. In World's navigator, repository
+workspaces offer the same button and create/remove menu entries on desktop and
+phone; a stale or failed host shows them but leaves them inert. The workspace
+list clips long worktree and branch names at the start, so their distinctive
+end stays visible.
+
+Each repository can choose where its new worktrees go with **Worktree
+location** (workspace context menu, command menu or Worktree Lifecycle); empty
+keeps Herdr's default. **Menu → Configuration → Instance** sets a **New
+worktree command** and a **Remove worktree command** that run from the source
+repository on the workspace's host instead of Herdr's own creation and
+removal; after a removal command, Herdr closes the workspace. `{path}`,
+`{branch}`, `{base}` and `{repo}` are replaced shell-quoted, and `{force}`
+becomes `--force` for a forced removal. A repository's own **Worktree
+command** and **Remove command**, set in Worktree Lifecycle, win; leave them
+empty to let Herdr do it. These settings belong to the workspace's connection.
+Ranger can run a configured command but never set one.
 
 ### Paseo Worktree Hooks
 
@@ -1200,8 +1257,10 @@ is open in the current connection.
   leading `/` resolves from the filesystem root.
   External links open a new browser tab.
 - Preview SVG, PNG/APNG, JPEG, GIF, WebP, BMP, ICO, and AVIF images with zoom and
-  Fit controls, plus PDFs and workspace-local Markdown images. Unsupported
-  binaries remain download-only; image decoding depends on the browser.
+  Fit controls, plus PDFs and workspace-local Markdown images. Phones and other
+  browsers without a PDF viewer draw a PDF three pages at a time, with Previous
+  pages and Next pages. Unsupported binaries remain download-only; image
+  decoding depends on the browser.
 - Drag uploads onto the root/directory. Download files or workspace-scoped
   `.tar.gz` directories; copy absolute paths; delete with confirmation.
   Open actions by right-click or touch long-press.
@@ -1328,10 +1387,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 
 ## Remote, Multi-Client, and Operations
 
-- Manage shared local/SSH profiles with independent browser selection. Disconnect
-  does not stop Herdr/workspaces. Linux/macOS `--ssh-host` forwards control and
-  render sockets; Windows supports native local profiles, not SSH forwarding.
-  See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
+- Manage shared local/SSH profiles with independent browser selection. A
+  browser starts on the connection it last used while that connection still
+  exists, otherwise on the service's default; phones still open on Town.
+  Disconnect does not stop Herdr/workspaces. Linux/macOS `--ssh-host` forwards
+  control and render sockets; Windows supports native local profiles, not SSH
+  forwarding. See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
@@ -1366,7 +1427,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   per appearance mode in **Menu → Appearance → Terminal theme**. Built-ins
   include Solarized, Dracula, One Dark, Nord, Tokyo Night, Catppuccin, and GitHub;
   custom themes set base/ANSI colors. Themes apply live to all terminals and save
-  per browser. **Text size** scales the UI from 80% to 150%, including mobile.
+  per browser. **Menu → Configuration → Appearance → Black background** uses
+  pure black instead of blue-grey for the interface and terminals in the dark
+  theme, from the first paint. **Text size** scales the UI from 80% to 150%,
+  including mobile.
 - Manage a user service from the CLI; check releases and run checksum-verified
   one-click standalone updates under a supported supervisor. Probe `/health` or
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
@@ -1396,8 +1460,11 @@ See the [desktop](docs/screenshots/keyboard-shortcuts-desktop.png) and
   an action. Editing built-ins creates a custom copy. Overlapping conflicts are
   rejected while ordinary typing, IME, and dialog dismissal stay available.
 - **Save as** creates named presets; **Active preset** switches them. Edits save
-  immediately and sync to same-origin tabs. **Export/Import** transfers JSON
-  between browsers; deleting a custom preset returns to Automatic.
+  immediately on the World service and follow you to every browser, even
+  while the selected Herdr connection is offline. A custom preset applies only
+  on the platform it was written for; elsewhere that platform's defaults
+  apply. **Export/Import** transfers presets as JSON; deleting a custom preset
+  returns to Automatic.
 - Letter/number bindings use physical keys, unaffected by modifier-produced
   characters. Recording captures only keys the page receives; choose alternatives
   for browser/OS-reserved shortcuts, including macOS tab shortcuts.
@@ -1452,6 +1519,13 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
 - Ranger reads explicitly permitted workspaces across local and SSH connections,
   chats with a configured model, and proposes actions for manual confirmation.
   An explicit high-permission mode can execute supported operations automatically.
+- Ranger can use the service account's signed-in Claude Code CLI as a provider,
+  alongside the existing model providers. Its tools retain World's workspace
+  permissions, connection/runtime qualification and action confirmations.
+- Ranger can show a workspace or session in the asking browser's shared Inspector;
+  other windows stay where they are, and unavailable targets report an error.
+- Scheduled tasks can explicitly follow all authorized workspaces, including new
+  ones, with a fresh captured scope for each run.
 - While Ranger answers, **Steer** or Enter adds a message after its current step;
   **Queue** or Alt+Enter (Option+Enter on macOS) waits for the next answer. Up to
   eight waiting messages can be edited or removed. Stop, failure or a chat switch
@@ -1470,8 +1544,20 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
 
 ## Latest upstream additions
 
+- Read local Oh My Pi transcripts, Pi directory-inferred history in read-only mode,
+  Claude continuation transcripts and queued-message state. SSH transcript reads
+  reuse cached bytes and fetch appended text while keeping World's history bounds.
+
 - Ranger workspace/agent mentions, quick model and thinking controls, task-management
   previews, guarded close actions, and clearer settings/chat history.
 - Windows Herdr 0.9.1+ hosts over SSH from Linux/macOS World, with native terminal
   and workspace actions. Unix-only remote file and Git tools remain unavailable.
 - Optional private-network PIN login with independent session signing and recovery.
+
+## SSH responsiveness
+
+SSH runtimes share a private command connection while terminal transport stays
+independent. Background reads leave command slots available for interactive work;
+Git status refreshes in the background, and large untracked-file lists avoid a
+command per file. Stalled sessions end through keepalives. See
+[SSH setup and operator controls](docs/DEPLOYMENT.md#ssh-command-sharing-and-port-forwards).

@@ -2,14 +2,15 @@ import { harnessReadiness } from "../agent/harness-readiness";
 import { agentKinds } from "../agent/launch";
 import { discoverSkills } from "../agent/skills";
 import { CONNECTION_CHANGED_DURING_REQUEST } from "../connections/protocol";
-import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
+import { shQuote } from "../utils/process-utils";
+import type { RunProcessWithCodeTimeout } from "../workspace/file-types";
 import type { ConnectionRpcContext } from "./context";
 
 /** Capture the admitted host once; discovery must not retarget a replacement. */
 export async function probeLauncher(
   rpc: ConnectionRpcContext,
   includeSkills: boolean,
-  run = runProcessWithCodeTimeout,
+  run: RunProcessWithCodeTimeout,
 ) {
   const current = () => {
     if (!rpc.requestIsCurrent())

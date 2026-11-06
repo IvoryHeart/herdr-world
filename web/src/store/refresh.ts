@@ -1,3 +1,8 @@
+import {
+  type GitStatusPush,
+  parseGitStatusPush,
+  withGitStatuses,
+} from "../gitStatusPush";
 import { bridge } from "../api";
 import { recordFocusedRead } from "./focusedInterest";
 import {
@@ -25,12 +30,28 @@ import { pickActiveTabId, stabilizeRefreshPatch } from "./sessions";
 
 const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const refreshingConnectionKeys = new Set<string>();
+export const gitStatusPushesDuringRefresh = new Map<string, GitStatusPush>();
 const refreshCompletions = new Map<
   string,
   { promise: Promise<void>; resolve(): void }
 >();
 const queuedConnectionKeys = new Set<string>();
 const focusActionChains = new Map<string, Promise<unknown>>();
+
+export function applyGitStatusPush(lease: StoreConnectionLease, data: unknown) {
+  const push = parseGitStatusPush(data);
+  if (!push || !leaseIsCurrent(lease)) return;
+  const key = `${lease.connectionId}:${lease.generation}`;
+  if (refreshingConnectionKeys.has(key)) {
+    const pending = gitStatusPushesDuringRefresh.get(key) ?? new Map();
+    for (const [path, status] of push) pending.set(path, status);
+    gitStatusPushesDuringRefresh.set(key, pending);
+  }
+  const snapshot = leaseSnapshot(lease);
+  const workspaces = withGitStatuses(snapshot.workspaces, push);
+  if (workspaces !== snapshot.workspaces)
+    setForConnection(lease, { workspaces });
+}
 
 function enqueueFocusAction<T>(
   fn: () => Promise<T>,
@@ -89,6 +110,7 @@ function settlePendingFocusWorkspace(seq: number): void {
 async function refreshNow(
   lease = captureConnectionLease(),
   waitForRunning = false,
+  background = false,
 ) {
   if (
     leaseSnapshot(lease).connectionPaused ||
@@ -124,8 +146,13 @@ async function refreshNow(
   let complete = true;
   const options =
     bridge.hello?.capabilities.world_shared_acquisition === true
-      ? { focusedObservation: true }
-      : undefined;
+      ? {
+          focusedObservation: true,
+          ...(background ? { lane: "background" as const } : {}),
+        }
+      : background
+        ? { lane: "background" as const }
+        : undefined;
   try {
     const [wsRes, tabRes, paneRes, agentRes] = await Promise.all([
       lease.client.call("workspace.list", {}, undefined, options),
@@ -311,6 +338,12 @@ async function refreshNow(
         state.agentActivityHistory,
       ),
     );
+    const overlappingGitStatuses = gitStatusPushesDuringRefresh.get(refreshKey);
+    if (overlappingGitStatuses && next.workspaces)
+      next.workspaces = withGitStatuses(
+        next.workspaces,
+        overlappingGitStatuses,
+      );
     const patch = stabilizeRefreshPatch(leaseSnapshot(lease), next);
     if (
       !setForConnection(lease, {
@@ -330,6 +363,7 @@ async function refreshNow(
     recordFocusedRead(lease, false);
   } finally {
     refreshingConnectionKeys.delete(refreshKey);
+    gitStatusPushesDuringRefresh.delete(refreshKey);
     refreshCompletions.delete(refreshKey);
     completion.resolve();
     if (queuedConnectionKeys.delete(refreshKey) && leaseIsCurrent(lease)) {
@@ -359,7 +393,7 @@ function scheduleRefresh(lease = captureConnectionLease()) {
     key,
     setTimeout(() => {
       refreshTimers.delete(key);
-      if (leaseIsCurrent(lease)) void refreshNow(lease);
+      if (leaseIsCurrent(lease)) void refreshNow(lease, false, true);
     }, 80),
   );
 }

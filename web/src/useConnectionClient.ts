@@ -1,10 +1,20 @@
-import { createContext, useContext, useMemo } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useSyncExternalStore,
+} from "react";
 import { bridge, type ConnectionClient } from "./api";
 import { resourcePresentationScope } from "./resourcePresentationClient";
-import { OperationalContext, useStoreSelector } from "./store";
+import { OperationalContext, store, useStoreSelector } from "./store";
 
 export const ResourceConnectionClientContext =
   createContext<ConnectionClient | null>(null);
+
+/** Catalog restoration can make the same client usable after socket hello. */
+export function useConnectionReady(client: ConnectionClient): boolean {
+  return useSyncExternalStore(store.subscribe, client.isCurrent);
+}
 
 /** Captures the active browser routing lease for component-owned work. */
 export function useConnectionClient(): ConnectionClient {

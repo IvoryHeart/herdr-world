@@ -21,7 +21,11 @@ import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
 import { paneAgentName } from "../agentName";
 import { MobileTerminalIdentity } from "./MobileControls";
 import { useSystemBack } from "../systemBack";
-import { runTerminalInput, sendTerminalInput } from "../terminalInput";
+import {
+  focusTerminalEndpoint,
+  runTerminalInput,
+  sendTerminalInput as sendBytes,
+} from "../terminalInput";
 import {
   ClipboardAddon,
   type ClipboardSelectionType,
@@ -71,7 +75,7 @@ import {
   AnnotationComposerPopover,
 } from "./AnnotationComposerPopover";
 import "@xterm/xterm/css/xterm.css";
-import { bridge, type ConnectionClient, type TerminalPush } from "../api";
+import { bridge, type TerminalPush } from "../api";
 import { useCreationSources } from "../creationRequests";
 import { directoryPreviewName } from "../filesystemPaths";
 import { mobileTerminalShortcutExecution } from "../mobileTerminalShortcutAction";
@@ -183,7 +187,14 @@ import {
   terminalWheelScroll,
 } from "../terminalScroll";
 import { TerminalSelectionDragGuard } from "../terminalSelectionGuard";
+import {
+  createEchoProbe,
+  latencyDebugEnabled,
+  logEchoSample,
+  logLatency,
+} from "../latencyDebug";
 import { applyTerminalTheme } from "../terminalThemes";
+import { useTerminalOptionAsMetaRef } from "../terminalOptionKey";
 import {
   TerminalTouchSelection,
   terminalSelectedText,
@@ -205,23 +216,6 @@ import { TerminalAttachSize } from "../terminalAttachSize";
 import { withTimeout } from "../withTimeout";
 import "./TerminalView.css";
 
-function focusTerminalEndpoint(
-  client: ConnectionClient,
-  terminalId: string | undefined,
-) {
-  if (
-    !terminalId ||
-    !client.isCurrent() ||
-    !applicationStore
-      .getConnection(client.connectionId)
-      .endpointAvailability[terminalId]?.methods.includes("pane.focus")
-  )
-    return;
-  void client
-    .call("terminal.focus", { terminal_id: terminalId })
-    .catch(() => null);
-}
-
 const SYSTEM_CLIPBOARD = "c" as ClipboardSelectionType;
 
 function b64toBytes(b64: string): Uint8Array {
@@ -236,14 +230,6 @@ function b64toText(b64: string): string | null {
   } catch {
     return null;
   }
-}
-
-function sendBytes(
-  client: ConnectionClient,
-  bytes: Uint8Array,
-  terminalId: string,
-) {
-  return sendTerminalInput(client, bytes, terminalId);
 }
 
 const CLIPBOARD_READ_TIMEOUT_MS = 2000;
@@ -493,6 +479,7 @@ export function TerminalView({
   const [termInstance, setTermInstance] = useState<Terminal | null>(null);
   // Theme changes update xterm in place without recreating the terminal.
   const terminalThemeRef = useRef(terminalTheme);
+  const optionAsMetaRef = useTerminalOptionAsMetaRef(termInstance);
   const terminalFontFamilyRef = useRef(terminalFontFamily);
   const terminalFontScaleRef = useRef(terminalFontScale);
   const fitRef = useRef<FitAddon | null>(null);
@@ -500,6 +487,8 @@ export function TerminalView({
   const attachedRef = useRef<string | null>(null);
   const attachingRef = useRef<string | null>(null);
   const desiredTerminalRef = useRef<string | null>(null);
+  // Opt-in latency samples: input to the next written frame (?debugLatency).
+  const echoProbeRef = useRef(latencyDebugEnabled ? createEchoProbe() : null);
   const ownedAttachmentRef = useRef<{
     terminalId: string;
     attempt: number;
@@ -1128,6 +1117,7 @@ export function TerminalView({
     const renderer = createTerminalRenderer(
       container,
       {
+        macOptionIsMeta: optionAsMetaRef.current,
         fontFamily: terminalFontFamilyRef.current,
         ...terminalDensity(terminalFontScaleRef.current),
         theme: terminalThemeRef.current,
@@ -1151,6 +1141,10 @@ export function TerminalView({
             autoDismissMs: 8000,
           }),
       },
+      {
+        written: () =>
+          logEchoSample(echoProbeRef.current, desiredTerminalRef.current),
+      },
     );
     termRef.current = renderer.term;
     fitRef.current = renderer.fit;
@@ -1166,7 +1160,7 @@ export function TerminalView({
       renderedTerminalRef.current = null;
       setTermInstance(null);
     };
-  }, [container, terminalIdentity, pane?.terminal_id]);
+  }, [container, terminalIdentity, pane?.terminal_id, optionAsMetaRef]);
 
   // Rebind transport work and input handlers to one captured client at a time.
   useEffect(() => {
@@ -1397,6 +1391,7 @@ export function TerminalView({
       acceptsEndpointInput() &&
       isActivePaneRef.current &&
       (!shouldAvoidVirtualKeyboard() || inputActiveRef.current);
+    const echoProbe = echoProbeRef.current;
 
     const inputData = term.onData((data) => {
       invalidateLinks();
@@ -1427,6 +1422,7 @@ export function TerminalView({
       if (!terminalId) return;
       imeKeyEvent.recordXtermData(unsuppressedData);
       const bytes = new TextEncoder().encode(unsuppressedData);
+      echoProbe?.sent(unsuppressedData);
       sendBytes(connectionClient, bytes, terminalId).catch(() => {});
     });
 
@@ -3374,6 +3370,11 @@ export function TerminalView({
                 return;
               }
               const recovery = recoveryBudgetRef.current.fail();
+              logLatency("attach watchdog fired", {
+                terminal: terminalId,
+                watchdog_ms: watchdogMs,
+                recovery,
+              });
               attachedRef.current = null;
               attachingRef.current = null;
               detachOwnedTerminal(terminalId);

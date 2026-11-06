@@ -18,6 +18,7 @@ import {
 import { luckyWorktreeBranchName } from "../luckyName";
 import { ConfirmDialog, TextInputDialog } from "./ModalDialogs";
 import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
+import { WorktreeLocationDialog } from "./WorktreeLocationDialog";
 import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 import { WorkspaceAutoSyncDialog } from "./WorkspaceAutoSyncDialog";
 import { worktreeCreationSource } from "../worktree";
@@ -30,12 +31,18 @@ import {
 import { copyTextFromUserGesture } from "../terminalClipboard";
 import { useLayer } from "../layerStack";
 import { observeClampedContextMenu } from "./contextMenuPosition";
+import {
+  isServerSourceAvailable,
+  openServerSession,
+  type ServerSessionSource,
+} from "../useAllServerAgentSessions";
 import "./ContextMenu.css";
 
 export interface ContextMenuState {
   x: number;
   y: number;
   workspace: Workspace;
+  source?: ServerSessionSource;
 }
 
 interface Item {
@@ -79,6 +86,7 @@ export function ContextMenu({
   onBrowseFiles,
   onReviewChanges,
   onClose,
+  workspaces: hostWorkspaces,
 }: {
   state: ContextMenuState | null;
   reviewStatus?: PullRequestSummary;
@@ -87,10 +95,17 @@ export function ContextMenu({
   onBrowseFiles?: (workspace: Workspace) => void;
   onReviewChanges?: (workspace: Workspace) => void;
   onClose: () => void;
+  /**
+   * The tree's own host topology, in World's navigator: the menu resolves its
+   * workspace and worktree creation source there, never in whichever
+   * connection's session is focused.
+   */
+  workspaces?: Workspace[];
 }) {
   const store = useOperationalStore();
   const workspaceColors = useContext(WorkspaceColorContext);
-  const workspaces = useStoreSelector((state) => state.workspaces);
+  const sessionWorkspaces = useStoreSelector((state) => state.workspaces);
+  const workspaces = hostWorkspaces ?? sessionWorkspaces;
   const activeConnectionId = useStoreSelector(
     (state) => state.activeConnectionId,
   );
@@ -105,6 +120,9 @@ export function ContextMenu({
   const [openWorktreeWorkspaceId, setOpenWorktreeWorkspaceId] = useState<
     string | null
   >(null);
+  const [locationWorkspaceId, setLocationWorkspaceId] = useState<string | null>(
+    null,
+  );
   const [worktreeHooksWorkspaceId, setWorktreeHooksWorkspaceId] = useState<
     string | null
   >(null);
@@ -261,6 +279,13 @@ export function ContextMenu({
       onClose={() => setAutoSyncWorkspaceId(null)}
     />
   );
+  const locationDialog = (
+    <WorktreeLocationDialog
+      open={!!locationWorkspaceId}
+      workspaceId={locationWorkspaceId}
+      onClose={() => setLocationWorkspaceId(null)}
+    />
+  );
   const lifecycleDialog = (
     <WorktreeLifecycleDialog
       open={!!lifecycleWorkspaceId}
@@ -268,7 +293,7 @@ export function ContextMenu({
       onClose={() => setLifecycleWorkspaceId(null)}
     />
   );
-  if (!state) {
+  if (!state || (state.source && !isServerSourceAvailable(state.source))) {
     return (
       <>
         {dialogs}
@@ -276,13 +301,17 @@ export function ContextMenu({
         {worktreeHooksDialog}
         {autoSyncDialog}
         {lifecycleDialog}
+        {locationDialog}
       </>
     );
   }
-  const w =
-    workspaces.find(
-      (workspace) => workspace.workspace_id === state.workspace.workspace_id,
-    ) ?? state.workspace;
+  const remote =
+    !!state.source && state.source.connectionId !== activeConnectionId;
+  const w = remote
+    ? state.workspace
+    : (workspaces.find(
+        (workspace) => workspace.workspace_id === state.workspace.workspace_id,
+      ) ?? state.workspace);
   const isLinked = !!w.worktree?.is_linked_worktree;
   const displayName = workspaceDisplayName(w);
   const pinned = isWorkspacePinned(pinnedWorkspaceKeys, w);
@@ -331,6 +360,10 @@ export function ContextMenu({
     {
       label: "Open worktree…",
       action: () => setOpenWorktreeWorkspaceId(w.workspace_id),
+    },
+    {
+      label: "Worktree location…",
+      action: () => setLocationWorkspaceId(w.workspace_id),
     },
   ];
   if (w.worktree) {
@@ -415,13 +448,27 @@ export function ContextMenu({
       });
     },
   });
-  const groups: ItemGroup[] = [
-    { label: "Inspect", items: inspectItems },
-    { label: "Organize", items: organizeItems },
-    { label: "Worktrees", items: worktreeItems },
-    { label: "Source control", items: sourceControlItems },
-    { label: "Close", items: closeItems, danger: true },
-  ].filter((group) => group.items.length > 0);
+  const groups: ItemGroup[] = remote
+    ? [
+        {
+          label: state.source!.serverLabel,
+          items: [
+            {
+              label: "Open workspace",
+              action: () => {
+                void openServerSession(state.source!, w.workspace_id);
+              },
+            },
+          ],
+        },
+      ]
+    : [
+        { label: "Inspect", items: inspectItems },
+        { label: "Organize", items: organizeItems },
+        { label: "Worktrees", items: worktreeItems },
+        { label: "Source control", items: sourceControlItems },
+        { label: "Close", items: closeItems, danger: true },
+      ].filter((group) => group.items.length > 0);
 
   const style: React.CSSProperties = {
     position: "fixed",
@@ -460,6 +507,14 @@ export function ContextMenu({
                 className={`context-menu-item ${item.danger ? "is-danger" : ""}`}
                 onClick={() => {
                   onClose();
+                  if (
+                    state.source &&
+                    (!isServerSourceAvailable(state.source) ||
+                      (!remote &&
+                        store.get().activeConnectionId !==
+                          state.source.connectionId))
+                  )
+                    return;
                   item.action();
                 }}
               >
@@ -487,6 +542,7 @@ export function ContextMenu({
       {worktreeHooksDialog}
       {autoSyncDialog}
       {lifecycleDialog}
+      {locationDialog}
     </>
   );
 }

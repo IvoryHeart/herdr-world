@@ -1,3 +1,4 @@
+import { collectUntrackedStats } from "./git-untracked-stats";
 import { randomUUID } from "node:crypto";
 import { selectDiffBase } from "./diff-base";
 import { LARGE_DIFF_PATCH_BYTES } from "../../../shared/gitDiffLimits";
@@ -8,7 +9,6 @@ import {
   GIT_DIFF_MAX_BYTES,
   GIT_DIFF_TIMEOUT_MS,
   GIT_PULL_TIMEOUT_MS,
-  GIT_UNTRACKED_NUMSTAT_CONCURRENCY,
 } from "./file-constants";
 import { sanitizeExplorerPath } from "./file-paths";
 import { trimIncompleteUtf8Tail } from "./preview";
@@ -837,39 +837,16 @@ async function collectStats({
     mergeStats("unstaged", unstaged.stdout, "conflicted");
   }
 
-  const untrackedEntries = entries.filter(
-    (entry) => entry.kind === "untracked",
-  );
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < untrackedEntries.length) {
-      const entry = untrackedEntries[cursor];
-      cursor += 1;
-      if (!entry) continue;
-      const result = await runGitShellCommand({
-        root,
-        command: `diff --no-ext-diff --no-index --numstat -- /dev/null ${shQuote(entry.path)}`,
-        host,
-        shQuote,
-        runProcessWithCodeTimeout,
-      });
-      if (result.code !== 0 && result.code !== 1) continue;
-      const value = parseNumstat(result.stdout).get(entry.path);
-      if (value) stats.set(entryKeyForStats(entry), value);
-    }
-  };
-  await Promise.all(
-    Array.from(
-      {
-        length: Math.min(
-          GIT_UNTRACKED_NUMSTAT_CONCURRENCY,
-          untrackedEntries.length,
-        ),
-      },
-      () => worker(),
-    ),
-  );
-
+  const untrackedStats = await collectUntrackedStats({
+    root,
+    entries,
+    host,
+    shQuote,
+    runProcessWithCodeTimeout,
+    parseNumstat,
+  });
+  for (const [path, value] of untrackedStats)
+    stats.set(`untracked:${path}`, value);
   return stats;
 }
 

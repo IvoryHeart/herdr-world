@@ -2,6 +2,8 @@ import { open, lstat, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sshCommandArgv } from "../bridge/ssh-command";
+import { trackSshProcess } from "../bridge/ssh-metrics";
+import { bindSshCommand, holdSshSession } from "../bridge/ssh-sessions";
 import { worldEnv } from "../config/environment";
 import { shQuote } from "../utils/process-utils";
 import { terminalPathText } from "./terminal-path-text";
@@ -9,6 +11,7 @@ import { terminalPathText } from "./terminal-path-text";
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
 const DEFAULT_RETENTION_HOURS = 24;
 export const TERMINAL_UPLOAD_TIMEOUT_MS = 300_000;
+const CLEANUP_TIMEOUT_MS = 30_000;
 
 function positiveInteger(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -78,6 +81,8 @@ trap - EXIT`;
 
 export function createTerminalUploadHandler(args: {
   sshHost: () => string | undefined;
+  sshControlPath?: string;
+  runtimeSignal?: AbortSignal;
   tempRoot?: () => string;
   platform?: NodeJS.Platform;
   maxBytes?: number;
@@ -133,22 +138,38 @@ export function createTerminalUploadHandler(args: {
       await privateRoot();
       const host = args.sshHost();
       if (!host) return;
-      const proc = Bun.spawn(
+      const argv = bindSshCommand(
         sshCommandArgv(
           host,
           `sh -c ${shQuote(remoteTerminalCleanupScript(retentionHours * 60))}`,
+          [],
+          "upload.cleanup",
         ),
-        {
+        args.sshControlPath,
+        args.runtimeSignal,
+      );
+      const session = await holdSshSession(argv, {
+        timeoutMs: CLEANUP_TIMEOUT_MS,
+        signal: args.runtimeSignal,
+      });
+      let code: number;
+      let stderr: string;
+      try {
+        session.signal?.throwIfAborted();
+        const proc = Bun.spawn(argv, {
+          signal: session.signal,
+          killSignal: "SIGKILL",
           stdin: "ignore",
           stdout: "ignore",
           stderr: "pipe",
-          timeout: 30_000,
-        },
-      );
-      const [code, stderr] = await Promise.all([
-        proc.exited,
-        new Response(proc.stderr).text(),
-      ]);
+          timeout: session.remainingMs ?? CLEANUP_TIMEOUT_MS,
+        });
+        const stderrText = new Response(proc.stderr).text();
+        trackSshProcess(argv, proc.exited, stderrText);
+        [code, stderr] = await Promise.all([proc.exited, stderrText]);
+      } finally {
+        session.release();
+      }
       if (code !== 0) {
         throw new Error(
           `ssh upload cleanup failed: ${stderr.trim() || `exit ${code}`}`,
@@ -203,26 +224,48 @@ export function createTerminalUploadHandler(args: {
         );
       const host = args.sshHost();
       if (host) {
-        req.signal.throwIfAborted();
-        const proc = Bun.spawn(
+        const argv = bindSshCommand(
           sshCommandArgv(
             host,
             `sh -c ${shQuote(remoteTerminalUploadScript(name, retentionHours * 60))}`,
+            [],
+            "upload",
           ),
-          {
+          args.sshControlPath,
+          args.runtimeSignal,
+        );
+        const uploadTimeoutMs =
+          args.uploadTimeoutMs ?? TERMINAL_UPLOAD_TIMEOUT_MS;
+        // The wait for a session slot ends with the request and counts
+        // against the upload's own timeout.
+        const session = await holdSshSession(argv, {
+          timeoutMs: uploadTimeoutMs,
+          signal: req.signal,
+        });
+        let code: number;
+        let path: string;
+        let stderr: string;
+        try {
+          session.signal?.throwIfAborted();
+          if (!isCurrent()) throw new Error("connection runtime retired");
+          const proc = Bun.spawn(argv, {
             stdin: Bun.file(localPath),
             stdout: "pipe",
             stderr: "pipe",
-            signal: req.signal,
-            timeout: args.uploadTimeoutMs ?? TERMINAL_UPLOAD_TIMEOUT_MS,
+            signal: session.signal,
+            timeout: session.remainingMs ?? uploadTimeoutMs,
             killSignal: "SIGKILL",
-          },
-        );
-        const [code, path, stderr] = await Promise.all([
-          proc.exited,
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-        ]);
+          });
+          const stderrText = new Response(proc.stderr).text();
+          trackSshProcess(argv, proc.exited, stderrText);
+          [code, path, stderr] = await Promise.all([
+            proc.exited,
+            new Response(proc.stdout).text(),
+            stderrText,
+          ]);
+        } finally {
+          session.release();
+        }
         if (code !== 0 || !path.startsWith("/")) {
           return Response.json(
             { error: `ssh upload failed: ${stderr.trim() || `exit ${code}`}` },
