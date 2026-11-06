@@ -1167,8 +1167,9 @@ export function TerminalView({
     const term = termInstance;
     const endpointPresentation = endpointPresentationRef.current;
     const historySelection = historySelectionRef.current;
-    if (!container || !term || !endpointPresentation || !historySelection)
-      return;
+    // Renderer state can still hold the disposed predecessor for this commit.
+    if (!term || term !== termRef.current) return;
+    if (!container || !endpointPresentation || !historySelection) return;
     let terminalEffectDisposed = false;
     const retireTouchLink = () => {
       touchLinkIntentRef.current++;
@@ -3261,7 +3262,7 @@ export function TerminalView({
       setTerminalAttachError("");
       return;
     }
-    if (!term) return;
+    if (!term || term !== termRef.current) return;
     focusTerminalSoon();
     if (attachedRef.current === paneTerminalId) return;
     if (attachingRef.current === paneTerminalId) return;
@@ -3424,7 +3425,7 @@ export function TerminalView({
 
   useEffect(() => {
     terminalFontScaleRef.current = terminalFontScale;
-    if (!termInstance) return;
+    if (!termInstance || termInstance !== termRef.current) return;
     // Font geometry invalidates hit targets, not the current input session.
     linkRevisionRef.current++;
     termInstance.refresh(0, termInstance.rows - 1);
@@ -3438,7 +3439,7 @@ export function TerminalView({
 
   useEffect(() => {
     terminalFontFamilyRef.current = terminalFontFamily;
-    if (!termInstance) return;
+    if (!termInstance || termInstance !== termRef.current) return;
     termInstance.options.fontFamily = terminalFontFamily;
     const size = fitVisibleTerminal();
     if (size) resizeSyncRef.current?.sendNow(size);
@@ -3446,7 +3447,8 @@ export function TerminalView({
 
   useEffect(() => {
     terminalThemeRef.current = terminalTheme;
-    if (termInstance) applyTerminalTheme(termInstance, terminalTheme);
+    if (termInstance && termInstance === termRef.current)
+      applyTerminalTheme(termInstance, terminalTheme);
   }, [terminalTheme, termInstance]);
 
   // Mobile browsers freeze the page while hidden: the socket can die

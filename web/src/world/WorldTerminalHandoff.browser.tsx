@@ -65,7 +65,11 @@ import {
 } from "../workspaceResource";
 
 const failures: string[] = [];
-const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+const calls: Array<{
+  method: string;
+  params: Record<string, unknown>;
+  inspectorView?: string;
+}> = [];
 const boardDocument: BoardDocument = {
   version: 1,
   revision: 0,
@@ -352,7 +356,13 @@ let client: ConnectionClient = {
   isCurrent: () => true,
   acceptsServerGeneration: (generation) => generation === 7,
   call: async (method, params = {}) => {
-    calls.push({ method, params });
+    calls.push({
+      method,
+      params,
+      inspectorView: document.querySelector<HTMLElement>(
+        '[role="dialog"][aria-label="Reviewer Inspector"] .workspace-inspector',
+      )?.dataset.view,
+    });
     if (method === "world.board.get") return structuredClone(boardDocument);
     if (method === "world.board.patch") {
       if (failInterestPatch) throw new Error("Synthetic Interest save failure");
@@ -721,13 +731,14 @@ async function openAgent(label: string) {
       ),
     `${label} window on ${opensOn(label) === "history" ? "Chat" : "its terminal"}`,
   );
-  // A window on Chat hides its terminal: its attach keeps the agent's Herdr
-  // pane at the tab's current size, and nothing resizes it before Terminal.
+  // Terminal is shown until Chat is readable and can claim its viewport then.
+  // Once Chat is shown, its hidden terminal must preserve the Herdr pane size.
   const terminalId = `${label.toLowerCase()}-terminal`;
   if (opensOn(label) === "history")
     check(
       calls
         .slice(before)
+        .filter(({ inspectorView }) => inspectorView === "history")
         .every(
           ({ method, params }) =>
             params.terminal_id !== terminalId ||

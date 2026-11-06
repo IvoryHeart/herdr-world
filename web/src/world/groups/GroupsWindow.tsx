@@ -76,6 +76,13 @@ function GroupsBody({
   } = useGroups();
   const [kind, setKind] = useState("all");
   const [selected, setSelected] = useState(requested);
+  const [selectedRequest, setSelectedRequest] = useState(request);
+  // Commit the requested title with its focus intent. A later effect would
+  // re-register the renamed panel and cancel its pending restore request.
+  if (selectedRequest !== request) {
+    setSelectedRequest(request);
+    setSelected(requested);
+  }
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{
@@ -92,9 +99,6 @@ function GroupsBody({
       mounted.current = false;
     };
   }, []);
-  useEffect(() => {
-    setSelected(requested);
-  }, [requested, request]);
   const group = groups.find((group) => group.key === selected);
   const terminals = observations
     .filter((connection) => connection.current)

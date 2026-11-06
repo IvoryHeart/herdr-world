@@ -90,6 +90,9 @@ Bun's asynchronous rejection matcher can block MessagePort delivery.
 
 All six storage `*-crash.test.ts` suites use the
 [shared crash harness](../server/src/storage/testing/crash-harness.ts).
+The native installer matrix runs these suites with one test-file worker and
+one concurrent case, so standalone compilation does not compete with other
+suites' SQLite recovery on the same runner. The watchdogs below remain unchanged.
 Compilation, seed initialization and fault setup finish before recovery assertions
 start. Seed initialization keeps its five-second hook; each child has its original
 watchdog plus a five-second kill/reap/stream-cleanup bound. Compilation keeps its

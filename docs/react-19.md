@@ -10,6 +10,23 @@ and check bundle module identities so patch metadata cannot be mistaken for a
 React DOM service import. Their lifecycle, error-containment and service-boundary
 assertions remain in force.
 
+React 19's effect ordering also exposed two lifecycle races. Terminal effects
+can retain a disposed xterm instance for the commit that replaces its renderer;
+they now verify it still matches the current renderer before binding transport,
+attaching or updating font/theme options. The phone Spaces navigator case
+reproduced a font effect refreshing that disposed instance, followed by xterm's
+viewport callback reading its removed renderer. Groups now applies a requested
+selection before committing its panel title and focus intent together; an effect
+that changed the title afterward could cancel restoration of a minimized panel.
+The desktop/phone navigation and Groups browser cases cover these sequences.
+
+Creation fixtures wait for the enabled Create button while the suggested name
+loads. The terminal handoff fixture records the Inspector view at each RPC and
+checks that Chat's hidden terminal preserves the pane size. A transient Terminal
+view shown before Chat becomes readable may claim its displayed viewport; it is
+not counted as a resize from Chat. These are direct browser lifecycle consumers
+under the existing Q06 attachment boundary, not new authority or recovery claims.
+
 ## Cause and fix
 
 Closed PR #252 (`fd39a227`) separated ordinary production latency from a
