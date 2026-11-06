@@ -2,9 +2,10 @@
 
 **Status: proposed, awaiting owner approval.** All rules below are proposals
 unless explicitly described as shipping facts. Mockups may explore these rules
-now; shipping changes, including #638, wait for the owner decision coordinated
-by steward-main. Phase 1 is ready for mockups, not owner-approved. After approval,
-apply the approved rules to new UI and code you touch. Token and component
+now; adopting the proposed rules in shipping changes waits for the owner
+decision coordinated by steward-main. Phase 1 is ready for mockups, not
+owner-approved. After approval, apply the approved rules to new UI and code
+you touch. Token and component
 changes come in separate PRs. This guide doesn't change product code.
 
 ## What this guide is for
@@ -142,14 +143,16 @@ plain text glyphs.
 The legend image records guide revision `6847c781`, before the Needs you card
 refresh. Its `ⓘ` agent-information control has since been replaced: hovering
 the agent name shows that card, and clicking the name opens Chat. The table
-below describes current controls. The card specimens retain `ⓘ` as a proposed
-optional action, not a shipping Needs you control.
+below describes current controls, including the current Needs you Back and
+hide icons. The card specimens retain `ⓘ` as a proposed optional action, not
+a shipping Needs you control.
 
 | Icon | Means | Where today |
 | --- | --- | --- |
 | `Castle`, `StickyNote`, `LayoutDashboard`, `PanelsTopLeft` | Town, Board, Desk, Spaces | Zen view picker, phone view button and nav |
 | `Minimize2`; `Maximize2` | Exit Zen or restore; show the bars, maximize or fit | Zen dock, windows, Board |
 | `Server` | Hosts | top bar; with a count badge on phones |
+| `Inbox` with the Hosts count badge | Needs you | phone top bar outside Zen, immediately after the view name |
 | `Keyboard` | Actions, the command menu | top bar |
 | `Command` | Shortcut cheat sheet | desktop top bar |
 | `Menu` | Menu | phone top bar; desktop shows the word |
@@ -158,8 +161,8 @@ optional action, not a shipping Needs you control.
 | `SquareStack` with a count | Tabs | phone bars and floating controls |
 | `PanelTop` | Show or hide Workspaces | phone workspace shortcut |
 | `Search` | Search this view | view toolbar |
-| `ArrowLeft`; `ChevronLeft` | Back | phone detail bar; a window opened from another surface |
-| `X` | Close a window, dialog or search; hide mobile controls; dismiss a question or mark finished work reviewed | windows, dialogs, search; phone floating controls; Needs you card headers |
+| `ArrowLeft`; `ChevronLeft` | Back | phone detail bars and the Needs you sheet; a window opened from another surface |
+| `X` | Close a window, dialog or search; hide mobile controls or the desktop Needs you tray; dismiss a question or mark finished work reviewed | windows, dialogs, search; phone floating controls; desktop Needs you header; Needs you card headers |
 | `MoreHorizontal`; `EllipsisVertical` | More actions; more or settings | windows; Board, Town and phones |
 | `MessagesSquare`, `SquareTerminal`, `FolderTree`, `FileDiff` | Chat, Terminal, Files, Changes | agent window views |
 | `MessageSquare`; `SendHorizontal` | Open Chat; send an answer | Needs you card headers; answer fields |
@@ -168,17 +171,19 @@ optional action, not a shipping Needs you control.
 | `History` | Agent message History | phone workspace views |
 | `GitPullRequest`, `Sparkles`, `Minus`, `Plus` | Work, tidy, zoom out, zoom in or new | Board dock, Town |
 | `Pencil`; `Trash2` | Rename room; close room or delete | Town room plaques, Board |
-| Agent marks `•` `!` `?` `✓` `×` `–` `~` | Working, Needs you, Asks you, Done, Offline, Idle or Reviewed, No signal | Needs you, agent hover cards and Town's peek; Desk shows the `?` mark |
-| Text `‹`, `↵`, `E` | Hide Needs you; open; mark reviewed | Needs you tab, Desk key hints |
+| Agent marks `•` `!` `?` `✓` `×` `–` `~` | Working, Needs you, Asks you, Done, Offline, Idle or Reviewed, No signal | Needs you (including the closed desktop handle), agent hover cards and Town's peek; Desk shows the `?` mark |
+| Text `↵`, `E` | Open; mark reviewed | Desk key hints |
 
 The same meaning still has more than one form today. Back is `ArrowLeft` on
-phone bars, `ChevronLeft` in windows and the text `‹ Back` in the Needs you
-sheet. Close is `X` in windows and dialogs, the text `×` in Board's trays and
-Town's peek, and `‹` for Needs you. Board's card badges are CSS glyphs, not
-agent marks. Reuse an icon for its existing meaning before adding one.
+phone bars and the Needs you sheet, and `ChevronLeft` in windows. Close is
+`X` in windows, dialogs and the desktop Needs you tray, and the text `×` in
+Board's trays and Town's peek. The closed desktop Needs you handle shows an
+AgentMark followed by `Needs you` and its count. Board's card badges are CSS
+glyphs, not agent marks. Reuse an icon for its existing meaning before adding one.
 
-The specimens below use these icons. Their `Inbox` is #638's design for a
-compact Needs you button, which does not ship yet.
+The specimens below use these icons. Their `Inbox` with the Hosts badge
+(`.world-hosts-count`) is the shipping compact phone Needs you counter,
+introduced in #638.
 
 ## Principles
 
@@ -407,7 +412,7 @@ inner highlight.
 
 ### Badges and counters
 
-![Count badges on Needs you (Inbox, #638's design) and Hosts (Server), inline counts and status pills](images/badges.png)
+![Count badges on Needs you (Inbox, shipping on phones) and Hosts (Server), inline counts and status pills](images/badges.png)
 
 1. **Count badge on an icon** (header, dock, view picker). Use one look: the
    Hosts badge (`.world-hosts-count` in
@@ -484,8 +489,8 @@ Actions and Menu. These rules are for that bar.
   dashes each 44 px slot.
 - **No second bar under the header.** Notices go to Needs you or a toast.
 - **Left:** the view name, then the Needs you icon with its count badge
-  (`Inbox` in #638's design). On a detail screen, `‹ Back` and the title
-  instead.
+  (`Inbox` with the shipping Hosts badge). On a detail screen, `‹ Back` and
+  the title instead.
 - **Right:** icon buttons only: Hosts (`Server`), Actions (`Keyboard`) and Menu
   (`Menu`). At most four icon buttons in the whole bar at 360 px.
 - **Icon buttons:** 36 px drawn, 44 px hit area, radius 8, the
@@ -562,7 +567,7 @@ laptop 1512 × 982, half 1280 × 1440, wide 2560 × 1440 and portrait 1440 × 25
 For mockup review now, and shipping UI review after owner approval:
 
 - [ ] For shipping changes, the applicable owner decisions are approved;
-      proposed rules alone do not authorize implementation, including #638.
+      proposed rules alone do not authorize implementation.
 - [ ] Colours come from the role tokens. No new hex values and no hex
       fallbacks.
 - [ ] Spacing is from 2, 4, 6, 8, 10, 12, 16 or 24, and type is from 11, 12,
