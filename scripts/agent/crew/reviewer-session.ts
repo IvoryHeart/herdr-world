@@ -1,7 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { Run } from "../gate/observe";
+import { basename } from "node:path";
 import type { Action, CrewSettings } from "./plan";
-import { getAction, runsOf } from "./store";
+import { activeRuns, getAction, runsOf } from "./store";
 import { harnessOf } from "./worker";
 import { routeJudgment } from "./review-judgments";
 
@@ -66,6 +67,33 @@ export function reviewerSessionOwner(
       if (!identity || identity.value !== session) continue;
       if (identity.kind !== "id" || identity.agent !== harness)
         return unreadable;
+      if (typeof agent.pane_id !== "string") return unreadable;
+      const process = run([
+        "herdr",
+        "pane",
+        "process-info",
+        "--pane",
+        agent.pane_id,
+      ]);
+      if (process.code !== 0) return unreadable;
+      const processes = JSON.parse(process.stdout)?.result?.process_info
+        ?.foreground_processes;
+      if (!Array.isArray(processes)) return unreadable;
+      if (
+        processes.some(
+          (p) => !p || typeof p.name !== "string" || !Array.isArray(p.argv),
+        )
+      )
+        return unreadable;
+      // A completed tab can retain display identity after its harness exits.
+      if (
+        !processes.some(
+          (p) =>
+            p.name === harness ||
+            (typeof p.argv[0] === "string" && basename(p.argv[0]) === harness),
+        )
+      )
+        continue;
       return `Retained reviewer session is still owned by ${agent.name ?? "an unnamed reviewer"} in ${agent.tab_id ?? agent.pane_id ?? "a live tab"}; original-owner cleanup and explicit operator rearm are required`;
     }
     return null;
@@ -87,6 +115,16 @@ export function reviewerSessionAdmission(
   const key = `${action.key}|session-owner`;
   const held = getAction(crew, key);
   const retained = retainedReviewer(crew, settings, action.pr, action.target);
+  // Current crew work waits on its normal completion, not a handoff.
+  if (
+    activeRuns(crew).some(
+      (entry) =>
+        entry.pr === action.pr &&
+        entry.reviewer === action.target &&
+        entry.session === retained.session,
+    )
+  )
+    return null;
   const reason =
     held && held.state !== "superseded"
       ? "Reviewer session handoff awaits explicit operator rearm"

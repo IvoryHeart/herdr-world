@@ -21,6 +21,7 @@ import {
   finishRun,
   getRun,
   setAction,
+  setRunSession,
 } from "./crew/store";
 import { SETTINGS_DEFAULTS, type Action } from "./crew/plan";
 
@@ -48,6 +49,7 @@ const owners = (session = "saved-reviewer") =>
         {
           name: "original-reviewer",
           tab_id: "tab-original",
+          pane_id: "pane-original",
           agent_status: "done",
           agent_session: { agent: "codex", kind: "id", value: session },
         },
@@ -55,11 +57,21 @@ const owners = (session = "saved-reviewer") =>
     },
   });
 const result = (stdout: string, code = 0) => ({ code, stdout, stderr: "" });
+const processes = (name = "codex") =>
+  JSON.stringify({
+    result: {
+      process_info: {
+        foreground_processes: [{ name, argv: [name] }],
+      },
+    },
+  });
+const locked = (argv: string[]) =>
+  result(argv.includes("process-info") ? processes() : owners());
 
 test("idle exact session owner blocks; same alias with another session does not", () => {
-  expect(
-    reviewerSessionOwner(() => result(owners()), "codex", "saved-reviewer"),
-  ).toContain("original-reviewer in tab-original");
+  expect(reviewerSessionOwner(locked, "codex", "saved-reviewer")).toContain(
+    "original-reviewer in tab-original",
+  );
   expect(
     reviewerSessionOwner(
       () => result(owners("another")),
@@ -89,7 +101,11 @@ test("known session owner never allocates a run or consumes the slot", () => {
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   const run = f.deps.run;
   f.deps.run = (argv) =>
-    argv.join(" ") === "herdr agent list" ? result(owners()) : run(argv);
+    argv.includes("process-info")
+      ? result(processes())
+      : argv.join(" ") === "herdr agent list"
+        ? result(owners())
+        : run(argv);
   addAction(f.crew, action, NOW);
   const recorded: Action[] = [];
   startReviewers(
@@ -130,9 +146,7 @@ test("known session owner never allocates a run or consumes the slot", () => {
 
 test("handoff stays held after owner closes until explicit rearm; old timeout is preserved", () => {
   const f = setup();
-  const held = reviewerSessionAdmission(f.crew, settings, action, () =>
-    result(owners()),
-  )!;
+  const held = reviewerSessionAdmission(f.crew, settings, action, locked)!;
   addAction(f.crew, held, NOW);
   expect(
     reviewerSessionAdmission(f.crew, settings, action, () =>
@@ -171,6 +185,45 @@ test("handoff stays held after owner closes until explicit rearm; old timeout is
   expect(getRun(f.crew, id)?.exitCode).toBe(-124);
 });
 
+test("completed tab metadata does not claim an exited harness still owns the session", () => {
+  expect(
+    reviewerSessionOwner(
+      (argv) =>
+        result(argv.includes("process-info") ? processes("bash") : owners()),
+      "codex",
+      "saved-reviewer",
+    ),
+  ).toBeNull();
+  expect(
+    reviewerSessionOwner(
+      (argv) => result(argv.includes("process-info") ? "{}" : owners()),
+      "codex",
+      "saved-reviewer",
+    ),
+  ).toContain("unreadable");
+});
+
+test("active same-reviewer crew work waits normally without manufacturing a handoff", () => {
+  const f = setup();
+  const id = addRun(
+    f.crew,
+    {
+      actionKey: "current",
+      reviewer: "rev2",
+      pr: 7,
+      head: SHA.reviewed,
+      log: "stdout",
+    },
+    NOW,
+  );
+  setRunSession(f.crew, id, "codex", "gpt-6.1-sol", "saved-reviewer");
+  expect(
+    reviewerSessionAdmission(f.crew, settings, action, () => {
+      throw new Error("no external handoff while own review is running");
+    }),
+  ).toBeNull();
+});
+
 test("real pass routes session handoff to steward without an owner ask or resume", () => {
   const f = setup({
     settings: {
@@ -183,18 +236,20 @@ test("real pass routes session handoff to steward without an owner ask or resume
   const run = f.deps.run;
   let occupied = true;
   f.deps.run = (argv) =>
-    argv.join(" ") === "herdr agent list"
-      ? result(
-          JSON.stringify({
-            result: {
-              agents: [
-                ...(occupied ? JSON.parse(owners()).result.agents : []),
-                { name: "steward", agent_status: "done" },
-              ],
-            },
-          }),
-        )
-      : run(argv);
+    argv.includes("process-info")
+      ? result(processes())
+      : argv.join(" ") === "herdr agent list"
+        ? result(
+            JSON.stringify({
+              result: {
+                agents: [
+                  ...(occupied ? JSON.parse(owners()).result.agents : []),
+                  { name: "steward", agent_status: "done" },
+                ],
+              },
+            }),
+          )
+        : run(argv);
   f.comment(`[builder]\nrev2:101:1 fixed in ${SHA.fixed}`, NOW + 1);
   f.pass(SHA.fixed, NOW);
   const planned = f.pass(SHA.fixed, NOW + QUIET_MS + 2);
