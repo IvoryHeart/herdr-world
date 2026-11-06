@@ -39,6 +39,6 @@ export function findingFix(
     head: context.input.item!.headSha!,
     kind: "fix",
     target: context.author,
-    text: `[crew -> ${context.author}] ACT #${cycle.pr} fix @${cycle.head.slice(0, 7)}: ${evaluation ? "Fix ONLY these evaluator-mandatory findings" : "Address every finding"}, push fixes and reply signed by your seat, one line per finding ID or exact file:line naming its fixing commit: ${missing.map((finding) => `${finding.id}: ${finding.text}`).join("; ")}. Reviews wait for fresh replies and 10 quiet minutes.${evaluation ? " Follow-up issues are outside this fix pass." : ""}`,
+    text: `[crew -> ${context.author}] ACT #${cycle.pr} fix @${context.input.item!.headSha!.slice(0, 7)} (findings at ${cycle.head.slice(0, 7)}): ${evaluation ? "Fix ONLY these evaluator-mandatory findings" : "Address every finding"}, push fixes and reply signed by your seat, one line per finding ID or exact file:line naming its fixing commit: ${missing.map((finding) => `${finding.id}: ${finding.text}`).join("; ")}. Reviews wait for fresh replies and 10 quiet minutes.${evaluation ? " Follow-up issues are outside this fix pass." : ""}`,
   };
 }

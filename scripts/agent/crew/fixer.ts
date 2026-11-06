@@ -1,3 +1,4 @@
+import { allocateFixerWorktree } from "./fixer-allocation";
 import type { Database } from "bun:sqlite";
 import { appendFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -61,12 +62,12 @@ ${task.steps.map((step) => `- ${step}`).join("\n")}
 
 Work item:
 - PR: ${task.url} "${task.title}", branch ${branch}, author seat ${author}.
-- This directory is the PR's own worktree, the author's checkout, on ${branch} at ${head}. Commit only your own changes and leave everything else as you found it.
+- This directory is the verified PR worktree at ${head}; it may use a crew-owned helper branch. The remote PR target remains ${branch}. Commit only your own changes and leave everything else as you found it.
 - Read the PR, the reviews and earlier fix replies with gh: \`gh pr view ${pr} --repo ${repo} --comments\` and \`gh api repos/${repo}/pulls/${pr}/reviews\`.
 
 Rules:
 - Follow AGENTS.md and the candidate-delivery skill (.agents/skills/candidate-delivery/SKILL.md): fix every P1–P3 finding in one pass, with tests and docs as the change needs.
-- Push to ${branch} only. The pre-push hook runs the gate; wait for it and never bypass it. If the push is refused because the branch moved, stop and say so here; don't force-push.
+- Push to ${branch} only. Use \`git push origin HEAD:${branch}\` from this crew-owned helper branch. The pre-push hook runs the gate; wait for it and never bypass it. If the push is refused because the branch moved, stop and say so here; don't force-push.
 - Never use git stash: its stack is shared with every worktree.
 - After pushing, post one comment on the PR that starts with \`[fixer #${pr}]\`, then one line per finding or step naming its fixing commit. A step that needs no push gets the same comment saying what you found. Diagnose CI failures and fix their cause; the owner permits at most one justified rerun after an unrelated terminal failure, never as the fix.
 - When you are done, pushed or not, run \`${task.done}\` so the watcher hands the PR on.
@@ -156,12 +157,21 @@ export function startFixers(
                 : null;
     const place = why
       ? { why }
-      : fixerWorktree(
-          context.deps.run,
-          dirname(dirname(context.dir)),
-          branches.get(pr),
-          head,
-        );
+      : settings.convergingReviews
+        ? allocateFixerWorktree(
+            crew,
+            context.deps.run,
+            dirname(dirname(context.dir)),
+            pr,
+            branches.get(pr),
+            head,
+          )
+        : fixerWorktree(
+            context.deps.run,
+            dirname(dirname(context.dir)),
+            branches.get(pr),
+            head,
+          );
     if ("why" in place) {
       waits.set(pr, place.why);
       continue;

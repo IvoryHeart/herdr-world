@@ -181,6 +181,14 @@ integration PRs; `on-hold` labels and explicit gate holds remain binding.
 Run the sole watcher in a visible `crew-watch` Herdr tab, with conservative
 full/busy intervals; do not run a second hidden controller or tight GitHub loop.
 
+Converging-mode fixers allocate their own normal helper branch from the exact
+remote PR head. Another seat's occupied checkout requires that owner to detach
+it cleanly; the program never resets, moves or removes that tree or its branch.
+Dirty or stale crew helpers also remain untouched. Fixers push with
+`git push origin HEAD:<PR branch>`, never a force push or a replacement PR.
+Each allocation rechecks the remote head, retains its SQLite ownership record,
+and verifies its clean registered helper before launching the Sol fixer.
+
 ### Legacy evaluator flow
 
 After round 2, any unresolved earlier finding or new finding starts a fresh
