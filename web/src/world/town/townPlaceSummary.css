@@ -34,6 +34,28 @@
   font-size: 20px;
   cursor: pointer;
 }
+.town-place-summary-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.town-place-summary-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border, #7a5536);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.town-place-summary-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .town-place-summary .town-summary {
   padding: 12px 0 0;
   gap: 12px;

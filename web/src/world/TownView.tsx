@@ -977,6 +977,7 @@ export default function TownView({
           />
         </div>
         <TownPlaceSummaryCard
+          roomActions={townRoomActions}
           selectedKey={selectedKey}
           preview={placeSummary}
           now={now}

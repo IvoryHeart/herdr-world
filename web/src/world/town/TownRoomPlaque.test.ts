@@ -10,7 +10,6 @@ import {
 import { officeReadModel } from "../officeReadModel";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldAgentStatus } from "../worldObject";
-import type { TownRoomActions } from "./TownCanvas";
 import { townModelFromProjection } from "./townModel";
 import { TownRoomPlaque } from "./TownRoomPlaque";
 
@@ -59,13 +58,6 @@ function roomWith(statuses: readonly WorldAgentStatus[]) {
   };
   return projectWorldOffice(buildWorldObject([connection], "host"), 1);
 }
-
-const actions = {
-  canRenameRoom: () => true,
-  onRenameRoom() {},
-  canCloseRoom: () => true,
-  onCloseRoom() {},
-} as unknown as TownRoomActions;
 
 test.each([
   [
@@ -116,7 +108,6 @@ test.each([
           width: 176,
           counts,
           color: null,
-          actions,
         }),
       );
       const count = browser.document.querySelector(".town-room-plaque-count")!;
@@ -206,7 +197,6 @@ test("a folded plaque totals hidden agents as well as its 24 visible desks", asy
         width: 176,
         counts,
         color: null,
-        actions,
       }),
     );
     expect(

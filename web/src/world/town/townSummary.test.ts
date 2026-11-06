@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { Pane, Tab, Workspace } from "../../types";
 import {
   projectWorldOffice,
@@ -21,6 +23,8 @@ import { townFoldedActivity } from "./townFoldedActivity";
 import { townCalls, type TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
 import { townPlaceSummary, townSummary, townSummaryAge } from "./townSummary";
+import { TownBoard } from "./TownBoard";
+import { townModelFromProjection } from "./townModel";
 
 /** One synthetic host: two rooms, one agent per tab, with given statuses. */
 function office(statuses: Record<string, string[]>) {
@@ -111,6 +115,33 @@ test("Summary counts and lists agents in every building with colliding native ID
   ]);
   expect(summary.finished).toHaveLength(2);
   expect(summary.hosts.map(({ counts }) => counts.working)).toEqual([1, 1]);
+});
+
+test("the board counts every building even when scene admission shows only one", async () => {
+  const { connection } = office({ alpha: ["blocked", "working", "done"] });
+  const world = buildWorldObject(
+    [
+      connection,
+      { ...connection, connectionId: "other", label: "Other building" },
+    ],
+    "studio",
+  );
+  await prepareWorldOffice(world);
+  const projection = projectWorldOffice(world, 1, null, {
+    ...TOWN_PRESENTATION_BOUNDS,
+    rooms: 1,
+  });
+  expect(projection.rooms).toHaveLength(1);
+  expect(projection.roster).toHaveLength(6);
+  const board = renderToStaticMarkup(
+    createElement(TownBoard, {
+      model: townModelFromProjection(projection),
+      observability: NO_METRICS,
+    }),
+  );
+  expect(board).toContain(
+    'aria-label="Town board: 2 working, 2 need you, 2 done"',
+  );
 });
 
 test("room and table summaries reuse board statuses and lists without crossing places or hosts", async () => {

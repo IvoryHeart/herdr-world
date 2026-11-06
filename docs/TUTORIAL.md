@@ -177,9 +177,9 @@ hosts stay usable.
    hover the name for its full text. The colour, active/total agent count and
    blocked badge stay visible. Active means working or waiting on you; plain
    terminals are excluded from the total. Hover the count for the working/waiting
-   breakdown. Hover or focus a plate to reveal Rename and Close below it,
-   plus that room's summary. Hover a table or its name for that table's
-   summary; tap the table's name to keep it open. On a touch screen, tap the
+   breakdown. Hover or focus a plate to open one card containing Rename, Close
+   and that room's summary. Move into the card to use its controls or lists.
+   Hover a table or its name for that table's summary; tap the table's name to keep it open. On a touch screen, tap the
    room name or table name to read the same summaries. They use the Town
    board's status counts, waiting agents, questions and unreviewed finishes,
    limited to that place, including agents away from their seats. Close a

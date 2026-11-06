@@ -536,7 +536,6 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                         ...roomColor,
                       }
                     }
-                    actions={roomActions}
                     onSummary={onPlaceSummary}
                   />
                   {roomActions.showCreateSeat(room.key) && seatCell ? (

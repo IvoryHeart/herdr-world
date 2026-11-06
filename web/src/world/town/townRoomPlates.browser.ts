@@ -112,10 +112,7 @@ export async function checkTownRoomPlates(
     "the visible room plate must receive its native pointer hit",
   );
   const actions = plate.querySelector<HTMLElement>(".town-room-plaque-actions");
-  check(
-    !!actions && getComputedStyle(actions).visibility === "hidden",
-    "room management controls must start hidden",
-  );
+  check(!actions, "room management controls belong in the shared summary card");
   const receivesPointer = (element: HTMLElement) => {
     const box = element.getBoundingClientRect();
     return element.contains(
@@ -132,6 +129,49 @@ export async function checkTownRoomPlates(
   await waitFor(
     () => document.querySelector(".town-place-summary") !== null,
     "hovering a room name did not show its summary",
+  );
+  const hoverCard = document.querySelector<HTMLElement>(".town-place-summary")!;
+  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+  canvas.dispatchEvent(
+    new PointerEvent("pointerleave", { pointerType: "mouse" }),
+  );
+  const afterLabelDelay = performance.now() + 250;
+  await waitFor(
+    () => performance.now() >= afterLabelDelay,
+    "label hover dismiss deadline did not elapse",
+  );
+  check(
+    document.querySelector(".town-place-summary") === hoverCard,
+    "a queued canvas leave must not dismiss the room label's hover summary",
+  );
+  plate.dispatchEvent(
+    new PointerEvent("pointerout", {
+      bubbles: true,
+      pointerType: "mouse",
+      relatedTarget: hoverCard,
+    }),
+  );
+  hoverCard.dispatchEvent(
+    new PointerEvent("pointerover", {
+      bubbles: true,
+      pointerType: "mouse",
+      relatedTarget: plate,
+    }),
+  );
+  // A queued scene hover-clear can arrive after the portal receives the pointer.
+  canvas.dispatchEvent(
+    new PointerEvent("pointerleave", { pointerType: "mouse" }),
+  );
+  const afterDismissDelay = performance.now() + 250;
+  await waitFor(
+    () => performance.now() >= afterDismissDelay,
+    "hover dismiss deadline did not elapse",
+  );
+  check(
+    document.querySelector(".town-place-summary") === hoverCard &&
+      hoverCard.querySelector('[aria-label^="Rename room "]') !== null &&
+      hoverCard.querySelector('[aria-label^="Close room "]') !== null,
+    "moving from a room name into its combined actions/summary card must keep that card open",
   );
   document
     .querySelector<HTMLButtonElement>('[aria-label="Close place summary"]')!
@@ -158,33 +198,37 @@ export async function checkTownRoomPlates(
       !roomSummary.textContent?.includes("Hosts and rooms"),
     "place summary must omit town-wide spend and topology",
   );
+  const sharedActions = roomSummary.querySelector<HTMLElement>(
+    ".town-place-summary-actions",
+  );
   check(
-    !!actions &&
-      getComputedStyle(actions).visibility === "visible" &&
-      [...actions.querySelectorAll("button")].every(
+    !!sharedActions &&
+      [...sharedActions.querySelectorAll("button")].every(
         (button) =>
-          button.getBoundingClientRect().width >= 39.5 &&
           button.getBoundingClientRect().height >= 39.5 &&
           receivesPointer(button),
       ) &&
-      Math.abs(plate.getBoundingClientRect().width - width) < 1 &&
-      actions.getBoundingClientRect().left >=
-        plate.getBoundingClientRect().left - 1 &&
-      actions.getBoundingClientRect().right <=
-        plate.getBoundingClientRect().right + 1,
-    "keyboard focus must reveal 40px room actions without widening the name plate",
+      sharedActions.querySelector('[aria-label^="Rename room "]') !== null &&
+      sharedActions.querySelector('[aria-label^="Close room "]') !== null &&
+      Math.abs(plate.getBoundingClientRect().width - width) < 1,
+    "room summary must contain reachable Rename and Close controls without widening the name plate",
   );
   plate.blur();
   plate.dispatchEvent(
     new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }),
   );
-  check(
-    !!actions && getComputedStyle(actions).visibility === "visible",
-    "a touch on the room plate must reveal its management controls",
-  );
   await waitFor(
     () => document.querySelector(".town-place-summary") !== null,
     "a touch on the room name did not show its summary",
+  );
+  check(
+    document.querySelector(
+      '.town-place-summary [aria-label^="Rename room "]',
+    ) !== null &&
+      document.querySelector(
+        '.town-place-summary [aria-label^="Close room "]',
+      ) !== null,
+    "touch must reveal the same combined actions and room summary",
   );
   document
     .querySelector<HTMLButtonElement>('[aria-label="Close place summary"]')!
@@ -219,7 +263,6 @@ export async function checkTownRoomPlates(
     (target) => target.dataset.targetKey === tableName.dataset.townDeskKey,
   )!;
   const tableBox = tableTarget.getBoundingClientRect();
-  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
   canvas.dispatchEvent(
     new PointerEvent("pointermove", {
       bubbles: true,
