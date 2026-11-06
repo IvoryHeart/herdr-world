@@ -22,6 +22,8 @@ import {
  */
 
 export type GateConfig = {
+  /** Crew-owned classification of complete fixture-only web file inventories. */
+  excludeUiFixtures?: boolean;
   /** `owner/name`. */
   repo: string;
   /** Required reviewers: per PR number, else per `pod:<name>` label, else default. */

@@ -143,3 +143,32 @@ test("React/tooling fixture-only paths need no UI captures; actual visible chang
   ).toBeNull();
   expect(crewUiChange({ totalCount: 1, nodes: [{}] })).toBeNull();
 });
+
+test("the public crew setting reaches the observer through the gate config loader", async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { loadConfig } = await import("./gate");
+  const dir = mkdtempSync(join(tmpdir(), "crew-gate-config-"));
+  try {
+    const path = join(dir, "config.json");
+    writeFileSync(
+      path,
+      JSON.stringify({
+        repo: "example-org/widgets",
+        crew: { convergingReviews: true },
+      }),
+    );
+    expect(loadConfig(path).excludeUiFixtures).toBe(true);
+    writeFileSync(
+      path,
+      JSON.stringify({
+        repo: "example-org/widgets",
+        crew: { convergingReviews: false },
+      }),
+    );
+    expect(loadConfig(path).excludeUiFixtures).toBeUndefined();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

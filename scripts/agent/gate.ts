@@ -117,12 +117,17 @@ export function loadConfig(path: string): GateConfig {
     throw new Error(
       `No gate config at ${path}. Copy scripts/agent/gate/config.example.json there and fill in the crew's reviewers.`,
     );
-  const value = JSON.parse(readFileSync(path, "utf8")) as Partial<GateConfig>;
+  const value = JSON.parse(
+    readFileSync(path, "utf8"),
+  ) as Partial<GateConfig> & { crew?: { convergingReviews?: boolean } };
   if (typeof value.repo !== "string" || !/^[\w.-]+\/[\w.-]+$/u.test(value.repo))
     throw new Error("Gate config needs repo as owner/name");
   return {
     repo: value.repo,
     reviewers: value.reviewers ?? {},
+    ...(value.crew?.convergingReviews === true
+      ? { excludeUiFixtures: true }
+      : {}),
     ...(value.requiredChecks ? { requiredChecks: value.requiredChecks } : {}),
     ...(value.remote ? { remote: value.remote } : {}),
   };

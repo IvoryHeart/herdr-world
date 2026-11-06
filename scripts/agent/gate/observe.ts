@@ -241,10 +241,7 @@ export function observe(options: {
         expiresAt: now + PULL_REQUEST_DETAIL_MAX_AGE_MS,
       };
       const pr = record(record(data[`p${index}`]).pullRequest);
-      if (
-        (config as GateConfig & { crew?: { convergingReviews?: boolean } }).crew
-          ?.convergingReviews
-      ) {
+      if (config.excludeUiFixtures) {
         const visible = crewUiChange(record(pr.files));
         if (visible !== null) item.pr.uiChange = visible;
       }
