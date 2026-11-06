@@ -32,17 +32,8 @@ import {
   type TerminalFrame,
   terminalFrameMessage,
   type TerminalSession,
+  type ViewerViewport,
 } from "./terminal-sessions";
-
-type ViewerViewport = {
-  cols: number;
-  rows: number;
-  /**
-   * Order of the request that set this viewport. Terminal viewports use the
-   * bridge-wide viewport counter; relay viewports use the relay revision.
-   */
-  revision: number;
-};
 
 const CLIPBOARD_RELAY_READY_WAIT_MS = 500;
 const TERMINAL_FIRST_FRAME_WAIT_MS = 20_000;

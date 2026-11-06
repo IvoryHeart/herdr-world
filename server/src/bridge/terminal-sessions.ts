@@ -15,6 +15,16 @@ export type TerminalSession = {
   rows: number;
 };
 
+export type ViewerViewport = {
+  cols: number;
+  rows: number;
+  /**
+   * Order of the request that set this viewport. Terminal viewports use the
+   * bridge-wide viewport counter; relay viewports use the relay revision.
+   */
+  revision: number;
+};
+
 export type SharedTerminalSession = {
   thin: ThinClient | EndpointTerminalSession;
   connecting: Promise<void> | null;

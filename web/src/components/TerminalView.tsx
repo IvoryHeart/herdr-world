@@ -21,7 +21,11 @@ import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
 import { paneAgentName } from "../agentName";
 import { MobileTerminalIdentity } from "./MobileControls";
 import { useSystemBack } from "../systemBack";
-import { runTerminalInput, sendTerminalInput } from "../terminalInput";
+import {
+  focusTerminalEndpoint,
+  runTerminalInput,
+  sendTerminalInput as sendBytes,
+} from "../terminalInput";
 import {
   ClipboardAddon,
   type ClipboardSelectionType,
@@ -71,7 +75,7 @@ import {
   AnnotationComposerPopover,
 } from "./AnnotationComposerPopover";
 import "@xterm/xterm/css/xterm.css";
-import { bridge, type ConnectionClient, type TerminalPush } from "../api";
+import { bridge, type TerminalPush } from "../api";
 import { useCreationSources } from "../creationRequests";
 import { directoryPreviewName } from "../filesystemPaths";
 import { mobileTerminalShortcutExecution } from "../mobileTerminalShortcutAction";
@@ -212,23 +216,6 @@ import { TerminalAttachSize } from "../terminalAttachSize";
 import { withTimeout } from "../withTimeout";
 import "./TerminalView.css";
 
-function focusTerminalEndpoint(
-  client: ConnectionClient,
-  terminalId: string | undefined,
-) {
-  if (
-    !terminalId ||
-    !client.isCurrent() ||
-    !applicationStore
-      .getConnection(client.connectionId)
-      .endpointAvailability[terminalId]?.methods.includes("pane.focus")
-  )
-    return;
-  void client
-    .call("terminal.focus", { terminal_id: terminalId })
-    .catch(() => null);
-}
-
 const SYSTEM_CLIPBOARD = "c" as ClipboardSelectionType;
 
 function b64toBytes(b64: string): Uint8Array {
@@ -243,14 +230,6 @@ function b64toText(b64: string): string | null {
   } catch {
     return null;
   }
-}
-
-function sendBytes(
-  client: ConnectionClient,
-  bytes: Uint8Array,
-  terminalId: string,
-) {
-  return sendTerminalInput(client, bytes, terminalId);
 }
 
 const CLIPBOARD_READ_TIMEOUT_MS = 2000;
