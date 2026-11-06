@@ -112,9 +112,6 @@
 .town-bus[data-facing="left"] {
   scale: -1 1;
 }
-.town-bus[data-facing="down"] {
-  rotate: 90deg;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .town-bin-rider[data-out][data-walk],

@@ -38,7 +38,8 @@ export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
  * sets off only when someone is waiting, and everyone waiting boards. When
  * its trip ends the riders are handed to `commit`, which records one durable
  * close intent per entry for the effect runner; the runner reports back
- * through `settle`. Nothing reaches Herdr from here. A reload keeps this
+ * through `settle`. Until then, Put back takes an entry out, riding or not.
+Nothing reaches Herdr from here. A reload keeps this
  * state; a service restart loses it, so nothing held is closed.
  */
 export class WorldBinRegistry {
@@ -119,12 +120,13 @@ export class WorldBinRegistry {
     return this.list();
   }
 
-  /** Take an agent back out before it boards; nothing is closed. */
+  /**
+   * Take an agent back out; nothing is closed. Where the bus picks it up
+   * depends on each browser's Town layout, so the service allows this until
+   * the bus has left the map and its close is recorded.
+   */
   restore(id: string): BinState {
-    const entry = this.entries.get(id);
-    if (!entry) return this.list();
-    if (entry.riding) throw new Error("It has already boarded the bus");
-    this.entries.delete(id);
+    if (!this.entries.delete(id)) return this.list();
     this.changed();
     return this.list();
   }

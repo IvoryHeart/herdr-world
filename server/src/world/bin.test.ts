@@ -143,15 +143,20 @@ test("no bus sets off for an empty bin, and no timer waits for one", async () =>
   expect(registry.list().bus.elapsed_ms).toBeNull();
 });
 
-test("put back works until boarding, then refuses", async () => {
+test("put back works until the bus has left the map", async () => {
   const { registry, committed, advance } = fixture();
   const a = registry.add(agent("p1")).entries[0]!.id;
   expect(registry.restore(a).entries).toEqual([]);
   const b = registry.add(agent("p2")).entries[0]!.id;
+  const c = registry.add(agent("p3")).entries[1]!.id;
   await advance(60_000);
-  expect(() => registry.restore(b)).toThrow("already boarded");
+  // The bus is out: Town may still show it waiting at a later stop.
+  expect(registry.list().entries.every((entry) => entry.riding)).toBe(true);
+  expect(registry.restore(b).entries.map((entry) => entry.id)).toEqual([c]);
   await advance(10_000);
-  expect(ids(committed)).toEqual([["p2"]]);
+  expect(ids(committed)).toEqual([["p3"]]);
+  // Once it has left, the close is recorded and Put back does nothing.
+  expect(registry.restore(c).closing.map((entry) => entry.id)).toEqual([c]);
 });
 
 test("close now takes exactly the entries named", async () => {

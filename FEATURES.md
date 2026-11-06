@@ -265,9 +265,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Agents put in the bin while the bus is out wait for the next one. The
     **Bin** chip at the bottom of every view (on a phone, also a stop or the
     bus in Town) opens the tray: who waits, the time to the next bus,
-    **Put back** (until an agent boards; it walks back to its desk) and
-    **Close now**. A pinned desk's last agent cannot go in the bin, and its
-    close never takes a pinned tab's last pane. Closes are qualified by host
+    **Put back** (until the bus has left the map; it walks back to its desk)
+    and **Close now**. A pinned desk's or pinned tab's last agent cannot go
+    in the bin, and its close never takes a pinned tab's last pane. Closes are qualified by host
     and runtime: a host that restarts keeps its agents, and restarting World
     drops the bin without closing anything.
   - Cached failed-host buildings, agents and Board cards stay stale and

@@ -29,6 +29,9 @@ const towns: Record<string, number[]>[] = [
   { a: [2] },
   { a: [3, 2], b: [1] },
   { a: [2], b: [2], c: [1], d: [1], e: [2] },
+  // A shorter last row, and a wider one below a narrower one.
+  Object.fromEntries([..."abcdefgh"].map((key) => [key, [1]])),
+  { a: [1], b: [1], c: [1], d: [1], e: [1, 1, 1, 1] },
 ];
 
 test("every road crossing has a stop, and the bus passes each on its way off the map", () => {
@@ -44,11 +47,15 @@ test("every road crossing has a stop, and the bus passes each on its way off the
       expect(route.stops.map((stop) => stop.key).sort()).toEqual(
         [...crossings].sort(),
       );
-      // It starts and ends off the map.
-      const first = route.points[0]!;
-      const last = route.points[route.points.length - 1]!;
-      for (const end of [first, last])
-        expect(end.x < 0 || end.x > layout.width * T).toBe(true);
+      // Every street is driven edge to edge, from off the map to off it.
+      expect(route.legs.map((leg) => leg.y)).toEqual(
+        [...new Set(layout.roads)]
+          .sort((a, b) => a - b)
+          .map((r) => (r + 2.5) * T),
+      );
+      for (const leg of route.legs)
+        for (const end of [leg.from, leg.to])
+          expect(end < 0 || end > layout.width * T).toBe(true);
       for (const stop of route.stops) {
         expect(stop.at).toBeGreaterThan(0);
         expect(stop.at).toBeLessThan(route.length);
@@ -56,7 +63,7 @@ test("every road crossing has a stop, and the bus passes each on its way off the
         const bus = townBusAt(route, stop.at);
         expect(
           Math.hypot(bus.x - stop.wait.x, bus.y - stop.wait.y),
-        ).toBeLessThanOrEqual(4 * T);
+        ).toBeLessThanOrEqual(2 * T);
       }
     }
 });

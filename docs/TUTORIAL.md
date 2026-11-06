@@ -404,9 +404,10 @@ at a road crossing. A **Bin** chip appears at the bottom of the screen with the
 time to the next bus. The bus comes every three minutes, drives past every stop
 and picks everyone up; when it has driven off the map, World closes their agents.
 Changed your mind? Open the tray from the chip (or tap a stop or the bus) and
-choose **Put back** before the bus arrives: the agent walks back to its desk and
-stays open. **Close now** skips the wait. A pinned desk keeps its last agent,
-and restarting World empties the bin without closing anything.
+choose **Put back** before the bus leaves the map: the agent walks back to its
+desk and stays open. **Close now** skips the wait. A pinned desk or a tab pinned
+in Spaces keeps its last agent, and restarting World empties the bin without
+closing anything.
 
 **You are done when:** you can find an agent on the expected host, read its peek,
 and open its terminal or Inspector without losing its workspace context.

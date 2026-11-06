@@ -2,33 +2,32 @@ import { Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLayer } from "../../layerStack";
 import { store } from "../../store";
+import { tabPinsFor } from "../../tabPins";
 import type { BinView } from "../../../../shared/bin";
 import type { WorldLeafObject } from "../worldObject";
-import { binBusClock, binClockLabel, type WorldBin } from "./binStore";
+import {
+  binAddRequest,
+  binBusClock,
+  binClockLabel,
+  type WorldBin,
+} from "./binStore";
 import { useWorldBin, worldBinStore } from "./useWorldBin";
 import { WORLD_BIN_OPEN_EVENT } from "./worldBinEvents";
 import "./bin.css";
 
 /**
  * Put an agent in the bin: it is held, and Town's next bus takes it. A
- * pinned tab (`preserveTab`) never loses its last pane. True once held.
+ * pinned desk (`pinnedDesk`) or a tab pinned in Spaces never loses its last
+ * pane. True once held.
  */
 export async function putInBin(
   leaf: WorldLeafObject,
   view: BinView,
-  preserveTab: boolean,
+  pinnedDesk: boolean,
 ) {
-  const error = await worldBinStore().add({
-    connection_id: leaf.connectionId,
-    connection_generation: leaf.generation,
-    workspace_id: leaf.workspaceId,
-    tab_id: leaf.tabId,
-    pane_id: leaf.nativeId,
-    terminal_id: leaf.terminalId,
-    label: leaf.label,
-    view,
-    preserve_tab: preserveTab,
-  });
+  const error = await worldBinStore().add(
+    binAddRequest(leaf, view, pinnedDesk, tabPinsFor(leaf.connectionId)),
+  );
   if (error)
     store.notify({
       kind: "error",
@@ -127,12 +126,13 @@ export function WorldBin() {
                   <span>
                     <b>{entry.label}</b>
                     <small>
-                      {entry.riding ? "On the bus" : "Waiting at the stop"}
+                      {entry.riding
+                        ? "Taken by this bus"
+                        : "Waiting for the bus"}
                     </small>
                   </span>
                   <button
                     type="button"
-                    disabled={entry.riding}
                     onClick={() => act(() => worldBinStore().restore(entry.id))}
                   >
                     Put back

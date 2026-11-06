@@ -28,8 +28,11 @@ export type TownBusStop = {
   at: number;
 };
 
+/** One pass along a street, edge to edge, at the lanes' height. */
+export type TownBusLeg = { y: number; from: number; to: number };
+
 export type TownBusRoute = {
-  points: readonly TownPoint[];
+  legs: readonly TownBusLeg[];
   length: number;
   stops: readonly TownBusStop[];
 };
@@ -37,81 +40,56 @@ export type TownBusRoute = {
 const lane = (road: number) => (road + STREET / 2) * T;
 
 /**
- * Every crossing of a street and a side road has a stop. The bus snakes
- * along each street in turn, from off the map's left edge, turning down the
- * outermost side road to the next street, and leaves the map past the last.
+ * Every crossing of a street and a side road has a stop. The bus drives
+ * every street from one edge of the map to the other, alternating
+ * direction, so it passes every crossing whatever the rows' widths; between
+ * streets it is off the map.
  */
 export function townBusRoute(layout: TownLayout): TownBusRoute {
   const roads = [...new Set(layout.roads)].sort((a, b) => a - b);
-  const crossings = new Map<string, TownPoint>();
-  for (const road of roads)
-    for (const side of layout.verticalRoads)
-      if (side.y0 === road + STREET || side.y1 === road)
-        crossings.set(`${side.x}:${road}`, {
-          x: (side.x - 0.5) * T,
-          y: (road + STREET - 0.5) * T,
-        });
-  const points: TownPoint[] = [];
-  let right = true;
-  roads.forEach((road, index) => {
-    if (!index) points.push({ x: -3 * T, y: lane(road) });
-    const next = roads[index + 1];
-    if (next === undefined) {
-      points.push({
-        x: right ? (layout.width + 3) * T : -3 * T,
-        y: lane(road),
-      });
-      return;
-    }
-    const sides = layout.verticalRoads
-      .filter((side) => side.y0 === road + STREET && side.y1 === next)
-      .map((side) => (side.x + STREET / 2) * T);
-    const turn = sides.length
-      ? right
-        ? Math.max(...sides)
-        : Math.min(...sides)
-      : right
-        ? layout.width * T
-        : 0;
-    points.push({ x: turn, y: lane(road) }, { x: turn, y: lane(next) });
-    right = !right;
-  });
-  const length = points.reduce(
-    (sum, point, index) =>
-      index ? sum + distance(points[index - 1]!, point) : 0,
-    0,
-  );
-  const stops = [...crossings].map(([key, wait]) => ({
-    key,
-    wait,
-    at: alongRoute(points, wait),
+  const left = -3 * T;
+  const right = (layout.width + 3) * T;
+  const legs = roads.map((road, index) => ({
+    y: lane(road),
+    from: index % 2 ? right : left,
+    to: index % 2 ? left : right,
   }));
-  return { points, length, stops };
+  const span = right - left;
+  const stops: TownBusStop[] = [];
+  roads.forEach((road, index) => {
+    const leg = legs[index]!;
+    for (const side of layout.verticalRoads)
+      if (side.y0 === road + STREET || side.y1 === road) {
+        const key = `${side.x}:${road}`;
+        if (stops.some((stop) => stop.key === key)) continue;
+        const wait = { x: (side.x - 0.5) * T, y: (road + STREET - 0.5) * T };
+        stops.push({
+          key,
+          wait,
+          at: index * span + Math.abs(wait.x - leg.from),
+        });
+      }
+  });
+  return { legs, length: legs.length * span, stops };
 }
 
-/** The bus's position `distance` pixels along the route, and its heading. */
+/** The bus's position `along` pixels along the route, and its heading. */
 export function townBusAt(route: TownBusRoute, along: number) {
   let left = Math.max(0, along);
-  for (let index = 1; index < route.points.length; index += 1) {
-    const a = route.points[index - 1]!;
-    const b = route.points[index]!;
-    const step = distance(a, b);
-    if (left <= step || index === route.points.length - 1) {
+  for (let index = 0; index < route.legs.length; index += 1) {
+    const leg = route.legs[index]!;
+    const step = Math.abs(leg.to - leg.from);
+    if (left <= step || index === route.legs.length - 1) {
       const k = step ? Math.min(1, left / step) : 1;
       return {
-        x: a.x + (b.x - a.x) * k,
-        y: a.y + (b.y - a.y) * k,
-        facing: (Math.abs(b.x - a.x) >= Math.abs(b.y - a.y)
-          ? b.x < a.x
-            ? "left"
-            : "right"
-          : "down") as "left" | "right" | "down",
+        x: leg.from + (leg.to - leg.from) * k,
+        y: leg.y,
+        facing: (leg.to < leg.from ? "left" : "right") as "left" | "right",
       };
     }
     left -= step;
   }
-  const only = route.points[0] ?? { x: 0, y: 0 };
-  return { ...only, facing: "right" as const };
+  return { x: 0, y: 0, facing: "right" as const };
 }
 
 /** A binned agent shown in Town, at the stop nearest its room. */
@@ -215,40 +193,4 @@ export function townNearestStop(
     }
   }
   return best;
-}
-
-function distance(a: TownPoint, b: TownPoint) {
-  return Math.hypot(b.x - a.x, b.y - a.y);
-}
-
-/** How far along the route its closest point to `point` is. */
-function alongRoute(points: readonly TownPoint[], point: TownPoint) {
-  let best = Infinity;
-  let along = 0;
-  let walked = 0;
-  for (let index = 1; index < points.length; index += 1) {
-    const a = points[index - 1]!;
-    const b = points[index]!;
-    const step = distance(a, b);
-    const k = step
-      ? Math.max(
-          0,
-          Math.min(
-            1,
-            ((point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y)) /
-              (step * step),
-          ),
-        )
-      : 0;
-    const gap = distance(point, {
-      x: a.x + (b.x - a.x) * k,
-      y: a.y + (b.y - a.y) * k,
-    });
-    if (gap < best) {
-      best = gap;
-      along = walked + step * k;
-    }
-    walked += step;
-  }
-  return along;
 }

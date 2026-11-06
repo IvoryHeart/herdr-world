@@ -7,6 +7,7 @@ import {
   type BinTarget,
   type BinView,
 } from "../../../../shared/bin";
+import type { WorldLeafObject } from "../worldObject";
 
 /** The service's bin as this page last read it. */
 export type WorldBin = BinState & {
@@ -125,6 +126,30 @@ export type BinAddRequest = BinTarget & {
   view: BinView;
   preserve_tab: boolean;
 };
+
+/**
+ * The request to hold `leaf`. Its tab keeps its last pane when its desk is
+ * pinned in Town or its tab is pinned in Spaces (`pinnedTabs`, the tab pins
+ * of the leaf's connection).
+ */
+export function binAddRequest(
+  leaf: WorldLeafObject,
+  view: BinView,
+  pinnedDesk: boolean,
+  pinnedTabs: ReadonlySet<string>,
+): BinAddRequest {
+  return {
+    connection_id: leaf.connectionId,
+    connection_generation: leaf.generation,
+    workspace_id: leaf.workspaceId,
+    tab_id: leaf.tabId,
+    pane_id: leaf.nativeId,
+    terminal_id: leaf.terminalId,
+    label: leaf.label,
+    view,
+    preserve_tab: pinnedDesk || pinnedTabs.has(leaf.tabId),
+  };
+}
 
 /**
  * The bin as every view shows it: refreshed on the service's revision

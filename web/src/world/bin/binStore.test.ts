@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import type { BridgeControlMsg, ConnectionStatus } from "../../api";
 import type { BinState } from "../../../../shared/bin";
-import { binBusClock, binClockLabel, WorldBinStore } from "./binStore";
+import type { WorldLeafObject } from "../worldObject";
+import {
+  binAddRequest,
+  binBusClock,
+  binClockLabel,
+  WorldBinStore,
+} from "./binStore";
 
 const state = (over: Partial<BinState> = {}): BinState => ({
   epoch: "run1",
@@ -114,8 +120,8 @@ test("actions take the service's reply, and report its refusal", async () => {
   expect(f.calls[0]![0]).toBe("world.bin.add");
   expect(f.calls[0]![1]).toMatchObject({ pane_id: "p-a", preserve_tab: true });
   expect(f.store.get().entries).toHaveLength(1);
-  f.replies.push(new Error("It has already boarded the bus"), state());
-  expect(await f.store.restore("a")).toBe("It has already boarded the bus");
+  f.replies.push(new Error("invalid bin target"), state());
+  expect(await f.store.restore("a")).toBe("invalid bin target");
   f.replies.push(state({ revision: 4 }));
   expect(await f.store.closeNow(["a"])).toBeNull();
   expect(f.calls[f.calls.length - 1]).toEqual([
@@ -181,4 +187,28 @@ test("each entry remembers when this page first saw it", async () => {
   await f.store.refresh();
   expect(f.store.firstSeen("a")).toBe(first);
   expect(f.store.firstSeen("b")).toBe(first + 20_000);
+});
+
+test("a pinned desk or a tab pinned in Spaces keeps its tab's last pane", () => {
+  const leaf = {
+    connectionId: "studio",
+    generation: 3,
+    workspaceId: "w",
+    tabId: "w:t1",
+    nativeId: "p1",
+    terminalId: "term-1",
+    label: "Agent",
+  } as WorldLeafObject;
+  const request = (desk: boolean, tabs: string[]) =>
+    binAddRequest(leaf, "town", desk, new Set(tabs));
+  expect(request(false, [])).toMatchObject({
+    connection_id: "studio",
+    connection_generation: 3,
+    tab_id: "w:t1",
+    pane_id: "p1",
+    preserve_tab: false,
+  });
+  expect(request(true, []).preserve_tab).toBe(true);
+  expect(request(false, ["w:t1"]).preserve_tab).toBe(true);
+  expect(request(false, ["w:t2"]).preserve_tab).toBe(false);
 });

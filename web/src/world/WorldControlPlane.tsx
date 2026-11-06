@@ -321,7 +321,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       : null;
   };
 
-  // An agent window puts its agent in the bin; a pinned desk keeps its tab.
+  // An agent window puts its agent in the bin; a pinned desk or tab keeps
+  // its tab.
   const inspectorBin = (conversation: WorldInspectorConversation) => {
     const node = presentedWorld.nodeById.get(conversation.nodeId);
     const tab = inspectorTab(conversation);

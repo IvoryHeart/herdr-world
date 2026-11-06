@@ -117,14 +117,16 @@ from the service's start (`BIN_BUS_INTERVAL_MS` in
 [shared/bin.ts](../shared/bin.ts)) it sets off if anyone is waiting, everyone
 waiting boards, and it drives for 20 seconds (`BIN_BUS_TRIP_MS`). When its trip
 ends, its riders' closes are recorded. An agent added while the bus is out waits
-for the next one. Put back works until an agent boards. Its browser RPCs (all
+for the next one. Put back works until the bus has left the map, even for an
+agent Town already shows aboard: where the bus picks an agent up depends on
+each browser's Town layout, so the service does not decide boarding. Its browser RPCs (all
 bridge-scoped `world.*`, browser actor only):
 
 | Method | Effect |
 | --- | --- |
-| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, held entries (each `riding` once it has boarded), entries whose close is in progress, recent outcomes, and `bus`: interval, trip length, time to the next departure and how long the bus on the map has driven |
-| `world.bin.add` | Hold one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first. With `preserve_tab` (a pinned desk), it refuses the tab's last pane that is not already held |
-| `world.bin.restore` | Put back one entry that has not boarded; nothing is closed |
+| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, held entries (each `riding` once the bus on the map is taking it), entries whose close is in progress, recent outcomes, and `bus`: interval, trip length, time to the next departure and how long the bus on the map has driven |
+| `world.bin.add` | Hold one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first. With `preserve_tab` (a pinned desk, or a tab pinned in Spaces), it refuses the tab's last pane that is not already held |
+| `world.bin.restore` | Put back one held entry, until its bus has left the map; nothing is closed |
 | `world.bin.close_now` | `ids`: an explicit list of this run's entry IDs (`bin-<incarnation>-<n>`). Any other run's ID refuses the whole request; there is no unscoped "all" |
 
 Staging lives only in the service's memory, on its monotonic clock: a reload

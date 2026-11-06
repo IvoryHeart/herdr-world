@@ -4,7 +4,8 @@
  * sets off, everyone waiting boards, and it drives the whole route. When it
  * has left the map, `BIN_BUS_TRIP_MS` later, World records one durable close
  * intent per rider, which the effect runner dispatches under its recovery
- * rules. Until an agent boards, Put back takes it out again. Holding and the
+ * rules. Until the bus has left the map, Put back takes an agent out again,
+ * even one Town shows aboard. Holding and the
  * trip are reversible staging in the service's memory: a reload keeps them
  * and a service restart drops them without closing anything.
  */
@@ -32,7 +33,10 @@ export type BinEntry = BinTarget & {
   /** The agent's name, for the bin, the bus and the receipt. */
   label: string;
   view: BinView;
-  /** It boarded the bus on the map: Put back no longer applies. */
+  /**
+   * The bus on the map takes it: it closes when the bus leaves, unless it is
+   * put back first. Town shows it boarding as the bus passes its stop.
+   */
   riding: boolean;
   /** Its tab is pinned: the close never takes the tab's last pane. */
   preserve_tab: boolean;
