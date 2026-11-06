@@ -166,3 +166,10 @@ test("close now admits only an explicit list of entries, never an unscoped all",
     admitVerb(verb, { ids: ["bin-run-1", "bin-run-2"] }, admission),
   ).not.toThrow();
 });
+
+test("a protected last pane is refused before staging", async () => {
+  const f = fixture();
+  await f.add({ preserve_tab: true });
+  expect(f.errors[0]).toContain("last pane of a pinned tab");
+  expect(f.registry.list().entries).toEqual([]);
+});

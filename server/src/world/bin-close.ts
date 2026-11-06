@@ -80,6 +80,7 @@ function captured(entry: EffectEntry) {
         tab_id?: string;
         connection_generation?: number;
         service_incarnation?: string;
+        preserve_tab?: boolean;
       }
     | undefined;
   if (
@@ -95,6 +96,7 @@ function captured(entry: EffectEntry) {
     return null;
   return {
     bin_id: params.bin_id,
+    preserve_tab: params.preserve_tab === true,
     /**
      * The World run that recorded it. A runtime generation is a per-run
      * counter (a restarted World counts from 1 again), so it proves the
@@ -132,6 +134,7 @@ export function binCloseEffect(
       version: 1,
       params: {
         bin_id: entry.id,
+        ...(entry.preserve_tab ? { preserve_tab: true } : {}),
         service_incarnation: incarnation,
         workspace_id: entry.workspace_id,
         tab_id: entry.tab_id,
@@ -228,6 +231,17 @@ export function createBinCloser(deps: {
         // After a possible dispatch only the decisive read in reconcile decides.
         if (!entry.ever_dispatched) throw error;
       }
+      if (
+        target.preserve_tab &&
+        panes &&
+        !entry.ever_dispatched &&
+        panes.filter((item) => item.tab_id === target.tab_id).length <= 1
+      )
+        return {
+          state: "ended",
+          reason:
+            "The last pane of a pinned tab cannot be closed; unpin it first.",
+        };
       if (panes) finalLayouts.set(entry.id, panes.length);
       else finalLayouts.delete(entry.id);
       const pane = panes?.find((item) => item.pane_id === target.pane_id);
@@ -302,6 +316,16 @@ export function createBinCloser(deps: {
         pane.tab_id !== target.tab_id
       )
         return { state: "refused", reason: GONE.moved, not_submitted: true };
+      if (
+        target.preserve_tab &&
+        layout.filter((item) => item.tab_id === target.tab_id).length <= 1
+      )
+        return {
+          state: "refused",
+          reason:
+            "The last pane of a pinned tab cannot be closed; unpin it first.",
+          not_submitted: true,
+        };
       const closesWorkspace = layout.length === 1;
       if (!closesWorkspace) {
         const workspace = (await lease.call(

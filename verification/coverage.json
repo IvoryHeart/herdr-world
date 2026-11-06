@@ -2223,6 +2223,9 @@
         "web/src/world/worldAskTargets.test.ts",
         "web/src/world/town/townAskers.test.ts",
         "web/src/world/town/townActors.test.ts",
+        "web/src/world/town/townBus.test.ts",
+        "web/src/world/bin/binStore.test.ts",
+        "web/src/world/Bin.browser.test.ts",
         "web/src/world/town/townBubbleKind.test.ts",
         "web/src/world/town/townReception.test.ts",
         "web/src/storeImportOrder.test.ts",
@@ -2649,7 +2652,9 @@
         "server/src/world/attention-dispatch.test.ts",
         "server/src/world/answer-dispatch.test.ts",
         "server/src/storage/answer-delivery-crash.test.ts",
-        "server/src/world/bin-close.test.ts"
+        "server/src/world/bin-close.test.ts",
+        "server/src/world/bin-schedule.test.ts",
+        "server/src/rpc/bin.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "bounded-model-and-real-sqlite-crash-matrix",

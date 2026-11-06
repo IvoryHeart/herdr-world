@@ -4,7 +4,7 @@ World's existing `world.sqlite` outbox owns durable effects. Recording the domai
 change and its intent is one SQLite transaction. The service registry marks only
 three private effect verbs queueable: `notification.show` for owner alerts,
 `world.ask.deliver-answer` for one saved answer and its original recipient, and
-`world.bin.close` for one pane whose agent-bin countdown ended.
+`world.bin.close` for one agent after its scheduled Town bus leaves, or on **Close now**.
 Interactive terminal input and Chat sends stay nonqueueable. This substrate
 provides no workflow authoring API or new browser controls. Its schema migration
 follows the durable ID, binding, profile and runtime-status migrations, preserving
@@ -135,3 +135,36 @@ layout. A write storage refused before sending is reported as not recorded; a
 write whose acknowledgement was lost, or whose lookup failed, stays tracked by its
 entry ID until a read settles it.
 
+
+
+## Agent bin and Town bus
+
+Select an agent in Town, Board or Desk and choose **Put in bin** at the lower
+left, in its window's **⋯** menu, or on a Desk card. This holds
+it open; it does not stop the agent's work. Town shows it walking through its
+building's front door to the road intersection nearest its room. Every
+intersection has a **B** stop. Click a stop, the bus, or **Bin** to open the tray,
+including on a phone. The tray shows the time to the next shared bus and each
+held agent's **Put back** and **Close now** controls.
+
+The service starts a fixed three-minute schedule. At arrival, everyone already
+waiting boards that run; new holds wait for the next bus. Boarding ends
+**Put back**. The bus tours every intersection over thirty seconds, then leaves
+the map. Only then are its riders recorded as durable close intents. Opening
+the tray does not pause or change the schedule. **Put back** returns a waiting
+agent to its desk and leaves its pane open; **Close now** records its durable
+close immediately.
+
+Holds are in-memory and shared by open World pages. Reloading a page retains
+them; restarting World forgets holds and riders without closing them. A retired
+runtime generation releases its holds. Dispatch rechecks the captured connection,
+generation, pane, tab and terminal, uses one close lane per connection, and
+preserves existing uncertain-outcome recovery. A protected tab's last pane is
+refused at admission and checked again at dispatch, including after another
+binned pane closes. Tab pins remain browser-local and their protection is
+captured when putting an agent in the bin. Refusals and uncertainty appear in
+the tray. Existing restrictions on worktree-root closes still apply.
+
+The legacy countdown RPCs remain for compatibility; production's scheduled bin
+ignores pause/resume and the old countdown setting. There is no countdown or
+route settings UI.

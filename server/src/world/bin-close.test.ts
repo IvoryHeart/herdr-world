@@ -623,3 +623,29 @@ test("an unconfirmed write that did commit is tracked; a refused write is not re
   );
   expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
 });
+
+test("a pinned tab keeps its last pane when two protected holds close in one lane", async () => {
+  const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
+  const { closer, settled } = await fixture({ studio });
+  await closer.commit(
+    [entry("studio", pane("p1")), entry("studio", pane("p2"))].map((e) => ({
+      ...e,
+      preserve_tab: true,
+    })),
+  );
+  const outcomes = await settled(2);
+  expect(outcomes.map((o) => o.result)).toEqual(["closed", "refused"]);
+  expect(studio.host.panes).toHaveLength(1);
+  expect(studio.host.calls).toHaveLength(1);
+});
+
+test("a protected sibling disappearing between reads cannot empty its tab", async () => {
+  const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
+  studio.host.afterList = (count) => {
+    if (count === 1) studio.host.panes = [pane("p1")];
+  };
+  const { closer, settled } = await fixture({ studio });
+  await closer.commit([{ ...entry("studio", pane("p1")), preserve_tab: true }]);
+  expect((await settled(1))[0]!.result).toBe("refused");
+  expect(studio.host.calls).toEqual([]);
+});

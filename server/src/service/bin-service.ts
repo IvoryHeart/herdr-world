@@ -28,8 +28,9 @@ type Lease = {
 };
 
 /**
- * The agent bin's composition: in-memory countdowns (bin.ts), the durable,
- * per-connection close (bin-close.ts), and the owner's countdown setting.
+ * The agent bin's composition: in-memory scheduled holds (bin.ts), and the
+ * durable per-connection close (bin-close.ts). Legacy countdown settings remain
+ * readable but do not alter Town's fixed bus.
  */
 export function createBinService(deps: {
   incarnation: string;
@@ -68,6 +69,7 @@ export function createBinService(deps: {
   // The registry and closer refer to each other; each call is made later.
   const registry: WorldBinRegistry = new WorldBinRegistry({
     epoch: deps.incarnation,
+    scheduled: true,
     clock: deps.clock,
     scheduler: deps.scheduler,
     commit: (entries) => closer.commit(entries),

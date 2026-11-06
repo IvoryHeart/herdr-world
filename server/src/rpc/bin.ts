@@ -3,8 +3,8 @@ import type { BridgeRpcContext } from "./context";
 
 /**
  * The agent bin (world.bin.*). Every method changes only the reversible,
- * in-memory countdown; Herdr is reached only by the durable close intent
- * recorded when a countdown ends or on Close now.
+ * in-memory staging; Herdr is reached only by the durable close intent
+ * recorded after the scheduled bus leaves or on Close now.
  */
 export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
   const { id, method, params, sendReply, sendError } = rpc;
@@ -57,6 +57,13 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
       pane.workspace_id !== target.workspace_id
     )
       throw new Error("That agent has already closed or moved");
+    if (
+      target.preserve_tab &&
+      result!.panes!.filter((item) => item.tab_id === target.tab_id).length <= 1
+    )
+      throw new Error(
+        "The last pane of a pinned tab cannot be closed; unpin it first.",
+      );
     reply(registry.add(target));
   } catch (error) {
     sendError("world-bin-error", error);

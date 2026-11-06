@@ -1,3 +1,4 @@
+import { binBlockReason, putInBin } from "./bin/binStore";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { agentDirectory } from "./deskDirectory";
 export { agentDirectory, type DirectoryGroup } from "./deskDirectory";
@@ -749,6 +750,17 @@ export function DeskBoard({
               <kbd>E</kbd>
             </button>
           ) : null}
+          <button
+            type="button"
+            disabled={!!binBlockReason(leaf, world)}
+            title={binBlockReason(leaf, world) ?? "Hold for the next Town bus"}
+            onClick={(event) => {
+              event.stopPropagation();
+              void putInBin(leaf, world, "desk");
+            }}
+          >
+            Put in bin
+          </button>
         </div>
       </li>
     );

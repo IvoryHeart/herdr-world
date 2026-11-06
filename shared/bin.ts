@@ -1,11 +1,20 @@
 /**
- * The agent bin. An agent dropped in it waits out a countdown and is then
- * closed, unless the owner takes it back first. The countdown is reversible
- * staging held in the service's memory: a reload keeps it and a service
- * restart cancels it without closing anything. Only when the countdown ends
- * (or the owner chooses Close now) does World record a durable close intent,
- * which the effect runner dispatches under its recovery rules.
+ * Agent-bin holds live only in the World service's memory. Production uses
+ * Town's shared periodic bus: holds board at arrival and the riders close
+ * only after the bus leaves. Reload keeps holds; a World restart releases
+ * them without closing. Close now uses the same durable fenced close path.
+ * The registry also retains its legacy internal countdown mode.
  */
+
+/** Town's fixed service-owned schedule; independent of entries and open views. */
+export const BIN_BUS_INTERVAL_MS = 180_000;
+export const BIN_BUS_DRIVE_MS = 30_000;
+export type BinBus = {
+  cycle: number;
+  driving: boolean;
+  remaining_ms: number;
+  elapsed_ms: number;
+};
 
 /** The countdowns the owner can choose, in seconds. */
 export const BIN_COUNTDOWNS = [10, 30, 60, 120] as const;
@@ -35,10 +44,14 @@ export type BinTarget = {
   tab_id: string;
   pane_id: string;
   terminal_id: string;
+  /** Preserve the tab if this becomes its last pane before dispatch. */
+  preserve_tab?: boolean;
 };
 
 export type BinEntry = BinTarget & {
   id: string;
+  /** Scheduled holds become riders together when the bus arrives. */
+  boarded?: boolean;
   /** The agent's name, for the bin, the bus and the receipt. */
   label: string;
   view: BinView;
@@ -71,6 +84,7 @@ export type BinState = {
    * takes a new run's state whatever its revision, and no stale ID can name
    * an agent added after the restart.
    */
+  bus?: BinBus;
   epoch: string;
   revision: number;
   /** Opening the bin, or holding the bus, pauses every countdown in it. */
@@ -78,6 +92,8 @@ export type BinState = {
   entries: BinEntry[];
   /** IDs whose countdown ended and whose close is being carried out. */
   closing: string[];
+  /** Qualified riders retained for presentation until the durable close settles. */
+  closing_entries?: BinEntry[];
   /** The most recent results, newest last, so every open World can show them. */
   outcomes: BinOutcome[];
   /** The owner's countdown setting, in seconds. */

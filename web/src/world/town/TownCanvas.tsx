@@ -1,3 +1,5 @@
+import { useTownTransit } from "./useTownTransit";
+import { TownBusLayer } from "./TownBusLayer";
 import { useDrawReadiness } from "../useDrawReadiness";
 import "../worldAsks.css";
 import { TownBoard } from "./TownBoard";
@@ -261,7 +263,9 @@ export function TownCanvas({
       void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
   }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
+  const transit = useTownTransit(model, layout);
   const latest = useRef({
+    transit,
     chrome,
     model,
     layout,
@@ -283,6 +287,7 @@ export function TownCanvas({
     roomActions,
   });
   latest.current = {
+    transit,
     chrome,
     calm,
     model,
@@ -429,6 +434,7 @@ export function TownCanvas({
   }, [view, chrome.left, chrome.right]);
 
   const sceneState = () => ({
+    transit: latest.current.transit,
     selectedKey: latest.current.selectedKey,
     hoverKey: latest.current.hover,
     completionSeenKeys: latest.current.completionSeenKeys,
@@ -559,6 +565,7 @@ export function TownCanvas({
     summonedKeys,
     askingKeys,
     calm,
+    transit,
   ]);
 
   // Re-report after any render, so anchors World cleared come back. World
@@ -779,6 +786,7 @@ export function TownCanvas({
         data-level="overview"
         aria-hidden={!ready}
       >
+        <TownBusLayer transit={transit} />
         <TownTeamsLayer teams={teams} />
         <TownHudContext.Provider value={hud}>
           <TownWorldLayer

@@ -302,3 +302,30 @@ policies, separate from history retention.
 #### Scenario: Old pending ask
 - **WHEN** an ask stays unanswered past any history retention window
 - **THEN** it remains answerable, and its correlation and receipts are kept
+
+
+### Requirement: Reversible agent holds and a scheduled Town bus
+
+Putting an agent in the bin from Town, Board or Desk SHALL hold its qualified
+pane open. Town SHALL show stops at road intersections and direct the held
+agent to the stop nearest its room. The service SHALL use one fixed periodic
+schedule, independent of individual holds and open views. Waiting agents SHALL
+board together at arrival; later holds SHALL wait for the next run. Riders SHALL
+close through the existing durable, connection- and generation-fenced close path
+only after the bus leaves the map. Put back SHALL restore a waiting agent to its
+desk without closing; Close now SHALL use that durable close path immediately.
+The tray SHALL show held agents, time to the next bus and those controls, and
+SHALL open from a stop or bus on phones. A protected tab SHALL keep its last pane.
+
+#### Scenario: Undo before boarding
+- **WHEN** the owner puts a held agent back before the bus arrives
+- **THEN** it returns to its desk and its pane stays open
+
+#### Scenario: Arrival during a run
+- **WHEN** an agent is put in the bin while the bus is already driving
+- **THEN** it waits for the next scheduled bus and remains reversible until then
+
+#### Scenario: World restarts with held agents
+- **WHEN** World restarts while agents are waiting or riding
+- **THEN** those in-memory holds are forgotten without recording close intents;
+  already committed closes retain the existing World-run recovery rules

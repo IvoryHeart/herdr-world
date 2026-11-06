@@ -159,6 +159,22 @@ Transient SSH failures retry with backoff. Tap **Reconnect** to restart that
 host's connection, or use **Manage connections** to inspect its error. Other
 hosts stay usable.
 
+### Hold an agent for the Town bus
+
+Select an agent in Town, Board or Desk, then choose **Put in bin** at the lower
+left or from its window's **⋯** menu. Desk cards also offer it.
+The agent stays open and walks to the **B** stop nearest its room. Open **Bin**
+to see the shared countdown; on a phone, tapping a stop or the bus opens the
+same tray.
+
+Try **Put back** before boarding: the agent returns to its desk and stays open.
+Bin it again and wait for the bus, which arrives every three minutes and tours
+the roads for thirty seconds. Everyone already waiting boards that run; agents
+binned during the drive wait for the next bus. Once the bus leaves the map,
+World closes its riders. **Close now** uses the same close path immediately.
+The tray stays usable while the schedule runs. Reloading keeps holds; a World
+restart releases them without closing. A pinned tab keeps its last pane.
+
 ### Explore Town: find work that needs you
 
 <a id="town"></a>

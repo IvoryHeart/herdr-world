@@ -82,3 +82,23 @@ source that honors its declared recovery contract. It does not prove power-loss
 or filesystem safety, network delivery, source idempotency implementations,
 external agent execution/reading, or temporal fairness. The unchanged platform
 and native consumer jobs remain required.
+
+
+## Scheduled bin consumer
+
+The bin schedule adds no durable runner transition. Allowed: hold without an
+intent, restore before boarding, batch-board at the shared arrival, commit only
+after the drive or an explicit Close now. Forbidden: a tray pausing the fixed
+schedule, late holds joining an active run, restoration after boarding, closing
+held agents after World restart, cross-generation dispatch, or emptying a
+protected tab. `server/src/world/bin-schedule.test.ts` uses an injected clock to
+exercise these boundaries without real-time or frame assertions. Existing
+`bin-close.test.ts` retains SQLite, restart, uncertain-send and independent-lane
+consumers and adds last-pane protection after another protected pane closes.
+`rpc/bin.test.ts` covers protected last-pane admission. `townBus.test.ts` covers
+all layout shapes, all intersections, road-only route segments (including
+crosswalks), nearest-stop selection and outdoor reachability; `townActors.test.ts`
+exercises the actual door/stop/restore path. `Bin.browser.test.ts` drives the
+production tray, Town stops and bus controls at desktop/phone widths against a
+synthetic service. These finite consumers supplement the unchanged M5 model;
+visual motion and native Herdr close atomicity remain browser/platform evidence.

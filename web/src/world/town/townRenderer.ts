@@ -1,3 +1,4 @@
+import { BIN_BUS_DRIVE_MS } from "../../../../shared/bin";
 import {
   TownAmbient,
   townSpriteVisible,
@@ -208,12 +209,21 @@ export async function createTownRenderer(
   const groundLayer = new Container();
   const sceneLayer = new Container();
   sceneLayer.sortableChildren = true;
+  const transitLayer = new Container();
+  transitLayer.sortableChildren = true;
   const fxLayer = new Graphics();
   const screenLayer = new Container();
   // Drag effects sit above the scene and survive a scene rebuild.
   const dragLayer = new Container();
   const puffLayer = new Graphics();
-  world.addChild(groundLayer, sceneLayer, fxLayer, dragLayer, puffLayer);
+  world.addChild(
+    groundLayer,
+    sceneLayer,
+    transitLayer,
+    fxLayer,
+    dragLayer,
+    puffLayer,
+  );
   app.stage.addChild(world, screenLayer);
 
   let model: TownModel | null = null;
@@ -588,6 +598,8 @@ export async function createTownRenderer(
     actors,
     sprites,
     screenLayer,
+    outdoorLayer: transitLayer,
+    layout: () => layout,
     model: () => model,
     level: () => level,
     clock: () => clock,
@@ -781,7 +793,14 @@ export async function createTownRenderer(
       actorsMoved ||
       camera.flying ||
       materializing ||
-      dragging;
+      dragging ||
+      Boolean(
+        state.transit?.bus?.driving &&
+          performance.now() -
+            state.transit.readAt +
+            state.transit.bus.elapsed_ms <
+            BIN_BUS_DRIVE_MS,
+      );
     const next = moving
       ? "state"
       : !camera.reducedMotion && !state.calm && ambient.next === clock
@@ -845,6 +864,7 @@ export async function createTownRenderer(
       state.summonedKeys,
       state.askingKeys ?? new Set(),
       hosts,
+      state.transit?.waiting,
     );
     stats.actorsReconciled += actors.reconciled;
     for (const hostKey of hosts ?? actorWorld.buildings.keys())

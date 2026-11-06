@@ -24,6 +24,7 @@ import "./windows.css";
 import "../../components/WorkspaceInspectorActions.css";
 
 export type ManagedWindowControls = {
+  bin?: { onBin(): void };
   maximized: boolean;
   compact: boolean;
   onMinimize(): void;
@@ -131,6 +132,7 @@ export function WindowControls({
       ]
     : [];
   const items: MenuItem[] = [
+    ...(controls.bin ? [{ label: "Put in bin", run: controls.bin.onBin }] : []),
     ...(controls.compact ? pinItems : []),
     ...(controls.views ?? []).map((view, index) => ({
       key: `view:${view.id}`,

@@ -1,0 +1,63 @@
+.town-bus-stop {
+  position: absolute;
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  transform: translate(-50%, -100%);
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid #d9c88f;
+  border-radius: 0;
+  color: #fff5cf;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 5;
+}
+.town-bus-stop span {
+  display: block;
+  width: 18px;
+  height: 19px;
+  margin: 0 auto 6px;
+  background: #285d62;
+  border: 2px solid #e4d7a3;
+  border-radius: 3px;
+  font: bold 12px monospace;
+}
+.town-bus-stop::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+.town-scheduled-bus {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid #594a2e;
+  border-radius: 6px;
+  background: #e4b751;
+  color: #263d4a;
+  box-shadow: 0 4px #172330;
+  offset-rotate: auto;
+  animation-name: town-bus-route;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 8;
+}
+@keyframes town-bus-route {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .town-scheduled-bus {
+    offset-rotate: 0deg;
+  }
+}

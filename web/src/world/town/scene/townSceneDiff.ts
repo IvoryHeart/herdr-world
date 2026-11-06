@@ -1,3 +1,4 @@
+import type { TownTransit } from "../townBus";
 /**
  * What the renderer is handed: the town now, and what changed since the
  * renderer last applied it. The scene computes the dirty sets; the renderer
@@ -21,6 +22,7 @@ import {
 
 /** The user's marks the renderer draws: selection, hover, seen, summoned, asking. */
 export type TownSceneState = {
+  transit?: TownTransit;
   selectedKey: string | null;
   hoverKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
@@ -104,6 +106,8 @@ export class TownSceneDiff {
           : townActorDirty(this.actorKeys, keys);
       this.actorKeys = keys;
     }
+    if (state.transit !== this.state?.transit)
+      actors = new Set(layout.buildings.map((building) => building.hostKey));
     this.model = model;
     this.layout = layout;
     this.state = state;

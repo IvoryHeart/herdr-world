@@ -1,3 +1,4 @@
+import { townRiderHidden } from "./townBus";
 /**
  * The Town renderer's standing and walking agents and their status bubbles:
  * each agent away from its seat as a retained sprite and shadow in its
@@ -10,7 +11,13 @@ import type { TownActors } from "./townActors";
 import type { TownAmbient } from "./townAmbient";
 import { townAgentChatting, townBubbleKind } from "./townBubbleKind";
 import type { TownCamera, TownLevel } from "./townCamera";
-import { TOWN_AGENT_SCALE, townSeat, type TownCell } from "./townLayout";
+import {
+  TOWN_TILE as T,
+  TOWN_AGENT_SCALE,
+  townSeat,
+  type TownCell,
+  type TownLayout,
+} from "./townLayout";
 import type { TownModel } from "./townModel";
 import type { TownSceneState } from "./townRenderer";
 import { textureOf, type BuildingView } from "./townRendererScene";
@@ -30,6 +37,8 @@ export type TownActorViewsContext = {
   actors: TownActors;
   sprites: TownStaticSprites;
   screenLayer: Container;
+  outdoorLayer: Container;
+  layout(): TownLayout | null;
   model(): TownModel | null;
   level(): TownLevel;
   /** The renderer's animation clock, in seconds. */
@@ -69,9 +78,23 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
   const updateActors = (standingAlpha: number) => {
     const live = new Set<string>();
     for (const actor of actors.actors.values()) {
-      if (actor.mode === "seat") continue;
+      if (
+        actor.mode === "seat" ||
+        townRiderHidden(actor.key, ctx.state().transit, performance.now())
+      )
+        continue;
       const building = ctx.buildingOf(actor.hostKey);
-      if (!building || !building.container.visible) continue;
+      const bounds = ctx
+        .layout()
+        ?.buildings.find((b) => b.hostKey === actor.hostKey);
+      const outside =
+        bounds &&
+        (actor.x < bounds.x * T ||
+          actor.x >= (bounds.x + bounds.w) * T ||
+          actor.y < bounds.y * T ||
+          actor.y >= (bounds.y + bounds.h) * T);
+      if (!outside && (!building || !building.container.visible)) continue;
+      const parent = outside ? ctx.outdoorLayer : building!.dynamic;
       live.add(actor.key);
       let view = actorViews.get(actor.key);
       if (!view) {
@@ -86,10 +109,12 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
         sprite.anchor.set(0.5, 1);
         sprite.scale.set(TOWN_AGENT_SCALE);
         shadow.scale.set(TOWN_AGENT_SCALE, 1);
-        building.dynamic.addChild(shadow, sprite);
+        parent.addChild(shadow, sprite);
         view = { sprite, shadow, look: lookOf(actor.key) };
         actorViews.set(actor.key, view);
       }
+      if (view.sprite.parent !== parent)
+        parent.addChild(view.shadow, view.sprite);
       const moving = actor.mode === "walk";
       const frame = moving ? Math.floor(actor.walked / 6) % 4 : 0;
       const bob = moving && frame % 2 ? -1 : 0;
@@ -133,7 +158,11 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
     if (model && level !== "town")
       for (const actor of actors.actors.values()) {
         const agent = model.agents.get(actor.key);
-        if (!agent) continue;
+        if (
+          !agent ||
+          townRiderHidden(actor.key, state.transit, performance.now())
+        )
+          continue;
         const status = agent.semanticStatus;
         const near = level === "room" || level === "desk";
         const chatting = townAgentChatting(

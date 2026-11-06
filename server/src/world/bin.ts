@@ -1,4 +1,6 @@
 import {
+  BIN_BUS_INTERVAL_MS,
+  BIN_BUS_DRIVE_MS,
   parseBinCountdown,
   type BinCountdown,
   type BinEntry,
@@ -56,11 +58,17 @@ export class WorldBinRegistry {
   private outcomes: BinOutcome[] = [];
   private timer: { cancel(): void } | null = null;
   private nextId = 1;
+  private busAt = 0;
+  private busOrigin = 0;
+  private busCycle = 0;
+  private driving = false;
 
   constructor(
     private readonly deps: {
       /** The service incarnation: entry IDs carry it. */
       epoch: string;
+      /** Production uses a periodic bus; legacy countdown callers remain supported. */
+      scheduled?: boolean;
       clock: Clock;
       scheduler: Scheduler;
       commit: BinCommit;
@@ -68,12 +76,33 @@ export class WorldBinRegistry {
       publish(revision: number): void;
       log?(message: string): void;
     },
-  ) {}
+  ) {
+    if (deps.scheduled) {
+      this.busOrigin = deps.clock.monotonic();
+      this.busAt = this.busOrigin + BIN_BUS_INTERVAL_MS;
+      this.schedule();
+    }
+  }
 
   list(): BinState {
     const now = this.deps.clock.monotonic();
     return {
       epoch: this.deps.epoch,
+      ...(this.deps.scheduled
+        ? {
+            bus: {
+              cycle: this.busCycle,
+              driving: this.driving,
+              remaining_ms: Math.max(0, this.busAt - now),
+              elapsed_ms: this.driving
+                ? Math.min(
+                    BIN_BUS_DRIVE_MS,
+                    BIN_BUS_DRIVE_MS - (this.busAt - now),
+                  )
+                : 0,
+            },
+          }
+        : {}),
       revision: this.revision,
       paused: this.paused,
       entries: [...this.entries.values()].map(({ deadline, ...entry }) => ({
@@ -82,6 +111,7 @@ export class WorldBinRegistry {
           deadline === null ? entry.remaining_ms : Math.max(0, deadline - now),
       })),
       closing: [...this.closing.keys()],
+      closing_entries: [...this.closing.values()],
       outcomes: [...this.outcomes],
       countdown_s: parseBinCountdown(this.deps.countdown()),
     };
@@ -105,6 +135,20 @@ export class WorldBinRegistry {
     if (this.entries.size >= MAX_ENTRIES)
       throw new Error(`The bin holds at most ${MAX_ENTRIES} agents`);
     const now = this.deps.clock.monotonic();
+    if (this.deps.scheduled) {
+      const id = `bin-${this.deps.epoch}-${this.nextId++}`;
+      this.entries.set(id, {
+        ...target,
+        id,
+        boarded: false,
+        trip: "scheduled",
+        duration_ms: BIN_BUS_INTERVAL_MS,
+        remaining_ms: 0,
+        deadline: null,
+      });
+      this.changed();
+      return this.list();
+    }
     const joined =
       typeof input.join === "string" ? this.entries.get(input.join) : undefined;
     const joinedLeft = joined
@@ -129,6 +173,7 @@ export class WorldBinRegistry {
   }
 
   pause(): BinState {
+    if (this.deps.scheduled) return this.list();
     if (this.paused) return this.list();
     const now = this.deps.clock.monotonic();
     for (const entry of this.entries.values()) {
@@ -152,6 +197,7 @@ export class WorldBinRegistry {
 
   /** Take an agent back out; nothing is closed. */
   restore(id: string): BinState {
+    if (this.entries.get(id)?.boarded) return this.list();
     if (!this.entries.delete(id)) return this.list();
     this.emptied();
     this.changed();
@@ -238,6 +284,16 @@ export class WorldBinRegistry {
   private schedule() {
     this.timer?.cancel();
     this.timer = null;
+    if (this.deps.scheduled) {
+      this.timer = this.deps.scheduler.schedule(
+        () => {
+          this.timer = null;
+          this.runBus();
+        },
+        Math.max(0, this.busAt - this.deps.clock.monotonic()),
+      );
+      return;
+    }
     if (this.paused) return;
     let next = Infinity;
     for (const entry of this.entries.values())
@@ -250,6 +306,30 @@ export class WorldBinRegistry {
       },
       Math.max(0, next - this.deps.clock.monotonic()),
     );
+  }
+
+  private runBus() {
+    const now = this.deps.clock.monotonic();
+    if (now < this.busAt) return this.schedule();
+    if (!this.driving) {
+      this.driving = true;
+      this.busCycle += 1;
+      for (const entry of this.entries.values()) entry.boarded = true;
+      // A delayed wake still gives this bus its full drive off the map.
+      this.busAt = now + BIN_BUS_DRIVE_MS;
+      this.changed();
+    } else {
+      this.driving = false;
+      this.busAt =
+        this.busOrigin +
+        (Math.floor((now - this.busOrigin) / BIN_BUS_INTERVAL_MS) + 1) *
+          BIN_BUS_INTERVAL_MS;
+      const riders = [...this.entries.values()].filter(
+        (entry) => entry.boarded,
+      );
+      if (riders.length) this.depart(riders);
+      else this.changed();
+    }
   }
 
   private expire() {
@@ -330,6 +410,7 @@ function normalize(
     tab_id: input.tab_id,
     pane_id: input.pane_id,
     terminal_id: input.terminal_id,
+    ...(input.preserve_tab === true ? { preserve_tab: true } : {}),
     label: label || "Agent",
     view: (["town", "board", "desk"] as const).includes(
       input.view as "town" | "board" | "desk",

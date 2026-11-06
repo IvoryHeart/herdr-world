@@ -50,6 +50,15 @@ Town, Board, Desk and Spaces are World's views. Office, Tree and Graph have been
 retired: `/office` opens Town, and `/graph` and `/tree` open Board. Board and
 these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
+- **Agent bin and Town bus.** **Put in bin** in Town, Board or Desk holds an
+  agent open. It walks to the nearest intersection's **B** stop in Town. The
+  shared bus arrives every three minutes, collects waiting agents and closes
+  them through World's durable close path after it drives off the map.
+  **Bin**, a stop or the bus opens the tray on desktop and phone: see the next
+  bus, **Put back** before boarding, or **Close now**. Reload retains holds;
+  restarting World releases them without closing. Pinned last panes and
+  retired runtime generations remain protected. See [the bin guide](docs/world-effects.md#agent-bin-and-town-bus).
+
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded

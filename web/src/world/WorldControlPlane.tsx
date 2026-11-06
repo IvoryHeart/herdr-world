@@ -1,3 +1,5 @@
+import { binBlockReason, putInBin } from "./bin/binStore";
+import { BinTray } from "./bin/BinTray";
 import { memo, Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
@@ -320,6 +322,25 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       : null;
   };
 
+  const inspectorBin = (conversation: WorldInspectorConversation) => {
+    const leaf = aggregateWorld.leaves.find(
+      (leaf) =>
+        leaf.connectionId === conversation.connectionId &&
+        leaf.generation === conversation.runtimeGeneration &&
+        leaf.pane.pane_id === conversation.paneId &&
+        leaf.terminalId === conversation.terminalId,
+    );
+    return leaf?.kind === "agent" && !binBlockReason(leaf, aggregateWorld)
+      ? {
+          onBin: () => {
+            void putInBin(leaf, aggregateWorld, view)?.then((held) => {
+              if (held) closeInspector(conversation);
+            });
+          },
+        }
+      : undefined;
+  };
+
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
   const stableOpenNodeById = useStableCallback(openNodeById);
@@ -346,6 +367,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       id="world"
       data-active={active ? "true" : "false"}
     >
+      {active ? (
+        <BinTray world={aggregateWorld} selectedId={selectedId} view={view} />
+      ) : null}
       <AgentDialogs
         world={aggregateWorld}
         onOpenNode={(nodeId) => void openNodeById(nodeId)}
@@ -818,6 +842,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                 });
               },
               pin: inspectorPin(conversation),
+              bin: inspectorBin(conversation),
               // The colour is chosen from the swatch beside the name.
               back: view === "town" ? { label: "Back to Town" } : undefined,
               // A phone switches between agents and terminals from ⋯, as

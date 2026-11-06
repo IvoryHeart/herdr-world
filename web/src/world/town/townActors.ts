@@ -1,3 +1,4 @@
+import { townOutdoorPath, type TownBusStop } from "./townBus";
 /**
  * Presentation-only agent movement for the Office town.
  *
@@ -57,7 +58,8 @@ export type TownActor = {
 export type TownGoal =
   | { kind: "seat"; deskKey: string; seat: number }
   | { kind: "queue"; slot: number }
-  | { kind: "lounge"; spot: TownSpot };
+  | { kind: "lounge"; spot: TownSpot }
+  | { kind: "bin"; spot: TownBusStop };
 
 const WALK_SPEED = 76;
 const SEAT_TWEEN = 0.26;
@@ -258,6 +260,8 @@ export class TownActors {
   private clock = 0;
   private summoned: ReadonlySet<string> = new Set();
   private asking: ReadonlySet<string> = new Set();
+  private binStops: ReadonlyMap<string, TownBusStop> = new Map();
+  private returned = new Map<string, string>();
 
   get time() {
     return this.clock;
@@ -279,11 +283,25 @@ export class TownActors {
     summoned: ReadonlySet<string> = this.summoned,
     asking: ReadonlySet<string> = this.asking,
     hosts?: ReadonlySet<string>,
+    binStops: ReadonlyMap<string, TownBusStop> = new Map(),
   ) {
     const previousWorld = this.world;
     this.world = world;
     this.summoned = summoned;
     this.asking = asking;
+    for (const key of this.binStops.keys())
+      if (!binStops.has(key))
+        this.returned.set(
+          key,
+          world.model.agents.get(key)?.semanticStatus ?? "",
+        );
+    this.binStops = binStops;
+    for (const [key, status] of this.returned)
+      if (
+        world.model.agents.get(key)?.semanticStatus !== status ||
+        binStops.has(key)
+      )
+        this.returned.delete(key);
     const { model } = world;
     const seen = new Set<string>();
     const fresh = new Set<string>();
@@ -399,6 +417,8 @@ export class TownActors {
     const queues = new Map<string, TownActor[]>();
     for (const actor of actors) {
       const agent = model.agents.get(actor.key)!;
+      if (this.binStops.has(actor.key) || this.returned.has(actor.key))
+        continue;
       if (
         (agent.semanticStatus !== "blocked" &&
           agent.semanticStatus !== "done" &&
@@ -444,7 +464,8 @@ export class TownActors {
         agent.semanticStatus === "idle" &&
         !this.summoned.has(actor.key) &&
         !this.asking.has(actor.key) &&
-        !model.deskPins.has(seat.deskKey)
+        !model.deskPins.has(seat.deskKey) &&
+        !this.returned.has(actor.key)
       ) {
         if (actor.spot) goal = { kind: "lounge", spot: actor.spot };
         else {
@@ -459,6 +480,8 @@ export class TownActors {
           }
         }
       }
+      const stop = this.binStops.get(actor.key);
+      if (stop) goal = { kind: "bin", spot: stop };
       if (goal.kind !== "lounge" && actor.spot) actor.spot = null;
       if (goal.kind === "lounge") actor.spot = goal.spot;
       actor.queueSlot = goal.kind === "queue" ? goal.slot : null;
@@ -472,6 +495,8 @@ export class TownActors {
         y >= (building.y + building.h) * T;
       const invalidMotion =
         layoutChanged &&
+        actor.goal?.kind !== "bin" &&
+        goal.kind !== "bin" &&
         (outside(actor.x, actor.y) ||
           (actor.tween !== null && outside(actor.tween.x, actor.tween.y)) ||
           actor.path.some(([x, y]) => outside(x, y)));
@@ -508,7 +533,10 @@ export class TownActors {
     }
     const building = world.buildings.get(actor.hostKey)!;
     const spot = goal.kind === "queue" ? building.queue[goal.slot]! : goal.spot;
-    return { tile: [spot.x, spot.y], face: spot.face };
+    return {
+      tile: [spot.x, spot.y],
+      face: "face" in spot ? spot.face : "down",
+    };
   }
 
   private travel(actor: TownActor, instant: boolean, settleOnly = false) {
@@ -546,12 +574,44 @@ export class TownActors {
       const target = this.destination(actor);
       if (!target) return;
       const navigation = this.world!.navigation.get(actor.hostKey)!;
-      const path = navigation.path(
-        Math.floor(actor.x / T),
-        Math.floor((actor.y - 1) / T),
-        target.tile[0],
-        target.tile[1],
-      );
+      const sx = Math.floor(actor.x / T),
+        sy = Math.floor((actor.y - 1) / T);
+      const [tx, ty] = target.tile;
+      const b = navigation.building;
+      const inside = (x: number, y: number) =>
+        x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
+      let path = navigation.path(sx, sy, tx, ty);
+      if (!inside(sx, sy) || !inside(tx, ty)) {
+        const door: [number, number] = [b.entryX, b.y + 2];
+        const outside = { x: b.entryX, y: b.y - 1 };
+        const portal: [number, number][] = [
+          [b.entryX, b.y + 1],
+          [b.entryX, b.y],
+          [outside.x, outside.y],
+        ];
+        path = inside(sx, sy)
+          ? [
+              ...(navigation.path(sx, sy, ...door) ?? []),
+              ...portal,
+              ...townOutdoorPath(this.world!.layout, outside, { x: tx, y: ty }),
+            ]
+          : inside(tx, ty)
+            ? [
+                ...townOutdoorPath(
+                  this.world!.layout,
+                  { x: sx, y: sy },
+                  outside,
+                ),
+                ...portal.slice().reverse(),
+                door,
+                ...(navigation.path(...door, tx, ty) ?? []),
+              ]
+            : townOutdoorPath(
+                this.world!.layout,
+                { x: sx, y: sy },
+                { x: tx, y: ty },
+              );
+      }
       // Already in the goal tile (an empty path), still walk to its centre:
       // arriving off-centre would leave the actor where a later settle snaps.
       actor.path = (path?.length ? path : [target.tile]).map(([x, y]) =>
@@ -718,6 +778,7 @@ function sameGoal(a: TownGoal | null, b: TownGoal) {
   if (a.kind === "seat" && b.kind === "seat")
     return a.deskKey === b.deskKey && a.seat === b.seat;
   if (a.kind === "queue" && b.kind === "queue") return a.slot === b.slot;
+  if (a.kind === "bin" && b.kind === "bin") return a.spot.key === b.spot.key;
   if (a.kind === "lounge" && b.kind === "lounge")
     return spotKey(a.spot) === spotKey(b.spot);
   return false;

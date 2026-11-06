@@ -1,3 +1,4 @@
+import { townBusRoute, nearestTownStop } from "./townBus";
 import { expect, test } from "bun:test";
 import { townActorWorld, TownActors } from "./townActors";
 import { layoutTown, TOWN_TILE, townSeat } from "./townLayout";
@@ -465,3 +466,33 @@ for (const count of [24, 4]) {
     ]);
   });
 }
+
+test("bin overrides reception and Put back returns an agent through its door to its desk", () => {
+  const w = world({ a: "blocked" });
+  const actors = new TownActors();
+  actors.sync(w.actorWorld, true);
+  const route = townBusRoute(w.layout);
+  const room = w.layout.buildings[0]!.rooms[0]!;
+  const stop = nearestTownStop(route, {
+    x: room.x + room.w / 2,
+    y: room.y + room.h / 2,
+  })!;
+  actors.sync(
+    w.actorWorld,
+    false,
+    new Set(),
+    new Set(),
+    undefined,
+    new Map([["a", stop]]),
+  );
+  expect(actors.actors.get("a")!.goal?.kind).toBe("bin");
+  settle(actors);
+  expect(actors.actors.get("a")!.x).toBe(stop.x * TOWN_TILE + 8);
+  expect(actors.actors.get("a")!.y).toBe(stop.y * TOWN_TILE + 13);
+  actors.sync(w.actorWorld, false);
+  expect(actors.actors.get("a")!.goal?.kind).toBe("seat");
+  settle(actors);
+  expect(actors.actors.get("a")!.mode).toBe("seat");
+  actors.sync(w.actorWorld, false);
+  expect(actors.actors.get("a")!.goal?.kind).toBe("seat");
+});
