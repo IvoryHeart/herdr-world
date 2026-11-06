@@ -1,5 +1,6 @@
 import {
   type PointerEvent as ReactPointerEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   useLayoutEffect,
   useRef,
@@ -32,6 +33,54 @@ const SWIPE_SLOP_PX = 6;
 const SWIPE_DISMISS_PX = 36;
 const SWIPE_DISMISS_VELOCITY = 0.45;
 const SWIPE_EXIT_MS = 180;
+const REPEAT_DISMISS_MS = 500;
+
+/** A rapid second tap must not activate the control a removed toast exposed. */
+function guardRemovedToastClick(point: { x: number; y: number; at: number }) {
+  const remaining = REPEAT_DISMISS_MS - (performance.now() - point.at);
+  if (remaining <= 0) return;
+  const events = [
+    "pointerdown",
+    "pointerup",
+    "pointercancel",
+    "mousedown",
+    "mouseup",
+    "click",
+    "dblclick",
+  ] as const;
+  const held = new Set<number>();
+  const cleanup = () => {
+    for (const type of events) window.removeEventListener(type, guard, true);
+    window.removeEventListener("blur", cleanup);
+    window.clearTimeout(timer);
+  };
+  let timer = window.setTimeout(cleanup, remaining);
+  const guard = (event: MouseEvent) => {
+    const pointerId = (event as PointerEvent).pointerId;
+    if (
+      !event.isTrusted ||
+      (event.type === "click" && event.detail === 0) ||
+      (!held.has(pointerId) &&
+        (event.button !== 0 ||
+          Math.hypot(event.clientX - point.x, event.clientY - point.y) > 24 ||
+          (event.target instanceof Element && event.target.closest(".toast"))))
+    )
+      return;
+    // Keep a second contact blocked through release, even if it is held past
+    // the repeat window or moved away from the original close button.
+    if (event.type === "pointerdown") {
+      held.add(pointerId);
+      window.clearTimeout(timer);
+    } else if (event.type === "pointerup" || event.type === "pointercancel") {
+      held.delete(pointerId);
+      if (!held.size) timer = window.setTimeout(cleanup, REPEAT_DISMISS_MS);
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  for (const type of events) window.addEventListener(type, guard, true);
+  window.addEventListener("blur", cleanup, { once: true });
+}
 
 // Touch-only swipe-up dismissal in the mobile layout, matching native
 // notification banners. Desktop layouts, mouse, and pen keep the explicit
@@ -47,6 +96,7 @@ export function Toast({
   const ref = useRef<HTMLDivElement>(null);
   const swipeRef = useRef<SwipeState | null>(null);
   const exitTimerRef = useRef<number | null>(null);
+  const clickRef = useRef<{ x: number; y: number; at: number } | null>(null);
 
   // A replacement notification reuses this element. Abandon gestures and
   // exits that began on the previous one before the new one paints, so they
@@ -54,6 +104,8 @@ export function Toast({
   useLayoutEffect(() => {
     const el = ref.current;
     return () => {
+      if (clickRef.current) guardRemovedToastClick(clickRef.current);
+      clickRef.current = null;
       swipeRef.current = null;
       if (exitTimerRef.current !== null) {
         window.clearTimeout(exitTimerRef.current);
@@ -158,11 +210,22 @@ export function Toast({
     }, SWIPE_EXIT_MS);
   };
 
+  const rememberClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    // Keyboard and programmatic activations do not begin a pointer sequence.
+    if (!event.isTrusted || event.detail === 0) return;
+    clickRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      at: performance.now(),
+    };
+  };
+
   return (
     <div
       ref={ref}
       className={className}
       role={role}
+      onClickCapture={rememberClick}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={finishSwipe}
