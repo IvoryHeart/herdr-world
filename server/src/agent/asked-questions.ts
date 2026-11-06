@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { newestOpenCall } from "./conversation";
 import type { PendingPrompt } from "./pending-prompt";
 import type { HistoryEntry } from "./session-history";
 
@@ -40,16 +41,26 @@ function question(value: unknown): AskedQuestion | null {
   if (!value || typeof value !== "object") return null;
   const item = value as Record<string, unknown>;
   const asked = text(item.question);
-  const kind = item.kind ?? "choice";
+  const kind = item.kind === undefined ? "choice" : item.kind;
   if (!asked || (kind !== "choice" && kind !== "text" && kind !== "number"))
     return null;
-  const options = item.options ?? [];
+  if (
+    (item.header !== undefined && !text(item.header)) ||
+    (item.multiSelect !== undefined && typeof item.multiSelect !== "boolean")
+  )
+    return null;
+  const options = item.options === undefined ? [] : item.options;
   if (!Array.isArray(options) || options.length > MAX_OPTIONS) return null;
   const parsed: AskedQuestion["options"] = [];
   for (const option of options) {
     const label = text((option as Record<string, unknown> | null)?.label);
     if (!label) return null;
     const description = text((option as Record<string, unknown>).description);
+    if (
+      (option as Record<string, unknown>).description !== undefined &&
+      !description
+    )
+      return null;
     parsed.push({ label, ...(description ? { description } : {}) });
   }
   if (kind === "choice" && parsed.length < 2) return null;
@@ -66,47 +77,61 @@ function question(value: unknown): AskedQuestion | null {
 /**
  * The questions of the newest ask-the-user call with no result yet, when that
  * is the newest open call: an answered or interrupted ask has its result.
- * Null for anything malformed or out of bounds, so Chat never shows a partial
- * question as the whole one.
+ * Rejected input stays pending without keys, so bounds failures cannot
+ * bypass the transcript check or show a partial question as the whole one.
  */
+export type PendingAsk =
+  | Omit<AskedQuestions, "current">
+  | { call_id: string; rejected: string };
+
 export function askedQuestions(
   entries: readonly HistoryEntry[],
-): Omit<AskedQuestions, "current"> | null {
-  const finished = new Set<string>();
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index]!;
-    if (!entry.source_call_id) continue;
-    if (entry.kind === "tool_result") {
-      finished.add(entry.source_call_id);
-      continue;
-    }
-    if (entry.kind !== "tool_call" || finished.has(entry.source_call_id))
-      continue;
-    if (entry.tool_name !== TOOL) return null;
-    let input: unknown;
-    try {
-      input = JSON.parse(entry.text);
-    } catch {
-      return null;
-    }
-    const list = (input as Record<string, unknown> | null)?.questions;
+): PendingAsk | null {
+  const entry = newestOpenCall(entries);
+  if (!entry || entry.tool_name !== TOOL) return null;
+  // A rejected pending ask is different from no ask: never retain screen keys.
+  const rejected = {
+    call_id: entry.source_call_id!,
+    rejected: createHash("sha256").update(entry.text).digest("hex"),
+  };
+  try {
+    const input = JSON.parse(entry.text);
+    const list = input?.questions;
     if (!Array.isArray(list) || !list.length || list.length > MAX_QUESTIONS)
-      return null;
+      return rejected;
     const questions = list.map(question);
-    if (questions.some((item) => item === null)) return null;
+    if (questions.some((item) => item === null)) return rejected;
     return {
-      call_id: entry.source_call_id,
+      call_id: entry.source_call_id!,
       questions: questions as AskedQuestion[],
     };
+  } catch {
+    return rejected;
   }
-  return null;
 }
 
-/** Text as compared with the screen: no emphasis marks, single spaces. */
-const plain = (value: string) =>
-  value.replace(/[*`]/g, "").replace(/\s+/g, " ").trim();
+/** Normalize paired rendering markup; keep literal wildcard and code contents. */
+const plain = (value: string): string =>
+  value
+    .split(/(`+[^`]+`+)/g)
+    .map((part) =>
+      part.startsWith("`") && /^(`+)([^`]+)\1$/.test(part)
+        ? part.replace(/^(`+)([^`]+)\1$/, "$2")
+        : part
+            .replace(
+              /(^|[\s(])\*\*([^\s*](?:[^*]*[^\s*])?)\*\*(?=$|[\s).,!?])/g,
+              "$1$2",
+            )
+            .replace(
+              /(^|[\s(])\*([^\s*](?:[^*]*[^\s*])?)\*(?=$|[\s).,!?])/g,
+              "$1$2",
+            ),
+    )
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
 const optionText = (label: string, description?: string) =>
-  plain(`${label} ${description ?? ""}`);
+  `${plain(label)} ${plain(description ?? "")}`.trim();
 
 export const UNMATCHED =
   "Chat could not match this question to what the terminal shows (it may be cut off, still drawing or changed), so it does not press a key.";
@@ -125,14 +150,26 @@ export const TYPED =
  */
 export function withAskedQuestions(
   screen: PendingPrompt | null,
-  asked: Omit<AskedQuestions, "current"> | null,
+  asked: PendingAsk | null,
 ): PendingPrompt | null {
   if (!asked) return screen;
-  const { questions } = asked;
   const fingerprint = createHash("sha256")
     .update(JSON.stringify([screen?.fingerprint ?? null, asked]))
     .digest("hex")
     .slice(0, 32);
+  if ("rejected" in asked)
+    return {
+      question: screen?.question ?? [
+        "Claude is waiting on a question Chat cannot read safely.",
+      ],
+      request: screen?.request ?? [],
+      options: [],
+      fingerprint,
+      unanswerable:
+        "Claude's recorded question is unsupported or exceeds Chat's limits. Answer it in the Terminal.",
+      ...(screen?.screen ? { screen: screen.screen } : {}),
+    };
+  const { questions } = asked;
   const headers = questions.map((item) => plain(item.header ?? ""));
   const steps = screen?.steps?.map((step) => plain(step.label));
   const sameForm =
@@ -154,6 +191,17 @@ export function withAskedQuestions(
           match.options[index]!.description,
         ),
     );
+  // The review's full ordered question list must belong to this call.
+  const reviewed = screen?.review
+    ? screen.request
+        .join(" ")
+        .split(/(?:^|\s)●\s+/)
+        .slice(1)
+        .map((part) => plain(part.split(/\s+→\s+/)[0]!))
+    : [];
+  const sameReview =
+    reviewed.length === questions.length &&
+    reviewed.every((item, index) => item === plain(questions[index]!.question));
   const reason = match?.multi_select
     ? MULTI_SELECT
     : match && match.kind !== "choice"
@@ -166,7 +214,7 @@ export function withAskedQuestions(
     sameForm &&
     ((sameOptions && !reason) ||
       // A form's review submits the answers to these same questions.
-      (screen.review && match === null && questions.length > 1))
+      (screen.review && sameReview && match === null && questions.length > 1))
   )
     return {
       ...screen,
@@ -181,11 +229,13 @@ export function withAskedQuestions(
     asked: { ...asked, current: match ? current : null },
     unanswerable:
       reason ??
-      (questions.some((item) => item.multi_select)
-        ? MULTI_SELECT
-        : questions.some((item) => item.kind !== "choice")
-          ? TYPED
-          : UNMATCHED),
+      (match
+        ? UNMATCHED
+        : questions.some((item) => item.multi_select)
+          ? MULTI_SELECT
+          : questions.some((item) => item.kind !== "choice")
+            ? TYPED
+            : UNMATCHED),
     ...(screen?.screen ? { screen: screen.screen } : {}),
     fingerprint,
   };

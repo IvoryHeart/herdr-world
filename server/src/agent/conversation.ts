@@ -123,37 +123,41 @@ const SUMMARY_FIELDS = [
  * when it starts and the result when it ends, so this is the step running
  * now. Reads the whole projection, not the visible window.
  */
-export function runningTool(
+export function newestOpenCall(
   entries: readonly HistoryEntry[],
-): RunningTool | null {
+): HistoryEntry | null {
   const finished = new Set<string>();
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (!entry.source_call_id) continue;
-    if (entry.kind === "tool_result") {
-      finished.add(entry.source_call_id);
-      continue;
-    }
-    if (entry.kind !== "tool_call" || finished.has(entry.source_call_id))
-      continue;
-    let summary: string | null = null;
-    try {
-      const input = JSON.parse(entry.text) as Record<string, unknown>;
-      const field = SUMMARY_FIELDS.find(
-        (name) => typeof input?.[name] === "string" && input[name],
-      );
-      if (field) summary = String(input[field]).split("\n")[0]!.slice(0, 160);
-    } catch {
-      // Arguments that are not JSON name nothing.
-    }
-    return {
-      id: entry.source_call_id,
-      name: entry.tool_name || "tool",
-      summary,
-      started_at: entry.sent_at,
-    };
+    if (entry.kind === "tool_result") finished.add(entry.source_call_id);
+    else if (entry.kind === "tool_call" && !finished.has(entry.source_call_id))
+      return entry;
   }
   return null;
+}
+
+export function runningTool(
+  entries: readonly HistoryEntry[],
+): RunningTool | null {
+  const entry = newestOpenCall(entries);
+  if (!entry) return null;
+  let summary: string | null = null;
+  try {
+    const input = JSON.parse(entry.text) as Record<string, unknown>;
+    const field = SUMMARY_FIELDS.find(
+      (name) => typeof input?.[name] === "string" && input[name],
+    );
+    if (field) summary = String(input[field]).split("\n")[0]!.slice(0, 160);
+  } catch {
+    // Arguments that are not JSON name nothing.
+  }
+  return {
+    id: entry.source_call_id!,
+    name: entry.tool_name || "tool",
+    summary,
+    started_at: entry.sent_at,
+  };
 }
 
 export type ConversationSendResult =
@@ -293,6 +297,16 @@ export interface ConversationSource {
       text?: string;
     },
   ): Promise<ConversationAnswerResult>;
+  /**
+   * Answer Claude's folder-trust question before any session exists, with
+   * the choice the user picked, under the source's pre-session witness.
+   */
+  trust?(
+    target: ConversationTarget & {
+      prompt_fingerprint: string;
+      choice: string;
+    },
+  ): Promise<import("./trust-prompt").TrustResult>;
   /**
    * Press one key in the pane for the Chat session that asked: a key the
    * shown command menu names (with `menu_fingerprint`), text for that menu's

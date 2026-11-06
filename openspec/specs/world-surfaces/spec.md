@@ -2119,7 +2119,29 @@ header, option, description and selection mode with no keys, the reason, and
 the Terminal. The prompt fingerprint SHALL cover the call and its questions as
 well as the screen. A guessed conversation SHALL NOT supply questions. An
 unrecognized prompt SHALL be shown as its whole bottom block, with the reason,
-never as a clipped tail. Needs you SHALL show the same card.
+never as a clipped tail, with its final row initially in view and after updates.
+Supplied transcript fields SHALL be validated atomically. A rejected pending ask
+SHALL remain Terminal-only without retaining screen keys. Literal wildcard and
+code contents SHALL remain significant when matching. A form review SHALL match
+its complete ordered question list as well as its headers before keeping keys.
+History read errors SHALL remain visible alongside question cards.
+Needs you SHALL show the same card.
+
+Claude Code's folder-trust question before a session SHALL be recognized only
+as the complete dialog: its "Quick safety check" text, the unnumbered choices
+"No, exit" then "Yes, I trust this folder" with exactly one cursor, and the
+"Enter to confirm · Esc to cancel" footer. Its input SHALL be bound to a
+service-owned pre-session witness: the source's connection runtime, the pane,
+its terminal, Claude with no reported session, and the pane's foreground
+process group and processes. Every key SHALL follow a fresh read of the witness
+and the exact question, with Herdr's record unchanged across that check, under
+the per-pane input lock. A click SHALL move the cursor with one arrow key only
+when needed, confirm the same question with the cursor on that choice, and only
+then press Enter. A session arriving, a replaced process or terminal, another
+question, a stale or partial read, an unmoved cursor or concurrent input SHALL
+refuse further keys. Digit shortcuts, automatic acceptance, a fabricated
+session fingerprint or relaxed session-bound answer, key or send paths SHALL
+NOT be used.
 
 #### Scenario: Codex waits without hooks
 
@@ -2153,6 +2175,19 @@ never as a clipped tail. Needs you SHALL show the same card.
   from the screen, or that allows several options
 - **THEN** Chat shows the recorded question whole with no answer keys, says
   why, and refuses any answer to that card
+
+#### Scenario: Folder trust before a session
+
+- **WHEN** Claude shows its folder-trust question with no session and the user
+  picks the choice not under the cursor
+- **THEN** the service checks the witness and question, presses one arrow key,
+  confirms the cursor moved on the same question, and presses Enter
+
+#### Scenario: A session or process change during folder trust
+
+- **WHEN** a session arrives, the foreground process changes or the question
+  changes between the card and a key
+- **THEN** no further key is sent and the card shows the refusal
 
 ### Requirement: Chat completes harness command menus and composer keys
 

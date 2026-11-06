@@ -76,10 +76,10 @@ test("the open ask-the-user call gives every question, option and description", 
     Array(9).fill(COLOR),
     [{ ...COLOR, kind: "slider" }],
   ])
-    expect(askedQuestions([call({ questions })])).toBeNull();
+    expect(askedQuestions([call({ questions })])).toHaveProperty("rejected");
   expect(
     askedQuestions([{ ...call({ questions: [COLOR] }), text: "{" }]),
-  ).toBeNull();
+  ).toHaveProperty("rejected");
 });
 
 test("the screen keeps its keys only when it shows the same question and options", () => {
@@ -197,7 +197,7 @@ test("a form keeps keys for its review, never for an unmatched question", () => 
   ];
   const review = {
     question: ["Ready to submit your answers?"],
-    request: [],
+    request: [`● ${COLOR.question}`, "→ Red", `● ${SIZE.question}`, "→ Small"],
     options: [
       { number: "1", label: "Submit answers", key: "1" },
       { number: "2", label: "Cancel", key: "2" },
@@ -216,4 +216,97 @@ test("a form keeps keys for its review, never for an unmatched question", () => 
       asked,
     )!.options,
   ).toEqual([]);
+});
+
+test("review refuses different or missing questions even with the same headers", () => {
+  const asked = askedQuestions([
+    call({
+      questions: [COLOR, { ...COLOR, header: "Size", question: "Which size?" }],
+    }),
+  ]);
+  const review = shown(
+    [
+      "────────────────────────",
+      "←  ☒ Color  ☒ Size  ✔ Submit  →",
+      "",
+      "Review your answers",
+      "",
+      " ● Which unrelated color?",
+      "   → Red",
+      "",
+      " ● Which unrelated size?",
+      "   → Small",
+      "",
+      "Ready to submit your answers?",
+      "",
+      "❯ 1. Submit answers",
+      "  2. Cancel",
+      "",
+    ].join("\n"),
+  )!;
+  expect(review.review).toBe(true);
+  expect(review.options).toHaveLength(2);
+  expect(withAskedQuestions(review, asked)!.options).toEqual([]);
+  const own = {
+    ...review,
+    request: [`● ${COLOR.question}`, "→ Red", "● Which size?", "→ Small"],
+  };
+  expect(withAskedQuestions(own, asked)!.options).toHaveLength(2);
+  expect(
+    withAskedQuestions({ ...own, request: own.request.slice(0, 2) }, asked)!
+      .options,
+  ).toEqual([]);
+});
+
+test("an unmatched single-select uses its own reason in a mixed call", () => {
+  for (const extra of [
+    { ...COLOR, header: "Size", multiSelect: true },
+    { question: "How many?", kind: "number" },
+  ]) {
+    const joined = withAskedQuestions(
+      shown(screen.replace("❯", " ")),
+      askedQuestions([call({ questions: [COLOR, extra] })]),
+    )!;
+    expect(joined.asked!.current).toBe(0);
+    expect(joined.unanswerable).toBe(UNMATCHED);
+    expect(joined.options).toEqual([]);
+  }
+});
+
+test("literal wildcard, code and punctuation differences never get keys", () => {
+  for (const [recorded, displayed] of [
+    ["Delete *.log", "Delete .log"],
+    ["Delete `*.log`", "Delete .log"],
+    ["Use a*b", "Use ab"],
+    ["Use foo_bar", "Use foobar"],
+    ["Use --force", "Use force"],
+  ]) {
+    const changed = {
+      ...COLOR,
+      options: [{ label: recorded, description: recorded }, COLOR.options[1]],
+    };
+    const shownText = screen
+      .replace("Red", displayed!)
+      .replace("Warm color", displayed!);
+    expect(
+      withAskedQuestions(
+        shown(shownText),
+        askedQuestions([call({ questions: [changed] })]),
+      )!.options,
+    ).toEqual([]);
+  }
+  const marked = {
+    ...COLOR,
+    question: "Which **color** should the badge use?",
+    options: [
+      { label: "`Red`", description: "*Warm color*" },
+      COLOR.options[1],
+    ],
+  };
+  expect(
+    withAskedQuestions(
+      shown(),
+      askedQuestions([call({ questions: [marked] })]),
+    )!.options,
+  ).toHaveLength(4);
 });

@@ -51,6 +51,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_conversation.dismiss",
   "agent_conversation.answer",
   "agent_conversation.press",
+  "agent_conversation.trust",
   "agent_conversation.watch",
   "agent_conversation.unwatch",
   "agent_history.get",

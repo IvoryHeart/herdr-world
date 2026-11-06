@@ -37,6 +37,7 @@ import {
   type PendingPrompt,
 } from "./pending-prompt";
 import { askedQuestions, withAskedQuestions } from "./asked-questions";
+import { createTrustPrompts } from "./trust-prompt";
 import { stepsFromEntries, type ConversationStep } from "./conversation-steps";
 import type { AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
@@ -152,6 +153,11 @@ export function createHerdrConversationSource(args: {
     }
     return isRecord(result) && isRecord(result.agent) ? result.agent : null;
   };
+  const trustPrompts = createTrustPrompts({
+    herdrCall: args.herdrCall,
+    agentInfo,
+    active: sendGuard.active,
+  });
 
   const unavailable = (
     base: Omit<Conversation, "status" | "unavailable">,
@@ -414,13 +420,19 @@ export function createHerdrConversationSource(args: {
     const shown = parsePendingPrompt(agent, text, promptContext(info));
     // Claude records the questions it asks: only the pane's reported
     // session, read for this same agent record, supplies them.
-    const step = agent === "claude" && info ? await resolve(paneId) : null;
-    const bound = paneBinding(agent, info ?? {}, args.context)?.fingerprint;
-    if (!step || !("resolved" in step) || !step.resolved.file || !bound)
+    let step: Awaited<ReturnType<typeof resolve>> | null = null;
+    try {
+      step = agent === "claude" && info ? await resolve(paneId) : null;
+      const bound = paneBinding(agent, info ?? {}, args.context)?.fingerprint;
+      if (!step || !("resolved" in step) || !step.resolved.file || !bound)
+        return shown;
+      if (step.base.session_fingerprint !== bound) return shown;
+      const { entries } = await args.cache.get(step.resolved);
+      return withAskedQuestions(shown, askedQuestions(entries));
+    } catch {
+      if (step && "resolved" in step) args.cache.invalidate(step.resolved);
       return shown;
-    if (step.base.session_fingerprint !== bound) return shown;
-    const { entries } = await args.cache.get(step.resolved);
-    return withAskedQuestions(shown, askedQuestions(entries));
+    }
   };
 
   /**
@@ -478,10 +490,16 @@ export function createHerdrConversationSource(args: {
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
     const status = shown.agent_status ?? "";
-    // A blocked agent's question is on its screen, and so is a command
-    // menu, which Chat asks for.
+    // Before Claude has a session, only its folder-trust question is read,
+    // under its pre-session witness. A blocked agent's question is on its
+    // screen, and so is a command menu, which Chat asks for.
+    const trust =
+      shown.agent === "claude" && shown.unavailable?.reason === "no_session"
+        ? await trustPrompts.read(pane_id).catch(() => null)
+        : null;
     const pending_prompt =
-      (status === "blocked" || (menus && MENU_STATUSES.has(status))) &&
+      trust ??
+      ((status === "blocked" || (menus && MENU_STATUSES.has(status))) &&
       shown.session_binding !== "guessed" &&
       (shown.agent !== "codex" || Boolean(shown.session_fingerprint))
         ? await agentInfo(pane_id)
@@ -495,7 +513,7 @@ export function createHerdrConversationSource(args: {
               return (await readMenu(pane_id, info, shown)) ?? asked;
             })
             .catch(() => null)
-        : null;
+        : null);
     const list = reservations.deliveries(
       pane_id,
       shown,
@@ -563,6 +581,7 @@ export function createHerdrConversationSource(args: {
 
   const source: ConversationSource & { dispose(): void } = {
     id: "herdr",
+    trust: trustPrompts.choose,
     ...createPromptActions({
       active: sendGuard.active,
       herdrCall: args.herdrCall,
@@ -581,6 +600,7 @@ export function createHerdrConversationSource(args: {
     dismiss: ({ pane_id, delivery_id }) =>
       deliveries.dismiss(pane_id, delivery_id),
     dispose: () => {
+      trustPrompts.close();
       claims.clear();
       for (const timer of deadlines) clearTimeout(timer);
       deadlines.clear();

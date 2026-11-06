@@ -1,5 +1,5 @@
 import { SquareTerminal } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import type { PendingPrompt, UnconfirmedReason } from "../types";
 import "./ask.css";
 
@@ -41,6 +41,11 @@ export function AskCard({
   onOpenTerminal?: () => void;
   renderMessage?: (message: ReactNode) => ReactNode;
 }) {
+  const screenRef = useRef<HTMLPreElement>(null);
+  useLayoutEffect(() => {
+    const block = screenRef.current;
+    if (block) block.scrollTop = block.scrollHeight;
+  }, [prompt]);
   const nativeEditor = prompt.options.some((option) => option.active);
   const options = nativeEditor ? [] : prompt.options;
   const [textKey, setTextKey] = useState<string | null>(null);
@@ -65,6 +70,7 @@ export function AskCard({
         <AskedQuestions asked={prompt.asked} />
       ) : prompt.screen && !options.length ? (
         <pre
+          ref={screenRef}
           className="agent-chat-ask-screen"
           aria-label="The prompt as the Terminal shows it"
         >

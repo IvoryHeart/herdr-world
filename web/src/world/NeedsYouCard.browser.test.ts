@@ -193,11 +193,11 @@ test.skipIf(!chrome)(
   30000 + BROWSER_STARTUP_TIMEOUT_MS,
 );
 
-// Claude's recorded questions and an unknown prompt, in Chat and Needs you,
-// with synthetic data only.
+// Claude's recorded questions, an unknown prompt and the folder-trust
+// question, in Chat and Needs you, with synthetic data only.
 for (const width of [1280, 390])
   test.skipIf(!chrome)(
-    `Chat and Needs you show Claude's questions whole (${width}px)`,
+    `Chat and Needs you show Claude's questions and trust choices (${width}px)`,
     async () => {
       const dir = await mkdtemp(join(tmpdir(), "question-cards-"));
       const { assets } = await buildWorldBrowserBundle("QuestionCards", dir);
@@ -223,21 +223,36 @@ for (const width of [1280, 390])
         },
       });
       let child: ReturnType<typeof Bun.spawn> | undefined;
+      let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
         const log = join(dir, "chrome.log");
+        const profile = join(dir, "profile");
         child = Bun.spawn(
           [
             chrome!,
             "--headless=new",
             "--disable-gpu",
+            "--remote-debugging-port=0",
             `--window-size=${width},900`,
             "--no-first-run",
             "--no-default-browser-check",
-            `--user-data-dir=${join(dir, "profile")}`,
-            server.url.href,
+            `--user-data-dir=${profile}`,
+            "about:blank",
           ],
           { stdout: "ignore", stderr: Bun.file(log) },
         );
+        connection = await connectCapture(
+          await waitForChromePort(child, profile, log),
+        );
+        await connection.command("Emulation.setDeviceMetricsOverride", {
+          width,
+          height: 900,
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+        await connection.command("Page.navigate", {
+          url: `${server.url.href}?width=${width}`,
+        });
         expect(
           await waitForBrowserFixture(
             requested.promise,
@@ -252,6 +267,7 @@ for (const width of [1280, 390])
           ),
         ).toEqual([]);
       } finally {
+        connection?.close();
         await stopChrome(child);
         server.stop(true);
         await rm(dir, { recursive: true, force: true });

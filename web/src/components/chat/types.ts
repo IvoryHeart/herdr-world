@@ -101,8 +101,27 @@ export type PendingPrompt = {
   unanswerable?: string;
   /** The prompt as the terminal shows it, when Chat cannot read it whole. */
   screen?: string[];
+  /** Claude's folder-trust question before a session: its cursor's choice. */
+  trust?: { cursor: TrustChoice };
   fingerprint: string;
 };
+
+export type TrustChoice = "cancel" | "confirm";
+
+// Mirrors TrustResult in server/src/agent/trust-prompt.ts.
+export type TrustResult =
+  | {
+      status: "sent";
+      choice: TrustChoice;
+      label: string;
+      acknowledged: boolean;
+    }
+  | {
+      status: "refused";
+      reason: string;
+      message: string;
+      prompt: PendingPrompt | null;
+    };
 
 // Mirrors ConversationKeyResult in server/src/agent/conversation.ts.
 export type KeyResult =

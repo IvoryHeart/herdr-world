@@ -8,6 +8,7 @@
   "rpc:agent_conversation.press": "allow deny deny deny deny deny",
   "rpc:agent_conversation.send": "allow deny deny deny deny deny",
   "rpc:agent_conversation.steps": "allow deny deny deny deny deny",
+  "rpc:agent_conversation.trust": "allow deny deny deny deny deny",
   "rpc:agent_conversation.unwatch": "allow deny deny deny deny deny",
   "rpc:agent_conversation.watch": "allow deny deny deny deny deny",
   "rpc:agent_history.entry": "allow deny deny deny deny deny",
