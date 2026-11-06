@@ -1,4 +1,5 @@
 import type { Pane } from "./types";
+import { activityIdentity, activityKey } from "../../shared/agentActivity";
 
 export const AGENT_ORDER_STORAGE_KEY = "agentOrder.v1";
 
@@ -116,7 +117,7 @@ export function agentAttentionPriority(status: string): number {
   return index < 0 ? ATTENTION_STATUSES.length - 1 : index;
 }
 
-/** Join server activity metadata; no activity history is tracked in the browser. */
+/** Join names and sequence metadata; recency additionally requires session identity. */
 export function withAgentActivity(
   panes: readonly Pane[],
   result: unknown,
@@ -152,28 +153,30 @@ export function withAgentActivity(
     const sameCompletedState =
       (pane.agent_status === "idle" || pane.agent_status === "done") &&
       (agent?.agent_status === "idle" || agent?.agent_status === "done");
-    // Still reject metadata from a replacement or an actual state transition.
-    if (
-      !agent ||
-      agent.terminal_id !== pane.terminal_id ||
-      agent.agent !== pane.agent ||
-      (agent.agent_status !== pane.agent_status && !sameCompletedState)
-    )
-      return named;
+    if (!sameAgent || !agent) return named;
     const sequence = agent.state_change_seq;
     const activity = agent.last_activity_at;
+    const paneIdentity = activityIdentity(pane);
+    const agentIdentity = activityIdentity(agent);
+    const sameSession =
+      paneIdentity &&
+      agentIdentity &&
+      activityKey(paneIdentity) === activityKey(agentIdentity);
+    const sequenceMatches =
+      (agent.agent_status === pane.agent_status || sameCompletedState) &&
+      typeof sequence === "number" &&
+      Number.isSafeInteger(sequence) &&
+      sequence >= 0;
+    const activityMatches =
+      sameSession &&
+      typeof activity === "number" &&
+      Number.isFinite(activity) &&
+      activity > 0;
+    if (!sequenceMatches && !activityMatches) return named;
     return {
       ...named,
-      ...(typeof sequence === "number" &&
-      Number.isSafeInteger(sequence) &&
-      sequence >= 0
-        ? { state_change_seq: sequence }
-        : {}),
-      ...(typeof activity === "number" &&
-      Number.isFinite(activity) &&
-      activity > 0
-        ? { last_activity_at: activity }
-        : {}),
+      ...(sequenceMatches ? { state_change_seq: sequence } : {}),
+      ...(activityMatches ? { last_activity_at: activity } : {}),
     };
   });
 }

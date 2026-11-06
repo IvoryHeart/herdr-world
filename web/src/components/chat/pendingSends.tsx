@@ -2,6 +2,10 @@ import type { ConversationDelivery } from "../AgentChat";
 import { formatUiDateTime } from "../../uiLocale";
 import { CommandReceipt } from "./blocks/command";
 
+/** Send receipts hold message text, so World keeps them in memory only. */
+export const RECEIPT_MEMORY_NOTE =
+  "World does not store this: it is gone after World restarts.";
+
 /**
  * Sends Herdr took that the session's transcript does not show yet. A busy
  * harness writes a message there only when the agent takes it up. Native
@@ -23,6 +27,11 @@ export function placedSends(
         <CommandReceipt
           text={delivery.text}
           at={delivery.sent_at}
+          waiting={
+            delivery.waiting
+              ? `waiting for ${agent}: it is busy and runs this when it reaches it`
+              : undefined
+          }
           detail={delivery.detail}
           onDismiss={() => onDismiss(delivery.id)}
         />
@@ -34,7 +43,7 @@ export function placedSends(
           <div className="agent-history-chat-bubble">
             <p>{delivery.text}</p>
           </div>
-          <div className="agent-history-chat-meta">
+          <div className="agent-history-chat-meta" title={RECEIPT_MEMORY_NOTE}>
             {delivery.queued && delivery.state === "pending"
               ? `Queued · sent to ${agent}`
               : "Sent, not seen in the transcript"}{" "}

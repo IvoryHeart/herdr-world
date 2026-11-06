@@ -109,6 +109,7 @@ test.skipIf(!chrome)(
           let reply: unknown, error: unknown;
           await handleAppearanceRpc({
             id: "browser",
+            requestIsCurrent: () => !request.signal.aborted,
             method,
             params,
             sendReply: (message: Record<string, unknown>) => {

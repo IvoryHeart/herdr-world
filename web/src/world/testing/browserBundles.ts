@@ -1,7 +1,12 @@
 import { readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
-export type WorldBrowserEntry = "HostsFilter" | "ProductionContexts";
+export type WorldBrowserEntry =
+  | "HostsFilter"
+  | "ProductionContexts"
+  | "AnswerDeliveries"
+  | "NeedsYouCard"
+  | "QuestionCards";
 export type WorldBrowserBundle = {
   directory: string;
   assets: Map<string, Blob>;

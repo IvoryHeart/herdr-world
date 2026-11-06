@@ -2,9 +2,11 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WorldObservation } from "../world/observation-v1";
 import { BoardStore } from "../world/board-store";
 import { handleWorldRpc } from "./world";
 import type { BridgeRpcContext } from "./context";
+import { systemClock } from "../service/ports";
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0))
@@ -61,6 +63,7 @@ for (const mode of [
       sendReply: () => true,
       sendError: (_context: string, error: unknown) => errors.push(error),
       services: {
+        clock: systemClock,
         board: () => board,
         clients: new Set([ws]),
         safeSend: () => true,
@@ -93,6 +96,7 @@ for (const mode of [
           }),
         },
         worldSnapshots: {
+          observation: new WorldObservation("synthetic-service"),
           snapshot: async () => {
             admitted.resolve();
             await finish.promise;

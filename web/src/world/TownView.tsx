@@ -1,20 +1,8 @@
+import { AnswerOutboxContext } from "./town/answerOutbox";
 import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
-import { requestAgentLaunch } from "./agentProfiles";
 import { questMark, useAgentQuests } from "./agentQuests";
-import {
-  useCreationProgress,
-  creationPendingReason,
-} from "../creationRequests";
-import {
-  requestAgentMove,
-  requestDeskMove,
-  requestDeskReorder,
-  townMoveNotice,
-  townMoveResult,
-  type TownMoveOutcome,
-  type TownMoveResult,
-} from "./town/townMoves";
+import { useCreationProgress } from "../creationRequests";
 import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useTownFinished, withTownFinished } from "./town/townFinished";
@@ -25,14 +13,7 @@ import { TraceOverlay } from "./devtools/TraceOverlay";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
-import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
-import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
-import {
-  endpointCreationReason,
-  connectionSnapshot,
-  store,
-  useStoreSelector,
-} from "../store";
+import { useStoreSelector } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
 import { useTownOffice } from "./town/useTownOffice";
@@ -40,7 +21,12 @@ import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
 import type { TownQuestMark } from "./town/townQuestPennant";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
-import { resolveTerminal, type TerminalColor } from "./terminalColor";
+import { TOWN_HOST_THEMES } from "./town/townPaint";
+import {
+  hostColorKey,
+  resolveTerminal,
+  type TerminalColor,
+} from "./terminalColor";
 import {
   setTerminalColor,
   usePlaceColorChoices,
@@ -48,12 +34,6 @@ import {
   useWorldColorSource,
 } from "./useTerminalColors";
 import { useRelations } from "./relations";
-import { townTeamActions } from "./town/townTeamActions";
-import { townMoveMenu, type TownMoveFlow } from "./town/townMoveMenu";
-import { inheritedColorKey } from "../../../shared/terminalColor";
-import type { OfficeDesk } from "./herdrOfficeProjection";
-import { hostColorKey, terminalColorKey } from "./terminalColor";
-import { TOWN_HOST_THEMES } from "./town/townPaint";
 import {
   sendTownReply,
   townChoices,
@@ -61,7 +41,6 @@ import {
   townPaneIdentity,
   townQuestion,
   townScreenLines,
-  useTownConversation,
   useTownScreen,
 } from "./town/townChat";
 import { requestTerminalComposer } from "./terminalComposerRequest";
@@ -72,8 +51,6 @@ import {
   townCalls,
   townLocation,
   unseenTownCompletions,
-  readTownRailCollapsed,
-  TownRail,
 } from "./town/TownRail";
 import { useNow } from "./handoffs";
 import type {
@@ -97,21 +74,25 @@ import {
 } from "./officePreferences";
 import { worldNodeOpenView } from "./worldInspectorSelection";
 import { useTownMaster } from "./town/useTownMaster";
+import { TownHerdrSetupOffer, TownNoHosts } from "./WorldStatus";
+import {
+  TownRoomDialogs,
+  useTownRoomActions,
+  type TownRoomDialog,
+} from "./town/useTownRoomActions";
+import { townMoveActions, type TownMoveConfirm } from "./town/townMoveActions";
+import type { TownMoveFlow } from "./town/townMoveMenu";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
-import {
-  officeCreationActionState,
-  officeRoomActionCapabilities,
-  officeRoomKeyForSelection,
-  type OfficeCreationActionState,
-} from "./officeRoomActions";
-import {
-  officeCompletionIdentity,
-  readCompletionSeen,
-  writeCompletionSeen,
-} from "./completionSeenState";
+import { officeRoomKeyForSelection } from "./officeRoomActions";
+import { reviewedAgentKeys, useReviewedWork } from "./useReviewedWork";
+import { useShownReport } from "./shownReport";
+import { needsYouLeafKey, offerNeedsYouOutbox, openNeedsYou } from "./needsYou";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
+
+/** Town's chrome insets: Needs you is a World tab now, not a Town rail. */
+const TOWN_CHROME = { left: 0, right: 0 };
 
 /** A keyed index of a list, built the first time it is read. */
 function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
@@ -124,21 +105,9 @@ function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
   };
 }
 
-type RoomDialog =
-  | {
-      mode: "create";
-      roomKey: string | null;
-      owner?: { connectionId: string; runtimeGeneration: number };
-    }
-  | {
-      mode: "rename" | "close";
-      roomKey: string;
-      label: string;
-      owner: { connectionId: string; runtimeGeneration: number };
-    };
-
 export default function TownView({
   world,
+  aggregate = world,
   toolbarPortal = null,
   selectedId,
   onSelect,
@@ -158,6 +127,8 @@ export default function TownView({
     focus?: boolean,
   ) => void;
   world: WorldObject;
+  /** Unfiltered connection observation for local setup admission. */
+  aggregate?: WorldObject;
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string, signal?: AbortSignal): void | Promise<boolean>;
@@ -189,10 +160,11 @@ export default function TownView({
     readOfficePreferences(worldLocalStorage),
   );
   const preferencesRef = useRef(preferences);
-  const [roomDialog, setRoomDialog] = useState<RoomDialog | null>(null);
-  const [completionSeen, setCompletionSeen] = useState(() =>
-    readCompletionSeen(worldLocalStorage),
-  );
+  const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
+  // The one reviewed record, Desk's stop mark. Town
+  // sees only reviewed records, so the service's stop notices do not
+  // re-render a busy Town.
+  const work = useReviewedWork(undefined, false);
   const [sceneHover, setSceneHover] = useState<WorldCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
     EMPTY_OFFICE_OBSERVABILITY,
@@ -247,44 +219,23 @@ export default function TownView({
       );
   }, []);
 
-  // Seen marks name their agent last; only those agents need their full
-  // identity checked, not the whole roster.
-  const seenAgentKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const identity of completionSeen)
-      try {
-        const parts: unknown = JSON.parse(identity);
-        if (Array.isArray(parts) && typeof parts[3] === "string")
-          keys.add(parts[3]);
-      } catch {
-        // A malformed mark names no agent.
-      }
-    return keys;
-  }, [completionSeen]);
-  const completionSeenKeys = useMemo(() => {
-    const keys = new Set<string>();
-    if (seenAgentKeys.size)
-      for (const { agent } of observedOffice.roster)
-        if (
-          seenAgentKeys.has(agent.key) &&
-          completionSeen.has(officeCompletionIdentity(agent))
-        )
-          keys.add(agent.key);
-    return keys;
-  }, [completionSeen, seenAgentKeys, observedOffice]);
-  // Seen marks belong to one completion: an agent that works again, or
-  // finishes again, has new work to check.
-  useEffect(() => {
-    if (!townFinished.fresh.length) return;
-    setCompletionSeen((current) => {
-      const next = new Set(current);
-      for (const agent of townFinished.fresh)
-        next.delete(officeCompletionIdentity(agent));
-      if (next.size === current.size) return current;
-      writeCompletionSeen(worldLocalStorage, next);
-      return next;
-    });
-  }, [townFinished.fresh]);
+  // Town's reviewed agents: recomputed only when the roster, Town's finishes
+  // or the reviewed record change, and the same set while its keys are.
+  const latestWorld = useRef(world);
+  latestWorld.current = world;
+  const checkedKeys = useRef<ReadonlySet<string>>(new Set());
+  const reviewedLeaf = work.reviewed;
+  const completionSeenKeys = useMemo(
+    () =>
+      (checkedKeys.current = reviewedAgentKeys(
+        observedOffice.roster,
+        townFinished.finished,
+        (nodeId) => townLeaf(latestWorld.current, nodeId),
+        reviewedLeaf,
+        checkedKeys.current,
+      )),
+    [observedOffice, townFinished.finished, reviewedLeaf],
+  );
   const office = useMemo(
     () =>
       withTownFinished(
@@ -300,154 +251,30 @@ export default function TownView({
     [completionSeenKeys, office.roster],
   );
   const selectedRoomKey = officeRoomKeyForSelection(world, selectedId);
-  const conversationTargets = floatingTerminals.flatMap((terminal) => {
-    const targetKey = officePresentationKey(office, terminal.nodeId);
-    return targetKey
-      ? [
-          {
-            id: terminal.nodeId,
-            selectedKey: targetKey,
-            targetKey,
-          },
-        ]
-      : [];
-  });
-
-  const roomForKey = (roomKey: string | null) =>
-    roomKey
-      ? (office.rooms.find(
-          (room) =>
-            room.key === roomKey &&
-            (!roomDialog?.owner ||
-              roomDialog.roomKey !== roomKey ||
-              (room.workspaceRef.connectionId ===
-                roomDialog.owner.connectionId &&
-                room.workspaceRef.generation ===
-                  roomDialog.owner.runtimeGeneration)),
-        ) ?? null)
-      : null;
-  const seatCreationStates = useMemo(
+  const conversationTargets = useMemo(
     () =>
-      Object.fromEntries(
-        office.rooms.map((room) => {
-          const admitted = officeRoomActionCapabilities(world, room).createSeat;
-          return [
-            room.key,
-            officeCreationActionState(
-              admitted,
-              admitted
-                ? (creationPendingReason(
-                    {
-                      connectionId: room.workspaceRef.connectionId,
-                      runtimeGeneration: room.workspaceRef.generation,
-                    },
-                    "tab",
-                    room.workspaceRef.nativeId,
-                    creationProgress,
-                  ) ??
-                    endpointCreationReason(
-                      connectionSnapshot(
-                        creationSnapshot,
-                        room.workspaceRef.connectionId,
-                      ),
-                      "tab.create",
-                      room.workspaceRef.nativeId,
-                    ))
-                : null,
-            ),
-          ];
-        }),
-      ) as Record<string, OfficeCreationActionState>,
-    [creationSnapshot, creationProgress, office.rooms, world],
+      floatingTerminals.flatMap(({ nodeId: id }) => {
+        const targetKey = officePresentationKey(office, id);
+        return targetKey ? [{ id, selectedKey: targetKey, targetKey }] : [];
+      }),
+    [floatingTerminals, office],
   );
-  const seatCreationState = (roomKey: string) =>
-    seatCreationStates[roomKey] ?? officeCreationActionState(false, null);
-  const showCreateSeat = (roomKey: string) =>
-    seatCreationState(roomKey).visible;
-  const canCreateSeat = (roomKey: string) => seatCreationState(roomKey).enabled;
-  const createSeatReason = (roomKey: string) =>
-    seatCreationState(roomKey).reason;
-  const roomCreationState = (roomKey: string | null) => {
-    const room = roomForKey(roomKey);
-    const destination = room
-      ? world.hosts.find(
-          (host) =>
-            host.connectionId === room.workspaceRef.connectionId &&
-            host.generation === room.workspaceRef.generation,
-        )
-      : world.hosts.find((host) => host.actionable && !host.stale);
-    const admitted = Boolean(destination?.actionable && !destination.stale);
-    return officeCreationActionState(
-      admitted,
-      admitted
-        ? endpointCreationReason(
-            connectionSnapshot(creationSnapshot, destination!.connectionId),
-            "workspace.create",
-            room?.workspaceRef.nativeId,
-          )
-        : null,
-    );
-  };
-  const showCreateRoom = (roomKey: string | null) =>
-    roomCreationState(roomKey).visible;
-  const canCreateRoom = (roomKey: string | null) =>
-    roomCreationState(roomKey).enabled;
-  const createRoomReason = (roomKey: string | null) =>
-    roomCreationState(roomKey).reason;
-  const canManageRoom = (roomKey: string, action: "rename" | "close") => {
-    const room = roomForKey(roomKey);
-    if (!room) return false;
-    return officeRoomActionCapabilities(world, room)[action];
-  };
-  const reportRoomActionFailure = (action: string, cause: unknown) => {
-    store.notify({
-      kind: "error",
-      message: `${action} failed`,
-      detail: cause instanceof Error ? cause.message : String(cause),
-    });
-  };
-  const submitRenameRoom = async (label: string) => {
-    if (
-      roomDialog?.mode !== "rename" ||
-      !canManageRoom(roomDialog.roomKey, "rename")
-    ) {
-      return;
-    }
-    const room = roomForKey(roomDialog.roomKey);
-    if (!room) return;
-    setRoomDialog(null);
-    const value = label.trim();
-    if (value && value !== roomDialog.label) {
-      try {
-        await store.renameQualifiedWorkspace(
-          {
-            connectionId: room.workspaceRef.connectionId,
-            runtimeGeneration: room.observedGeneration,
-          },
-          room.workspaceRef.nativeId,
-          value,
-        );
-      } catch (cause) {
-        reportRoomActionFailure("Room rename", cause);
-      }
-    }
-  };
-  const closeRoom = async (roomKey: string) => {
-    const room = roomForKey(roomKey);
-    if (!room || !canManageRoom(roomKey, "close")) return;
-    setRoomDialog(null);
-    try {
-      await store.closeQualifiedWorkspace(
-        {
-          connectionId: room.workspaceRef.connectionId,
-          runtimeGeneration: room.observedGeneration,
-        },
-        room.workspaceRef.nativeId,
-      );
-    } catch (cause) {
-      reportRoomActionFailure("Room close", cause);
-    }
-  };
+
+  const {
+    roomForKey,
+    roomActions: townRoomActions,
+    submitRenameRoom,
+    closeRoom,
+  } = useTownRoomActions({
+    world,
+    office,
+    roomDialog,
+    setRoomDialog,
+    creationSnapshot,
+    creationProgress,
+    // A room's launcher opens over Town: close the peek first.
+    beforeLaunch: () => setPeek(null),
+  });
   const selectOfficeKey = (key: string) => {
     if (DEVTOOLS) trace.record("select", { key });
     const device = office.paneRoster.find(
@@ -477,13 +304,10 @@ export default function TownView({
     onSelect(key);
   };
   const markCompletionSeen = (agent: OfficeAgent) => {
-    townFinished.dismiss(agent.key);
-    setCompletionSeen((current) => {
-      const next = new Set(current);
-      next.add(officeCompletionIdentity(agent));
-      writeCompletionSeen(worldLocalStorage, next);
-      return next;
-    });
+    // The one reviewed record, shared by every view and browser; a new stop
+    // (or the agent working or asking again) ends it.
+    const leaf = townLeaf(world, agent.nodeId);
+    if (leaf) void work.mark(leaf);
   };
   /**
    * Open the terminal for a pane, agent or desk. Opening a finished agent's
@@ -503,7 +327,6 @@ export default function TownView({
 
   /* ---------- Town attention, peek, replies and toasts ---------- */
   const now = useNow(5_000);
-  const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
   const blockedSince = useRef(new Map<string, number>());
   // Built on first use: a dense town's roster is large, and these lookups are
   // only needed by taps, hovers and an open peek.
@@ -553,7 +376,6 @@ export default function TownView({
     [office.roster, unseenCompletions, agentByKey],
   );
   const townSummary = useTownSummary({
-    railCollapsed,
     world,
     office,
     calls,
@@ -563,6 +385,9 @@ export default function TownView({
     openTerminal: (id) => void onOpenTerminal(id).catch(() => undefined),
     showRoom: focusRoom,
   });
+  // Needs you's Outbox row opens Town's Summary at the saved answers.
+  const openOutbox = townSummary.openOutbox;
+  useEffect(() => offerNeedsYouOutbox(openOutbox), [openOutbox]);
   const askingKeys = useMemo(() => {
     return askingKeysForWorld(townSummary.summary.asks, world);
   }, [townSummary.summary.asks, world]);
@@ -662,10 +487,7 @@ export default function TownView({
   const [moveFlow, setMoveFlow] = useState<TownMoveFlow | null>(null);
   /** The desk or agent being moved; further moves wait for it. */
   const [movingKey, setMovingKey] = useState<string | null>(null);
-  const [moveConfirm, setMoveConfirm] = useState<{
-    message: string;
-    run(): void;
-  } | null>(null);
+  const [moveConfirm, setMoveConfirm] = useState<TownMoveConfirm | null>(null);
   /** The hover card being previewed: an agent and the point it sits by. */
   const [peek, setPeek] = useState<{
     key: string;
@@ -697,176 +519,30 @@ export default function TownView({
       ? desk
       : null;
   };
-  const deskForKey = (key: string) =>
-    office.deskRoster.find(({ desk }) => desk.key === key)?.desk ?? null;
-  const reportMove = (
-    label: string,
-    outcome: TownMoveOutcome,
-    sourceTab: string,
-  ) => {
-    if (DEVTOOLS) trace.record("move", { label, status: outcome.status });
-    toast(
-      outcome.status === "moved" ? "ok" : "error",
-      townMoveNotice(label, outcome, sourceTab),
-    );
-    return townMoveResult(outcome);
-  };
-  /** The desk shows its parent's colour rather than one of its own. */
-  const inheritsColor = (desk: OfficeDesk) => {
-    const target = townDeskColorTarget(office, desk);
-    if (!target) return false;
-    const key = terminalColorKey(target);
-    return (
-      !terminalColors[key] && Boolean(terminalColors[inheritedColorKey(key)])
-    );
-  };
-  const teams = townTeamActions({
+  const {
+    deskForKey,
+    runDeskMove,
+    runDeskReorder,
+    runAgentMove,
+    teams,
+    dialogs: moveDialogs,
+  } = townMoveActions({
+    moveFlow,
+    setMoveFlow,
+    movingKey,
+    setMovingKey,
+    moveConfirm,
+    setMoveConfirm,
     world,
     office,
     deskPins,
     relations: relations.relations,
-    movingKey,
-    deskForKey,
+    terminalColors,
+    agentByKey,
     roomForKey,
     toast,
-    confirm: (message, run) => setMoveConfirm({ message, run }),
-    runDeskMove: (deskKey, roomKey, allowCloseRoom, then) =>
-      runDeskMove(deskKey, roomKey, allowCloseRoom, then),
-    closeMenu: () => setMoveFlow(null),
-    openGroupMenu: (deskKey) => setMoveFlow({ step: "group", deskKey }),
+    trace,
   });
-  const runDeskMove = async (
-    deskKey: string,
-    roomKey: string,
-    allowCloseRoom = false,
-    /** After a move: seat the moved tab (its new ID) next to a teammate. */
-    then?: (tabId: string) => Promise<void>,
-  ): Promise<TownMoveResult> => {
-    const desk = deskForKey(deskKey);
-    const room = roomForKey(roomKey);
-    const source = desk ? roomForKey(desk.roomKey) : null;
-    if (!desk || !room || movingKey) return "returned";
-    // Herdr closes a room when its last desk leaves; ask first.
-    if (!allowCloseRoom && (source?.observedDeskCount ?? 2) <= 1) {
-      setMoveConfirm({
-        message: `“${desk.displayLabel}” is the last desk in “${source?.displayLabel}”. Moving it to “${room.displayLabel}” closes that room.`,
-        run: () => void runDeskMove(deskKey, roomKey, true, then),
-      });
-      return "returned";
-    }
-    setMovingKey(desk.key);
-    toast("ok", `Moving ${desk.displayLabel} to ${room.displayLabel}…`);
-    try {
-      const outcome = await requestDeskMove(
-        desk,
-        room,
-        allowCloseRoom,
-        inheritsColor(desk),
-      );
-      const result = reportMove(
-        desk.displayLabel,
-        outcome,
-        desk.tabRef.nativeId,
-      );
-      if (outcome.status === "moved" && then) await then(outcome.tab_id);
-      return result;
-    } catch (cause) {
-      toast(
-        "error",
-        `${desk.displayLabel} may not have moved: ${String(cause)}`,
-      );
-      return "uncertain";
-    } finally {
-      setMovingKey(null);
-    }
-  };
-  /** Reorder a desk in its room: into `ontoKey`'s slot, or last when null. */
-  const runDeskReorder = async (
-    deskKey: string,
-    ontoKey: string | null,
-  ): Promise<TownMoveResult> => {
-    const desk = deskForKey(deskKey);
-    const room = desk ? roomForKey(desk.roomKey) : null;
-    const onto = ontoKey ? deskForKey(ontoKey) : null;
-    if (!desk || !room || (ontoKey && !onto) || movingKey) return "returned";
-    setMovingKey(desk.key);
-    try {
-      const outcome = await requestDeskReorder(desk, onto);
-      if (outcome.status === "moved") {
-        if (DEVTOOLS)
-          trace.record("move", {
-            label: desk.displayLabel,
-            status: outcome.status,
-          });
-        return "moved";
-      }
-      return reportMove(desk.displayLabel, outcome, desk.tabRef.nativeId);
-    } catch (cause) {
-      toast(
-        "error",
-        `${desk.displayLabel} may not have moved: ${String(cause)}`,
-      );
-      return "uncertain";
-    } finally {
-      setMovingKey(null);
-    }
-  };
-  const runAgentMove = async (
-    agentKey: string,
-    deskKey: string,
-    allowCloseRoom = false,
-  ): Promise<TownMoveResult> => {
-    const agent = agentByKey.get(agentKey)?.agent;
-    const device = office.paneRoster.find(
-      ({ device }) => device.agentKey === agentKey,
-    )?.device;
-    const target = deskForKey(deskKey);
-    const sourceDesk = device ? deskForKey(device.deskKey) : null;
-    const sourceRoom = sourceDesk ? roomForKey(sourceDesk.roomKey) : null;
-    if (!agent || !device || !target || movingKey) return "returned";
-    if (
-      !allowCloseRoom &&
-      (sourceDesk?.observedPaneCount ?? 2) <= 1 &&
-      (sourceRoom?.observedDeskCount ?? 2) <= 1
-    ) {
-      setMoveConfirm({
-        message: `${agent.displayLabel} is alone at the last desk in “${sourceRoom?.displayLabel}”. Moving it closes that room.`,
-        run: () => void runAgentMove(agentKey, deskKey, true),
-      });
-      return "returned";
-    }
-    setMovingKey(agentKey);
-    toast("ok", `Moving ${agent.displayLabel} to ${target.displayLabel}…`);
-    try {
-      const outcome = await requestAgentMove(device, target, allowCloseRoom);
-      return reportMove(
-        agent.displayLabel,
-        outcome,
-        sourceDesk?.tabRef.nativeId ?? "",
-      );
-    } catch (cause) {
-      toast(
-        "error",
-        `${agent.displayLabel} may not have moved: ${String(cause)}`,
-      );
-      return "uncertain";
-    } finally {
-      setMovingKey(null);
-    }
-  };
-  /** The choices for each step of a move (townMoveMenu.ts). */
-  const moveChooser = (flow: NonNullable<typeof moveFlow>) =>
-    townMoveMenu(flow, {
-      office,
-      deskForKey,
-      roomForKey,
-      agentOf: (key) => agentByKey.get(key)?.agent,
-      close: () => setMoveFlow(null),
-      runDeskReorder,
-      runDeskMove,
-      runAgentMove,
-      teams,
-    });
   const openReply = (key: string) => {
     if (!townTargetActionable(office, key)) return;
     // A desk with more panes than seats lists them all rather than guessing.
@@ -937,7 +613,13 @@ export default function TownView({
     Boolean(peekAgent) && peekBlocked,
     2_000,
   );
-  const peekConversation = useTownConversation(peekLeaf, Boolean(peekAgent));
+  // The peek's report and its stop: Mark reviewed names only that stop.
+  const peekReport = useShownReport(
+    peekLeaf,
+    Boolean(peekAgent),
+    peekAgent?.semanticStatus === "done",
+  );
+  const peekConversation = peekReport.conversation;
   const peekCanReply =
     Boolean(peekLeaf) && !!peekAgent?.canOpenInSpaces && !peekAgent.stale;
   // Answers come only from the question at the bottom of a waiting screen.
@@ -1097,15 +779,7 @@ export default function TownView({
     };
   };
 
-  if (!world.hosts.length) {
-    return (
-      <div className="world-empty" role="status">
-        <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
-        <h2>No connected spaces yet</h2>
-        <p>Add or connect a local or SSH Herdr profile from Spaces.</p>
-      </div>
-    );
-  }
+  if (!world.hosts.length) return <TownNoHosts />;
 
   const toolbar = (
     <WorldViewToolbar
@@ -1127,7 +801,7 @@ export default function TownView({
   );
 
   return (
-    <>
+    <AnswerOutboxContext.Provider value={townSummary.openOutbox}>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       {townSummary.window}
@@ -1145,44 +819,7 @@ export default function TownView({
             onClose={() => setTrace(false)}
           />
         ) : null}
-        <TownRail
-          needsYouCount={townSummary.summary.counts.needsYou}
-          asks={townSummary.summary.asks}
-          askActions={townSummary.askActions}
-          collapsed={railCollapsed}
-          onCollapsedChange={setRailCollapsed}
-          calls={calls}
-          activeKey={peek?.key ?? null}
-          now={now}
-          onPeek={(key, rect) =>
-            key && rect
-              ? hoverAgent(key, {
-                  x: rect.right,
-                  y: rect.top + rect.height / 2,
-                })
-              : hoverAgent(null)
-          }
-          onOpen={(key) => openAgent(key)}
-        />
-        {moveFlow ? (
-          <TownChooser
-            {...moveChooser(moveFlow)}
-            onClose={() => setMoveFlow(null)}
-          />
-        ) : null}
-        <ConfirmDialog
-          open={moveConfirm !== null}
-          title="Close the room?"
-          message={moveConfirm?.message ?? ""}
-          confirmLabel="Move and close room"
-          danger
-          onClose={() => setMoveConfirm(null)}
-          onConfirm={() => {
-            const run = moveConfirm?.run;
-            setMoveConfirm(null);
-            run?.();
-          }}
-        />
+        {moveDialogs}
         {chooserDesk ? (
           <TownChooser
             title={chooserDesk.displayLabel}
@@ -1221,10 +858,14 @@ export default function TownView({
               void reply(peekLeaf, peekAgent.displayLabel, key, false)
             }
             deskColor={peekDeskColor(peekAgent.key)}
-            onReviewed={() => {
-              markCompletionSeen(peekAgent);
-              toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
-            }}
+            review={peekReport.review}
+            onReviewed={() =>
+              void peekReport.markShown(
+                work.mark,
+                peekAgent.displayLabel,
+                toast,
+              )
+            }
             onChat={() => openChat(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);
@@ -1255,6 +896,7 @@ export default function TownView({
           ))}
         </div>
         <div className="town-stage">
+          <TownHerdrSetupOffer world={world} aggregate={aggregate} />
           <TownCanvas
             trace={trace}
             projection={office}
@@ -1267,7 +909,8 @@ export default function TownView({
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
             askingKeys={askingKeys}
-            onActivateAsk={townSummary.openTerminal}
+            // A letter at reception: its question in Needs you.
+            onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
@@ -1305,10 +948,7 @@ export default function TownView({
             onOpenSummary={townSummary.open}
             roomFocus={roomFocus}
             calm={preferences.townCalm}
-            chrome={{
-              left: townSummary.railInset,
-              right: 0,
-            }}
+            chrome={TOWN_CHROME}
             roomActions={{
               onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
@@ -1323,7 +963,6 @@ export default function TownView({
                 setPeek(null);
                 setMoveFlow({ step: "room", deskKey });
               },
-              placeColor: placeColorOf,
               onMoveAgent: (agentKey) => {
                 setPeek(null);
                 setMoveFlow({ step: "desk", agentKey });
@@ -1332,68 +971,8 @@ export default function TownView({
                 setPeek(null);
                 setChooser(deskKey);
               },
-              showCreateSeat,
-              canCreateSeat,
-              createSeatReason,
-              onNewAgent: (roomKey) => {
-                const room = roomForKey(roomKey);
-                if (!room || !canCreateSeat(roomKey)) return;
-                setPeek(null);
-                requestAgentLaunch({
-                  connectionId: room.workspaceRef.connectionId,
-                  generation: room.observedGeneration,
-                  workspaceId: room.workspaceRef.nativeId,
-                  workspaceLabel: room.displayLabel,
-                });
-              },
-              showCreateRoom,
-              canCreateRoom,
-              createRoomReason,
-              onCreateRoom: (roomKey) =>
-                setRoomDialog({
-                  mode: "create",
-                  roomKey,
-                  ...(roomForKey(roomKey)
-                    ? {
-                        owner: {
-                          connectionId:
-                            roomForKey(roomKey)!.workspaceRef.connectionId,
-                          runtimeGeneration:
-                            roomForKey(roomKey)!.workspaceRef.generation,
-                        },
-                      }
-                    : {}),
-                }),
-              canRenameRoom: (roomKey) => canManageRoom(roomKey, "rename"),
-              onRenameRoom: (roomKey) => {
-                const room = roomForKey(roomKey);
-                if (room) {
-                  setRoomDialog({
-                    mode: "rename",
-                    roomKey,
-                    label: room.displayLabel,
-                    owner: {
-                      connectionId: room.workspaceRef.connectionId,
-                      runtimeGeneration: room.workspaceRef.generation,
-                    },
-                  });
-                }
-              },
-              canCloseRoom: (roomKey) => canManageRoom(roomKey, "close"),
-              onCloseRoom: (roomKey) => {
-                const room = roomForKey(roomKey);
-                if (room) {
-                  setRoomDialog({
-                    mode: "close",
-                    roomKey,
-                    label: room.displayLabel,
-                    owner: {
-                      connectionId: room.workspaceRef.connectionId,
-                      runtimeGeneration: room.workspaceRef.generation,
-                    },
-                  });
-                }
-              },
+              ...townRoomActions,
+              placeColor: placeColorOf,
             }}
           />
         </div>
@@ -1404,46 +983,14 @@ export default function TownView({
             top={sceneHover.clientY}
           />
         ) : null}
-        <CreateWorkspaceDialog
-          open={roomDialog?.mode === "create"}
-          initialDestination={
-            roomDialog?.owner
-              ? {
-                  ...roomDialog.owner,
-                  sourceWorkspaceId: roomForKey(roomDialog.roomKey)
-                    ?.workspaceRef.nativeId,
-                }
-              : undefined
-          }
-          onClose={() => setRoomDialog(null)}
-        />
-        <TextInputDialog
-          open={roomDialog?.mode === "rename"}
-          title="Rename room"
-          label="Room name"
-          initialValue={roomDialog?.mode === "rename" ? roomDialog.label : ""}
-          submitLabel="Rename"
-          onClose={() => setRoomDialog(null)}
-          onSubmit={(label) => void submitRenameRoom(label)}
-        />
-        <ConfirmDialog
-          open={roomDialog?.mode === "close"}
-          title="Close room"
-          message={
-            roomDialog?.mode === "close"
-              ? `Close room “${roomDialog.label}”? Its running terminal sessions will end.`
-              : ""
-          }
-          confirmLabel="Close room"
-          danger
-          onClose={() => setRoomDialog(null)}
-          onConfirm={() => {
-            if (roomDialog?.mode === "close") {
-              void closeRoom(roomDialog.roomKey);
-            }
-          }}
+        <TownRoomDialogs
+          dialog={roomDialog}
+          setDialog={setRoomDialog}
+          roomForKey={roomForKey}
+          submitRenameRoom={submitRenameRoom}
+          closeRoom={closeRoom}
         />
       </div>
-    </>
+    </AnswerOutboxContext.Provider>
   );
 }

@@ -22,8 +22,22 @@ export type HerdrSubscription =
  *     of the shape `{ event: "<name>", data: { ... } }`.
  */
 export class HerdrClient extends EventEmitter {
+  /** One-shot calls still waiting for Herdr, by their finishers. */
+  readonly #pending = new Set<(error: Error) => void>();
+  #closed = false;
+
   constructor(private socketPath: string) {
     super();
+  }
+
+  /**
+   * Fail every call still waiting and refuse new ones. The runtime that owns
+   * this client stopped, so any reply would belong to a retired generation.
+   */
+  close(): void {
+    this.#closed = true;
+    for (const finish of [...this.#pending])
+      finish(new Error("Herdr connection stopped"));
   }
 
   /** One-shot RPC: open -> send one request -> read one response -> close. */
@@ -32,14 +46,24 @@ export class HerdrClient extends EventEmitter {
     params: Record<string, unknown> = {},
     timeoutMs = 8000,
     beforeSend?: () => void,
+    signal?: AbortSignal,
   ): Promise<any> {
     const requestId = `r_${Date.now().toString(36)}_${Math.random()
       .toString(36)
       .slice(2, 6)}`;
+    const pending = this.#pending;
     return new Promise((resolve, reject) => {
+      if (this.#closed || signal?.aborted) {
+        reject(new Error("Herdr connection stopped"));
+        return;
+      }
       const s = net.createConnection({ path: this.socketPath });
       let buf = "";
       let done = false;
+      const abort = (error: Error) => finish(error);
+      const cancel = () => finish(new Error("Herdr call cancelled"));
+      signal?.addEventListener("abort", cancel, { once: true });
+      pending.add(abort);
 
       const timer = setTimeout(
         () => finish(new Error(`timeout: ${method}`)),
@@ -49,6 +73,8 @@ export class HerdrClient extends EventEmitter {
       function finish(err?: Error, val?: any) {
         if (done) return;
         done = true;
+        pending.delete(abort);
+        signal?.removeEventListener("abort", cancel);
         clearTimeout(timer);
         try {
           // One-shot RPCs never reuse the socket. Force closure so a peer that
@@ -69,6 +95,7 @@ export class HerdrClient extends EventEmitter {
         if (done) return;
         try {
           beforeSend?.();
+          if (done) return;
           s.write(JSON.stringify({ id: requestId, method, params }) + "\n");
         } catch (error) {
           finish(

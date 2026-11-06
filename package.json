@@ -14,7 +14,7 @@
     "url": "https://github.com/IvoryHeart/herdr-world/issues"
   },
   "engines": {
-    "bun": ">=1.4.3"
+    "bun": ">=1.4.4"
   },
   "workspaces": [
     "web",
@@ -51,10 +51,6 @@
     "label:pr": "bun scripts/classify-pr-label.ts",
     "upstream:work": "bun scripts/upstream-local.ts",
     "agent:worktree": "bun scripts/agent/worktree.mjs",
-    "agent:usage": "bun scripts/agent/pr-usage.ts",
-    "agent:await": "bun scripts/agent/await.ts",
-    "agent:gate": "bun scripts/agent/gate.ts",
-    "agent:crew": "bun scripts/agent/crew.ts",
     "agent:stamp": "bun server/src/index.ts stamp",
     "notices:generate": "bun scripts/dependency-notices.ts",
     "notices:check": "bun scripts/dependency-notices.ts --check",
@@ -102,7 +98,7 @@
     "@babel/parser": "^8.0.8",
     "@biomejs/biome": "2.5.15",
     "@types/web-push": "^3.6.4",
-    "bun-types": "1.4.3",
+    "bun-types": "1.4.4",
     "typescript": "^7.0.2",
     "@fission-ai/openspec": "1.12.0",
     "oxlint": "1.88.0",
@@ -116,5 +112,5 @@
     "undici": "8.12.3",
     "@earendil-works/pi-codemode": "1.1.0"
   },
-  "packageManager": "bun@1.4.3"
+  "packageManager": "bun@1.4.4"
 }

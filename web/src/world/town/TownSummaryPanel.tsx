@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { answerRecipientView } from "./answerOutbox";
+import { ConnectedAnswerDeliveries } from "./AnswerDeliveries";
+import { useAnswerDeliveryCounts } from "../worldAnswerDeliveries";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import {
   formatOfficeCost,
@@ -10,7 +19,6 @@ import type { WorldObject } from "../worldObject";
 import { GroupsSummary } from "../groups/GroupsSummary";
 import {
   TownAsk,
-  townRailInset,
   townLocation,
   type TownAskActions,
   type TownCall,
@@ -38,6 +46,7 @@ export function TownSummaryPanel({
   onShowRoom,
   askActions,
   groups,
+  deliveries,
 }: {
   summary: TownSummaryModel;
   now: number;
@@ -47,6 +56,7 @@ export function TownSummaryPanel({
   onShowRoom(roomKey: string): void;
   askActions: TownAskActions;
   groups?: ReactNode;
+  deliveries?: ReactNode;
 }) {
   return (
     <div className="town-summary">
@@ -81,9 +91,10 @@ export function TownSummaryPanel({
           <p className="town-summary-empty">Nobody is waiting for you.</p>
         )}
       </section>
+      {deliveries}
       <section aria-labelledby="town-summary-finished">
         <h3 id="town-summary-finished">
-          Finished, not reviewed <span>{summary.counts.finished}</span>
+          Done, not reviewed <span>{summary.counts.finished}</span>
         </h3>
         {summary.finished.length ? (
           <ul>
@@ -95,7 +106,7 @@ export function TownSummaryPanel({
                 // it finished, so the age says so.
                 detail={
                   item.since === null
-                    ? "finished"
+                    ? "done"
                     : `last active ${townSummaryAge(item.since, now)}`
                 }
                 action="Open"
@@ -181,7 +192,7 @@ function SummaryItem({
         <strong>
           {item.agent.displayLabel}
           {item.agent.semanticStatus === "blocked"
-            ? ` · blocked: ${item.agent.stateLabels.blocked?.trim() || "needs input"}`
+            ? ` · blocked: ${item.agent.stateLabels.blocked?.trim() || "needs you"}`
             : ""}
         </strong>
         <small>
@@ -202,7 +213,7 @@ function SummaryItem({
 const COUNT_LABELS: [keyof TownSummaryCounts, string][] = [
   ["needsYou", "need you"],
   ["working", "working"],
-  ["finished", "finished"],
+  ["finished", "done"],
   ["quiet", "quiet"],
   ["unknown", "unknown"],
 ];
@@ -228,7 +239,6 @@ function Counts({ counts }: { counts: TownSummaryCounts }) {
  * for the canvas; on a phone the window closes first, since it covers Town.
  */
 export function useTownSummary({
-  railCollapsed,
   world,
   office,
   calls,
@@ -238,7 +248,6 @@ export function useTownSummary({
   openTerminal,
   showRoom,
 }: {
-  railCollapsed: boolean;
   world: WorldObject;
   office: HerdrOfficeProjection;
   calls: readonly TownCall[];
@@ -250,7 +259,10 @@ export function useTownSummary({
   showRoom(roomKey: string): void;
 }): {
   summary: TownSummaryModel;
-  railInset: number;
+  deliveries: ReactNode;
+  deliveryCount: number;
+  deliveryWaiting: number;
+  openOutbox(): void;
   askActions: TownAskActions;
   openTerminal(nodeId: string): void;
   open(): void;
@@ -262,6 +274,20 @@ export function useTownSummary({
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
+  const { checks: deliveryCount, waiting: deliveryWaiting } =
+    useAnswerDeliveryCounts();
+  const [deliveryFocus, setDeliveryFocus] = useState(0);
+  const deliveries = (
+    <ConnectedAnswerDeliveries
+      focusKey={deliveryFocus}
+      recipient={(notice) => answerRecipientView(notice.ask, world, office)}
+      open={(target) => {
+        if (target.key === null) return;
+        if (target.terminal) openTerminal(target.key);
+        else openAgent(target.key);
+      }}
+    />
+  );
   const asksStore = sharedAsksStore();
   const asks = useWorldAsks(asksStore);
   const askers = useMemo(
@@ -299,13 +325,17 @@ export function useTownSummary({
   );
   const [isOpen, setOpen] = useState(false);
   const [focusKey, setFocusKey] = useState(0);
+  const openOutbox = useCallback(() => {
+    setOpen(true);
+    setFocusKey((key) => key + 1);
+    setDeliveryFocus((key) => key + 1);
+  }, []);
   return {
     summary,
-    railInset: townRailInset(
-      viewportWidth,
-      railCollapsed,
-      summary.counts.needsYou,
-    ),
+    deliveries,
+    deliveryCount,
+    deliveryWaiting,
+    openOutbox,
     askActions,
     openTerminal,
     open: () => {
@@ -321,6 +351,7 @@ export function useTownSummary({
       >
         <TownSummaryPanel
           summary={summary}
+          deliveries={deliveries}
           groups={<GroupsSummary />}
           now={now}
           onOpenAgent={openAgent}

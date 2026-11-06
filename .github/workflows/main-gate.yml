@@ -10,6 +10,7 @@ on:
     branches: [main]
 
 permissions:
+  # Dispatches CI on the prepared revert branch (gh workflow run).
   actions: write
   contents: write
   issues: write
@@ -31,15 +32,13 @@ jobs:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: "1.4.3"
+          bun-version: "1.4.4"
           no-cache: true
       - name: Open the issue and the revert PR
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
         run: |
           git config user.name "github-actions[bot]"

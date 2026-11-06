@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 
 /**
- * Wait until this machine is quiet before a latency measurement: CI's World
- * latency job runs it after installing, so dependency setup and its tail do
- * not land inside a measured budget. Quiet means at least `idle` of the CPU
+ * Wait until this machine is quiet before a latency measurement: the World
+ * latency trend workflow runs it after installing, so dependency setup and its
+ * tail do not land inside a measurement. Quiet means at least `idle` of the CPU
  * time was idle in each of `needed` consecutive one-second samples. After
- * `limit` seconds it carries on and says so; the budgets then decide.
+ * `limit` seconds it carries on and says so; the report then shows the noise.
  */
 
 export type CpuSample = { idle: number; total: number };

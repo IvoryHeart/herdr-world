@@ -225,6 +225,40 @@ describe("service commands", () => {
     );
   });
 
+  test("creates the login token in the service's own data folder", () => {
+    if (process.platform === "win32") return;
+    const homeDir = tempHome();
+    const own = join(homeDir, "own-data");
+    const configPath = join(
+      homeDir,
+      ".config",
+      "herdr-world",
+      "herdr-world.env",
+    );
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(configPath, `HERDR_WORLD_DATA_DIR=${own}\n`, {
+      mode: 0o600,
+    });
+    const logs: string[] = [];
+    const code = runServiceCommand(["service", "install"], {
+      runtime: {
+        platform: "linux",
+        homeDir,
+        execPath: "/opt/herdr-world-test/bin/herdr-world",
+        argv: ["/opt/herdr-world-test/bin/herdr-world", "service", "install"],
+        uid: 1000,
+      },
+      runCommand: () => 0,
+      getLanIPs: () => [],
+      log: (message) => logs.push(message),
+    });
+    expect(code).toBe(0);
+    const token = readFileSync(join(own, "auth-token"), "utf8").trim();
+    expect(token).toMatch(/^[a-f0-9]{64}$/);
+    expect(logs.join("\n")).toContain(`Token file: ${join(own, "auth-token")}`);
+    expect(existsSync(join(dirname(configPath), "auth-token"))).toBe(false);
+  });
+
   test("reloads the systemd definition before restarting", () => {
     const homeDir = tempHome();
     const definitionPath = join(

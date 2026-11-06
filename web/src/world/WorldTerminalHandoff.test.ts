@@ -1,3 +1,5 @@
+import { connectCapture } from "./testing/connectCapture";
+import { captureScene, resizeCapture } from "./testing/captureScene";
 import { captureResumeViewports } from "./testing/resumeVisualCapture";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
@@ -18,7 +20,7 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "World keeps navigator, managed windows, and terminal identities aligned",
+  "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
@@ -71,6 +73,14 @@ test.skipIf(!chrome)(
               port!,
               resumeCaptureDir,
               path.endsWith("disconnected") ? "disconnected" : "recovery",
+              {
+                view: "board",
+                content: {
+                  selector:
+                    ".workspace-inspector .workspace-inspector-tabs, .workspace-inspector .workspace-inspector-view-select",
+                  scope: "document",
+                },
+              },
             );
           }
           return new Response(null, { status: 204 });
@@ -80,56 +90,46 @@ test.skipIf(!chrome)(
             const [port] = (
               await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
             ).split("\n");
-            const targets = (await (
-              await fetch(`http://127.0.0.1:${port}/json/list`)
-            ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-            const target = targets.find((target) => target.type === "page")!;
-            const socket = new WebSocket(target.webSocketDebuggerUrl);
-            await new Promise<void>((resolve, reject) => {
-              socket.onopen = () => resolve();
-              socket.onerror = () =>
-                reject(new Error("Screenshot browser connection failed"));
-            });
-            let id = 0;
-            const command = (
-              method: string,
-              params: Record<string, unknown> = {},
-            ) =>
-              new Promise<Record<string, string>>((resolve, reject) => {
-                const current = ++id;
-                const receive = (event: MessageEvent) => {
-                  const message = JSON.parse(String(event.data));
-                  if (message.id !== current) return;
-                  socket.removeEventListener("message", receive);
-                  if (message.error) reject(new Error(message.error.message));
-                  else resolve(message.result);
-                };
-                socket.addEventListener("message", receive);
-                socket.send(JSON.stringify({ id: current, method, params }));
-              });
+            const { command, close } = await connectCapture(port!);
             try {
-              if (path.endsWith("mobile")) {
-                await command("Emulation.setDeviceMetricsOverride", {
-                  width: 390,
-                  height: 844,
-                  deviceScaleFactor: 1,
-                  mobile: false,
-                });
-                await Bun.sleep(200);
-              }
-              const screenshot = await command("Page.captureScreenshot", {
-                format: "png",
+              const original = await command("Runtime.evaluate", {
+                expression: "({width:innerWidth,height:innerHeight})",
+                returnByValue: true,
+              });
+              const dimensions = path.endsWith("mobile")
+                ? { width: 390, height: 844 }
+                : original.result.value;
+              if (path.endsWith("mobile"))
+                await resizeCapture(
+                  command,
+                  dimensions.width,
+                  dimensions.height,
+                );
+              const screenshot = await captureScene(command, {
+                ...dimensions,
+                content: {
+                  selector:
+                    ".workspace-inspector .workspace-inspector-tabs, .workspace-inspector .workspace-inspector-view-select",
+                  scope: "document",
+                },
               });
               await Bun.write(
                 join(captureDir, `${path.split("/").pop()}.png`),
-                Buffer.from(screenshot.data!, "base64"),
+                screenshot.bytes,
               );
               if (path.endsWith("mobile")) {
-                await command("Emulation.clearDeviceMetricsOverride");
-                await Bun.sleep(200);
+                await resizeCapture(
+                  command,
+                  original.result.value.width,
+                  original.result.value.height,
+                );
+                await command("Runtime.evaluate", {
+                  expression: `window.__HERDR_WORLD_CAPTURE__.wait(${JSON.stringify({ ...original.result.value, timeoutMs: 15000 })})`,
+                  awaitPromise: true,
+                });
               }
             } finally {
-              socket.close();
+              close();
             }
           }
           return new Response(null, { status: 204 });
@@ -157,26 +157,48 @@ test.skipIf(!chrome)(
         define: { __HERDR_WORLD_VERSION__: JSON.stringify("9.8.7-test") },
         plugins: [
           {
-            name: "short-created-pane-deadline",
+            name: "created-opener-clock-and-completion",
             setup(builder) {
               builder.onLoad(
-                { filter: /officeRoomActions\.ts$/ },
+                { filter: /createdTerminalAdmission\.ts$/ },
                 async (args) => {
                   const source = await Bun.file(args.path).text();
-                  const declaration =
-                    /export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 21_000;/;
-                  if (!declaration.test(source)) {
-                    throw new Error(
-                      "Created-pane deadline declaration changed",
-                    );
-                  }
-                  // The real 21-second policy is covered by officeRoomActions.test.ts.
-                  // This browser case verifies deadline cleanup without a real wait.
+                  if (
+                    !source.includes("const timer = setTimeout(") ||
+                    !source.includes("clearTimeout(timer);")
+                  )
+                    throw new Error("Created-terminal timer port changed");
                   return {
-                    contents: source.replace(
-                      declaration,
-                      "export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 1_000;",
-                    ),
+                    contents:
+                      'import { admissionTimers } from "./testing/handoffAdmissionClock";\n' +
+                      source
+                        .replace(
+                          "const timer = setTimeout(",
+                          "const timer = admissionTimers.setTimeout(",
+                        )
+                        .replace(
+                          "clearTimeout(timer);",
+                          "admissionTimers.clearTimeout(timer);",
+                        ),
+                    loader: "ts",
+                  };
+                },
+              );
+              builder.onLoad(
+                { filter: /useWorldCreatedTerminal\.ts$/ },
+                async (args) => {
+                  const source = await Bun.file(args.path).text();
+                  if (source.split("await opening;").length !== 2)
+                    throw new Error(
+                      "Created-terminal opener completion changed",
+                    );
+                  return {
+                    contents:
+                      'import { createdOpenerCompleted } from "./testing/handoffAdmissionClock";\n' +
+                      source.replace(
+                        "await opening;",
+                        "try { await opening; } finally { createdOpenerCompleted(node.id); }",
+                      ),
                     loader: "ts",
                   };
                 },

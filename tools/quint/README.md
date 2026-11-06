@@ -18,8 +18,11 @@ not just a startup log line. Linux verifies ownership through `/proc`; macOS
 requires its standard `lsof` tool and separate runner evidence. Checker and replay workers have owned POSIX process groups,
 deadlines and TERM/KILL drain, including grandchildren and inherited pipes.
 
-Use Bun 1.4.3, Node 18+ and Java 17+ on POSIX systems; the measured local
-and candidate CI toolchain uses Node 24.19.0 and Java 21 on Linux. macOS requires
+Use Bun 1.4.3, Node 18+ and Java 17+ on POSIX systems. Candidate CI pins
+Node 24.19.0 and Eclipse Temurin JDK 21.0.13+9 on Linux x64 in every shard
+and the aggregate; use that exact build to reproduce CI tool identities.
+Java comes from commit-pinned `actions/setup-java`, independent of runner image
+updates. Aggregation rejects differing full tool identities. macOS requires
 its own runner evidence before claiming equivalent process/platform coverage:
 
 ```bash
@@ -39,7 +42,7 @@ observation; malformed traces, adapter errors and cleanup errors abort. Witnesse
 are counted from successfully executed production replay, not only simulation.
 Raw output is kept in bounded local logs and summarized in console output.
 
-The maintained command executes all 11 runtime, observation, allocation, protocol,
+The maintained command executes all 12 runtime, observation, allocation, protocol,
 creation and Ranger models, their controls and larger-bound/host-order sensitivity.
 The verified JAR is launched directly. These bounded implementations and consumer mappings are independently accepted in review 5516249164. A complete Linux candidate run takes approximately four minutes
 with the configured bounds; this is execution evidence for this toolchain, not a
@@ -47,7 +50,7 @@ guarantee for other environments or total peak-memory measurement. Final gate/re
 
 The canonical command uses `execution.json`'s bounded case pool (two workers by
 default), with isolated case processes and private checkers. Its aggregate manifest
-requires all 11 focused worker results against one current source/tool identity.
+requires all 12 focused worker results against one current source/tool identity.
 Failure/cancellation stops queue admission and drains peers; focused results do
 not substitute for this aggregate. Worker count is CPU-capped and recorded with
 case timings/resource observations. Retain conservative concurrency for the

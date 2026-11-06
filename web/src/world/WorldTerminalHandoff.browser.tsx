@@ -1,3 +1,8 @@
+import {
+  admissionClock,
+  nextCreatedOpenerCompletion,
+} from "./testing/handoffAdmissionClock";
+
 const resumeGallery = new URLSearchParams(location.search).has(
   "resume-gallery",
 );
@@ -46,10 +51,11 @@ import {
   INSPECTOR_TERMINAL_FILE_EVENT,
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
-import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
+import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { buildWorldObject, worldObjectId } from "./worldObject";
 import WorldFoundationApp from "./WorldFoundationApp";
+import { runSharedInspectorChecks } from "./testing/sharedInspectorBrowser";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import type { BoardDocument, BoardOp } from "./board/boardDocument";
 import { interestKey } from "../../../shared/interest";
@@ -89,6 +95,21 @@ let renderError: unknown = null;
 window.addEventListener("error", (event) => {
   if (event.error) renderError = event.error;
 });
+/** Needs you counters a person can see and reach. */
+const visibleNeedsYouCounters = () =>
+  [...document.querySelectorAll<HTMLElement>(".needs-you-counter")].filter(
+    (counter) => {
+      const box = counter.getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        box.height > 0 &&
+        box.bottom > 0 &&
+        box.top < innerHeight &&
+        getComputedStyle(counter).visibility !== "hidden"
+      );
+    },
+  ).length;
+
 async function until(
   condition: () => unknown,
   message: string | (() => string),
@@ -151,6 +172,12 @@ const tabs: Tab[] = [
     agent_status: "idle",
   },
 ];
+const initialReviewerSession = {
+  source: "herdr:claude",
+  agent: "claude",
+  kind: "id",
+  value: "review-a",
+};
 const panes: Pane[] = [
   {
     pane_id: "builder-pane",
@@ -173,6 +200,8 @@ const panes: Pane[] = [
     // harness is one Chat cannot read, so it opens its terminal.
     agent: "claude",
     display_agent: "Reviewer",
+    // Match the native session already advertised by this fixture's agent list.
+    agent_session: initialReviewerSession,
     agent_status: "idle",
     revision: 1,
   },
@@ -196,11 +225,14 @@ let siblingObservationGate: Promise<void> | null = null;
 let navigationMode: "shared" | "browser-local" = "browser-local";
 const initialTerminalAttach = Promise.withResolvers<void>();
 let zoomedFocusedPaneId: string | null = null;
-let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
+let delayedPaneGet: {
+  paneId: string;
+  promise: Promise<void>;
+  entered?: () => void;
+} | null = null;
 let delayedTabList: { promise: Promise<void>; tabs: Tab[] } | null = null;
 let delayedPaneLayout: { promise: Promise<void>; layout: PaneLayout } | null =
   null;
-let rejectCreatedPaneFocus = true;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
 let agents: Record<string, unknown>[] = [
@@ -208,7 +240,7 @@ let agents: Record<string, unknown>[] = [
     pane_id: "reviewer-pane",
     terminal_id: "reviewer-terminal",
     agent: "claude",
-    agent_session: { agent: "claude", kind: "id", value: "review-a" },
+    agent_session: initialReviewerSession,
   },
 ];
 const terminalListeners = new Set<(push: TerminalPush) => void>();
@@ -312,6 +344,7 @@ function currentWorldCoverage() {
   };
 }
 
+let heldConversationRead: Promise<void> | undefined;
 let client: ConnectionClient = {
   connectionId: "local",
   generation: 1,
@@ -395,6 +428,7 @@ let client: ConnectionClient = {
     if (method === "pane.get") {
       const paneId = String(params.pane_id ?? "");
       if (delayedPaneGet?.paneId === paneId) {
+        delayedPaneGet.entered?.();
         await delayedPaneGet.promise;
       }
       if (rejectNextPaneGetId === paneId) {
@@ -454,7 +488,6 @@ let client: ConnectionClient = {
       worldRevision += 1;
       focusedTabId = createdTab.tab_id;
       focusedPaneId = createdPane.pane_id;
-      if (rejectCreatedPaneFocus) rejectNextPaneGetId = createdPane.pane_id;
       return {
         type: "tab_created",
         tab: createdTab,
@@ -559,6 +592,34 @@ let client: ConnectionClient = {
           "Agent checkout unavailable: this session has not reported a valid checkout.",
       };
     }
+    // This fixture already exposes readable History. Its summary admits a
+    // read-only conversation without inventing a native session or Send authority.
+    if (method === "agent_conversation.latest") {
+      await heldConversationRead;
+      const readable =
+        panes.find((pane) => pane.pane_id === params.pane_id)?.agent ===
+        "claude";
+      return {
+        conversation_version: 1,
+        source: "synthetic",
+        pane_id: String(params.pane_id),
+        agent: "claude",
+        agent_status: "idle",
+        session_binding: "guessed",
+        session_fingerprint: null,
+        session_label: "Synthetic readable conversation",
+        status: readable ? "ok" : "unavailable",
+        unavailable: readable
+          ? null
+          : {
+              reason: "unsupported_agent",
+              detail:
+                "This synthetic harness has no Chat support. Open Terminal.",
+            },
+        messages: [],
+        latest: null,
+      };
+    }
     if (method === "agent_history.get") {
       return {
         status: "ok",
@@ -646,6 +707,7 @@ const opensOn = (label: string) =>
  */
 async function openAgent(label: string) {
   const target = agentTarget(label)!;
+  const before = calls.length;
   flushSync(() => {
     target.click();
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
@@ -659,6 +721,22 @@ async function openAgent(label: string) {
       ),
     `${label} window on ${opensOn(label) === "history" ? "Chat" : "its terminal"}`,
   );
+  // A window on Chat hides its terminal: its attach keeps the agent's Herdr
+  // pane at the tab's current size, and nothing resizes it before Terminal.
+  const terminalId = `${label.toLowerCase()}-terminal`;
+  if (opensOn(label) === "history")
+    check(
+      calls
+        .slice(before)
+        .every(
+          ({ method, params }) =>
+            params.terminal_id !== terminalId ||
+            (method !== "terminal.resize" &&
+              (method !== "terminal.attach" ||
+                (params.surface_cols === 160 && params.surface_rows === 48))),
+        ),
+      `${label} window on Chat resized its Herdr pane`,
+    );
   flushSync(() =>
     document
       .querySelector<HTMLButtonElement>(
@@ -863,6 +941,23 @@ async function run() {
       ).cursor === "pointer",
     "Town did not establish one parked creation endpoint without opening an Inspector",
   );
+  // Herdr resizes a pane to every attach, for every viewer: the parked,
+  // undisplayed endpoint attaches at the tab's current 160×48 surface.
+  check(
+    calls.some(
+      ({ method, params }) =>
+        method === "terminal.attach" &&
+        params.terminal_id === "builder-terminal",
+    ) &&
+      calls.every(
+        ({ method, params }) =>
+          method !== "terminal.attach" ||
+          params.terminal_id !== "builder-terminal" ||
+          (params.surface_cols === 160 && params.surface_rows === 48),
+      ) &&
+      !calls.some(({ method }) => method === "terminal.resize"),
+    "the parked creation endpoint resized the Herdr pane",
+  );
   check(
     !calls.some(
       ({ method }) => method === "tab.create" || method === "workspace.create",
@@ -892,6 +987,16 @@ async function run() {
   const browserLocalCreateCount = calls.filter(
     ({ method }) => method === "tab.create",
   ).length;
+  const browserLocalFocusGate = Promise.withResolvers<void>();
+  const browserLocalFocusEntered = Promise.withResolvers<void>();
+  const browserLocalOpened = nextCreatedOpenerCompletion(
+    worldObjectId(client.connectionId, "terminal", "created-terminal-3"),
+  );
+  delayedPaneGet = {
+    paneId: "created-pane-3",
+    promise: browserLocalFocusGate.promise,
+    entered: browserLocalFocusEntered.resolve,
+  };
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(
@@ -925,61 +1030,34 @@ async function run() {
         }),
     "browser-local Town seat creation omitted its exact parked source",
   );
-  const browserLocalFocusGate = Promise.withResolvers<void>();
-  delayedPaneGet = {
-    paneId: "created-pane-3",
-    promise: browserLocalFocusGate.promise,
-  };
+  // Rendering/lifecycle: a launcher-created seat owns one real Inspector and
+  // terminal renderer. Admission retries are covered headlessly on test time.
   await worldRuntimeStore.refresh();
-  await until(
-    () =>
-      calls.some(
-        ({ method, params }) =>
-          method === "pane.get" && params.pane_id === "created-pane-3",
-      ),
-    "delayed browser-local created-seat focus",
-  );
-  const gatedBrowserLocalFocusCalls = calls.filter(
-    ({ method, params }) =>
-      method === "pane.get" && params.pane_id === "created-pane-3",
-  ).length;
-  worldRevision += 1;
-  await worldRuntimeStore.refresh();
-  await settle();
-  check(
-    calls.filter(
-      ({ method, params }) =>
-        method === "pane.get" && params.pane_id === "created-pane-3",
-    ).length === gatedBrowserLocalFocusCalls,
-    "World refresh overlapped an in-flight browser-local created-seat focus",
-  );
+  await browserLocalFocusEntered.promise;
+  await settleWindowLayout();
   check(
     ![...document.querySelectorAll(".workspace-inspector-agent-identity")].some(
       (identity) => identity.getAttribute("data-kind") === "terminal",
     ),
-    "pending browser-local created-seat focus opened an unadmitted Inspector",
+    "pending browser-local focus rendered an unadmitted terminal Inspector",
   );
   browserLocalFocusGate.resolve();
   delayedPaneGet = null;
+  await browserLocalOpened;
   await until(
     () =>
-      rejectedPaneGets === 1 &&
       store.get().selectedPaneId === "created-pane-3" &&
       [
         ...document.querySelectorAll(".workspace-inspector-agent-identity"),
       ].some((identity) => identity.getAttribute("data-kind") === "terminal"),
-    "browser-local created seat exact Inspector after transient focus rejection",
+    "browser-local created seat rendered its Inspector",
   );
   check(
     calls.filter(
       ({ method, params }) =>
-        method === "pane.get" && params.pane_id === "created-pane-3",
-    ).length === 2 &&
-      calls.filter(
-        ({ method, params }) =>
-          method === "terminal.attach" &&
-          params.terminal_id === "builder-terminal",
-      ).length === 1 &&
+        method === "terminal.attach" &&
+        params.terminal_id === "builder-terminal",
+    ).length === 1 &&
       calls.filter(
         ({ method, params }) =>
           method === "terminal.attach" &&
@@ -1513,7 +1591,6 @@ async function run() {
     panes.findIndex(({ pane_id }) => pane_id === "builder-second-pane"),
     1,
   );
-  rejectCreatedPaneFocus = false;
   shortcut("create", "7");
   await until(
     () => inspectorPane() === "created-pane-3",
@@ -1801,7 +1878,6 @@ async function run() {
     () => inspectorPane() === "reviewer-pane",
     "Reviewer Inspector restored after rejected notification",
   );
-  rejectCreatedPaneFocus = true;
   document
     .querySelector<HTMLButtonElement>(
       '.world-managed-window.is-active button[aria-label="Close Inspector window"]',
@@ -2323,6 +2399,10 @@ async function run() {
         ?.getClientRects().length &&
       document.querySelector(".topbar")?.classList.contains("is-zen") === true,
     "the phone terminal window shows one bar of its own and no topbar above it",
+  );
+  check(
+    visibleNeedsYouCounters() === 0,
+    "the phone terminal window's bar carries no Needs you counter",
   );
   const mobileInput = mobileInspector.querySelector<HTMLTextAreaElement>(
     "textarea.terminal-composer-input",
@@ -2869,14 +2949,20 @@ async function run() {
   const seatCreatesBeforeClick = calls.filter(
     ({ method }) => method === "tab.create",
   ).length;
-  const createdPaneGetsBeforeClick = calls.filter(
-    ({ method, params }) =>
-      method === "pane.get" && params.pane_id === "created-pane-3",
-  ).length;
-  const sharedDeadlineFocusGate = Promise.withResolvers<void>();
+  // Focus/lifecycle: the actual opener must honor the hook's cancellation.
+  // The headless consumer covers the full deadline and no-overlap policy.
+  const priorInspector = document.querySelector(
+    ".world-managed-window.is-active",
+  );
+  const sharedFocusGate = Promise.withResolvers<void>();
+  const sharedFocusEntered = Promise.withResolvers<void>();
+  const sharedFocusCompleted = nextCreatedOpenerCompletion(
+    worldObjectId(client.connectionId, "terminal", "created-terminal-3"),
+  );
   delayedPaneGet = {
     paneId: "created-pane-3",
-    promise: sharedDeadlineFocusGate.promise,
+    promise: sharedFocusGate.promise,
+    entered: sharedFocusEntered.resolve,
   };
   createSeatButton?.click();
   await chooseRoomTerminal(seatCreatesBeforeClick);
@@ -2887,44 +2973,25 @@ async function run() {
     "Town seat creation",
   );
   await worldRuntimeStore.refresh();
-  await until(
-    () =>
-      calls.filter(
-        ({ method, params }) =>
-          method === "pane.get" && params.pane_id === "created-pane-3",
-      ).length -
-        createdPaneGetsBeforeClick ===
-      1,
-    "gated shared created-seat focus",
-  );
-  await new Promise((resolve) =>
-    window.setTimeout(resolve, CREATED_PANE_ADMISSION_TIMEOUT_MS + 200),
-  );
-  await until(
-    () =>
-      store.get().notice?.message === "Tab created, but Inspector focus failed",
-    "created-seat admission deadline",
-  );
+  await sharedFocusEntered.promise;
+  await admissionClock.advance(CREATED_PANE_ADMISSION_TIMEOUT_MS);
   check(
-    reviewerInspectorActive() === true,
-    "created-seat deadline replaced the prior Reviewer Inspector",
+    store.get().notice?.message === "Tab created, but Inspector focus failed",
+    "hook cancellation reached the actual opener",
   );
-  rejectNextPaneGetId = null;
-  sharedDeadlineFocusGate.resolve();
+  sharedFocusGate.resolve();
   delayedPaneGet = null;
-  await settle();
+  await sharedFocusCompleted;
+  await settleWindowLayout();
   check(
-    reviewerInspectorActive() === true &&
-      calls.filter(
-        ({ method, params }) =>
-          method === "pane.get" && params.pane_id === "created-pane-3",
-      ).length -
-        createdPaneGetsBeforeClick ===
-        1,
-    "late created-seat focus completion replaced the prior Reviewer Inspector",
+    priorInspector?.isConnected === true &&
+      document.querySelector(".world-managed-window.is-active") ===
+        priorInspector &&
+      reviewerInspectorActive(),
+    "late cancelled opener replaced the rendered prior Inspector or took its focus",
   );
   store.clearNotice();
-  await settle();
+  await settleWindowLayout();
   await until(() => agentTarget("Builder"), "Builder desk target");
   await openAgent("Builder");
   await until(
@@ -4332,6 +4399,12 @@ async function run() {
     "restored desktop layout",
   );
   await until(() => boardTarget("Reviewer"), "Reviewer before retirement");
+  // CI's order: the owner picks Files before the reopened window's Chat read
+  // returns, then the session is replaced.
+  let releaseConversationRead = () => {};
+  heldConversationRead = new Promise<void>(
+    (resolve) => (releaseConversationRead = resolve),
+  );
   flushSync(() => boardTarget("Reviewer")!.click());
   await until(
     () => reviewerInspectorActive(),
@@ -4348,6 +4421,13 @@ async function run() {
   await until(
     () => reviewerInspector.getAttribute("data-view") === "files",
     "Reviewer Files state before session replacement",
+  );
+  heldConversationRead = undefined;
+  releaseConversationRead();
+  await settle();
+  check(
+    reviewerInspector.getAttribute("data-view") === "files",
+    "a late Chat read overrode the owner's Files choice",
   );
   const worktreeBeforeReplacement = calls.length;
   const replacementSession = {
@@ -5163,7 +5243,7 @@ async function run() {
   );
   check(
     clippedVisualControls().length === 0,
-    "narrow Columns clipped title controls",
+    `narrow Columns clipped title controls: ${JSON.stringify({ clipped: clippedVisualControls(), scrollLeft: scrollingLayer.scrollLeft, scrollWidth: scrollingLayer.scrollWidth, clientWidth: scrollingLayer.clientWidth })}`,
   );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";
@@ -5490,6 +5570,12 @@ async function run() {
     !document.querySelector('button[aria-label="Back to Town"]'),
     "return action disappears when no Inspector is open",
   );
+  // A phone root screen keeps one Needs you counter in reach, in Zen's
+  // picker or, outside Zen, in the top bar.
+  check(
+    visibleNeedsYouCounters() === 1,
+    `a phone root screen shows ${visibleNeedsYouCounters()} Needs you counters, not one`,
+  );
   // The closed terminal leaves no history entry: one system Back leaves
   // Town for the scene shown before it.
   await settle();
@@ -5686,6 +5772,12 @@ async function run() {
     !reuseWindow.querySelector('[role="tab"][aria-label="Chat"]'),
     "shell window unexpectedly offers Chat before the agent appears",
   );
+  const reuseSession = {
+    source: "herdr:claude",
+    agent: "claude",
+    kind: "id",
+    value: "open-rule-session",
+  };
   const reuseAgent: Pane = {
     ...reuseShell,
     pane_id: "open-rule-agent",
@@ -5694,13 +5786,13 @@ async function run() {
     agent_name: "Open Rule Agent",
     display_agent: "Open Rule Agent",
     agent_status: "idle",
-    agent_session: { value: "open-rule-session" },
+    agent_session: reuseSession,
   };
   panes.push(reuseAgent);
   reuseTab.pane_count = 2;
   agents.push({
     ...reuseAgent,
-    agent_session: { agent: "claude", kind: "id", value: "open-rule-session" },
+    agent_session: reuseSession,
   });
   worldRevision += 1;
   await worldRuntimeStore.refresh();
@@ -6022,6 +6114,7 @@ async function run() {
     await settle();
   }
   root.unmount();
+  await runSharedInspectorChecks(check);
 }
 
 run()

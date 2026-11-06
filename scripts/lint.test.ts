@@ -184,3 +184,33 @@ test("generated assets, binaries and workspace dependencies stay ignored", () =>
     expect(lint("debugger;", path)).toEqual([]);
   }
 });
+
+test("effect and storage core time uses injected ports, including globalThis access", () => {
+  for (const path of [
+    "server/src/effects/fixture.ts",
+    "server/src/storage/fixture.ts",
+    "server/src/world/answer-dispatch.ts",
+  ]) {
+    for (const expression of [
+      "Date.now()",
+      "new Date()",
+      "performance.now()",
+      "setTimeout(() => {}, 1)",
+      "globalThis.Date.now()",
+      "globalThis.setTimeout(() => {}, 1)",
+    ]) {
+      expect(lint(`export const value = ${expression};`, path)).toEqual([
+        "error:eslint(no-restricted-globals)",
+      ]);
+    }
+    expect(lint("export const time = (clock) => clock.now();", path)).toEqual(
+      [],
+    );
+  }
+  expect(
+    lint(
+      "export const value = Date.now();",
+      "server/src/effects/fixture.test.ts",
+    ),
+  ).toEqual([]);
+});

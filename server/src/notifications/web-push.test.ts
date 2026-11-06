@@ -1,3 +1,5 @@
+import { systemClock, systemScheduler } from "../service/ports";
+import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { expect, mock, test } from "bun:test";
 import { createECDH, randomBytes } from "node:crypto";
 import {
@@ -21,6 +23,11 @@ import {
 } from "./web-push";
 import { createAuthHandlers } from "../http/auth";
 import { createLegacyConnectionRuntime } from "../connections/runtime";
+import { createGuiSettingsStore } from "../config/gui-settings";
+
+const settings = createGuiSettingsStore(
+  join(mkdtempSync(join(tmpdir(), "runtime-settings-")), "settings.json"),
+);
 
 function device(id = "device-1") {
   const key = createECDH("prime256v1");
@@ -501,6 +508,10 @@ test.each(["older first", "newer first"])(
     );
     let lookupIndex = 0;
     const runtime = createLegacyConnectionRuntime({
+      clock: systemClock,
+      scheduler: systemScheduler,
+      runtimeStatus: memoryRuntimeStatus(),
+      settings,
       config: {
         socketPath: join(dirname(f.path), "control.sock"),
         clientSocketPath: join(dirname(f.path), "client.sock"),
@@ -603,6 +614,10 @@ test.each([
   let tabLabel = "Peter";
   const subscribed = Promise.withResolvers<void>();
   const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
     config: {
       socketPath: join(dirname(f.path), "control.sock"),
       clientSocketPath: join(dirname(f.path), "client.sock"),
@@ -748,4 +763,26 @@ test("push payload uses Herdr text and tolerates pane-less alerts", () => {
     tag: JSON.stringify(["herdr-world-task", "alpha", 3, "codex needs input"]),
     target: null,
   });
+});
+
+test("a stopped service keeps its push registry as it was", async () => {
+  const f = fixture();
+  try {
+    expect((await f.service.handle(request("POST", device()))).status).toBe(
+      200,
+    );
+    const before = readFileSync(f.path, "utf8");
+    f.service.stop();
+    // A registration admitted before stop and finished after it.
+    expect(
+      (await f.service.handle(request("POST", device("second")))).status,
+    ).toBe(500);
+    // Logout turns this refusal into a 503 (service/listener.ts).
+    expect(() => f.service.revokeSession("session-token")).toThrow(
+      "World storage is closed",
+    );
+    expect(readFileSync(f.path, "utf8")).toBe(before);
+  } finally {
+    f.cleanup();
+  }
 });

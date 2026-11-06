@@ -7,7 +7,7 @@ import {
   readWorldBrowserBundle,
 } from "./browserBundles";
 
-test.each(["HostsFilter", "ProductionContexts"] as const)(
+test.each(["HostsFilter", "ProductionContexts", "AnswerDeliveries"] as const)(
   "shared %s assets survive writing and can be served by another test file",
   async (entry) => {
     const root = await mkdtemp(join(tmpdir(), "world-bundle-regression-"));

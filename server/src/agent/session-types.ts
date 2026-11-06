@@ -3,6 +3,7 @@ export type HerdrCall = (
   params?: Record<string, unknown>,
   timeoutMs?: number,
   beforeSend?: () => void,
+  signal?: AbortSignal,
 ) => Promise<unknown>;
 
 export type AgentHistoryParams = {

@@ -288,6 +288,8 @@ export function createWebPushService(
   let active = 0;
 
   function save(next: Registry) {
+    // A stopped service no longer owns its data folder.
+    if (stopped) throw new Error("World storage is closed");
     assertSafeDataPath(path);
     const temporary = join(dirname(path), `.web-push-${randomUUID()}.tmp`);
     try {
@@ -324,7 +326,7 @@ export function createWebPushService(
   }
 
   function forget(device: Device) {
-    if (!registry || !registry.devices.includes(device)) return;
+    if (stopped || !registry || !registry.devices.includes(device)) return;
     save({
       ...registry,
       devices: registry.devices.filter((entry) => entry !== device),

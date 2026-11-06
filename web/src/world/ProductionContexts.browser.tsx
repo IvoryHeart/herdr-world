@@ -135,6 +135,8 @@ if (PerformanceObserver.supportedEntryTypes.includes("long-animation-frame")) {
 }
 let receivedFrames = 0,
   presentedFrames = 0;
+/** Production World work per stage (devtools counters; see renderer.ts). */
+const worldWork: Record<string, Record<string, number>> = {};
 bridge.onTerminal((frame) => {
   if (frame.connection_id === "alpha") receivedFrames++;
 });
@@ -585,6 +587,8 @@ async function run() {
     }
   } else {
     const runtime = new WorldRuntimeStore(bridge);
+    // This fixture owns one mounted surface and its observation store.
+    const releaseView = runtime.retainView(view === "board" ? "board" : "town");
     const scene = document.body.appendChild(document.createElement("div"));
     scene.dataset.scene = view;
     scene.className = "world-stage-scroll";
@@ -608,6 +612,7 @@ async function run() {
       );
     for (const stage of ["initial", "refresh"]) {
       phase = stage;
+      const workBefore = { ...window.__HERDR_WORLD_WORK__ };
       await fetch("/input-ready?phase=" + stage);
       const began = performance.now();
       if (traceEnabled)
@@ -719,6 +724,13 @@ async function run() {
         acknowledgements.filter((ack) => ack.phase === stage).length === count,
         "Missing admitted input acknowledgement",
       );
+      const work: Record<string, number> = {};
+      for (const [kind, total] of Object.entries(
+        window.__HERDR_WORLD_WORK__ ?? {},
+      ))
+        if (total !== (workBefore[kind] ?? 0))
+          work[kind] = total - (workBefore[kind] ?? 0);
+      worldWork[stage] = work;
       phase = null;
       if (
         view === "town" &&
@@ -751,6 +763,7 @@ async function run() {
       }
     }
     root.unmount();
+    releaseView();
     runtime.stop();
   }
   terminals.unmount();
@@ -771,6 +784,7 @@ async function run() {
       notices,
       receivedFrames,
       presentedFrames,
+      worldWork,
     }),
   });
 }
@@ -792,6 +806,7 @@ void run().catch(async (error) => {
       notices,
       receivedFrames,
       presentedFrames,
+      worldWork,
     }),
   });
 });

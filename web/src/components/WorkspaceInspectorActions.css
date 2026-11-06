@@ -1,0 +1,27 @@
+/* Shared by the Inspector header and every World window's controls, so it
+   loads with the window controls rather than with the lazy Inspector. */
+.workspace-inspector-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.workspace-inspector-actions button {
+  width: 28px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-inspector-actions button:hover {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}

@@ -1,3 +1,4 @@
+import { commandReplies } from "../verbs/replies";
 import {
   EndpointCreationDeadline,
   parseEndpointCreationSource,
@@ -81,6 +82,8 @@ export function createTerminalBridge(args: {
   lookupPaneId?: (terminalId: string) => Promise<string | null>;
   /** Popup surfaces follow this connection's focused Space, not the shell default. */
   focusedWorkspaceId?: () => Promise<string | null>;
+  /** The session's app size now: a hidden app client must not resize it. */
+  appViewportSize?: () => Promise<{ cols: number; rows: number } | null>;
   surfaceCodecsEnabled?: () => Promise<boolean>;
   validateCreationSource?: (source: EndpointCreationSource) => Promise<void>;
   createEmptyWorkspace?: (
@@ -349,6 +352,7 @@ export function createTerminalBridge(args: {
     try {
       if ((await navigationMode()) !== "browser-local") return;
       const codecs = await (args.surfaceCodecsEnabled?.() ?? true);
+      const size = await args.appViewportSize?.().catch(() => null);
       if (disposed || popupObserver) return;
       const observer = new EndpointClient(args.clientSocketPath, codecs);
       popupObserver = observer;
@@ -376,7 +380,7 @@ export function createTerminalBridge(args: {
         popupChanged(null);
         retryPopupObserver();
       });
-      await observer.connect(80, 24);
+      await observer.connect(size?.cols ?? 80, size?.rows ?? 24);
       refreshPopupObserverFocus();
     } catch (error) {
       logger.warn("popup observer connect failed", {
@@ -1135,21 +1139,14 @@ export function createTerminalBridge(args: {
     params: Record<string, unknown>,
     requestIsCurrent: () => boolean = () => true,
   ) {
-    const fail = (message: string) => {
-      const effectiveMessage = requestIsCurrent()
-        ? message
-        : CONNECTION_CHANGED_DURING_REQUEST;
-      args.markRpcError(ws, id, effectiveMessage);
-      return args.safeSend(
-        ws,
-        serialize({ id, error: { message: effectiveMessage } }),
-        `${method}-error`,
-      );
-    };
-    const reply = (result: unknown) =>
-      requestIsCurrent()
-        ? args.safeSend(ws, serialize({ id, result }), method)
-        : fail(CONNECTION_CHANGED_DURING_REQUEST);
+    const { fail, reply } = commandReplies({
+      id,
+      method,
+      current: requestIsCurrent,
+      error: (message) => args.markRpcError(ws, id, message),
+      send: (message, context) =>
+        args.safeSend(ws, serialize(message), context),
+    });
     try {
       if (!requestIsCurrent()) return fail(CONNECTION_CHANGED_DURING_REQUEST);
       if (disposed) return fail("terminal bridge disposed");

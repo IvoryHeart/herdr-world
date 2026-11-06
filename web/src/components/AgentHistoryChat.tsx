@@ -49,6 +49,8 @@ import {
   type HistoryDecoration,
 } from "./historyDecoration";
 import { useHistoryCatchUp } from "./useHistoryCatchUp";
+import { RECEIPT_MEMORY_NOTE } from "./chat/pendingSends";
+import { chatRows, type ChatRow } from "./chat/chatSenders";
 import "./AgentHistoryChat.css";
 
 // Treat the list as pinned while the reader is within this distance of the
@@ -68,9 +70,17 @@ const ChatBubble = memo(function ChatBubble({
   decorate,
   decorationToken,
   onOpen,
+  from = null,
+  fromKind = "agent",
+  continued = false,
 }: {
   entry: HistoryEntry;
   sequence: number;
+  /** The transcript's sender name; null outside the wide transcript. */
+  from?: string | null;
+  fromKind?: ChatRow["sender"]["kind"];
+  /** Continues the previous message's sender, so its name is not repeated. */
+  continued?: boolean;
   highlighted: boolean;
   /** Has the same words as a message Chat sent: matched, not proven. */
   matched?: "words" | "order" | null;
@@ -109,10 +119,36 @@ const ChatBubble = memo(function ChatBubble({
     );
   return (
     <article
-      className={`agent-history-chat-message ${tone} ${highlighted ? "is-minimap-target" : ""}`}
+      className={[
+        "agent-history-chat-message",
+        tone,
+        fromKind === "relayed" && "is-relayed",
+        continued && "is-continued",
+        highlighted && "is-minimap-target",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-sequence={sequence}
       data-delivery={matched ? "matched" : undefined}
     >
+      {from !== null ? (
+        <header className="agent-history-chat-from">
+          <span className="agent-history-chat-avatar" aria-hidden="true">
+            {fromKind === "user" ? "you" : from.slice(0, 2)}
+          </span>
+          <span className="agent-history-chat-name">
+            {from}
+            {fromKind === "relayed" ? (
+              <span
+                className="agent-history-chat-relayed"
+                title={`Typed into this terminal starting “${from}:”, the name of a live agent. World shows it as that agent's message; it cannot prove who typed it.`}
+              >
+                relayed
+              </span>
+            ) : null}
+          </span>
+        </header>
+      ) : null}
       <div className="agent-history-chat-bubble">
         {entry.role === "user" ? (
           <p>{preview}</p>
@@ -145,8 +181,8 @@ const ChatBubble = memo(function ChatBubble({
             className="agent-history-chat-read"
             title={
               matched === "words"
-                ? "Chat sent the same words just before this appeared; it cannot prove this is that message."
-                : "Inferred: the first message here after Chat sent one, in a form its harness rewrites (a paste or image placeholder, or added words)."
+                ? `Chat sent the same words just before this appeared; it cannot prove this is that message. ${RECEIPT_MEMORY_NOTE}`
+                : `Inferred: the first message here after Chat sent one, in a form its harness rewrites (a paste or image placeholder, or added words). ${RECEIPT_MEMORY_NOTE}`
             }
           >
             <CheckCheck size={13} aria-hidden="true" />
@@ -563,8 +599,15 @@ export function AgentHistoryChat({
   onAtLatest,
   placed,
   countNewAgentMessages = false,
+  transcript,
 }: {
   countNewAgentMessages?: boolean;
+  /**
+   * Chat's sender names: a window 900px or wider shows the conversation as
+   * transcript rows (sender, text, time at the right edge) instead of
+   * bubbles. `agents` are other live agents whose "name: …" relays count.
+   */
+  transcript?: { agent: string; agents: ReadonlySet<string> };
   /** Shown among the messages at their time, such as an unseen send. */
   placed?: readonly { key: string; at: string; node: ReactNode }[];
   /** Entries older than the shown ones exist; onLoadOlder fetches a page. */
@@ -595,6 +638,10 @@ export function AgentHistoryChat({
   onOpen: (entry: HistoryEntry) => void;
 }) {
   const followRef = useRef(true);
+  const rows = useMemo(
+    () => (transcript ? chatRows(items, transcript.agents) : null),
+    [items, transcript],
+  );
   const { unread, clear: clearUnread } = useHistoryCatchUp(
     items,
     followKey,
@@ -718,7 +765,9 @@ export function AgentHistoryChat({
   return (
     <div
       ref={listRef}
-      className="agent-history-chat"
+      className={
+        transcript ? "agent-history-chat is-transcript" : "agent-history-chat"
+      }
       onScroll={(event) => {
         const list = event.currentTarget;
         // A hidden list reports zero geometry; keep the last pin state.
@@ -795,6 +844,7 @@ export function AgentHistoryChat({
                 historyDecorationKey(item.entry),
               )}
               onOpen={onOpen}
+              {...senderProps(rows?.get(item.entry.id), transcript?.agent)}
             />
           ) : (
             <ToolBlock
@@ -813,4 +863,19 @@ export function AgentHistoryChat({
       </div>
     </div>
   );
+}
+
+function senderProps(row: ChatRow | undefined, agent: string | undefined) {
+  if (!row || agent === undefined) return {};
+  const { sender } = row;
+  return {
+    from:
+      sender.kind === "relayed"
+        ? sender.name
+        : sender.kind === "user"
+          ? "You"
+          : agent,
+    fromKind: sender.kind,
+    continued: row.continued,
+  };
 }

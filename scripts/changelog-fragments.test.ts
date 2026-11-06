@@ -192,8 +192,16 @@ test("a code PR needs a fragment or a stated reason; docs-only PRs do not", () =
     false,
   );
   expect(assessPullRequest(code, none, "Changelog: none — n/a").ok).toBe(false);
-  // Workflow and agent guidance are not documentation-only.
-  expect(assessPullRequest(["AGENTS.md"], none, null).ok).toBe(false);
+  // Contributor/skill Markdown is documentation; executable workflow policy is code.
+  for (const path of [
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    ".agents/skills/example/SKILL.md",
+  ])
+    expect(assessPullRequest([path], none, null).ok).toBe(true);
+  expect(assessPullRequest([".github/workflows/ci.yml"], none, null).ok).toBe(
+    false,
+  );
   expect(
     assessPullRequest(["docs/release.md", "README.md"], none, null).ok,
   ).toBe(true);

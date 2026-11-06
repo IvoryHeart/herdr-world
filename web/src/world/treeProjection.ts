@@ -6,6 +6,8 @@ import type {
   WorldSpaceObject,
 } from "./worldObject";
 import { admitWorldSpaces } from "./spaceAdmission";
+import { DEVTOOLS } from "./devtools/flag";
+import { countWorldWork } from "./devtools/renderer";
 
 export const TREE_PRESENTATION_BOUNDS = Object.freeze({
   hosts: 128,
@@ -55,6 +57,7 @@ export function projectWorldTree(
   world: WorldObject,
   selectedId: string | null = null,
 ): WorldTreeProjection {
+  if (DEVTOOLS) countWorldWork("tree.project");
   const selected = selectedPath(world, selectedId);
   const presentedHosts = world.hosts
     .map((host, index): IndexedHost => ({ host, index }))

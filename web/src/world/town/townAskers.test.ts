@@ -36,22 +36,27 @@ const asked = (id: string, pane: string, terminal?: string): WorldAsk => ({
   },
 });
 
-test("no questions require no topology or roster lookup", () => {
-  const unused = new Proxy(
-    {},
-    {
-      get() {
-        throw new Error("read unrelated topology for an empty question list");
-      },
+test("empty questions return no askers without reading the World or office rosters", () => {
+  const reads = { leaves: 0, agents: 0, terminals: 0 };
+  const world = {
+    get leaves() {
+      reads.leaves++;
+      return [];
     },
-  );
-  expect(
-    townAskers(
-      [],
-      unused as Parameters<typeof townAskers>[1],
-      unused as Parameters<typeof townAskers>[2],
-    ).size,
-  ).toBe(0);
+  };
+  const office = {
+    get roster() {
+      reads.agents++;
+      return [];
+    },
+    get paneRoster() {
+      reads.terminals++;
+      return [];
+    },
+  };
+
+  expect(townAskers([], world, office)).toEqual(new Map());
+  expect(reads).toEqual({ leaves: 0, agents: 0, terminals: 0 });
 });
 
 test("every placed asker is named as Town labels its desk, others by what they carry", () => {

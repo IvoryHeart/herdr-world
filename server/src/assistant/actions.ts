@@ -6,10 +6,7 @@ import type {
   AssistantWorkspace,
 } from "../../../shared/assistant";
 import { isRecord } from "../agent/session-utils";
-import {
-  repoWorktreeHooksEnabled,
-  workspaceRepoSettingsKey,
-} from "../config/gui-settings";
+import { workspaceRepoSettingsKey } from "../config/gui-settings";
 import { validateConnectionId } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { assertUnixHost } from "../connections/unix-only";
@@ -318,7 +315,7 @@ export async function prepareAssistantAction(args: {
     )
       throw new Error("Cannot preview this setup hook");
     const enabled = await read(() =>
-      repoWorktreeHooksEnabled(
+      runtime.worktreeHooks.hooksEnabled(
         workspaceRepoSettingsKey(
           source,
           runtime.sshHost(),

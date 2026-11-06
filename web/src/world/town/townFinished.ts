@@ -18,8 +18,7 @@ const BUSY = new Set(["working", "blocked"]);
 /**
  * One observation, in a single pass over the roster: agents that went from
  * busy to idle have finished; agents that are busy again, or gone, are no
- * longer finished. `renewed` are agents whose earlier completion no longer
- * counts as seen: they just finished or just started working again.
+ * longer finished.
  */
 export function nextTownFinished<
   T extends Pick<OfficeAgent, "key" | "semanticStatus">,
@@ -30,7 +29,6 @@ export function nextTownFinished<
 ) {
   const statuses = new Map<string, string>();
   const started: string[] = [];
-  const renewed: T[] = [];
   let next: Set<string> | null = null;
   const change = () => (next ??= new Set(current));
   for (const agent of agents) {
@@ -40,15 +38,11 @@ export function nextTownFinished<
     const busy = BUSY.has(status);
     if (was !== undefined && BUSY.has(was) && status === "idle") {
       started.push(agent.key);
-      renewed.push(agent);
       if (!current.has(agent.key)) change().add(agent.key);
-    } else if (busy) {
-      if (!BUSY.has(was ?? "")) renewed.push(agent);
-      if (current.has(agent.key)) change().delete(agent.key);
-    }
+    } else if (busy && current.has(agent.key)) change().delete(agent.key);
   }
   for (const key of current) if (!statuses.has(key)) change().delete(key);
-  return { statuses, started, renewed, finished: next ?? current };
+  return { statuses, started, finished: next ?? current };
 }
 
 /**
@@ -72,8 +66,6 @@ export function useTownFinished(office: HerdrOfficeProjection) {
   );
   const finishedRef = useRef(finished);
   finishedRef.current = finished;
-  /** Agents whose earlier completion no longer counts as seen. */
-  const [fresh, setFresh] = useState<readonly OfficeAgent[]>([]);
   useEffect(() => {
     const step = nextTownFinished(
       previous.current,
@@ -85,22 +77,16 @@ export function useTownFinished(office: HerdrOfficeProjection) {
       finishedRef.current = step.finished;
       setFinished(step.finished);
     }
-    if (step.renewed.length) setFresh(step.renewed);
   }, [office]);
-  const dismiss = (key: string) => {
-    const current = finishedRef.current;
-    if (!current.has(key)) return;
-    const next = new Set(current);
-    next.delete(key);
-    finishedRef.current = next;
-    setFinished(next);
-  };
-  return { finished, fresh, dismiss };
+  return { finished };
 }
 
 /**
  * The projection as Town presents it: agents that finished unchecked are
- * done, and done agents the user has checked are idle.
+ * done, and agents the user has checked are idle. Checks come from the World
+ * service, so a check made in another browser applies here too; finishes are
+ * kept, so a check the service forgets (a restart) leaves the finish unchecked
+ * again.
  */
 export function withTownFinished(
   office: HerdrOfficeProjection,
@@ -108,10 +94,10 @@ export function withTownFinished(
   checked: ReadonlySet<string>,
 ): HerdrOfficeProjection {
   const changes = (agent: OfficeAgent) =>
-    (agent.semanticStatus === "idle" && finished.has(agent.key)) ||
-    (agent.semanticStatus === "done" &&
-      checked.has(agent.key) &&
-      !finished.has(agent.key));
+    (agent.semanticStatus === "idle" &&
+      finished.has(agent.key) &&
+      !checked.has(agent.key)) ||
+    (agent.semanticStatus === "done" && checked.has(agent.key));
   if (!office.roster.some(({ agent }) => changes(agent))) return office;
   const swapped = new Map<OfficeAgent, OfficeAgent>();
   const present = (agent: OfficeAgent) => {

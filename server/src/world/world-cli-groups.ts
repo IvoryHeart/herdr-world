@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { admitVerb } from "../verbs/admission";
+import { registeredVerb } from "../verbs/registry";
 import { parsePodMarkdown } from "../../../shared/groupMarkdown";
 import {
   agentAddress,
@@ -54,7 +56,7 @@ type Context = {
   deps: WorldCliDeps;
   actor: CliActor;
   host?: CliHost;
-  patch(ops: GroupOp[]): BoardDocument;
+  patch(ops: GroupOp[]): BoardDocument | Promise<BoardDocument>;
 };
 const fail = (
   code: "usage" | "refused" | "not_found" | "unavailable",
@@ -266,7 +268,7 @@ export async function runGroupCommand(
       params.open_pr_limit === undefined
         ? undefined
         : { open_pr_limit: params.open_pr_limit as number };
-    const document = context.patch([
+    const document = await context.patch([
       {
         op: "group.create",
         id,
@@ -360,7 +362,7 @@ export async function runGroupCommand(
         members: [...members.values()],
       });
     }
-    const document = context.patch(ops);
+    const document = await context.patch(ops);
     return {
       revision: document.revision,
       imported: document.relations.groups.filter((group) =>
@@ -385,6 +387,21 @@ export async function runGroupCommand(
       );
     if (params.herdr !== true)
       return fail("refused", "add --herdr to move the agent in Herdr");
+    // The target owner comes from the resolved view, never the caller's claim.
+    try {
+      admitVerb(
+        registeredVerb("cli", command),
+        { ...params, herdr_target: true },
+        {
+          actor: context.actor.verified ? "cli_verified" : "cli_unverified",
+          authorized: () => !deps.signal?.aborted,
+          capabilities: () => new Set(["world"]),
+          preconditions: () => Boolean(view.current && view.projected),
+        },
+      );
+    } catch (error) {
+      return fail("refused", (error as Error).message);
+    }
     if (params.role !== undefined || params.replace === true)
       return fail(
         "refused",
@@ -562,7 +579,7 @@ export async function runGroupCommand(
         replace,
       });
   } else return fail("usage", "unknown group command");
-  const document = context.patch(ops);
+  const document = await context.patch(ops);
   const updated = document.relations.groups.find(
     (entry) => entry.id === group.id,
   );

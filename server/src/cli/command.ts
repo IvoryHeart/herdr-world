@@ -1,3 +1,4 @@
+import { writeCliOutput } from "./stdout";
 import { homedir } from "node:os";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import {
@@ -38,6 +39,8 @@ export interface CliContext {
   /** Runs a command and returns its standard output, for status queries. */
   captureCommand: CaptureCommand;
   log: (message: string) => void;
+  /** Completes only after stdout accepts the line; used before answer receipts. */
+  output?: (message: string) => Promise<void>;
   error: (message: string) => void;
 }
 
@@ -73,6 +76,7 @@ export function defaultCliContext(version: string): CliContext {
     runCommand: defaultRunCommand,
     captureCommand: defaultCaptureCommand,
     log: console.log,
+    output: writeCliOutput,
     error: console.error,
   };
 }

@@ -1,7 +1,13 @@
+import { planBoardPatch } from "../world/board-plan";
+import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
-import { legacyAppearanceOps } from "../world/appearance-observation";
+import {
+  legacyAppearanceObservations,
+  legacyAppearanceObservationOps,
+} from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
+import { handleBinRpc } from "./bin";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -9,7 +15,7 @@ import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
 
-/** Aggregate World methods: snapshot, board document, profiles and watchlist (world.*). */
+/** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
   rpc: BridgeRpcContext,
 ): false | Promise<false | void> {
@@ -27,6 +33,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     connectionManager,
     logger,
     profiles,
+    terminalSettings,
     publishBoardChanged,
     publishProfilesChanged,
     publishWatchlistChanged,
@@ -37,11 +44,32 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     worldWatchlist,
     worldCli,
   } = rpc.services;
+  if (method === "world.focused.observe") {
+    try {
+      rpc.services.focusedAcquisition.declare(ws, params);
+      sendReply({ id, result: { ok: true } }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+  if (method === "world.usage.get") {
+    try {
+      const usage = rpc.services.worldUsage;
+      if (!usage) throw new Error("World usage service is unavailable");
+      sendReply({ id, result: await usage.get(params ?? {}) }, method);
+    } catch {
+      sendError("world-usage-error", new Error("World usage is unavailable"));
+    }
+    return;
+  }
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
+  if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {
+      const base = parseObservationBase(params);
       const snapshots = worldSnapshots;
       if (!snapshots) throw new Error("World snapshot service is unavailable");
       if (
@@ -71,20 +99,39 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
           detail: String(error),
         }),
       );
-      recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
+      await recordSpawnClaims(
+        board(),
+        snapshot,
+        publishBoardChanged,
+        logger,
+        rpc.services.clock.now(),
+        (id, generation) => {
+          const lease = connectionManager.readyRuntimeLease(id);
+          return Boolean(
+            lease && lease.generation === generation && lease.isCurrent(),
+          );
+        },
+      );
       try {
-        const appearanceOps = legacyAppearanceOps(
-          board().get(),
-          snapshot,
-          (connectionId, generation) => {
-            const lease = connectionManager.readyRuntimeLease(connectionId);
-            return Boolean(
-              lease && lease.generation === generation && lease.isCurrent(),
+        const observations = legacyAppearanceObservations(snapshot);
+        let changed = false;
+        const document = await board().patch(
+          planBoardPatch([observations], (current) => {
+            const appearanceOps = legacyAppearanceObservationOps(
+              current,
+              observations,
+              (connectionId, generation) => {
+                const lease = connectionManager.readyRuntimeLease(connectionId);
+                return Boolean(
+                  lease && lease.generation === generation && lease.isCurrent(),
+                );
+              },
             );
-          },
+            changed = appearanceOps.length > 0;
+            return changed ? appearanceOps : null;
+          }),
         );
-        if (appearanceOps.length)
-          publishBoardChanged(board().patch(appearanceOps).revision);
+        if (changed) publishBoardChanged(document.revision);
       } catch (error) {
         logger.warn("World could not bind legacy tab colours", {
           detail: String(error),
@@ -92,7 +139,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
       }
       await sendWorldSnapshotReply(
         id,
-        snapshot,
+        snapshots.observation.reply(snapshot, base),
         req.accept_world_snapshot_chunks === true,
         (payload) => safeSend(ws, payload, "world-snapshot"),
         () => clients.has(ws),
@@ -108,10 +155,14 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (
     method === "world.asks.get" ||
     method === "world.ask.answer" ||
-    method === "world.ask.dismiss"
+    method === "world.ask.dismiss" ||
+    method === "world.ask.deliveries.get" ||
+    method === "world.ask.delivery.get" ||
+    method === "world.ask.delivery.resend" ||
+    method === "world.ask.delivery.close"
   ) {
     try {
-      sendReply({ id, result: worldCli.rpc(method, params) }, method);
+      sendReply({ id, result: await worldCli.rpc(method, params) }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
     }
@@ -119,7 +170,9 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.board.get") {
     try {
-      sendReply({ id, result: board().get() }, "world-board-get");
+      const document = board().get();
+      await rpc.services.bindings?.settled();
+      sendReply({ id, result: document }, "world-board-get");
     } catch (error) {
       sendError("world-board-get-error", error);
     }
@@ -127,9 +180,22 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.board.patch") {
     try {
-      const { ops, observed } = clientBoardOps(
-        (params as { ops?: unknown } | undefined)?.ops,
-        board().get(),
+      let ops: import("../world/board-store").BoardOp[] = [];
+      let observed = new Map<
+        string,
+        import("../world/board-recipient").ObservedAgent
+      >();
+      const prepare = planBoardPatch(
+        [params],
+        (document: import("../world/board-store").BoardDocument) => {
+          if (!rpc.requestIsCurrent())
+            throw new Error("Board request is no longer current");
+          ({ ops, observed } = clientBoardOps(
+            (params as { ops?: unknown } | undefined)?.ops,
+            document,
+          ));
+          return ops;
+        },
       );
       const revision = (params as { revision?: unknown } | undefined)?.revision;
       if (
@@ -137,16 +203,16 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         (!Number.isSafeInteger(revision) || Number(revision) < 0)
       )
         throw new Error("invalid Board revision");
-      const result =
-        revision === undefined
-          ? board().patch(ops)
-          : board().patchIf(Number(revision), ops);
+      const result = await (revision === undefined
+        ? board().patch(prepare)
+        : board().patchIf(Number(revision), prepare));
       if (!result)
         throw new BoardConflictError(
           "The Board changed. Review the current Group before editing again.",
           board().get(),
         );
       publishBoardChanged(result.revision);
+      await rpc.services.bindings?.settled();
       sendReply({ id, result: { document: result } }, "world-board-patch");
       void bindBoardRecipients(ops, observed).catch((error) =>
         logger.warn("Board could not record a string's agent", {
@@ -165,16 +231,29 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.profiles.get") {
     try {
-      sendReply({ id, result: profiles().get() }, "world-profiles-get");
+      sendReply(
+        { id, result: await terminalSettings().settled() },
+        "world-profiles-get",
+      );
     } catch (error) {
       sendError("world-profiles-get-error", error);
+    }
+    return;
+  }
+  if (method === "world.town_master.set") {
+    try {
+      const result = await terminalSettings().setMaster(params ?? {});
+      sendReply({ id, result }, "world-town-master-set");
+    } catch (error) {
+      sendError("world-town-master-set-error", error);
     }
     return;
   }
   const profilesWrite = profileWrite(method);
   if (profilesWrite) {
     try {
-      const result = profilesWrite(profiles(), params);
+      await profilesWrite(profiles(), params);
+      const result = terminalSettings().get();
       publishProfilesChanged(result.revision);
       sendReply({ id, result }, "world-profiles-write");
     } catch (error) {
@@ -201,6 +280,53 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         !terminalId
       ) {
         throw new Error("invalid World watch identity");
+      }
+      if (rpc.services.persistentMarks) {
+        if (
+          method === "world.watchlist.unpin" &&
+          identity?.watch_id !== undefined &&
+          (typeof identity.watch_id !== "string" ||
+            !identity.watch_id ||
+            identity.watch_id.length > 512)
+        )
+          throw new Error("invalid World watch capture");
+        const watch = {
+          connection_id: connectionId,
+          connection_generation: generation as number,
+          terminal_id: terminalId,
+          ...(method === "world.watchlist.unpin" &&
+          typeof identity?.watch_id === "string"
+            ? { watch_id: identity.watch_id }
+            : {}),
+        };
+        const before = worldWatchlist.list().revision;
+        if (method === "world.watchlist.unpin")
+          await rpc.services.persistentMarks.unpin(watch);
+        else
+          await rpc.services.persistentMarks.mutate(
+            watch,
+            (draft) => {
+              draft.watchlist.pin({
+                ...watch,
+                label:
+                  typeof identity?.label === "string"
+                    ? identity.label
+                    : "Watch",
+              });
+            },
+            "terminal",
+          );
+        sendReply(
+          {
+            id,
+            result: {
+              ...worldWatchlist.list(),
+              changed: worldWatchlist.list().revision !== before,
+            },
+          },
+          "world-watchlist",
+        );
+        return;
       }
       if (method === "world.watchlist.unpin") {
         const result = worldWatchlist.unpin({

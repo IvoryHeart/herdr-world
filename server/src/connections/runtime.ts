@@ -1,3 +1,8 @@
+import type { Clock, Scheduler } from "../service/ports";
+import {
+  TERMINAL_DEFAULT_SIZE,
+  terminalSqueezed,
+} from "../../../shared/terminalSize";
 import { createAgentWorktree } from "../agent/worktree";
 import { createWorktreeGit } from "../agent/worktree-git";
 import {
@@ -30,7 +35,8 @@ import {
 import { worldEnv } from "../config/environment";
 import { createSettingsRpcHandler } from "../bridge/settings-rpc";
 import {
-  readGuiSettings,
+  type GuiSettingsStore,
+  repoWorktreeHooksEnabled,
   terminalSurfaceCodecsEnabled,
 } from "../config/gui-settings";
 import {
@@ -77,6 +83,7 @@ import {
 } from "./subscription-loop";
 import { type ConnectionIdentity, STARTUP_DEFAULT_CONNECTION } from "./types";
 import { unixOnlyHandlers } from "./unix-only";
+import { createRuntimeUsage } from "../usage/host";
 
 const DEFAULT_EVENTS = [
   "workspace.created",
@@ -116,9 +123,14 @@ type MarkRpcError = (
 ) => void;
 
 export function createLegacyConnectionRuntime(args: {
+  clock: Clock;
+  scheduler: Scheduler;
   identity?: ConnectionIdentity;
   connectionGeneration?: number;
   config: SshTunnelConfig;
+  /** The owning service's settings file. */
+  settings: GuiSettingsStore;
+  runtimeStatus: import("../storage/runtime-status").RuntimeStatusPort;
   logger?: Logger;
   safeSend: SafeSend;
   broadcast?: (payload: string, context?: string) => void;
@@ -147,6 +159,9 @@ export function createLegacyConnectionRuntime(args: {
     sshHost: config.sshHost,
     runBinaryProcessWithTimeout,
     shQuote,
+  });
+  const usage = createRuntimeUsage({
+    sshHost: config.sshHost,
   });
   // These helper groups run Unix shell commands over SSH.
   const agentSessions = unixOnlyHandlers(
@@ -195,10 +210,15 @@ export function createLegacyConnectionRuntime(args: {
       readSessionMetadata: agentSessions.readWorktreeMetadata,
     }),
   );
+  const readSettings = () => args.settings.read();
+  const updateSettings: GuiSettingsStore["update"] = (update, shouldCommit) =>
+    args.settings.update(update, shouldCommit);
   const worktreeParents = createWorktreeParentStore({
     connectionId: identity.id,
     herdr,
     sshHost,
+    readSettings,
+    updateSettings,
   });
   const { handleHerdrInfo } = createHerdrInfoHandler({
     ping: () => herdr.ping(),
@@ -225,10 +245,13 @@ export function createLegacyConnectionRuntime(args: {
   const status = createStatusEnricher({
     connectionId: identity.id,
     sshHost,
+    readSettings,
     runProcessWithCodeTimeout,
     shQuote,
   });
   const workspaceAutoSync = createWorkspaceAutoSync({
+    clock: args.clock,
+    scheduler: args.scheduler,
     connectionId: identity.id,
     logger: logger.child("auto-sync"),
     formatError: sanitizeConnectionError,
@@ -239,6 +262,8 @@ export function createLegacyConnectionRuntime(args: {
     invalidateGitStatus: status.invalidateGitStatus,
     resolveWorkspaceGitRoot: async (workspaceId) =>
       files.resolveWorkspaceGitRoot({ workspace_id: workspaceId }),
+    readSettings,
+    runtimeStatus: args.runtimeStatus,
   });
   const worktreeHooks = unixOnlyHandlers(
     remotePlatform,
@@ -250,6 +275,8 @@ export function createLegacyConnectionRuntime(args: {
       runProcess,
       runProcessWithCode,
       shQuote,
+      hooksEnabled: (repoKey) =>
+        repoWorktreeHooksEnabled(readSettings, repoKey),
     }),
   );
   const worktreeRemovalCoordinator = createWorktreeRemovalCoordinator();
@@ -277,8 +304,10 @@ export function createLegacyConnectionRuntime(args: {
     onUnexpectedExit: args.onTransportExit,
   });
   const handleSettingsRpc = createSettingsRpcHandler({
+    runtimeStatus: args.runtimeStatus,
     connectionId: identity.id,
     connectionGeneration: args.connectionGeneration,
+    settings: args.settings,
     herdr,
     sshHost,
     readWorktreeHooks: worktreeHooks.readWorktreeHooks,
@@ -308,7 +337,7 @@ export function createLegacyConnectionRuntime(args: {
     formatError: sanitizeConnectionError,
     clientSocketPath,
     surfaceCodecsEnabled: async () =>
-      terminalSurfaceCodecsEnabled(await readGuiSettings(), identity.id),
+      terminalSurfaceCodecsEnabled(await readSettings(), identity.id),
     herdrProtocol: async () => {
       const protocol: unknown = (await herdr.ping()).protocol;
       assertSupportedHerdrProtocol(protocol);
@@ -332,6 +361,35 @@ export function createLegacyConnectionRuntime(args: {
           (workspace: { focused?: boolean }) => workspace.focused,
         )?.workspace_id ?? null
       );
+    },
+    appViewportSize: async () => {
+      const panes = (await herdr.call("pane.list", {}, 5000))?.panes;
+      const pane = Array.isArray(panes)
+        ? (panes.find((item: { focused?: boolean }) => item?.focused) ??
+          panes[0])
+        : null;
+      if (typeof pane?.pane_id !== "string") return null;
+      const area = (
+        await herdr.call("pane.layout", { pane_id: pane.pane_id }, 5000)
+      )?.layout?.area;
+      // A squeezed area is never the observer's size: keep the app offsets
+      // around the default area instead.
+      const [width, height] = terminalSqueezed({
+        cols: Number(area?.width),
+        rows: Number(area?.height),
+      })
+        ? [TERMINAL_DEFAULT_SIZE.cols, TERMINAL_DEFAULT_SIZE.rows]
+        : [Number(area?.width), Number(area?.height)];
+      const cols = Number(area?.x) + width;
+      const rows = Number(area?.y) + height;
+      return Number.isInteger(cols) &&
+        Number.isInteger(rows) &&
+        cols > 0 &&
+        rows > 0 &&
+        cols <= 65_535 &&
+        rows <= 65_535
+        ? { cols, rows }
+        : null;
     },
     lookupPaneId: async (terminalId) => {
       try {
@@ -728,6 +786,10 @@ export function createLegacyConnectionRuntime(args: {
     if (disposed) return Promise.resolve();
     disposed = true;
     backgroundStarted = false;
+    // Calls still waiting on Herdr belong to this retired runtime: fail them
+    // now rather than at their timeout, so their callers can settle.
+    herdr.close();
+    const usageStop = usage.close();
     handleTerminalUpload.stopCleanup();
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
@@ -746,6 +808,7 @@ export function createLegacyConnectionRuntime(args: {
     const transportStop =
       transportStart?.catch(() => undefined) ?? Promise.resolve();
     stopTask = Promise.all([
+      usageStop,
       autoSyncStop,
       subscriptionStop,
       agentStatusStop,
@@ -776,6 +839,7 @@ export function createLegacyConnectionRuntime(args: {
     worktreeRemovalRuntime,
     terminalBridge,
     agentSessions,
+    usage,
     agentCheckout,
     agentWorktree,
     recoveryIdentity,

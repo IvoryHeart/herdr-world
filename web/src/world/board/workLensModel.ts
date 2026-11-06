@@ -6,7 +6,7 @@ import {
   type WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
 import type { WorldObject } from "../worldObject";
-import { linkMatchesPane, paneKey } from "../worldSources";
+import { linkMatchesPane, paneKey } from "../workLinks";
 
 /**
  * Board's Work lens: pull requests and tickets as kanban columns, each card

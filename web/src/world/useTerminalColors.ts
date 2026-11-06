@@ -13,6 +13,7 @@ import {
 import type { TabColorControl } from "../components/TabBar";
 import {
   sharedBoardStore,
+  type BoardDocument,
   type BoardDocumentStore,
 } from "./board/boardDocument";
 import {
@@ -34,6 +35,8 @@ import {
 import type { RelationsDocument } from "../../../shared/relations";
 import { worldRuntimeStore } from "./runtimeStore";
 import type { WorldObject } from "./worldObject";
+import { DEVTOOLS } from "./devtools/flag";
+import { countWorldWork } from "./devtools/renderer";
 
 /** Terminal colours as World's service keeps them (see terminalColor.ts). */
 
@@ -122,6 +125,42 @@ export function keepColors(
     : next;
 }
 
+/** The colours last derived, and the inputs they were derived from. */
+export type TerminalColorsSnapshot = {
+  colors: TerminalColors;
+  inputs?: { document: BoardDocument | null; connections: Connections };
+};
+
+/**
+ * useTerminalColors' snapshot. React reads it on every render and every
+ * notification of either store, so the colours are derived again only when
+ * the Board document or the connections change.
+ */
+export function terminalColorsSnapshot(
+  last: TerminalColorsSnapshot,
+  store: { get(): { document: BoardDocument | null } },
+  runtime: Pick<ColorSource, "get">,
+): TerminalColors {
+  const document = store.get().document;
+  const connections = runtime.get().connections;
+  if (
+    last.inputs?.document === document &&
+    last.inputs.connections === connections
+  )
+    return last.colors;
+  if (DEVTOOLS) countWorldWork("colors.derive");
+  last.inputs = { document, connections };
+  last.colors = keepColors(
+    last.colors,
+    inherited(
+      visibleAppearanceColors(document, connections),
+      document?.relations ?? NO_RELATIONS,
+      connections,
+    ),
+  );
+  return last.colors;
+}
+
 /**
  * The saved colours, kept current from the World service, with the colours
  * spawned tabs inherit from their parents (relations.ts). The object changes
@@ -136,7 +175,7 @@ export function useTerminalColors(
     store.start();
     return () => store.stop();
   }, [store]);
-  const last = useRef<TerminalColors>(NONE);
+  const last = useRef<TerminalColorsSnapshot>({ colors: NONE });
   const subscribe = useCallback(
     (listener: () => void) => {
       const offStore = store.subscribe(listener);
@@ -148,18 +187,7 @@ export function useTerminalColors(
     },
     [store, runtime],
   );
-  const snapshot = () => {
-    const document = store.get().document;
-    last.current = keepColors(
-      last.current,
-      inherited(
-        visibleAppearanceColors(document, runtime.get().connections),
-        document?.relations ?? NO_RELATIONS,
-        runtime.get().connections,
-      ),
-    );
-    return last.current;
-  };
+  const snapshot = () => terminalColorsSnapshot(last.current, store, runtime);
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 

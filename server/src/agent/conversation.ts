@@ -49,6 +49,8 @@ export type Conversation = {
   pane_id: string;
   agent: string | null;
   agent_status: string | null;
+  /** Additive runtime evidence; legacy status and Send qualification remain separate. */
+  field_claims?: import("../../../shared/fieldClaims").AgentFieldClaims;
   session_binding: ConversationBinding;
   /** The bound session; null for a guess. Send refuses when it changes. */
   session_fingerprint: string | null;
@@ -80,6 +82,8 @@ export type Conversation = {
    * reports it blocked; null otherwise.
    */
   pending_prompt: PendingPrompt | null;
+  /** Measured size for this session's unreadable command menu; grants no input authority. */
+  menu_unreadable?: { reason: "terminal_too_small"; rows: number };
 } & (
   | { status: "ok"; unavailable: null }
   | {
@@ -119,37 +123,41 @@ const SUMMARY_FIELDS = [
  * when it starts and the result when it ends, so this is the step running
  * now. Reads the whole projection, not the visible window.
  */
-export function runningTool(
+export function newestOpenCall(
   entries: readonly HistoryEntry[],
-): RunningTool | null {
+): HistoryEntry | null {
   const finished = new Set<string>();
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (!entry.source_call_id) continue;
-    if (entry.kind === "tool_result") {
-      finished.add(entry.source_call_id);
-      continue;
-    }
-    if (entry.kind !== "tool_call" || finished.has(entry.source_call_id))
-      continue;
-    let summary: string | null = null;
-    try {
-      const input = JSON.parse(entry.text) as Record<string, unknown>;
-      const field = SUMMARY_FIELDS.find(
-        (name) => typeof input?.[name] === "string" && input[name],
-      );
-      if (field) summary = String(input[field]).split("\n")[0]!.slice(0, 160);
-    } catch {
-      // Arguments that are not JSON name nothing.
-    }
-    return {
-      id: entry.source_call_id,
-      name: entry.tool_name || "tool",
-      summary,
-      started_at: entry.sent_at,
-    };
+    if (entry.kind === "tool_result") finished.add(entry.source_call_id);
+    else if (entry.kind === "tool_call" && !finished.has(entry.source_call_id))
+      return entry;
   }
   return null;
+}
+
+export function runningTool(
+  entries: readonly HistoryEntry[],
+): RunningTool | null {
+  const entry = newestOpenCall(entries);
+  if (!entry) return null;
+  let summary: string | null = null;
+  try {
+    const input = JSON.parse(entry.text) as Record<string, unknown>;
+    const field = SUMMARY_FIELDS.find(
+      (name) => typeof input?.[name] === "string" && input[name],
+    );
+    if (field) summary = String(input[field]).split("\n")[0]!.slice(0, 160);
+  } catch {
+    // Arguments that are not JSON name nothing.
+  }
+  return {
+    id: entry.source_call_id!,
+    name: entry.tool_name || "tool",
+    summary,
+    started_at: entry.sent_at,
+  };
 }
 
 export type ConversationSendResult =
@@ -162,7 +170,13 @@ export type ConversationSendResult =
         | "unavailable"
         | "empty"
         | "command"
-        | "unsettled";
+        | "unsettled"
+        /** A harness menu is open: typed text would go into it as keys. */
+        | "menu"
+        /** The same command already waits for the busy agent to reach it. */
+        | "duplicate"
+        /** Another World input to this pane is in flight. */
+        | "busy";
       message: string;
     };
 
@@ -213,10 +227,33 @@ export type ConversationAnswerResult =
       pending_prompt: PendingPrompt | null;
     };
 
+export type ConversationKeyResult =
+  | {
+      /** The key, or the field's text, was sent to the pane. */
+      status: "sent";
+      key: string;
+      text?: string;
+      /** The command menu shown after the key, or null once it closed. */
+      menu: PendingPrompt | null;
+    }
+  | {
+      status: "refused";
+      reason: "changed" | "unknown_option" | "invalid_text" | "busy";
+      message: string;
+      /** The command menu now shown, if any. */
+      menu: PendingPrompt | null;
+    };
+
 export interface ConversationSource {
   readonly id: string;
   read(target: ConversationTarget): Promise<Conversation>;
-  latest(target: ConversationTarget): Promise<ConversationLatest>;
+  /**
+   * With `menus`, a command menu shown while the agent is idle or done is
+   * read from its screen into `pending_prompt` (Chat asks; Town does not).
+   */
+  latest(
+    target: ConversationTarget & { menus?: boolean },
+  ): Promise<ConversationLatest>;
   /** A cheap key for change notification, without reading the transcript. */
   identity(target: ConversationTarget): Promise<ConversationIdentity>;
   /** Latest for the named panes, or for every agent the source sees. */
@@ -232,6 +269,12 @@ export interface ConversationSource {
       session_fingerprint: string;
       /** IDs of the user messages Chat showed; saves a reread over SSH. */
       baseline?: readonly string[];
+      /** Internal durable consumers admit immediately before native submission. */
+      beforeSubmit?: () => Promise<boolean>;
+      /** Rechecked synchronously against the final native agent observation. */
+      guard?: (info: Record<string, unknown>) => boolean;
+      /** Actual native queued-recipient evidence, never an execution/read receipt. */
+      submitted?: (fingerprint: string | null) => void;
     },
   ): Promise<ConversationSendResult>;
   /**
@@ -254,6 +297,29 @@ export interface ConversationSource {
       text?: string;
     },
   ): Promise<ConversationAnswerResult>;
+  /**
+   * Answer Claude's folder-trust question before any session exists, with
+   * the choice the user picked, under the source's pre-session witness.
+   */
+  trust?(
+    target: ConversationTarget & {
+      prompt_fingerprint: string;
+      choice: string;
+    },
+  ): Promise<import("./trust-prompt").TrustResult>;
+  /**
+   * Press one key in the pane for the Chat session that asked: a key the
+   * shown command menu names (with `menu_fingerprint`), text for that menu's
+   * field, or one of the composer's key controls.
+   */
+  press(
+    target: ConversationTarget & {
+      key: string;
+      session_fingerprint: string;
+      menu_fingerprint?: string;
+      text?: string;
+    },
+  ): Promise<ConversationKeyResult>;
 }
 
 function plural(name: string, calls: number) {

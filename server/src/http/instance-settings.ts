@@ -1,5 +1,5 @@
 import { normalizeTitleSuffix } from "../../../shared/instanceName";
-import { readGuiSettings, updateGuiSettings } from "../config/gui-settings";
+import type { GuiSettingsStore } from "../config/gui-settings";
 import { serverLogger } from "../utils/logger";
 import { readJsonBody } from "./json-body";
 
@@ -7,9 +7,12 @@ const headers = { "cache-control": "no-store" };
 
 // Called only after the server's normal authentication gate. This setting is
 // instance-wide, so it must not depend on a selected or connected Herdr server.
-export async function handleInstanceSettings(req: Request): Promise<Response> {
+export async function handleInstanceSettings(
+  req: Request,
+  store: Pick<GuiSettingsStore, "read" | "update">,
+): Promise<Response> {
   if (req.method === "GET") {
-    const settings = await readGuiSettings();
+    const settings = await store.read();
     return Response.json(
       { title_suffix: settings.title_suffix ?? "" },
       { headers },
@@ -59,7 +62,7 @@ export async function handleInstanceSettings(req: Request): Promise<Response> {
     );
   }
   try {
-    const settings = await updateGuiSettings((current) => ({
+    const settings = await store.update((current) => ({
       ...current,
       title_suffix: suffix,
     }));

@@ -234,6 +234,158 @@
         "es2024": true,
         "shared-node-browser": true
       }
+    },
+    {
+      "files": ["web/src/world/town/scene/**/*.{ts,tsx,mts,cts,js,jsx}"],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          { "name": "Date", "message": "Read time through TownClock." },
+          { "name": "performance", "message": "Read time through TownClock." },
+          { "name": "setTimeout", "message": "Defer through TownClock.after." },
+          {
+            "name": "clearTimeout",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "setInterval",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "clearInterval",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "setImmediate",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "queueMicrotask",
+            "message": "Defer through TownClock.after."
+          },
+          {
+            "name": "requestAnimationFrame",
+            "message": "Frames come from the renderer's scheduler."
+          },
+          {
+            "name": "cancelAnimationFrame",
+            "message": "Frames come from the renderer's scheduler."
+          },
+          {
+            "name": "requestIdleCallback",
+            "message": "Defer through TownClock.after."
+          },
+          { "name": "window", "message": "The scene model is headless." },
+          { "name": "document", "message": "The scene model is headless." },
+          { "name": "navigator", "message": "The scene model is headless." },
+          { "name": "globalThis", "message": "The scene model is headless." },
+          { "name": "self", "message": "The scene model is headless." },
+          { "name": "process", "message": "The scene model is headless." }
+        ],
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "Use the scene's seed."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "../../worldSources",
+                "message": "The sources store is a browser adapter; use workLinks."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "react",
+                  "react/*",
+                  "react-dom",
+                  "react-dom/*",
+                  "lucide-react",
+                  "pixi.js",
+                  "pixi.js/*",
+                  "node:*",
+                  "**/townBrowserClock",
+                  "**/townRenderer",
+                  "**/pixiSystemTicker",
+                  "**/worldFrameScheduler"
+                ],
+                "message": "The scene model is headless: no framework, renderer, platform or clock adapter."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "server/src/effects/**/*.ts",
+        "server/src/storage/**/*.ts",
+        "server/src/world/answer-dispatch.ts",
+        "server/src/world/attention-dispatch.ts"
+      ],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "globals": [
+              {
+                "name": "Date",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "performance",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "setTimeout",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "clearTimeout",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "setInterval",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "clearInterval",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "setImmediate",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "clearImmediate",
+                "message": "Use the injected Clock and Scheduler ports."
+              },
+              {
+                "name": "requestAnimationFrame",
+                "message": "Use the injected Clock and Scheduler ports."
+              }
+            ],
+            "checkGlobalObject": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "server/src/effects/**/*.test.ts",
+        "server/src/effects/testing/**/*.ts",
+        "server/src/storage/**/*.test.ts",
+        "server/src/storage/testing/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-globals": "off"
+      }
     }
   ]
 }

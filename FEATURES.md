@@ -3,6 +3,26 @@
 A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 [Install it](./docs/DEPLOYMENT.md) or follow the [tutorial](./docs/TUTORIAL.md).
 
+Explicit default-local `herdr-world herdr setup` configures persistent startup.
+If Herdr is already running, it registers future startup without restarting the
+server; its current workspaces and agents keep running.
+
+Agent questions, answers and task results survive service restarts in the
+instance's private `world.sqlite`. The service sends owner alerts from a durable
+outbox; an interrupted send retains explicit uncertainty. Retrieve answers with
+`herdr-world ask get ID` or `--wait`. New asks from a verified local Linux
+agent can also receive the saved answer in their original Chat session without
+`--wait`. Town Summary’s Outbox keeps waiting, unconfirmed and not-sent deliveries separate
+from open questions; the owner can close a delivery or explicitly resend to the
+same session after accepting a possible duplicate. A changed session is skipped.
+See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-backups).
+
+The service also exposes shared [harness usage data](./docs/usage.md): bounded
+token records from Claude Code, Codex, Pi and Gemini logs on qualified local or
+SSH hosts, with source health, host/workspace/tab/pane rollups and optional
+versioned price-table estimates. The `world.usage.get` read contract is ready
+for expenses projections in Town and Board.
+
 ## World update notifications
 
 - An available release notifies once per version in each browser profile and World
@@ -32,15 +52,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
-  pane a seat. Rooms resize as tabs open and close; explicitly expanded rooms
-  keep their size until folded. Plain terminals show prompts. Additional panes beyond the drawn
-  seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge. Agents go by the
-  name Herdr gives them (`firstmate`), else their harness (`claude`); window
-  and Inspector titles put the name first (`firstmate · claude`).
+  pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded
+  as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
+  seats remain available through the table's count and chooser. Each table's
+  nameplate shows its sole agent's Herdr name when exactly one named agent
+  occupies the tab; otherwise it shows the tab's name, or `Tab N` if unnamed.
+  Agents go by the name Herdr gives them (`firstmate`), else their harness
+  (`claude`); window and Inspector titles put the name first
+  (`firstmate · claude`).
   - The Town board counts agents working and finished, plus **items** needing
     you: blocked agents and open questions, matching the reception tray and
-    call rail. A blocked agent with an open question contributes two items.
+    **Needs you**. A blocked agent with an open question contributes two items.
     It shows spend when a metrics provider
     is configured. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
@@ -49,22 +71,41 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with its counts (tap a room to go there), and spend per model ("No cost
     data" without a provider). Press **Summary** again to restore its minimized
     window or bring it to the front.
-  - Blocked agents queue at reception oldest first. Finished agents wait there
-    until you open their terminal or mark that completion reviewed, then join
-    idle agents in the lounge. Movement only represents state.
+  - Each building has its reception at the top, under the front door, and a
+    bar in its bottom corner. Blocked agents queue at reception oldest first.
+    Finished agents wait there until you open their terminal or mark that
+    completion reviewed, then join idle agents at the bar. Movement only
+    represents state.
+  - Every building has roads on at least three sides: a street above and below
+    each row and a side road to its right. The last lot on the grid is
+    reserved for a town hall: a fenced plot with a sign, not yet in use.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
     attention choices move into the window's ellipsis menu.
     Tapping an agent or its table, activating it (double-click,
-    **Shift+Enter**), the needs-you list, **N** and **Next** open that window on
+    **Shift+Enter**), **Chat about this** in Needs you, **N** and **Next** open that window on
     **Chat**: the conversation's latest 200 entries, which scroll inside the
     window, with **Jump to latest** when you have scrolled back (counting new
     agent messages until you reach the bottom) and the
-    composer always at the bottom. Explicitly opening or returning to Chat
+    composer always at the bottom. In a window 900px or wider (expanded or
+    Zen), the conversation fills the window up to 1440px as rows: who, the
+    text (prose wraps at about 110 characters; tables, code and tool steps use
+    the whole row) and the time at the right edge, once per run of messages.
+    A message typed into the terminal as `name: …` by another live agent in
+    the same Herdr session shows as that agent's, marked **relayed**. Narrower
+    windows and phones keep bubbles. Explicitly opening or returning to Chat
     focuses its message input when available; Desk previews keep focus in the
     queue. Reopening or redocking the window keeps the
-    conversation. In Town it
+    conversation. A new agent without a session shows **No messages yet**;
+    missing or unreadable reported transcripts still show their error. A window
+    opens on Terminal whenever Chat cannot show its conversation, including
+    when a reported record cannot be read. It switches once Chat is available,
+    unless you choose a view by hand. While a new window waits, a line under its
+    header says Chat is not available yet and offers **Stay on Terminal**. Unavailable messages appear when you
+    pick Chat yourself. Chat describes startup
+    or a question plainly and offers Open Terminal; integration guidance waits
+    while the agent is starting or waiting for you in Terminal. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.
     Drag its inner edge to resize it; Town remembers the width. It can be
@@ -93,6 +134,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     not checked** until transcript evidence. Native working-state admission
     shows queued message bubbles with the recipient and time; blocked sends
     preserve the draft and the refusal reason.
+  - Claude's questions show from its own record: every question, header,
+    option and description, and whether several can be picked. Answer buttons
+    appear only when the terminal shows that same question; otherwise the card
+    keeps the whole question with **Answer in the Terminal** and the reason.
+    An unrecognised prompt is shown as the terminal draws it. Before Claude
+    has a session, its folder-trust question shows **No, exit** and **Yes, I
+    trust this folder**. With pre-approved grants the decline choice can be
+    **No, continue without these permissions**, which continues without those
+    grants instead of exiting. Chat and Needs you show the folder, full safety
+    text and warnings above the choices. A click is checked against that
+    question and Claude process, then moves Claude's selection and presses Enter.
+  - Harness command menus, such as Claude Code's and Codex's `/model` and
+    `/permissions`, appear as a menu card: numbered options, the cursor, the
+    footer's keys as buttons and any text field. Each key is checked against
+    that menu and session first; follow-up steps replace the card. **⋮** also
+    offers the Terminal's key controls (arrows, Esc, Tab, Enter, Ctrl keys),
+    sent to the session Chat shows; paging stays in the Terminal.
+    When a qualified row read shows that the terminal is too short to read the
+    current session's latest command menu, Chat explains this and offers
+    **Open Terminal** to fix its size. Unknown sizes do not produce the note.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
@@ -107,7 +168,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     where replies and attachments go. The card refreshes when the conversation
     changes, without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
-    lounge it walks to its desk and stays there until its status changes. A
+    bar it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before
     the one seated there. **Menu → Agents open** chooses whether that tap opens
     the chat (the default) or the terminal, in Town, Board and Desk alike; either way the tap does not mark
@@ -120,9 +181,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens the agent's window, whose Files and Changes views hold the rest.
     **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
-    The needs-you list becomes a bottom tray on phones and hides when no agent
-    is blocked. Review marks acknowledge a specific completion in this browser,
-    without certifying its correctness.
+    **Mark reviewed** in the peek marks the report it shows: it waits while a
+    newer stop's report is read, offers **Retry** when that read fails, and
+    says so when the mark could not be saved.
+    Review marks acknowledge a specific completion in the service's one
+    reviewed record, shared by Town, Desk, Needs you and every browser of this
+    World, without certifying its correctness. They survive a World restart
+    and reappear after the same terminal and known session are verified.
+    Upgrading old separate completion checks preserves proven known-session
+    reviews; work without session proof may need review once again. Missing Desk
+    stop metadata is refreshed before marking, and an unavailable stop stays retryable.
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
@@ -135,7 +203,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (tap on touch screens) for Rename and Close below it, with 40px targets.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
-    agent from the keyboard). A carried table lifts and sways after the
+    agent from the keyboard). Tables lift from the room-summary zoom in, even
+    under a room summary, whose tap still zooms in; agents lift once zoomed
+    into a room. A carried table lifts and sways after the
     pointer, lands with a bounce and a puff of dust, and shakes and springs
     back when a move is refused; calm and reduced motion keep it under the
     pointer and end with a short fade. The live panes move, agents keep running, a failed
@@ -180,7 +250,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     it (other tables fill the free places in tab order). A saved pin applies
     only while its tab is in the room's visible native-order prefix. A pinned
     desk beyond the fold stays hidden until you expand to reveal it. Its agents stay at it:
-    they never go to the lounge, leave only to wait at reception (blocked, or
+    they never go to the bar, leave only to wait at reception (blocked, or
     finished and not yet seen) and walk straight back once you have seen them.
     The pin is a World view setting, saved on the World service beside
     terminal colours, so every device sees it; Herdr is unchanged, and
@@ -188,11 +258,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     follows its tab when the tab moves to another room and goes when it closes.
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
-    reception and Board's host label. Transient SSH outages keep retrying with
+    reception and Board's host label. When the local connection is failing and
+    no host is ready, Town's stage also offers **Set up Herdr** if Herdr is
+    missing or installed but stopped; it installs or starts Herdr only after you
+    confirm, and never appears during a normal start or after you disconnect.
+    Transient local socket failures and SSH outages keep retrying with
     capped backoff; explicit disconnect/removal and permanent failures stop
     recovery. Cached work never becomes current until a fresh runtime snapshot
     is admitted. Search and Hosts
-    use the shared aggregate. Reception and lounge positions only show status;
+    use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
@@ -214,7 +288,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   creates an agent's tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
   harness stops on a question (such as Claude's folder trust) or exits at
-  once, it says so and offers to open the tab.
+  once, it says so and offers to open the tab. While a start is in flight, the
+  pressed choice stays marked busy and a **Starting …** line says what World is
+  doing; after 10 seconds of real waiting it reads **Taking longer than
+  usual** (there is no progress bar or countdown, and the icon stays still
+  with reduced motion). Progress and outcomes stay in view above the choices. A confirmed start closes the launcher; an uncertain
+  attempt keeps its explanation and disables start choices. Open its existing
+  tab or close the launcher before another attempt. A definite failure lets
+  you retry, log in or edit profiles.
   - The launcher shows whether each harness is installed and logged in on the
     host, asked with the harness's own status command (`claude auth status`,
     `codex login status`; Pi reports only whether it is installed). **Log in**
@@ -239,6 +320,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     start plainly and get the role in their first prompt. The editor shows the
     exact command. The new tab takes the profile's colour and its agent wears
     the profile's look in Town.
+  - Profile assignments and the Town master travel with their terminal in Herdr
+    and are shared by Worlds connected to that Herdr. Profiles and chimes stay
+    per World; an unknown profile shows its recorded name with the default look.
+    Closing the terminal or restarting Herdr ends its assignment and role.
+    The newest Town master assignment wins; moving the role still asks first.
   See the [New agent exercise](./docs/TUTORIAL.md#new-agent).
 - **Shared terminal appearance.** The title-bar icon opens the same editor in
   every view, including the Spaces tab strip and arranged window headers; a
@@ -319,7 +405,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     old room's last pane asks before closing that room.
   - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
-    its terminal.
+    its terminal. Without a conversation yet, an agent starts on Terminal and
+    switches to Chat when its session arrives unless you choose another view.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
     still moves it). On a phone, where the card's terminal covers Board, the
@@ -379,7 +466,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Desk** organizes the filtered hosts' agents by what
   they need from you rather than where they run:
   - **Needs you** lists blocked agents, oldest first, with the question and choices
-    read from the agent's screen.
+    read from the agent's screen; **Answer** opens the Needs you tab at that agent.
   - **To review** lists finished turns with your request, the agent's closing
     report, how long it ran, its tool calls and the files it edited, all read from
     the session transcript. **Mark reviewed** (`E`) acknowledges a turn across
@@ -390,9 +477,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Desk first, then each workspace by recent activity. **Reviewed** lists the
     latest stop you marked for each idle or done agent, newest first, with
     **Reopen**; marking offers **Undo** for that exact stop across browsers.
-    Marks, observed stops and recent opens are held in bounded service memory,
-    scoped by connection, runtime, terminal and agent session. They survive a
-    browser reload and clear on service restart or owner/session replacement;
+    Marks, observed stops and recent opens are saved in bounded World storage,
+    bound to their original connection, terminal and known agent session. They
+    survive reloads and service restarts, reappearing after fresh verification.
+    A terminal confirmed absent or a positive session replacement clears them;
     previous browser-local Desk marks are not imported. Marks agree even when
     browsers read different receipts; later stops or native activity need review.
     Review marks survive expiry of the stop's display time. Native state-change
@@ -409,7 +497,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
   - `J`/`K` move between cards; `Enter` opens the agent's Inspector using **Agents open** to
-    answer, review, or watch. Hosts outside the filter appear as summary chips.
+    answer, review, or watch. Expand an outside-filter host's summary chip to see
+    its agents. **Reveal & open [agent] on [host]** explicitly adds that host to
+    Hosts and opens that exact agent's Inspector while preserving existing open
+    resources. Host controls remain visible beside a reading pane and wrap below
+    the counts on phones. Cached, unavailable or replaced agents explain why they
+    cannot open. Leaving Desk or starting another opening cancels a pending
+    reveal permanently; supersession keeps current agents available to retry.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
@@ -417,6 +511,45 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
+- **Needs you** in the top bar (in the view picker in Zen, including on a phone;
+  outside Zen a phone shows it as an inbox icon with a count badge, hidden at
+  zero, right after the view's name) counts
+  open questions and the blocked agents of the hosts the Hosts filter shows, in
+  every view, and opens the **Needs you** tab on the left: beside the view on
+  wide landscape screens, over it on narrower ones, full screen with **Back** on a
+  phone, where it takes focus, keeps the app behind it out of reach and gives
+  focus back when it closes. It stays open or closed per device; while closed and anything waits, a
+  **Needs you** handle sits at the left edge. Each item is a compact notification
+  from its agent with Chat's formatting: one header row (its mark, name, place
+  and age, then icons), the message, and answer controls only when the agent
+  asked. **?** questions show their options as quick replies (the first
+  highlighted; **Other…** opens a typed answer) or one answer field with a send
+  icon, plus why an owner alert may not have arrived; **!** blocked agents show
+  the agent's own question with its options as quick replies, answered and
+  confirmed as Chat does (the same card, including Claude's recorded questions
+  and its folder-trust choices), with **Open Terminal** when the answer could
+  not be confirmed; **✓** finished work lists done agents and idle agents the service saw
+  finish in the last 12 hours, with no answer row (Desk's To review lane can
+  also list idle agents from recent transcript turns). Every item names its
+  agent and marks an unverified asker; the name and the chat icon (**Open in
+  Chat**, or **Follow up in Chat** for finished work) open the agent's Chat.
+  The **✕** icon keeps each kind's own action: **Dismiss question** on a
+  question, **Mark reviewed** on finished work (it marks the report shown, says
+  so if the mark could not be saved, and the item offers **Retry** if the report
+  could not be read); a blocked agent has none. Every icon has a label and a
+  tooltip. A message longer than two lines shows **more** on its last line: it,
+  or a tap on the text, shows the whole message in place with its links, and
+  **less** clips it again. Keyboard focus entering the message reveals its
+  links. Hovering the agent's name shows its card with
+  the latest message. An answered question folds to one line until the tab
+  closes. It shows a page of 30 items; **Show … more** and **Show the … before**
+  turn the page, and every opener turns to its item's page. Town's reception
+  letters, Desk's **Answer** and the **!**/**✓** badge on a Board card open it at
+  that item. When Town has saved answers to check, **✉ Outbox** at the foot opens
+  Town's Summary there. It replaces Town's Needs you rail.
+- One set of agent marks, each with one glyph, colour and word, in Town, Board,
+  Desk, Chat and the phone bar: • Working, ! Needs you, ? Asks you, ✓ Done,
+  – Idle or Reviewed, ~ No signal, × Offline (`web/src/world/agentMarks.ts`).
 - Inspectors and terminals capture their own host, runtime generation and resource
   identity. Focus and filters cannot retarget them. Global creation confirms one
   destination; room creation inherits its room. Notifications outside the filter
@@ -495,12 +628,16 @@ each source's state, switch it off or configure it.
 
 - **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
   auth login`): open pull requests you opened, were asked to review or are
-  assigned, every pull request you opened that was merged in the last 7 days
+  assigned, pull requests you opened that were merged in the last 7 days
   (change the window in **Settings → Sources**, 1 to 90 days) and issues
   assigned to you, each with review state, checks and mergeability. World
   stores no GitHub credentials. Work's **Merged** and **Done** columns group
   cards by the day each was merged or resolved, newest day open; tap an older
-  day to open it.
+  day to open it. GitHub history is bounded to 400 pull requests and one
+  minute per refresh, after your open PR action details. If history is
+  shortened, World keeps its last complete list, reports the oldest merge
+  date actually observed (or no confirmed date), and asks you to shorten the
+  window in **Settings → Sources**; partial history does not authorize actions.
 - **Jira Cloud** needs a site, your account email and an API token. The token
   stays in World's private storage on the service and is never shown again;
   changing the site or email removes it, so enter the token again with them.
@@ -621,7 +758,7 @@ when piped, with stable exit codes:
   order, as a drag in Town does. It needs `--herdr` because it changes Herdr,
   and World cannot undo it.
 - `ask "…" [--key CAUSE] [--options a,b] [--owner-only] [--wait]`: a question
-  for you. It appears first in Town's **Needs you** list and Summary, where you
+  for you. It appears first in the **Needs you** tab and Town's Summary, where you
   pick an option or type an answer; `--wait` returns that answer to the asker.
   Its agent waits at reception with **?**; Board and Desk show the same mark.
   Each question names its agent as Town labels its desk, with **Open agent**
@@ -631,8 +768,18 @@ when piped, with stable exit codes:
   reaches reception when exactly one local Herdr has the pane it names. A new
   ask follows your chime, toast and OS notification preferences, naming its
   agent with the question's first line and **Open agent** for its exact
-  original seat. Another verified agent (never the asker) may answer a
-  question that is not owner-only.
+  original seat. Reception shows failed or uncertain owner-alert delivery while
+  keeping the saved question answerable. World commits a new ask and its attention intent together in
+  `world.sqlite`, then sends the owner alert through its captured Herdr connection.
+  Herdr's toasts, connected Worlds and phone notifications can receive it even
+  when no World tab is open. The CLI retains a fallback alert through the asking
+  pane's Herdr if World could not record it; it names the failure and exits 1.
+  When no alert is confirmed yet, exit 6 (`not_delivered`) carries the recorded ID;
+  `retrying: true` means the service will retry a temporary failure with backoff.
+  Closing the ask cancels a pending alert. Duplicates are possible after a lost
+  reply or restart. JSON preserves `recorded` and Herdr's `notified` evidence
+  (`null` for a repeated cause), including through `--wait`. Another verified agent (never
+  the asker) may answer a question that is not owner-only.
 - `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
   withdraws a cleared cause, including when a creation reply lost its ask ID.
   Answering or withdrawing removes its question marks. `--key` keeps repeated

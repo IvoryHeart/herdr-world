@@ -12,7 +12,7 @@ import { chromeRenderingFlags } from "./testing/chromeRendering";
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 test.skipIf(!chrome).each([1440, 390])(
-  "shared creation owns exact sources across visual views and Spaces at %ipx",
+  "rendering, focus and terminal lifecycle: shared creation across views at %ipx",
   async (width) => {
     const dir = await mkdtemp(join(tmpdir(), "world-shared-creation-"));
     const assets = new Map<string, Blob>();
@@ -41,6 +41,9 @@ test.skipIf(!chrome).each([1440, 390])(
             socket!.onerror = () => reject(new Error("CDP connection failed"));
           });
           const driver = new InputDriver(socket);
+          await driver.call("Emulation.setEmulatedMedia", {
+            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+          });
           await driver.call("Emulation.setDeviceMetricsOverride", {
             width,
             height: width === 390 ? 844 : 1000,

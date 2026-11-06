@@ -1,6 +1,6 @@
 # Development
 
-Herdr World uses Bun 1.4.3, React/Vite and a Bun server. Herdr is an external runtime.
+Herdr World uses Bun 1.4.4, React/Vite and a Bun server. Herdr is an external runtime.
 
 ```bash
 bun install --frozen-lockfile
@@ -16,6 +16,21 @@ bun run dev:web
 Open <http://localhost:5173>. Vite proxies API and WebSocket traffic to the World
 service at <http://127.0.0.1:8788>. To use explicit Herdr sockets or SSH, pass service
 options after the workspace command or configure a profile in the UI.
+
+A development or preview World next to an installed one needs its own data
+folder: set `HERDR_WORLD_DATA_DIR` for that instance, and copy
+`connections.json` (and `settings.json`) into it once if it should reach the
+same Herdr hosts. A second World on an occupied folder refuses to start. Point
+its agent CLI at it with `HERDR_WORLD_URL` and the same `HERDR_WORLD_DATA_DIR`,
+which locates the CLI token. Tests never use your data folder: the test preload
+sets `HERDR_WORLD_DATA_DIR` under the run's temporary directory, and a test that
+starts World with its own `HOME` unsets it. To test the service end to end, start
+it in the test's own process with `startTestService`
+([test services](../server/src/service/testing/services.ts)), which gives it its own
+folder. Spawn `server/src/index.ts` only for what needs a real process: signals and
+exit codes, the lock between processes, a home folder of its own, or fakes on
+`PATH`. A test that saves source settings should switch the GitHub source off
+first, because `gh` keeps its own state in the process's home folder.
 
 ## Development tools
 
@@ -39,12 +54,73 @@ bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
 bun run test:world --shard=1/6 # reproduce one CI shard, one browser at a time
-bun run test:world --shard=latency # the latency-budget suites, as CI's quiet job runs them
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # repository checks and tests
 bun run check:delivery        # full local gate, including behavioral verification
 ```
+
+Process fixtures run fake behavior in the test process where practical. The
+[diagnostics adapter](../scripts/browser-diagnostics.ts) and
+[native plugin dispatch](../server/src/config/plugin-command.ts) accept narrow
+process doubles with production defaults. Launcher and hook fixtures call the
+real status/scope producers in-process and retain CLI conformance cases.
+The [SSH process fixture](../server/src/connections/testing/inProcessSsh.ts) keeps
+forwarding in-process, with a private Unix-socket transport through `curl` and
+small shell shims so real PID death, reconnect isolation and socket cleanup stay
+covered. It requires `curl` on Unix. Real inherited-pipe and argv/exit regressions
+also keep lightweight shell children; Windows retains Bun for these OS-boundary
+fixtures because it has no required POSIX shell. Keep those boundary checks,
+assertions and deadlines when optimizing fake startup. Measure alternating
+baseline/candidate runs and report negligible or negative results honestly.
+
+The diagnostics adapter detaches its WebSocket callbacks before returning so a
+late close event cannot write to a completed or removed log. The arrangement-menu
+browser fixture retains task boundaries and attaches mount/unmount, focus,
+resize, scroll, load and first-query traces to failures. Its first-open CI failure
+remains undiagnosed; local passing traces do not establish a cause.
+Worker rejection tests settle the promise before asserting on the error, because
+Bun's asynchronous rejection matcher can block MessagePort delivery.
+
+All six storage `*-crash.test.ts` suites use the
+[shared crash harness](../server/src/storage/testing/crash-harness.ts).
+Compilation, seed initialization and fault setup finish before recovery assertions
+start. Seed initialization keeps its five-second hook; each child has its original
+watchdog plus a five-second kill/reap/stream-cleanup bound. Compilation keeps its
+own process budget with the same cleanup headroom. Recovery retains each suite's
+configured deadline, including storage reopening and the original assertions:
+
+| Suite | Compilation | Fault child | Recovery |
+| --- | --- | --- | --- |
+| Board, profiles, runtime status | 60 s | 15 s | 5 s |
+| World storage before/after COMMIT | 60 s | 15 s | 5 s |
+| World storage acknowledgements/drain and effect recovery | 60 s | 15 s per child | 30 s |
+| Terminal marks | 60 s | 15 s | 30 s |
+| Answer delivery | 120 s | 30 s | 60 s |
+
+World's two-child setups retain their order. Answer delivery's second process
+remains after its initial storage assertions, with its existing 30-second bound
+inside the 60-second recovery case. Source and standalone runs keep the same
+fault markers, forced kills, clean drains and embedded workers.
+Crash subprocess ownership ends at the Node child-process `close` event, after
+exit and stdio closure, before the standalone tree can be removed. The
+[child adapter controls](../server/src/storage/testing/crash-child.test.ts)
+exercise exit-before-close ordering and startup failure without filesystem retries.
+
+Failures emit `compile`, `spawn`, `marker`, `kill` and `reopen` timings, including
+pending or not-reached phases. Repeated phases appear in execution order. These
+are failure diagnostics, not latency assertions. Native Bun hook/test timeouts
+also report unfinished phases at finalization. Timer/reader release is
+unconditional on stream or exit errors; cleanup failures retain an earlier
+failure as their cause. Final directory removal awaits the installer's shared
+cleanup helper: retryable filesystem errors get at most five yielding retries
+(1.5 seconds of total backoff) after children are reaped. Persistent locks still
+fail teardown. This handles Windows handles retained briefly after process exit;
+it does not retry compilation, crash setup or recovery. The installer's portable
+filesystem-denial and native Windows lock tests cover the shared removal policy.
+No suite retries a failed schedule. The
+[harness controls](../server/src/storage/testing/crash-harness.test.ts) use virtual
+time and process doubles for budget separation, diagnostic and cleanup failures.
 
 The test wrapper runs ordinary files in parallel using up to eight available CPUs.
 Set `HERDR_TEST_PARALLEL`
@@ -55,6 +131,28 @@ tests with up to four file workers and one case per worker. World bundles are bu
 per run; each case retains its own server, fixture and fresh browser profile.
 Focused test files build a bundle once per file. Production responsiveness cases
 are serial within each file so their global diagnostic instrumentation cannot overlap.
+
+`useWorldObservation.test.ts` mounts the real observation hook on the test clock
+for watch revision and unavailable-host scope policy. Actions browser cases keep
+rendered watch feedback, qualified action wiring and focus at desktop/phone widths.
+
+Keep policy checks headless once a replacement test and its mapping in
+`verification/coverage.json` exist. Retained browser cases name the behavior that
+requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
+or visual comparison. For example, `useWorldCreatedTerminal.test.ts` mounts the
+production creation hook and the Inspector selection-lease effect on the test
+clock to check admission retries, deadline cancellation and stale observations.
+`WorldTerminalHandoff.test.ts` and
+`SharedViewCreation.test.ts` retain launcher wiring, focus, rendered Inspectors and
+real terminal ownership. Controlled opener tests do not replace browser evidence
+that the actual opener honors cancellation.
+`useHostsFilter.test.ts` runs the real Hosts hook and catalogue refresh on the
+test clock, including delayed/empty admission and saved-scope reconciliation.
+`HostsFilter.test.ts` retains responsive geometry, rendered navigation and removal
+feedback, Inspector focus and terminal lifecycle. Town cases stay in the browser.
+The handoff browser probe holds the real browser-local focus request, then uses
+controlled admission time and named opener completion for its cancellation
+check; see [the fixture clock guide](../web/src/world/README.md#browser-fixtures-on-test-time).
 
 **Known limitation: native sequential World browser runs.** Direct `bun test` runs
 across multiple `HostsFilter*.test.ts` or `ProductionContexts*.test.ts` files,
@@ -80,37 +178,55 @@ those paths are unaffected, including shards with one file worker.
 PR CI and Release run the remaining repository checks with one file worker and up
 to two concurrent cases, preserving the upstream test configuration. Both call the
 [shared World browser workflow](../.github/workflows/world-browser.yml), which runs
-six separate runners, each with one file worker and one active case,
-**Web browser tests** and **World latency budgets**. That job runs only the suites that assert
-wall-clock budgets (production contexts, concurrent contexts, terminal handoff):
-it waits until the runner is quiet after setup (`scripts/wait-for-quiet.ts`:
-three consecutive seconds at least 90% idle, at most 60 s) and then runs them one
-case at a time. A failed case runs once more (`--retry=1`): a hosted runner still
-produces the odd slow event, and the worst-event budgets are judged on one run.
-The shards never retry. The [shard inventory](../scripts/world-browser-suites.ts)
-includes all World browser suites, split between the six shards and the
-`latency` group; inventory checks reject missing or duplicate assignments. The
-required Delivery checks status succeeds only when repository validation, every
-World shard, the web browser job and the latency job pass. Markdown-only and exact-head reuse keep their existing shorter paths.
-Release packaging requires repository validation, all six shards, the web
-browser job and the latency job to pass. **Web browser tests** runs the
+six separate runners, each with one file worker and one active case, and
+**Web browser tests**. Browser jobs install the Chrome for Testing build pinned in
+[`tools/chrome/test-chrome.json`](../tools/chrome/test-chrome.json) (checksum
+verified, cached) and print its version and the runner's CPU, so a browser
+update is a reviewed change rather than a runner-image roll-out. Ubuntu 24.04
+and later deny unprivileged user namespaces to programs without an AppArmor
+profile, which aborts Chrome's sandbox outside the packaged path; on CI the
+installer loads a profile like the Chrome package's for the pinned binary, and
+then starts it headless once, so a browser that cannot start fails installation
+rather than every test. Locally it prints the two commands instead. No job retries a
+failed test. The [shard inventory](../scripts/world-browser-suites.ts) splits all
+World browser suites between the six shards; inventory checks reject missing or
+duplicate assignments. The required Delivery checks status succeeds only when
+repository validation, every World shard and the web browser job pass.
+Markdown-only and exact-head reuse keep their existing shorter paths.
+Release packaging requires repository validation, all six shards and the web
+browser job to pass. **Web browser tests** runs the
 Chrome-driven suites outside World (`webBrowserSuites` in the same inventory) one
 file at a time; an inventory check rejects an unlisted one.
 Prepare Release validates its generated working tree in one checkout with one file
 worker; it retains the complete World suite, with one active World case at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
-CI uploads them as `world-browser-N-attempt-M` and `world-latency-attempt-M`
-artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare
+CI uploads them as `world-browser-N-attempt-M` artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare
 the slowest shard and total delivery time before changing the shard assignment or
 concurrency. The slowest file bounds the slowest shard, so add shards only when
 the slowest shard holds more than one long file. Keep all scenario combinations, dense
-fixtures, real deadline checks and input-latency budgets when rebalancing.
+fixtures, real deadline checks and work-count ceilings when rebalancing.
+
+No World test asserts a wall-clock number. The dense suites (production and
+concurrent contexts) assert what does not depend on the runner's speed: routing
+and generation of every input, one acknowledgement per input, frame coalescing,
+and ceilings on the work done per phase (terminal mounts, card observer
+registrations, Board commits, World preparations, construction units and
+projections, counted by dev-only counters in the production modules; see
+`web/src/world/testing/workCeilings.ts`). Their input delays go to the
+non-blocking [World latency trend](../.github/workflows/world-latency-trend.yml):
+on every main push, and on a pull request labelled `latency-trend`, it runs each
+of those suites alone on a quiet runner (`scripts/wait-for-quiet.ts`: three
+consecutive seconds at least 90% idle, at most 60 s) with the pinned Chrome, and
+its summary sets each p95 and worst delay beside the median of recent main runs
+on the same CPU model, marking a rise over 25% (`scripts/latency-trend.ts`).
+Hosted runners differ by CPU model and image, so a timing is comparable only
+within one; no branch rule requires the trend.
 
 Production responsiveness cases also save `world-production-*-inputs.json` in
 those CI artifacts. These lightweight timings correlate independently scheduled
 inputs with browser dispatch, service replies, browser acknowledgements and
-snapshot admission. Inspect them when a latency limit fails; CI keeps full Chrome
+snapshot admission. Inspect them when the latency trend flags a rise; CI keeps full Chrome
 timeline tracing disabled to avoid adding its recording cost to the benchmark.
 
 World browser harnesses use two bounded phases through
@@ -120,7 +236,7 @@ per-fixture deadline begins. The fixture budget still includes serving HTML and
 assets, application initialization, interaction and every assertion. Browser exit
 fails either phase immediately, and deadline timers are cleared on completion.
 The outer Bun timeout includes setup, the startup allowance, fixture execution
-and cleanup. Input latency, rendering and operation-specific limits are unchanged.
+and cleanup. Rendering and operation-specific limits are unchanged.
 
 This boundary addresses a confirmed first-case CI failure: Chrome reached its
 debugging endpoint after 18.4 seconds, connected after 25.5 seconds and requested
@@ -131,7 +247,7 @@ the repaired harness completed all Spaces assertions in 33.3 seconds, with the
 same 30-second fixture limit. This proves startup consumed the acceptance budget;
 it does not identify why Chrome initialization was slow on that runner. Diagnose
 any failure after the page request separately, using fixture progress or input
-artifacts, rather than extending an acceptance or latency limit.
+artifacts, rather than extending an acceptance limit.
 
 A separate compact Inspector failure occurred after page loading: the terminal
 handoff fixture checked `data-view="files"`, optionally clicked the Files back

@@ -287,6 +287,10 @@ test("production HTTP admission preserves an exact loopback proxy origin", async
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const env: Record<string, string | undefined> = {
     ...process.env,
+    HOME: root,
+    APPDATA: root,
+    XDG_CONFIG_HOME: root,
+    HERDR_WORLD_DATA_DIR: undefined,
     HOST: "127.0.0.1",
     HERDR_WORLD_PASSWORD: password,
     PORT: "0",
@@ -381,6 +385,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     HOME: root,
     APPDATA: root,
     XDG_CONFIG_HOME: root,
+    HERDR_WORLD_DATA_DIR: undefined,
     HOST: "127.0.0.1",
     HERDR_WORLD_PASSWORD: password,
     PORT: "0",
@@ -419,10 +424,19 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       let sequence = 0;
       const pending = new Map<string, (message: any) => void>();
       const controls: Array<Record<string, unknown>> = [];
+      const waiters = new Set<{
+        matches(control: Record<string, unknown>): boolean;
+        resolve(control: Record<string, unknown>): void;
+      }>();
       socket.onmessage = (event) => {
         const message = JSON.parse(String(event.data));
         if (message.control) {
           controls.push(message.control);
+          for (const waiter of waiters)
+            if (waiter.matches(message.control)) {
+              waiters.delete(waiter);
+              waiter.resolve(message.control);
+            }
           return;
         }
         if (typeof message.id === "string") pending.get(message.id)?.(message);
@@ -472,7 +486,21 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
         if (message.error) throw new Error(message.error.message);
         return message.result;
       };
-      return { raw, rpc, controls };
+      /** The next matching notice; register before the triggering call. */
+      const nextControl = (
+        matches: (control: Record<string, unknown>) => boolean,
+      ) => {
+        const notice = Promise.withResolvers<Record<string, unknown>>();
+        const waiter = { matches, resolve: notice.resolve };
+        waiters.add(waiter);
+        // Real time only guards against a hang.
+        const timer = setTimeout(() => {
+          waiters.delete(waiter);
+          notice.reject(new Error("control notice timeout"));
+        }, 5_000);
+        return notice.promise.finally(() => clearTimeout(timer));
+      };
+      return { raw, rpc, controls, nextControl };
     };
     const browserA = rpcFor(wsA, "a");
     const browserB = rpcFor(wsB, "b");
@@ -756,6 +784,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       ),
     ).toBe(true);
 
+    // Town, Desk and Needs you share the Desk review record.
     const deskIdentity = {
       connection_id: "alpha",
       connection_generation: oldAlphaGeneration,
@@ -967,6 +996,7 @@ for (const { protocol, welcomeProtocol, accepted } of [
       HOME: root,
       APPDATA: root,
       XDG_CONFIG_HOME: root,
+      HERDR_WORLD_DATA_DIR: undefined,
       HOST: "127.0.0.1",
       HERDR_WORLD_PASSWORD: password,
       PORT: "0",
@@ -1079,6 +1109,7 @@ test("production routing bootstraps only a verified empty session and serializes
     HOME: root,
     APPDATA: root,
     XDG_CONFIG_HOME: root,
+    HERDR_WORLD_DATA_DIR: undefined,
     HOST: "127.0.0.1",
     HERDR_WORLD_PASSWORD: password,
     PORT: "0",

@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  townRailInset,
-  nextTownCall,
-  TownRail,
-  type TownCall,
-} from "./TownRail";
+import { nextTownCall, TownAsk, type TownCall } from "./TownRail";
+
+const askActions = {
+  askers: new Map(),
+  answer: async () => null,
+  dismiss: async () => null,
+  open: () => {},
+};
 
 const call = (key: string, kind: TownCall["kind"]) =>
   ({ agent: { key }, kind }) as unknown as TownCall;
@@ -35,36 +37,25 @@ test("Next moves to a finished agent only when no other agent waits", () => {
   expect(nextTownCall([call("a", "blocked")], "a")).toBeNull();
 });
 
-test("questions from agents open the rail, with their options", () => {
+test("a question card names its asker, its age and its options", () => {
   const html = renderToStaticMarkup(
-    createElement(TownRail, {
-      needsYouCount: 1,
-      asks: [
-        {
-          id: "q-1",
-          at: 0,
-          actor: { label: "claude in w1:p2", verified: true },
-          question: "Ship the fix now?",
-          options: ["yes", "no"],
-          owner_only: true,
-        },
-      ],
-      calls: [],
-      activeKey: null,
+    createElement(TownAsk, {
+      ask: {
+        id: "q-1",
+        at: 0,
+        actor: { label: "claude in w1:p2", verified: true },
+        question: "Ship the fix now?",
+        options: ["yes", "no"],
+        owner_only: true,
+      },
       now: 60_000,
-      onPeek: () => {},
-      onOpen: () => {},
-      collapsed: false,
-      onCollapsedChange: () => {},
+      actions: askActions,
     }),
   );
-  expect(html).toContain("NEEDS YOU <b>1</b>");
-  expect(html).toContain("Ship the fix now?");
   expect(html).toContain("claude in w1:p2");
   expect(html).toContain("asks: Ship the fix now?");
   expect(html).toContain("1m</small>");
   expect(html).toContain(">yes</button>");
-  expect(html).not.toContain("Nobody is waiting on you.");
 });
 
 test("a question names its asker once, marks it unverified, and offers Open agent and Dismiss", () => {
@@ -76,34 +67,26 @@ test("a question names its asker once, marks it unverified, and offers Open agen
     options: [],
     owner_only: true,
   });
-  const html = renderToStaticMarkup(
-    createElement(TownRail, {
-      needsYouCount: 2,
-      asks: [
-        question("q-placed", "unverified w1:p6", false),
-        question("q-bare", "unverified w1:p6", false),
+  const actions = {
+    ...askActions,
+    // Only the placed one has a Town agent, named as its desk is.
+    askers: new Map([
+      [
+        "q-placed",
+        { name: "dispatch", key: "agent-dispatch", terminal: false },
       ],
-      askActions: {
-        // Only the placed one has a Town agent, named as its desk is.
-        askers: new Map([
-          [
-            "q-placed",
-            { name: "dispatch", key: "agent-dispatch", terminal: false },
-          ],
-        ]),
-        answer: async () => null,
-        dismiss: async () => null,
-        open: () => {},
-      },
-      calls: [],
-      activeKey: null,
-      now: 60_000,
-      onPeek: () => {},
-      onOpen: () => {},
-      collapsed: false,
-      onCollapsedChange: () => {},
-    }),
-  );
+    ]),
+  };
+  const html = [
+    question("q-placed", "unverified w1:p6", false),
+    question("q-bare", "unverified w1:p6", false),
+  ]
+    .map((ask) =>
+      renderToStaticMarkup(
+        createElement(TownAsk, { ask, now: 60_000, actions }),
+      ),
+    )
+    .join("");
   expect(html).toContain(
     "<b>dispatch</b> (unverified) asks: Which brief next?",
   );
@@ -114,10 +97,31 @@ test("a question names its asker once, marks it unverified, and offers Open agen
   expect(html.match(/>Dismiss</g)).toHaveLength(2);
 });
 
-test("camera reserves the rail for open questions and respects tray/collapse boundaries", () => {
-  expect(townRailInset(960, false, 1)).toBe(252);
-  expect(townRailInset(960, false, 0)).toBe(0);
-  expect(townRailInset(960, true, 1)).toBe(0);
-  expect(townRailInset(640, false, 1)).toBe(0);
-  expect(townRailInset(641, false, 1)).toBe(252);
-});
+for (const state of ["uncertain", "refused", "pending"] as const)
+  test(`Reception keeps owner-alert ${state} evidence visible on the stored question`, () => {
+    const html = renderToStaticMarkup(
+      createElement(TownAsk, {
+        ask: {
+          id: "q-evidence",
+          at: 0,
+          actor: { label: "Fixture", verified: true },
+          question: "Still stored?",
+          options: [],
+          owner_only: true,
+          delivery: {
+            notification: { state, reason: "Synthetic delivery evidence" },
+          },
+        },
+        now: 60_000,
+        actions: askActions,
+      }),
+    );
+    expect(html).toContain('role="status"');
+    expect(html).toContain(
+      "your question is saved".replace(
+        "your",
+        state === "uncertain" ? "your" : "Your",
+      ),
+    );
+    expect(html).toContain("Still stored?");
+  });

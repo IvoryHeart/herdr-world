@@ -1,4 +1,5 @@
 import type { CliActor } from "./world-ledger";
+import type { Evidence } from "../verbs/types";
 import type { CliErrorCode } from "./world-cli-errors";
 
 export type WorldCliRequest = {
@@ -8,7 +9,7 @@ export type WorldCliRequest = {
   caller?: { pane_id?: unknown };
 };
 
-export type WorldCliResponse =
+export type WorldCliResponse = (
   | { ok: true; actor: CliActor; result: unknown }
   | {
       ok: false;
@@ -16,4 +17,10 @@ export type WorldCliResponse =
       error: string;
       actor?: CliActor;
       result?: unknown;
-    };
+    }
+) & {
+  recorded?: boolean;
+  command_evidence?: Evidence;
+  retrying?: boolean;
+  notified?: { shown: boolean; reason: string } | null;
+};

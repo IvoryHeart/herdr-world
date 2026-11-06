@@ -1,3 +1,8 @@
+import { watchConversation } from "../conversationWatch";
+import { harnessLabel } from "./agentProfiles";
+import { WorldLoader } from "./WorldLoader";
+import { useEffectCallback } from "../useEffectCallback";
+import type { Conversation } from "../components/chat/types";
 import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
 import { leafAppearance, useAppearanceDocument } from "./appearance";
 import { useAgentWorktree } from "../useAgentWorktree";
@@ -24,7 +29,8 @@ import { worldLocalStorage } from "../browserStorage";
 import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
-import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
+import { lazyWithReload } from "../lazyWithReload";
+import { InspectorLoadingShell } from "../components/InspectorLoadingShell";
 import { ThemeScope } from "../themeScope";
 import { AgentProfileLink } from "./AgentProfileLink";
 import { InspectorPaneMap } from "../components/InspectorPaneMap";
@@ -64,6 +70,24 @@ import {
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
 import { townPortrait } from "./town/townSprites";
+import {
+  loadedWorkspaceInspector,
+  registerWorkspaceInspectorLoader,
+  workspaceInspectorLoaded,
+} from "./inspectorPreload";
+
+const loadWorkspaceInspector = () =>
+  import("../components/WorkspaceInspectorHost").then((module) => {
+    workspaceInspectorLoaded(module.WorkspaceInspectorHost);
+    return module;
+  });
+registerWorkspaceInspectorLoader(loadWorkspaceInspector);
+
+const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
+  loadWorkspaceInspector().then((module) => ({
+    default: module.WorkspaceInspectorHost,
+  })),
+);
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
@@ -104,7 +128,7 @@ function InspectorResources({
   floating,
   terminalActive,
   embedded = false,
-  onChange,
+  onChange: patchConversation,
   onClose,
   onDockOut,
   onDockIn,
@@ -201,6 +225,127 @@ function InspectorResources({
     foregroundCwd: historyPane?.foreground_cwd,
   });
   const connectionClient = worktree.client;
+  const cancelChatOpen = useRef(() => {});
+  const updateChatOpening = useEffectCallback(patchConversation);
+  const openingReplaced =
+    historyPane &&
+    (historyPane.terminal_id !== conversation.terminalId ||
+      historyPane.agent !== conversation.context.agent);
+  const awaitingChat =
+    Boolean(target) &&
+    conversation.awaitChatSession === true &&
+    conversation.view === "terminal" &&
+    conversation.availableViews.includes("history") &&
+    Boolean(historyPane) &&
+    !openingReplaced;
+  const reportedSession = historyPane?.agent_session?.value ?? null;
+  // When this window began waiting for its Chat (presentation only).
+  const [awaitSince, setAwaitSince] = useState(0);
+  if (awaitingChat && !awaitSince) setAwaitSince(Date.now());
+  if (!awaitingChat && awaitSince) setAwaitSince(0);
+  const waitingName =
+    harnessLabel(conversation.context.agent ?? "") || "The agent";
+  useLayoutEffect(() => {
+    if (conversation.awaitChatSession && openingReplaced) {
+      updateChatOpening({ awaitChatSession: false });
+      return;
+    }
+    if (!awaitingChat || !conversation.paneId) return;
+    let current = true,
+      pending = false,
+      again = false;
+    cancelChatOpen.current = () => {
+      current = false;
+    };
+    const currentPane = () =>
+      connectionSnapshot(store.get(), conversation.connectionId).panes.find(
+        (pane) =>
+          pane.workspace_id === conversation.workspaceId &&
+          pane.tab_id === conversation.tabId &&
+          pane.pane_id === conversation.paneId &&
+          pane.terminal_id === conversation.terminalId &&
+          pane.agent === conversation.context.agent,
+      );
+    const read = async () => {
+      if (!current || !baseConnectionClient.isCurrent() || !currentPane())
+        return;
+      if (pending) {
+        again = true;
+        return;
+      }
+      pending = true;
+      try {
+        const reply = (await baseConnectionClient.call(
+          "agent_conversation.latest",
+          { pane_id: conversation.paneId },
+        )) as Conversation | null;
+        const pane = currentPane();
+        if (
+          current &&
+          !again &&
+          baseConnectionClient.isCurrent() &&
+          pane &&
+          reply?.conversation_version === 1 &&
+          reply.pane_id === conversation.paneId &&
+          reply.status === "ok" &&
+          reply.unavailable === null &&
+          // A Codex title that names no thread yet reads "ok", but Chat has no
+          // conversation to show and cannot tell where a message would go.
+          !(reply.session_binding === "title" && !reply.session_fingerprint) &&
+          (reply.session_binding !== "reported" ||
+            !conversation.agentSessionFingerprint ||
+            reply.session_fingerprint === conversation.agentSessionFingerprint)
+        ) {
+          current = false;
+          updateChatOpening({ view: "history", awaitChatSession: undefined });
+        }
+      } catch {
+        /* Stay on Terminal; manual Chat owns its error presentation. */
+      } finally {
+        pending = false;
+        if (again) {
+          again = false;
+          void read();
+        }
+      }
+    };
+    const stop = watchConversation(
+      baseConnectionClient,
+      conversation.paneId,
+      () => void read(),
+    );
+    void read();
+    return () => {
+      current = false;
+      stop();
+    };
+  }, [
+    awaitingChat,
+    openingReplaced,
+    conversation.awaitChatSession,
+    baseConnectionClient,
+    conversation.connectionId,
+    conversation.runtimeGeneration,
+    conversation.workspaceId,
+    conversation.tabId,
+    conversation.paneId,
+    conversation.terminalId,
+    conversation.context.agent,
+    conversation.agentSessionFingerprint,
+    reportedSession,
+    updateChatOpening,
+  ]);
+  const onChange = (change: Partial<WorldInspectorConversation>) => {
+    if (change.view) {
+      cancelChatOpen.current();
+      patchConversation({
+        ...change,
+        ...(conversation.awaitChatSession !== undefined
+          ? { awaitChatSession: false }
+          : {}),
+      });
+    } else patchConversation(change);
+  };
   const scope = useMemo(
     () =>
       workspace
@@ -220,6 +365,20 @@ function InspectorResources({
         : null,
     [conversation.connectionId, workspace, worktree.view?.selected],
   );
+  // The Inspector itself when its code is already loaded (no loading shell);
+  // chosen once per window, so the window never swaps component types.
+  const [InspectorHost] = useState(
+    () => loadedWorkspaceInspector() ?? WorkspaceInspectorHost,
+  );
+  // A preloaded Inspector still mounts one commit after its window, as the
+  // lazy component does, so the window's Back layer registers before the
+  // Inspector's own; that commit runs before paint, so no shell shows.
+  const [hostReady, setHostReady] = useState(
+    InspectorHost === WorkspaceInspectorHost,
+  );
+  useLayoutEffect(() => {
+    if (!hostReady) setHostReady(true);
+  }, [hostReady]);
   const [fileSelection, setFileSelection] =
     useState<ActiveFilePreviewSelection>(emptyFile);
   const [diffSelection, setDiffSelection] =
@@ -519,6 +678,15 @@ function InspectorResources({
     !catalogueReady ||
     !baseConnectionClient.isCurrent() ||
     Boolean(worktree.view?.selected && !worktree.view.target);
+  const loadingShell = (
+    <InspectorLoadingShell
+      title={conversation.label}
+      dock={conversation.dock}
+      floating={floating}
+      windowControls={windowControls}
+      onClose={onClose}
+    />
+  );
   const content = (
     <div
       tabIndex={
@@ -540,183 +708,206 @@ function InspectorResources({
           className="workspace-inspector-slot"
           data-stale={presentationStale || undefined}
         >
-          <Suspense fallback={null}>
-            <WorkspaceInspectorHost
-              state={inspectorState}
-              visible={Boolean(target)}
-              workspace={workspace}
-              historyPane={historyPane}
-              historySessionFingerprint={conversation.agentSessionFingerprint}
-              chatFocusIntent={conversation.chatFocusIntent}
-              fileSelection={fileSelection}
-              previewRequestRef={previewRequestRef}
-              diffSelection={diffSelection}
-              connectionClient={connectionClient}
-              onFileSelectionChange={(selection) => {
-                if (
-                  connectionClient.isCurrent() &&
-                  resourceBindingRef.current === resourceBinding
-                )
-                  setFileSelection(selection);
-              }}
-              onDiffSelectionChange={(selection) => {
-                if (
-                  connectionClient.isCurrent() &&
-                  resourceBindingRef.current === resourceBinding
-                )
-                  setDiffSelection(selection);
-              }}
-              onOpenDiffFile={(entry) => entry && openFile(entry.path)}
-              annotations={readAnnotationDraft(scope)}
-              onCreateAnnotation={createAnnotation}
-              onReanchorFileAnnotations={(path, text) =>
-                updateAnnotationDraft(scope, (current) =>
-                  reanchorFileReviewAnnotations(current, path, text),
-                )
-              }
-              onReanchorDiffAnnotations={(
-                path: string,
-                kind: GitDiffEntry["kind"],
-                patch: string,
-              ) =>
-                updateAnnotationDraft(scope, (current) =>
-                  reanchorDiffReviewAnnotations(current, path, kind, patch),
-                )
-              }
-              onEditAnnotation={(id) => {
-                const annotation = readAnnotationDraft(scope).find(
-                  (candidate) => candidate.id === id,
-                );
-                if (annotation) openAnnotation(annotation);
-              }}
-              onSelectFileTab={openFile}
-              onOpenDocument={openFile}
-              onRefreshFile={() => {
-                if (fileSelection.entry) {
-                  loadFile(fileSelection.entry, fileSelection.fragment);
+          <Suspense fallback={loadingShell}>
+            {hostReady ? (
+              <InspectorHost
+                state={inspectorState}
+                visible={Boolean(target)}
+                workspace={workspace}
+                historyPane={historyPane}
+                historySessionFingerprint={conversation.agentSessionFingerprint}
+                notice={
+                  awaitingChat && awaitSince ? (
+                    <WorldLoader
+                      className="world-inspector-chat-wait"
+                      since={awaitSince}
+                      label="Chat is not available yet: showing Terminal"
+                      longerLabel="Still showing Terminal: Chat is not available yet"
+                      detail={`Chat opens here when ${waitingName}'s conversation can be read.`}
+                      actions={
+                        <button
+                          type="button"
+                          onClick={() => onChange({ view: "terminal" })}
+                        >
+                          Stay on Terminal
+                        </button>
+                      }
+                    />
+                  ) : undefined
                 }
-              }}
-              onTerminalPortalChange={
-                terminalActive ? setTerminalPortal : undefined
-              }
-              onViewChange={changeView}
-              onDockChange={changeDock}
-              onExpandedChange={changeExpanded}
-              windowControls={windowControls}
-              terminalColor={terminalColor}
-              agentSettings={
-                conversation.tabId &&
-                conversation.paneId &&
-                conversation.terminalId &&
-                terminalColor ? (
-                  <TerminalAppearanceEditor
-                    key={JSON.stringify([
-                      conversation.connectionId,
-                      conversation.runtimeGeneration,
-                      conversation.tabId,
-                      conversation.paneId,
-                      conversation.terminalId,
-                    ])}
-                    connectionId={conversation.connectionId}
-                    generation={conversation.runtimeGeneration}
-                    tabId={conversation.tabId}
-                    paneId={conversation.paneId}
-                    terminalId={conversation.terminalId}
-                    tabTerminals={
-                      panes.some((pane) => pane.tab_id === conversation.tabId)
-                        ? panes
-                            .filter(
-                              (pane) => pane.tab_id === conversation.tabId,
-                            )
-                            .map((pane) => pane.terminal_id)
-                        : [conversation.terminalId]
-                    }
-                    workspaceIds={workspaces.map(
-                      (workspace) => workspace.workspace_id,
-                    )}
-                    tabName={
-                      tabs.find((tab) => tab.tab_id === conversation.tabId)
-                        ?.label ??
-                      conversation.context.tabName ??
-                      "Terminal"
-                    }
-                    color={terminalColor}
-                    disabled={presentationStale}
-                  >
-                    {conversation.context.kind === "agent" ? (
-                      <AgentProfileLink
-                        connectionId={conversation.connectionId}
-                        terminalId={conversation.terminalId}
-                      />
-                    ) : null}
-                  </TerminalAppearanceEditor>
-                ) : undefined
-              }
-              paneMap={
-                conversation.tabId && onSelectPane ? (
-                  <InspectorPaneMap
-                    workspaceId={conversation.workspaceId}
-                    tabId={conversation.tabId}
-                    tabLabel={
-                      tabs.find((tab) => tab.tab_id === conversation.tabId)
-                        ?.label
-                    }
-                    tabPanes={panes.filter(
-                      (pane) =>
-                        pane.workspace_id === conversation.workspaceId &&
-                        pane.tab_id === conversation.tabId,
-                    )}
-                    workspace={workspace}
-                    selectedPaneId={conversation.paneId}
-                    onSelect={onSelectPane}
-                  />
-                ) : undefined
-              }
-              onWindowMaximize={onWindowMaximize}
-              windowMaximized={windowMaximized}
-              onDockOut={floating ? undefined : onDockOut}
-              onDockIn={floating ? onDockIn : undefined}
-              controlMode={floating ? "floating" : "docked"}
-              windowMovable={!floating && !embedded}
-              onClose={onClose}
-              onBack={() => {
-                if (conversation.view === "files") {
-                  previewRequestRef.current += 1;
-                  setFileSelection(emptyFile());
-                  writeResourceFileSelection(worldLocalStorage, scope, null);
-                } else {
-                  setDiffSelection(emptyDiff());
+                chatFocusIntent={conversation.chatFocusIntent}
+                fileSelection={fileSelection}
+                previewRequestRef={previewRequestRef}
+                diffSelection={diffSelection}
+                connectionClient={connectionClient}
+                onFileSelectionChange={(selection) => {
+                  if (
+                    connectionClient.isCurrent() &&
+                    resourceBindingRef.current === resourceBinding
+                  )
+                    setFileSelection(selection);
+                }}
+                onDiffSelectionChange={(selection) => {
+                  if (
+                    connectionClient.isCurrent() &&
+                    resourceBindingRef.current === resourceBinding
+                  )
+                    setDiffSelection(selection);
+                }}
+                onOpenDiffFile={(entry) => entry && openFile(entry.path)}
+                annotations={readAnnotationDraft(scope)}
+                onCreateAnnotation={createAnnotation}
+                onReanchorFileAnnotations={(path, text) =>
+                  updateAnnotationDraft(scope, (current) =>
+                    reanchorFileReviewAnnotations(current, path, text),
+                  )
                 }
-              }}
-              context={{
-                ...(townSkin && conversation.context.kind === "agent"
-                  ? {
-                      ...conversation.context,
-                      portrait: townPortrait(conversation.nodeId),
-                    }
-                  : conversation.context),
-                tabName:
-                  tabs.find((tab) => tab.tab_id === conversation.tabId)
-                    ?.label ??
-                  conversation.context.tabName ??
-                  "Terminal",
-                appearanceAvatar:
+                onReanchorDiffAnnotations={(
+                  path: string,
+                  kind: GitDiffEntry["kind"],
+                  patch: string,
+                ) =>
+                  updateAnnotationDraft(scope, (current) =>
+                    reanchorDiffReviewAnnotations(current, path, kind, patch),
+                  )
+                }
+                onEditAnnotation={(id) => {
+                  const annotation = readAnnotationDraft(scope).find(
+                    (candidate) => candidate.id === id,
+                  );
+                  if (annotation) openAnnotation(annotation);
+                }}
+                onSelectFileTab={openFile}
+                onOpenDocument={openFile}
+                onRefreshFile={() => {
+                  if (fileSelection.entry) {
+                    loadFile(fileSelection.entry, fileSelection.fragment);
+                  }
+                }}
+                onTerminalPortalChange={
+                  terminalActive ? setTerminalPortal : undefined
+                }
+                onViewChange={changeView}
+                onDockChange={changeDock}
+                onExpandedChange={changeExpanded}
+                windowControls={windowControls}
+                terminalColor={terminalColor}
+                agentSettings={
+                  conversation.tabId &&
                   conversation.paneId &&
                   conversation.terminalId &&
-                  conversation.tabId
-                    ? leafAppearance(appearance, {
-                        connectionId: conversation.connectionId,
-                        tabId: conversation.tabId,
-                        nativeId: conversation.paneId,
-                        terminalId: conversation.terminalId,
-                        stale: presentationStale,
-                        actionable: !presentationStale,
-                      })?.avatar
-                    : undefined,
-              }}
-              agentWorktree={worktree.view}
-              presentationStale={presentationStale}
-            />
+                  terminalColor ? (
+                    <TerminalAppearanceEditor
+                      key={JSON.stringify([
+                        conversation.connectionId,
+                        conversation.runtimeGeneration,
+                        conversation.tabId,
+                        conversation.paneId,
+                        conversation.terminalId,
+                      ])}
+                      connectionId={conversation.connectionId}
+                      generation={conversation.runtimeGeneration}
+                      tabId={conversation.tabId}
+                      paneId={conversation.paneId}
+                      terminalId={conversation.terminalId}
+                      tabTerminals={
+                        panes.some((pane) => pane.tab_id === conversation.tabId)
+                          ? panes
+                              .filter(
+                                (pane) => pane.tab_id === conversation.tabId,
+                              )
+                              .map((pane) => pane.terminal_id)
+                          : [conversation.terminalId]
+                      }
+                      workspaceIds={workspaces.map(
+                        (workspace) => workspace.workspace_id,
+                      )}
+                      tabName={
+                        tabs.find((tab) => tab.tab_id === conversation.tabId)
+                          ?.label ??
+                        conversation.context.tabName ??
+                        "Terminal"
+                      }
+                      color={terminalColor}
+                      disabled={presentationStale}
+                    >
+                      {conversation.context.kind === "agent" ? (
+                        <AgentProfileLink
+                          connectionId={conversation.connectionId}
+                          terminalId={conversation.terminalId}
+                        />
+                      ) : null}
+                    </TerminalAppearanceEditor>
+                  ) : undefined
+                }
+                paneMap={
+                  conversation.tabId && onSelectPane ? (
+                    <InspectorPaneMap
+                      workspaceId={conversation.workspaceId}
+                      tabId={conversation.tabId}
+                      tabLabel={
+                        tabs.find((tab) => tab.tab_id === conversation.tabId)
+                          ?.label
+                      }
+                      tabPanes={panes.filter(
+                        (pane) =>
+                          pane.workspace_id === conversation.workspaceId &&
+                          pane.tab_id === conversation.tabId,
+                      )}
+                      workspace={workspace}
+                      selectedPaneId={conversation.paneId}
+                      onSelect={onSelectPane}
+                    />
+                  ) : undefined
+                }
+                onWindowMaximize={onWindowMaximize}
+                windowMaximized={windowMaximized}
+                onDockOut={floating ? undefined : onDockOut}
+                onDockIn={floating ? onDockIn : undefined}
+                controlMode={floating ? "floating" : "docked"}
+                windowMovable={!floating && !embedded}
+                onClose={onClose}
+                onBack={() => {
+                  if (conversation.view === "files") {
+                    previewRequestRef.current += 1;
+                    setFileSelection(emptyFile());
+                    writeResourceFileSelection(worldLocalStorage, scope, null);
+                  } else {
+                    setDiffSelection(emptyDiff());
+                  }
+                }}
+                context={{
+                  ...(townSkin && conversation.context.kind === "agent"
+                    ? {
+                        ...conversation.context,
+                        portrait: townPortrait(conversation.nodeId),
+                      }
+                    : conversation.context),
+                  tabName:
+                    tabs.find((tab) => tab.tab_id === conversation.tabId)
+                      ?.label ??
+                    conversation.context.tabName ??
+                    "Terminal",
+                  appearanceAvatar:
+                    conversation.paneId &&
+                    conversation.terminalId &&
+                    conversation.tabId
+                      ? leafAppearance(appearance, {
+                          connectionId: conversation.connectionId,
+                          tabId: conversation.tabId,
+                          nativeId: conversation.paneId,
+                          terminalId: conversation.terminalId,
+                          stale: presentationStale,
+                          actionable: !presentationStale,
+                        })?.avatar
+                      : undefined,
+                }}
+                agentWorktree={worktree.view}
+                presentationStale={presentationStale}
+              />
+            ) : (
+              loadingShell
+            )}
           </Suspense>
         </div>
       </ResourceConnectionClientContext.Provider>

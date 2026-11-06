@@ -1,11 +1,16 @@
+import { useDrawReadiness } from "./useDrawReadiness";
+import { worldRuntimeStore } from "./runtimeStore";
 import { AppearanceAvatar } from "./AppearanceAvatar";
 import { visibleAppearanceColors, saveAppearance } from "./appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
 import { useWorldAsks } from "./worldAsks";
+import { agentStateWord } from "./agentMarks";
+import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
 import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
+import { bridge } from "../api";
 import {
   ChevronDown,
   ChevronUp,
@@ -133,6 +138,7 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
+import "./board/boardBadge.css";
 import "./board/boardRelations.css";
 import {
   relationTeams,
@@ -154,13 +160,12 @@ import {
  * comes to rest within about a second. See openspec/changes/board-view.
  */
 
-const STATUS_LABEL: Record<WorldAgentStatus, string> = {
-  blocked: "Needs you",
-  working: "Working",
-  done: "Finished, not checked",
-  idle: "Idle",
-  unknown: "No signal",
-};
+const STATUS_LABEL = Object.fromEntries(
+  (["blocked", "working", "done", "idle", "unknown"] as const).map((status) => [
+    status,
+    agentStateWord(status),
+  ]),
+) as Record<WorldAgentStatus, string>;
 const OVERVIEW_IN = 0.44;
 const OVERVIEW_OUT = 0.5;
 const MIN_ZOOM = 0.12;
@@ -220,7 +225,6 @@ async function moveTabThroughService(
   space: BoardWorkspace,
   allowClose: boolean,
 ) {
-  const { bridge } = await import("../api");
   return (await bridge.connection(space.connectionId, space.generation).call(
     "town.move_desk",
     {
@@ -272,7 +276,6 @@ async function createTabThroughStore(
   if (typeof tabId !== "string")
     return { namingProblem: "Herdr did not say which tab it created" };
   try {
-    const { bridge } = await import("../api");
     await bridge
       .connection(space.connectionId, space.generation)
       .call("tab.rename", { tab_id: tabId, label: name });
@@ -321,7 +324,6 @@ function startLabel(kind: string) {
 const FALLBACK_KINDS = ["claude", "codex"];
 const NO_CARD_COLORS: Readonly<Record<string, CardColor>> = {};
 async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
-  const { bridge } = await import("../api");
   return (await bridge
     .connection(host.connectionId, host.generation)
     .call(
@@ -336,7 +338,6 @@ async function sendNoteThroughService(
   note: BoardNote,
   confirmRecipient?: string,
 ) {
-  const { bridge } = await import("../api");
   return (await bridge.connection(target.connectionId, target.generation).call(
     "board.send_note",
     {
@@ -397,12 +398,12 @@ function rowsByUrgency(tab: BoardTab): BoardPane[] {
 }
 
 function paneName(pane: BoardPane) {
-  if (!pane.isAgent) return "shell";
+  if (!pane.isAgent) return "terminal";
   return pane.leaf.agentName ?? pane.leaf.agentLabel ?? "agent";
 }
 
 function paneLine(pane: BoardPane, status: WorldAgentStatus) {
-  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "shell";
+  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "terminal";
   return (
     pane.leaf.taskSummary ?? pane.leaf.terminalTitle ?? STATUS_LABEL[status]
   );
@@ -506,6 +507,7 @@ export default function BoardView({
 }) {
   // Topology updates render at low priority and in slices, so a large board
   // never holds up typing in a terminal.
+  useEffect(() => worldRuntimeStore.retainView("board"), []);
   const deferredWorld = useDeferredValue(world);
   const shownWorld = boardObservation(world, deferredWorld);
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
@@ -596,7 +598,10 @@ export default function BoardView({
     () => nextBoardAttention(fullModel.tabs, selectedId, asking),
     [fullModel, selectedId, asking],
   );
-  const [tracing, setTracing] = useState(false);
+  // The event trace exists only in development builds (devtools/flag.ts).
+  const trace = useMemo(() => (DEVTOOLS ? openTrace("board") : NO_TRACE), []);
+  // Read at mount: setting it from an effect re-rendered the Board once.
+  const [tracing, setTracing] = useState(() => trace.enabled);
   const [toast, setToast] = useState<{
     text: string;
     undo?: () => void;
@@ -648,9 +653,6 @@ export default function BoardView({
   const hostStart = useRef<{ key: string; anchor?: Point } | null>(null);
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
   const pinchStart = useRef<{ cam: Camera; mid: Point } | null>(null);
-  // The event trace exists only in development builds (devtools/flag.ts).
-  const trace = useMemo(() => (DEVTOOLS ? openTrace("board") : NO_TRACE), []);
-  useEffect(() => setTracing(trace.enabled), [trace]);
   const setTrace = (on: boolean) => {
     if (!DEVTOOLS) return;
     rememberTrace("board", trace, on);
@@ -661,6 +663,7 @@ export default function BoardView({
   // data-moving says whether the board still has work to draw: true from a
   // request until a frame finds nothing moving (tests wait on it).
   const invalidate = (reason: string) => {
+    if (reason !== "capture") capture.current?.invalidate(reason);
     const board = boardRef.current;
     if (board && board.dataset.moving !== "true") board.dataset.moving = "true";
     loopRef.current?.invalidate(reason);
@@ -670,6 +673,9 @@ export default function BoardView({
     invalidate("physics");
   };
   const fitted = useRef(false);
+  const capture = useDrawReadiness("board", boardRef, () =>
+    invalidate("capture"),
+  );
   const farRef = useRef(far);
   const yarnEls = useRef(new Map<string, SVGPathElement[]>());
   /** Strings between cards whose terminals know each other (relations). */
@@ -691,12 +697,17 @@ export default function BoardView({
     onNodeAnchorsChange,
     onSelectedAnchorChange,
   });
-  anchorProps.current = {
-    conversationNodeIds,
-    selectedId,
-    onNodeAnchorsChange,
-    onSelectedAnchorChange,
-  };
+  // Refs that frames read are published at commit, never during render: a
+  // transition render can yield before committing (or never commit), and a
+  // frame in between must see the Board on screen, not that render's.
+  useLayoutEffect(() => {
+    anchorProps.current = {
+      conversationNodeIds,
+      selectedId,
+      onNodeAnchorsChange,
+      onSelectedAnchorChange,
+    };
+  });
   const loaded = useRef(false);
   const saveTimer = useRef(0);
   /** True while a layout save is waiting to go out. */
@@ -715,17 +726,20 @@ export default function BoardView({
     related,
     groupFrom,
   });
-  latest.current = {
-    model,
-    collapsed,
-    onSelect,
-    onOpen,
-    saved,
-    picked,
-    noteSelected,
-    related,
-    groupFrom,
-  };
+  // Published at commit (see anchorProps); before the effects that read it.
+  useLayoutEffect(() => {
+    latest.current = {
+      model,
+      collapsed,
+      onSelect,
+      onOpen,
+      saved,
+      picked,
+      noteSelected,
+      related,
+      groupFrom,
+    };
+  });
 
   const kindOf = (key: string, m: BoardModel) =>
     m.workspaceByKey.has(key) ? "workspace" : "tab";
@@ -796,6 +810,7 @@ export default function BoardView({
     return cards.current.get(key)?.size ?? DEFAULT_SIZE[kind];
   }, []);
 
+  const placedModel = useRef<BoardModel | null>(null);
   /* ---------- Model changes: measure, place new cards, keep the rest ---------- */
   useLayoutEffect(() => {
     large.current = model.workspaces.length + model.tabs.length > CULL_ABOVE;
@@ -812,6 +827,7 @@ export default function BoardView({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [model, sizeOf]);
   function placeModel() {
+    placedModel.current = model;
     if (!farRef.current && !large.current)
       for (const [key, el] of cardEls.current) {
         const card = cards.current.get(key);
@@ -1209,6 +1225,16 @@ export default function BoardView({
     }
     const svg = svgRef.current;
     if (svg) paint(svg, m);
+    capture.current?.drawn(
+      !built ||
+        shownWorld !== world ||
+        placedModel.current !== model ||
+        (cards.current.size > 0 && !fitted.current) ||
+        renderKeys !== renderKeysRef.current ||
+        !saved
+        ? "placement/observation"
+        : undefined,
+    );
     return (
       tweens.current.size > 0 ||
       physics.current.heat > 0 ||
@@ -1219,7 +1245,10 @@ export default function BoardView({
     );
   };
   const frameRef = useRef(frame);
-  frameRef.current = frame;
+  // A frame runs the committed render's closure (see anchorProps).
+  useLayoutEffect(() => {
+    frameRef.current = frame;
+  });
   // One loop per mount: a cleanup stops it for good, and React may mount a
   // component twice (development, remounts), so each mount makes its own.
   useEffect(() => {
@@ -1345,6 +1374,11 @@ export default function BoardView({
   );
 
   function paint(svg: SVGSVGElement, m: BoardModel) {
+    // A previously armed frame can run before the dense transition or its
+    // placement task. Keep the initial overview and culling state until the
+    // cards have positions and the camera has fitted them; placement asks
+    // for another frame when ready.
+    if (!built || (large.current && !fitted.current)) return;
     const c = cam.current;
     const worldEl = worldRef.current,
       board = boardRef.current;
@@ -3117,7 +3151,9 @@ export default function BoardView({
         keys.add(tab.key);
     return keys;
   }, [model, selectedId]);
-  selectedKeysRef.current = selectedKeys;
+  useLayoutEffect(() => {
+    selectedKeysRef.current = selectedKeys;
+  });
 
   /**
    * Colours the user chose. A tab is a terminal and always has its terminal
@@ -3147,7 +3183,10 @@ export default function BoardView({
     [...selectedKeys].find((key) => model.tabByKey.has(key)) ??
     [...selectedKeys].find((key) => model.workspaceByKey.has(key)) ??
     null;
-  barKey.current = noteSelected ? NOTE_PREFIX + noteSelected : colorKey;
+  const shownBarKey = noteSelected ? NOTE_PREFIX + noteSelected : colorKey;
+  useLayoutEffect(() => {
+    barKey.current = shownBarKey;
+  });
   // A pending Group… belongs to the tab whose bar offered it.
   useEffect(() => {
     if (groupFrom && groupFrom !== colorKey) setGroupFrom(null);
@@ -3569,7 +3608,7 @@ export default function BoardView({
                           role="button"
                           aria-pressed={selectedId === row.leaf.id}
                           className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
-                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
+                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "terminal"}`}
                         >
                           {row.isAgent ? (
                             <span className="board-dot" />
@@ -3589,7 +3628,9 @@ export default function BoardView({
                             <QuestChip quest={quests.get(row.leaf.id)!} />
                           ) : null}
                           <span className="board-pane-state">
-                            {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                            {row.isAgent
+                              ? STATUS_LABEL[row.status]
+                              : "terminal"}
                           </span>
                         </div>
                       ))}
@@ -3620,7 +3661,20 @@ export default function BoardView({
                       {pane.leaf.appearance.status}
                     </div>
                   ) : null}
-                  <span className="board-badge" aria-hidden="true" />
+                  {/* Its ! or ✓ opens Needs you at this agent. */}
+                  <button
+                    type="button"
+                    className="board-badge"
+                    aria-label={`Open ${tab.label} in Needs you`}
+                    disabled={tab.status === "unknown"}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openNeedsYou(
+                        pane ? needsYouLeafKey(pane.leaf.id) : undefined,
+                      );
+                    }}
+                  />
                   <span
                     className="board-handle"
                     title="Drag to string this to a note or card"
@@ -4017,7 +4071,7 @@ export default function BoardView({
                 )}
                 <span className="board-pane-name">{paneName(row)}</span>
                 <span className="board-pane-state">
-                  {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                  {row.isAgent ? STATUS_LABEL[row.status] : "terminal"}
                 </span>
               </button>
             ))}
@@ -4344,14 +4398,10 @@ function NewTabDialog({
   );
 }
 
-/** A workspace's agents by status, and its shells: "3 agents · 1 working · 2 idle". */
-const COUNT_ORDER: [WorldAgentStatus, string][] = [
-  ["blocked", "waiting"],
-  ["working", "working"],
-  ["done", "done"],
-  ["idle", "idle"],
-  ["unknown", "unknown"],
-];
+/** A workspace's agents by state word, and its terminals: "3 agents · 1 working · 2 idle". */
+const COUNT_ORDER = (
+  ["blocked", "working", "done", "idle", "unknown"] as const
+).map((status) => [status, STATUS_LABEL[status].toLowerCase()] as const);
 function workspaceCounts(space: BoardWorkspace) {
   const agents = space.squares.filter((square) => square.isAgent);
   const shells = space.squares.length - agents.length;
@@ -4360,7 +4410,7 @@ function workspaceCounts(space: BoardWorkspace) {
     const n = agents.filter((square) => square.status === status).length;
     if (n) parts.push(`${n} ${word}`);
   }
-  if (shells) parts.push(`${shells} shell${shells === 1 ? "" : "s"}`);
+  if (shells) parts.push(`${shells} terminal${shells === 1 ? "" : "s"}`);
   return parts.join(" · ");
 }
 const NO_IDS: readonly string[] = [];

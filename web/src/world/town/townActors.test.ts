@@ -431,11 +431,13 @@ for (const [status, elapsed] of [
 }
 
 for (const count of [24, 4]) {
-  test(`a reception walker stays on the current floor after 80 desks shrink to ${count}`, () => {
+  // The bar is at the bottom of the building, so an idle agent walking there
+  // from a large room passes below where a shrunken building ends.
+  test(`a bar walker stays on the current floor after 80 desks shrink to ${count}`, () => {
     const actors = new TownActors();
     actors.sync(world({ a: "working" }, 80).actorWorld, false);
-    const large = world({ a: "blocked" }, 80);
-    const small = world({ a: "blocked" }, count);
+    const large = world({ a: "idle" }, 80);
+    const small = world({ a: "idle" }, count);
     const building = small.actorWorld.buildings.get("host")!;
     const bottom = (building.y + building.h) * TOWN_TILE;
     actors.sync(large.actorWorld, false);
@@ -455,7 +457,8 @@ for (const count of [24, 4]) {
       actors.step(1 / 30);
     }
     settle(actors);
-    const spot = building.queue[actor.queueSlot!]!;
+    const spot = actor.spot!;
+    expect(building.lounge.spots).toContainEqual(spot);
     expect([actor.x, actor.y]).toEqual([
       spot.x * TOWN_TILE + 8,
       spot.y * TOWN_TILE + 13,

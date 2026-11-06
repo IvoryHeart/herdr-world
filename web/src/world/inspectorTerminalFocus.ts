@@ -7,6 +7,25 @@ import {
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
 
+/**
+ * Open layers that keep the deferred terminal focus out. A popover counts: the
+ * title's pane map can open before the focus from a previous pick arrives a
+ * frame later, and moving focus under it would close it (terminalFocus.ts
+ * guards the main terminal the same way).
+ */
+export function inspectorFocusBlocked(
+  document: Pick<Document, "querySelector">,
+) {
+  return (
+    openLayerCount() > 0 ||
+    Boolean(
+      document.querySelector(
+        '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"], [data-radix-popper-content-wrapper], .popover-content[data-state="open"]',
+      ),
+    )
+  );
+}
+
 /** Preserve the existing qualified terminal focus handoff outside controller routing. */
 export function createInspectorTerminalFocuser(
   inspectorFocusIntentRef: MutableRefObject<number>,
@@ -31,14 +50,7 @@ export function createInspectorTerminalFocuser(
     }
     const attempt = (remaining: number) => {
       if (inspectorFocusIntentRef.current !== focusIntent) return;
-      // A queued terminal handoff must not dismiss a newly opened picker.
-      if (
-        openLayerCount() > 0 ||
-        document.querySelector(
-          '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"], .popover-content[data-state="open"]',
-        )
-      )
-        return;
+      if (inspectorFocusBlocked(document)) return;
       const conversation = inspectorConversationsRef.current.find(
         (candidate) => worldInspectorWindowId(candidate) === windowId,
       );

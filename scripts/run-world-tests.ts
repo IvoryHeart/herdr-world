@@ -2,13 +2,11 @@ import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildWorldBrowserBundle } from "../web/src/world/testing/browserBundles";
-import { acquireAllCheckSlots, acquireCheckSlot, heldEnv } from "./check-lock";
-import { guardDiskSpace } from "./disk-guard";
+import { acquireCheckSlot, heldEnv } from "./check-lock";
 import {
   assertWorldBrowserInventory,
   selectWorldBrowserShard,
   worldBrowserSuites,
-  includesTimedFiles,
 } from "./world-browser-suites";
 
 // Suites named on the command line replace the shard selection.
@@ -21,15 +19,12 @@ if (
   args.some((arg) => arg.startsWith("--shard") && arg !== shardArg) ||
   (shardArg && !shard)
 ) {
-  throw new Error(
-    "Use --shard=i/6 or --shard=latency to select World browser suites",
-  );
+  throw new Error("Use --shard=i/6 to select World browser suites");
 }
 if (named.length && shard)
   throw new Error("Name World browser suites or a shard, not both");
 const files = named.length ? named : selectWorldBrowserShard(shard);
 const testArgs = args.filter((arg) => arg !== shardArg);
-guardDiskSpace("the World browser suites");
 await assertWorldBrowserInventory();
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -48,14 +43,14 @@ const label = shard
   ? `shard-${shard.replace("/", "-of-")}`
   : (Bun.env.HERDR_WORLD_TEST_LABEL ?? "local");
 await mkdir(".agents/delivery", { recursive: true });
-// Timed suites take the whole machine; other World runs take the browser slot.
-// A nested runner already holds its parent's slots and skips acquisition.
-const release = includesTimedFiles(files)
-  ? await acquireAllCheckSlots({ lane: `world ${label}` })
-  : await acquireCheckSlot("browser", { lane: `world ${label}` });
+// World runs take the browser slot. A nested runner already holds its
+// parent's slot and skips acquisition.
+const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
 try {
   const began = performance.now();
   await buildWorldBrowserBundle("HostsFilter", directory);
+  if (files.some((path) => path.includes("AnswerDeliveries.browser")))
+    await buildWorldBrowserBundle("AnswerDeliveries", directory);
   if (files.some((path) => path.includes("ProductionContexts"))) {
     await buildWorldBrowserBundle("ProductionContexts", directory);
   }

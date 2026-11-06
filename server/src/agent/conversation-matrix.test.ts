@@ -415,6 +415,7 @@ const fixtures: Fixture[] = [
 
 function herdr(agent: Record<string, unknown> | null, prompts: unknown[] = []) {
   const call: HerdrCall = async (method, params) => {
+    if (method === "pane.read") return { read: { text: "❯ " } };
     if (method === "agent.get") return { agent };
     if (method === "agent.list") return { agents: agent ? [agent] : [] };
     if (method === "agent.prompt") {
@@ -755,6 +756,7 @@ describe("conversation availability", () => {
       value: path,
     });
     const blocked: HerdrCall = async (method, params) => {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       if (method === "agent.prompt")
         throw new Error("agent_blocked: agent is blocked");
       return herdr(reported)(method, params);
@@ -863,6 +865,7 @@ describe("quests", () => {
     const calls: string[] = [];
     let listFails = false;
     const chat = source(async (method, params) => {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       calls.push(method);
       if (method === "agent.list" && listFails) throw new Error("offline");
       return inner(method, params);
@@ -1022,6 +1025,7 @@ describe("conversation binding and remote admission", () => {
     let current = reported(path);
     const log: string[] = [];
     const call: HerdrCall = async (method) => {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       log.push(method);
       if (method === "agent.get") return { agent: current };
       if (method === "agent.prompt") return { agent: current };
@@ -1137,6 +1141,7 @@ describe("conversation binding and remote admission", () => {
     };
     const prompts: unknown[] = [];
     const call: HerdrCall = async (method, params) => {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       if (method === "agent.get") return { agent: current };
       if (method === "agent.prompt") {
         prompts.push(params);

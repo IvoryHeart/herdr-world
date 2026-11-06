@@ -15,32 +15,34 @@ recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 started_at=$(date +%s)
 gate=changed
 base=
+all_units=
 
 # Code pushes check what changed since the remote branch (or since main for a
-# new branch); CI runs the full gate. HERDR_WORLD_PREPUSH=full runs it here.
+# new branch): static checks and affected non-browser units only. Browser and
+# behavioral acceptance run in CI. HERDR_WORLD_PREPUSH=full opts in locally.
 # The scoped gate reads this worktree, so a push of anything but its HEAD
-# (another branch, several refs) runs the full gate. A Markdown-only
+# (another branch, several refs) runs all non-browser units. A Markdown-only
 # follow-up can use the docs gate if this worktree already passed a code gate
 # on an ancestor. A push that only merges origin/main into the pushed branch
 # (scripts/merge-push.ts defines this conservatively) runs static checks only:
 # both sides were tested and CI runs the full gate on the merge.
 if read -r local_ref local_sha remote_ref remote_sha; then
   if read -r extra_line || [ "$local_sha" != "$head_sha" ]; then
-    gate=full
+    all_units=--all-units
   fi
   case "$gate:$local_ref" in
     changed:refs/heads/*)
-      if [ "$local_sha" = "$head_sha" ] &&
+      if [ -z "$all_units" ] && [ "$local_sha" = "$head_sha" ] &&
         git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null; then
         base=$remote_sha
       fi
-      if [ "$local_sha" = "$head_sha" ] &&
+      if [ -z "$all_units" ] && [ "$local_sha" = "$head_sha" ] &&
         git rev-parse --quiet --verify "$head_sha^2" >/dev/null &&
         merge_note=$(bun scripts/merge-push.ts "$remote_sha" 2>&1); then
         gate=static
         printf 'pre-push: %s; running static checks only\n' "$merge_note" >&2
       fi
-      if [ "$gate" = changed ] && [ "$local_sha" = "$head_sha" ] && [ -f "$report_file" ]; then
+      if [ -z "$all_units" ] && [ "$gate" = changed ] && [ "$local_sha" = "$head_sha" ] && [ -f "$report_file" ]; then
         full_sha=$(awk -F '\t' '$3 == "0" && ($5 == "" || $5 == "full" || $5 == "changed") { sha=$2 } END { print sha }' "$report_file")
         if [ -n "$full_sha" ] &&
           git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null &&
@@ -66,6 +68,9 @@ else
   check_command=check:changed
 fi
 set -- run "$check_command"
+if [ "$gate" = changed ] && [ -n "$all_units" ]; then
+  set -- "$@" "$all_units"
+fi
 if [ "$gate" = changed ] && [ -n "$base" ]; then
   set -- "$@" "--base=$base"
 fi

@@ -1,3 +1,7 @@
+import {
+  agentActivityAt,
+  agentListRecord,
+} from "../../../shared/agentMetadata";
 import { createHash } from "node:crypto";
 import {
   validDeskIdentity,
@@ -15,17 +19,38 @@ export function deskSessionFingerprint(value: unknown): string | null {
   return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
 }
 
-/** Called only for a successfully admitted fresh host read, never cached topology. */
-export function observeDeskPanes(
-  desk: WorldDeskRegistry,
-  connectionId: string,
-  generation: number,
+/** Herdr's and harnesses' status words, as the states World observes. */
+export function observedAgentStatus(status: unknown) {
+  const word = String(status);
+  return ["working", "busy", "running"].includes(word)
+    ? "working"
+    : ["idle", "waiting"].includes(word)
+      ? "idle"
+      : ["blocked", "error"].includes(word)
+        ? "blocked"
+        : ["done", "completed"].includes(word)
+          ? "done"
+          : "unknown";
+}
+
+/**
+ * Each agent pane of one fresh host read, with the status and sequence World
+ * admits for it: an agent.list row counts only when it is the pane's one row
+ * and names the pane's current session; otherwise the pane's own status
+ * stands. Panes sharing a terminal are ambiguous and left out.
+ */
+export function admittedAgentPanes(
   panes: readonly Record<string, unknown>[],
-  observedAt: number,
   agents: readonly Record<string, unknown>[] = [],
 ) {
   const agentByPane = new Map<string, Record<string, unknown> | null>();
+  const displayByPane = new Map<string, Record<string, unknown>[]>();
   for (const agent of agents) {
+    if (typeof agent.pane_id === "string") {
+      const rows = displayByPane.get(agent.pane_id) ?? [];
+      rows.push(agent);
+      displayByPane.set(agent.pane_id, rows);
+    }
     if (
       typeof agent.pane_id !== "string" ||
       typeof agent.terminal_id !== "string"
@@ -41,6 +66,14 @@ export function observeDeskPanes(
     if (seen.has(pane.terminal_id)) duplicates.add(pane.terminal_id);
     seen.add(pane.terminal_id);
   }
+  const admitted: {
+    terminalId: string;
+    session: string | null;
+    status: ReturnType<typeof observedAgentStatus>;
+    sequence: unknown;
+    lastActivityAt: number | null;
+    activityMatchesWorld: boolean;
+  }[] = [];
   for (const pane of panes) {
     if (
       typeof pane.agent !== "string" ||
@@ -56,29 +89,61 @@ export function observeDeskPanes(
     const agentSession = deskSessionFingerprint(candidate?.agent_session);
     const agent =
       candidate && agentSession === paneSession ? candidate : undefined;
-    const status =
-      typeof agent?.agent_status === "string" && agent.agent_status
-        ? agent.agent_status
-        : pane.agent_status;
-    const sequence = agent?.state_change_seq ?? pane.state_change_seq;
+    const activity = agentActivityAt(pane, agent);
+    const displayedActivity = agentActivityAt(
+      pane,
+      agentListRecord(
+        typeof pane.pane_id === "string"
+          ? (displayByPane.get(pane.pane_id) ?? [])
+          : [],
+        {
+          pane_id: pane.pane_id,
+          terminal_id: pane.terminal_id,
+          agent: pane.agent,
+        },
+      ),
+    );
+    admitted.push({
+      terminalId: pane.terminal_id,
+      session: paneSession,
+      status: observedAgentStatus(
+        typeof agent?.agent_status === "string" && agent.agent_status
+          ? agent.agent_status
+          : pane.agent_status,
+      ),
+      sequence: agent?.state_change_seq ?? pane.state_change_seq,
+      lastActivityAt: activity,
+      // Display metadata cannot authorize identity/progress. Defer migration
+      // when its activity differs from the strict, session-qualified proof.
+      activityMatchesWorld: activity === displayedActivity,
+    });
+  }
+  return admitted;
+}
+
+/** Called only for a successfully admitted fresh host read, never cached topology. */
+export function observeDeskPanes(
+  desk: WorldDeskRegistry,
+  connectionId: string,
+  generation: number,
+  panes: readonly Record<string, unknown>[],
+  observedAt: number,
+  agents: readonly Record<string, unknown>[] = [],
+) {
+  for (const { terminalId, session, status, sequence } of admittedAgentPanes(
+    panes,
+    agents,
+  )) {
     const identity: DeskIdentity = {
       connection_id: connectionId,
       connection_generation: generation,
-      terminal_id: pane.terminal_id,
-      agent_session_fingerprint: paneSession,
+      terminal_id: terminalId,
+      agent_session_fingerprint: session,
     };
     if (validDeskIdentity(identity))
       desk.observeAgent(
         identity,
-        ["working", "busy", "running"].includes(String(status))
-          ? "working"
-          : ["idle", "waiting"].includes(String(status))
-            ? "idle"
-            : ["blocked", "error"].includes(String(status))
-              ? "blocked"
-              : ["done", "completed"].includes(String(status))
-                ? "done"
-                : "unknown",
+        status,
         observedAt,
         Number.isSafeInteger(sequence) && (sequence as number) >= 0
           ? (sequence as number)

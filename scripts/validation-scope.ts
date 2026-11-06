@@ -1,15 +1,10 @@
-import {
-  affected,
-  buildGraph,
-  coverageOwners,
-  gitChanges,
-  TEST,
-  type Graph,
-} from "./affected";
+import { affected, buildGraph, gitChanges, TEST, type Graph } from "./affected";
+import { readFileSync } from "node:fs";
+import { readCoverageScope } from "./coverage-scope";
 import {
   worldBrowserSuites,
   worldBrowserShards,
-  worldTimedSuites,
+  worldRuntimeSuites,
   webBrowserSuites,
 } from "./world-browser-suites";
 
@@ -23,11 +18,7 @@ export function isToolingPath(path: string): boolean {
     return false;
   return (
     path.startsWith("scripts/agent/") ||
-    [
-      "docs/agent-development.md",
-      "docs/crew-runbook.md",
-      "docs/dispatch-runbook.md",
-    ].includes(path) ||
+    path === "docs/agent-development.md" ||
     /^changes\/[a-z0-9][a-z0-9-]*\.md$/.test(path)
   );
 }
@@ -39,17 +30,11 @@ export function isToolingOnlyChange(paths: readonly string[]): boolean {
 export function isDocumentationPath(path: string): boolean {
   return (
     path.endsWith(".md") &&
+    (!path.startsWith(".agents/") || /^\.agents\/skills\/.+\.md$/.test(path)) &&
+    !["verification/", "quint/", "tools/quint/", "openspec/", ".github/"].some(
+      (prefix) => path.startsWith(prefix),
+    ) &&
     ![
-      "verification/",
-      "quint/",
-      "tools/quint/",
-      "openspec/",
-      ".agents/",
-      ".github/",
-    ].some((prefix) => path.startsWith(prefix)) &&
-    ![
-      "AGENTS.md",
-      "CONTRIBUTING.md",
       // Copied into every release package by scripts/package-release.sh.
       "THIRD_PARTY_NOTICES.md",
       "DEPENDENCY_NOTICES.md",
@@ -68,7 +53,6 @@ export type ValidationSelection = {
   world: string[];
   worldShards: number[];
   web: string[];
-  latency: string[];
   verification: boolean;
   packaging: boolean;
 };
@@ -77,6 +61,25 @@ const NATIVE =
   /^(?:server\/|shared\/|scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
 const WORLD_RUNTIME =
   /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
+
+// Native jobs are the authority for their explicitly named test consumers.
+// Derive these paths so adding a native test cannot leave scoped PR CI skipping it.
+const nativeTestConsumers = new Set<string>();
+for (const [file, jobs] of [
+  ["ci.yml", ["plugin-windows", "launchd"]],
+  ["installer-upgrade.yml", ["upgrade"]],
+] as const) {
+  const workflow = Bun.YAML.parse(
+    readFileSync(
+      new URL(`../.github/workflows/${file}`, import.meta.url),
+      "utf8",
+    ),
+  ) as { jobs: Record<string, { steps: { run?: string }[] }> };
+  for (const job of jobs)
+    for (const step of workflow.jobs[job]!.steps)
+      for (const path of step.run?.match(/[\w./-]+\.test\.[cm]?[jt]sx?/g) ?? [])
+        nativeTestConsumers.add(path.replace(/^\.\//, ""));
+}
 
 export function ordinaryDocumentation(
   paths: readonly string[],
@@ -96,18 +99,36 @@ export function selectValidation(
   paths: readonly string[],
   owns: (path: string) => boolean = () => false,
   testPaths = paths,
+  models: (path: string) => boolean = owns,
 ): ValidationSelection {
   const completeTooling = isToolingOnlyChange(paths);
   // The accepted agent-tooling exception uses unit evidence, not Q41's broad
   // scripts owner. Uncovered agent modules therefore still need the fallback.
   const relevantOwner = completeTooling ? () => false : owns;
-  const complete = affected(graph, paths, worldBrowserSuites, relevantOwner);
-  const tests = affected(graph, testPaths, worldBrowserSuites, relevantOwner);
+  const complete = affected(
+    graph,
+    paths,
+    worldBrowserSuites,
+    relevantOwner,
+    completeTooling ? () => false : models,
+  );
+  const tests = affected(
+    graph,
+    testPaths,
+    worldBrowserSuites,
+    relevantOwner,
+    completeTooling ? () => false : models,
+  );
   // A reverted gate/configuration edit can exist only in the incremental diff.
   // Preserve the tooling exception only when that diff is also tooling-only.
   const tooling =
     completeTooling && !(tests.full && !isToolingOnlyChange(testPaths));
-  if (ordinaryDocumentation(paths, owns) && !tests.full)
+  if (
+    ordinaryDocumentation(paths, owns) &&
+    !tests.full &&
+    !tests.unit.length &&
+    !tests.browser.length
+  )
     return {
       full: false,
       tooling: false,
@@ -117,7 +138,6 @@ export function selectValidation(
       world: [],
       worldShards: [],
       web: [],
-      latency: [],
       verification: false,
       packaging: false,
     };
@@ -133,17 +153,42 @@ export function selectValidation(
       : tests.full
         ? allTests
         : tests.unit;
-  const timed = new Set(worldTimedSuites);
+  if (
+    !full &&
+    paths.some((path) => path === "verification/coverage.json" || owns(path))
+  )
+    chosen.push("scripts/verification-coverage.test.ts");
+  const browserPlanPaths = [
+    "scripts/world-browser-suites.ts",
+    "scripts/world-browser-timings.json",
+    "scripts/world-browser-suites.test.ts",
+  ];
+  const shardTable =
+    paths.includes("scripts/world-browser-suites.ts") ||
+    paths.includes("scripts/world-browser-timings.json") ||
+    paths.includes("scripts/balance-shards.ts");
+  const browserPlanOnly =
+    shardTable &&
+    paths.every(
+      (path) =>
+        browserPlanPaths.includes(path) ||
+        (isDocumentationPath(path) && !owns(path)),
+    );
   const world = new Set(worldBrowserSuites);
   const web = new Set(webBrowserSuites);
-  const latency =
-    !tooling &&
-    (full ||
-      paths.some((path) => WORLD_RUNTIME.test(path)) ||
-      (!complete.full && complete.browser.some((path) => timed.has(path))));
-  const chosenWorld = (
-    full ? worldBrowserSuites : tooling || tests.full ? [] : tests.browser
-  ).filter((path) => !timed.has(path));
+  const runtime =
+    !tooling && !full && paths.some((path) => WORLD_RUNTIME.test(path));
+  const affectedWorld =
+    full || shardTable
+      ? worldBrowserSuites
+      : tooling || tests.full
+        ? []
+        : tests.browser;
+  const chosenWorld = worldBrowserSuites.filter(
+    (path) =>
+      affectedWorld.includes(path) ||
+      (runtime && worldRuntimeSuites.includes(path)),
+  );
   return {
     full,
     tooling,
@@ -157,22 +202,28 @@ export function selectValidation(
       : tooling
         ? "agent tooling"
         : "affected contracts and consumers",
-    unit: chosen.filter((path) => !world.has(path) && !web.has(path)),
-    web: chosen.filter((path) => web.has(path)),
+    unit: [
+      ...new Set(chosen.filter((path) => !world.has(path) && !web.has(path))),
+    ].sort(),
+    web: shardTable ? webBrowserSuites : chosen.filter((path) => web.has(path)),
     world: chosenWorld,
     worldShards: worldBrowserShards.flatMap((shard, index) =>
       chosenWorld.some((path) => shard.includes(path)) ? [index + 1] : [],
     ),
-    latency: latency ? [...worldTimedSuites] : [],
     verification:
       !tooling && (full || (!complete.full && complete.verification)),
     packaging:
       !tooling &&
       (full ||
-        paths.some((path) => NATIVE.test(path) && !TEST.test(path)) ||
-        chosen.some((path) =>
-          /^scripts\/(?:install|plugin|package|homebrew)/.test(path),
-        )),
+        paths.some(
+          (path) =>
+            nativeTestConsumers.has(path) ||
+            (NATIVE.test(path) && !TEST.test(path)),
+        ) ||
+        (!browserPlanOnly &&
+          chosen.some((path) =>
+            /^scripts\/(?:install|plugin|package|homebrew)/.test(path),
+          ))),
   };
 }
 
@@ -184,11 +235,13 @@ export function repositorySelection(
 ): ValidationSelection {
   const complete = gitChanges(root, base, head);
   const tests = testBase === base ? complete : gitChanges(root, testBase, head);
+  const coverage = readCoverageScope(root, base);
   return selectValidation(
     buildGraph(root, complete.tracked, [...complete.deleted, ...tests.deleted]),
     complete.changed,
-    coverageOwners(root),
+    coverage.owns,
     tests.changed,
+    coverage.models,
   );
 }
 
@@ -203,7 +256,7 @@ if (import.meta.main) {
   const root = process.cwd();
   process.exitCode = ordinaryDocumentation(
     gitChanges(root, base).changed,
-    coverageOwners(root),
+    readCoverageScope(root).owns,
   )
     ? 0
     : 1;

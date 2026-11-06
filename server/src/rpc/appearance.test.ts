@@ -41,6 +41,7 @@ function fixture() {
       id: "test",
       method,
       params,
+      requestIsCurrent: () => current,
       sendError: (_context: string, error: unknown) => errors.push(error),
       sendReply: (reply: unknown) => {
         replies.push(reply);

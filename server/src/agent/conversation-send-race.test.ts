@@ -162,6 +162,7 @@ function fakeHerdr(initial: Record<string, unknown>) {
     prompts: [] as unknown[],
   };
   const call: HerdrCall = async (method, params) => {
+    if (method === "pane.read") return { read: { text: "❯ " } };
     if (method === "agent.get") return { agent: state.current };
     if (method === "agent.prompt") {
       state.prompts.push(params);
@@ -1060,5 +1061,90 @@ describe("the delivery ledger", () => {
     expect(ledger.list("p")).toMatchObject([
       { state: "misdelivered", delivered_to: "session B" },
     ]);
+  });
+});
+
+describe("durable record submission uses Chat's existing guarded path", () => {
+  test("a denied durable admission sends no input", async () => {
+    const path = await transcript("durable-denied");
+    const { state, call } = fakeHerdr(claude(path));
+    const source = chat(call);
+    try {
+      const read = await source.read({ pane_id: "w1:p1" });
+      expect(
+        await source.send({
+          pane_id: "w1:p1",
+          text: "Answer to q-fixture: Proceed",
+          session_fingerprint: read.session_fingerprint!,
+          beforeSubmit: async () => false,
+        }),
+      ).toMatchObject({ status: "refused", reason: "changed" });
+      expect(state.prompts).toEqual([]);
+    } finally {
+      source.dispose();
+    }
+  });
+  test("the native session is checked again after awaiting durable admission", async () => {
+    const path = await transcript("durable-before");
+    const other = await transcript("durable-after");
+    const { state, call } = fakeHerdr(claude(path));
+    const source = chat(call);
+    try {
+      const read = await source.read({ pane_id: "w1:p1" });
+      expect(
+        await source.send({
+          pane_id: "w1:p1",
+          text: "Answer to q-fixture: Proceed",
+          session_fingerprint: read.session_fingerprint!,
+          beforeSubmit: async () => {
+            await Promise.resolve();
+            state.current = claude(other);
+            return true;
+          },
+        }),
+      ).toMatchObject({ status: "refused", reason: "changed" });
+      expect(state.prompts).toEqual([]);
+    } finally {
+      source.dispose();
+    }
+  });
+  test("final lease guard and actual native queued-recipient evidence stay distinct", async () => {
+    const path = await transcript("durable-queued");
+    const { state, call } = fakeHerdr(claude(path));
+    const source = chat(call);
+    try {
+      const read = await source.read({ pane_id: "w1:p1" });
+      let admitted = false;
+      let evidence: string | null | undefined;
+      const target = {
+        pane_id: "w1:p1",
+        text: "Answer to q-fixture: /compact\n!pwd\n# remember",
+        session_fingerprint: read.session_fingerprint!,
+        beforeSubmit: async () => {
+          admitted = true;
+          return true;
+        },
+      };
+      expect(
+        await source.send({ ...target, guard: () => false }),
+      ).toMatchObject({ status: "refused", reason: "changed" });
+      expect(state.prompts).toEqual([]);
+      state.onPrompt = () => {
+        expect(admitted).toBe(true);
+      };
+      expect(
+        await source.send({
+          ...target,
+          guard: (info) => info.pane_id === "w1:p1",
+          submitted: (fingerprint) => {
+            evidence = fingerprint;
+          },
+        }),
+      ).toMatchObject({ status: "sent" });
+      expect(evidence).toBe(read.session_fingerprint);
+      expect(state.prompts).toHaveLength(1);
+    } finally {
+      source.dispose();
+    }
   });
 });

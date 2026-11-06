@@ -1,3 +1,6 @@
+import type { EffectState } from "./effect-recovery";
+import type { BaseState } from "./observation-base";
+import type { BindingModelState } from "./binding-resolution";
 import type { DrainState } from "./runtime-drain";
 import type { CreditState } from "./chunk-credits";
 import type { AssemblyState } from "./chunk-assembly";
@@ -36,6 +39,9 @@ type RefreshState = {
   status: string;
 };
 export type TraceState = CreditState & {
+  effect: EffectState;
+  incarnation: number;
+  binding: BindingModelState;
   recovery: RecoveryState;
   authority: AuthorityState;
   creation: CreationState;
@@ -46,7 +52,8 @@ export type TraceState = CreditState & {
   op: string;
   target: number;
   hosts: Host[];
-  s: RefreshState;
+  s: RefreshState & BaseState;
+  host: number;
   present: number[];
   relevant: number[];
   bound: number;

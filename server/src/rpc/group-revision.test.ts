@@ -27,6 +27,7 @@ test("browser Group confirmations bind the reviewed Board revision through the r
         method,
         params,
         id: "group-edit",
+        requestIsCurrent: () => true,
         services: {
           board: () => board,
           publishBoardChanged: (revision: number) => published.push(revision),

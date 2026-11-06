@@ -44,8 +44,15 @@ export function defaultAuthTokenPath(
   homeDir = homedir(),
   platform = process.platform,
   appDataDir = process.env.APPDATA,
+  environment: Record<string, string | undefined> = process.env,
 ): string {
-  return defaultDataFile("auth-token", homeDir, platform, appDataDir);
+  return defaultDataFile(
+    "auth-token",
+    homeDir,
+    platform,
+    appDataDir,
+    environment,
+  );
 }
 
 function pathUnder(path: string, root: string | undefined): string | null {
