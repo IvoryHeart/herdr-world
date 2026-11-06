@@ -936,9 +936,9 @@ export function WorkspaceInspectorHost({
       {workspace ? (
         <div
           className="workspace-inspector-body"
-          ref={(element) =>
-            element?.toggleAttribute("inert", presentationStale)
-          }
+          ref={(element) => {
+            element?.toggleAttribute("inert", presentationStale);
+          }}
         >
           <div
             className={`workspace-inspector-resource inspector-files-resource ${

@@ -61,13 +61,14 @@ if (process.env.HERDR_TOWN_SIGN_DOM_TEST !== "1") {
         "[data-building-sign]",
       )!;
       expect(cold.isConnected).toBe(true);
-      expect(frames).toBe(1);
+      // React 19 StrictMode replays committed callback refs on mount.
+      expect(frames).toBe(2);
       signs.update(() => 1);
       expect(cold.style.opacity).toBe("1");
       expect(cold.style.visibility).toBe("visible");
       await act(async () => root.render(render("Updated cached status")));
       expect(container.querySelector("[data-building-sign]")).toBe(cold);
-      expect(frames).toBe(1);
+      expect(frames).toBe(2);
       await act(async () => root.render(null));
       expect(cold.isConnected).toBe(false);
       signs.update(() => {
@@ -78,7 +79,7 @@ if (process.env.HERDR_TOWN_SIGN_DOM_TEST !== "1") {
         "[data-building-sign]",
       )!;
       expect(next).not.toBe(cold);
-      expect(frames).toBe(2);
+      expect(frames).toBe(4);
       signs.update(() => 0);
       expect(next.style.visibility).toBe("hidden");
       signs.update(() => 1);

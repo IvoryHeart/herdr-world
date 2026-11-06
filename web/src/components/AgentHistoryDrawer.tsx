@@ -760,7 +760,9 @@ export function AgentHistoryDrawer({
         } ${wide ? "is-wide" : ""}`}
         aria-label="Agent session"
         aria-hidden={!open}
-        ref={(node) => node?.toggleAttribute("inert", !open)}
+        ref={(node) => {
+          node?.toggleAttribute("inert", !open);
+        }}
       >
         <div className="agent-history-drawer-head">
           <div className="agent-history-identity">

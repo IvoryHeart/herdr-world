@@ -54,7 +54,7 @@ const icon = (control: BoardControl) => {
 
 /** One measured row: primary modes stay visible; secondary actions remain in the menu. */
 export function BoardControls(props: {
-  workRef: RefObject<HTMLButtonElement>;
+  workRef: RefObject<HTMLButtonElement | null>;
   workOpen: boolean;
   onWork(): void;
   count: number;

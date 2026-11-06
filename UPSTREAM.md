@@ -55,7 +55,7 @@ Tabs and More reachable across Town, Board and Spaces. Upload completion remains
 bound to the original draft or terminal; failed Direct insertion retains the path
 without replaying input. World retains its managed-window tab sheet and terminal
 screen Back layer; upstream's per-layer history guards and departure handling are
-adapted to those layers. React 18 requires synchronous tool-gesture state before
+adapted to those layers. Tool gestures capture state synchronously before
 native blur. Herdr setup now pins 0.9.5 with the official five-platform checksums;
 its protocol remains 22 and endpoint generation remains 1. Herdr's hotfixes belong
 to the external runtime, including its Codex integration migration; World does not
@@ -84,7 +84,7 @@ install or restart an external runtime.
 
 All eight incoming commits, including release metadata, are classified in the
 ledger. The upstream version-only release commit is adapted to World's existing
-0.2.7 identity; React 18, asset budgets and U1's DOMPurify/undici updates remain.
+0.2.7 identity; World asset budgets and U1's DOMPurify/undici updates remain.
 There are no incoming workflow/control edits or React dependency changes. The
 three outstanding workflow/React decisions are reassessed for this frozen source
 in [the follow-up assessment](docs/upstream-follow-ups.md#assessment-for-source-b84ccd53-22-october-2026);
@@ -124,9 +124,12 @@ commit; [adoption policy](docs/upstream-policy.md) requires human approval of ne
 or changed exceptions and reconsideration of outstanding work each source sync.
 Upstream's legacy service migration
 and browser-test removal are excluded; World already checks macOS listener
-conflicts before installing a service. React and React DOM remain on 18.3.1:
-upstream's React 19 upgrade stalls terminal input during World's dense topology
-refresh. Dialog callback freshness is adapted without that dependency upgrade.
+conflicts before installing a service. World now uses React and React DOM 19.3.1
+and their 19.x types, matching Roamgate's version range. A version-scoped Bun patch
+corrects the development changed-prop diagnostic walk's width counter, removing
+the dense-refresh input stall without disabling diagnostics or changing production
+React. See the [measurements and patch maintenance](docs/react-19.md). Dialog
+callback freshness and qualified focus guards remain in place.
 
 Future source refreshes should merge from the recorded upstream head, resolve
 World-specific conflicts explicitly, and update this record and the changelog.
@@ -151,14 +154,15 @@ The post-v0.8.6 main refresh adds Ranger Steer/Queue messages, bounded collapsib
 model reasoning, selection-preserving output focus and clearer Composer mode/shortcut
 controls. Waiting questions retain their selected World runtime generation; a
 replacement holds the queue instead of retargeting. Compatible typebox, xterm,
-Radix and lint updates are adopted. React remains 18 and the Roamgate-only CodeQL
-workflow remains excluded under World policy; both dispositions require owner review.
+Radix and lint updates are adopted. The Roamgate-only CodeQL workflow remains
+excluded under World policy and requires owner review. The later React migration
+is recorded above.
 
 The v0.8.7 and following main refresh adds History Chat/Timeline views with a
 shared Ranger/History conversation minimap, latest workspace PR/MR status,
 Inspector refresh and commit navigation, manual Codex session linking and
 remote Codex transcript lookup, composer command-picker styling and mobile toast
-banners. World retains React 18 callback freshness, qualified resource clients,
+banners. World retains callback freshness, qualified resource clients,
 its measured terminal focus guard and its screen/panel/navigation/popup Back
 ordering. Codex links require preview and confirmation against the captured
 runtime and foreground process; the external runtime does not offer an atomic

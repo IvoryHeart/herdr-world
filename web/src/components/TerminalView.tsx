@@ -4148,12 +4148,12 @@ export function TerminalView({
         <div
           className="terminal-pane-toolbar"
           aria-label="Pane actions"
-          ref={(element) =>
+          ref={(element) => {
             element?.toggleAttribute(
               "inert",
               s.status !== "connected" || !connectionClient.isCurrent(),
-            )
-          }
+            );
+          }}
         >
           {s.endpointAvailability[pane.terminal_id] &&
           store.terminalScrollReason(pane.terminal_id) ? (

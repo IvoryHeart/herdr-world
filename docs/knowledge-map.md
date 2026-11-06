@@ -17,6 +17,9 @@ decisions and are not current operational guidance.
 
 Browser startup has dedicated [fresh import-order coverage](../web/src/storeImportOrder.test.ts)
 and a [real Vite application-entry browser check](../web/src/appStartup.browser.test.ts).
+React version evidence and the development diagnostic patch are maintained in
+[React 19 migration](react-19.md), with deterministic coverage in
+[the installed-renderer regression](../web/src/testing/reactPerformanceTracks.test.ts).
 Notification wiring is described in the [World startup guide](../web/src/world/README.md#application-startup-and-owner-questions).
 
 | When changing | Current contract | Start in source | Focused evidence or runbook |

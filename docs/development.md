@@ -1,6 +1,6 @@
 # Development
 
-Herdr World uses Bun 1.4.4, React/Vite and a Bun server. Herdr is an external runtime.
+Herdr World uses Bun 1.4.4, React 19/Vite and a Bun server. Herdr is an external runtime.
 
 ```bash
 bun install --frozen-lockfile
@@ -31,6 +31,12 @@ folder. Spawn `server/src/index.ts` only for what needs a real process: signals 
 exit codes, the lock between processes, a home folder of its own, or fakes on
 `PATH`. A test that saves source settings should switch the GitHub source off
 first, because `gh` keeps its own state in the process's home folder.
+
+React DOM's development renderer has a version-scoped Bun patch that enforces
+its existing changed-prop diagnostic width limit. Install with the frozen lockfile
+so the patch applies; retain it during dependency refreshes until the installed
+renderer regression passes without it. See [React 19 measurements and patch
+maintenance](react-19.md).
 
 ## Development tools
 
