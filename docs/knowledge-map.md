@@ -7,7 +7,11 @@ were removed.
 Use this map to locate ownership, then read the relevant contract, source and focused
 test. For end-to-end module and data-flow navigation, use the
 [foundation source guide](foundation-guide.md); for visual and terminal tasks,
-use the [World component routes](../web/src/world/README.md).
+use the [World component routes](../web/src/world/README.md). For World's visual
+rules across every surface (shell, Town, Board, Desk, Spaces, windows, trays,
+dialogs and phone), see the [World style guide](design/style-guide.md);
+it separates shipping facts, seven owner-approved design directions and remaining
+detailed proposals. Token and component adoption follows in separate PRs.
 [Current OpenSpec specs](../openspec/specs/) describe maintained product
 behavior; source and tests show its implementation. [Active changes](../openspec/changes/)
 hold deltas and decisions at different delivery stages. Check their task state with
