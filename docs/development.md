@@ -112,7 +112,13 @@ pending or not-reached phases. Repeated phases appear in execution order. These
 are failure diagnostics, not latency assertions. Native Bun hook/test timeouts
 also report unfinished phases at finalization. Timer/reader release is
 unconditional on stream or exit errors; cleanup failures retain an earlier
-failure as their cause. No suite retries a failed schedule. The
+failure as their cause. Final directory removal awaits the installer's shared
+cleanup helper: retryable filesystem errors get at most five yielding retries
+(1.5 seconds of total backoff) after children are reaped. Persistent locks still
+fail teardown. This handles Windows handles retained briefly after process exit;
+it does not retry compilation, crash setup or recovery. The installer's portable
+filesystem-denial and native Windows lock tests cover the shared removal policy.
+No suite retries a failed schedule. The
 [harness controls](../server/src/storage/testing/crash-harness.test.ts) use virtual
 time and process doubles for budget separation, diagnostic and cleanup failures.
 

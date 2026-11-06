@@ -27,6 +27,14 @@ missing or unreadable named records keep their error. While an agent is
 starting or waiting, Chat points you to Terminal rather than suggesting an
 integration install. Send still needs an identified conversation.
 
+Malformed or oversized recorded questions stay **Terminal-only**: Chat does
+not drop fields or fall back to screen answer keys. Review buttons require the
+whole ordered list of questions to match the recorded call, as well as its
+header chips. Literal wildcard and code contents remain part of the comparison.
+Ambiguous asterisk formatting stays Terminal-only. If the transcript cannot be
+checked, the screen question remains visible without answer keys.
+A failed history read still shows its **Refresh** error beside any question card.
+
 ## What Chat does
 
 On Unix SSH hosts, Claude Code sessions reported by Herdr as UUIDs are resolved
@@ -34,14 +42,16 @@ in that host's `~/.claude/projects/<project>/<UUID>.jsonl`. The transcript is re
 through the captured connection's SSH file adapter. Missing files, duplicate UUID
 matches and SSH errors never use a local transcript. A readable, reported session
 can use the same session-checked Send as a local conversation. When no session
-has been reported, Chat stays empty; use **Details** for session and integration
-information.
+has been reported, Chat shows only a verified folder-trust question if present;
+use **Details** for session and integration information.
 The projects root is resolved on that host, including when it is a symlink.
 Discovered paths must name the requested UUID directly inside one project under
 that root; stat metadata cannot redirect the read to a different transcript.
 
-- Reads only the conversation read model described below. It never reads the
-  terminal screen and never shows terminal output.
+- Reads the conversation read model described below. Messages come from the
+  transcript; pending questions and command menus also use a checked screen
+  read. Unrecognised prompts show the visible bottom block with its last row
+  in view and a way to the Terminal.
 - Sends with Herdr's `agent prompt`, and only to a conversation that Herdr ties
   to the pane (see [Binding](#binding)). Herdr refuses a blocked agent; answer
   its question first.
@@ -116,10 +126,50 @@ that root; stat metadata cannot redirect the read to a different transcript.
 
   It shows an ask card with the complete request (the whole command, the file
   and its edit, or a form's header and answers so far), the question and each
-  option. Anything else gets no options and **Answer in the Terminal**: plain
-  numbered output, a y/n line, an unnumbered menu (such as Claude Code's
-  folder trust), a box or form cut off by the capture, or a request the
-  harness shows shortened.
+  option. Anything else gets no options and **Answer in the Terminal** with
+  the reason: plain numbered output, a y/n line, an unnumbered menu, a box or
+  form cut off by the capture, or a request the harness shows shortened. The
+  card then shows the prompt's whole block as the terminal draws it (up to its
+  last 40 rows, blank runs folded), not a clipped tail.
+- Claude Code's questions come from its transcript too. Claude records each
+  ask-the-user call (questions, headers, options with descriptions, and
+  whether several options may be picked) before the user answers. While that
+  call is the newest open one in the pane's reported session, Chat joins it
+  with the screen: the card keeps the screen's keys only when the screen shows
+  one of those questions with exactly its options and descriptions (wrapped
+  lines compared as one) and, for a form, the same header chips, or the form's
+  own review of those questions. Otherwise the card shows every recorded
+  question, its options and descriptions, a disabled "Type something" field
+  and "Chat about this", with **Answer in the Terminal** and the reason: a
+  question the screen does not show whole, a multi-select question (Chat does
+  not pick several options yet), or a typed text or number question. The
+  fingerprint covers the call ID and the recorded questions as well as the
+  screen, so an answer is refused if either changes. A guessed conversation
+  never supplies questions. Needs you shows the same card.
+- Claude Code's folder-trust question (the complete "Accessing workspace:"
+  heading and folder, "Quick safety check: …", the unnumbered choices
+  "No, exit" and "Yes, I trust this folder", the ❯ cursor on one, and
+  "Enter to confirm · Esc to cancel") comes before Claude has a session.
+  For folders with pre-approved tool grants, Claude can instead offer
+  "No, continue without these permissions": declining continues Claude without
+  those grants rather than exiting. Chat preserves that label and action.
+  Chat and Needs you show the full safety question and warnings above the
+  choices without a collapsed preview. Chat shows the card only while Herdr reports
+  Claude in that pane with no session. A click on a choice calls
+  `agent_conversation.trust` with the card's fingerprint. Without a session,
+  the service binds the input to a pre-session witness: its own
+  connection/runtime, the pane, its terminal, Claude with no session reported,
+  and the pane's foreground process group and processes (from
+  `pane.process_info`). Before every key it reads the witness and the whole
+  question again and checks that Herdr's record does not change across that
+  check. If the cursor is on the other choice, it presses one arrow key, then
+  waits for the same question with the cursor on the choice, and only then
+  presses Enter. A session arriving, another process or terminal, another
+  question, a cursor that did not move (Claude ignores keys just after the
+  question opens) or input already in flight to that pane refuses with no
+  further key. Digits are never used, nothing is accepted automatically, and
+  sending messages still needs a session. The answer and key-press paths
+  never take a trust card's fingerprint.
 - Picking an option, or pressing its number while that card has focus, calls
   `agent_conversation.answer`. The service checks Herdr's state, rereads the
   screen, and checks Herdr's state again (status, session, title, state
@@ -404,6 +454,7 @@ compression does not grant a stronger binding or enable Send for a guess.
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
 | `agent_conversation.press` | `pane_id`, `key`, `session_fingerprint`, optional `menu_fingerprint` and `text` (a menu field's line) | `{ status: "sent", key, text?, menu }` (the menu after the key, or null) or `{ status: "refused", reason, message, menu }` |
+| `agent_conversation.trust` | `pane_id`, `prompt_fingerprint`, `choice` (`cancel` or `confirm`) | `{ status: "sent", choice, label, acknowledged }` or `{ status: "refused", reason, message, prompt }`; Claude's folder-trust question before a session only |
 | `agent_conversation.steps` | `pane_id`, `call_ids` (at most 500) | `{ steps }`: the step model for those tool calls, by the harness's call ID; calls it cannot find are left out |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 | `agent_worktree.get` | qualified `subject` (connection, generation, pane/terminal, session), optional `refresh` | Worktree observation with revision/time, candidates and attributed evidence; selected candidate plus subject/revision is submitted with resource requests |
@@ -411,7 +462,10 @@ compression does not grant a stronger binding or enable Send for a guess.
 
 A conversation carries `agent`, `agent_status`, `terminal_title`, `running_tool`
 (the open tool call: its ID, name, summary and start), `pending_prompt` (the
-question a blocked agent is waiting on, or null), `session_binding`,
+question a blocked agent is waiting on, or null; with `asked` for Claude's
+recorded questions, `unanswerable` for the reason no options are offered,
+`screen` for a prompt shown as drawn, and `trust` for the pre-session
+folder-trust question), `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
 assistant message), `quest` (see [Quests](#quests)) and a `status` of `ok` or
 `unavailable`. Each message has a

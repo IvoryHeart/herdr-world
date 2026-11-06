@@ -10,7 +10,8 @@ import {
 import { agentMarkKind } from "./agentMarks";
 import { AgentMark } from "../components/AgentMark";
 import { ChatAfterBlocks } from "../components/chat/blocks/after";
-import type { AnswerResult } from "../components/chat/types";
+import { chooseTrust } from "../components/chat/blocks/trust";
+import type { AnswerResult, TrustChoice } from "../components/chat/types";
 import { MarkdownPreview } from "../components/markdown";
 import { AgentHoverCard } from "./AgentHoverCard";
 import { leafOwner, useConversationRead } from "./conversationRead";
@@ -465,6 +466,16 @@ function NeedsYouAgent({
       setAnswering(false);
     }
   };
+  // Claude's folder-trust question, as in Chat.
+  const trust = async (choice: TrustChoice) => {
+    const client = leafOwner(leaf);
+    if (!prompt?.trust || !client || answering) return;
+    setAnswering(true);
+    setNotice("");
+    setNotice(await chooseTrust(client, leaf.pane.pane_id, prompt, choice));
+    setAnswering(false);
+    read.retry();
+  };
   // The report on screen belongs to the current stop only once read for it.
   const stale = !conversation || read.readFor !== stop;
   const current = stop !== null && !stale;
@@ -540,16 +551,21 @@ function NeedsYouAgent({
             : null
         }
         prompt={asking}
-        renderPromptMessage={(message) => (
-          <NeedsYouText>
+        renderPromptMessage={(message) =>
+          asking?.trust ? (
             <div className="needs-you-markdown">{message}</div>
-          </NeedsYouText>
-        )}
+          ) : (
+            <NeedsYouText>
+              <div className="needs-you-markdown">{message}</div>
+            </NeedsYouText>
+          )
+        }
         agent={name}
         answering={answering}
         notice={notice}
         onAnswer={(key, text) => void answer(key, text)}
         onOpenTerminal={onOpenTerminal}
+        onTrust={(choice) => void trust(choice)}
       />
       {answered && !answered.acknowledged ? (
         <div className="needs-you-replies">

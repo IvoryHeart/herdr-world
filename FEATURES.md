@@ -134,6 +134,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     not checked** until transcript evidence. Native working-state admission
     shows queued message bubbles with the recipient and time; blocked sends
     preserve the draft and the refusal reason.
+  - Claude's questions show from its own record: every question, header,
+    option and description, and whether several can be picked. Answer buttons
+    appear only when the terminal shows that same question; otherwise the card
+    keeps the whole question with **Answer in the Terminal** and the reason.
+    An unrecognised prompt is shown as the terminal draws it. Before Claude
+    has a session, its folder-trust question shows **No, exit** and **Yes, I
+    trust this folder**. With pre-approved grants the decline choice can be
+    **No, continue without these permissions**, which continues without those
+    grants instead of exiting. Chat and Needs you show the folder, full safety
+    text and warnings above the choices. A click is checked against that
+    question and Claude process, then moves Claude's selection and presses Enter.
   - Harness command menus, such as Claude Code's and Codex's `/model` and
     `/permissions`, appear as a menu card: numbered options, the cursor, the
     footer's keys as buttons and any text field. Each key is checked against
@@ -504,8 +515,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   highlighted; **Other…** opens a typed answer) or one answer field with a send
   icon, plus why an owner alert may not have arrived; **!** blocked agents show
   the agent's own question with its options as quick replies, answered and
-  confirmed as Chat does, with **Open Terminal** when the answer could not be
-  confirmed; **✓** finished work lists done agents and idle agents the service saw
+  confirmed as Chat does (the same card, including Claude's recorded questions
+  and its folder-trust choices), with **Open Terminal** when the answer could
+  not be confirmed; **✓** finished work lists done agents and idle agents the service saw
   finish in the last 12 hours, with no answer row (Desk's To review lane can
   also list idle agents from recent transcript turns). Every item names its
   agent and marks an unverified asker; the name and the chat icon (**Open in

@@ -8,6 +8,7 @@ export const CONVERSATION_RPC_METHODS: ReadonlySet<string> = new Set([
   "agent_conversation.send",
   "agent_conversation.answer",
   "agent_conversation.press",
+  "agent_conversation.trust",
   "agent_conversation.dismiss",
 ]);
 
@@ -33,6 +34,22 @@ export async function conversationRpc(
           .slice(0, 500),
       }),
     };
+  if (method === "agent_conversation.trust")
+    return source.trust
+      ? source.trust({
+          pane_id: paneId,
+          prompt_fingerprint:
+            typeof p.prompt_fingerprint === "string"
+              ? p.prompt_fingerprint
+              : "",
+          choice: typeof p.choice === "string" ? p.choice : "",
+        })
+      : {
+          status: "refused",
+          reason: "changed",
+          message: "This agent's trust question cannot be answered from Chat.",
+          prompt: null,
+        };
   const result =
     method === "agent_conversation.get"
       ? await source.read({ pane_id: paneId })

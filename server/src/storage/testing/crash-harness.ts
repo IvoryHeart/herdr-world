@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { removeInstallerFixture } from "../../../../scripts/installer-upgrade";
 import { spawnCrashChild } from "./crash-child";
 
 type Phase = "compile" | "spawn" | "marker" | "kill" | "reopen";
@@ -346,7 +347,7 @@ export function createCrashFixture(options: {
         ),
       );
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      await removeInstallerFixture(root);
     }
   });
   return {

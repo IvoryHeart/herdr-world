@@ -464,6 +464,22 @@ text. It works for any agent you open from Town, Board or Desk.
    the option, type a single-line reply and choose **Send text answer**. Chat
    checks the native text editor before submitting. Already-open native text
    editors and unsupported menus stay in the Terminal.
+   Claude's questions also come from its own record, so the card shows each
+   question, header, option and description even when the terminal cuts them
+   off. Chat offers answer buttons only when the terminal shows that same
+   question and options; otherwise, and for questions where several options
+   can be picked, it shows the whole question with **Answer in the Terminal**
+   and says why. A prompt Chat does not recognise is shown as the terminal
+   draws it, never as a clipped last line.
+   Before Claude starts its session it may ask whether to trust the folder.
+   Chat and **Needs you** show that question with **No, exit** and **Yes, I
+   trust this folder**, the one under Claude's cursor marked. The full folder,
+   safety question and warnings appear above the choices. For pre-approved tool
+   grants the decline choice may be **No, continue without these permissions**:
+   it continues Claude without those grants instead of exiting. Your click is
+   the choice: Chat checks it is still the same question in the same Claude
+   process with no session, moves Claude's selection if needed, checks again
+   and presses Enter. Chat opens once the session starts.
    Commands such as `/model` and `/permissions` open the harness's own menu;
    Chat shows it on a menu card with the cursor marked. Pick a numbered
    option, or use the key buttons the menu names (**↑**/**↓**, **Enter**,
