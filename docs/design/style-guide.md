@@ -38,6 +38,27 @@ and the product's own Lucide icons, add local styles for the proposed rules,
 and use synthetic names. Specimens are not product screenshots or evidence of
 reusable shipping APIs.
 
+**For the owner's review of PR #648:** start with [World today](#world-today)
+to orient yourself, then compare the linked specimens and recommendations
+below. Check whether you want these rules used in later UI work. The seven
+decisions match the PR description; all remain pending, and the recommendation
+is **yes** for each.
+
+| # | What to check | Recommendation |
+| --- | --- | --- |
+| 1 | Compare the Shell and Town cards in [Skins](#skins). Should surfaces floating over Town share its Town appearance? | Yes: extend the Town skin to those surfaces. |
+| 2 | Compare the soft and solid buttons in [Dos and don'ts](#dos-and-donts), and the proposed [button set](#button) with Desk's current lane actions. | Yes: one soft-accent primary; reserve solid accent for indicators, including replacing Desk's solid state-coloured action buttons. |
+| 3 | Look at the dashed touch targets in the [phone header](#phone-header) and the phone [card](#card). | Yes: every phone control gets a 44 × 44 px hit area. |
+| 4 | Review the [spacing](#spacing), [type](#type), and [radius and control-height](#radius-and-control-heights) scales. | Yes: shared scale tokens, adopted view by view. |
+| 5 | Read the measured contrast gaps in [Accessibility](#accessibility), including the count digits. This decision approves a repair, not a final colour sample. | Yes: a separate token PR fixes muted text, light-theme accent links and count digits, with an accessible badge foreground/fill pairing. |
+| 6 | Review the proposed [state-colour map](#state-colours), especially Working. | Yes: one map across views, with base Working changing from yellow to blue. |
+| 7 | Read principle 6 in [Principles](#principles). | Yes: change Roamgate-derived component CSS only when touched, and offer token fixes upstream. |
+
+Reply in one batch, for example: **“Approve all seven”** or **“Approve 1, 3–7;
+change 2 to …”**. Approval here chooses the direction for later implementation
+PRs. This PR changes only documentation; there is no new product behaviour to
+exercise in a running World instance.
+
 ## Contents
 
 - [Scope: every surface](#scope-every-surface)
