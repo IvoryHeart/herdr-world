@@ -73,6 +73,8 @@ if (process.env.BOARD_CONTROLS_DOM_TEST !== "1") {
           h(BoardControls, {
             workRef: { current: null },
             workOpen: false,
+            appearance: { surface: "theme", statusColors: {} },
+            onAppearance() {},
             count: 0,
             onWork() {},
             onHome() {},
