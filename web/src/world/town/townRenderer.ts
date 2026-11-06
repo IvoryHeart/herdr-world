@@ -845,6 +845,7 @@ export async function createTownRenderer(
       state.summonedKeys,
       state.askingKeys ?? new Set(),
       hosts,
+      state.awayKeys ?? new Set(),
     );
     stats.actorsReconciled += actors.reconciled;
     for (const hostKey of hosts ?? actorWorld.buildings.keys())
@@ -923,7 +924,8 @@ export async function createTownRenderer(
     },
     actorPosition(key) {
       const actor: TownActor | undefined = actors.actors.get(key);
-      return actor
+      // An agent out of the front door (in the bin) is drawn by the bus layer.
+      return actor && actor.mode !== "out"
         ? { x: actor.x, y: actor.y, seated: actor.mode === "seat" }
         : null;
     },

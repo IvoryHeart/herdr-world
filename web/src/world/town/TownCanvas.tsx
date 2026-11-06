@@ -56,6 +56,8 @@ import {
 } from "./townFoldedActivity";
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
+import { markOut, TownBusLayer, useTownBin } from "./TownBusLayer";
+import { worldBinStore } from "../bin/useWorldBin";
 import "./townBoard.css";
 import "./townTeams.css";
 
@@ -208,6 +210,7 @@ export function TownCanvas({
   const worldRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<TownRendererHandle | null>(null);
   const pennants = useRef(new Set<HTMLElement>());
+  const riderNodes = useRef(new Set<HTMLElement>());
   const [failure, setFailure] = useState(false);
   const [ready, setReady] = useState(false);
   const capture = useDrawReadiness("town", shellRef, () =>
@@ -250,6 +253,8 @@ export function TownCanvas({
   });
   const { model, placed, layout, teams, targets, deskBadges, blockedSince } =
     semantics;
+  const townBin = useTownBin(model, layout);
+  const awayKeys = townBin.away;
   // A desk just pinned keeps the cell it has; save it so it stays there.
   const deskPinned = model.deskPins;
   useEffect(() => {
@@ -272,6 +277,7 @@ export function TownCanvas({
     completionSeenKeys,
     summonedKeys,
     askingKeys,
+    awayKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -293,6 +299,7 @@ export function TownCanvas({
     completionSeenKeys,
     summonedKeys,
     askingKeys,
+    awayKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -397,6 +404,7 @@ export function TownCanvas({
         signs.update((hostKey) => renderer.roofAlpha(hostKey));
         if (level !== "overview")
           for (const pennant of pennants.current) markAway(pennant, renderer);
+        for (const rider of riderNodes.current) markOut(rider, renderer);
       }
     }
     hud.framed();
@@ -434,6 +442,7 @@ export function TownCanvas({
     completionSeenKeys: latest.current.completionSeenKeys,
     summonedKeys: latest.current.summonedKeys,
     askingKeys: latest.current.askingKeys,
+    awayKeys: latest.current.awayKeys,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -558,6 +567,7 @@ export function TownCanvas({
     completionSeenKeys,
     summonedKeys,
     askingKeys,
+    awayKeys,
     calm,
   ]);
 
@@ -780,6 +790,14 @@ export function TownCanvas({
         aria-hidden={!ready}
       >
         <TownTeamsLayer teams={teams} />
+        <TownBusLayer
+          bin={townBin.bin}
+          route={townBin.route}
+          riders={townBin.riders}
+          riderNodes={riderNodes.current}
+          renderer={rendererRef}
+          firstSeen={worldBinStore().firstSeen}
+        />
         <TownHudContext.Provider value={hud}>
           <TownWorldLayer
             hud={hud}

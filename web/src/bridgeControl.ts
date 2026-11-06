@@ -8,6 +8,7 @@ export interface BridgeControlMsg {
     | "world_watchlist_changed"
     | "world_desk_changed"
     | "world_board_changed"
+    | "world_bin_changed"
     | "world_ledger_changed"
     | "world_ask_delivery_changed"
     | "world_profiles_changed"

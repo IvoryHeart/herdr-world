@@ -1,0 +1,124 @@
+/* Town's bus: stops at road crossings, binned agents and the bus (TownBusLayer). */
+.town-bus-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.town-bus-stop {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  /* Never smaller on screen than at room zoom, so a phone can tap it. */
+  translate: -50% -100%;
+  scale: max(1, var(--iz));
+  transform-origin: 50% 100%;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  background: #2a5bd7;
+  border: 1px solid #f6f2e6;
+  border-radius: 50%;
+  box-shadow: 0 2px 0 -1px #3b3b3b;
+  cursor: pointer;
+  pointer-events: auto;
+}
+/* The pole. */
+.town-bus-stop::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 1px;
+  height: 7px;
+  background: #3b3b3b;
+}
+.town-bus-stop[data-waiting] {
+  background: #d7432a;
+}
+.town-bus-stop em {
+  position: absolute;
+  left: calc(100% + 2px);
+  font-style: normal;
+  font-size: 7px;
+  color: var(--town-text, #fff);
+  text-shadow: 0 0 2px #000;
+}
+
+/* A waiting agent stands at its stop once its actor is out of the door. */
+.town-bin-rider {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+.town-bin-rider img {
+  display: block;
+  width: 16px;
+  image-rendering: pixelated;
+}
+.town-bin-rider:not([data-out]),
+.town-bin-rider[data-boarded],
+.town-bin-rider[data-queued] {
+  visibility: hidden;
+}
+/* Out of the front door: up to the pavement, then along it to the stop. */
+.town-bin-rider[data-out][data-walk] {
+  animation: town-bin-walk-x var(--tx) linear var(--ty) backwards;
+}
+.town-bin-rider[data-out][data-walk] img {
+  animation: town-bin-walk-y var(--ty) linear backwards;
+}
+@keyframes town-bin-walk-x {
+  from {
+    translate: var(--dx) 0;
+  }
+}
+@keyframes town-bin-walk-y {
+  from {
+    translate: 0 var(--dy);
+  }
+}
+
+.town-bus {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  width: 44px;
+  height: 20px;
+  margin: -12px 0 0 -22px;
+  padding: 0;
+  background: #d7432a;
+  border: 2px solid #3b3b3b;
+  border-radius: 5px 7px 3px 3px;
+  box-shadow: 0 3px 0 -1px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.town-bus[hidden] {
+  display: none;
+}
+.town-bus-windows {
+  position: absolute;
+  inset: 3px 4px 8px 4px;
+  background: repeating-linear-gradient(90deg, #bfe3f2 0 7px, #d7432a 7px 9px);
+}
+.town-bus[data-facing="left"] {
+  scale: -1 1;
+}
+.town-bus[data-facing="down"] {
+  rotate: 90deg;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-bin-rider[data-out][data-walk],
+  .town-bin-rider[data-out][data-walk] img {
+    animation: none;
+  }
+}

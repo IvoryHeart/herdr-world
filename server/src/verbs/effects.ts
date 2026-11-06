@@ -35,7 +35,7 @@ export const effectVerbs = [
     [],
     ANSWER_DELIVERY_VERB,
   ),
-  // The bin's close, recorded once its countdown ends. A queued intent is
+  // The bin's close, recorded once its bus leaves the map. A queued intent is
   // conditioned on the captured runtime generation and terminal, so a host that
   // returns with another runtime or occupant never gets a late close.
   declare(
@@ -48,6 +48,8 @@ export const effectVerbs = [
       connection_generation: Type.Integer({ minimum: 0 }),
       // The World run that recorded it: generations are per-run counters.
       service_incarnation: text,
+      // A pinned tab: the close never takes the tab's last pane.
+      preserve_tab: Type.Optional(Type.Boolean()),
     }),
     object(),
     "reconcilable",
@@ -57,6 +59,7 @@ export const effectVerbs = [
       "captured runtime generation is current",
       "the pane still holds the captured terminal",
       "a worktree root closes only as its workspace's last pane",
+      "a pinned tab keeps its last pane",
     ],
     [],
     { queueable: true, version: 1 },

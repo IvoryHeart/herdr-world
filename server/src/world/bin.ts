@@ -1,6 +1,6 @@
 import {
-  parseBinCountdown,
-  type BinCountdown,
+  BIN_BUS_INTERVAL_MS,
+  BIN_BUS_TRIP_MS,
   type BinEntry,
   type BinOutcome,
   type BinState,
@@ -18,44 +18,42 @@ export class BinCloseNotRecorded extends Error {}
 export const NOT_RECORDED =
   "World could not record the close, so nothing was sent.";
 
-/** A later agent joins a departure only if it still has this long to go. */
-export const MIN_JOIN_MS = 3_000;
-
-type Staged = BinEntry & {
-  /** Monotonic ms when it closes; null while the bin is paused. */
-  deadline: number | null;
-};
-
 export type BinAdd = BinTarget & {
   label: string;
   view: BinView;
-  /** Share this entry's departure (Town: one bus collects everyone at the stop). */
-  join?: string;
+  /** Its tab is pinned: never close the tab's last pane. */
+  preserve_tab?: boolean;
 };
 
 /**
- * Records the durable close intents for entries whose countdown ended. It
- * resolves once they are committed; a rejection means nothing was recorded,
- * so nothing will be sent.
+ * Records the durable close intents for the bus's riders. It resolves once
+ * they are committed; a rejection means nothing was recorded, so nothing
+ * will be sent.
  */
 export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 
 /**
- * The service's bin: reversible staging in memory. Each agent's countdown runs
- * on the service clock, so a reload keeps it; a service restart loses it, so
- * nothing is closed. Nothing reaches Herdr from here: when a countdown ends,
- * or on Close now, the entry is handed to `commit`, which records one durable
- * close intent per entry for the effect runner. The runner reports back
- * through `settle`.
+ * The service's bin: reversible holding in memory, and one bus on a fixed
+ * schedule. Buses set off every `interval` ms from the service's start; one
+ * sets off only when someone is waiting, and everyone waiting boards. When
+ * its trip ends the riders are handed to `commit`, which records one durable
+ * close intent per entry for the effect runner; the runner reports back
+ * through `settle`. Nothing reaches Herdr from here. A reload keeps this
+ * state; a service restart loses it, so nothing held is closed.
  */
 export class WorldBinRegistry {
   private revision = 0;
-  private paused = false;
-  private readonly entries = new Map<string, Staged>();
+  private readonly entries = new Map<string, BinEntry>();
   private readonly closing = new Map<string, BinEntry>();
   private outcomes: BinOutcome[] = [];
   private timer: { cancel(): void } | null = null;
   private nextId = 1;
+  /** The schedule's origin: buses set off at anchor + k·interval. */
+  private readonly anchor: number;
+  /** When the bus on the map set off, or null when none is out. */
+  private trip: number | null = null;
+  private readonly interval: number;
+  private readonly tripMs: number;
 
   constructor(
     private readonly deps: {
@@ -64,26 +62,31 @@ export class WorldBinRegistry {
       clock: Clock;
       scheduler: Scheduler;
       commit: BinCommit;
-      countdown(): BinCountdown;
       publish(revision: number): void;
       log?(message: string): void;
+      interval_ms?: number;
+      trip_ms?: number;
     },
-  ) {}
+  ) {
+    this.anchor = deps.clock.monotonic();
+    this.interval = deps.interval_ms ?? BIN_BUS_INTERVAL_MS;
+    this.tripMs = Math.min(deps.trip_ms ?? BIN_BUS_TRIP_MS, this.interval);
+  }
 
   list(): BinState {
     const now = this.deps.clock.monotonic();
     return {
       epoch: this.deps.epoch,
       revision: this.revision,
-      paused: this.paused,
-      entries: [...this.entries.values()].map(({ deadline, ...entry }) => ({
-        ...entry,
-        remaining_ms:
-          deadline === null ? entry.remaining_ms : Math.max(0, deadline - now),
-      })),
-      closing: [...this.closing.keys()],
+      entries: [...this.entries.values()].map((entry) => ({ ...entry })),
+      closing: [...this.closing.values()].map((entry) => ({ ...entry })),
       outcomes: [...this.outcomes],
-      countdown_s: parseBinCountdown(this.deps.countdown()),
+      bus: {
+        interval_ms: this.interval,
+        trip_ms: this.tripMs,
+        next_ms: this.departure(now) - now,
+        elapsed_ms: this.trip === null ? null : now - this.trip,
+      },
     };
   }
 
@@ -92,76 +95,44 @@ export class WorldBinRegistry {
     return this.entries.has(id) || this.closing.has(id);
   }
 
-  /** Put an agent in the bin; an agent already in it keeps its countdown. */
+  /** Whether this pane, on this runtime, is held or closing. */
+  holds(target: Pick<BinTarget, "connection_id" | "connection_generation">) {
+    return (paneId: string) =>
+      [...this.entries.values(), ...this.closing.values()].some(
+        (entry) =>
+          entry.connection_id === target.connection_id &&
+          entry.connection_generation === target.connection_generation &&
+          entry.pane_id === paneId,
+      );
+  }
+
+  /** Put an agent in the bin; an agent already in it stays as it is. */
   add(input: BinAdd): BinState {
     const target = normalize(input);
-    const same = [...this.entries.values(), ...this.closing.values()].some(
-      (entry) =>
-        entry.connection_id === target.connection_id &&
-        entry.connection_generation === target.connection_generation &&
-        entry.pane_id === target.pane_id,
-    );
-    if (same) return this.list();
+    if (this.holds(target)(target.pane_id)) return this.list();
     if (this.entries.size >= MAX_ENTRIES)
       throw new Error(`The bin holds at most ${MAX_ENTRIES} agents`);
-    const now = this.deps.clock.monotonic();
-    const joined =
-      typeof input.join === "string" ? this.entries.get(input.join) : undefined;
-    const joinedLeft = joined
-      ? joined.deadline === null
-        ? joined.remaining_ms
-        : joined.deadline - now
-      : 0;
-    const joins = joined !== undefined && joinedLeft >= MIN_JOIN_MS;
-    const duration = parseBinCountdown(this.deps.countdown()) * 1000;
     const id = `bin-${this.deps.epoch}-${this.nextId++}`;
-    const remaining = joins ? joinedLeft : duration;
-    this.entries.set(id, {
-      ...target,
-      id,
-      trip: joins ? joined.trip : id,
-      duration_ms: joins ? joined.duration_ms : duration,
-      remaining_ms: remaining,
-      deadline: this.paused ? null : now + remaining,
-    });
+    // A bus already on the map has collected its riders: this one waits.
+    this.entries.set(id, { ...target, id, riding: false });
     this.changed();
     return this.list();
   }
 
-  pause(): BinState {
-    if (this.paused) return this.list();
-    const now = this.deps.clock.monotonic();
-    for (const entry of this.entries.values()) {
-      entry.remaining_ms = Math.max(0, (entry.deadline ?? now) - now);
-      entry.deadline = null;
-    }
-    this.paused = true;
-    this.changed();
-    return this.list();
-  }
-
-  resume(): BinState {
-    if (!this.paused) return this.list();
-    const now = this.deps.clock.monotonic();
-    for (const entry of this.entries.values())
-      entry.deadline = now + entry.remaining_ms;
-    this.paused = false;
-    this.changed();
-    return this.list();
-  }
-
-  /** Take an agent back out; nothing is closed. */
+  /** Take an agent back out before it boards; nothing is closed. */
   restore(id: string): BinState {
-    if (!this.entries.delete(id)) return this.list();
-    this.emptied();
+    const entry = this.entries.get(id);
+    if (!entry) return this.list();
+    if (entry.riding) throw new Error("It has already boarded the bus");
+    this.entries.delete(id);
     this.changed();
     return this.list();
   }
 
   /**
-   * Close now, without waiting: exactly the entries named, as the caller saw
-   * them. Every ID must belong to this service run, so a page still showing
-   * an earlier run's bin can never close agents staged since.
+   * Close now, without waiting for the bus: exactly the entries named, as
+   * the caller saw them. Every ID must belong to this service run, so a page
+   * still showing an earlier run's bin can never close agents held since.
    */
   closeNow(ids: readonly string[]): BinState {
     const run = `bin-${this.deps.epoch}-`;
@@ -176,7 +147,7 @@ export class WorldBinRegistry {
     return this.list();
   }
 
-  /** A connection's new runtime retires the old one's staged entries; none is closed. */
+  /** A connection's new runtime retires the old one's held entries; none is closed. */
   retireConnectionGeneration(connectionId: string, generation: number) {
     let changed = false;
     for (const [id, entry] of this.entries)
@@ -195,9 +166,7 @@ export class WorldBinRegistry {
         });
         changed = true;
       }
-    if (!changed) return;
-    this.emptied();
-    this.changed();
+    if (changed) this.changed();
   }
 
   /** The durable close finished (or will never be sent). */
@@ -214,19 +183,15 @@ export class WorldBinRegistry {
     this.deps.publish(this.revision);
   }
 
-  /** Something the state shows changed outside the entries (the setting). */
-  touch() {
-    this.revision += 1;
-    this.deps.publish(this.revision);
-  }
-
   dispose() {
     this.timer?.cancel();
     this.timer = null;
   }
 
-  private emptied() {
-    if (!this.entries.size) this.paused = false;
+  /** The first scheduled departure after `now`. */
+  private departure(now: number) {
+    const k = Math.floor((now - this.anchor) / this.interval) + 1;
+    return this.anchor + k * this.interval;
   }
 
   private changed() {
@@ -235,45 +200,52 @@ export class WorldBinRegistry {
     this.deps.publish(this.revision);
   }
 
+  /** One timer: the bus leaving the map, else the next departure for anyone waiting. */
   private schedule() {
     this.timer?.cancel();
     this.timer = null;
-    if (this.paused) return;
-    let next = Infinity;
-    for (const entry of this.entries.values())
-      if (entry.deadline !== null) next = Math.min(next, entry.deadline);
-    if (next === Infinity) return;
+    const now = this.deps.clock.monotonic();
+    let at: number;
+    let run: () => void;
+    if (this.trip !== null) {
+      at = this.trip + this.tripMs;
+      run = () => this.arrive();
+    } else if (this.entries.size) {
+      at = this.departure(now);
+      run = () => this.setOff(at);
+    } else return;
     this.timer = this.deps.scheduler.schedule(
       () => {
         this.timer = null;
-        this.expire();
+        run();
       },
-      Math.max(0, next - this.deps.clock.monotonic()),
+      Math.max(0, at - now),
     );
   }
 
-  private expire() {
-    if (this.paused) return;
-    const now = this.deps.clock.monotonic();
-    const due = [...this.entries.values()].filter(
-      (entry) => entry.deadline !== null && entry.deadline <= now,
-    );
-    if (!due.length) return this.schedule();
-    this.depart(due);
+  /** The bus sets off: everyone waiting boards. */
+  private setOff(at: number) {
+    if (this.trip !== null || !this.entries.size) return this.schedule();
+    this.trip = at;
+    for (const entry of this.entries.values()) entry.riding = true;
+    this.changed();
   }
 
-  /** The countdown is over: from here on, only the durable intent decides. */
-  private depart(due: Staged[]) {
-    const leaving = due.map((staged): BinEntry => {
-      const entry: Partial<Staged> = { ...staged, remaining_ms: 0 };
-      delete entry.deadline;
-      return entry as BinEntry;
-    });
+  /** The bus has left the map: its riders' closes are recorded. */
+  private arrive() {
+    this.trip = null;
+    const riders = [...this.entries.values()].filter((entry) => entry.riding);
+    if (riders.length) this.depart(riders);
+    else this.changed();
+  }
+
+  /** From here on, only the durable intent decides. */
+  private depart(due: BinEntry[]) {
+    const leaving = due.map((entry) => ({ ...entry }));
     for (const entry of leaving) {
       this.entries.delete(entry.id);
       this.closing.set(entry.id, entry);
     }
-    this.emptied();
     this.changed();
     this.deps.commit(leaving).catch((error: unknown) => {
       // Only a write storage refused before sending is known not to be
@@ -298,9 +270,7 @@ export class WorldBinRegistry {
   }
 }
 
-function normalize(
-  input: BinAdd,
-): Omit<Staged, "id" | "duration_ms" | "remaining_ms" | "deadline" | "trip"> {
+function normalize(input: BinAdd): Omit<BinEntry, "id" | "riding"> {
   for (const key of [
     "connection_id",
     "workspace_id",
@@ -336,5 +306,6 @@ function normalize(
     )
       ? input.view
       : "other",
+    preserve_tab: input.preserve_tab === true,
   };
 }

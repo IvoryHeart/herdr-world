@@ -10,7 +10,8 @@
  * desk only to wait at reception (blocked, or finished and not yet seen), and
  * walks straight back once seen. Movement never delays operational state,
  * and every actor keeps its agent key, so its exact pane target is unchanged
- * wherever it stands.
+ * wherever it stands. An agent in the bin (away) walks out of its building's
+ * front door and is drawn outside by the bus layer until it is put back.
  */
 
 import {
@@ -23,7 +24,8 @@ import {
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 
-export type TownActorMode = "seat" | "stand" | "walk" | "tween";
+/** `out`: through the front door, not drawn in the building. */
+export type TownActorMode = "seat" | "stand" | "walk" | "tween" | "out";
 export type TownFacing = "down" | "up" | "left" | "right";
 
 export type TownActor = {
@@ -57,7 +59,8 @@ export type TownActor = {
 export type TownGoal =
   | { kind: "seat"; deskKey: string; seat: number }
   | { kind: "queue"; slot: number }
-  | { kind: "lounge"; spot: TownSpot };
+  | { kind: "lounge"; spot: TownSpot }
+  | { kind: "door" };
 
 const WALK_SPEED = 76;
 const SEAT_TWEEN = 0.26;
@@ -258,6 +261,7 @@ export class TownActors {
   private clock = 0;
   private summoned: ReadonlySet<string> = new Set();
   private asking: ReadonlySet<string> = new Set();
+  private away: ReadonlySet<string> = new Set();
 
   get time() {
     return this.clock;
@@ -268,7 +272,8 @@ export class TownActors {
 
   /**
    * Reconcile actors with a new model or layout. `instant` skips walking;
-   * `summoned` agents go to their desks rather than reception or the lounge.
+   * `summoned` agents go to their desks rather than reception or the lounge;
+   * `away` agents (in the bin) leave by the front door.
    * With `hosts`, only those hosts' agents are reconciled: the caller vouches
    * that nothing any other host's actors read has changed
    * (scene/townSceneActors.ts), so a full sync would leave them as they are.
@@ -279,11 +284,13 @@ export class TownActors {
     summoned: ReadonlySet<string> = this.summoned,
     asking: ReadonlySet<string> = this.asking,
     hosts?: ReadonlySet<string>,
+    away: ReadonlySet<string> = this.away,
   ) {
     const previousWorld = this.world;
     this.world = world;
     this.summoned = summoned;
     this.asking = asking;
+    this.away = away;
     const { model } = world;
     const seen = new Set<string>();
     const fresh = new Set<string>();
@@ -400,6 +407,7 @@ export class TownActors {
     for (const actor of actors) {
       const agent = model.agents.get(actor.key)!;
       if (
+        this.away.has(actor.key) ||
         (agent.semanticStatus !== "blocked" &&
           agent.semanticStatus !== "done" &&
           !this.asking.has(actor.key)) ||
@@ -439,7 +447,8 @@ export class TownActors {
         seat: seat.seat,
       };
       const slot = queueSlots.get(actor.key);
-      if (slot !== undefined) goal = { kind: "queue", slot };
+      if (this.away.has(actor.key)) goal = { kind: "door" };
+      else if (slot !== undefined) goal = { kind: "queue", slot };
       else if (
         agent.semanticStatus === "idle" &&
         !this.summoned.has(actor.key) &&
@@ -477,7 +486,11 @@ export class TownActors {
           actor.path.some(([x, y]) => outside(x, y)));
       const instant = instantAll || fresh.has(actor.key) || invalidMotion;
       if (sameGoal(actor.goal, goal) && !instant) {
-        if (actor.mode === "seat" || actor.mode === "stand")
+        if (
+          actor.mode === "seat" ||
+          actor.mode === "stand" ||
+          actor.mode === "out"
+        )
           this.travel(actor, true, true);
         else if (actor.mode === "walk" || actor.mode === "tween")
           this.retarget(actor);
@@ -507,6 +520,9 @@ export class TownActors {
       };
     }
     const building = world.buildings.get(actor.hostKey)!;
+    // The front door, in the building's top wall.
+    if (goal.kind === "door")
+      return { tile: [building.entryX, building.y + 1], face: "up" };
     const spot = goal.kind === "queue" ? building.queue[goal.slot]! : goal.spot;
     return { tile: [spot.x, spot.y], face: spot.face };
   }
@@ -519,7 +535,10 @@ export class TownActors {
       if (actor.mode === "seat" && target.seat) {
         actor.x = target.seat.x;
         actor.y = target.seat.y;
-      } else if (actor.mode === "stand" && !target.seat) {
+      } else if (
+        (actor.mode === "stand" || actor.mode === "out") &&
+        !target.seat
+      ) {
         [actor.x, actor.y] = tileCenter(...target.tile);
       }
       return;
@@ -536,7 +555,7 @@ export class TownActors {
       } else {
         [actor.x, actor.y] = tileCenter(...target.tile);
         actor.dir = target.face;
-        actor.mode = "stand";
+        actor.mode = actor.goal?.kind === "door" ? "out" : "stand";
       }
       return;
     }
@@ -696,7 +715,7 @@ export class TownActors {
       };
       actor.mode = "tween";
     } else {
-      actor.mode = "stand";
+      actor.mode = actor.goal?.kind === "door" ? "out" : "stand";
       actor.dir = target.face;
     }
   }
@@ -720,7 +739,7 @@ function sameGoal(a: TownGoal | null, b: TownGoal) {
   if (a.kind === "queue" && b.kind === "queue") return a.slot === b.slot;
   if (a.kind === "lounge" && b.kind === "lounge")
     return spotKey(a.spot) === spotKey(b.spot);
-  return false;
+  return a.kind === "door";
 }
 
 const spotKey = (spot: TownSpot) => `${spot.x},${spot.y}`;

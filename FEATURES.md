@@ -256,6 +256,20 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     terminal colours, so every device sees it; Herdr is unchanged, and
     Spaces' tab pins (close protection in this browser) are separate. A pin
     follows its tab when the tab moves to another room and goes when it closes.
+  - **Bin and bus.** **Put in bin** in an agent window's **⋯** menu (from
+    Town, Board or Desk) holds the agent; nothing closes yet. In Town it
+    walks out of its building's front door to the bus stop nearest its room;
+    there is a stop at every road crossing. A bus comes every three minutes
+    on a fixed schedule when someone is waiting, drives the whole route and
+    picks everyone up; when it has left the map, its riders' agents close.
+    Agents put in the bin while the bus is out wait for the next one. The
+    **Bin** chip at the bottom of every view (on a phone, also a stop or the
+    bus in Town) opens the tray: who waits, the time to the next bus,
+    **Put back** (until an agent boards; it walks back to its desk) and
+    **Close now**. A pinned desk's last agent cannot go in the bin, and its
+    close never takes a pinned tab's last pane. Closes are qualified by host
+    and runtime: a host that restarts keeps its agents, and restarting World
+    drops the bin without closing anything.
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
     reception and Board's host label. When the local connection is failing and

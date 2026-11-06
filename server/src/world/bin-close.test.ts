@@ -212,9 +212,8 @@ const entry = (
   ...pane,
   label: pane.pane_id,
   view: "board",
-  duration_ms: 30_000,
-  remaining_ms: 0,
-  trip: "trip",
+  riding: true,
+  preserve_tab: false,
 });
 
 const pane = (id: string, tab = "t1", workspace = "w1"): Pane => ({
@@ -284,6 +283,25 @@ test("a worktree root's pane is not closed while its workspace has others", asyn
   await closer.commit([entry("studio", pane("p1"))]);
   expect((await settled(1))[0]!.result).toBe("refused");
   expect(studio.host.calls).toEqual([]);
+});
+
+test("a pinned tab's last pane is never closed; its other panes are", async () => {
+  const studio = fakeHerdr("studio", [
+    pane("p1"),
+    pane("p2"),
+    pane("p3", "t2"),
+  ]);
+  const { closer, settled } = await fixture({ studio });
+  const pinned = (id: string, tab = "t1") => ({
+    ...entry("studio", pane(id, tab)),
+    preserve_tab: true,
+  });
+  await closer.commit([pinned("p1")]);
+  expect((await settled(1))[0]!.result).toBe("closed");
+  await closer.commit([pinned("p2")]);
+  const last = (await settled(2))[1]!;
+  expect(last).toMatchObject({ result: "refused" });
+  expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
 });
 
 test("a lost reply is read back and recorded as closed", async () => {

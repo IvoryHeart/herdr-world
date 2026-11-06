@@ -15,6 +15,8 @@ function fixture() {
       terminal_id: "term-1",
       workspace_id: "w1",
     },
+    /** Other panes of the workspace. */
+    others: [] as Record<string, string>[],
     reads: 0,
   };
   const registry = new WorldBinRegistry({
@@ -22,7 +24,6 @@ function fixture() {
     clock: { now: () => 0, monotonic: () => 0 },
     scheduler: { schedule: () => ({ cancel() {} }) },
     commit: async () => {},
-    countdown: () => 30,
     publish: () => {},
   });
   const lease = (id: string): BinLease | null =>
@@ -33,7 +34,7 @@ function fixture() {
           isCurrent: () => host.current,
           call: async () => {
             host.reads += 1;
-            return { panes: [host.pane] };
+            return { panes: [host.pane, ...host.others] };
           },
         }
       : null;
@@ -52,11 +53,7 @@ function fixture() {
         errors.push(error instanceof Error ? error.message : String(error));
       },
       services: {
-        bin: {
-          registry,
-          lease,
-          setCountdown: async () => {},
-        },
+        bin: { registry, lease },
       },
     } as unknown as BridgeRpcContext);
   const add = (extra: Record<string, unknown> = {}) =>
@@ -82,7 +79,8 @@ test("adding stages the agent only while its pane holds the same terminal", asyn
     pane_id: "p1",
     label: "Example agent",
     view: "town",
-    remaining_ms: 30_000,
+    riding: false,
+    preserve_tab: false,
   });
 });
 
@@ -100,16 +98,41 @@ test("an old runtime, an absent host or a new occupant is refused", async () => 
   expect(f.registry.list().entries).toEqual([]);
 });
 
-test("put back, pause and close now act only on the staged countdown", async () => {
+test("put back acts only on the held agent", async () => {
   const f = fixture();
   await f.add();
   const id = f.registry.list().entries[0]!.id;
-  await f.rpc("world.bin.pause");
-  expect(f.registry.list().paused).toBe(true);
   await f.rpc("world.bin.restore", { id });
   expect(f.registry.list().entries).toEqual([]);
-  await f.rpc("world.bin.unknown");
-  expect(f.errors).toEqual(["unknown bin operation"]);
+  await f.rpc("world.bin.pause");
+  await f.rpc("world.bin.countdown.set", { countdown_s: 10 });
+  expect(f.errors).toEqual(["unknown bin operation", "unknown bin operation"]);
+});
+
+test("a pinned tab's last agent is refused; one with another pane is held", async () => {
+  const f = fixture();
+  await f.add({ preserve_tab: true });
+  expect(f.errors).toEqual([
+    "A pinned tab keeps its last agent; unpin its desk first",
+  ]);
+  // A pane in another tab does not keep this tab.
+  f.host.others = [
+    { pane_id: "p9", tab_id: "t2", terminal_id: "t9", workspace_id: "w1" },
+  ];
+  await f.add({ preserve_tab: true });
+  expect(f.errors).toHaveLength(2);
+  f.host.others.push({
+    pane_id: "p2",
+    tab_id: "t1",
+    terminal_id: "term-2",
+    workspace_id: "w1",
+  });
+  await f.add({ preserve_tab: true });
+  expect(f.errors).toHaveLength(2);
+  expect(f.registry.list().entries[0]!.preserve_tab).toBe(true);
+  // With p1 held, p2 is now the tab's last pane.
+  await f.add({ pane_id: "p2", terminal_id: "term-2", preserve_tab: true });
+  expect(f.errors).toHaveLength(3);
 });
 
 test("every bridge-global verb, the bin's included, is admitted for the browser as dispatch routes it", async () => {

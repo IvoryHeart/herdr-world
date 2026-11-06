@@ -1,10 +1,11 @@
+import { binEmptiesTab } from "../../../shared/bin";
 import type { BinAdd } from "../world/bin";
 import type { BridgeRpcContext } from "./context";
 
 /**
  * The agent bin (world.bin.*). Every method changes only the reversible,
- * in-memory countdown; Herdr is reached only by the durable close intent
- * recorded when a countdown ends or on Close now.
+ * in-memory holding; Herdr is reached only by the durable close intent
+ * recorded when the bus leaves the map or on Close now.
  */
 export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
   const { id, method, params, sendReply, sendError } = rpc;
@@ -17,8 +18,6 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
     if (!bin) throw new Error("The bin needs World storage");
     const { registry } = bin;
     if (method === "world.bin.list") return reply(registry.list());
-    if (method === "world.bin.pause") return reply(registry.pause());
-    if (method === "world.bin.resume") return reply(registry.resume());
     if (method === "world.bin.restore")
       return reply(registry.restore(String(p.id)));
     if (method === "world.bin.close_now")
@@ -27,10 +26,6 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
           Array.isArray(p.ids) ? p.ids.map((id) => String(id)) : [],
         ),
       );
-    if (method === "world.bin.countdown.set") {
-      await bin.setCountdown(Number(p.countdown_s));
-      return reply(registry.list());
-    }
     if (method !== "world.bin.add") throw new Error("unknown bin operation");
     const target = p as unknown as BinAdd;
     // Admission: the pane must still be this terminal on its current runtime.
@@ -57,6 +52,23 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
       pane.workspace_id !== target.workspace_id
     )
       throw new Error("That agent has already closed or moved");
+    // A pinned tab keeps its last pane: refuse now rather than at the bus.
+    if (
+      target.preserve_tab === true &&
+      binEmptiesTab(
+        target,
+        result!.panes!.filter(
+          (item) =>
+            item?.workspace_id === target.workspace_id &&
+            item?.tab_id === target.tab_id &&
+            typeof item?.pane_id === "string",
+        ) as { pane_id: string }[],
+        registry.holds(target),
+      )
+    )
+      throw new Error(
+        "A pinned tab keeps its last agent; unpin its desk first",
+      );
     reply(registry.add(target));
   } catch (error) {
     sendError("world-bin-error", error);

@@ -465,3 +465,42 @@ for (const count of [24, 4]) {
     ]);
   });
 }
+
+test("an agent in the bin walks out of the front door, and back to its desk when put back", () => {
+  const { actorWorld, layout } = world({ a: "blocked", b: "working" });
+  const actors = new TownActors();
+  actors.sync(actorWorld, false);
+  const binned = new Set(["a"]);
+  actors.sync(actorWorld, false, undefined, undefined, undefined, binned);
+  const actor = actors.actors.get("a")!;
+  // In the bin it leaves even the reception queue it was waiting in.
+  expect(actor.goal).toEqual({ kind: "door" });
+  expect(actor.queueSlot).toBeNull();
+  expect(actors.busy).toBe(true);
+  settle(actors);
+  const building = layout.buildings[0]!;
+  expect(actor.mode).toBe("out");
+  expect(Math.floor(actor.x / TOWN_TILE)).toBe(building.entryX);
+  expect(actors.actors.get("b")!.mode).toBe("seat");
+  // Put back: it walks in through the door and waits at reception again.
+  actors.sync(actorWorld, false, undefined, undefined, undefined, new Set());
+  expect(actors.busy).toBe(true);
+  settle(actors);
+  expect(actor.mode).toBe("stand");
+  expect(actor.queueSlot).toBe(0);
+});
+
+test("an agent already in the bin when Town opens is out at once", () => {
+  const { actorWorld } = world({ a: "working" });
+  const actors = new TownActors();
+  actors.sync(
+    actorWorld,
+    false,
+    undefined,
+    undefined,
+    undefined,
+    new Set(["a"]),
+  );
+  expect(actors.actors.get("a")!.mode).toBe("out");
+  expect(actors.busy).toBe(false);
+});

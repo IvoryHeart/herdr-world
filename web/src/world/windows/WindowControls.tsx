@@ -39,6 +39,8 @@ export type ManagedWindowControls = {
   } | null;
   /** An agent window's Town desk pin (useDeskPins.ts), toggled in its menu. */
   pin?: { pinned: boolean; onPin(pinned: boolean): void } | null;
+  /** An agent window: put the agent in the bin (bin/WorldBin.tsx). */
+  bin?: { onBin(): void } | null;
   /** Close is shown as Back at the start of the bar, as Town's window does. */
   back?: { label: string };
   /** A narrow window: maximize joins ⋯ so the bar still fits. */
@@ -215,6 +217,9 @@ export function WindowControls({
           { label: "Float window", run: controls.onFloat },
         ]),
     ...(!controls.compact ? pinItems : []),
+    ...(controls.bin
+      ? [{ key: "bin", label: "Put in bin", run: controls.bin.onBin }]
+      : []),
   ];
   const host = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);

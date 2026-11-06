@@ -4,7 +4,7 @@ World's existing `world.sqlite` outbox owns durable effects. Recording the domai
 change and its intent is one SQLite transaction. The service registry marks only
 three private effect verbs queueable: `notification.show` for owner alerts,
 `world.ask.deliver-answer` for one saved answer and its original recipient, and
-`world.bin.close` for one pane whose agent-bin countdown ended.
+`world.bin.close` for one pane whose agent left on Town's bus.
 Interactive terminal input and Chat sends stay nonqueueable. This substrate
 provides no workflow authoring API or new browser controls. Its schema migration
 follows the durable ID, binding, profile and runtime-status migrations, preserving
@@ -111,27 +111,32 @@ model/replay evidence and the required real SQLite source/compiled crash matrix.
 
 ## Agent bin service
 
-The agent bin stages closes in memory and records a durable close only when the
-staging ends. Its browser RPCs (all bridge-scoped `world.*`, browser actor only):
+The agent bin holds agents in memory and records a durable close only when
+Town's bus has taken them. One bus runs on a fixed schedule: every three minutes
+from the service's start (`BIN_BUS_INTERVAL_MS` in
+[shared/bin.ts](../shared/bin.ts)) it sets off if anyone is waiting, everyone
+waiting boards, and it drives for 20 seconds (`BIN_BUS_TRIP_MS`). When its trip
+ends, its riders' closes are recorded. An agent added while the bus is out waits
+for the next one. Put back works until an agent boards. Its browser RPCs (all
+bridge-scoped `world.*`, browser actor only):
 
 | Method | Effect |
 | --- | --- |
-| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, paused, entries with time left, closing IDs, recent outcomes, `countdown_s` |
-| `world.bin.add` | Stage one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first |
-| `world.bin.pause`, `world.bin.resume` | Stop or restart every countdown |
-| `world.bin.restore` | Take one entry back out; nothing is closed |
+| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, held entries (each `riding` once it has boarded), entries whose close is in progress, recent outcomes, and `bus`: interval, trip length, time to the next departure and how long the bus on the map has driven |
+| `world.bin.add` | Hold one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first. With `preserve_tab` (a pinned desk), it refuses the tab's last pane that is not already held |
+| `world.bin.restore` | Put back one entry that has not boarded; nothing is closed |
 | `world.bin.close_now` | `ids`: an explicit list of this run's entry IDs (`bin-<incarnation>-<n>`). Any other run's ID refuses the whole request; there is no unscoped "all" |
-| `world.bin.countdown.set` | 10, 30 (default), 60 or 120 seconds, kept as `bin_countdown_s` in World's settings file |
 
 Staging lives only in the service's memory, on its monotonic clock: a reload
-keeps it, and a World restart drops it without closing anything. When a countdown
-ends, or on Close now, one `world.bin.close` intent per entry is recorded with the
+keeps it, and a World restart drops it, a bus on the map included, without closing
+anything. When the bus leaves the map, or on Close now, one `world.bin.close` intent per entry is recorded with the
 captured target and the recording run's incarnation. A runtime generation is a
 per-run counter, so the close is sent only in the run that recorded it: in a later
 run an unsent close ends not sent and a possibly sent one stays uncertain; neither
 is read from or sent to the host's current runtime. Within the run, the final read
 before sending decides `pane.close` or `workspace.close` and must match the planned
-layout. A write storage refused before sending is reported as not recorded; a
+layout. A close captured with `preserve_tab` is refused, not sent, when that read
+shows no other pane in its tab, so a pinned tab never loses its last pane. A write storage refused before sending is reported as not recorded; a
 write whose acknowledgement was lost, or whose lookup failed, stays tracked by its
 entry ID until a read settles it.
 
