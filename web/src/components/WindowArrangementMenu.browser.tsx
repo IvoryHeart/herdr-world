@@ -12,31 +12,6 @@ const calls: WindowArrangementCommand[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-// Keep browser task boundaries: startup resize/scroll events must be observable.
-const trace: object[] = [];
-const record = (event: string, target?: EventTarget | null) => {
-  trace.push({
-    event,
-    at: performance.now(),
-    ready: document.readyState,
-    target: target instanceof Element ? target.tagName : String(target),
-    menu: !!document.querySelector('[role="menu"]'),
-    viewport: [window.innerWidth, window.innerHeight],
-    scroll: [window.scrollX, window.scrollY],
-  });
-};
-for (const event of ["resize", "scroll", "focusin", "load"])
-  window.addEventListener(event, (e) => record(event, e.target), true);
-new MutationObserver((records) => {
-  for (const mutation of records)
-    for (const [event, nodes] of [
-      ["mount", mutation.addedNodes],
-      ["unmount", mutation.removedNodes],
-    ] as const)
-      for (const node of nodes)
-        if (node instanceof Element && node.matches('[role="menu"]'))
-          record(event, node);
-}).observe(document.body, { childList: true, subtree: true });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
 
 async function run() {
@@ -59,11 +34,9 @@ async function run() {
     'button[aria-label="Arrange windows"]',
   )!;
   trigger.focus();
-  record("first-open");
   trigger.click();
   await settle();
 
-  record("first-query");
   const menu = document.querySelector<HTMLElement>('[role="menu"]');
   const items = [
     ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
@@ -195,10 +168,6 @@ async function run() {
     "Close all must dispatch through the shared arrangement control",
   );
 
-  if (failures.length)
-    failures.push(
-      ...trace.map((entry) => `Lifecycle: ${JSON.stringify(entry)}`),
-    );
   await fetch("/result", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

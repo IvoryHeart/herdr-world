@@ -74,14 +74,6 @@ fixtures because it has no required POSIX shell. Keep those boundary checks,
 assertions and deadlines when optimizing fake startup. Measure alternating
 baseline/candidate runs and report negligible or negative results honestly.
 
-The diagnostics adapter detaches its WebSocket callbacks before returning so a
-late close event cannot write to a completed or removed log. The arrangement-menu
-browser fixture retains task boundaries and attaches mount/unmount, focus,
-resize, scroll, load and first-query traces to failures. Its first-open CI failure
-remains undiagnosed; local passing traces do not establish a cause.
-Worker rejection tests settle the promise before asserting on the error, because
-Bun's asynchronous rejection matcher can block MessagePort delivery.
-
 All six storage `*-crash.test.ts` suites use the
 [shared crash harness](../server/src/storage/testing/crash-harness.ts).
 Compilation, seed initialization and fault setup finish before recovery assertions
@@ -102,10 +94,6 @@ World's two-child setups retain their order. Answer delivery's second process
 remains after its initial storage assertions, with its existing 30-second bound
 inside the 60-second recovery case. Source and standalone runs keep the same
 fault markers, forced kills, clean drains and embedded workers.
-Crash subprocess ownership ends at the Node child-process `close` event, after
-exit and stdio closure, before the standalone tree can be removed. The
-[child adapter controls](../server/src/storage/testing/crash-child.test.ts)
-exercise exit-before-close ordering and startup failure without filesystem retries.
 
 Failures emit `compile`, `spawn`, `marker`, `kill` and `reopen` timings, including
 pending or not-reached phases. Repeated phases appear in execution order. These

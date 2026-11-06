@@ -9,10 +9,6 @@ export type DiagnosticChild = {
   signalCode?: unknown;
   kill: (signal?: NodeJS.Signals) => void;
 };
-type DiagnosticSocket = Pick<
-  WebSocket,
-  "send" | "close" | "onopen" | "onmessage" | "onerror" | "onclose"
->;
 type DiagnosticOptions = {
   executable?: string;
   directory?: string;
@@ -22,7 +18,6 @@ type DiagnosticOptions = {
 type DiagnosticDependencies = {
   spawn?: (argv: string[]) => DiagnosticChild;
   writeStderr?: (chunk: Uint8Array) => void;
-  connect?: (endpoint: string) => DiagnosticSocket;
 };
 
 /** The CLI and in-process fixtures share observation, forwarding and drain behavior. */
@@ -66,7 +61,7 @@ export async function runBrowserDiagnostics(
       : []),
     ...args,
   ]);
-  let socket: DiagnosticSocket | undefined;
+  let socket: WebSocket | undefined;
   let sequence = 0;
   let stopTimer: ReturnType<typeof setTimeout> | undefined;
   const pending = new Map<number, string>();
@@ -78,7 +73,7 @@ export async function runBrowserDiagnostics(
   };
   function observe(endpoint: string) {
     if (socket) return;
-    socket = dependencies.connect?.(endpoint) ?? new WebSocket(endpoint);
+    socket = new WebSocket(endpoint);
     socket.onopen = () => {
       record("debugger-connected", {});
       send("Target.setDiscoverTargets", { discover: true });
@@ -210,6 +205,7 @@ export async function runBrowserDiagnostics(
     })();
     const code = await child.exited;
     clearTimeout(stopTimer);
+    socket?.close();
     let drainTimer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       readStderr,
@@ -227,15 +223,6 @@ export async function runBrowserDiagnostics(
     record("exit", { code, signal: child.signalCode });
     return code;
   } finally {
-    if (socket) {
-      // Closing is asynchronous: no observer may write after the caller takes
-      // ownership of the completed log (or removes its fixture directory).
-      socket.onopen = null;
-      socket.onmessage = null;
-      socket.onerror = null;
-      socket.onclose = null;
-      socket.close();
-    }
     for (const [signal, handler] of handlers) process.off(signal, handler);
   }
 }
