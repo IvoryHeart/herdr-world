@@ -2129,11 +2129,23 @@ async function run() {
     `expected ${totalTabs} desk targets, found ${deskTargets}`,
   );
   // Counted now: expanding a room can move other rooms out of the drawn area.
-  const roomsNow = host.querySelectorAll(".town-room").length;
-  const renames = host.querySelectorAll('[aria-label^="Rename room"]').length;
+  const roomsNow = [...host.querySelectorAll(".town-room")];
+  const summaryTriggers = roomsNow.filter((room) =>
+    room.querySelector(
+      '[data-town-place-summary-trigger="room"][aria-haspopup="dialog"]',
+    ),
+  ).length;
   check(
-    renames === roomsNow,
-    `every room needs a rename action (${renames} of ${roomsNow})`,
+    summaryTriggers === roomsNow.length,
+    `every room needs a summary/actions trigger (${summaryTriggers} of ${roomsNow.length})`,
+  );
+  // Rename and Close are mounted in the shared portal only when opened.
+  // Hover, focus and touch reachability are exercised by checkTownRoomPlates.
+  check(
+    document.querySelector(
+      '[aria-label^="Rename room "], [aria-label^="Close room "]',
+    ) === null,
+    "unopened room summaries must not expose Rename or Close controls",
   );
   // Room actions hidden at the overview must not take a tap.
   const hiddenActions = [
