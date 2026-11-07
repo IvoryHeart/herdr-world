@@ -1,30 +1,26 @@
 /**
- * The agent bin. An agent dropped in it waits out a countdown and is then
- * closed, unless the owner takes it back first. The countdown is reversible
- * staging held in the service's memory: a reload keeps it and a service
- * restart cancels it without closing anything. Only when the countdown ends
- * (or the owner chooses Close now) does World record a durable close intent,
- * which the effect runner dispatches under its recovery rules.
+ * The agent bin and Town's bus. An agent put in the bin is held: nothing is
+ * closed. A bus runs on one fixed schedule: every `BIN_BUS_INTERVAL_MS` it
+ * sets off, everyone waiting boards, and it drives the whole route. When it
+ * has left the map, `BIN_BUS_TRIP_MS` later, World records one durable close
+ * intent per rider, which the effect runner dispatches under its recovery
+ * rules. Until the bus has left the map, Put back takes an agent out again,
+ * even one Town shows aboard, and the bus can be stopped where it is so
+ * nothing closes until it is let go. Holding and the
+ * trip are reversible staging in the service's memory: a reload keeps them
+ * and a service restart drops them without closing anything.
  */
 
-/** The countdowns the owner can choose, in seconds. */
-export const BIN_COUNTDOWNS = [10, 30, 60, 120] as const;
-export type BinCountdown = (typeof BIN_COUNTDOWNS)[number];
-export const DEFAULT_BIN_COUNTDOWN: BinCountdown = 30;
-export const BIN_COUNTDOWN_LABELS: Record<BinCountdown, string> = {
-  10: "10 s",
-  30: "30 s",
-  60: "1 min",
-  120: "2 min",
-};
+/** The bus sets off this often, on a fixed schedule. */
+export const BIN_BUS_INTERVAL_MS = 240_000;
+/**
+ * How long a trip lasts; its riders close when it ends. Town fits the bus's
+ * drive into it: it comes in, slows to each stop with riders, waits there
+ * about 10 s, speeds up and leaves the map as the trip ends.
+ */
+export const BIN_BUS_TRIP_MS = 120_000;
 
-export function parseBinCountdown(value: unknown): BinCountdown {
-  return BIN_COUNTDOWNS.includes(value as BinCountdown)
-    ? (value as BinCountdown)
-    : DEFAULT_BIN_COUNTDOWN;
-}
-
-/** The view an agent was staged from (reported back with its outcome). */
+/** The view an agent was put in the bin from (reported back with its outcome). */
 export type BinView = "board" | "town" | "desk" | "other";
 
 /** The pane to close, qualified by connection and runtime generation. */
@@ -42,12 +38,13 @@ export type BinEntry = BinTarget & {
   /** The agent's name, for the bin, the bus and the receipt. */
   label: string;
   view: BinView;
-  /** The countdown it went in with, in milliseconds. */
-  duration_ms: number;
-  /** Time left when the state was read; it runs only while the bin isn't paused. */
-  remaining_ms: number;
-  /** Entries that share one departure (Town: everyone on one bus). */
-  trip: string;
+  /**
+   * The bus on the map takes it: it closes when the bus leaves, unless it is
+   * put back first. Town shows it boarding as the bus passes its stop.
+   */
+  riding: boolean;
+  /** Its tab is pinned: the close never takes the tab's last pane. */
+  preserve_tab: boolean;
 };
 
 export type BinOutcome = {
@@ -65,6 +62,20 @@ export type BinOutcome = {
   detail?: string;
 };
 
+/** The bus's schedule, as it stood when the state was read. */
+export type BinBus = {
+  interval_ms: number;
+  trip_ms: number;
+  /** Until the next bus sets off. */
+  next_ms: number;
+  /** How long the bus on the map has driven, or null when none is out. */
+  elapsed_ms: number | null;
+  /** The bus on the map was stopped: it stands, and nothing closes, until it goes. */
+  stopped: boolean;
+  /** The trip on the map, counted from 1 in this service run, or null. */
+  trip: number | null;
+};
+
 export type BinState = {
   /**
    * The service run. A restart starts revisions and IDs again, so a browser
@@ -73,23 +84,41 @@ export type BinState = {
    */
   epoch: string;
   revision: number;
-  /** Opening the bin, or holding the bus, pauses every countdown in it. */
-  paused: boolean;
+  /** Agents held in the bin, waiting at a stop or riding the bus. */
   entries: BinEntry[];
-  /** IDs whose countdown ended and whose close is being carried out. */
-  closing: string[];
+  /** Agents whose bus has left and whose close is being carried out. */
+  closing: BinEntry[];
   /** The most recent results, newest last, so every open World can show them. */
   outcomes: BinOutcome[];
-  /** The owner's countdown setting, in seconds. */
-  countdown_s: BinCountdown;
+  bus: BinBus;
 };
 
 export const EMPTY_BIN: BinState = {
   epoch: "",
   revision: 0,
-  paused: false,
   entries: [],
   closing: [],
   outcomes: [],
-  countdown_s: DEFAULT_BIN_COUNTDOWN,
+  bus: {
+    interval_ms: BIN_BUS_INTERVAL_MS,
+    trip_ms: BIN_BUS_TRIP_MS,
+    next_ms: BIN_BUS_INTERVAL_MS,
+    elapsed_ms: null,
+    stopped: false,
+    trip: null,
+  },
 };
+
+/**
+ * The pinned-tab rule: closing `target` would leave its tab without a pane
+ * that is not itself held in the bin. `tabPanes` are every pane of its tab.
+ */
+export function binEmptiesTab(
+  target: Pick<BinTarget, "pane_id">,
+  tabPanes: readonly { pane_id: string }[],
+  held: (paneId: string) => boolean,
+): boolean {
+  return !tabPanes.some(
+    (pane) => pane.pane_id !== target.pane_id && !held(pane.pane_id),
+  );
+}

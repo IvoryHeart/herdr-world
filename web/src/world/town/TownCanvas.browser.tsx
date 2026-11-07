@@ -13,7 +13,10 @@ import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import type { AnswerNotice } from "../worldAnswerDeliveries";
-import { checkTownRoomPlates } from "./townRoomPlates.browser";
+import {
+  checkOverviewRoomHover,
+  checkTownRoomPlates,
+} from "./townRoomPlates.browser";
 import { checkTownCenter } from "./townCenter.browser";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
@@ -2608,6 +2611,7 @@ async function run() {
   }
 
   await prepareTownRoomCard(host, diagnostics, waitFor);
+  await checkOverviewRoomHover(host, check, waitFor);
   // Room card activation still has to zoom into the room from that overview.
   const zoomBefore = diagnostics.zoom;
   host.querySelector<HTMLButtonElement>(".town-room-card")!.click();

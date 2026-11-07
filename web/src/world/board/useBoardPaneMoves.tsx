@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ConfirmDialog } from "../../components/ModalDialogs";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
+import { aimAtBin } from "../bin/binDrop";
 import { townMoveNotice } from "../town/townMoves";
 import type { GestureTarget, Point } from "./boardGesture";
 import type { BoardModel, BoardPane, BoardTab } from "./boardModel";
@@ -21,6 +22,8 @@ type Held = {
   origin: Element | null;
   over: string | null;
   overElement: Element | null;
+  /** Over the bin: a drop puts the pane's agent in it. */
+  bin: boolean;
 };
 
 /** Adapts the shared mouse/touch gesture to a single-pane move, leaving the card in place. */
@@ -29,6 +32,8 @@ export function useBoardPaneMoves(props: {
   move?: BoardPaneMove;
   notice(message: string): void;
   moved(): void;
+  /** The pane was dropped on the bin. */
+  bin?(panes: readonly BoardPane[]): void;
 }) {
   const latest = useRef(props);
   latest.current = props;
@@ -40,6 +45,7 @@ export function useBoardPaneMoves(props: {
     if (!drag) return false;
     held.current = null;
     drag.element.remove();
+    aimAtBin(null);
     drag.origin?.classList.remove("board-pane-lifted");
     drag.overElement?.classList.remove("board-pane-move-target");
     return true;
@@ -127,9 +133,12 @@ export function useBoardPaneMoves(props: {
     const scale = measuredFixedPositionScale();
     drag.element.style.left = `${(at.x + 12) / scale}px`;
     drag.element.style.top = `${(at.y + 12) / scale}px`;
-    const under = document
-      .elementFromPoint(at.x, at.y)
-      ?.closest<HTMLElement>(".board-tab");
+    drag.bin = Boolean(latest.current.bin) && aimAtBin(at);
+    const under = drag.bin
+      ? null
+      : document
+          .elementFromPoint(at.x, at.y)
+          ?.closest<HTMLElement>(".board-tab");
     const over =
       under?.dataset.key && under.dataset.key !== drag.source.key
         ? under
@@ -165,6 +174,7 @@ export function useBoardPaneMoves(props: {
       origin,
       over: null,
       overElement: null,
+      bin: false,
     };
     move(at);
     return true;
@@ -174,7 +184,8 @@ export function useBoardPaneMoves(props: {
     const drag = held.current!;
     const target = drag.over && latest.current.model.tabByKey.get(drag.over);
     cancel();
-    if (target)
+    if (drag.bin) latest.current.bin?.([drag.pane]);
+    else if (target)
       void run({ pane: drag.pane, source: drag.source, target }, false);
     return true;
   };

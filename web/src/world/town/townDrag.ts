@@ -23,7 +23,8 @@ export type TownDrag = {
 export type TownDropTarget = {
   key: string | null;
   label: string;
-  action?: "move" | "reorder" | "group" | "ungroup";
+  /** bin: over the bin or a bus stop, where a drop puts it in the bin. */
+  action?: "move" | "reorder" | "group" | "ungroup" | "bin";
 };
 
 /**

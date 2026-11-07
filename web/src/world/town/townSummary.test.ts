@@ -445,7 +445,15 @@ test("the summary counts what the call rail shows, room by room", () => {
   );
   // One shared needs-you count: the rail's blocked calls, which reception
   // also shows, and which the sign, the chip and the window all read.
-  expect(summary.counts).toEqual({ needsYou: 1, working: 2, finished: 1 });
+  expect(summary.counts).toEqual({
+    needsYou: 1,
+    working: 2,
+    finished: 1,
+    quiet: 1,
+    unknown: 0,
+    agents: 5,
+    buildings: 1,
+  });
   const atReception = projection.receptions
     .flatMap((reception) => reception.waitingAgents)
     .filter((agent) => agent.semanticStatus === "blocked").length;

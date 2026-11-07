@@ -300,12 +300,11 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
-  /** The agent bin: reversible countdowns, then a durable fenced close. */
+  /** The agent bin: reversible holding, a scheduled bus, then a durable fenced close. */
   const bin = createBinService({
     incarnation: serviceIncarnation,
     clock,
     scheduler,
-    settings,
     ledger: () => storage.ledger(),
     outbox: () => storage.attention(),
     effects: () => storage.effects(),

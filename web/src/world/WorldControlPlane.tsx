@@ -23,6 +23,7 @@ import {
 } from "./floatingTerminalPreferences";
 import { terminalColorKey } from "./terminalColor";
 import { setDeskPinned, useDeskPins } from "./useDeskPins";
+import { putInBin, WorldBin } from "./bin/WorldBin";
 import { useTerminalColorChoices } from "./useTerminalColors";
 import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
@@ -320,6 +321,26 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       : null;
   };
 
+  // An agent window puts its agent in the bin; a pinned desk or tab keeps
+  // its tab.
+  const inspectorBin = (conversation: WorldInspectorConversation) => {
+    const node = presentedWorld.nodeById.get(conversation.nodeId);
+    const tab = inspectorTab(conversation);
+    if (node?.kind !== "agent" || node.stale || !node.actionable) return null;
+    return {
+      onBin: () =>
+        void putInBin(
+          node,
+          view === "town" || view === "board" || view === "desk"
+            ? view
+            : "other",
+          Boolean(tab && deskPins[terminalColorKey(tab)]),
+        ).then((held) => {
+          if (held) closeInspector(conversation);
+        }),
+    };
+  };
+
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
   const stableOpenNodeById = useStableCallback(openNodeById);
@@ -350,6 +371,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         world={aggregateWorld}
         onOpenNode={(nodeId) => void openNodeById(nodeId)}
       />
+      <WorldBin always={view === "town" || view === "board"} />
       <GroupsWindow
         world={aggregateWorld}
         onOpenTerminal={(id) => void openTerminalById(id)}
@@ -818,6 +840,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                 });
               },
               pin: inspectorPin(conversation),
+              bin: inspectorBin(conversation),
               // The colour is chosen from the swatch beside the name.
               back: view === "town" ? { label: "Back to Town" } : undefined,
               // A phone switches between agents and terminals from ⋯, as

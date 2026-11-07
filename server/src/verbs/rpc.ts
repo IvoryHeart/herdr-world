@@ -246,7 +246,7 @@ export const rpcVerbs = [
       terminal_id: text,
       label: Type.Optional(Type.String({ maxLength: 200 })),
       view: Type.Optional(Type.String({ maxLength: 16 })),
-      join: Type.Optional(Type.String({ maxLength: 600 })),
+      preserve_tab: Type.Optional(Type.Boolean()),
     }),
   ),
   rpc(
@@ -256,13 +256,8 @@ export const rpcVerbs = [
     // Explicit IDs of one service run: never an unscoped "everything".
     object({ ids: Type.Array(text, { minItems: 1, maxItems: 64 }) }),
   ),
-  rpc(
-    "world.bin.countdown.set",
-    "reconcilable",
-    "world",
-    object({ countdown_s: Type.Integer() }),
-  ),
   rpc("world.bin.list", "read", "world"),
+  // Stop the bus on the map (pause) so riders can be put back, or let it go.
   rpc("world.bin.pause", "reconcilable", "world"),
   rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
   rpc("world.bin.resume", "reconcilable", "world"),

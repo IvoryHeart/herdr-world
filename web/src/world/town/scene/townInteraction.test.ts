@@ -50,7 +50,13 @@ function testFrames() {
 }
 
 function setup(
-  options: { level?: TownLevel; zoom?: number; teams?: TownTeams } = {},
+  options: {
+    level?: TownLevel;
+    zoom?: number;
+    teams?: TownTeams;
+    /** Tables have cards (TownCanvas: drawn with their nameplates). */
+    cards?: boolean;
+  } = {},
 ) {
   const projection = office({
     alpha: working(3),
@@ -84,6 +90,7 @@ function setup(
   let level: TownLevel = options.level ?? "room";
   let ready = true;
   let hovered: string | null = null;
+  let carded: string | null = null;
   let result: Promise<TownMoveResult> = Promise.resolve("moved");
   /** Agents standing (walking, queued, lounging) where the renderer has them. */
   const standing = new Map<string, Point>();
@@ -104,6 +111,9 @@ function setup(
     finishMove: (outcome) => log.push(["finish", outcome]),
   };
   const ghost: unknown[][] = [];
+  /** Where the bin lies on the canvas, when a test puts one there. */
+  let binAt: ((at: Point) => boolean) | null = null;
+  const binned: unknown[] = [];
   const interaction = new TownInteraction({
     clock: time.clock,
     frames: frames.frames,
@@ -118,6 +128,14 @@ function setup(
     hover: (hover) => log.push(["hover", hover?.key ?? null]),
     cursor: (pointer) => log.push(["cursor", pointer]),
     select: (key) => log.push(["select", key]),
+    tapCard: options.cards
+      ? (deskKey) => {
+          log.push(["card", deskKey]);
+          const opens = deskKey !== null && deskKey !== carded;
+          carded = opens ? deskKey : null;
+          return opens;
+        }
+      : undefined,
     activateAgent: (key) => log.push(["activate", key]),
     activateRoom: (key) => log.push(["room", key]),
     openCenter: () => log.push(["center"]),
@@ -131,6 +149,8 @@ function setup(
       remove: () => ghost.push(["remove"]),
     },
     held: () => log.push(["held"]),
+    binAt: (at) => Boolean(at && binAt?.(at)),
+    bin: (drag) => binned.push(drag),
   });
   /** Draw a frame, as the renderer does, so presses hit what is drawn. */
   const draw = () => view.drew(camera, level, layout);
@@ -163,6 +183,8 @@ function setup(
     log,
     moves,
     ghost,
+    binned,
+    setBin: (over: (at: Point) => boolean) => (binAt = over),
     reasons,
     draw,
     press,
@@ -333,6 +355,39 @@ test("a drop outside every building springs back and asks nothing", () => {
   expect(t.log).toContainEqual(["end", "cancel"]);
 });
 
+test("a desk dropped on the bin is put in it and moves nowhere", () => {
+  const t = setup();
+  t.setBin((at) => at.x < 10 && at.y < 10);
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.moveTo(pointer, { x: 4, y: 4 });
+  expect(last(t.ghost)).toEqual(["aim", "Put in the bin", true, "bin"]);
+  t.lift(pointer, { x: 4, y: 4 });
+  expect(t.moves).toEqual([]);
+  expect(t.binned).toEqual([{ kind: "desk", key: cell.deskKey }]);
+  expect(t.log).toContainEqual(["end", "cancel"]);
+});
+
+test("a desk carried over the bin and away drops as usual", () => {
+  const t = setup();
+  t.setBin((at) => at.x < 10 && at.y < 10);
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  const room = t.rooms[1]!;
+  const floor = t.screen({ x: room.x * T + 4, y: (room.y + room.h) * T - 4 });
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.moveTo(pointer, { x: 4, y: 4 });
+  t.moveTo(pointer, floor);
+  t.lift(pointer, floor);
+  expect(t.binned).toEqual([]);
+  expect(t.moves).toEqual([
+    { kind: "desk", deskKey: cell.deskKey!, roomKey: room.key },
+  ]);
+});
+
 test("a desk rested on another desk snaps to it after the magnet time and groups", () => {
   const t = setup();
   const cell = t.deskCell(0);
@@ -439,6 +494,32 @@ test("a double tap opens a desk's agent, or zooms in elsewhere", () => {
   t.lift(t.press(outside), outside);
   t.camera.update(1);
   expect(t.camera.z).toBeGreaterThan(z * 1.5);
+});
+
+test("a touch tap on a table opens its card first; a second tap opens the table", () => {
+  const t = setup({ cards: true });
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  t.lift(t.press(at, "touch"), at);
+  expect(t.log).toContainEqual(["card", cell.deskKey]);
+  expect(t.log.some(([kind]) => kind === "select")).toBe(false);
+  t.time.advance(1000);
+  t.lift(t.press(at, "touch"), at);
+  expect(t.log).toContainEqual(["select", cell.deskKey]);
+  // A touch tap elsewhere closes an open card.
+  t.time.advance(1000);
+  t.lift(t.press(at, "touch"), at);
+  t.log.length = 0;
+  t.time.advance(1000);
+  const outside = { x: 2, y: 2 };
+  t.lift(t.press(outside, "touch"), outside);
+  expect(t.log).toContainEqual(["card", null]);
+  // A mouse has hover: its click opens the table at once.
+  t.log.length = 0;
+  t.time.advance(1000);
+  t.lift(t.press(at), at);
+  expect(t.log).toContainEqual(["select", cell.deskKey]);
+  expect(t.log.some(([kind]) => kind === "card")).toBe(false);
 });
 
 test("a hovering mouse names what is under it, and leaving clears it", () => {

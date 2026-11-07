@@ -185,8 +185,15 @@ hosts stay usable.
    hover the name for its full text. The colour, active/total agent count and
    blocked badge stay visible. Active means working or waiting on you; plain
    terminals are excluded from the total. Hover the count for the working/waiting
-   breakdown. Hover or focus a plate to reveal Rename and Close below it;
-   on a touch screen, tap the plate first. The dashed **+** seat inside a room
+   breakdown. Hover or focus a plate for the room's card below it: the Town
+   board's numbers for that room (working, need you, done, quiet and its
+   agents) and its economy today (estimated cost, tokens and models), then
+   Rename and Close. Cost shows when a price table is set; see
+   [harness usage](./usage.md). Hover a table or its nameplate for the
+   same card about that table. Zoomed out to the room cards, hover anywhere
+   over a room for its numbers under its card. On a touch screen, tap the plate or nameplate;
+   the first tap on a table opens its card, and a second tap (or a double tap)
+   opens the table as before. The dashed **+** seat inside a room
    opens its launcher with that room selected. Choose **Terminal** for a plain
    tab, a profile, or an agent kind. If the requested room is no longer
    available, choose a current room in the launcher before creating anything.
@@ -195,7 +202,8 @@ hosts stay usable.
    their terminal or mark that completion reviewed, then join idle agents at
    the bar in the building's bottom corner. These locations visualize
    status; they do not move the underlying pane or change its host. For the
-   whole picture, press **Summary** on the Town board (on a phone, tap the
+   whole picture, the Town board counts every building's agents, quiet ones
+   included; press **Summary** on it (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts, and spend. Answer a question from its offered
@@ -409,6 +417,23 @@ connection is ready.
 Opening a finished agent's terminal also clears its reception stop; neither action proves the result
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
+
+To close an agent you no longer need, drag it onto the **bin** icon at the
+bottom of Town or Board, or onto a Town bus stop; or open its window and choose
+**Put in bin** from **⋯** (this also works from Desk). Nothing closes yet: in
+Town the agent walks out of the front door to the nearest bus stop, a London
+stop with a red roundel at a road crossing. A small board over the waiting
+agents, and the bin, show the time to the next bus. Every four minutes a red double-decker comes in, slows to each stop where
+someone waits, stands there about ten seconds while they board (you can see
+them in its windows), then speeds up
+and drives off the map; only then does World close their agents. Changed your
+mind? Open the tray from the bin (or tap a stop or the bus) and choose **Put
+back** any time before the bus has left the screen, even after the agent has
+boarded: it walks back to its desk and stays open. Tap the bus while it drives
+to stop it where it is and open the tray: nothing closes while it stands, and
+**Let the bus go**, or closing the tray, sends it on. **Close now** skips the wait. A pinned desk or a tab pinned
+in Spaces keeps its last agent, and restarting World empties the bin without
+closing anything.
 
 **You are done when:** you can find an agent on the expected host, read its peek,
 and open its terminal or Inspector without losing its workspace context.

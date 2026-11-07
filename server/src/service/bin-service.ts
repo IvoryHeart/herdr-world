@@ -1,9 +1,3 @@
-import {
-  DEFAULT_BIN_COUNTDOWN,
-  parseBinCountdown,
-  type BinCountdown,
-} from "../../../shared/bin";
-import type { GuiSettingsStore } from "../config/gui-settings";
 import type { EffectStore } from "../effects/types";
 import type { AttentionOutbox } from "../storage/world-protocol";
 import { createBinCloser, type BinLease } from "../world/bin-close";
@@ -28,14 +22,13 @@ type Lease = {
 };
 
 /**
- * The agent bin's composition: in-memory countdowns (bin.ts), the durable,
- * per-connection close (bin-close.ts), and the owner's countdown setting.
+ * The agent bin's composition: in-memory holding and the scheduled bus
+ * (bin.ts), and the durable, per-connection close (bin-close.ts).
  */
 export function createBinService(deps: {
   incarnation: string;
   clock: Clock;
   scheduler: Scheduler;
-  settings: GuiSettingsStore;
   ledger(): LedgerStore;
   outbox(): AttentionOutbox;
   effects(): EffectStore;
@@ -46,13 +39,6 @@ export function createBinService(deps: {
   publish(revision: number): void;
   log(message: string): void;
 }) {
-  let countdown: BinCountdown = DEFAULT_BIN_COUNTDOWN;
-  void deps.settings
-    .read()
-    .then((settings) => {
-      countdown = parseBinCountdown(settings.bin_countdown_s);
-    })
-    .catch(() => {});
   const lease = (id: string): BinLease | null => {
     const current = deps.connections().readyRuntimeLease(id);
     return current
@@ -71,7 +57,6 @@ export function createBinService(deps: {
     clock: deps.clock,
     scheduler: deps.scheduler,
     commit: (entries) => closer.commit(entries),
-    countdown: () => countdown,
     publish: deps.publish,
     log: deps.log,
   });
@@ -106,16 +91,6 @@ export function createBinService(deps: {
     }) {
       registry.retireConnectionGeneration(status.id, status.generation);
       if (status.state === "ready") void closer.wake(status.id);
-    },
-    async setCountdown(value: number) {
-      const next = parseBinCountdown(value);
-      if (next !== value) throw new Error("unsupported bin countdown");
-      await deps.settings.update((current) => ({
-        ...current,
-        bin_countdown_s: next,
-      }));
-      countdown = next;
-      registry.touch();
     },
     async stop() {
       registry.dispose();
