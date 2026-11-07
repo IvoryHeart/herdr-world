@@ -4,7 +4,8 @@
   street beside the town center (today or 7 days) and an Expenses board
   beside each building's reception with the host's totals and its costliest
   rooms, from harness usage. Missing, partial, stale and unpriced figures say
-  so ("no data", "partial", "no price table") instead of showing zero. On a
+  so ("no data", "partial", "no price table") instead of showing zero, and
+  figures that can no longer be refreshed read "out of date". On a
   phone the boards fold to signs that open on a tap.
 
 ### Changed

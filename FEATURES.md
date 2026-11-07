@@ -135,7 +135,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     "none recorded"; and notes name usage tied to no pane or room
     ("unattributed"), partial reads, stale numbers left out and hosts with no
     data. The boards re-read usage about once a minute and when the page
-    regains focus. On a phone the billboard folds to a sign in the town
+    regains focus; when re-reads fail, the last figures stay for at most five
+    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
     center's corner and each building's board to a sign on its reception;
     tap one to open it. Zoomed in to desks, the boards are put away with
     reception.

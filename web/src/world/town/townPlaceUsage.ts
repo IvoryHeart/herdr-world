@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { bridge } from "../../api";
 import type {
   UsageEntity,
@@ -18,10 +18,21 @@ export type TownUsageState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "ready"; snapshot: WorldUsageSnapshot };
+  | {
+      status: "ready";
+      snapshot: WorldUsageSnapshot;
+      /** When the read arrived, by the store's clock. */
+      receivedAt: number;
+    };
+
+/**
+ * A read as the boards and cards may show it now: a read too old for its
+ * window is stale, never shown as current figures.
+ */
+export type TownCurrentUsage = TownUsageState | { status: "stale" };
 
 export type TownPlaceEconomy =
-  | { status: "loading" | "unavailable" | "none" | "no-data" }
+  | { status: "loading" | "unavailable" | "stale" | "none" | "no-data" }
   | {
       status: "ready";
       /** Estimated from the operator's price table; null when unpriced. */
@@ -81,6 +92,33 @@ export function townHostHasData(
   );
 }
 
+/**
+ * How long a read may be shown when refreshes fail: a few refresh intervals.
+ * Readers refresh every minute while shown.
+ */
+export const TOWN_USAGE_MAX_AGE_MS = 5 * 60_000;
+const DAY_MS = 86_400_000;
+
+/**
+ * A read as it may be shown at `now` (the store's clock). Kept reads go
+ * stale after `TOWN_USAGE_MAX_AGE_MS`, and at once when the service's UTC
+ * day turns: both windows end at UTC midnight, so yesterday's "today" is
+ * not today's. The service's day is its `observed_at` plus the time since
+ * the read arrived, so the browser's clock offset does not matter.
+ */
+export function townUsageCurrent(
+  state: TownUsageState,
+  now: number,
+): TownCurrentUsage {
+  if (state.status !== "ready") return state;
+  const age = Math.max(0, now - state.receivedAt);
+  const observed = state.snapshot.observed_at;
+  return age > TOWN_USAGE_MAX_AGE_MS ||
+    Math.floor((observed + age) / DAY_MS) !== Math.floor(observed / DAY_MS)
+    ? { status: "stale" }
+    : state;
+}
+
 type UsageClient = {
   call(method: string, params?: Record<string, unknown>): Promise<unknown>;
 };
@@ -93,7 +131,7 @@ export class TownUsageStore {
 
   constructor(
     private readonly client: UsageClient,
-    private readonly clock: () => number = Date.now,
+    readonly clock: () => number = Date.now,
     readonly window: TownUsageWindow = "today",
   ) {}
 
@@ -108,7 +146,8 @@ export class TownUsageStore {
 
   /**
    * A card opened: read the window's usage, at most once per refresh interval.
-   * A failed read keeps the last numbers it had.
+   * A failed read keeps the last numbers it had, which readers stop showing
+   * once they are too old (`townUsageCurrent`).
    */
   request() {
     const now = this.clock();
@@ -121,7 +160,7 @@ export class TownUsageStore {
         this.pending = false;
         const snapshot = result as WorldUsageSnapshot | null;
         if (snapshot?.version === 1 && Array.isArray(snapshot.rollups))
-          this.set({ status: "ready", snapshot });
+          this.set({ status: "ready", snapshot, receivedAt: this.clock() });
         else if (this.state.status !== "ready") this.set({ status: "failed" });
       },
       () => {
@@ -148,6 +187,28 @@ export function townUsageStore(window: TownUsageWindow = "today") {
 
 export function useTownUsage(store: TownUsageStore = townUsageStore()) {
   return useSyncExternalStore(store.subscribe, store.get, store.get);
+}
+
+/** How often shown figures re-check whether their read is too old. */
+const CURRENT_TICK_MS = 30_000;
+
+/**
+ * The store's read as it may be shown now, re-checked every 30 seconds so
+ * a read kept through failed refreshes goes stale while it is on screen.
+ */
+export function useTownCurrentUsage(
+  store: TownUsageStore = townUsageStore(),
+): TownCurrentUsage {
+  const state = useTownUsage(store);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setTick((tick) => tick + 1),
+      CURRENT_TICK_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, [store]);
+  return townUsageCurrent(state, store.clock());
 }
 
 /** Whether some harness on a host could be read only in part. */
@@ -220,12 +281,13 @@ function index(snapshot: WorldUsageSnapshot) {
 
 /** A room's or table's part of today's usage, for its card. */
 export function townPlaceEconomy(
-  state: TownUsageState,
+  state: TownCurrentUsage,
   place: TownUsagePlace,
 ): TownPlaceEconomy {
   if (state.status === "idle" || state.status === "loading")
     return { status: "loading" };
   if (state.status === "failed") return { status: "unavailable" };
+  if (state.status === "stale") return { status: "stale" };
   const { target } = place;
   const usage = index(state.snapshot).get(
     placeKey(

@@ -10,7 +10,6 @@ import { TOWN_TILE as T } from "./townLayout";
 import type { TownCenterLot } from "./townCenter";
 import {
   townUsageStore,
-  useTownUsage,
   type TownUsageStore,
   type TownUsageWindow,
 } from "./townPlaceUsage";
@@ -31,6 +30,7 @@ import "./townExpenses.css";
 const WAITING_TEXT = {
   loading: "Reading usage…",
   unavailable: "Usage unavailable",
+  stale: "out of date",
   "no-data": "no data",
 } as const;
 
@@ -135,7 +135,12 @@ const spokenText = (expenses: TownCityExpenses | TownHostExpenses) =>
     ? townExpenseText(expenses.total)
     : WAITING_TEXT[expenses.status];
 
-const SIGN_WAITING = { loading: "…", unavailable: "n/a", "no-data": "no data" };
+const SIGN_WAITING = {
+  loading: "…",
+  unavailable: "n/a",
+  stale: "old",
+  "no-data": "no data",
+};
 
 /** The folded sign's few characters: the cost, else the tokens. */
 const signText = (expenses: TownCityExpenses | TownHostExpenses) => {
@@ -166,7 +171,7 @@ export function TownCityBillboard({
   stores?: (span: TownUsageWindow) => TownUsageStore;
 }) {
   const [span, setSpan] = useState<TownUsageWindow>("today");
-  const expenses = townCityExpenses(useTownExpensesUsage(span, stores));
+  const expenses = townCityExpenses(useTownExpensesUsage(stores(span)));
   const style = folded
     ? { left: (center.x + 4) * T, top: (center.y + 2) * T }
     : { left: (center.x + center.w / 2) * T, top: street * T - 4 };
@@ -226,8 +231,7 @@ export function TownHostExpensesBoard({
   folded: boolean;
   store?: TownUsageStore;
 }) {
-  // The city billboard and the Town board keep today's read fresh.
-  const expenses = townHostExpenses(useTownUsage(store), connectionId);
+  const expenses = townHostExpenses(useTownExpensesUsage(store), connectionId);
   return (
     <Board
       folded={folded}

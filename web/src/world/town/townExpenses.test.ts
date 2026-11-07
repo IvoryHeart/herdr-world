@@ -11,11 +11,18 @@ import {
   townUsd,
 } from "./townExpenses";
 import { TownCityBillboard, TownHostExpensesBoard } from "./TownExpenseBoards";
-import { TownUsageStore, type TownUsageState } from "./townPlaceUsage";
+import {
+  TOWN_USAGE_MAX_AGE_MS,
+  TownUsageStore,
+  townPlaceEconomy,
+  townUsageCurrent,
+  type TownUsageState,
+} from "./townPlaceUsage";
 
 const ready = (snapshot: WorldUsageSnapshot): TownUsageState => ({
   status: "ready",
   snapshot,
+  receivedAt: 0,
 });
 
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
@@ -286,4 +293,102 @@ test("the boards render the figures, rooms and what they leave out", async () =>
   // Folded on a phone: a sign that opens the board, reading "no data".
   expect(missing).toContain('aria-label="Archive expenses: no data. Open"');
   expect(missing).not.toContain("$0");
+});
+
+test("a read kept through failed refreshes goes stale, and never past UTC midnight", async () => {
+  // One good read at 23:58 UTC, then the service goes away.
+  const snapshot = usageFixture({
+    rows: [{ connection: "studio", workspace: "alpha", input: 10_000 }],
+    sources: [{ connection: "studio", state: "available" }],
+    observedAt: Date.UTC(2026, 10, 7, 23, 58),
+  });
+  let now = 1_000_000;
+  let fail = false;
+  const store = new TownUsageStore(
+    {
+      call: async () => {
+        if (fail) throw new Error("disconnected");
+        return snapshot;
+      },
+    },
+    () => now,
+  );
+  const settle = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+  store.request();
+  await settle();
+  expect(townCityExpenses(townUsageCurrent(store.get(), now)).status).toBe(
+    "ready",
+  );
+
+  // Refreshes fail; the kept read is still current a minute later...
+  fail = true;
+  now += 60_000;
+  store.request();
+  await settle();
+  expect(store.get().status).toBe("ready");
+  expect(townCityExpenses(townUsageCurrent(store.get(), now)).status).toBe(
+    "ready",
+  );
+  // ...but not once the service's UTC day has turned: no figures at all.
+  now += 60_000;
+  const current = townUsageCurrent(store.get(), now);
+  expect(townCityExpenses(current)).toEqual({ status: "stale" });
+  expect(townHostExpenses(current, "studio")).toEqual({ status: "stale" });
+  expect(
+    townPlaceEconomy(current, {
+      kind: "room",
+      target: {
+        connectionId: "studio",
+        generation: 1,
+        kind: "workspace",
+        nativeId: "alpha",
+        worldId: "example",
+      },
+    }),
+  ).toEqual({ status: "stale" });
+
+  const center = { x: 40, y: 14, w: 34, h: 15, street: 34 };
+  const billboard = renderToStaticMarkup(
+    createElement(TownCityBillboard, {
+      center,
+      street: 7,
+      folded: false,
+      stores: () => store,
+    }),
+  );
+  expect(billboard).toContain("Today</span> · <b>out of date</b>");
+  expect(billboard).not.toContain("tokens");
+  const sign = renderToStaticMarkup(
+    createElement(TownHostExpensesBoard, {
+      connectionId: "studio",
+      hostLabel: "Studio",
+      roomLabel: () => "ALPHA",
+      folded: true,
+      store,
+    }),
+  );
+  expect(sign).toContain('aria-label="Studio expenses: out of date. Open"');
+  expect(sign).not.toContain("ALPHA");
+
+  // Within the same day, a kept read goes stale after a few minutes.
+  const midday = {
+    status: "ready",
+    snapshot: townUsageFixture(),
+    receivedAt: 0,
+  } as const;
+  expect(townUsageCurrent(midday, TOWN_USAGE_MAX_AGE_MS).status).toBe("ready");
+  expect(townUsageCurrent(midday, TOWN_USAGE_MAX_AGE_MS + 1).status).toBe(
+    "stale",
+  );
+
+  // A fresh read brings the figures back.
+  fail = false;
+  store.request();
+  await settle();
+  expect(townCityExpenses(townUsageCurrent(store.get(), now)).status).not.toBe(
+    "stale",
+  );
 });

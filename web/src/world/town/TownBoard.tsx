@@ -186,6 +186,7 @@ const PLACE_ECONOMY: Record<
 > = {
   loading: "Reading today's usage…",
   unavailable: "Usage is unavailable right now.",
+  stale: "Usage is out of date: it could not be refreshed.",
   none: "No usage recorded here today.",
   "no-data": "No usage data from this host.",
 };

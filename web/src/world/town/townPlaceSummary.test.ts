@@ -314,7 +314,11 @@ test("a room's and a table's economy is today's usage of its workspace or tab", 
   const desk = office.deskRoster.find(
     ({ desk }) => desk.tabRef.nativeId === "alpha:t0",
   )!.desk;
-  const ready: TownUsageState = { status: "ready", snapshot: usage() };
+  const ready: TownUsageState = {
+    status: "ready",
+    snapshot: usage(),
+    receivedAt: 0,
+  };
 
   expect(
     townPlaceEconomy(ready, { kind: "room", target: alpha.workspaceRef }),
@@ -360,7 +364,7 @@ test("a room's and a table's economy is today's usage of its workspace or tab", 
   );
   expect(
     townPlaceEconomy(
-      { status: "ready", snapshot: missing },
+      { status: "ready", snapshot: missing, receivedAt: 0 },
       { kind: "room", target: beta.workspaceRef },
     ),
   ).toEqual({ status: "no-data" });
@@ -382,7 +386,7 @@ test("a room card says why its cost is missing rather than showing $0", async ()
     unpriced_records: rollup.records,
   }));
   const economy = townPlaceEconomy(
-    { status: "ready", snapshot },
+    { status: "ready", snapshot, receivedAt: 0 },
     { kind: "room", target: alpha.workspaceRef },
   );
   expect(economy).toMatchObject({ costUsd: null, price: "no-table" });
@@ -461,7 +465,7 @@ test("place cards read today's usage once per refresh interval", async () => {
   const snapshot = usage();
   resolve(snapshot);
   await Promise.resolve();
-  expect(store.get()).toEqual({ status: "ready", snapshot });
+  expect(store.get()).toEqual({ status: "ready", snapshot, receivedAt: 0 });
   now = 29_999;
   store.request();
   expect(calls).toHaveLength(1);
@@ -471,7 +475,7 @@ test("place cards read today's usage once per refresh interval", async () => {
   // A failed refresh keeps the numbers the cards already show.
   resolve(null);
   await Promise.resolve();
-  expect(store.get()).toEqual({ status: "ready", snapshot });
+  expect(store.get()).toEqual({ status: "ready", snapshot, receivedAt: 0 });
 });
 
 test("room and table cards build their summaries only once opened", () => {

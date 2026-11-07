@@ -162,6 +162,11 @@ Town reads `world.usage.get` for its boards (`web/src/world/town/townExpenses.ts
 - A host with no available or partial source reads "no data", and the city
   board counts such hosts. A readable host with no records reads "none
   recorded". Neither is shown as zero.
+- A failed re-read keeps the last read for at most five minutes, and never
+  past the service's UTC midnight (its `observed_at` day plus the time since
+  the read arrived), since both windows turn there. After that the boards
+  and room cards read "out of date" and show no figures until a read
+  succeeds.
 - Boards re-read about once a minute while Town shows them and when the page
   regains focus or becomes visible; the shared store sends at most one read
   per window every 30 seconds.

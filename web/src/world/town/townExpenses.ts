@@ -11,9 +11,9 @@ import {
   townUsageCounted,
   townUsagePrice,
   townUsageStore,
-  useTownUsage,
+  useTownCurrentUsage,
+  type TownCurrentUsage,
   type TownUsagePrice,
-  type TownUsageState,
   type TownUsageStore,
   type TownUsageWindow,
 } from "./townPlaceUsage";
@@ -32,6 +32,8 @@ import {
  * - A null estimated cost stays null and says why: no price table, or models
  *   missing from it. It is never $0.
  * - A host with no readable harness has no data, which is never shown as 0.
+ * - A read kept through failed refreshes, or from before the UTC day turned,
+ *   is stale and shows no figures (`townUsageCurrent`).
  */
 
 /** One figure: tokens, and the estimate with why it is null when it is. */
@@ -60,7 +62,7 @@ export type TownExpenseRoom = {
   total: TownExpenseTotal;
 };
 
-type Waiting = { status: "loading" | "unavailable" | "no-data" };
+type Waiting = { status: "loading" | "unavailable" | "stale" | "no-data" };
 
 export type TownCityExpenses =
   | Waiting
@@ -152,13 +154,15 @@ function coverage(
   };
 }
 
-const waiting = (state: TownUsageState): Waiting | null =>
-  state.status === "ready"
-    ? null
-    : { status: state.status === "failed" ? "unavailable" : "loading" };
+const waiting = (state: TownCurrentUsage): Waiting | null => {
+  if (state.status === "ready") return null;
+  if (state.status === "failed") return { status: "unavailable" };
+  if (state.status === "stale") return { status: "stale" };
+  return { status: "loading" };
+};
 
 /** The whole World's expenses, for the city billboard. */
-export function townCityExpenses(state: TownUsageState): TownCityExpenses {
+export function townCityExpenses(state: TownCurrentUsage): TownCityExpenses {
   const pending = waiting(state);
   if (pending || state.status !== "ready") return pending!;
   const { snapshot } = state;
@@ -202,7 +206,7 @@ const spend = (a: TownExpenseRoom, b: TownExpenseRoom, byCost: boolean) =>
 
 /** One host's expenses, for the board beside its reception. */
 export function townHostExpenses(
-  state: TownUsageState,
+  state: TownCurrentUsage,
   connectionId: string,
 ): TownHostExpenses {
   const pending = waiting(state);
@@ -317,15 +321,12 @@ export const TOWN_WINDOW_LABEL: Record<TownUsageWindow, string> = {
 export const TOWN_EXPENSES_REFRESH_MS = 60_000;
 
 /**
- * A window's usage, read when the board mounts, every minute while it is
- * shown and when the page regains focus; never while the page is hidden.
- * The store holds requests to one per 30 seconds, the service's interval.
+ * A window's usage as it may be shown now, read when the board mounts,
+ * every minute while it is shown and when the page regains focus; never
+ * while the page is hidden. The store holds requests to one per 30 seconds,
+ * the service's interval.
  */
-export function useTownExpensesUsage(
-  span: TownUsageWindow,
-  stores: (span: TownUsageWindow) => TownUsageStore = townUsageStore,
-) {
-  const store = stores(span);
+export function useTownExpensesUsage(store: TownUsageStore = townUsageStore()) {
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState !== "hidden") store.request();
@@ -340,5 +341,5 @@ export function useTownExpensesUsage(
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [store]);
-  return useTownUsage(store);
+  return useTownCurrentUsage(store);
 }
