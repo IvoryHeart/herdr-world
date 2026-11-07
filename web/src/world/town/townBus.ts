@@ -5,6 +5,7 @@
  */
 
 import type { BinEntry } from "../../../../shared/bin";
+import { binClockLabel } from "../bin/binStore";
 import {
   TOWN_TILE as T,
   type TownBuilding,
@@ -236,6 +237,44 @@ export function townBusTimeline(
   return { start, pieces, halts, cruise, length: route.length };
 }
 
+/** A stop's clock reads "due" from this long before the bus pulls in. */
+export const TOWN_BUS_DUE_MS = 5_000;
+
+/**
+ * What a stop's clock reads. The trip starts with the bus off the map (it
+ * comes in late when it has time to spare, see townBusTimeline) and drives
+ * the route first, so the clock counts to when the bus pulls in at this
+ * stop: `halt` in this trip, seconds into it, for those riding it, and
+ * `nextHalt` in the next one for those waiting for it. It reads "due" in
+ * the last few seconds and while the bus stands there, "stopped" while the
+ * bus is stopped.
+ */
+export function townStopClock({
+  elapsed,
+  next,
+  stopped,
+  riding,
+  halt,
+  nextHalt,
+}: {
+  /** ms into the trip on the map, or null (binBusClock). */
+  elapsed: number | null;
+  /** ms until the next trip sets off (binBusClock). */
+  next: number;
+  stopped: boolean;
+  /** Someone at the stop rides the trip on the map. */
+  riding: boolean;
+  halt: number | undefined;
+  nextHalt: number | undefined;
+}) {
+  if (elapsed !== null && riding && stopped) return "stopped";
+  const until =
+    elapsed !== null && riding
+      ? (halt ?? 0) * 1000 - elapsed
+      : next + (nextHalt ?? 0) * 1000;
+  return until <= TOWN_BUS_DUE_MS ? "due" : binClockLabel(until);
+}
+
 /**
  * How far along the route the bus is `elapsedMs` into its trip, or null
  * while it has not yet come in.
@@ -385,6 +424,47 @@ export function townNearestStop(
     }
   }
   return best;
+}
+
+/**
+ * A waiting rider's walk outside: whether this page saw its actor indoors
+ * (on its way out), and when it went out of the front door (ms), or null
+ * while it is not out.
+ */
+export type TownRiderOuting = { indoors: boolean; out: number | null };
+
+/**
+ * A rider's outing before Town first draws it. One this page has never
+ * shown (binned here a moment ago, or on Board before Town was opened)
+ * counts as on its way out, so it walks from its front door; one this page
+ * already showed outside (Town opened again) stands at its stop.
+ */
+export function townRiderFirstOuting(shownBefore: boolean): TownRiderOuting {
+  return { indoors: !shownBefore, out: null };
+}
+
+/**
+ * A rider's outing after the frame drawn at `time`, where its actor is out
+ * of the front door (`out`), indoors, or not drawn yet (null). One seen
+ * indoors walks from the door when it goes out, however long its walk
+ * indoors took (slower on a phone, where frames come less often). One
+ * already out when first seen and not counted as on its way out
+ * (townRiderFirstOuting) stands at its stop, as every rider does with
+ * reduced motion.
+ */
+export function townRiderOuting(
+  outing: TownRiderOuting,
+  out: boolean | null,
+  time: number,
+  still: boolean,
+): TownRiderOuting {
+  if (out === null) return { indoors: outing.indoors, out: null };
+  if (!out) return { indoors: true, out: null };
+  if (outing.out !== null) return outing;
+  return {
+    indoors: outing.indoors,
+    out: outing.indoors && !still ? time : -Infinity,
+  };
 }
 
 /**

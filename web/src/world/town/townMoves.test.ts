@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import { bridge } from "../../api";
 import { moveTabInList } from "../../tabReorder";
-import type { OfficeDesk } from "../herdrOfficeProjection";
+import type { OfficeDesk, OfficeRoom } from "../herdrOfficeProjection";
 import {
   deskReorderIndex,
   requestDeskReorder,
+  requestRoomOrder,
+  townRoomOrderMoves,
   townMoveNotice,
   townMoveResult,
 } from "./townMoves";
@@ -128,6 +130,95 @@ test("an old Herdr host is refused in plain words, before any tab.move", async (
         "This host's Herdr cannot reorder tabs. Herdr 0.7.2 or later can.",
     });
     expect(calls).toEqual(["tab.list"]);
+  } finally {
+    bridge.connection = connection;
+  }
+});
+
+const room = (workspace: string, connectionId = "local", generation = 3) =>
+  ({
+    key: `room:${workspace}`,
+    displayLabel: workspace,
+    workspaceRef: { connectionId, generation, nativeId: workspace },
+  }) as unknown as OfficeRoom;
+
+test("Herdr's workspace order follows the rooms' reading order", () => {
+  // Apply the moves as Herdr does: insert before the entry at insert_index,
+  // counted before removal.
+  const apply = (
+    order: string[],
+    moves: { workspace_id: string; insert_index: number }[],
+  ) => {
+    for (const { workspace_id, insert_index } of moves) {
+      const before = order[insert_index];
+      order.splice(order.indexOf(workspace_id), 1);
+      const at = before === undefined ? order.length : order.indexOf(before);
+      order.splice(at, 0, workspace_id);
+    }
+    return order;
+  };
+  const order = ["w1", "w2", "w3", "w4", "w5"];
+  // Rooms w2, w3 and w5 are this building's; w1 and w4 keep their places.
+  const moves = townRoomOrderMoves(order, ["w5", "w2", "w3"])!;
+  expect(apply([...order], moves)).toEqual(["w1", "w5", "w2", "w4", "w3"]);
+  expect(townRoomOrderMoves(order, ["w2", "w3", "w5"])).toEqual([]);
+  expect(townRoomOrderMoves(order, ["w2", "w9"])).toBeUndefined();
+  for (const rooms of [
+    ["w5", "w4", "w3", "w2", "w1"],
+    ["w3", "w1", "w2"],
+    ["w4", "w1"],
+  ])
+    expect(
+      apply([...order], townRoomOrderMoves(order, rooms)!).filter((id) =>
+        rooms.includes(id),
+      ),
+    ).toEqual(rooms);
+});
+
+test("a building's rooms are put in order through workspace.move", async () => {
+  const calls: [string, unknown][] = [];
+  const connection = bridge.connection;
+  bridge.connection = ((connectionId: string, generation: number) => ({
+    connectionId,
+    generation,
+    serverRuntimeGeneration: generation,
+    isCurrent: () => true,
+    acceptsServerGeneration: () => true,
+    call: async (method: string, params: unknown) => {
+      calls.push([method, params]);
+      if (method === "workspace.list")
+        // Listed out of order: Herdr's order is the workspace number.
+        return {
+          workspaces: [
+            { workspace_id: "w3", number: 3 },
+            { workspace_id: "w1", number: 1 },
+            { workspace_id: "w4", number: 4 },
+            { workspace_id: "w2", number: 2 },
+          ],
+        };
+      return { type: "ok" };
+    },
+  })) as unknown as typeof bridge.connection;
+  try {
+    expect(
+      await requestRoomOrder([room("w4"), room("w1"), room("w2"), room("w3")]),
+    ).toEqual({ status: "moved" });
+    expect(calls.slice(1)).toEqual([
+      ["workspace.move", { workspace_id: "w4", insert_index: 0 }],
+    ]);
+    // A room Herdr no longer lists is refused, with nothing moved.
+    calls.length = 0;
+    expect(await requestRoomOrder([room("w9"), room("w2")])).toMatchObject({
+      status: "refused",
+      reason: "changed",
+    });
+    expect(calls.map(([method]) => method)).toEqual(["workspace.list"]);
+    // Another host's building: refused before asking any host.
+    calls.length = 0;
+    expect(
+      await requestRoomOrder([room("w1"), room("w2", "remote")]),
+    ).toMatchObject({ status: "refused", reason: "other_host" });
+    expect(calls).toEqual([]);
   } finally {
     bridge.connection = connection;
   }

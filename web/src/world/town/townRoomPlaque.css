@@ -43,6 +43,13 @@
   text-transform: uppercase;
 }
 
+/* The name is the room's handle: drag it (a touch hold) to move the room. */
+.town-room-plaque-name.is-movable,
+.town-room-plaque .town-plaque-action.town-plaque-move {
+  cursor: grab;
+  touch-action: none;
+}
+
 .town-room-plaque-count,
 .town-room-plaque-badge {
   flex: 0 0 auto;

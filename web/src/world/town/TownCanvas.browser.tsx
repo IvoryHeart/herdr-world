@@ -54,6 +54,7 @@ import {
   writeOfficePreferences,
 } from "../officePreferences";
 import { waitForElement } from "../testing/waitForElement";
+import { WorldBin } from "../bin/WorldBin";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -393,6 +394,7 @@ const sent: { paneId: string; text: string; keys: string[] }[] = [];
 const moves: { method: string; params: Record<string, unknown> }[] = [];
 /** Each host's tabs in Herdr's order, for tab.list. */
 let herdrTabs: (connectionId: string) => unknown[] = () => [];
+let herdrWorkspaces: (connectionId: string) => unknown[] = () => [];
 let statusOf: (paneId: string) => string = () => "working";
 const SCREENS = {
   blocked: [
@@ -530,6 +532,12 @@ let latestText =
             },
           };
     if (method === "tab.list") return { tabs: herdrTabs(connectionId) };
+    if (method === "workspace.list")
+      return { workspaces: herdrWorkspaces(connectionId) };
+    if (method === "workspace.move") {
+      moves.push({ method, params: { ...params, connectionId } });
+      return { type: "ok" };
+    }
     if (method === "tab.move") {
       moves.push({ method, params: { ...params, connectionId } });
       return { type: "tab_list", tabs: [] };
@@ -629,7 +637,28 @@ const deskKeyOf = (identity: Record<string, unknown>) =>
     identity.terminal_id,
     identity.agent_session_fingerprint ?? null,
   ]);
+/** Agents put in the (fake) service's bin, which holds nobody. */
+const binAdds: Record<string, unknown>[] = [];
+const binState = () => ({
+  epoch: "town-fixture",
+  revision: binAdds.length,
+  entries: [],
+  closing: [],
+  outcomes: [],
+  bus: {
+    interval_ms: 240_000,
+    trip_ms: 120_000,
+    next_ms: 60_000,
+    elapsed_ms: null,
+    stopped: false,
+    trip: null,
+  },
+});
 worldBridge.call = async (method, params) => {
+  if (method.startsWith("world.bin.")) {
+    if (method === "world.bin.add") binAdds.push(params ?? {});
+    return binState();
+  }
   if (method === "world.desk.get") return structuredClone(desk);
   if (method === "world.desk.review") {
     const mark = params as Record<string, unknown>;
@@ -693,6 +722,13 @@ worldBridge.call = async (method, params) => {
       color: Extract<BoardOp, { op: "card.color" }>["color"];
     }[]) {
       boardPatches.push(op);
+      if (op.op === "room.place") {
+        const place = op as unknown as Extract<BoardOp, { op: "room.place" }>;
+        const pins = (boardDocument.layout.room_pins ??= {});
+        for (const key of Object.keys(pins))
+          if (key.startsWith(`${place.connection_id}:`)) delete pins[key];
+        Object.assign(pins, place.spots);
+      }
       if (op.op === "card.color") {
         const colors = (boardDocument.layout.colors ??= {});
         if (op.color) colors[op.key] = op.color;
@@ -996,6 +1032,9 @@ async function run() {
   herdrTabs = (connectionId) =>
     base.connections.find((c) => c.connectionId === connectionId)?.snapshot
       ?.tabs ?? [];
+  herdrWorkspaces = (connectionId) =>
+    base.connections.find((c) => c.connectionId === connectionId)?.snapshot
+      ?.workspaces ?? [];
   const blocked = base.agentPanes.filter((pane, index) =>
     scale === "plates" ? pane.agent_status === "blocked" : index % 23 === 4,
   );
@@ -1329,6 +1368,153 @@ async function run() {
   if (scale === "typical" && mode === "test")
     await checkTownCenter(host, check, waitFor);
   if (scale === "plates" && mode === "test") {
+    // A room dragged by its wall goes where it is dropped in its building:
+    // World saves every room's spot for that host, Herdr's order follows on
+    // that host only, and the room lands.
+    {
+      const visibleRooms = [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="room"]',
+        ),
+      ].filter((target) => {
+        const box = target.getBoundingClientRect();
+        return (
+          box.width > 40 &&
+          box.left > 0 &&
+          box.top > 0 &&
+          box.right < window.innerWidth &&
+          box.top + box.height * 4 < window.innerHeight
+        );
+      });
+      const owner = (target: HTMLElement) =>
+        JSON.parse(target.dataset.targetKey!) as [string, unknown, string];
+      const pair = visibleRooms.flatMap((from) => {
+        const onto = visibleRooms.find(
+          (other) => other !== from && owner(other)[0] === owner(from)[0],
+        );
+        return onto ? [[from, onto] as const] : [];
+      })[0];
+      if (pair) {
+        const [from, onto] = pair;
+        const roomPress = (type: string, x: number, y: number) =>
+          host.querySelector("canvas")!.parentElement!.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              pointerId: 41,
+              pointerType: "mouse",
+              button: 0,
+              buttons: type === "pointerup" ? 0 : 1,
+              clientX: x,
+              clientY: y,
+            }),
+          );
+        const wall = from.getBoundingClientRect();
+        const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
+        const before = moves.length;
+        const patchesBefore = boardPatches.length;
+        const drags = () => window.__HERDR_TOWN_RENDERER__!.drags;
+        const drawn = { ...drags() };
+        // Its left wall, under the name strip.
+        const below = wall.top + wall.height * 3;
+        // Escape puts a lifted room back without moving it.
+        roomPress("pointerdown", wall.left + 3, below);
+        roomPress("pointermove", wall.left + 30, below + 10);
+        await waitFor(() => ghost() !== null, "a room's wall did not lift it");
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+        await waitFor(() => ghost() === null, "Escape left the room carried");
+        roomPress("pointerup", wall.left + 30, below + 10);
+        await settle();
+        check(moves.length === before, "a room put back by Escape moved");
+        roomPress("pointerdown", wall.left + 3, below);
+        roomPress("pointermove", wall.left + 30, below + 10);
+        await waitFor(
+          () => ghost()?.textContent?.startsWith("Move ") ?? false,
+          "dragging a room's wall did not lift the room",
+        );
+        const box = onto.getBoundingClientRect();
+        const floor = [
+          box.left + box.width / 2,
+          box.top + box.height * 3,
+        ] as const;
+        roomPress("pointermove", ...floor);
+        for (let frame = 0; frame < 10; frame += 1) {
+          await settle();
+          if (ghost()?.dataset.valid === "true") break;
+        }
+        check(
+          ghost()?.dataset.valid === "true" &&
+            ghost()!.textContent!.endsWith(" here"),
+          `a room carried over its building was not a drop target: ${JSON.stringify(ghost()?.textContent)}`,
+        );
+        roomPress("pointerup", ...floor);
+        const [connectionId, , workspaceId] = owner(from);
+        await waitFor(
+          () =>
+            boardPatches
+              .slice(patchesBefore)
+              .some((op) => op.op === "room.place"),
+          "dropping a room did not save where the rooms stand",
+        );
+        const placed = boardPatches
+          .slice(patchesBefore)
+          .find((op) => op.op === "room.place") as unknown as Extract<
+          BoardOp,
+          { op: "room.place" }
+        >;
+        check(
+          placed.connection_id === connectionId &&
+            Boolean(placed.spots[`${connectionId}:${workspaceId}`]),
+          `a room drop saved ${JSON.stringify(placed)}`,
+        );
+        // Herdr's order follows on the room's own host, never another.
+        check(
+          moves
+            .slice(before)
+            .every(
+              (move) =>
+                move.method === "workspace.move" &&
+                move.params.connectionId === connectionId &&
+                typeof move.params.insert_index === "number",
+            ),
+          `a room drop sent ${JSON.stringify(moves.slice(before))}`,
+        );
+        await waitFor(
+          () => drags().landings > drawn.landings,
+          "a moved room did not land",
+        );
+        await waitFor(() => ghost() === null, "a moved room's label stayed up");
+        // Another device clears the saved spots: the rooms stack again in
+        // Herdr's order, as the rest of this case expects them.
+        const home = { left: wall.left, top: wall.top };
+        boardDocument = {
+          ...boardDocument,
+          revision: boardDocument.revision + 1,
+          layout: { ...boardDocument.layout, room_pins: {} },
+        };
+        for (const listener of boardListeners)
+          listener({
+            type: "world_board_changed",
+            revision: boardDocument.revision,
+          });
+        await waitFor(() => {
+          const box = from.isConnected
+            ? from.getBoundingClientRect()
+            : undefined;
+          return (
+            box !== undefined &&
+            Math.abs(box.left - home.left) < 2 &&
+            Math.abs(box.top - home.top) < 2
+          );
+        }, "rooms did not stack again once their saved spots were cleared");
+      } else if (!phone)
+        check(
+          false,
+          `no two visible rooms share a building (${visibleRooms.length} visible)`,
+        );
+    }
+
     await checkTownRoomPlates(host, check, waitFor, {
       connectionId: base.connections[0]!.connectionId,
       generation: base.connections[0]!.generation,
@@ -2954,6 +3140,56 @@ async function run() {
       `desk reorder sent ${JSON.stringify(reorder)}`,
     );
     await landed(drawn, "a reordered desk");
+
+    // The bin floats at the bottom of Town, over the canvas: a desk held and
+    // dropped on it puts its agents in the bin, wherever the stops are.
+    const binHost = document.createElement("div");
+    document.body.append(binHost);
+    const binRoot = createRoot(binHost);
+    binRoot.render(<WorldBin always bus />);
+    const chip = await waitForElement(
+      document.body,
+      () => document.querySelector<HTMLElement>(".world-bin-chip"),
+      "Town shows no floating bin",
+    );
+    const chipBox = chip.getBoundingClientRect();
+    const onChip = [
+      chipBox.left + chipBox.width / 2,
+      chipBox.top + chipBox.height / 2,
+    ] as const;
+    const binnedBefore = binAdds.length;
+    press("pointerdown", at(fromDesk));
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") !== null,
+      "holding a desk did not lift it for the bin",
+    );
+    press("pointermove", onChip);
+    await waitFor(
+      () => chip.hasAttribute("data-bin-over"),
+      "a desk carried over the floating bin did not mark it",
+    );
+    check(
+      host.querySelector(".town-drag-ghost")?.textContent ===
+        "Put in the bin" &&
+        document.documentElement.hasAttribute("data-bin-carry"),
+      "a carry over the floating bin offers to put it in the bin",
+    );
+    press("pointerup", onChip);
+    await waitFor(
+      () => binAdds.length > binnedBefore,
+      "dropping a desk on the floating bin did not put its agents in",
+    );
+    check(
+      binAdds.slice(binnedBefore).every((add) => add.view === "town"),
+      `a Town bin drop names Town (${JSON.stringify(binAdds.slice(binnedBefore))})`,
+    );
+    check(
+      !chip.hasAttribute("data-bin-over") &&
+        !document.documentElement.hasAttribute("data-bin-carry"),
+      "the floating bin's marks clear on drop",
+    );
+    binRoot.unmount();
+    binHost.remove();
 
     // Carried to another room's floor, the desk moves there with
     // town.move_desk and lands the same way.

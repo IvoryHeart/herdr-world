@@ -68,6 +68,8 @@ export type WorldUsageSnapshot = {
   total: UsageTotal;
   unattributed: UsageTotal;
   rollups: UsageRollup[];
+  /** Subscription limits per host and harness, independent of `window`. */
+  limits: UsageLimit[];
   telemetry: {
     role: "comparison";
     included_in_totals: false;
@@ -77,3 +79,48 @@ export type WorldUsageSnapshot = {
     total_tokens: number;
   };
 };
+
+/** One subscription window: its length, how much is used and when it resets. */
+export type UsageLimitWindow = {
+  window_minutes: number;
+  /** 0–100, as the harness reported it. */
+  used_percent: number;
+  /** Milliseconds since the epoch, or null when the harness gave none. */
+  resets_at: number | null;
+};
+/**
+ * The newest subscription-limit observation for one harness on one host.
+ * Only numbers, window lengths and times: never account IDs, plan names,
+ * credits, credentials or provider errors.
+ */
+export type UsageLimit = {
+  connection_id: string;
+  connection_generation: number;
+  harness: "codex" | "claude";
+  /**
+   * `available`: current; `stale`: older than its reset or a few hours;
+   * `missing`: no observation on this host; `unsupported`: the harness keeps
+   * no readable record of its limits, see `reason`.
+   */
+  state: "available" | "stale" | "missing" | "unsupported";
+  source: "codex-session-log" | null;
+  reason: string | null;
+  observed_at: number | null;
+  windows: UsageLimitWindow[];
+};
+/** An observation older than this is stale even before its window resets. */
+export const USAGE_LIMIT_STALE_MS = 3 * 60 * 60 * 1000;
+export const CLAUDE_LIMITS_REASON =
+  "Claude Code does not save how much of its limits is used";
+
+/** True once an observation is too old to trust, or any window has reset since. */
+export function usageLimitExpired(
+  observedAt: number,
+  windows: readonly UsageLimitWindow[],
+  now: number,
+) {
+  return (
+    now - observedAt > USAGE_LIMIT_STALE_MS ||
+    windows.some((w) => w.resets_at !== null && w.resets_at <= now)
+  );
+}

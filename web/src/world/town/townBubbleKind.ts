@@ -1,6 +1,12 @@
+import type { TownCrowdMood } from "./townActors";
 import { townHash } from "./townSprites";
 
-/** Blocked is urgent; a ledger question is quiet owner attention; a finish follows both. */
+/**
+ * Blocked is urgent; a ledger question is quiet owner attention; a finish
+ * follows both. An agent in the reception overflow crowd curses, then
+ * snores, whatever it waits for: the crowd itself is the signal. An agent
+ * whose state is unknown is confused, not asleep.
+ */
 export function townBubbleKind(
   status: string,
   asking: boolean,
@@ -9,10 +15,15 @@ export function townBubbleKind(
   mode: string,
   chatting: boolean,
   typingFrame: number,
+  mood: TownCrowdMood | null = null,
 ) {
+  if (mood === "grumble") return "curse";
+  if (mood === "nap") return "sleep";
   if (status === "blocked") return "blocked";
   if (asking) return "ask";
   if (status === "done" && !seen) return "done";
+  if ((level === "room" || level === "desk") && status === "unknown")
+    return "confused";
   if (level === "desk" && status === "idle" && mode === "stand") return "idle";
   if (
     (level === "room" || level === "desk") &&

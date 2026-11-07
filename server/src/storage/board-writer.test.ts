@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldWriter } from "./world-writer";
+import { migrateWorldDatabase, worldMigrations } from "./world-schema";
 import type { BoardOperation } from "./world-board";
 import { BoardStore } from "../world/board-store";
 const roots: string[] = [];
@@ -354,4 +355,63 @@ test("a conflicting preserved Board backup is refused before any rows or marker"
   expect(() => open(p)).toThrow(/backup/i);
   expect(readFileSync(p.board)).toEqual(bytes);
   expect(readFileSync(backup, "utf8")).toBe("Conflicting synthetic backup");
+});
+test("Town room spots are saved in their own rows, after an upgrade from the schema before them", () => {
+  const p = fresh();
+  // A database written by the service before room spots existed.
+  const old = new Database(p.database);
+  try {
+    migrateWorldDatabase(old, p.database, worldMigrations.slice(0, -1));
+  } finally {
+    old.close();
+  }
+  const writer = open(p);
+  let after;
+  try {
+    const [result] = writer.batch(
+      [
+        {
+          ticket: 0,
+          request: {
+            type: "board" as const,
+            operation: {
+              ops: [
+                {
+                  op: "room.place",
+                  connection_id: "studio",
+                  spots: {
+                    "studio:w1": { x: 2, y: 9 },
+                    "studio:w2": { x: 40, y: 9 },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      1000,
+    );
+    expect(result!.error).toBeUndefined();
+    after = writer.read().board!;
+    expect(after.layout.room_pins).toEqual({
+      "studio:w1": { x: 2, y: 9 },
+      "studio:w2": { x: 40, y: 9 },
+    });
+  } finally {
+    writer.close();
+  }
+  const reopened = open(p);
+  try {
+    expect(reopened.read().board).toEqual(after);
+  } finally {
+    reopened.close();
+  }
+  const db = new Database(p.database, { readonly: true });
+  try {
+    expect(
+      db.query("SELECT count(*) AS count FROM board_room_pins").get(),
+    ).toEqual({ count: 2 });
+  } finally {
+    db.close();
+  }
 });

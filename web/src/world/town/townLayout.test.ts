@@ -4,6 +4,7 @@ import {
   TOWN_DEFAULT_RENDERED_DESKS,
   TOWN_ROOM_TIERS,
   townDeskSlots,
+  townGeometryKey,
   townPinCell,
   townSeat,
   townRoomTiers,
@@ -14,6 +15,13 @@ import {
   type TownInput,
   type TownLayout,
 } from "./townLayout";
+import {
+  townRoomNeighbor,
+  townRoomPlacement,
+  townRoomsMoved,
+  townRoomSpotAt,
+  townRoomSwap,
+} from "./townRoomPlace";
 
 /** Tiles per desk cell, as townLayout draws them. */
 const CELL_TILES = 5;
@@ -853,4 +861,233 @@ test("rooms keep their place inside the building", () => {
   expect(Math.min(...building.rooms.map((room) => room.y))).toBe(
     building.y + 9,
   );
+});
+
+const roomsAt = (layout: TownLayout) =>
+  new Map(
+    layout.buildings
+      .flatMap((building) => building.rooms)
+      .map((room) => [
+        room.key,
+        { x: room.x, y: room.y, w: room.w, h: room.h },
+      ]),
+  );
+
+/** The input with its rooms in this order (Herdr's, after a move). */
+function ordered(input: TownInput, order: readonly string[]): TownInput {
+  return {
+    ...input,
+    rooms: input.rooms.map((room) =>
+      order.includes(room.key)
+        ? { ...room, order: order.indexOf(room.key) }
+        : room,
+    ),
+  };
+}
+
+/** Every room of every building stands clear of the others, inside its walls. */
+function expectClear(layout: TownLayout) {
+  for (const building of layout.buildings) {
+    for (const room of building.rooms) {
+      expect(room.x).toBeGreaterThanOrEqual(building.x + 2);
+      expect(room.y).toBeGreaterThanOrEqual(building.y + 9);
+      expect(room.x + room.w).toBeLessThanOrEqual(building.x + building.w - 2);
+      expect(room.y + room.h).toBeLessThanOrEqual(building.y + building.h - 2);
+      // The bar stays clear of every room.
+      expect(overlaps(room, building.lounge)).toBe(false);
+      for (const other of building.rooms)
+        if (other !== room)
+          expect(
+            overlaps(
+              { x: room.x - 1, y: room.y - 1, w: room.w + 2, h: room.h + 2 },
+              other,
+            ),
+          ).toBe(false);
+    }
+  }
+}
+
+test("a dropped room lands where the preview showed, as a reload lays it out", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const input = town({ a: [3, 3, 3, 3, 3, 3], b: [24, 1] });
+    const live = layoutTown(input, shape);
+    const building = live.layout.buildings[0]!;
+    // Every spot in the building, a few tiles apart, for the first room.
+    for (let ty = building.y; ty < building.y + building.h; ty += 4)
+      for (let tx = building.x; tx < building.x + building.w; tx += 5) {
+        const spot = townRoomSpotAt(live.layout, "a/room-0", tx, ty)!;
+        const placement = townRoomPlacement(
+          live.layout,
+          "a",
+          new Map([["a/room-0", spot]]),
+        )!;
+        // Herdr's order follows the rooms' reading order.
+        const moved = ordered(input, placement.order);
+        const after = layoutTown(
+          moved,
+          shape,
+          live.memory,
+          undefined,
+          placement.spots,
+        );
+        expect(roomsAt(after.layout)).toEqual(placement.rooms);
+        // The room stands exactly where it was dropped.
+        const placed = after.layout.buildings[0]!.rooms.find(
+          (room) => room.key === "a/room-0",
+        )!;
+        const lot = after.layout.buildings[0]!;
+        expect({ x: placed.x - lot.x, y: placed.y - lot.y }).toEqual(spot);
+        expectClear(after.layout);
+        // A reload (no memory) shows the same; so does a device that has
+        // not seen Herdr's new order yet.
+        const reload = layoutTown(
+          moved,
+          shape,
+          new Map(),
+          undefined,
+          placement.spots,
+        );
+        expect(townGeometryKey(reload.layout)).toBe(
+          townGeometryKey(after.layout),
+        );
+        const stale = layoutTown(
+          input,
+          shape,
+          live.memory,
+          undefined,
+          placement.spots,
+        );
+        expect(roomsAt(stale.layout)).toEqual(placement.rooms);
+      }
+  }
+});
+
+test("a room moved onto others pushes them down, and the building grows to fit", () => {
+  const input = town({ a: [3, 3, 3, 3] });
+  const live = layoutTown(input, TOWN_SHAPES.wide);
+  const at = roomsAt(live.layout);
+  const building = live.layout.buildings[0]!;
+  // Room 3 dropped onto room 0's spot: room 0 makes way below it.
+  const was = at.get("a/room-0")!;
+  const placement = townRoomPlacement(
+    live.layout,
+    "a",
+    new Map([["a/room-3", { x: was.x - building.x, y: was.y - building.y }]]),
+  )!;
+  expect(placement.changed).toBe(true);
+  const now = placement.rooms;
+  expect(now.get("a/room-3")).toMatchObject({ x: was.x, y: was.y });
+  expect(now.get("a/room-0")!.y).toBeGreaterThan(was.y);
+  expect(placement.order[0]).toBe("a/room-3");
+  const after = layoutTown(
+    ordered(input, placement.order),
+    TOWN_SHAPES.wide,
+    live.memory,
+    undefined,
+    placement.spots,
+  );
+  expectClear(after.layout);
+  // Dropped back on its own spot, nothing changes.
+  const own = at.get("a/room-1")!;
+  expect(
+    townRoomPlacement(
+      live.layout,
+      "a",
+      new Map([["a/room-1", { x: own.x - building.x, y: own.y - building.y }]]),
+    )!.changed,
+  ).toBe(false);
+});
+
+test("placed rooms stay clear when a room grows or a new one opens", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const input = town({ a: [3, 3, 3] });
+    const live = layoutTown(input, shape);
+    const building = live.layout.buildings[0]!;
+    const placement = townRoomPlacement(
+      live.layout,
+      "a",
+      new Map([["a/room-2", { x: 2, y: building.h - 2 - 6 }]]),
+    )!;
+    // Room 0 grows under its saved spot, and a fourth room opens unsaved.
+    const grown = town({ a: [40, 3, 3, 3] });
+    const after = layoutTown(
+      grown,
+      shape,
+      live.memory,
+      undefined,
+      placement.spots,
+    );
+    expectClear(after.layout);
+    expect(after.layout.buildings[0]!.rooms).toHaveLength(4);
+  }
+});
+
+test("Move before and after swap a room with its reading-order neighbour", () => {
+  const input = town({ a: [3, 3, 3], b: [3, 3] });
+  const live = layoutTown(input, TOWN_SHAPES.wide).layout;
+  const at = roomsAt(live);
+  expect(townRoomNeighbor(live, "a/room-0", -1)).toBeNull();
+  expect(townRoomNeighbor(live, "a/room-0", 1)!.key).toBe("a/room-1");
+  const swapped = townRoomSwap(live, "a/room-1", -1)!;
+  expect(swapped.rooms.get("a/room-1")).toMatchObject({
+    x: at.get("a/room-0")!.x,
+    y: at.get("a/room-0")!.y,
+  });
+  expect(swapped.order.slice(0, 2)).toEqual(["a/room-1", "a/room-0"]);
+  // The last room of a building has nothing after it.
+  expect(townRoomSwap(live, "b/room-1", 1)).toBeNull();
+});
+
+test("a carried room's spot stays inside its own building", () => {
+  const live = layoutTown(town({ a: [3, 3], b: [3] }), TOWN_SHAPES.wide).layout;
+  const building = live.buildings[0]!;
+  const room = building.rooms[0]!;
+  expect(townRoomSpotAt(live, room.key, -50, -50)).toEqual({ x: 2, y: 9 });
+  expect(townRoomSpotAt(live, room.key, 9999, 9999)).toEqual({
+    x: building.w - 2 - room.w,
+    y: building.h - 2 - room.h,
+  });
+  // Spots are whole tiles from the building's corner.
+  expect(
+    townRoomSpotAt(live, room.key, building.x + 10.4, building.y + 12.6),
+  ).toEqual({ x: 10, y: 13 });
+  // A room is placed only in its own host's building.
+  expect(
+    townRoomPlacement(live, "b", new Map([[room.key, { x: 2, y: 9 }]])),
+  ).toBeNull();
+});
+
+test("a move, not a reflow: saved spots or the workspace order changed", () => {
+  const input = town({ a: [3, 3, 3], b: [2] });
+  const before = layoutTown(input, TOWN_SHAPES.wide);
+  const grown = layoutTown(
+    town({ a: [30, 3, 3, 3], b: [2] }),
+    TOWN_SHAPES.wide,
+    before.memory,
+  );
+  expect(townRoomsMoved(before.layout, grown.layout)).toBe(false);
+  const reordered = layoutTown(
+    ordered(input, ["a/room-2", "a/room-0", "a/room-1"]),
+    TOWN_SHAPES.wide,
+    before.memory,
+  );
+  expect(townRoomsMoved(before.layout, reordered.layout)).toBe(true);
+  const spots = new Map([["a/room-0", { x: 2, y: 30 }]]);
+  const placed = layoutTown(
+    input,
+    TOWN_SHAPES.wide,
+    before.memory,
+    undefined,
+    spots,
+  );
+  expect(townRoomsMoved(before.layout, placed.layout)).toBe(true);
+  // The same saved spots again are no move.
+  const again = layoutTown(
+    input,
+    TOWN_SHAPES.wide,
+    placed.memory,
+    undefined,
+    spots,
+  );
+  expect(townRoomsMoved(placed.layout, again.layout)).toBe(false);
 });
