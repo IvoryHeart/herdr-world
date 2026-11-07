@@ -1,5 +1,4 @@
 import {
-  CLAUDE_LIMITS_REASON,
   usageLimitExpired,
   type UsageEntity,
   type UsageLimit,
@@ -45,8 +44,8 @@ type Cached = {
   topology: string;
   value: RuntimeUsage;
   stale: Set<string>;
-  /** Limits kept from an earlier read after this one failed. */
-  limitsStale: boolean;
+  /** Harnesses whose limits were kept from an earlier read after this one failed. */
+  limitsStale: Set<string>;
 };
 type Options = {
   incarnation: string;
@@ -207,23 +206,27 @@ export class WorldUsageService {
       value.rows = value.rows.slice(0, 1024);
       // A failed or partial read cannot establish a newer observation, so it
       // keeps the newer cached limits as stale rather than older numbers.
-      let limitsStale = false;
-      const cachedCodex = old?.value.limits?.find((l) => l.harness === "codex");
-      const readCodex = value.limits?.find((l) => l.harness === "codex");
-      if (
-        cachedCodex &&
-        (!readCodex || readCodex.at < cachedCodex.at) &&
-        value.sources.some(
-          (s) =>
-            s.harness === "codex" &&
-            (s.state === "unavailable" || s.state === "partial"),
-        )
-      ) {
-        value.limits = [
-          ...(value.limits ?? []).filter((l) => l.harness !== "codex"),
-          cachedCodex,
-        ];
-        limitsStale = true;
+      const limitsStale = new Set<string>();
+      for (const harness of ["codex", "claude"]) {
+        const cachedLimit = old?.value.limits?.find(
+          (l) => l.harness === harness,
+        );
+        const readLimit = value.limits?.find((l) => l.harness === harness);
+        if (
+          cachedLimit &&
+          (!readLimit || readLimit.at < cachedLimit.at) &&
+          value.sources.some(
+            (s) =>
+              s.harness === harness &&
+              (s.state === "unavailable" || s.state === "partial"),
+          )
+        ) {
+          value.limits = [
+            ...(value.limits ?? []).filter((l) => l.harness !== harness),
+            cachedLimit,
+          ];
+          limitsStale.add(harness);
+        }
       }
       if (
         this.#closed ||
@@ -358,45 +361,44 @@ export class WorldUsageService {
           refreshing: false,
         });
       const generation = cached?.generation ?? status.generation;
-      const codex = value.limits?.find((l) => l.harness === "codex");
-      limits.push(
-        codex
-          ? {
-              connection_id: status.id,
-              connection_generation: generation,
-              harness: "codex",
-              state:
-                !fresh ||
-                cached.limitsStale ||
-                usageLimitExpired(codex.at, codex.windows, now)
-                  ? "stale"
-                  : "available",
-              source: "codex-session-log",
-              reason: null,
-              observed_at: codex.at,
-              windows: codex.windows.map((w) => ({ ...w })),
-            }
-          : {
-              connection_id: status.id,
-              connection_generation: generation,
-              harness: "codex",
-              state: "missing",
-              source: null,
-              reason: null,
-              observed_at: null,
-              windows: [],
-            },
-        {
-          connection_id: status.id,
-          connection_generation: generation,
-          harness: "claude",
-          state: "unsupported",
-          source: null,
-          reason: CLAUDE_LIMITS_REASON,
-          observed_at: null,
-          windows: [],
-        },
-      );
+      for (const harness of ["codex", "claude"] as const) {
+        const limit = value.limits?.find((l) => l.harness === harness);
+        limits.push(
+          limit
+            ? {
+                connection_id: status.id,
+                connection_generation: generation,
+                harness,
+                state:
+                  !fresh ||
+                  cached.limitsStale.has(harness) ||
+                  usageLimitExpired(
+                    limit.at,
+                    limit.windows,
+                    now,
+                    limit.reached ?? null,
+                  )
+                    ? "stale"
+                    : "available",
+                source: limit.source,
+                reason: null,
+                observed_at: limit.at,
+                windows: limit.windows.map((w) => ({ ...w })),
+                reached: limit.reached ? { ...limit.reached } : null,
+              }
+            : {
+                connection_id: status.id,
+                connection_generation: generation,
+                harness,
+                state: "missing",
+                source: null,
+                reason: null,
+                observed_at: null,
+                windows: [],
+                reached: null,
+              },
+        );
+      }
       const bindings =
         fresh &&
         cached?.topology ===

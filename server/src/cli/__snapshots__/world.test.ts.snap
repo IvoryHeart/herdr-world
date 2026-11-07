@@ -66,6 +66,8 @@ Targets are on your own host; add --connection ID for another one.
          Offline delivery waits for that original session; a changed session
          is skipped. Older, unverified and unsupported asks stay retrieval-only.
          Always keep the ask ID: ask get reads the saved answer after restart.
+         An owner answer may end with "Attached files:" and one absolute path
+         per line: files the owner attached, stored temporarily; open them.
          Possible pane sends are never retried automatically. The owner can
          close delivery or authorize a possible duplicate in Reception.
          Successful stdout output acknowledges the exact answer as its verified

@@ -1984,6 +1984,7 @@
         "server/src/usage/host.test.ts",
         "server/src/usage/service.test.ts",
         "server/src/usage/limits.test.ts",
+        "server/src/usage/claude-tap.test.ts",
         "server/src/rpc/usage.test.ts",
         "server/src/usage/process.test.ts",
         "server/src/usage/reader.test.ts",

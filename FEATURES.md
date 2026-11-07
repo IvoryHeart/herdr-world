@@ -68,19 +68,22 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     gives every agent in the town and its buildings (and any of unknown
     status). It shows spend when a metrics provider
     is configured. Under **FUEL**, a gauge per harness with subscription-limit
-    data (today Codex, from its session logs) shows a short bar per window
+    data (Codex from its session logs, Claude from its status line) shows a short bar per window
     (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
     says **low**. Hover, focus or tap a gauge for each reset time, how long ago
     the numbers were seen, and their source. Old numbers read **stale** with no
     level; with several hosts the board shows the one with the least left.
-    Claude reads **not available**; hover, focus or tap it for the reason. On a
-    phone the compact chip adds the lowest percent left. Its **Summary** button, or on a phone the compact chip under
+    Claude gets its own gauge within about a minute of the first answer from an
+    agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
+    World, and the agent's status line looks as before. When Claude refused
+    work at its limit, the gauge reads **reached, resets …** instead of a level.
+    On a phone the compact chip adds the lowest percent left (or **reached**). Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
     with its counts (tap a room to go there) and its subscription limits
     (each window's percent used, reset time, source and age; stale or missing
-    labelled; Claude shows why its limits are not available), and spend per model ("No cost
+    labelled; a Claude refusal reads "limit reached"), and spend per model ("No cost
     data" without a provider). Press **Summary** again to restore its minimized
     window or bring it to the front.
   - **Since you left**: after 30 minutes or more away (no visible World tab
@@ -307,11 +310,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - **Teams.** Tables whose agents know each other are drawn inside one wall
     with a connector: a spawned agent is joined to the agent that started it,
     and a manual group with dotted lines; stale links are faded while a host
-    is offline, and dropped once its agents have closed.
+    is offline, and dropped once its agents have closed. A team's tables that
+    touch share one wall, which bends around another team's table rather than
+    splitting; separate clusters of one team get a wall each, joined by a
+    connector.
     Drag a table onto another table and hold it there a moment: it snaps to
     that table (**Group with …**), and dropping groups them. Town moves it to
-    that room if needed and seats its tab beside the other's in Herdr. A quick
-    drop keeps meaning a move or a reorder, so the gestures stay separate.
+    that room if needed and seats it in a free place touching the other
+    table, on the side it came from where it can; no other table moves, and
+    Herdr's tab order stays as it was. The tables keep those places until the
+    room's tab order changes or the page reloads. A quick drop keeps meaning
+    a move or a reorder, so the gestures stay separate.
     Drop a table you grouped on its own room's bare floor (not the free spot)
     to leave its group; a spawn link stays, since Herdr's stamp records it.
     **M** on a focused table offers the same as **Group with…** and **Leave
@@ -669,7 +678,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   and age, then icons), the message, and answer controls only when the agent
   asked. **?** questions show their options as quick replies (the first
   highlighted; **Other…** opens a typed answer) or one answer field with a send
-  icon, plus why an owner alert may not have arrived; **!** blocked agents show
+  icon, plus why an owner alert may not have arrived. The answer field's
+  paperclip attaches files or screenshots (also by paste or drop; on a phone it
+  picks photos or files). Each file uploads as a chip with a thumbnail that
+  **✕** removes before sending; the answer then ends with `Attached files:` and
+  one stored path per line, which the asker receives and `herdr-world ask get`
+  shows. Files are stored on the asker's host with the terminal upload limits
+  and retention, even after its connection restarts; while that host is down
+  the file is refused rather than stored elsewhere. Only an asker World never
+  tied to a connection stores files on the World host.
+  **!** blocked agents show
   the agent's own question with its options as quick replies, answered and
   confirmed as Chat does (the same card, including Claude's recorded questions
   and its folder-trust choices), with **Open Terminal** when the answer could

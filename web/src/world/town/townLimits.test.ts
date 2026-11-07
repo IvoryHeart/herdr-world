@@ -6,6 +6,7 @@ import {
   townFuelGauges,
   townFuelNotes,
   townLimits,
+  townResetTime,
   townSeenAge,
   townWindowLabel,
 } from "./townLimits";
@@ -35,7 +36,9 @@ const codex = (
       resets_at: now + 86_400_000,
     },
   ],
+  reached: null,
 });
+/** A harness that keeps no readable limits (the generic "not available" case). */
 const claude = (connection: string): UsageLimit => ({
   connection_id: connection,
   connection_generation: 1,
@@ -45,6 +48,23 @@ const claude = (connection: string): UsageLimit => ({
   reason: "Synthetic reason",
   observed_at: null,
   windows: [],
+  reached: null,
+});
+const claudeTap = (connection: string, used: [number, number]): UsageLimit => ({
+  ...codex(connection, used),
+  harness: "claude",
+  source: "claude-status-line",
+});
+const claudeReached = (
+  connection: string,
+  windowMinutes: number | null = 300,
+  resetsAt = now + 2 * 3_600_000,
+): UsageLimit => ({
+  ...codex(connection, [0, 0]),
+  harness: "claude",
+  source: "claude-transcript",
+  windows: [],
+  reached: { window_minutes: windowMinutes, resets_at: resetsAt },
 });
 const missing = (connection: string): UsageLimit => ({
   ...codex(connection, [0, 0], "missing"),
@@ -213,4 +233,78 @@ test("the summary lists each host's windows, source and age, and says why Claude
       }),
     ),
   ).toContain("Limits are unavailable");
+});
+
+test("Claude's status line reading gets a gauge beside Codex", () => {
+  const gauges = townFuelGauges(
+    [codex("alpha", [40, 50]), claudeTap("alpha", [20, 90])],
+    now,
+  );
+  expect(gauges.map((g) => g.name)).toEqual(["Claude", "Codex"]);
+  expect(gauges[0]).toMatchObject({
+    harness: "claude",
+    windows: [
+      { label: "5 h", left: 80, low: false, reached: false },
+      { label: "week", left: 10, low: true, reached: false },
+    ],
+  });
+  const html = renderToStaticMarkup(createElement(TownFuel, { gauges, now }));
+  expect(html).toContain("Claude limits: 5 h 80 % left; week 10 % left, low");
+  expect(townFuelDetails(gauges[0]!, now)).toMatch(
+    /^5 h resets .+ · week resets .+ · seen 3 min ago · Claude status line$/,
+  );
+  expect(townFuelLowest(gauges)?.gauge.name).toBe("Claude");
+});
+
+test("a Claude refusal reads limit reached with its reset, never a level", () => {
+  const resetsAt = now + 2 * 3_600_000;
+  const gauges = townFuelGauges(
+    [claudeTap("beta", [10, 10]), claudeReached("alpha", 300, resetsAt)],
+    now,
+  );
+  // The refusal is the least left across hosts.
+  expect(gauges).toHaveLength(1);
+  expect(gauges[0]).toMatchObject({
+    connectionId: "alpha",
+    stale: false,
+    windows: [{ label: "5 h", reached: true, resetsAt }],
+  });
+  const html = renderToStaticMarkup(createElement(TownFuel, { gauges, now }));
+  const reset = townResetTime(resetsAt);
+  expect(html).toContain(`reached, resets ${reset}`);
+  expect(html).toContain(`Claude limits: 5 h limit reached, resets ${reset}`);
+  expect(html).not.toContain("town-fuel-bar");
+  expect(html).not.toContain("%");
+  expect(townFuelDetails(gauges[0]!, now)).toBe(
+    `5 h limit reached, resets ${reset} · seen 3 min ago · Claude transcript`,
+  );
+  expect(townFuelLowest(gauges)?.window.reached).toBe(true);
+  // An unnamed window still reads "limit reached".
+  expect(
+    townFuelDetails(
+      townFuelGauges([claudeReached("alpha", null)], now)[0]!,
+      now,
+    ),
+  ).toMatch(/^limit reached, resets /);
+  // Once its reset passes it is stale, with no level and no "reached".
+  const passed = townFuelGauges([claudeReached("alpha", 300, now - 1000)], now);
+  expect(passed[0]?.stale).toBe(true);
+  expect(townFuelLowest(passed)).toBeNull();
+  const stale = renderToStaticMarkup(
+    createElement(TownFuel, { gauges: passed, now }),
+  );
+  expect(stale).toContain("stale");
+  expect(stale).not.toContain("reached,");
+  expect(stale).not.toContain("%");
+  // The summary lists it under the host the same way.
+  const summary = renderToStaticMarkup(
+    createElement(HostLimits, {
+      connectionId: "alpha",
+      now,
+      usage: ready([codex("alpha", [40, 92]), claudeReached("alpha")]),
+    }),
+  );
+  expect(summary).toContain("5 h limit reached");
+  expect(summary).toContain("Claude transcript · seen 3 min ago");
+  expect(summary).not.toContain("100 % used");
 });

@@ -215,10 +215,12 @@ hosts stay usable.
    desks the boards are put away: tap the reception lobby to bring its board
    and sign back. For the
    whole picture, the Town board counts every building's agents, quiet ones
-   included. Its **FUEL** gauges show how much of each Codex subscription
-   window is left (amber and **low** under 15 %); hover or tap one for its reset
-   time and how old the numbers are. Claude reads **not available**, since
-   Claude Code saves no record of how much of its limits is used. Press **Summary** on the board (on a phone, tap the
+   included. Its **FUEL** gauges show how much of each Codex and Claude
+   subscription window is left (amber and **low** under 15 %); hover or tap one
+   for its reset time, how old the numbers are and where they came from. The
+   Claude gauge appears within about a minute of the first answer from a
+   Claude agent you started from World, and reads **reached, resets …** while Claude is refusing work at
+   its limit. Press **Summary** on the board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts and its subscription limits, and spend. When you come back after 30 minutes
@@ -260,7 +262,12 @@ hosts stay usable.
    Tap it to open the **Needs you** tab on the left: each question, blocked
    agent and finished task is a compact notification from its agent. When the
    agent asked something, tap a quick reply (or **Other…** to type), or type in
-   the answer field and press Enter. Tap a long message (or **more**) to read
+   the answer field and press Enter. To send a screenshot or file with a typed
+   answer, tap the paperclip in the answer field (on a phone it offers your
+   photos and files), paste an image into the field, or drop files on it. Each
+   file shows as a chip with a thumbnail while it uploads; **✕** removes it
+   before you send. The answer carries each stored file's path, so the asking
+   agent can open it. Tap a long message (or **more**) to read
    all of it, links included; **less** shortens it again. Tabbing into a
    message reveals its links. The agent's name and the chat icon open the
    agent's Chat for the context behind it. **✕** dismisses a question, or marks
@@ -386,8 +393,11 @@ hosts stay usable.
    table.
 9. To group tables, drag one onto another table and rest it there a moment:
    it snaps to that table and the plaque says **Group with …**; let go. The
-   two get one wall, and Town brings the table to that room and beside the
-   other in Herdr's tab order. An agent started by another agent is grouped
+   two get one wall: Town brings the table to that room and seats it in a
+   free place touching the other, on the side it came from where it can.
+   No other table moves, so the shape you build is the shape you get; the
+   tables keep those places until the room's tab order changes or the page
+   reloads. An agent started by another agent is grouped
    automatically, with a solid connector to its parent and the parent's
    colour. To take a table you grouped out of its group, drag it onto its own
    room's bare floor, away from the free spot (**Leave the team**); a spawn
