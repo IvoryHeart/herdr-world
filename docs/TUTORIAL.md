@@ -1032,8 +1032,19 @@ it does not verify the work for you.
 **You are done when:** you can find the same agent in Town, Board or Desk and
 open its terminal on the expected host.
 
-On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
-windows** to restore minimized ones. On mobile, one Inspector fills the screen:
+Use the visible **− Minimize** button in an Inspector's header to hide its
+window. On desktop, **Open windows** restores it. **Close** (or **‹ Back**) dismisses
+the window; tap the agent or terminal again to reopen it. These controls leave
+agents and terminal sessions running and work in Town, Board and Desk.
+On touch tablets or without a pointing device, narrow Town columns keep 40px
+window controls and hide the pane map to leave room for the agent's name.
+On a phone, a minimized window waits as a chip at the bottom left of Town or
+Board, above the bottom controls and also in Zen: tap the chip once to bring the
+window back. While another window fills the screen, the chips sit in a strip at
+the bottom of that window, below its content, so restoring still takes one tap;
+**Tabs** in the expanded mobile controls also lists windows.
+On desktop, **Arrange windows** can tile or cascade open Inspectors.
+On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
 when Composer is open. The phone's own Back closes Composer first, then the
 terminal on the next press. Tapping the terminal's name opens the workspace

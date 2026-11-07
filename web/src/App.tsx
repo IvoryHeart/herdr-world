@@ -134,6 +134,7 @@ import { useLayer } from "./layerStack";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
 import type { WindowArrangementControl } from "./components/TabBar";
 import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
+import { MinimizedWindowDock } from "./world/windows/MinimizedWindowDock";
 import type { TerminalWorkspaceFileRequest } from "./components/TerminalView";
 import { WorkspaceTree } from "./components/WorkspaceTree";
 import { isIosDevice } from "./downloadFile";
@@ -4105,7 +4106,9 @@ export default function App({
       </div>
       <div className="topbar-actions">
         {mobile ? <MobileTerminalAppBar /> : null}
-        {!mobile && arrangementControl ? (
+        {mobile ? (
+          <MinimizedWindowDock entries={arrangementControl?.windows} />
+        ) : arrangementControl ? (
           <WindowArrangementMenu control={arrangementControl} />
         ) : null}
         {mobile ? null : (
