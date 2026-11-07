@@ -99,6 +99,15 @@
   white-space: nowrap;
 }
 
+/* A reading more than 15 minutes old: its age, muted, under the bars. */
+.town-fuel-age {
+  grid-column: 2;
+  color: #c9b79a;
+  font-size: 10px;
+  font-style: italic;
+  white-space: nowrap;
+}
+
 .town-fuel-gauge > button[data-stale="true"] .town-fuel-bar {
   border-style: dashed;
 }
@@ -146,6 +155,11 @@
 
 .town-board-chip [data-status="fuel"][data-low="true"] {
   color: var(--town-wait, #ffb547);
+}
+
+.town-board-chip [data-status="fuel"] .town-fuel-age {
+  margin-left: 4px;
+  font-weight: 400;
 }
 
 @media (prefers-reduced-motion: reduce) {

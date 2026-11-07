@@ -415,7 +415,10 @@ Raise a ceiling only in a reviewed change that explains the new work.
 The Hosts filter fixture's `town-idle` case holds idle Town, with an
 Inspector and its line open, to the same file's idle ceiling: React commits in
 at most two frames of 2 s of test time. Town animates through Pixi alone; only
-its data polls render React, and views keep an unchanged anchor set. Its
+its data polls render React, and views keep an unchanged anchor set. The
+phone case runs at 390 × 1200 px: its only motion is the idle agent in the
+lounge, which a phone's home view shows only when the screen fits the town
+center and the whole first building. Its
 `town-walk-anchor` case mounts a bare Town whose host never renders again, so
 the Inspector line follows a walking agent under a still camera only through
 the anchors Town reports from its own drawn frames.

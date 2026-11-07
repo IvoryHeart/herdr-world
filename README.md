@@ -52,8 +52,8 @@ known limits.
 
 Town, Board and Desk share the **Hosts** filter. Open terminals and Inspectors
 retain their owning host when the filter changes. Use **Actions → New workspace**
-or **New tab** and confirm the destination; Town's **New room** and Board's **+**
-controls offer the same qualified creation flows.
+or **New tab** and confirm the destination; Town's **+ Add room** slots and
+Board's **+** controls offer the same qualified creation flows.
 
 Office, Tree and Graph have been retired: old `/office` addresses open Town, and
 `/graph` and `/tree` open Board. Board and these redirects are included in

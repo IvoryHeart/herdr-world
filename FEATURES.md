@@ -70,14 +70,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is configured. Under **FUEL**, a gauge per harness with subscription-limit
     data (Codex from its session logs, Claude from its status line) shows a short bar per window
     (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
-    says **low**. Hover, focus or tap a gauge for each reset time, how long ago
-    the numbers were seen, and their source. Old numbers read **stale** with no
-    level; with several hosts the board shows the one with the least left.
+    says **low**. A reading more than 15 minutes old shows its age under the
+    bars in muted text, such as "seen 1 h ago". Hover, focus or tap a gauge for
+    each reset time, how long ago the numbers were seen, and their source. Old
+    numbers (over 3 h, or past a reset) read **stale** with no level; with several hosts the board shows the one with the least left.
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
     World, and the agent's status line looks as before. When Claude refused
     work at its limit, the gauge reads **reached, resets …** instead of a level.
-    On a phone the compact chip adds the lowest percent left (or **reached**). Its **Summary** button, or on a phone the compact chip under
+    On a phone the compact chip adds the lowest percent left (or **reached**), with the same age when that reading is over 15 minutes old. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
@@ -274,7 +275,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation. Room actions support
-    workspace/tab creation and room management on the captured host. Room
+    workspace/tab creation and room management on the captured host. Every
+    building ends with a dashed **+ Add room** slot where its next room would
+    stand (just **+** at the room-card zoom). It opens New room on that
+    building's host, the new room takes the slot's place and the slot moves
+    on, also after rooms move or are tidied. For keyboards and screen
+    readers it is a button named "Add room to <host>". Room
     plates fit their room width; only the name truncates, with its full text in
     a tooltip. Colour, active/total agent count and blocked badge remain visible.
     Active means working or waiting on you; the total excludes plain terminals.
@@ -387,6 +393,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (one binned on Board walks out the first time Town shows it); its seat
     fades into the carpet and crumbles, the whole desk when all its agents
     are binned;
+    those waiting at a stop queue along its pavement in joining order, in
+    two rows when long, with a **+N** board at the end for any more; one put
+    back walks home from the queue and those behind step up;
     there is a stop at every road crossing, and a countdown board over those
     waiting counts down to the bus reaching that stop (**due** a few seconds
     before it pulls in). The bin floats at the bottom of the screen and

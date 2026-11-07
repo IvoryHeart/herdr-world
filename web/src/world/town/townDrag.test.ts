@@ -281,17 +281,18 @@ test("a room goes anywhere in its own building, never another host's", () => {
   // Its top-left at tile (x, y), the pointer at (px, py).
   const aim = (x: number, y: number, px = x, py = y) =>
     townRoomDropTarget(drag, layout, m, x * T, y * T, px * T, py * T);
-  const down = aim(r1.x, r1.y + 3);
-  expect(down.target).toMatchObject({
+  // Across: host a's floor is only as tall as its rooms.
+  const across = aim(r1.x + 3, r1.y);
+  expect(across.target).toMatchObject({
     key: "r1",
     label: "Move R1 here",
     action: "move",
   });
   // Whole tiles, kept inside the building's walls (townRoomSpotAt).
-  expect(down.placement!.spots.get("r1")).toEqual(
-    townRoomSpotAt(layout, "r1", r1.x, r1.y + 3)!,
+  expect(across.placement!.spots.get("r1")).toEqual(
+    townRoomSpotAt(layout, "r1", r1.x + 3, r1.y)!,
   );
-  expect(down.placement!.spots.get("r1")!.y).toBeGreaterThan(r1.y - a!.y);
+  expect(across.placement!.spots.get("r1")!.x).toBeGreaterThan(r1.x - a!.x);
   // Back on its own spot: it goes back.
   expect(aim(r1.x, r1.y).target.key).toBeNull();
   expect(aim(r1.x, r1.y).placement).toBeNull();
@@ -301,7 +302,7 @@ test("a room goes anywhere in its own building, never another host's", () => {
     label: "Rooms stay in their own host’s building",
   });
   // Over the street, it stays inside its own building's walls.
-  const far = aim(r1.x, r1.y + 999);
+  const far = aim(r1.x + 3, r1.y + 999);
   expect(far.placement!.rooms.get("r1")!.y).toBeLessThan(
     a!.y + a!.h + r1.h + 20,
   );

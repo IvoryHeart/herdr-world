@@ -2380,7 +2380,7 @@ async function run() {
   // Room actions hidden at the overview must not take a tap.
   const hiddenActions = [
     ...host.querySelectorAll<HTMLElement>(
-      '[aria-label^="Rename room"], [aria-label^="Close room"], [aria-label="New room"], [aria-label^="New agent or terminal in"]',
+      '[aria-label^="Rename room"], [aria-label^="Close room"], [aria-label^="New agent or terminal in"]',
     ),
   ];
   const tappable = hiddenActions.filter((action) => {
@@ -2400,6 +2400,30 @@ async function run() {
     host.querySelectorAll('[aria-label^="New agent or terminal in"]').length >
       0,
     "rooms with free spots need a new seat action",
+  );
+  // Every live building ends with one + Add room slot, which takes a tap from
+  // the overview in; the floating New room button is gone.
+  const liveBuildings = [
+    ...host.querySelectorAll(".town-building-layer:not([data-stale])"),
+  ];
+  check(
+    liveBuildings.length > 0 &&
+      liveBuildings.every(
+        (building) =>
+          building.querySelectorAll(
+            '.town-add-room[aria-label^="Add room to "]',
+          ).length === 1,
+      ),
+    "every live building needs one Add room slot",
+  );
+  check(
+    getComputedStyle(host.querySelector(".town-add-room")!).visibility ===
+      "visible",
+    "the Add room slot shows at the overview",
+  );
+  check(
+    !host.querySelector('[aria-label="New room"]'),
+    "Town still shows the floating New room button",
   );
 
   // Needs you counts every agent that needs you and every open question.

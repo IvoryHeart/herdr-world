@@ -382,54 +382,6 @@
   color: #7f8a7c;
 }
 
-.town-new-room-wrap {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  /* Hidden overlays take no taps, including their buttons. */
-  visibility: hidden;
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  transform: scale(var(--iz));
-  transform-origin: 0 0;
-}
-
-/* A pixel sign over an empty plot: "+ New room" on one line, like the room
-   plaques, instead of Office's small box. */
-.town-new-room-wrap .town-new-room {
-  position: static;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: auto;
-  height: auto;
-  padding: 7px 12px 7px 9px;
-  white-space: nowrap;
-  color: #f1efe6;
-  background: rgba(14, 17, 24, 0.9);
-  border: 2px dashed #6f8f5a;
-  border-radius: 8px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-  font:
-    700 13px / 1 "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-}
-
-.town-new-room-wrap .town-new-room svg {
-  flex: none;
-  color: #e3aa3a;
-}
-
-.town-new-room-wrap .town-new-room:hover:not(:disabled),
-.town-new-room-wrap .town-new-room:focus-visible {
-  border-color: #e3aa3a;
-  background: rgba(30, 26, 14, 0.95);
-}
-
 /* Name tags: the desk's (tab's) name under its table from the room level, and
    each seat's agent or terminal name at the desk level. */
 .town-desk-tags {
@@ -686,13 +638,6 @@
   .town-room-plaque {
     transition: none;
   }
-}
-
-.town-world[data-level="room"] .town-new-room-wrap,
-.town-world[data-level="desk"] .town-new-room-wrap {
-  opacity: 1;
-  pointer-events: auto;
-  visibility: visible;
 }
 
 .town-visually-hidden {

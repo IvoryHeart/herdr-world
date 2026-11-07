@@ -220,8 +220,9 @@ hosts stay usable.
    and sign back. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex and Claude
-   subscription window is left (amber and **low** under 15 %); hover or tap one
-   for its reset time, how old the numbers are and where they came from. The
+   subscription window is left (amber and **low** under 15 %). A reading more
+   than 15 minutes old says how old it is, such as "seen 1 h ago"; hover or tap
+   a gauge for its reset time, how old the numbers are and where they came from. The
    Claude gauge appears within about a minute of the first answer from a
    Claude agent you started from World, and reads **reached, resets …** while Claude is refusing work at
    its limit. Press **Summary** on the board (on a phone, tap the
@@ -438,8 +439,11 @@ hosts stay usable.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room
-keeps no gap. **New room** creates a workspace; room actions also create tabs
-and manage the room. Check the destination host before creation. Stale buildings
+keeps no gap. Each building ends with a dashed **+ Add room** slot where its
+next room would stand: click or tap it to create a workspace on that
+building's host, and the new room appears in its place while the slot moves
+on. The town center's **New room** does the same. Room actions also create
+tabs and manage the room. Check the destination host before creation. Stale buildings
 remain visible but cannot accept operations. Use search and the Hosts filter to
 narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
@@ -479,7 +483,11 @@ is enough wherever you have scrolled; the town holds still while you rest on
 it. Nothing closes yet: in
 Town the agent walks out of the front door to the nearest bus stop, a London
 stop with a red roundel at a road crossing, whichever you dropped it on (an
-agent you binned on Board walks out too the first time you open Town). Its
+agent you binned on Board walks out too the first time you open Town).
+Everyone waiting at a stop lines up along the pavement, newest at the end; a
+long queue turns back in a second row, and past that a small red **+N** board
+at its end counts the rest. An agent you put back steps out of the queue and
+walks home to its front door, and those behind step up. Its
 seat fades into the carpet and crumbles, so the desk reads as going; when
 every agent at a desk is binned the whole desk fades. A
 small board over the waiting agents counts down to the bus reaching that stop
