@@ -947,6 +947,7 @@ export default function TownView({
             observability={observability}
             summary={townSummary.summary}
             onOpenSummary={townSummary.open}
+            sinceYouLeft={townSummary.sinceYouLeft}
             roomFocus={roomFocus}
             calm={preferences.townCalm}
             chrome={TOWN_CHROME}

@@ -166,10 +166,17 @@ export function useReviewedWork(
     (leaf: WorldLeafObject, stop?: string) => markReviewed(store, leaf, stop),
     [store],
   );
+  // When the work finished: the service's stop, else Herdr's last activity.
+  const finishedAt = useCallback(
+    (leaf: WorldLeafObject) =>
+      recordOf(leaf)?.stopped_at ?? leaf.lastActivityAt ?? null,
+    [recordOf],
+  );
   return {
     reviewed,
     stopOf,
     toReview,
+    finishedAt,
     mark,
     verified: shown.verified,
   };

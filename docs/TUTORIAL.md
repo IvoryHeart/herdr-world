@@ -198,7 +198,11 @@ hosts stay usable.
    included; press **Summary** on it (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
-   rooms with their counts, and spend. Answer a question from its offered
+   rooms with their counts, and spend. When you come back after 30 minutes
+   or more away, the board sign starts with **Since you left**: what is new
+   for you, what finished and what merged while you were away. Each line
+   opens **Needs you** at that item, which carries a "new" dot; **✕** clears
+   the recap. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound

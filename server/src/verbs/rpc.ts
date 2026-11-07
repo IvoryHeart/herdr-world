@@ -274,6 +274,8 @@ export const rpcVerbs = [
   rpc("world.desk.open", "reconcilable", "world"),
   rpc("world.desk.review", "reconcilable", "world"),
   rpc("world.focused.observe", "reconcilable", "world"),
+  // The owner's last sighting across browsers, for "Since you left".
+  rpc("world.presence.seen", "reconcilable", "world"),
   rpc("world.profiles.delete", "reconcilable", "world"),
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),

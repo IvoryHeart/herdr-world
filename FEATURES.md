@@ -74,6 +74,21 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with its counts (tap a room to go there), and spend per model ("No cost
     data" without a provider). Press **Summary** again to restore its minimized
     window or bring it to the front.
+  - **Since you left**: after 30 minutes or more away (no visible World tab
+    with input, on any device using this World service), the Town board sign
+    starts with "Since 11:40 · away 3 h ✕" and up to four lines, most
+    important first: new questions and newly blocked agents ("2 new for
+    you"), who asked ("1 new question from builder"), finished work still to
+    review ("5 finished"), and, with the GitHub source configured, pull
+    requests merged meanwhile. Each line opens **Needs you** at its first item,
+    where everything that arrived while you were away has a small "new" dot
+    until you click or type in it. The recap only counts what still waits, so
+    answering and reviewing shrink it; **✕** clears its lines on this browser
+    without touching any item, until your next return. A phone shows it as one
+    line under the summary chip ("Since 11:40: 2 for you, 5 finished ›"),
+    which opens **Needs you**. Calm motion shows it without animation. The
+    service remembers your last sighting in memory; after a service restart,
+    each browser's own last sighting decides.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
     Finished agents wait there until you open their terminal or mark that
