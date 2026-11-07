@@ -15,7 +15,7 @@ import { TownPlaceSummaryCard } from "./TownBoard";
 import {
   townPlaceEconomy,
   townUsageStore,
-  useTownUsage,
+  useTownCurrentUsage,
   type TownUsagePlace,
 } from "./townPlaceUsage";
 import "./townRoomPlaque.css";
@@ -47,7 +47,7 @@ export function TownPlaceCardSummary({
 }: {
   content: TownPlaceCardContent;
 }) {
-  const usage = useTownUsage();
+  const usage = useTownCurrentUsage();
   return (
     <TownPlaceSummaryCard
       place={content.summary()}

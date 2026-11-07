@@ -68,6 +68,8 @@ export type TownActor = {
   crowdSince: number;
   /** How far this agent lies on the floor: 0 standing, 1 napping. */
   rest: number;
+  /** A walk's speed over TOWN_WALK_SPEED: an arriving agent hurries in. */
+  pace?: number;
 };
 
 /** How an agent in the reception overflow crowd looks once it stands there. */
@@ -84,6 +86,8 @@ export type TownGoal =
 /** How fast agents walk, in world pixels a second (also outdoors, townBus). */
 export const TOWN_WALK_SPEED = 76;
 const SEAT_TWEEN = 0.26;
+/** An arriving agent walks in from the front door in at most this long. */
+export const TOWN_ARRIVAL_INDOOR_S = 2.5;
 /** Seconds of reception overflow before a grumbling agent gives up and naps. */
 export const TOWN_OVERFLOW_DOZE = 90;
 /** The most lobby crowd spots; more overflow huddles between them. */
@@ -365,6 +369,9 @@ export class TownActors {
   private asking: ReadonlySet<string> = new Set();
   private away: ReadonlySet<string> = new Set();
   private held: ReadonlySet<string> = new Set();
+  private arriving: ReadonlySet<string> = new Set();
+  /** Arrived at the front door: their next walk in is hurried. */
+  private readonly entering = new Set<string>();
 
   get time() {
     return this.clock;
@@ -377,7 +384,9 @@ export class TownActors {
    * Reconcile actors with a new model or layout. `instant` skips walking;
    * `summoned` agents go to their desks rather than reception or the lounge;
    * `away` agents (in the bin) leave by the front door; `held` agents, whose
-   * mark their reception does not take, stay at their desks.
+   * mark their reception does not take, stay at their desks; `arriving`
+   * agents (townArrivals.ts) wait outside the front door from the start, then
+   * walk in once they leave the set.
    * With `hosts`, only those hosts' agents are reconciled: the caller vouches
    * that nothing any other host's actors read has changed
    * (scene/townSceneActors.ts), so a full sync would leave them as they are.
@@ -390,8 +399,11 @@ export class TownActors {
     hosts?: ReadonlySet<string>,
     away: ReadonlySet<string> = this.away,
     held: ReadonlySet<string> = this.held,
+    arriving: ReadonlySet<string> = this.arriving,
   ) {
     const previousWorld = this.world;
+    const wasArriving = this.arriving;
+    this.arriving = arriving;
     this.world = world;
     this.summoned = summoned;
     this.asking = asking;
@@ -481,7 +493,13 @@ export class TownActors {
         const actor = this.actors.get(key)!;
         if (actor.spot) actor.spot = null;
         this.actors.delete(key);
+        this.entering.delete(key);
       }
+    // An arriving agent is outside at once, never seen walking out; one
+    // that reached the door walks in.
+    for (const key of arriving) if (!wasArriving.has(key)) fresh.add(key);
+    for (const key of wasArriving)
+      if (!arriving.has(key) && seen.has(key)) this.entering.add(key);
     this.assignGoals(
       instant,
       fresh,
@@ -516,6 +534,7 @@ export class TownActors {
       const agent = model.agents.get(actor.key)!;
       if (
         this.away.has(actor.key) ||
+        this.arriving.has(actor.key) ||
         this.held.has(actor.key) ||
         (agent.semanticStatus !== "blocked" &&
           agent.semanticStatus !== "done" &&
@@ -563,7 +582,8 @@ export class TownActors {
       };
       const slot = queueSlots.get(actor.key);
       const crowd = crowdSlots.get(actor.key);
-      if (this.away.has(actor.key)) goal = { kind: "door" };
+      if (this.away.has(actor.key) || this.arriving.has(actor.key))
+        goal = { kind: "door" };
       else if (slot !== undefined) goal = { kind: "queue", slot };
       else if (crowd !== undefined) goal = { kind: "crowd", slot: crowd };
       else if (
@@ -686,6 +706,7 @@ export class TownActors {
     }
     if (instant) {
       this.afterTween.delete(actor.key);
+      this.entering.delete(actor.key);
       actor.path = [];
       actor.tween = null;
       actor.rest = 0;
@@ -720,6 +741,18 @@ export class TownActors {
       );
       actor.path[actor.path.length - 1] = standPoint(target);
       actor.mode = "walk";
+      if (this.entering.delete(actor.key)) {
+        let length = 0;
+        let [x, y] = [actor.x, actor.y];
+        for (const [px, py] of actor.path) {
+          length += Math.hypot(px - x, py - y);
+          [x, y] = [px, py];
+        }
+        actor.pace = Math.max(
+          1,
+          length / (TOWN_WALK_SPEED * TOWN_ARRIVAL_INDOOR_S),
+        );
+      }
     };
     if (actor.mode === "stand" && actor.rest > 0) {
       // A napper gets up where it lies before walking anywhere.
@@ -841,7 +874,7 @@ export class TownActors {
       }
       if (actor.mode === "walk") {
         moved = true;
-        let remaining = TOWN_WALK_SPEED * dt;
+        let remaining = TOWN_WALK_SPEED * (actor.pace ?? 1) * dt;
         while (remaining > 0 && actor.path.length) {
           const [px, py] = actor.path[0]!;
           const dx = px - actor.x;
@@ -894,6 +927,7 @@ export class TownActors {
   }
 
   private arrive(actor: TownActor) {
+    delete actor.pace;
     const target = this.destination(actor);
     if (!target) {
       actor.mode = "stand";

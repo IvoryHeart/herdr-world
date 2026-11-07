@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { bridge } from "../../api";
 import type {
   UsageEntity,
@@ -18,14 +18,27 @@ export type TownUsageState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "ready"; snapshot: WorldUsageSnapshot };
+  | {
+      status: "ready";
+      snapshot: WorldUsageSnapshot;
+      /** When the read arrived, by the store's clock. */
+      receivedAt: number;
+    };
+
+/**
+ * A read as the boards and cards may show it now: a read too old for its
+ * window is stale, never shown as current figures.
+ */
+export type TownCurrentUsage = TownUsageState | { status: "stale" };
 
 export type TownPlaceEconomy =
-  | { status: "loading" | "unavailable" | "none" }
+  | { status: "loading" | "unavailable" | "stale" | "none" | "no-data" }
   | {
       status: "ready";
       /** Estimated from the operator's price table; null when unpriced. */
       costUsd: number | null;
+      /** Why a null cost is null: no table at all, or models it lacks. */
+      price: TownUsagePrice;
       tokens: number;
       /** Models used there, most tokens first. */
       models: string[];
@@ -35,6 +48,76 @@ export type TownPlaceEconomy =
 
 /** The service refreshes usage at most every 30 seconds per runtime. */
 const REFRESH_MS = 30_000;
+
+/** `world.usage.get`'s windows: since UTC midnight, or the last 7 UTC days. */
+export type TownUsageWindow = "today" | "7d";
+
+/**
+ * A total's estimate: priced, or null because the instance has no price
+ * table, or because some of its models are not in the table. A null cost is
+ * never shown as $0.
+ */
+export type TownUsagePrice = "priced" | "no-table" | "unpriced";
+
+/** Entity states the service counts in current totals (totals.ts). */
+export const townUsageCounted = (entity: UsageEntity) =>
+  entity.state === "available" || entity.state === "partial";
+
+/** Why a total's estimated cost is (or is not) null. */
+export function townUsagePrice(
+  cost: number | null,
+  counted: readonly UsageEntity[],
+): TownUsagePrice {
+  if (cost !== null) return "priced";
+  return counted.some((entity) => entity.price_table_version !== null)
+    ? "unpriced"
+    : "no-table";
+}
+
+/**
+ * Whether any harness on a host could be read: available or partial. A host
+ * with none (no source, or only missing, unavailable, stale or unsupported
+ * ones) has no data, which is not zero usage.
+ */
+export function townHostHasData(
+  snapshot: WorldUsageSnapshot,
+  connectionId: string,
+  generation: number,
+) {
+  return snapshot.sources.some(
+    (source) =>
+      source.connection_id === connectionId &&
+      source.connection_generation === generation &&
+      (source.state === "available" || source.state === "partial"),
+  );
+}
+
+/**
+ * How long a read may be shown when refreshes fail: a few refresh intervals.
+ * Readers refresh every minute while shown.
+ */
+export const TOWN_USAGE_MAX_AGE_MS = 5 * 60_000;
+const DAY_MS = 86_400_000;
+
+/**
+ * A read as it may be shown at `now` (the store's clock). Kept reads go
+ * stale after `TOWN_USAGE_MAX_AGE_MS`, and at once when the service's UTC
+ * day turns: both windows end at UTC midnight, so yesterday's "today" is
+ * not today's. The service's day is its `observed_at` plus the time since
+ * the read arrived, so the browser's clock offset does not matter.
+ */
+export function townUsageCurrent(
+  state: TownUsageState,
+  now: number,
+): TownCurrentUsage {
+  if (state.status !== "ready") return state;
+  const age = Math.max(0, now - state.receivedAt);
+  const observed = state.snapshot.observed_at;
+  return age > TOWN_USAGE_MAX_AGE_MS ||
+    Math.floor((observed + age) / DAY_MS) !== Math.floor(observed / DAY_MS)
+    ? { status: "stale" }
+    : state;
+}
 
 type UsageClient = {
   call(method: string, params?: Record<string, unknown>): Promise<unknown>;
@@ -48,7 +131,8 @@ export class TownUsageStore {
 
   constructor(
     private readonly client: UsageClient,
-    private readonly clock: () => number = Date.now,
+    readonly clock: () => number = Date.now,
+    readonly window: TownUsageWindow = "today",
   ) {}
 
   subscribe = (listener: () => void) => {
@@ -61,8 +145,9 @@ export class TownUsageStore {
   get = () => this.state;
 
   /**
-   * A card opened: read today's usage, at most once per refresh interval.
-   * A failed read keeps the last numbers it had.
+   * A card opened: read the window's usage, at most once per refresh interval.
+   * A failed read keeps the last numbers it had, which readers stop showing
+   * once they are too old (`townUsageCurrent`).
    */
   request() {
     const now = this.clock();
@@ -70,12 +155,12 @@ export class TownUsageStore {
     this.requestedAt = now;
     this.pending = true;
     if (this.state.status !== "ready") this.set({ status: "loading" });
-    void this.client.call("world.usage.get", { window: "today" }).then(
+    void this.client.call("world.usage.get", { window: this.window }).then(
       (result) => {
         this.pending = false;
         const snapshot = result as WorldUsageSnapshot | null;
         if (snapshot?.version === 1 && Array.isArray(snapshot.rollups))
-          this.set({ status: "ready", snapshot });
+          this.set({ status: "ready", snapshot, receivedAt: this.clock() });
         else if (this.state.status !== "ready") this.set({ status: "failed" });
       },
       () => {
@@ -91,14 +176,53 @@ export class TownUsageStore {
   }
 }
 
-let shared: TownUsageStore | null = null;
-export function townUsageStore() {
-  shared ??= new TownUsageStore(bridge);
-  return shared;
+const shared = new Map<TownUsageWindow, TownUsageStore>();
+/** The one store per window that every Town reader shares. */
+export function townUsageStore(window: TownUsageWindow = "today") {
+  let store = shared.get(window);
+  if (!store)
+    shared.set(window, (store = new TownUsageStore(bridge, Date.now, window)));
+  return store;
 }
 
 export function useTownUsage(store: TownUsageStore = townUsageStore()) {
   return useSyncExternalStore(store.subscribe, store.get, store.get);
+}
+
+/** How often shown figures re-check whether their read is too old. */
+const CURRENT_TICK_MS = 30_000;
+
+/**
+ * The store's read as it may be shown now, re-checked every 30 seconds so
+ * a read kept through failed refreshes goes stale while it is on screen.
+ */
+export function useTownCurrentUsage(
+  store: TownUsageStore = townUsageStore(),
+): TownCurrentUsage {
+  const state = useTownUsage(store);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setTick((tick) => tick + 1),
+      CURRENT_TICK_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, [store]);
+  return townUsageCurrent(state, store.clock());
+}
+
+/** Whether some harness on a host could be read only in part. */
+export function townHostPartial(
+  snapshot: WorldUsageSnapshot,
+  connectionId: string,
+  generation: number,
+) {
+  return snapshot.sources.some(
+    (source) =>
+      source.connection_id === connectionId &&
+      source.connection_generation === generation &&
+      source.state === "partial",
+  );
 }
 
 /** A place's usage: a room is a Herdr workspace, a table a tab. */
@@ -157,12 +281,13 @@ function index(snapshot: WorldUsageSnapshot) {
 
 /** A room's or table's part of today's usage, for its card. */
 export function townPlaceEconomy(
-  state: TownUsageState,
+  state: TownCurrentUsage,
   place: TownUsagePlace,
 ): TownPlaceEconomy {
   if (state.status === "idle" || state.status === "loading")
     return { status: "loading" };
   if (state.status === "failed") return { status: "unavailable" };
+  if (state.status === "stale") return { status: "stale" };
   const { target } = place;
   const usage = index(state.snapshot).get(
     placeKey(
@@ -172,9 +297,17 @@ export function townPlaceEconomy(
       target.nativeId,
     ),
   );
-  if (!usage || usage.rollup.records === 0) return { status: "none" };
+  if (!usage || usage.rollup.records === 0)
+    return townHostHasData(
+      state.snapshot,
+      target.connectionId,
+      target.generation,
+    )
+      ? { status: "none" }
+      : { status: "no-data" };
+  const counted = usage.entities.filter(townUsageCounted);
   const byModel = new Map<string, number>();
-  for (const entity of usage.entities)
+  for (const entity of counted)
     byModel.set(
       entity.model,
       (byModel.get(entity.model) ?? 0) + entity.total_tokens,
@@ -182,12 +315,14 @@ export function townPlaceEconomy(
   return {
     status: "ready",
     costUsd: usage.rollup.estimated_cost_usd,
+    price: townUsagePrice(usage.rollup.estimated_cost_usd, counted),
     tokens: usage.rollup.total_tokens,
     models: [...byModel]
       .sort(([, left], [, right]) => right - left)
       .map(([model]) => model),
     partial:
       state.snapshot.truncated ||
-      usage.entities.some((entity) => entity.state !== "available"),
+      usage.entities.some((entity) => entity.state !== "available") ||
+      townHostPartial(state.snapshot, target.connectionId, target.generation),
   };
 }

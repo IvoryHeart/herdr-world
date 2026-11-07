@@ -81,6 +81,7 @@ const missing = (connection: string): UsageLimit => ({
 });
 const ready = (limits: UsageLimit[]): TownUsageState => ({
   status: "ready",
+  receivedAt: 0,
   snapshot: {
     version: 1,
     rollups: [],
