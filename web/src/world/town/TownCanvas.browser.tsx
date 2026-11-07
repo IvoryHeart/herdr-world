@@ -1,6 +1,7 @@
 import { prepareTownEdgeDrop } from "./townEdgeScroll.browser";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
 import { checkTownBuildingSigns } from "./townBuildingSigns.browser";
+import { checkTownReceptionFilter } from "./townReceptionFilter.browser";
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { TERMINAL_COMPOSER_REQUEST_EVENT } from "../terminalComposerRequest";
 import { StrictMode, useEffect, useState } from "react";
@@ -1281,6 +1282,18 @@ async function run() {
       await waitFor(
         () => window.__HERDR_TOWN_RENDERER__?.activeApplications === 0,
         "recovery sign proof unmount left a live renderer",
+      );
+    }
+    return;
+  }
+  if (scale === "reception") {
+    try {
+      await checkTownReceptionFilter(host, check, waitFor);
+    } finally {
+      root.unmount();
+      await waitFor(
+        () => window.__HERDR_TOWN_RENDERER__?.activeApplications === 0,
+        "reception filter proof unmount left a live renderer",
       );
     }
     return;

@@ -29,6 +29,11 @@ export type TownSceneState = {
   askingKeys?: ReadonlySet<string>;
   /** Agents in the bin, who leave by the front door (townBus.ts). */
   awayKeys?: ReadonlySet<string>;
+  /**
+   * Agents whose mark their reception does not take, who stay at their desks
+   * (townReceptionFilter.ts).
+   */
+  heldKeys?: ReadonlySet<string>;
   /** Building currently held open (for example while moving a desk). */
   openHostKey: string | null;
   calm: boolean;
@@ -91,15 +96,18 @@ export class TownSceneDiff {
       bake = townBakeDirty(this.bakeKeys, keys);
       this.bakeKeys = keys;
     }
-    // Agents follow the model, the layout and the summoned, asking and away marks.
+    // Agents follow the model, the layout and the summoned, asking, away and
+    // held marks.
     let actors = NONE;
     const asking = state.askingKeys ?? NONE;
     const away = state.awayKeys ?? NONE;
+    const held = state.heldKeys ?? NONE;
     if (
       scene ||
       state.summonedKeys !== this.state?.summonedKeys ||
       asking !== (this.state?.askingKeys ?? NONE) ||
-      away !== (this.state?.awayKeys ?? NONE)
+      away !== (this.state?.awayKeys ?? NONE) ||
+      held !== (this.state?.heldKeys ?? NONE)
     ) {
       const keys = townActorKeys(
         model,
@@ -107,6 +115,7 @@ export class TownSceneDiff {
         state.summonedKeys,
         asking,
         away,
+        held,
       );
       actors =
         this.actorKeys === null

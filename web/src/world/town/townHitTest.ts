@@ -3,6 +3,7 @@ import { townCenterContains } from "./townCenter";
 import {
   TOWN_AGENT_SCALE as S,
   TOWN_FACADE,
+  TOWN_LOBBY_HEIGHT,
   TOWN_TILE as T,
   townDeskSlots,
   townSeat,
@@ -19,6 +20,8 @@ export type TownHit =
   | { kind: "cell"; roomKey: string; cellIndex: number }
   /** `edge`: on or just outside the room's wall, where a drag lifts the room. */
   | { kind: "room"; key: string; edge?: true }
+  /** The reception lobby at desk level, where its board is hidden. */
+  | { kind: "reception"; key: string }
   | { kind: "building"; key: string }
   /** The town center: a tap opens its radial menu. */
   | { kind: "center" };
@@ -158,6 +161,12 @@ export function townHitTest(
       y < (room.y + room.h) * T + outside
     )
       return { kind: "room", key: room.key, edge: true };
+  if (
+    detailed &&
+    y >= building.lobbyY * T &&
+    y < (building.lobbyY + TOWN_LOBBY_HEIGHT) * T
+  )
+    return { kind: "reception", key: building.hostKey };
   return { kind: "building", key: building.hostKey };
 }
 
@@ -165,6 +174,11 @@ export function townHitTest(
 export function townHitKey(hit: TownHit | null) {
   if (!hit) return null;
   if (hit.kind === "cell") return hit.roomKey;
-  if (hit.kind === "building" || hit.kind === "center") return null;
+  if (
+    hit.kind === "building" ||
+    hit.kind === "reception" ||
+    hit.kind === "center"
+  )
+    return null;
   return hit.key;
 }

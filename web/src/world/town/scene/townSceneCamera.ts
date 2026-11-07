@@ -26,6 +26,9 @@ import { townRoomsMoved } from "../townRoomPlace";
 import type { TownTarget } from "../townTargets";
 import { townCenterEmblem } from "../townCenter";
 
+/** Screen pixels kept above a reception board's foot for the board. */
+const RECEPTION_BOARD_ROOM = 260;
+
 /** A saved camera; `home` marks the home view, framed again when restored. */
 export type TownPose = { x: number; y: number; z: number; home?: boolean };
 
@@ -443,6 +446,45 @@ export class TownSceneCamera {
     const focus = townRoomFocus(room, camera.viewport, z);
     camera.flyTo(focus.x, focus.y, z, 0.6);
     this.invalidate("room");
+  }
+
+  /**
+   * Keep the zoom and pan so a building's reception board, which stands in
+   * the yard above its front door, has room on screen above the lobby.
+   */
+  revealReception(layout: TownLayout, hostKey: string) {
+    const camera = this.camera;
+    if (!camera) return;
+    const building = layout.buildings.find((b) => b.hostKey === hostKey);
+    if (!building) return;
+    // The board's foot (TownWorldLayer), and the screen it should show in.
+    const x = (building.entryX + 0.5) * T;
+    const y = building.y * T - 18;
+    const at = camera.toScreen(x, y);
+    const { width, height, inset } = camera.viewport;
+    const room = Math.min(
+      RECEPTION_BOARD_ROOM,
+      (height - inset.top - inset.bottom) / 2,
+    );
+    if (
+      at.x >= inset.left + 100 &&
+      at.x <= width - inset.right - 100 &&
+      at.y >= inset.top + room &&
+      at.y <= height - inset.bottom
+    )
+      return;
+    // flyTo puts its point at the focus point: the foot lands `room` below
+    // the top, the lobby under it. A level flight: dipping out would leave
+    // desk level, which puts the board away again (TownCanvas).
+    const focus = camera.focusPoint();
+    camera.flyTo(
+      x,
+      y - (inset.top + room - focus.y) / camera.z,
+      camera.z,
+      0.4,
+      { level: true },
+    );
+    this.invalidate("reception");
   }
 
   zoomToBuilding(layout: TownLayout, hostKey: string) {

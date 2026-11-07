@@ -203,7 +203,17 @@ hosts stay usable.
    the bar in the building's bottom corner. When the queue is full, the rest
    crowd the lobby and grumble, then nap on the floor after about 90 seconds;
    the front of the crowd takes the next free spot. These locations visualize
-   status; they do not move the underlying pane or change its host. For the
+   status; they do not move the underlying pane or change its host. To keep
+   reception for what matters now, press its sign (the **!** **?** **✓**
+   marks) and untick a mark, for example **✓** Done: those agents stay at
+   their desks with their mark, and reception shows `✓ N at desks · find`.
+   Press **find** to open the first of them and **Next ›** to step through
+   the rest; **Reset to default** brings everyone back. A change applies to
+   that building alone; tick **Apply to all buildings** to give every building
+   the same marks. Counts, Board and Needs you are
+   unchanged, and World keeps the filter for every browser. Zoomed in to
+   desks the boards are put away: tap the reception lobby to bring its board
+   and sign back. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex subscription
    window is left (amber and **low** under 15 %); hover or tap one for its reset

@@ -139,6 +139,7 @@ function setup(
       : undefined,
     activateAgent: (key) => log.push(["activate", key]),
     activateRoom: (key) => log.push(["room", key]),
+    openReception: (key) => log.push(["reception", key]),
     openCenter: () => log.push(["center"]),
     move: (command) => {
       moves.push(command);
@@ -236,6 +237,57 @@ test("a tap on a room's floor opens the room and zooms to it above desk level", 
   t.time.advance(1000);
   t.lift(t.press(floor), floor);
   expect(t.reasons).not.toContain("room");
+});
+
+test("at desk level a tap on the lobby brings its reception board back into view", () => {
+  const t = setup({ level: "desk", zoom: 2.5 });
+  const building = t.layout.buildings[0]!;
+  // The camera on the lobby: the board's foot above it is too near the top.
+  t.camera.jumpTo((building.entryX + 0.5) * T, (building.lobbyY + 4) * T, 2.5);
+  t.draw();
+  const lobby = t.screen({
+    x: (building.entryX + 0.5) * T,
+    y: (building.lobbyY + 5) * T,
+  });
+  t.lift(t.press(lobby), lobby);
+  expect(t.log).toContainEqual(["reception", building.hostKey]);
+  expect(t.reasons).toContain("reception");
+  expect(t.log.some(([kind]) => kind === "select" || kind === "room")).toBe(
+    false,
+  );
+  // A level flight: the zoom never dips out of desk level on the way.
+  for (let i = 0; i < 120; i += 1) {
+    t.camera.update(1 / 60);
+    expect(t.camera.z).toBeCloseTo(2.5);
+  }
+  // Settled, the board's foot has room above it and the lobby is below.
+  const foot = t.camera.toScreen(
+    (building.entryX + 0.5) * T,
+    building.y * T - 18,
+  );
+  expect(foot.y).toBeGreaterThanOrEqual(260);
+  expect(t.camera.toScreen(0, (building.lobbyY + 7) * T).y).toBeLessThanOrEqual(
+    WIDE.height,
+  );
+  // Any other tap puts it away again.
+  t.draw();
+  t.time.advance(1000);
+  const room = t.rooms[1]!;
+  const floor = t.screen({ x: room.x * T + 4, y: (room.y + room.h) * T - 4 });
+  t.lift(t.press(floor), floor);
+  expect(t.log[t.log.length - 2]).toEqual(["reception", null]);
+});
+
+test("above desk level the lobby is no reception target: its board shows", () => {
+  const t = setup();
+  const building = t.layout.buildings[0]!;
+  const lobby = t.screen({
+    x: (building.entryX + 0.5) * T,
+    y: (building.lobbyY + 5) * T,
+  });
+  t.lift(t.press(lobby), lobby);
+  expect(t.log).toContainEqual(["reception", null]);
+  expect(t.reasons).not.toContain("reception");
 });
 
 test("a tap on the town center opens its menu; a touch hold there pans", () => {
