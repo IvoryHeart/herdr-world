@@ -4,7 +4,13 @@
  * layout change was a move.
  */
 
-import type { TownLayout } from "./townLayout";
+import type { TownBuilding, TownLayout } from "./townLayout";
+import {
+  ROOM_TOP,
+  townFloor,
+  townPlaceLots,
+  type TownColumnSpan,
+} from "./townLots";
 
 /** Whether the ranks rooms had (in their new order) are out of order. */
 export function townRanksOutOfOrder(ranks: readonly (number | undefined)[]) {
@@ -56,19 +62,40 @@ export function townStackRooms<R extends { w: number; h: number }>(
 }
 
 /**
- * Where each room of a building would stand if room `roomKey` took room
- * `ontoKey`'s place in its building's order (tiles, absolute): a reordered
- * building is stacked afresh (townLayout.ts), so this is where a room move
- * lands. Null when either room is not in that building.
+ * A building's room columns as the layout stands them (tiles from its
+ * corner), and the width they take, as townStackRooms gave them.
+ */
+function columnsOf(building: TownBuilding) {
+  const columns = new Map<number, TownColumnSpan>();
+  for (const room of building.rooms) {
+    const x0 = room.x - building.x;
+    const column = columns.get(x0);
+    columns.set(x0, {
+      x0,
+      x1: Math.max(column?.x1 ?? x0, x0 + room.w),
+      bottom: Math.max(column?.bottom ?? 0, room.y - building.y + room.h + 2),
+    });
+  }
+  const spans = [...columns.values()].sort((a, b) => a.x0 - b.x0);
+  return { spans, width: (spans[spans.length - 1]?.x1 ?? 0) + 2 };
+}
+
+/**
+ * Where every room would stand if room `roomKey` took room `ontoKey`'s place
+ * in its building's order (tiles, absolute), as layoutTown lays it out: the
+ * reordered building is stacked afresh, its floor may grow or shrink, and so
+ * the buildings are placed on their streets again. Null when either room is
+ * not in that building.
  */
 export function townRoomMovePreview(
   layout: TownLayout,
   roomKey: string,
   ontoKey: string,
 ): Map<string, { x: number; y: number; w: number; h: number }> | null {
-  const building = layout.buildings.find((b) =>
+  const index = layout.buildings.findIndex((b) =>
     b.rooms.some((room) => room.key === roomKey),
   );
+  const building = layout.buildings[index];
   const order = building?.rooms.map((room) => room.key) ?? [];
   const from = order.indexOf(roomKey);
   const slot = order.indexOf(ontoKey);
@@ -77,25 +104,40 @@ export function townRoomMovePreview(
   order.splice(slot, 0, roomKey);
   const byKey = new Map(building.rooms.map((room) => [room.key, room]));
   const rooms = order.map((key) => byKey.get(key)!);
-  // A building's rooms start where its first room stands.
-  const top = Math.min(...building.rooms.map((room) => room.y)) - building.y;
-  const { positions } = townStackRooms(
+  const stacked = townStackRooms(
     rooms,
     layout.shape.roomColumns,
     () => undefined,
-    top,
+    ROOM_TOP,
   );
-  return new Map(
-    rooms.map((room, index) => [
-      room.key,
-      {
-        x: building.x + positions[index]!.rx,
-        y: building.y + positions[index]!.ry,
+  const floors = layout.buildings.map((b, i) => {
+    const { spans, width } = i === index ? stacked : columnsOf(b);
+    return townFloor(spans, width, layout.shape);
+  });
+  const lots = townPlaceLots(floors, layout.shape).buildings;
+  const preview = new Map<
+    string,
+    { x: number; y: number; w: number; h: number }
+  >();
+  layout.buildings.forEach((b, i) => {
+    const lot = lots[i]!;
+    for (const room of b.rooms)
+      preview.set(room.key, {
+        x: lot.x + room.x - b.x,
+        y: lot.y + room.y - b.y,
         w: room.w,
         h: room.h,
-      },
-    ]),
+      });
+  });
+  rooms.forEach((room, i) =>
+    preview.set(room.key, {
+      x: lots[index]!.x + stacked.positions[i]!.rx,
+      y: lots[index]!.y + stacked.positions[i]!.ry,
+      w: room.w,
+      h: room.h,
+    }),
   );
+  return preview;
 }
 
 /**

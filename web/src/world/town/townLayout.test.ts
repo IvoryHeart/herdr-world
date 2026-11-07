@@ -872,6 +872,24 @@ test("a moved room lands where the preview showed, as a reload lays it out", () 
   }
 });
 
+test("a move that resizes its building lands where the preview showed", () => {
+  // Reordering B's rooms changes B's height, so B (and its rooms) stand
+  // elsewhere on the street: the preview places the buildings afresh.
+  const input = town({ a: [24], b: [1, 24, 1] });
+  const moved = moveRoom(input, "b/room-0", "b/room-1");
+  const building = (layout: TownLayout) =>
+    layout.buildings.find((b) => b.hostKey === "b")!;
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const before = layoutTown(input, shape);
+    const after = layoutTown(moved, shape, before.memory);
+    if (shape === TOWN_SHAPES.medium)
+      expect(building(after.layout).h).not.toBe(building(before.layout).h);
+    expect(townRoomMovePreview(before.layout, "b/room-0", "b/room-1")).toEqual(
+      roomsAt(after.layout),
+    );
+  }
+});
+
 test("a room moved into the first room's place stands where that room stood", () => {
   const input = town({ a: [3, 3, 3, 3, 3, 3] });
   const before = layoutTown(input, TOWN_SHAPES.wide);
