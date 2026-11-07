@@ -335,11 +335,9 @@ async function compose(
   function publishWorldInvalidation(
     connectionId: string,
     connectionGeneration: number,
-    observedLate = false,
+    kind?: "late" | "activity",
   ) {
-    const revision = worldSnapshots?.invalidate(
-      observedLate ? undefined : connectionId,
-    );
+    const revision = worldSnapshots?.invalidate(connectionId, kind);
     if (revision === undefined) return;
     const line = serializeWorldInvalidation(
       connectionId,
@@ -475,7 +473,7 @@ async function compose(
     connectionManager,
     () => clock.now(),
     (connectionId, generation) =>
-      publishWorldInvalidation(connectionId, generation, true),
+      publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
     observeHost,
@@ -632,9 +630,13 @@ async function compose(
               context.isCurrent,
             );
           },
-          onEvent: (event, eventIdentity) => {
+          onEvent: (event, eventIdentity, kind) => {
             if (!context.isCurrent()) return;
-            publishWorldInvalidation(eventIdentity.id, context.generation);
+            publishWorldInvalidation(
+              eventIdentity.id,
+              context.generation,
+              kind,
+            );
             afterHerdrClose(
               board(),
               eventIdentity.id,
