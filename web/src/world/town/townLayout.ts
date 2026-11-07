@@ -18,7 +18,6 @@ import {
   TOWN_FACADE,
   townFloor,
   townPlaceLots,
-  YARD,
 } from "./townLots";
 import {
   NO_ROOM_SPOTS,
@@ -202,8 +201,6 @@ export type TownBuilding = {
   rooms: TownRoom[];
 };
 
-export type TownTree = TownPoint & { variant: number; seed: number };
-
 export type TownLayout = {
   formFactor: TownFormFactor;
   /** The container shape the town was laid out for. */
@@ -234,7 +231,6 @@ export type TownLayout = {
   benches: TownPoint[];
   lamps: TownPoint[];
   bushes: TownPoint[];
-  trees: TownTree[];
   /** Desk key to room key and cell index. */
   deskCells: ReadonlyMap<string, { roomKey: string; cellIndex: number }>;
   /** The saved room spots the town was laid out with (townRoomPlace.ts). */
@@ -366,16 +362,6 @@ function placeRoomDesks(
     taken.add(index);
   }
   return { memory: { cells }, overflow, cols, rows };
-}
-
-function mulberry32(seed: number) {
-  let a = seed | 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 type DraftBuilding = Omit<TownBuilding, "x" | "y" | "roadY" | "rooms"> & {
@@ -742,51 +728,6 @@ export function layoutTown(
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 
-  const random = mulberry32(42);
-  const trees: TownTree[] = [];
-  const treeAt = new Set<number>();
-  const nearBuilding = (tx: number, ty: number) =>
-    (tx >= center.x - 2 &&
-      tx <= center.x + center.w + 1 &&
-      ty >= center.y - 2 &&
-      ty <= center.street) ||
-    buildings.some(
-      (b) =>
-        tx >= b.x - 2 &&
-        tx <= b.x + b.w + 1 &&
-        ty >= b.y - 3 &&
-        ty <= b.y + b.h + TOWN_FACADE + YARD,
-    );
-  const clearAround = (tx: number, ty: number) => {
-    for (let dy = -1; dy <= 1; dy += 1)
-      for (let dx = -1; dx <= 1; dx += 1) {
-        const type = get(tx + dx, ty + dy);
-        if (type !== -1 && type !== TownGround.grass) return false;
-      }
-    return true;
-  };
-  for (let ty = 1; ty < height; ty += 1)
-    for (let tx = 0; tx < width; tx += 1) {
-      const edge = tx < 2 || ty < 2 || tx > width - 3 || ty > height - 3;
-      if (random() > (edge ? 0.42 : 0.07)) continue;
-      if (!clearAround(tx, ty) || nearBuilding(tx, ty)) continue;
-      if (Math.hypot((tx - plaza.x) / 1.2, (ty - plaza.y) * 1.25) < 10)
-        continue;
-      const spacing = edge ? 1.8 : 3.2;
-      let crowded = false;
-      for (let dy = -3; dy <= 3 && !crowded; dy += 1)
-        for (let dx = -3; dx <= 3 && !crowded; dx += 1)
-          if (
-            treeAt.has((ty + dy) * width + tx + dx) &&
-            Math.hypot(dx, dy) < spacing
-          )
-            crowded = true;
-      if (crowded) continue;
-      const variant = random() < 0.12 ? 2 : random() < 0.5 ? 1 : 0;
-      trees.push({ x: tx, y: ty, variant, seed: random() * 10 });
-      treeAt.add(ty * width + tx);
-    }
-
   const deskCells = new Map<string, { roomKey: string; cellIndex: number }>();
   for (const building of buildings)
     for (const room of building.rooms)
@@ -815,7 +756,6 @@ export function layoutTown(
       ],
       lamps: [...lamps, ...court.lamps],
       bushes,
-      trees,
       deskCells,
       ...(roomSpots.size ? { roomSpots } : {}),
     },

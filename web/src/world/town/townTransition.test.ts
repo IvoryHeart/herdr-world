@@ -39,17 +39,14 @@ const keysOf = (layout: TownLayout) =>
     layout,
   );
 
-/** Everything a layout needs drawn, as a whole frame draws it. */
-function whole(layout: TownLayout): TownDrawnScene {
+/**
+ * Everything a layout needs drawn through `view`, as a whole frame draws it:
+ * the ground runs on past the town's edges.
+ */
+function whole(layout: TownLayout, view: TownRect): TownDrawnScene {
   const keys = keysOf(layout);
-  const all: TownRect = {
-    x: 0,
-    y: 0,
-    w: layout.width * T,
-    h: layout.height * T,
-  };
   return {
-    ground: new Set(townGroundChunks(layout, all).map((chunk) => chunk.key)),
+    ground: new Set(townGroundChunks(view).map((chunk) => chunk.key)),
     buildings: new Map(
       layout.buildings.map((building) => [
         building.hostKey,
@@ -115,7 +112,7 @@ test("a whole frame has no gaps; a missing chunk, building or desk is one", () =
   const key = (building: TownLayout["buildings"][number]) =>
     keys.buildings.get(building.hostKey)!;
   const view = everything(layout);
-  const drawn = whole(layout);
+  const drawn = whole(layout, view);
   expect(townSceneGaps(layout, view, drawn, key, true)).toEqual([]);
   // The ground cleared before the new one is painted (the old scene reset).
   expect(
@@ -158,9 +155,7 @@ test("only what is in view must be drawn", () => {
     keys.buildings.get(building.hostKey)!;
   const [first] = layout.buildings;
   const view = townBuildingRect(first!);
-  const chunks = new Set(
-    townGroundChunks(layout, view).map((chunk) => chunk.key),
-  );
+  const chunks = new Set(townGroundChunks(view).map((chunk) => chunk.key));
   const drawn: TownDrawnScene = {
     ground: chunks,
     buildings: new Map([[first!.hostKey, { key: key(first!), pods: null }]]),

@@ -92,23 +92,19 @@ export const townRectsMeet = (a: TownRect, b: TownRect) =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
 /** The ground is painted in square chunks of this many world pixels. */
-export const TOWN_GROUND_CHUNK = 512;
+export const TOWN_GROUND_CHUNK = 256;
 
-/** The ground chunks of `layout` that meet `view`. */
-export function townGroundChunks(layout: TownLayout, view: TownRect) {
+/**
+ * The ground chunks that meet `view`. The ground covers the whole map, the
+ * town and the generated land beyond it (townLandscape.ts), so chunks
+ * continue past the town's edges wherever the camera looks.
+ */
+export function townGroundChunks(view: TownRect) {
   const chunks: { key: string; region: TownRect }[] = [];
-  const width = layout.width * T;
-  const height = layout.height * T;
-  const cx0 = Math.max(0, Math.floor(view.x / TOWN_GROUND_CHUNK));
-  const cy0 = Math.max(0, Math.floor(view.y / TOWN_GROUND_CHUNK));
-  const cx1 = Math.min(
-    Math.ceil(width / TOWN_GROUND_CHUNK),
-    Math.ceil((view.x + view.w) / TOWN_GROUND_CHUNK),
-  );
-  const cy1 = Math.min(
-    Math.ceil(height / TOWN_GROUND_CHUNK),
-    Math.ceil((view.y + view.h) / TOWN_GROUND_CHUNK),
-  );
+  const cx0 = Math.floor(view.x / TOWN_GROUND_CHUNK);
+  const cy0 = Math.floor(view.y / TOWN_GROUND_CHUNK);
+  const cx1 = Math.ceil((view.x + view.w) / TOWN_GROUND_CHUNK);
+  const cy1 = Math.ceil((view.y + view.h) / TOWN_GROUND_CHUNK);
   for (let cy = cy0; cy < cy1; cy += 1)
     for (let cx = cx0; cx < cx1; cx += 1)
       chunks.push({
@@ -116,8 +112,8 @@ export function townGroundChunks(layout: TownLayout, view: TownRect) {
         region: {
           x: cx * TOWN_GROUND_CHUNK,
           y: cy * TOWN_GROUND_CHUNK,
-          w: Math.min(TOWN_GROUND_CHUNK, width - cx * TOWN_GROUND_CHUNK),
-          h: Math.min(TOWN_GROUND_CHUNK, height - cy * TOWN_GROUND_CHUNK),
+          w: TOWN_GROUND_CHUNK,
+          h: TOWN_GROUND_CHUNK,
         },
       });
   return chunks;
@@ -153,7 +149,7 @@ export function townSceneGaps(
   detailed: boolean,
 ) {
   const gaps: string[] = [];
-  for (const { key } of townGroundChunks(layout, view))
+  for (const { key } of townGroundChunks(view))
     if (!drawn.ground.has(key)) gaps.push(`ground ${key}`);
   for (const building of layout.buildings) {
     if (!townRectsMeet(townBuildingRect(building), view)) continue;

@@ -17,7 +17,8 @@ import type { TownCamera } from "./townCamera";
 import type { TownRendererDiagnostics } from "./townDiagnostics";
 import { TOWN_TILE as T, type TownCell, type TownLayout } from "./townLayout";
 import type { TownModel } from "./townModel";
-import { paintTownGround, type TownHostTheme } from "./townPaint";
+import { townGroundPlan } from "./townGroundPlan";
+import { paintTownGroundPlan, type TownHostTheme } from "./townPaint";
 import {
   bakeTownBuilding,
   bakeTownPod,
@@ -71,15 +72,30 @@ export function createTownTopology(ctx: TownTopologyContext) {
   const pendingPods = new Map<string, TownCell[]>();
   let pendingBuildings: TownLayout["buildings"] = [];
 
+  /** A painted ground chunk, with the plan key it was painted from. */
+  type GroundChunk = {
+    sprite: Sprite;
+    key: string;
+    texture: Texture;
+    region: TownRect;
+  };
   /** The ground and outdoor items painted for one layout. */
   type GroundView = {
     layer: Container;
     outdoor: Container;
-    chunks: Map<string, Sprite>;
+    chunks: Map<string, GroundChunk>;
     items: TownOutdoorItem[];
-    textures: Texture[];
   };
   let ground: GroundView | null = null;
+  /**
+   * Chunks painted for an earlier layout, set aside off screen: when the
+   * camera reaches one whose plan is unchanged it is drawn again as it is.
+   */
+  const spare = new Map<string, GroundChunk>();
+  const dropChunk = (chunk: GroundChunk) => {
+    chunk.sprite.destroy();
+    chunk.texture.destroy(true);
+  };
   /** Drawings being replaced or removed, fading (and gliding) out. */
   type Retiring =
     | { kind: "ground"; ground: GroundView; t: number }
@@ -116,7 +132,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
   const destroyGround = (view: GroundView) => {
     view.layer.destroy({ children: true });
     view.outdoor.destroy({ children: true });
-    for (const texture of view.textures) texture.destroy(true);
+    for (const chunk of view.chunks.values()) chunk.texture.destroy(true);
   };
   const destroyView = (view: BuildingView) => {
     view.container.destroy({ children: true });
@@ -133,6 +149,8 @@ export function createTownTopology(ctx: TownTopologyContext) {
     retiring.length = 0;
     if (ground) destroyGround(ground);
     ground = null;
+    for (const chunk of spare.values()) dropChunk(chunk);
+    spare.clear();
   };
 
   /** A texture for a painted canvas, owned (and destroyed) by `owner`. */
@@ -146,8 +164,10 @@ export function createTownTopology(ctx: TownTopologyContext) {
 
   /**
    * The town's size or a building's rectangle changed: paint its ground
-   * again. The old ground stays drawn above the new one and fades out, so no
-   * frame shows the ground missing.
+   * again. The old ground in view stays drawn above the new one and fades
+   * out, so no frame shows the ground missing; its chunks off screen are set
+   * aside. A chunk whose plan is unchanged (most of the land, away from the
+   * change) is not painted again: the new ground takes it as it is.
    */
   const startGround = (instant: boolean) => {
     const layout = ctx.layout();
@@ -159,15 +179,23 @@ export function createTownTopology(ctx: TownTopologyContext) {
     outdoor.zIndex = -1;
     groundLayer.addChildAt(layer, 0);
     sceneLayer.addChild(outdoor);
-    // Trees, lamps and benches join the scene with the ground chunk under them.
+    // Lamps, bushes and benches join the scene with the ground chunk under them.
     ground = {
       layer,
       outdoor,
       chunks: new Map(),
       items: townOutdoor(layout, sprites, outdoor),
-      textures: [],
     };
     if (!old) return;
+    const near = viewRect(200);
+    for (const [key, chunk] of old.chunks) {
+      if (!instant && townRectsMeet(chunk.region, near)) continue;
+      old.chunks.delete(key);
+      old.layer.removeChild(chunk.sprite);
+      const previous = spare.get(key);
+      if (previous) dropChunk(previous);
+      spare.set(key, chunk);
+    }
     if (instant) destroyGround(old);
     else {
       old.outdoor.zIndex = -0.5;
@@ -361,12 +389,23 @@ export function createTownTopology(ctx: TownTopologyContext) {
   const paintChunk = (into: GroundView, key: string, region: TownRect) => {
     const layout = ctx.layout();
     if (!layout) return;
-    const sprite = new Sprite(
-      own(paintTownGround(layout, region), into.textures),
-    );
-    sprite.position.set(region.x, region.y);
-    into.layer.addChild(sprite);
-    into.chunks.set(key, sprite);
+    const plan = townGroundPlan(layout, region);
+    let chunk = reusable(key, plan.key);
+    if (chunk) stats.groundReused += 1;
+    else {
+      const texture = new Texture({
+        source: new CanvasSource({
+          resource: paintTownGroundPlan(plan),
+          scaleMode: "nearest",
+        }),
+      });
+      const sprite = new Sprite(texture);
+      sprite.position.set(region.x, region.y);
+      chunk = { sprite, key: plan.key, texture, region };
+      stats.groundPainted += 1;
+    }
+    into.layer.addChild(chunk.sprite);
+    into.chunks.set(key, chunk);
     into.items = into.items.filter((item) => {
       const inside =
         item.x >= region.x &&
@@ -376,6 +415,27 @@ export function createTownTopology(ctx: TownTopologyContext) {
       if (inside) item.place();
       return !inside;
     });
+  };
+  /**
+   * The chunk painted earlier for `key` with this plan, if any: set aside,
+   * or still fading out with an older ground. Others for `key` are dropped
+   * from the spares.
+   */
+  const reusable = (key: string, plan: string): GroundChunk | null => {
+    const set = spare.get(key);
+    if (set) {
+      spare.delete(key);
+      if (set.key === plan) return set;
+      dropChunk(set);
+    }
+    for (const entry of retiring) {
+      if (entry.kind !== "ground") continue;
+      const chunk = entry.ground.chunks.get(key);
+      if (chunk?.key !== plan) continue;
+      entry.ground.chunks.delete(key);
+      return chunk;
+    }
+    return null;
   };
 
   /**
@@ -393,10 +453,10 @@ export function createTownTopology(ctx: TownTopologyContext) {
     const view = viewRect(0);
     const near = viewRect(200);
     if (urgent)
-      for (const { key, region } of townGroundChunks(layout, view))
+      for (const { key, region } of townGroundChunks(view))
         if (!into.chunks.has(key)) paintChunk(into, key, region);
     let budget = 1;
-    for (const { key, region } of townGroundChunks(layout, near)) {
+    for (const { key, region } of townGroundChunks(near)) {
       if (budget <= 0) break;
       if (into.chunks.has(key)) continue;
       paintChunk(into, key, region);
