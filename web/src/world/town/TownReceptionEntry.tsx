@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { townPortrait } from "./townSprites";
+import { townReceptionName } from "./townNameplates";
 
 export const portrait = townPortrait;
 
@@ -11,6 +12,8 @@ function ago(since: number, now: number) {
 
 export function ReceptionEntry({
   agent,
+  room,
+  desk,
   asking = false,
   since,
   now,
@@ -20,6 +23,9 @@ export function ReceptionEntry({
   onHoverEntry,
 }: {
   agent: OfficeAgent;
+  /** The agent's room and desk labels: the chip says where it waits from. */
+  room?: string;
+  desk?: string;
   asking?: boolean;
   since: number;
   now: number;
@@ -29,6 +35,7 @@ export function ReceptionEntry({
   onHoverEntry(key: string | null, rect?: DOMRect): void;
 }) {
   const ref = useRef<HTMLButtonElement | null>(null);
+  const { name, title } = townReceptionName(agent, room, desk);
   useLayoutEffect(() => {
     if (selected) ref.current?.setAttribute("data-selected", "true");
     else ref.current?.removeAttribute("data-selected");
@@ -43,12 +50,12 @@ export function ReceptionEntry({
       disabled={agent.stale || !agent.canOpenInSpaces}
       aria-label={
         asking
-          ? `${agent.displayLabel}, owner question`
+          ? `${title}, owner question`
           : agent.semanticStatus === "done"
-            ? `${agent.displayLabel}, finished`
-            : `${agent.displayLabel}, needs you for ${ago(since, now)}`
+            ? `${title}, finished`
+            : `${title}, needs you for ${ago(since, now)}`
       }
-      title={agent.taskSummary ?? agent.displayLabel}
+      title={agent.taskSummary ? `${title}: ${agent.taskSummary}` : title}
       onClick={() => (asking ? onActivate(agent.key) : onSelect(agent.key))}
       onDoubleClick={() => onActivate(agent.key)}
       onMouseEnter={(event) =>
@@ -57,7 +64,7 @@ export function ReceptionEntry({
       onMouseLeave={() => onHoverEntry(null)}
     >
       <img src={portrait(agent.key)} alt="" width={28} height={40} />
-      <span>{agent.displayLabel}</span>
+      <span>{name}</span>
       <small>
         {asking
           ? "? Owner wanted"

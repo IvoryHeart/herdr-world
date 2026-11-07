@@ -632,6 +632,7 @@ export async function createTownRenderer(
     onDrawn?.(materializing);
     stats.level = level;
     stats.zoom = camera.z;
+    stats.camera = { x: camera.x, y: camera.y, ...camera.bounds };
     stats.flying = camera.flying;
     stats.transitioning = transitioning || camera.gliding;
     stats.buildingsDrawn = topology.buildings.length;

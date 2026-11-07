@@ -105,6 +105,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     each browser's own last sighting decides.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
+    A queued agent without a Herdr name is labelled with its room rather than
+    its harness, and its tooltip adds the desk, so the board says where each
+    one waits from.
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
