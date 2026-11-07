@@ -780,7 +780,8 @@ function hoverEntry(entry: Element) {
 /**
  * Teams: the fixture's spawn token draws a connector; dragging one desk onto
  * another in its room groups them (a mouse on wide screens, a held touch on
- * phones), seats its tab after the other's in Herdr and walls them in.
+ * phones) and walls them in. No other desk moves, and Herdr's tab order is
+ * left as it was.
  */
 async function groupTwoDesks(
   host: HTMLElement,
@@ -881,6 +882,29 @@ async function groupTwoDesks(
   const start = { x: a.left + a.width / 2, y: a.top + a.height / 2 };
   const end = { x: b.left + b.width / 2, y: b.top + b.height / 2 };
   const picked = [from.dataset.targetKey, to.dataset.targetKey];
+  // Where the room's other desks are drawn, relative to the teammate.
+  const deskBox = (key: string | undefined) =>
+    host
+      .querySelector<HTMLElement>(
+        `.world-semantic-target[data-target-key="${CSS.escape(key ?? "")}"]`,
+      )
+      ?.getBoundingClientRect();
+  const offsets = () => {
+    const anchor = deskBox(to.dataset.targetKey);
+    return desks
+      .filter(
+        (target) =>
+          target !== from && target !== to && roomOf(target) === roomOf(from),
+      )
+      .map((target) => {
+        const box = deskBox(target.dataset.targetKey);
+        return box && anchor
+          ? `${Math.round(box.left - anchor.left)},${Math.round(box.top - anchor.top)}`
+          : "gone";
+      })
+      .join(" ");
+  };
+  const stayed = offsets();
   point("pointerdown", start.x, start.y);
   if (phone)
     await waitFor(
@@ -927,17 +951,24 @@ async function groupTwoDesks(
     grouped.every((key, index) => key === picked[index]),
     `group.join changed the picked desks (${JSON.stringify({ picked, grouped, start, end })})`,
   );
-  await waitFor(
-    () => moves.some((move) => move.method === "tab.move"),
-    "grouping did not seat the desk next to its teammate in Herdr",
-  );
-  const seat = moves.find((move) => move.method === "tab.move")!;
-  check(
-    seat.params.tab_id === tabOf(join.members[0]!) &&
-      Number.isInteger(seat.params.insert_index),
-    `tab.move seats the grouped tab (${JSON.stringify(seat)})`,
-  );
   await waitFor(() => walled() > walls, "the grouped desks have no team wall");
+  // A join that grows the room reflows once input pauses; later steps (and
+  // the check below) start from that settled layout, as a capture would.
+  await window.__HERDR_WORLD_CAPTURE__!.wait({
+    view: "town",
+    width: innerWidth,
+    height: innerHeight,
+    timeoutMs: 20_000,
+  });
+  // Joining moves no other desk, and leaves Herdr's tab order alone.
+  check(
+    !moves.some((move) => move.method === "tab.move"),
+    "grouping reordered tabs in Herdr",
+  );
+  check(
+    offsets() === stayed,
+    `grouping moved other desks (${stayed} -> ${offsets()})`,
+  );
   // Walls are drawn only; the desk's name says who its team is.
   const fromKey = from.dataset.targetKey;
   await waitFor(
