@@ -84,7 +84,7 @@ test("a wide town opens at home: every building, centred", () => {
   view.attach(camera, layout, viewport);
   expect(camera.z).toBe(camera.limits!.home);
   // The hosts' centre sits at the focus point, between the panels' insets;
-  // the reserved town-hall lot lies beyond them, and ALL shows it.
+  // the verge beyond them lies off-screen, and ALL shows it.
   expect(camera.limits!.home).toBeGreaterThanOrEqual(camera.limits!.all);
   const usable = viewport.width - viewport.inset.left - viewport.inset.right;
   const fits = layout.width * T * camera.z <= usable;
@@ -103,6 +103,13 @@ test("a wide town opens at home: every building, centred", () => {
   );
   expect(centre.x).toBeCloseTo(camera.focusPoint().x);
   expect(centre.y).toBeCloseTo(camera.focusPoint().y);
+  // The town center stands among the buildings, its plaque on screen.
+  const plaque = townCenterEmblem(layout.center, T);
+  const sign = camera.toScreen(plaque.x, plaque.y);
+  expect(sign.x).toBeGreaterThan(viewport.inset.left);
+  expect(sign.x).toBeLessThan(viewport.width - viewport.inset.right);
+  expect(sign.y).toBeGreaterThan(viewport.inset.top);
+  expect(sign.y).toBeLessThan(viewport.height - viewport.inset.bottom);
   expect(view.atHome()).toBe(true);
   expect(reasons).toEqual(["home"]);
 });
@@ -206,8 +213,9 @@ test("a drawn frame reports movement and saves only a changed pose", () => {
     posed: false,
   });
   expect(poses.size).toBe(0);
-  // Below the saved precision a pan moves the drawn camera but not the pose.
-  camera.x += 0.01;
+  // Below the saved precision (a tenth of a pixel) a pan moves the drawn
+  // camera but not the pose: it steps toward the middle of its tenth.
+  camera.x += (camera.x * 10 + 0.5) % 1 < 0.5 ? 0.01 : -0.01;
   expect(view.drew(camera, "overview", layout)).toEqual({
     moved: true,
     posed: false,
