@@ -35,6 +35,16 @@ export class TownAmbient {
   continuous() {
     this.next = this.now;
   }
+
+  /**
+   * Earliest state change on a timer (an overflow agent dozing off). Unlike
+   * animation, it is drawn under calm or reduced motion too.
+   */
+  change = Infinity;
+
+  changeAt(time: number) {
+    if (time > this.now) this.change = Math.min(this.change, time);
+  }
 }
 
 /** Each renderer retains its own blink phase, including while a sprite is hidden. */
