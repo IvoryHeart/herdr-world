@@ -67,8 +67,10 @@ import {
 import type { TownModel } from "./townModel";
 import type { TerminalColor } from "../terminalColor";
 import { createTownLookResolver } from "./townAppearance";
+import { createTownBinnedDesks, TOWN_CRUMB_RATE } from "./townBinnedDesks";
 import {
   paintTownGround,
+  townCarpetFor,
   townChosenCarpet,
   townHostTheme,
   type TownHostTheme,
@@ -367,6 +369,12 @@ export async function createTownRenderer(
   const pendingPods = new Map<string, TownCell[]>();
   let outdoorItems: { x: number; y: number; place: () => void }[] = [];
   const buildingByHost = new Map<string, BuildingView>();
+  // Binned agents' seats fade and crumble until the bus takes them.
+  const binnedDesks = createTownBinnedDesks({
+    container: (hostKey) => buildingByHost.get(hostKey)?.dynamic,
+    carpet: (roomKey) => carpetFor(roomKey) ?? townCarpetFor(roomKey),
+    visible,
+  });
   const groundChunks = new Map<string, Sprite>();
   let pendingBuildings: TownLayout["buildings"] = [];
   let dimDirty = true;
@@ -742,6 +750,8 @@ export async function createTownRenderer(
     const roofsMoving = updateRoofs(dt);
     cull();
     updatePods(deskBlend, camera.z >= 0.6, lite);
+    if (binnedDesks.update(clock, camera.reducedMotion))
+      ambient.every(TOWN_CRUMB_RATE);
     agentViews.update(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
     agentViews.updateBubbles();
     drawTownSelectionEffects(
@@ -901,6 +911,7 @@ export async function createTownRenderer(
         for (const hostKey of dirty.bake.buildings) rebakeBuilding(hostKey);
         recordLayout();
       }
+      binnedDesks.sync(nextLayout, nextModel, nextState.awayKeys ?? new Set());
       // Agents of unchanged hosts keep their goals and paths; every sync
       // still takes the new model and layout.
       if (dirty.scene || dirty.actors.size)

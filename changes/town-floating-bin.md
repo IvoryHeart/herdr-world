@@ -5,6 +5,11 @@
   scrolled, and Town no longer scrolls while the drag rests on it.
 - Only Town's bin speaks of the bus: on Board and other views it reads
   "Cleaning up" with the count, and its tray says when they close.
+- While an agent waits for the bus in Town, its seat fades into the carpet
+  and crumbles, so the desk reads as going; a desk whose agents are all
+  binned fades whole. Putting the agent back clears it.
+- An agent put in the bin on Board walks out of its front door to its stop
+  the first time Town shows it, instead of already standing there.
 
 ### Fixed
 

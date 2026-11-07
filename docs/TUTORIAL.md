@@ -412,7 +412,10 @@ bottom of the screen and lights up while you drag, so on a phone a short drag
 is enough wherever you have scrolled; the town holds still while you rest on
 it. Nothing closes yet: in
 Town the agent walks out of the front door to the nearest bus stop, a London
-stop with a red roundel at a road crossing, whichever you dropped it on. A
+stop with a red roundel at a road crossing, whichever you dropped it on (an
+agent you binned on Board walks out too the first time you open Town). Its
+seat fades into the carpet and crumbles, so the desk reads as going; when
+every agent at a desk is binned the whole desk fades. A
 small board over the waiting agents counts down to the bus reaching that stop
 and reads **due** a few seconds before it pulls in; Town's bin shows the time
 to the next bus. Elsewhere there is no bus: on Board the bin reads **Cleaning

@@ -11,6 +11,7 @@ import {
   townBusOpacity,
   townBusRoute,
   townBusTimeline,
+  townRiderFirstOuting,
   townRiderOuting,
   townRiderWalk,
   townStopClock,
@@ -32,6 +33,12 @@ import "./townBus.css";
 
 /** A rider steps aboard this long after the bus has stopped for it. */
 const BOARD_S = 1.5;
+
+/**
+ * Bin entries this page has shown outside, across Town's mounts: one binned
+ * on Board walks from its door the first time Town shows it, not again.
+ */
+const shownOutside = new Set<string>();
 
 /**
  * The bin as Town shows it: the agents it takes out of their rooms (`away`,
@@ -165,6 +172,10 @@ export const TownBusLayer = memo(function TownBusLayer({
     const live = new Set(riders.map((rider) => rider.entry.id));
     for (const id of walks.current.keys())
       if (!live.has(id)) walks.current.delete(id);
+    const binned = new Set(
+      [...bin.entries, ...bin.closing].map((entry) => entry.id),
+    );
+    for (const id of shownOutside) if (!binned.has(id)) shownOutside.delete(id);
     const tick = () => {
       frame = 0;
       const time = performance.now();
@@ -190,13 +201,14 @@ export const TownBusLayer = memo(function TownBusLayer({
         // Shown once its actor has gone out of the front door (the frame
         // just drawn); from then it walks to its stop.
         const walk = townRiderOuting(
-          walks.current.get(id) ?? { indoors: false, out: null },
+          walks.current.get(id) ?? townRiderFirstOuting(shownOutside.has(id)),
           handle ? handle.actorPosition(rider.agentKey) === null : null,
           time,
           still,
         );
         walks.current.set(id, walk);
         const out = walk.out !== null;
+        if (out) shownOutside.add(id);
         if (node.hasAttribute("data-out") !== out)
           node.toggleAttribute("data-out", out);
         const pose = townRiderWalk(

@@ -10,6 +10,7 @@ import {
   townBusRoute,
   townBusTimeline,
   townNearestStop,
+  townRiderFirstOuting,
   townRiderOuting,
   townRiderWalk,
   townStopClock,
@@ -275,6 +276,14 @@ test("an agent seen indoors walks out of the door however long it took to reach 
   expect(townRiderOuting(outing, true, 42_000, false).out).toBe(41_000);
   // Already out when Town first draws it (Town opened again): at its stop.
   expect(townRiderOuting(start, true, 5_000, false).out).toBe(-Infinity);
+  // Binned on Board, then Town opened: never shown here, it walks from its door.
+  expect(
+    townRiderOuting(townRiderFirstOuting(false), true, 5_000, false).out,
+  ).toBe(5_000);
+  // Shown outside before, then Town opened again: at its stop.
+  expect(
+    townRiderOuting(townRiderFirstOuting(true), true, 5_000, false).out,
+  ).toBe(-Infinity);
   // With reduced motion, at its stop too.
   expect(
     townRiderOuting({ indoors: true, out: null }, true, 5_000, true).out,

@@ -274,7 +274,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;
     nothing closes yet. In Town it walks out of its building's front door to
     the London bus stop (red roundel) nearest its room, the same character
-    walking as it does indoors, whether it was dropped on the bin or a stop;
+    walking as it does indoors, whether it was dropped on the bin or a stop
+    (one binned on Board walks out the first time Town shows it); its seat
+    fades into the carpet and crumbles, the whole desk when all its agents
+    are binned;
     there is a stop at every road crossing, and a countdown board over those
     waiting counts down to the bus reaching that stop (**due** a few seconds
     before it pulls in). The bin floats at the bottom of the screen and

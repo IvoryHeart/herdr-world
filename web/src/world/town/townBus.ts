@@ -419,12 +419,23 @@ export function townNearestStop(
 export type TownRiderOuting = { indoors: boolean; out: number | null };
 
 /**
+ * A rider's outing before Town first draws it. One this page has never
+ * shown (binned here a moment ago, or on Board before Town was opened)
+ * counts as on its way out, so it walks from its front door; one this page
+ * already showed outside (Town opened again) stands at its stop.
+ */
+export function townRiderFirstOuting(shownBefore: boolean): TownRiderOuting {
+  return { indoors: !shownBefore, out: null };
+}
+
+/**
  * A rider's outing after the frame drawn at `time`, where its actor is out
  * of the front door (`out`), indoors, or not drawn yet (null). One seen
  * indoors walks from the door when it goes out, however long its walk
  * indoors took (slower on a phone, where frames come less often). One
- * already out when first seen (Town opened again) stands at its stop, as
- * every rider does with reduced motion.
+ * already out when first seen and not counted as on its way out
+ * (townRiderFirstOuting) stands at its stop, as every rider does with
+ * reduced motion.
  */
 export function townRiderOuting(
   outing: TownRiderOuting,
