@@ -7,7 +7,7 @@
 
 /**
  * Its rectangle in tiles: the whole drawn building, flag to front steps;
- * `street` is the top row of the first street, where its forecourt ends.
+ * `street` is the top row of the first street, the pavement at its steps.
  */
 export type TownCenterLot = {
   x: number;
@@ -27,15 +27,14 @@ export const townCenterWidth = (narrowPhone: boolean) =>
   narrowPhone ? 24 : 34;
 
 /**
- * The first street's top row, under the center and its short forecourt: the
- * steps open onto the pavement with no lawn between them.
+ * The first street's top row, right under the center: its front steps open
+ * straight onto the pavement, so it stands against the road.
  */
-export const TOWN_CENTER_STREET = TOWN_CENTER_TOP + TOWN_CENTER_HEIGHT + 3;
+export const TOWN_CENTER_STREET = TOWN_CENTER_TOP + TOWN_CENTER_HEIGHT;
 
 /**
- * The paved forecourt from the front steps down to the street's pavement, a
- * little wider than the steps, hedged along its sides. Tiles, x1 and y1
- * exclusive.
+ * The paved apron at the foot of the front steps, a little wider than the
+ * steps, meeting the street's pavement. Tiles, x1 and y1 exclusive.
  */
 export function townCenterForecourt(center: TownCenterLot) {
   const half = center.w >= 30 ? 8 : 7;
@@ -44,10 +43,7 @@ export function townCenterForecourt(center: TownCenterLot) {
   const x1 = mid + half;
   const y0 = center.y + center.h - 2;
   const y1 = center.street;
-  const bushes: { x: number; y: number }[] = [];
-  for (let y = y1 - 2; y > y0 + 2; y -= 3)
-    bushes.push({ x: x0 - 1, y }, { x: x1, y });
-  return { x0, y0, x1, y1, bushes };
+  return { x0, y0, x1, y1 };
 }
 
 /** The frieze over the portico, in pixels below the center's top row. */

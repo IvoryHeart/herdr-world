@@ -745,10 +745,9 @@ export function layoutTown(
     };
   });
 
-  // The center's forecourt is paved from its steps down to the street.
+  // The center's front steps open onto a paved apron on the pavement.
   const court = townCenterForecourt(center);
   strip(court.x0, court.y0, court.x1, court.y1, TownGround.plaza);
-  bushes.push(...court.bushes);
 
   const plaza = { x: Math.floor(width / 2), y: lastRoad + ROAD_GAP + 6 };
   for (let ty = plaza.y - 5; ty <= plaza.y + 5; ty += 1)
@@ -765,6 +764,10 @@ export function layoutTown(
   for (const ry of roads)
     for (let tx = 6; tx < width - 4; tx += 11) {
       if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
+      // The center stands on this pavement and brings its own lamps.
+      const underCenter =
+        ry === center.street && tx >= center.x - 1 && tx <= center.x + center.w;
+      if (underCenter) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 

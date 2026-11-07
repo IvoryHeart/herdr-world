@@ -732,10 +732,10 @@ test("the town center stands at the top, just across the first street", () => {
       const first = Math.min(...layout.roads);
       expect(center.x).toBeGreaterThanOrEqual(3);
       expect(center.x + center.w).toBeLessThanOrEqual(layout.width - 3);
-      // Above the first street, its forecourt meeting the pavement with no
-      // lawn between: no building, road or plaza column beside it.
+      // Above the first street, its front steps right on the pavement with
+      // no courtyard between: no building, road or plaza column beside it.
       expect(center.street).toBe(first);
-      expect(first - (center.y + center.h)).toBeLessThanOrEqual(3);
+      expect(center.y + center.h).toBe(first);
       for (const building of buildings)
         expect(building.y).toBeGreaterThan(first + ROAD_BAND);
       for (const road of layout.verticalRoads)
@@ -753,13 +753,20 @@ test("the town center stands at the top, just across the first street", () => {
       if (shape.roomColumns === 1)
         for (const building of buildings)
           expect(center.w).toBeLessThanOrEqual(building.w);
-      // Its forecourt is paved down to the street; no tree stands on it.
+      // Its steps stand on a paved apron at the pavement; no tree on it.
       const middle = center.x + Math.floor(center.w / 2);
-      for (let y = center.y + center.h; y < center.street; y += 1)
+      for (let y = center.y + center.h - 2; y < center.street; y += 1)
         expect(layout.ground[y * layout.width + middle]).toBe(TownGround.plaza);
       expect(layout.ground[center.street * layout.width + middle]).toBe(
         TownGround.walk,
       );
+      // The pavement's lamps leave its steps and wings clear.
+      for (const lamp of layout.lamps)
+        expect(
+          lamp.y === center.street &&
+            lamp.x >= center.x - 1 &&
+            lamp.x <= center.x + center.w,
+        ).toBe(false);
       for (const tree of layout.trees)
         expect(
           tree.x >= center.x - 1 &&
