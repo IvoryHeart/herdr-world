@@ -130,6 +130,29 @@ export const binClockLabel = (ms: number) => {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
+/** Town's words for the bin's clock: its bus. */
+export function binBusLabel(bin: WorldBin, now: number) {
+  if (!bin.verified) return "bin unavailable";
+  const { elapsed, next } = binBusClock(bin, now);
+  if (elapsed !== null && bin.bus.stopped) return "bus stopped";
+  return elapsed !== null ? "bus on its way" : `bus in ${binClockLabel(next)}`;
+}
+
+/**
+ * Every other view's words for the bin's clock: there is no bus there, only
+ * when what it holds closes, which is when the bus that takes it has left the
+ * map (its departure plus its trip). Those that came after the bus set off
+ * wait for the next one.
+ */
+export function binCloseLabel(bin: WorldBin, now: number) {
+  if (!bin.verified) return "bin unavailable";
+  const { elapsed, next } = binBusClock(bin, now);
+  const leaving = elapsed !== null && bin.entries.some((entry) => entry.riding);
+  if (leaving && bin.bus.stopped) return "paused";
+  const closes = leaving ? bin.bus.trip_ms - elapsed : next + bin.bus.trip_ms;
+  return `closes in ${binClockLabel(closes)}`;
+}
+
 export type BinAddRequest = BinTarget & {
   label: string;
   view: BinView;
@@ -170,8 +193,6 @@ export class WorldBinStore {
   private users = 0;
   private generation = 0;
   private unlisten: (() => void)[] = [];
-  /** When this page first saw each entry, so a remount does not replay its walk. */
-  private seen = new Map<string, number>();
 
   constructor(
     private readonly client: Client,
@@ -185,9 +206,6 @@ export class WorldBinStore {
       this.listeners.delete(listener);
     };
   };
-
-  /** When this page first saw the entry, by its clock. */
-  firstSeen = (id: string) => this.seen.get(id) ?? this.now();
 
   /** Counted: the last user to stop ends the subscription. */
   start() {
@@ -263,11 +281,7 @@ export class WorldBinStore {
       next.revision < this.state.revision
     )
       return;
-    const now = this.now();
-    const live = new Set([...next.entries, ...next.closing].map((e) => e.id));
-    for (const id of live) if (!this.seen.has(id)) this.seen.set(id, now);
-    for (const id of this.seen.keys()) if (!live.has(id)) this.seen.delete(id);
-    this.set({ ...next, readAt: now, verified: true });
+    this.set({ ...next, readAt: this.now(), verified: true });
   }
 
   private set(state: WorldBin) {

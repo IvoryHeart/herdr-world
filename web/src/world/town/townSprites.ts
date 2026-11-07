@@ -186,7 +186,8 @@ export function townLookFor(identity: string): TownLook {
 }
 
 export type TownDirection = "down" | "up" | "left" | "right";
-export type TownPose = "stand" | "sit" | "carry";
+/** `scratch`: seated, scratching its head with one hand (confused). */
+export type TownPose = "stand" | "sit" | "scratch" | "carry";
 
 const NAVY = "#1f2a44";
 const NAVY_DARK = "#141c30";
@@ -218,17 +219,18 @@ function drawCharacter(
   const shoe = "#2b2433";
   const eye = "#231d2b";
   const cap = townShade(shirt, -0.42);
+  const seated = pose === "sit" || pose === "scratch";
   if (dir !== "right") {
     if (outfit === "dress") {
       R(2, 12, 8, 3, top);
       R(2, 14, 8, 1, sd);
-      if (pose !== "sit") {
+      if (!seated) {
         R(3, 15, 2, 1, skin);
         R(7, 15, 2, 1, skin);
         R(3, 16, 2, 1, shoe);
         R(7, 16, 2, 1, shoe);
       }
-    } else if (pose !== "sit") {
+    } else if (!seated) {
       const lUp = frame === 1;
       const rUp = frame === 3;
       R(3, 13, 6, 1, pants);
@@ -254,7 +256,12 @@ function drawCharacter(
         R(9, 8, 1, 1, GOLD);
       } else R(5, 8, 2, 2, sl);
     }
-    if (pose === "sit") {
+    if (pose === "scratch") {
+      R(1, 8, 1, 2, top);
+      R(2, 10, 1, 1, skin);
+      R(10, 4, 1, 5, sd);
+      R(10, 2, 2, 2, skin);
+    } else if (pose === "sit") {
       R(1, 8, 1, 2, top);
       R(10, 8, 1, 2, sd);
       R(2, frame ? 9 : 10, 1, 1, skin);
@@ -350,11 +357,11 @@ function drawCharacter(
   }
   if (outfit === "dress") {
     R(3, 12, 6, 3, top);
-    if (pose !== "sit") {
+    if (!seated) {
       R(4, 15, 2, 1, skin);
       R(4, 16, 3, 1, shoe);
     }
-  } else if (pose !== "sit") {
+  } else if (!seated) {
     if (frame % 2 === 0) {
       R(4, 13, 4, 3, pants);
       R(4, 16, 5, 1, shoe);
@@ -495,14 +502,15 @@ export function buildTownSprites() {
       R(6, 2, 2, 2, logo);
       R(1, 5, 12, 2, "#3a404b");
     });
-  const bubble = (draw: (R: Rect) => void) =>
-    townSprite(11, 12, (R) => {
+  const bubble = (draw: (R: Rect) => void, width = 11) =>
+    townSprite(width, 12, (R) => {
       const w = "#fffaf0";
-      R(1, 0, 9, 10, w);
-      R(0, 1, 11, 8, w);
-      R(4, 10, 3, 1, w);
-      R(5, 11, 1, 1, w);
-      R(1, 9, 9, 1, "#e3dac8");
+      const tail = (width - 1) / 2;
+      R(1, 0, width - 2, 10, w);
+      R(0, 1, width, 8, w);
+      R(tail - 1, 10, 3, 1, w);
+      R(tail, 11, 1, 1, w);
+      R(1, 9, width - 2, 1, "#e3dac8");
       draw(R);
     });
   const tree = (c1: string, c2: string, c3: string, c4: string) =>
@@ -683,7 +691,37 @@ export function buildTownSprites() {
         R(5, 5, 1, 2, c);
         R(5, 8, 1, 1, c);
       }),
-      // Asleep at the desk.
+      // A distinct, purple pair of question marks: the state is unknown.
+      confused: bubble((R) => {
+        const c = "#8e5cc2";
+        R(2, 1, 3, 1, c);
+        R(1, 2, 1, 2, c);
+        R(5, 2, 1, 2, c);
+        R(4, 4, 1, 1, c);
+        R(3, 5, 1, 2, c);
+        R(3, 8, 1, 1, c);
+        R(7, 3, 2, 1, c);
+        R(9, 4, 1, 1, c);
+        R(8, 5, 1, 1, c);
+        R(8, 6, 1, 1, c);
+        R(8, 8, 1, 1, c);
+      }),
+      // Cursing in the reception overflow crowd: #@! in a wider bubble.
+      curse: bubble((R) => {
+        const c = "#c43d3d";
+        R(1, 2, 1, 5, c);
+        R(3, 2, 1, 5, c);
+        R(0, 3, 5, 1, c);
+        R(0, 5, 5, 1, c);
+        R(7, 2, 3, 1, c);
+        R(6, 3, 1, 3, c);
+        R(10, 3, 1, 2, c);
+        R(8, 4, 3, 1, c);
+        R(7, 6, 4, 1, c);
+        R(12, 2, 2, 3, c);
+        R(12, 6, 2, 1, c);
+      }, 15),
+      // Asleep at the desk or on the lobby floor.
       sleep: bubble((R) => {
         const c = "#6b7a8f";
         R(3, 2, 4, 1, c);

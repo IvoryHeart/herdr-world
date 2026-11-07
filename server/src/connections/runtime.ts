@@ -53,6 +53,7 @@ import { createTerminalBridge } from "../bridge/terminal-bridge";
 import { createHerdrInfoHandler } from "../http/herdr-info";
 import { createImageUploadHandler } from "../http/image-upload";
 import { createTerminalUploadHandler } from "../http/terminal-upload";
+import { createPaneActivityClassifier } from "../utils/herdr-events";
 import {
   createRecoveryReporter,
   type Logger,
@@ -143,7 +144,11 @@ export function createLegacyConnectionRuntime(args: {
   broadcast?: (payload: string, context?: string) => void;
   clientLabel: (ws: ServerWebSocket<unknown>) => string;
   markRpcError: MarkRpcError;
-  onEvent: (event: unknown, identity: ConnectionIdentity) => void;
+  onEvent: (
+    event: unknown,
+    identity: ConnectionIdentity,
+    kind?: "activity",
+  ) => void;
   onTaskEvent?: (event: TaskEvent) => void;
   /** Defaults to `status`; the server entrypoint selects `herdr` by default. */
   taskNotificationSource?: TaskNotificationSource;
@@ -735,6 +740,7 @@ export function createLegacyConnectionRuntime(args: {
     },
   });
 
+  const paneActivity = createPaneActivityClassifier();
   const onHerdrEvent = (event: unknown) => {
     taskEvents.handleHerdrEvent(event);
     lastStepTurns.handleHerdrEvent(event);
@@ -742,7 +748,7 @@ export function createLegacyConnectionRuntime(args: {
     agentSessions.conversationWatch.herdrEvent();
     if ((event as { event?: string })?.event === "workspace.focused")
       terminalBridge.refreshPopupObserverFocus();
-    args.onEvent(event, identity);
+    args.onEvent(event, identity, paneActivity.classify(event));
   };
   const onHerdrError = (error: unknown) => args.onError?.(error, identity);
   herdr.on("event", onHerdrEvent);
@@ -773,6 +779,7 @@ export function createLegacyConnectionRuntime(args: {
           ),
       ),
     onReady: () => {
+      paneActivity.reset();
       // Browser snapshots may start before the subscription ACK. Reconcile
       // after every ACK (including reconnect) to close that missed-event gap.
       // The browser's generic refresh path queues another snapshot if busy.

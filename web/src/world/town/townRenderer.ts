@@ -68,8 +68,10 @@ import {
 import type { TownModel } from "./townModel";
 import type { TerminalColor } from "../terminalColor";
 import { createTownLookResolver } from "./townAppearance";
+import { createTownBinnedDesks, TOWN_CRUMB_RATE } from "./townBinnedDesks";
 import {
   paintTownGround,
+  townCarpetFor,
   townChosenCarpet,
   townHostTheme,
   type TownHostTheme,
@@ -375,6 +377,12 @@ export async function createTownRenderer(
   const pendingPods = new Map<string, TownCell[]>();
   let outdoorItems: { x: number; y: number; place: () => void }[] = [];
   const buildingByHost = new Map<string, BuildingView>();
+  // Binned agents' seats fade and crumble until the bus takes them.
+  const binnedDesks = createTownBinnedDesks({
+    container: (hostKey) => buildingByHost.get(hostKey)?.dynamic,
+    carpet: (roomKey) => carpetFor(roomKey) ?? townCarpetFor(roomKey),
+    visible,
+  });
   const groundChunks = new Map<string, Sprite>();
   let pendingBuildings: TownLayout["buildings"] = [];
   let dimDirty = true;
@@ -499,7 +507,9 @@ export async function createTownRenderer(
   const lookOf = (key: string) => resolveLook(model?.agents.get(key), key);
 
   const resting = (agent: { semanticStatus: string }) =>
-    agent.semanticStatus === "idle" || agent.semanticStatus === "unknown";
+    agent.semanticStatus === "idle";
+  /** Head-scratches a second: an agent in an unknown state is confused. */
+  const CONFUSED_RATE = 0.8;
 
   const updatePods = (deskBlend: number, glow: boolean, lite: boolean) => {
     const frame = Math.floor(clock * 6);
@@ -552,12 +562,22 @@ export async function createTownRenderer(
               info.agent.semanticStatus === "working"
                 ? Math.floor(clock * 7 + (townHash(info.agent.key) % 7)) % 2
                 : 0;
+            // Confused agents scratch their heads, then look up again;
+            // calm motion holds the scratch.
+            const confused = info.agent.semanticStatus === "unknown";
+            const phase = (townHash(info.agent.key) % 5) / 5;
+            const animate = !state.calm && !camera.reducedMotion;
+            const scratching =
+              confused &&
+              (!animate || Math.floor(clock * CONFUSED_RATE + phase) % 2 === 0);
+            if (confused && animate && visible(person))
+              ambient.every(CONFUSED_RATE, phase);
             person.texture = textureOf(
               townCharacter(
                 lookOf(info.agent.key),
                 top ? "down" : "up",
                 typing,
-                "sit",
+                scratching ? "scratch" : "sit",
                 // Idle agents doze with their eyes closed.
                 top &&
                   (resting(info.agent) ||
@@ -736,7 +756,7 @@ export async function createTownRenderer(
     ambient = new TownAmbient(clock);
     stats.frames += 1;
     const cameraMoved = camera.update(dt);
-    const actorsMoved = actors.step(camera.reducedMotion ? 10 : dt);
+    const actorsMoved = actors.step(camera.reducedMotion ? 10 : dt, elapsed);
     const limits = camera.limits!;
     level = townLevel(camera.z, limits);
     const deskBlend = townBlend(limits.desk * 0.82, limits.desk, camera.z);
@@ -750,6 +770,8 @@ export async function createTownRenderer(
     const roofsMoving = updateRoofs(dt);
     cull();
     updatePods(deskBlend, camera.z >= 0.6, lite);
+    if (binnedDesks.update(clock, camera.reducedMotion))
+      ambient.every(TOWN_CRUMB_RATE);
     agentViews.update(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
     agentViews.updateBubbles();
     drawTownSelectionEffects(
@@ -790,23 +812,23 @@ export async function createTownRenderer(
       camera.flying ||
       materializing ||
       dragging;
+    const animated = !camera.reducedMotion && !state.calm;
     const next = moving
       ? "state"
-      : !camera.reducedMotion && !state.calm && ambient.next === clock
+      : animated && ambient.next === clock
         ? "motion"
         : null;
+    // Animation sleeps under calm or reduced motion; timed state changes don't.
+    const motionAt = animated ? ambient.next : Infinity;
+    const wakeAt = Math.min(motionAt, ambient.change);
     if (next) frames?.request(next);
-    else if (
-      !camera.reducedMotion &&
-      !state.calm &&
-      Number.isFinite(ambient.next)
-    )
+    else if (Number.isFinite(wakeAt))
       ambientTimer = setTimeout(
         () => {
           ambientTimer = null;
-          frames?.request("motion");
+          frames?.request(wakeAt === motionAt ? "motion" : "state");
         },
-        Math.max(1, (ambient.next - clock) * 1000 - 16),
+        Math.max(1, (wakeAt - clock) * 1000 - 16),
       );
     if (DEVTOOLS && onTrace) {
       const causes = Object.entries({
@@ -914,6 +936,7 @@ export async function createTownRenderer(
         for (const hostKey of dirty.bake.buildings) rebakeBuilding(hostKey);
         recordLayout();
       }
+      binnedDesks.sync(nextLayout, nextModel, nextState.awayKeys ?? new Set());
       // Agents of unchanged hosts keep their goals and paths; every sync
       // still takes the new model and layout.
       if (dirty.scene || dirty.actors.size)

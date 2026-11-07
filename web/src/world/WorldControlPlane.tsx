@@ -375,6 +375,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       />
       <WorldBin
         always={view === "town" || view === "board"}
+        bus={view === "town"}
         // Board's hub: the town center's actions beside the bin.
         dock={
           view === "board" ? (

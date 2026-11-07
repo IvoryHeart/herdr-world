@@ -8,12 +8,7 @@ import type { BinView } from "../../../../shared/bin";
 import { tabCardKey } from "../../../../shared/terminalColor";
 import { sharedBoardStore } from "../board/boardDocument";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
-import {
-  binAddRequest,
-  binBusClock,
-  binClockLabel,
-  type WorldBin,
-} from "./binStore";
+import { binAddRequest, binBusLabel, binCloseLabel } from "./binStore";
 import { useWorldBin, worldBinStore } from "./useWorldBin";
 import { WORLD_BIN_OPEN_EVENT } from "./worldBinEvents";
 import "./bin.css";
@@ -83,13 +78,17 @@ function useSecondClock(running: boolean) {
  * Board, where agents are dragged onto it), and its tray (from the chip, or
  * Town's stops and bus) listing who waits with the time to the next bus,
  * with Put back and Close now. A stopped bus is let go from the tray, or
- * goes on as the tray closes. `dock` (Board's hub) stands beside the chip.
+ * goes on as the tray closes. Only Town (`bus`) has a bus to speak of;
+ * elsewhere the bin says when it closes what it holds. `dock` (Board's hub)
+ * stands beside the chip.
  */
 export function WorldBin({
   always = false,
+  bus: town = false,
   dock,
 }: {
   always?: boolean;
+  bus?: boolean;
   dock?: ReactNode;
 }) {
   const bin = useWorldBin();
@@ -118,7 +117,7 @@ export function WorldBin({
   }, [open]);
   const act = (run: () => Promise<string | null>) =>
     void run().then((failed) => setError(failed));
-  const bus = busLabel(bin, now);
+  const bus = town ? binBusLabel(bin, now) : binCloseLabel(bin, now);
   if (!held && !open && !always) return null;
   const chipButton =
     held || always ? (
@@ -131,20 +130,26 @@ export function WorldBin({
         data-empty={held ? undefined : ""}
         aria-expanded={open}
         aria-label={
-          held
-            ? `Bin, ${held} ${held === 1 ? "agent" : "agents"}, ${bus}`
-            : "Bin, empty"
+          !held
+            ? "Bin, empty"
+            : town
+              ? `Bin, ${held} ${held === 1 ? "agent" : "agents"}, ${bus}`
+              : `Bin, cleaning up ${held} ${held === 1 ? "agent" : "agents"}, ${bus}`
         }
         title="Drag an agent here to put it in the bin"
         onClick={() => setOpen((value) => !value)}
       >
         <Trash2 size={15} aria-hidden="true" />
-        {held ? (
+        {!held ? null : town ? (
           <>
             <b>{held}</b>
             <span>{bus}</span>
           </>
-        ) : null}
+        ) : (
+          <>
+            Cleaning up <b>{held}</b>
+          </>
+        )}
       </button>
     ) : null;
   return (
@@ -173,7 +178,7 @@ export function WorldBin({
                 className="world-bin-go"
                 onClick={() => act(() => worldBinStore().goBus())}
               >
-                Let the bus go
+                {town ? "Let the bus go" : "Go on"}
               </button>
             ) : null}
             <button
@@ -191,9 +196,13 @@ export function WorldBin({
                   <span>
                     <b>{entry.label}</b>
                     <small>
-                      {entry.riding
-                        ? "On the bus; closes when it leaves"
-                        : "Waiting for the bus"}
+                      {town
+                        ? entry.riding
+                          ? "On the bus; closes when it leaves"
+                          : "Waiting for the bus"
+                        : entry.riding
+                          ? "Closing soon"
+                          : "Waiting to close"}
                     </small>
                   </span>
                   <button
@@ -224,8 +233,9 @@ export function WorldBin({
             </ul>
           ) : (
             <p className="world-bin-empty">
-              The bin is empty. Drag an agent onto the bin or a bus stop, or use
-              its window's ⋯ menu.
+              {town
+                ? "The bin is empty. Drag an agent onto the bin or a bus stop, or use its window's ⋯ menu."
+                : "The bin is empty. Drag an agent onto the bin, or use its window's ⋯ menu."}
             </p>
           )}
           {error ? (
@@ -252,11 +262,4 @@ export function WorldBin({
       ) : null}
     </>
   );
-}
-
-function busLabel(bin: WorldBin, now: number) {
-  if (!bin.verified) return "bin unavailable";
-  const { elapsed, next } = binBusClock(bin, now);
-  if (elapsed !== null && bin.bus.stopped) return "bus stopped";
-  return elapsed !== null ? "bus on its way" : `bus in ${binClockLabel(next)}`;
 }

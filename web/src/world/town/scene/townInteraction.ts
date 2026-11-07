@@ -434,10 +434,14 @@ export class TownInteraction {
     return !edge.dx && !edge.dy && !this.ports.stage()?.camera.moving;
   }
 
-  /** How far a carry at canvas point `at` pans the town each frame. */
+  /**
+   * How far a carry at canvas point `at` pans the town each frame. Over the
+   * bin (its chip floats at the screen's foot) the town holds still.
+   */
   private edgePush(at: Point) {
     const stage = this.ports.stage();
-    if (!stage) return { dx: 0, dy: 0 };
+    if (!stage || this.carrying?.target?.action === "bin")
+      return { dx: 0, dy: 0 };
     const { width, height, inset } = stage.camera.viewport;
     const push = (p: number, low: number, high: number) =>
       p < low + EDGE

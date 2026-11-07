@@ -32,6 +32,19 @@ import {
   type TownSummaryCounts,
   type TownSummaryItem,
 } from "./townSummary";
+import {
+  townFuelGauge,
+  townHarnessName,
+  townLimits,
+  townResetTime,
+  townSeenAge,
+} from "./townLimits";
+import {
+  townUsageStore,
+  useTownUsage,
+  type TownUsageState,
+} from "./townPlaceUsage";
+import type { UsageLimit } from "../../../../shared/usage";
 import "./townSummaryPanel.css";
 
 /**
@@ -47,9 +60,12 @@ export function TownSummaryPanel({
   askActions,
   groups,
   deliveries,
+  usage,
 }: {
   summary: TownSummaryModel;
   now: number;
+  /** Harness usage, whose `limits` each host lists; omitted, none show. */
+  usage?: TownUsageState;
   /** Open the agent's conversation, as reception does. */
   onOpenAgent(agentKey: string): void;
   /** Move the Town camera to a room. */
@@ -128,6 +144,13 @@ export function TownSummaryPanel({
                 {host.stale ? <small>Offline · stale</small> : null}
                 <Counts counts={host.counts} />
               </div>
+              {usage ? (
+                <HostLimits
+                  connectionId={host.connectionId}
+                  usage={usage}
+                  now={now}
+                />
+              ) : null}
               {host.rooms.map((room) => (
                 <button
                   key={room.key}
@@ -172,6 +195,77 @@ export function TownSummaryPanel({
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * A host's subscription limits: each harness's windows with the percent used,
+ * when each resets, where the numbers came from and how old they are. Stale
+ * and missing numbers say so; a harness without a source says why.
+ */
+export function HostLimits({
+  connectionId,
+  usage,
+  now,
+}: {
+  connectionId: string;
+  usage: TownUsageState;
+  now: number;
+}) {
+  if (usage.status !== "ready")
+    return (
+      <p className="town-summary-limits-note">
+        {usage.status === "failed"
+          ? "Limits are unavailable right now."
+          : "Reading limits…"}
+      </p>
+    );
+  const limits = townLimits(usage).filter(
+    (limit) => limit.connection_id === connectionId,
+  );
+  if (!limits.length) return null;
+  return (
+    <ul className="town-summary-limits" aria-label="Subscription limits">
+      {limits.map((limit) => (
+        <HostLimit key={limit.harness} limit={limit} now={now} />
+      ))}
+    </ul>
+  );
+}
+
+function HostLimit({ limit, now }: { limit: UsageLimit; now: number }) {
+  const name = townHarnessName(limit.harness);
+  const gauge = townFuelGauge(limit, now);
+  if (!gauge)
+    return (
+      <li data-state={limit.state}>
+        <span>{name}</span>
+        <small>
+          {limit.state === "unsupported"
+            ? `Limits not available: ${limit.reason ?? "no source"}`
+            : "Limits missing: none seen on this host"}
+        </small>
+      </li>
+    );
+  return (
+    <li data-state={gauge.stale ? "stale" : "available"}>
+      <span>
+        {name}
+        {gauge.stale ? <em> · stale</em> : null}
+      </span>
+      {gauge.windows.map((w) => (
+        <small key={w.label} data-low={!gauge.stale && w.low}>
+          {w.label}: {w.used} % used
+          {!gauge.stale && w.low ? " (low)" : ""} ·{" "}
+          {w.resetsAt === null
+            ? "reset unknown"
+            : `resets ${townResetTime(w.resetsAt)}`}
+        </small>
+      ))}
+      <small>
+        {gauge.source} · seen {townSeenAge(gauge.observedAt, now)}
+      </small>
+    </li>
   );
 }
 
@@ -325,12 +419,14 @@ export function useTownSummary({
   );
   const [isOpen, setOpen] = useState(false);
   const [focusKey, setFocusKey] = useState(0);
+  const usage = useTownUsage();
   const openOutbox = useCallback(() => {
     setOpen(true);
     setFocusKey((key) => key + 1);
     setDeliveryFocus((key) => key + 1);
   }, []);
   const open = useCallback(() => {
+    townUsageStore().request();
     setOpen(true);
     setFocusKey((key) => key + 1);
   }, []);
@@ -355,6 +451,7 @@ export function useTownSummary({
           deliveries={deliveries}
           groups={<GroupsSummary />}
           now={now}
+          usage={usage}
           onOpenAgent={openAgent}
           askActions={askActions}
           onShowRoom={(roomKey) => {

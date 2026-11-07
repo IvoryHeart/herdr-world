@@ -491,6 +491,28 @@ test("a carry near the edge pans the town each frame until it drops", () => {
   expect(t.frames.pending()).toBe(0);
 });
 
+test("a carry resting on the bin in the edge band holds the town still", () => {
+  // The bin's chip floats at the screen's foot, inside the edge band.
+  const t = setup();
+  t.setBin((at) => at.y > 880);
+  const at = t.deskCentre(t.deskCell(0));
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.moveTo(pointer, { x: 720, y: 890 });
+  expect(last(t.ghost)).toEqual(["aim", "Put in the bin", true, "bin"]);
+  const { x, y } = t.camera;
+  t.reasons.length = 0;
+  t.frames.step();
+  t.frames.step();
+  expect([t.camera.x, t.camera.y]).toEqual([x, y]);
+  expect(t.reasons).toEqual([]);
+  // Off the bin, still in the band, the town scrolls again.
+  t.moveTo(pointer, { x: 720, y: 870 });
+  t.frames.step();
+  expect(t.camera.y).not.toBe(y);
+  t.lift(pointer, { x: 720, y: 870 });
+});
+
 test("a camera that moves under a still carry aims at what is now drawn", () => {
   const t = setup();
   const at = t.deskCentre(t.deskCell(0, 0));
