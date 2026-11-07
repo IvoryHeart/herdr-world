@@ -12,6 +12,8 @@ import { setCapturePaintFrameForTesting } from "./useDrawReadiness";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import BoardView, { __boardDraftsTesting } from "./BoardView";
+import { WorldBin } from "./bin/WorldBin";
+import { worldBinStore } from "./bin/useWorldBin";
 import {
   BoardDocumentStore,
   type BoardDocument,
@@ -256,11 +258,38 @@ const emptyDocument = (): BoardDocument => ({
   relations: { spawns: [], groups: [] },
 });
 const askLedger = { revision: 0, asks: [] as WorldAsk[] };
+/** Agents put in the (fake) service's bin. */
+const binAdds: Record<string, unknown>[] = [];
+/** Every call to the (fake) bin, and whether its bus stands stopped. */
+const binCalls: string[] = [];
+let binStopped = false;
+const binState = () => ({
+  epoch: "test",
+  revision: binCalls.length,
+  entries: [],
+  closing: [],
+  outcomes: [],
+  bus: {
+    interval_ms: 240_000,
+    trip_ms: 120_000,
+    next_ms: 60_000,
+    elapsed_ms: binStopped ? 30_000 : null,
+    stopped: binStopped,
+    trip: binStopped ? 1 : null,
+  },
+});
 const originalAskCall = bridge.call.bind(bridge);
-bridge.call = (async (method: string, params?: Record<string, unknown>) =>
-  method === "world.asks.get"
-    ? structuredClone(askLedger)
-    : originalAskCall(method, params)) as typeof bridge.call;
+bridge.call = (async (method: string, params?: Record<string, unknown>) => {
+  if (method === "world.asks.get") return structuredClone(askLedger);
+  if (method.startsWith("world.bin.")) {
+    binCalls.push(method);
+    if (method === "world.bin.add") binAdds.push(params ?? {});
+    if (method === "world.bin.pause") binStopped = true;
+    if (method === "world.bin.resume") binStopped = false;
+    return binState();
+  }
+  return originalAskCall(method, params);
+}) as typeof bridge.call;
 
 let saved: BoardDocument = emptyDocument();
 // `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
@@ -2566,6 +2595,76 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           // Nothing stored.
         }
       }
+    },
+  ],
+  [
+    "drags an agent's card onto the bin",
+    async () => {
+      // Board shows the bin; an agent's card dropped on it puts it in. (A
+      // phone's Board has no zoom controls to bring a card into view.)
+      if (innerWidth <= 720) return;
+      const binHost = document.createElement("div");
+      document.body.appendChild(binHost);
+      const binRoot = createRoot(binHost);
+      binRoot.render(<WorldBin always />);
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-chip")),
+        "Board shows the bin",
+      );
+      const chip = document.querySelector(".world-bin-chip")!;
+      await bringIntoView(() => card("studio:w2:t1")!);
+      const moving = card("studio:w2:t1")!;
+      const from = centre(moving.querySelector(".board-label")!);
+      const to = centre(chip);
+      pointer(moving, "pointerdown", from.x, from.y, 17);
+      for (let i = 1; i <= 10; i++) {
+        pointer(
+          moving,
+          "pointermove",
+          from.x + ((to.x - from.x) * i) / 10,
+          from.y + ((to.y - from.y) * i) / 10,
+          17,
+        );
+        await settle(16);
+      }
+      check(
+        chip.hasAttribute("data-bin-over"),
+        "the bin is marked while an agent's card is over it",
+      );
+      pointer(moving, "pointerup", to.x, to.y, 17);
+      await waitFor(() => binAdds.length === 1, "the drop puts it in the bin");
+      const tutorial = world.leaves.find((leaf) => leaf.label === "tutorial");
+      check(
+        binAdds[0]!.view === "board" &&
+          (!tutorial || binAdds[0]!.pane_id === tutorial.nativeId),
+        "the agent on that card goes in, from Board",
+      );
+      check(!chip.hasAttribute("data-bin-over"), "the mark clears on drop");
+      // A bus stopped from Town opens the tray; closing it lets the bus go on.
+      await worldBinStore().stopBus();
+      await waitFor(
+        () => worldBinStore().get().bus.stopped,
+        "the bus is stopped",
+      );
+      (chip as HTMLButtonElement).click();
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-tray")),
+        "the tray opens",
+      );
+      check(
+        !binCalls.includes("world.bin.resume"),
+        "an open tray keeps the bus stopped",
+      );
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Close the bin"]')!
+        .click();
+      await waitFor(
+        () => binCalls.includes("world.bin.resume"),
+        "closing the tray lets the stopped bus go on",
+      );
+      binRoot.unmount();
+      binHost.remove();
+      await rest();
     },
   ],
   [

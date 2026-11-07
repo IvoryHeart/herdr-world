@@ -167,7 +167,6 @@
   "rpc:world.asks.get": "allow deny deny deny deny deny",
   "rpc:world.bin.add": "allow deny deny deny deny deny",
   "rpc:world.bin.close_now": "allow deny deny deny deny deny",
-  "rpc:world.bin.countdown.set": "allow deny deny deny deny deny",
   "rpc:world.bin.list": "allow deny deny deny deny deny",
   "rpc:world.bin.pause": "allow deny deny deny deny deny",
   "rpc:world.bin.restore": "allow deny deny deny deny deny",

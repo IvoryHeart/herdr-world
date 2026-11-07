@@ -58,6 +58,9 @@ import {
 } from "./townFoldedActivity";
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
+import { TownBusLayer, useTownBin } from "./TownBusLayer";
+import { worldBinStore } from "../bin/useWorldBin";
+import { aimAtBin } from "../bin/binDrop";
 import "./townBoard.css";
 import "./townTeams.css";
 
@@ -113,6 +116,8 @@ export type TownRoomActions = {
   onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
   /** A grouped desk dropped on its own room's floor: leave its team. */
   onUngroupDesk(deskKey: string): Promise<TownMoveResult>;
+  /** An agent, or a desk's agents, dropped on the bin or a bus stop. */
+  onBinDrop?(kind: "agent" | "desk", key: string): void;
 };
 
 /** Camera kept across Office visits within one page session. */
@@ -212,6 +217,7 @@ export function TownCanvas({
   const worldRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<TownRendererHandle | null>(null);
   const pennants = useRef(new Set<HTMLElement>());
+  const busFramed = useRef<(() => void) | null>(null);
   const [failure, setFailure] = useState(false);
   const [ready, setReady] = useState(false);
   const capture = useDrawReadiness("town", shellRef, () =>
@@ -254,6 +260,8 @@ export function TownCanvas({
   });
   const { model, placed, layout, teams, targets, deskBadges, blockedSince } =
     semantics;
+  const townBin = useTownBin(model, layout);
+  const awayKeys = townBin.away;
   // A desk just pinned keeps the cell it has; save it so it stays there.
   const deskPinned = model.deskPins;
   const fallbackSummary = useMemo(
@@ -291,6 +299,7 @@ export function TownCanvas({
     completionSeenKeys,
     summonedKeys,
     askingKeys,
+    awayKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -313,6 +322,7 @@ export function TownCanvas({
     completionSeenKeys,
     summonedKeys,
     askingKeys,
+    awayKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -417,6 +427,7 @@ export function TownCanvas({
         signs.update((hostKey) => renderer.roofAlpha(hostKey));
         if (level !== "overview")
           for (const pennant of pennants.current) markAway(pennant, renderer);
+        busFramed.current?.();
       }
     }
     hud.framed();
@@ -454,6 +465,7 @@ export function TownCanvas({
     completionSeenKeys: latest.current.completionSeenKeys,
     summonedKeys: latest.current.summonedKeys,
     askingKeys: latest.current.askingKeys,
+    awayKeys: latest.current.awayKeys,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -578,6 +590,7 @@ export function TownCanvas({
     completionSeenKeys,
     summonedKeys,
     askingKeys,
+    awayKeys,
     calm,
   ]);
 
@@ -658,6 +671,15 @@ export function TownCanvas({
         remove: () => ghost.remove(),
       },
       held: () => navigator.vibrate?.(12),
+      // The bin chip and the bus stops lie over the canvas: a carry over
+      // one is dropped in the bin.
+      binAt: (at) => {
+        if (!at || !latest.current.roomActions.onBinDrop) return aimAtBin(null);
+        const rect = host.getBoundingClientRect();
+        return aimAtBin({ x: rect.left + at.x, y: rect.top + at.y });
+      },
+      bin: (drag) =>
+        latest.current.roomActions.onBinDrop?.(drag.kind, drag.key),
       // Town's targets are live hits and drags: trace a summary of each.
       trace: DEVTOOLS
         ? (before, after, event, effects) =>
@@ -813,6 +835,15 @@ export function TownCanvas({
         aria-hidden={!ready}
       >
         <TownTeamsLayer teams={teams} />
+        <TownBusLayer
+          bin={townBin.bin}
+          route={townBin.route}
+          riders={townBin.riders}
+          lookOf={townBin.lookOf}
+          framed={busFramed}
+          renderer={rendererRef}
+          firstSeen={worldBinStore().firstSeen}
+        />
         <TownHudContext.Provider value={hud}>
           <TownWorldLayer
             hud={hud}

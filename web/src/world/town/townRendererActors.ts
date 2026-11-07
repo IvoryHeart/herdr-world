@@ -69,7 +69,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
   const updateActors = (standingAlpha: number) => {
     const live = new Set<string>();
     for (const actor of actors.actors.values()) {
-      if (actor.mode === "seat") continue;
+      if (actor.mode === "seat" || actor.mode === "out") continue;
       const building = ctx.buildingOf(actor.hostKey);
       if (!building || !building.container.visible) continue;
       live.add(actor.key);
@@ -133,7 +133,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
     if (model && level !== "town")
       for (const actor of actors.actors.values()) {
         const agent = model.agents.get(actor.key);
-        if (!agent) continue;
+        if (!agent || actor.mode === "out") continue;
         const status = agent.semanticStatus;
         const near = level === "room" || level === "desk";
         const chatting = townAgentChatting(

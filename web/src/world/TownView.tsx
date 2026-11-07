@@ -19,6 +19,7 @@ import { useTownSummary } from "./town/TownSummaryPanel";
 import { useTownOffice } from "./town/useTownOffice";
 import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
+import { putTownDropInBin } from "./town/townBinDrop";
 import type { TownQuestMark } from "./town/townQuestPennant";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
 import { TOWN_HOST_THEMES } from "./town/townPaint";
@@ -959,6 +960,8 @@ export default function TownView({
                 runDeskReorder(deskKey, ontoKey),
               onDropAgent: (agentKey, deskKey) =>
                 runAgentMove(agentKey, deskKey),
+              onBinDrop: (kind, key) =>
+                putTownDropInBin(office, world, kind, key),
               onMoveDesk: (deskKey) => {
                 setPeek(null);
                 setMoveFlow({ step: "room", deskKey });

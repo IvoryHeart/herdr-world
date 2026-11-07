@@ -217,7 +217,8 @@ it, ends unsent once that generation is replaced, and uses the reconcilable
 recovery class. A runtime generation is a per-run counter, so in a later World run
 such a close SHALL NOT be dispatched or reconciled against the host's current
 runtime: an unsent one SHALL be recorded as not sent and a possibly sent one SHALL
-stay uncertain.
+stay uncertain. A close captured for a pinned tab SHALL NOT be sent when its final
+read shows the pane is its tab's last.
 
 A dispatcher MAY run one lane per connection. Each lane SHALL select its
 connection before the dispatch query's bound, and lanes SHALL be found from
