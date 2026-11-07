@@ -7,6 +7,7 @@
  * instant, and still never shows a blank or half-drawn frame.
  */
 
+import { TOWN_LAND_OBJECT_REACH, townWildLine } from "./townLandscape";
 import { TOWN_FACADE, TOWN_TILE as T, type TownLayout } from "./townLayout";
 
 /** Seconds a glide or fade lasts. */
@@ -95,20 +96,46 @@ export const townRectsMeet = (a: TownRect, b: TownRect) =>
 export const TOWN_GROUND_CHUNK = 512;
 
 /**
- * Tiles of generated land painted past the town's edges (townLandscape.ts);
- * the outer ones shade into the woods' dark green behind the map.
+ * The ground painted from the layout, in world pixels: the town's own land
+ * out to its wild line (townLandscape.ts), and as far again as a tree or
+ * shrub there draws. Beyond it the land is the wild's alone, the same
+ * pixels the repeated wild square shows (townRendererTopology.ts).
  */
-export const TOWN_LAND_MARGIN = 16;
-
-/** The painted ground in world pixels: the town and its margin of land. */
 export function townLandRect(layout: TownLayout): TownRect {
-  const m = TOWN_LAND_MARGIN * T;
+  const line = townWildLine(layout);
+  const r = TOWN_LAND_OBJECT_REACH;
+  const reach = Math.max(r.left, r.right, r.up, r.down);
+  const x = (line.x0 - reach) * T;
+  const y = (line.y0 - reach) * T;
   return {
-    x: -m,
-    y: -m,
-    w: layout.width * T + 2 * m,
-    h: layout.height * T + 2 * m,
+    x,
+    y,
+    w: (line.x1 + reach) * T - x,
+    h: (line.y1 + reach) * T - y,
   };
+}
+
+/**
+ * The parts of `view` outside `land`, in whole world pixels: at most a band
+ * above, one below and one each side between them. The repeated wild land
+ * fills them (townRendererTopology.ts), so the map fills the view.
+ */
+export function townWildBands(land: TownRect, view: TownRect): TownRect[] {
+  const x0 = Math.floor(view.x);
+  const y0 = Math.floor(view.y);
+  const x1 = Math.ceil(view.x + view.w);
+  const y1 = Math.ceil(view.y + view.h);
+  const top = Math.min(y1, Math.max(y0, land.y));
+  const bottom = Math.max(top, Math.min(y1, land.y + land.h));
+  const left = Math.min(x1, Math.max(x0, land.x));
+  const right = Math.max(left, Math.min(x1, land.x + land.w));
+  const bands = [
+    { x: x0, y: y0, w: x1 - x0, h: top - y0 },
+    { x: x0, y: bottom, w: x1 - x0, h: y1 - bottom },
+    { x: x0, y: top, w: left - x0, h: bottom - top },
+    { x: right, y: top, w: x1 - right, h: bottom - top },
+  ];
+  return bands.filter((band) => band.w > 0 && band.h > 0);
 }
 
 /** The ground chunks of `layout` that meet `view`, cut to its land. */

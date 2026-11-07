@@ -3,6 +3,12 @@
  * and country lanes, generated from a fixed seed over every tile that the
  * layout leaves free, inside the town and on the map beyond it.
  *
+ * A few tiles past the town (townWildLine) the town's own land (lanes,
+ * parkland, what keeps clear of buildings) gives way to the wild: land that
+ * depends on the seed alone and repeats every TOWN_LAND_PERIOD tiles. The
+ * renderer bakes one period of it once and repeats it out to the window's
+ * edges, so the map never ends (townRendererTopology.ts).
+ *
  * Every tile's land is a pure function of its own coordinates, the seed and
  * the layout within a few tiles of it (its reserved land), never of the
  * town's size or of the order tiles are visited. So a reload draws the same
@@ -22,6 +28,16 @@ import {
 
 /** The landscape's seed: one fixed seed, so every World grows the same land. */
 export const TOWN_LANDSCAPE_SEED = 641;
+
+/**
+ * Every random choice repeats every this many tiles each way, so the wild
+ * land beyond the town is one baked square repeated. Each noise scale, the
+ * plot cell and the tree block divide it.
+ */
+export const TOWN_LAND_PERIOD = 96;
+
+/** Tiles of the town's own land (lanes, parkland) at least past its edges. */
+const WILD_GAP = 8;
 
 /** What a free tile's surface is. */
 export const TownLand = {
@@ -66,11 +82,17 @@ const CROWN = { left: 1, right: 1, up: 2, down: 1 } as const;
 /** How many tiles a lane runs straight from the town's edge before winding. */
 const LANE_STRAIGHT = 6;
 
-/** A well-mixed 32-bit hash of a tile and a salt. */
-function hash(x: number, y: number, salt: number) {
+const wrap = (v: number, period: number) =>
+  (((v | 0) % period) + period) % period;
+
+/**
+ * A well-mixed 32-bit hash of a point and a salt, repeating every `period`
+ * points each way (TOWN_LAND_PERIOD tiles, counted in the point's units).
+ */
+function hash(x: number, y: number, salt: number, period = TOWN_LAND_PERIOD) {
   let h =
-    Math.imul(x | 0, 0x27d4eb2d) ^
-    Math.imul(y | 0, 0x165667b1) ^
+    Math.imul(wrap(x, period), 0x27d4eb2d) ^
+    Math.imul(wrap(y, period), 0x165667b1) ^
     Math.imul(salt | 0, 0x5bd1e995);
   h ^= h >>> 15;
   h = Math.imul(h, 0x2c1b3c6d);
@@ -90,10 +112,11 @@ function noise(x: number, y: number, scale: number, salt: number) {
   const iy = Math.floor(fy);
   const sx = smooth(fx - ix);
   const sy = smooth(fy - iy);
-  const a = unit(hash(ix, iy, salt));
-  const b = unit(hash(ix + 1, iy, salt));
-  const c = unit(hash(ix, iy + 1, salt));
-  const d = unit(hash(ix + 1, iy + 1, salt));
+  const n = TOWN_LAND_PERIOD / scale;
+  const a = unit(hash(ix, iy, salt, n));
+  const b = unit(hash(ix + 1, iy, salt, n));
+  const c = unit(hash(ix, iy + 1, salt, n));
+  const d = unit(hash(ix + 1, iy + 1, salt, n));
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
 }
 
@@ -125,6 +148,7 @@ export type TownLandscape = {
 };
 
 const cache = new WeakMap<TownLayout, Map<number, TownLandscape>>();
+const wildCache = new Map<number, TownLandscape>();
 
 /** The landscape of `layout`, built once per layout and seed. */
 export function townLandscape(
@@ -136,6 +160,35 @@ export function townLandscape(
   let landscape = bySeed.get(seed);
   if (!landscape) bySeed.set(seed, (landscape = build(layout, seed)));
   return landscape;
+}
+
+/**
+ * The wild land of `seed`, with no town: what every town's landscape is past
+ * its wild line. It repeats every TOWN_LAND_PERIOD tiles each way.
+ */
+export function townWildLandscape(seed = TOWN_LANDSCAPE_SEED): TownLandscape {
+  let landscape = wildCache.get(seed);
+  if (!landscape) wildCache.set(seed, (landscape = build(null, seed)));
+  return landscape;
+}
+
+/** A rectangle of tiles, x0..x1 and y0..y1 exclusive. */
+export type TownTileRect = { x0: number; y0: number; x1: number; y1: number };
+
+/**
+ * Where `layout`'s own land ends: every tile outside this rectangle is the
+ * wild landscape's. It lies at least WILD_GAP tiles past the town, on plot
+ * cell lines, so no garden or pond is cut in two.
+ */
+export function townWildLine(layout: TownLayout): TownTileRect {
+  const out = (t: number) => Math.floor(t / PLOT_CELL) * PLOT_CELL;
+  const up = (t: number) => Math.ceil(t / PLOT_CELL) * PLOT_CELL;
+  return {
+    x0: out(-WILD_GAP),
+    y0: out(-WILD_GAP),
+    x1: up(layout.width + WILD_GAP),
+    y1: up(layout.height + WILD_GAP),
+  };
 }
 
 /** The reserved land: what the layout uses or keeps clear, with its distance. */
@@ -209,12 +262,18 @@ function reservedLand(layout: TownLayout) {
   };
 }
 
-function build(layout: TownLayout, seed: number): TownLandscape {
-  const reserved = reservedLand(layout);
-  const roads = [...new Set(layout.roads)].sort((a, b) => a - b);
-  const { width } = layout;
-
-  const { height } = layout;
+/** A town's landscape, or with `layout` null the wild land alone. */
+function build(layout: TownLayout | null, seed: number): TownLandscape {
+  const far = REACH + 1;
+  const reserved = layout ? reservedLand(layout) : () => far;
+  const roads = layout ? [...new Set(layout.roads)].sort((a, b) => a - b) : [];
+  const width = layout?.width ?? 0;
+  const height = layout?.height ?? 0;
+  // Past the wild line the town's land is the wild's, tile for tile.
+  const wild = layout ? townWildLandscape(seed) : null;
+  const line = layout ? townWildLine(layout) : null;
+  const isWild = (tx: number, ty: number) =>
+    !!line && (tx < line.x0 || ty < line.y0 || tx >= line.x1 || ty >= line.y1);
   const inTown = (tx: number, ty: number) =>
     tx >= 0 && ty >= 0 && tx < width && ty < height;
   /**
@@ -224,13 +283,16 @@ function build(layout: TownLayout, seed: number): TownLandscape {
   const wood = (tx: number, ty: number) =>
     inTown(tx, ty)
       ? 0
-      : 0.65 * noise(tx, ty, 22, seed + 1) + 0.35 * noise(tx, ty, 9, seed + 2);
+      : 0.65 * noise(tx, ty, 24, seed + 1) + 0.35 * noise(tx, ty, 8, seed + 2);
   const FOREST = 0.56;
   const DEEP = 0.66;
 
-  /** Beyond the town's edge each street runs on as a country lane. */
+  /**
+   * Beyond the town's edge each street runs on as a country lane, as far as
+   * the wild line.
+   */
   const lane = (tx: number, ty: number) => {
-    if (tx >= 0 && tx < width) return false;
+    if ((tx >= 0 && tx < width) || isWild(tx, ty)) return false;
     const out = tx < 0 ? -1 - tx : tx - width;
     const sway = Math.min(1, Math.max(0, (out - LANE_STRAIGHT) / 8));
     for (const road of roads) {
@@ -251,7 +313,7 @@ function build(layout: TownLayout, seed: number): TownLandscape {
 
   /** Footpaths wind along a noise field's contour, through woods and fields. */
   const trailField = (tx: number, ty: number) =>
-    noise(tx, ty, 30, seed + 5) >= 0.5;
+    noise(tx, ty, 32, seed + 5) >= 0.5;
   const trail = (tx: number, ty: number) => {
     const here = trailField(tx, ty);
     return here !== trailField(tx + 1, ty) || here !== trailField(tx, ty + 1);
@@ -273,9 +335,11 @@ function build(layout: TownLayout, seed: number): TownLandscape {
     return true;
   };
   const plot = (cx: number, cy: number): TownLandPlot | null => {
+    if (wild && isWild(cx * PLOT_CELL, cy * PLOT_CELL))
+      return wild.plot(cx, cy);
     const key = `${cx},${cy}`;
     if (plots.has(key)) return plots.get(key)!;
-    const h = hash(cx, cy, seed + 7);
+    const h = hash(cx, cy, seed + 7, TOWN_LAND_PERIOD / PLOT_CELL);
     const pick = unit(h);
     const x0 = cx * PLOT_CELL;
     const y0 = cy * PLOT_CELL;
@@ -319,6 +383,7 @@ function build(layout: TownLayout, seed: number): TownLandscape {
   };
 
   const surface = (tx: number, ty: number): TownLandKind => {
+    if (wild && isWild(tx, ty)) return wild.surface(tx, ty);
     if (reserved(tx, ty) === 0) return TownLand.meadow;
     if (lane(tx, ty)) return TownLand.lane;
     const p = plotAt(tx, ty);
@@ -342,7 +407,7 @@ function build(layout: TownLayout, seed: number): TownLandscape {
   const tree = (tx: number, ty: number): TownLandObject | null => {
     const bx = Math.floor(tx / 2);
     const by = Math.floor(ty / 2);
-    const h = hash(bx, by, seed + 11);
+    const h = hash(bx, by, seed + 11, TOWN_LAND_PERIOD / 2);
     if (tx !== bx * 2 + (h & 1) || ty !== by * 2 + ((h >>> 1) & 1)) return null;
     const depth = wood(tx, ty);
     const chance =
@@ -368,6 +433,7 @@ function build(layout: TownLayout, seed: number): TownLandscape {
   };
 
   const objectAt = (tx: number, ty: number): TownLandObject | null => {
+    if (wild && isWild(tx, ty)) return wild.objectAt(tx, ty);
     if (reserved(tx, ty) === 0) return null;
     const p = plotAt(tx, ty);
     if (p) {

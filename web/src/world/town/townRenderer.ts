@@ -205,6 +205,7 @@ export async function createTownRenderer(
   stats.reducedMotion = motion.matches;
 
   const world = new Container();
+  const landLayer = new Container();
   const groundLayer = new Container();
   const sceneLayer = new Container();
   sceneLayer.sortableChildren = true;
@@ -213,7 +214,14 @@ export async function createTownRenderer(
   // Drag effects sit above the scene and survive a scene rebuild.
   const dragLayer = new Container();
   const puffLayer = new Graphics();
-  world.addChild(groundLayer, sceneLayer, fxLayer, dragLayer, puffLayer);
+  world.addChild(
+    landLayer,
+    groundLayer,
+    sceneLayer,
+    fxLayer,
+    dragLayer,
+    puffLayer,
+  );
   app.stage.addChild(world, screenLayer);
 
   let model: TownModel | null = null;
@@ -259,6 +267,7 @@ export async function createTownRenderer(
   const topology = createTownTopology({
     camera,
     sprites,
+    landLayer,
     groundLayer,
     sceneLayer,
     stats,

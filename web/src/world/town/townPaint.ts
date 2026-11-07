@@ -9,7 +9,7 @@ import {
   type TownGroundPlan,
   townGroundPlan,
 } from "./townGroundPlan";
-import { TownLand } from "./townLandscape";
+import { TOWN_LAND_PERIOD, TownLand } from "./townLandscape";
 import { paintTownLandObjects, townLandTile } from "./townLandscapePaint";
 import {
   TOWN_TILE as T,
@@ -170,6 +170,8 @@ const plazaTile = (odd: number) =>
 
 const tileHash = (tx: number, ty: number) =>
   (Math.imul(tx + 1, 73856093) ^ Math.imul(ty + 1, 19349663)) >>> 0;
+const wrapTile = (t: number) =>
+  ((t % TOWN_LAND_PERIOD) + TOWN_LAND_PERIOD) % TOWN_LAND_PERIOD;
 
 /**
  * Paint one rectangular region (in pixels) of the ground, on the town or
@@ -199,9 +201,11 @@ export function paintTownGroundPlan(plan: TownGroundPlan) {
       const type = at(tx, ty);
       const x = tx * T;
       const y = ty * T;
-      const hash = tileHash(tx, ty);
+      let hash = tileHash(tx, ty);
       let tile: TownCanvas;
       if (type >= TOWN_GROUND_LAND) {
+        // The land's looks repeat with its period, like the land itself.
+        hash = tileHash(wrapTile(tx), wrapTile(ty));
         const kind = type - TOWN_GROUND_LAND;
         const same =
           (at(tx, ty - 1) === type ? 1 : 0) |
@@ -230,10 +234,6 @@ export function paintTownGroundPlan(plan: TownGroundPlan) {
     g.fillRect(mark.x, mark.y, mark.w, mark.h);
   }
   paintTownLandObjects(g, plan.objects);
-  for (const mark of plan.shade) {
-    g.fillStyle = mark.fill;
-    g.fillRect(mark.x, mark.y, mark.w, mark.h);
-  }
   return canvas;
 }
 

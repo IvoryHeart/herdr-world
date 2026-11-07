@@ -11,8 +11,11 @@
  */
 
 import {
+  TOWN_LAND_PERIOD,
+  TOWN_LANDSCAPE_SEED,
   townLandObjects,
   townLandscape,
+  townWildLandscape,
   type TownLandObject,
 } from "./townLandscape";
 import {
@@ -21,14 +24,7 @@ import {
   TownGround,
   type TownLayout,
 } from "./townLayout";
-import {
-  TOWN_LAND_MARGIN,
-  townLandRect,
-  type TownRect,
-} from "./townTransition";
-
-/** Tiles over which the land's edge shades into the woods. */
-const SHADE_TILES = 8;
+import type { TownRect } from "./townTransition";
 
 /** A tile's code: the layout's ground (0–5), or LAND + a TownLand kind. */
 export const TOWN_GROUND_LAND = 16;
@@ -54,8 +50,6 @@ export type TownGroundPlan = {
   marks: TownGroundMark[];
   /** The landscape objects whose drawings reach the region, in drawing order. */
   objects: TownLandObject[];
-  /** The land's outer tiles shading into the woods, drawn over everything. */
-  shade: TownGroundMark[];
   /** Equal for plans that paint the same pixels. */
   key: string;
 };
@@ -125,36 +119,6 @@ export function townGroundPlan(
   }
 
   const objects = townLandObjects(land, tx0 + 1, ty0 + 1, tx1 - 1, ty1 - 1);
-
-  // The land ends TOWN_LAND_MARGIN tiles past the town (townLandRect): its
-  // outer tiles darken step by step to the page's woodland green (town.css),
-  // so the painted map has no edge.
-  const shade: TownGroundMark[] = [];
-  const edge = {
-    x0: -TOWN_LAND_MARGIN,
-    y0: -TOWN_LAND_MARGIN,
-    x1: width + TOWN_LAND_MARGIN - 1,
-    y1: height + TOWN_LAND_MARGIN - 1,
-  };
-  const depth = (tx: number, ty: number) =>
-    Math.min(tx - edge.x0, edge.x1 - tx, ty - edge.y0, edge.y1 - ty);
-  const outer = townLandRect(layout);
-  for (let ty = ty0 + 1; ty < ty1 - 1; ty += 1)
-    for (let tx = tx0 + 1; tx < tx1 - 1; ) {
-      const d = depth(tx, ty);
-      let end = tx + 1;
-      while (end < tx1 - 1 && depth(end, ty) === d) end += 1;
-      if (d >= 0 && d < SHADE_TILES) {
-        const fill = `rgba(47,74,43,${(1 - d / SHADE_TILES).toFixed(3)})`;
-        const x = Math.max(tx * T, outer.x);
-        const w = Math.min(end * T, outer.x + outer.w) - x;
-        const before = marks.length;
-        mark(fill, x, ty * T, w, T);
-        shade.push(...marks.splice(before));
-      }
-      tx = end;
-    }
-
   return {
     region,
     tx0,
@@ -164,8 +128,35 @@ export function townGroundPlan(
     tiles,
     marks,
     objects,
-    shade,
-    key: planKey(region, tiles, [...marks, ...shade], objects),
+    key: planKey(region, tiles, marks, objects),
+  };
+}
+
+/**
+ * The plan of one period of the wild land (townWildLandscape), tiles 0 to
+ * TOWN_LAND_PERIOD each way: repeated, it paints the land past every town's
+ * land rect seamlessly, trees reaching over its edges included.
+ */
+export function townWildPlan(seed = TOWN_LANDSCAPE_SEED): TownGroundPlan {
+  const land = townWildLandscape(seed);
+  const size = TOWN_LAND_PERIOD;
+  const region = { x: 0, y: 0, w: size * T, h: size * T };
+  const cols = size + 2;
+  const tiles = new Uint8Array(cols * cols);
+  for (let ty = -1; ty <= size; ty += 1)
+    for (let tx = -1; tx <= size; tx += 1)
+      tiles[(ty + 1) * cols + tx + 1] = TOWN_GROUND_LAND + land.surface(tx, ty);
+  const objects = townLandObjects(land, 0, 0, size, size);
+  return {
+    region,
+    tx0: -1,
+    ty0: -1,
+    cols,
+    rows: cols,
+    tiles,
+    marks: [],
+    objects,
+    key: planKey(region, tiles, [], objects),
   };
 }
 

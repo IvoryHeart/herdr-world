@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { TownBuildingLayers } from "./townBuildingLayers";
 import { TownCamera, townZoomLimits } from "./townCamera";
-import { townGroundPlan } from "./townGroundPlan";
+import { TOWN_LAND_OBJECT_REACH, townWildLine } from "./townLandscape";
 import { layoutTown, TOWN_TILE as T, type TownLayout } from "./townLayout";
 import { townBakeDirty, townBakeKeys } from "./scene/townSceneBake";
 import {
@@ -13,8 +13,9 @@ import {
   townMotionPose,
   townRetiringAlpha,
   townLandRect,
+  townRectsMeet,
   townSceneGaps,
-  TOWN_LAND_MARGIN,
+  townWildBands,
   type TownDrawnScene,
   type TownRect,
 } from "./townTransition";
@@ -261,14 +262,18 @@ test("a building without rooms that moves is baked again in its new place", () =
   expect(dirty.buildings).toEqual(new Set(["c"]));
 });
 
-test("the ground stops a margin of land past the town, shaded into the woods", () => {
+test("the ground stops past the wild line; the repeated wild fills the rest", () => {
   const { layout } = layoutTown(input(["a", "b"]), "wide");
   const land = townLandRect(layout);
+  const line = townWildLine(layout);
+  // The painted ground reaches past the line as far as anything there draws.
+  const r = TOWN_LAND_OBJECT_REACH;
+  const reach = Math.max(r.left, r.right, r.up, r.down) * T;
   expect(land).toEqual({
-    x: -TOWN_LAND_MARGIN * T,
-    y: -TOWN_LAND_MARGIN * T,
-    w: (layout.width + 2 * TOWN_LAND_MARGIN) * T,
-    h: (layout.height + 2 * TOWN_LAND_MARGIN) * T,
+    x: line.x0 * T - reach,
+    y: line.y0 * T - reach,
+    w: (line.x1 - line.x0) * T + 2 * reach,
+    h: (line.y1 - line.y0) * T + 2 * reach,
   });
   // However far the camera sees, chunks tile exactly the land, no farther.
   const chunks = townGroundChunks(layout, {
@@ -289,20 +294,45 @@ test("the ground stops a margin of land past the town, shaded into the woods", (
   expect(townGroundChunks(layout, { x: -9000, y: 0, w: 100, h: 100 })).toEqual(
     [],
   );
-  // The outer tile row is the page's woodland green; the shading thins
-  // inward and stops before the town.
-  const corner = chunks.find(
-    ({ region }) => region.x === land.x && region.y === land.y,
-  )!;
-  const plan = townGroundPlan(layout, corner.region);
-  const alphaAt = (x: number, y: number) =>
-    plan.shade
-      .filter((m) => x >= m.x && x < m.x + m.w && y >= m.y && y < m.y + m.h)
-      .map((m) => Number(/,([\d.]+)\)$/.exec(m.fill)![1]));
-  expect(alphaAt(land.x + T * 12, land.y)).toEqual([1]);
-  const inner = alphaAt(land.x + T * 12, land.y + T * 7)[0]!;
-  expect(inner).toBeGreaterThan(0);
-  expect(inner).toBeLessThan(0.5);
-  expect(alphaAt(land.x + T * 12, land.y + T * 8)).toEqual([]);
-  expect(alphaAt(0, 0)).toEqual([]);
+
+  // The wild bands and the land cover any view exactly, never overlapping.
+  const covered = (view: TownRect) => {
+    const bands = townWildBands(land, view);
+    const whole = {
+      x: Math.floor(view.x),
+      y: Math.floor(view.y),
+      w: Math.ceil(view.x + view.w) - Math.floor(view.x),
+      h: Math.ceil(view.y + view.h) - Math.floor(view.y),
+    };
+    let sum = 0;
+    for (const band of bands) {
+      expect(townRectsMeet(band, land)).toBe(false);
+      for (const other of bands)
+        if (other !== band) expect(townRectsMeet(band, other)).toBe(false);
+      expect(band.x).toBeGreaterThanOrEqual(whole.x);
+      expect(band.y).toBeGreaterThanOrEqual(whole.y);
+      expect(band.x + band.w).toBeLessThanOrEqual(whole.x + whole.w);
+      expect(band.y + band.h).toBeLessThanOrEqual(whole.y + whole.h);
+      sum += band.w * band.h;
+    }
+    const lx = Math.max(
+      0,
+      Math.min(whole.x + whole.w, land.x + land.w) - Math.max(whole.x, land.x),
+    );
+    const ly = Math.max(
+      0,
+      Math.min(whole.y + whole.h, land.y + land.h) - Math.max(whole.y, land.y),
+    );
+    expect(sum + lx * ly).toBe(whole.w * whole.h);
+    return bands.length;
+  };
+  // Zoomed far out: a band all round.
+  expect(covered({ x: -5000.4, y: -3000.7, w: 12000.2, h: 9000.9 })).toBe(4);
+  // Panned past one corner, or wholly off the land.
+  expect(covered({ x: land.x - 300.5, y: land.y - 200, w: 900, h: 700 })).toBe(
+    2,
+  );
+  expect(covered({ x: -9000, y: 0, w: 100, h: 100 })).toBe(1);
+  // Inside the land, nothing.
+  expect(covered({ x: land.x + 10, y: land.y + 10, w: 400, h: 300 })).toBe(0);
 });

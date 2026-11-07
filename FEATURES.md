@@ -133,8 +133,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     each row and a side road to its right.
   - The land around the town is generated: woods with pines, meadows, hedged
     flower gardens and orchards, ponds with reeds, winding footpaths, and each
-    street running on beyond the town as a country lane. It reaches 16 tiles
-    past the town, its outer edge shading into the dark woods. It is the same on every reload and in every browser, and
+    street running on beyond the town as a country lane. It fills the whole
+    view at every zoom and pan: past the town's own land the woods, meadows,
+    gardens and ponds carry on as far as the window shows, with no plain border.
+    It is the same on every reload and in every browser, and
     when the town grows only the land next to the change is regenerated. It
     keeps clear of buildings, roads, the town center and its forecourt, bus
     stops and the verge above the first street.

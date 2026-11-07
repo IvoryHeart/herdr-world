@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
 import { townBusRoute } from "./townBus";
-import { townGroundPlan } from "./townGroundPlan";
+import { townGroundPlan, townWildPlan } from "./townGroundPlan";
 import {
   TOWN_BILLBOARD_VERGE,
   TOWN_LANDSCAPE_SEED,
+  TOWN_LAND_PERIOD,
   TownLand,
   townLandscape,
+  townWildLandscape,
+  townWildLine,
   type TownLandObject,
 } from "./townLandscape";
 import {
@@ -193,6 +196,98 @@ test("nothing generated stands on a building, road, lot, stop or the verge", () 
   }
 });
 
+test("past its wild line a town's land is the wild land, which repeats", () => {
+  const wild = townWildLandscape();
+  const same = (
+    a: ReturnType<typeof townLandscape>,
+    b: ReturnType<typeof townLandscape>,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+  ) => {
+    expect([ax, ay, a.surface(ax, ay)]).toEqual([ax, ay, b.surface(bx, by)]);
+    expect([ax, ay, a.objectAt(ax, ay)]).toEqual([
+      ax,
+      ay,
+      b.objectAt(bx, by) && { ...b.objectAt(bx, by)!, x: ax, y: ay },
+    ]);
+  };
+  // The wild repeats every period, whichever way.
+  const P = TOWN_LAND_PERIOD;
+  for (let ty = -20; ty < P + 20; ty += 1)
+    for (let tx = -20; tx < P + 20; tx += 1) {
+      same(wild, wild, tx, ty, tx + P, ty - 2 * P);
+      same(wild, wild, tx, ty, tx - 3 * P, ty + P);
+    }
+  // It holds woods, meadows, ponds, gardens and paths.
+  const kinds = new Set<number>();
+  for (let ty = 0; ty < P; ty += 1)
+    for (let tx = 0; tx < P; tx += 1) kinds.add(wild.surface(tx, ty));
+  for (const kind of [
+    TownLand.meadow,
+    TownLand.forest,
+    TownLand.trail,
+    TownLand.water,
+    TownLand.bed,
+  ])
+    expect(kinds.has(kind)).toBe(true);
+  expect(kinds.has(TownLand.lane)).toBe(false);
+
+  for (const [, shape, hosts] of cases) {
+    const { layout } = layoutTown(town(hosts), shape);
+    const land = townLandscape(layout);
+    const line = townWildLine(layout);
+    // The line keeps the town's own land at least 8 tiles past it, on
+    // plot-cell lines, so no garden or pond straddles it.
+    expect(line.x0).toBeLessThanOrEqual(-8);
+    expect(line.y0).toBeLessThanOrEqual(-8);
+    expect(line.x1).toBeGreaterThanOrEqual(layout.width + 8);
+    expect(line.y1).toBeGreaterThanOrEqual(layout.height + 8);
+    for (const edge of [line.x0, line.y0, line.x1, line.y1])
+      expect(Math.abs(edge % 12)).toBe(0);
+    for (const [x, y] of tilesOf(layout, BEYOND)) {
+      const outside =
+        x < line.x0 || y < line.y0 || x >= line.x1 || y >= line.y1;
+      if (outside) same(land, wild, x, y, x, y);
+    }
+  }
+});
+
+test("the wild plan paints one period, its edges wrapping round", () => {
+  const plan = townWildPlan();
+  const wild = townWildLandscape();
+  const P = TOWN_LAND_PERIOD;
+  expect(plan.region).toEqual({ x: 0, y: 0, w: P * T, h: P * T });
+  expect(plan.key).toBe(townWildPlan().key);
+  // The ring of tiles round it (for edges) is the period's other side.
+  const at = (tx: number, ty: number) =>
+    plan.tiles[(ty - plan.ty0) * plan.cols + tx - plan.tx0];
+  for (let i = 0; i < P; i += 1) {
+    expect(at(-1, i)).toBe(at(P - 1, i));
+    expect(at(P, i)).toBe(at(0, i));
+    expect(at(i, -1)).toBe(at(i, P - 1));
+    expect(at(i, P)).toBe(at(i, 0));
+  }
+  // Objects from beyond each edge that reach in are drawn, like their
+  // twins a period away.
+  const key = (o: TownLandObject) =>
+    `${o.kind}:${o.variant}:${((o.x % P) + P) % P},${((o.y % P) + P) % P}`;
+  const inside = new Set(
+    plan.objects
+      .filter((o) => o.x >= 0 && o.x < P && o.y >= 0 && o.y < P)
+      .map(key),
+  );
+  const beyond = plan.objects.filter(
+    (o) => o.x < 0 || o.x >= P || o.y < 0 || o.y >= P,
+  );
+  expect(beyond.length).toBeGreaterThan(0);
+  for (const o of beyond) {
+    expect(inside.has(key(o))).toBe(true);
+    expect(wild.objectAt(o.x, o.y)).toEqual(o);
+  }
+});
+
 test("each street runs on beyond the town as a lane, and nothing grows on it", () => {
   for (const [, shape, hosts] of cases) {
     const { layout } = layoutTown(town(hosts), shape);
@@ -202,6 +297,11 @@ test("each street runs on beyond the town as a lane, and nothing grows on it", (
       for (const x of [-1, -3, layout.width, layout.width + 2])
         for (let y = road + 1; y < road + 4; y += 1)
           expect(land.surface(x, y)).toBe(TownLand.lane);
+      // It ends at the wild line.
+      const line = townWildLine(layout);
+      for (let y = road - 6; y < road + 10; y += 1)
+        for (const x of [line.x0 - 1, line.x1])
+          expect(land.surface(x, y)).not.toBe(TownLand.lane);
     }
     for (const [x, y] of tilesOf(layout)) {
       if (land.surface(x, y) !== TownLand.lane) continue;
@@ -270,6 +370,18 @@ test("growth regenerates only the land next to what changed", () => {
           (r) => !a.roads.includes(r) || !b.roads.includes(r),
         ),
       );
+      // A wider town's wild line moves out, so its streets' lanes run
+      // farther: their rows (and the plots beside them) change near the
+      // line, between its old and new places.
+      const lineA = townWildLine(a);
+      const lineB = townWildLine(b);
+      const between = (x: number, p: number, q: number) =>
+        p !== q && x >= Math.min(p, q) - 16 && x < Math.max(p, q) + 16;
+      const laneGrew = (x: number, y: number) =>
+        (between(x, lineA.x0, lineB.x0) || between(x, lineA.x1, lineB.x1)) &&
+        [...a.roads, ...b.roads].some(
+          (r) => y >= r - 3 - 16 && y <= r + 6 + 16,
+        );
       const landA = townLandscape(a);
       const landB = townLandscape(b);
       let same = 0;
@@ -290,11 +402,8 @@ test("growth regenerates only the land next to what changed", () => {
           const byLane = [...lanes].some(
             (r) => y >= r - 3 - 16 && y <= r + 6 + 16,
           );
-          expect([x, y, reach.has(`${x},${y}`) || byLane]).toEqual([
-            x,
-            y,
-            true,
-          ]);
+          const near = reach.has(`${x},${y}`) || byLane || laneGrew(x, y);
+          expect([x, y, near]).toEqual([x, y, true]);
         }
       // Most of the land stays put.
       expect(same).toBeGreaterThan(differ * 4);
