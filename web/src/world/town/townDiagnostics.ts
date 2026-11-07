@@ -25,6 +25,11 @@ export type TownRendererDiagnostics = {
   /** Buildings that glided, faded in or faded out after a topology change. */
   transitions: number;
   /**
+   * Buildings baked again over their old drawing, whose interior and desks
+   * crossfade in (an added or closed desk fades rather than pops).
+   */
+  crossfades: number;
+  /**
    * Frames drawn after a topology change with part of the scene in view
    * missing (ground, a building or a desk); always 0 (townTransition.ts).
    */
@@ -93,6 +98,7 @@ export function diagnostics(): TownRendererDiagnostics {
     sceneRenders: 0,
     buildingBakes: 0,
     transitions: 0,
+    crossfades: 0,
     topologyGaps: 0,
     lastTopologyGap: null,
     navigationsBuilt: 0,

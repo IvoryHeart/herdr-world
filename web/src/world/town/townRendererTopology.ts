@@ -2,8 +2,10 @@
  * The Town renderer's ground and buildings as the layout changes (see
  * townRenderer.ts for the rest of the frame). What was drawn stays until its
  * replacement is drawn: a topology change bakes what is in view in its first
- * frame, then the old ground and buildings fade (and glide) out under the new
- * ones (townTransition.ts). Otherwise ground and buildings are painted a few
+ * frame, then a rebaked building's interior and desks fade in over its old
+ * drawing (so an added or closed desk fades while the rest stays put), both
+ * gliding together to its new place, and the old ground fades out over the
+ * new (townTransition.ts). Otherwise ground and buildings are painted a few
  * per frame, as the camera reaches them.
  */
 
@@ -28,6 +30,7 @@ import type { TownCanvas, TownStaticSprites } from "./townSprites";
 import {
   TOWN_TRANSITION_SECONDS,
   townBuildingRect,
+  townCrossfadeAlpha,
   townDeskRect,
   townEase,
   townGroundChunks,
@@ -36,6 +39,7 @@ import {
   townRetiringAlpha,
   townSceneGaps,
   type TownBuildingMotion,
+  type TownCover,
   type TownRect,
 } from "./townTransition";
 
@@ -83,8 +87,10 @@ export function createTownTopology(ctx: TownTopologyContext) {
         kind: "building";
         view: BuildingView;
         t: number;
-        /** Under its replacement (a crossfade), or leaving on its own. */
-        under: boolean;
+        /** How its replacement covers it, or "none" when it leaves on its own. */
+        cover: TownCover;
+        /** Progress of its own crossfade, which runs on under its replacement. */
+        fade: number | null;
         /** Its offset and opacity when it began to leave. */
         from: { x: number; y: number; alpha: number };
         /** Where it glides to, in world pixels, with its replacement. */
@@ -94,6 +100,15 @@ export function createTownTopology(ctx: TownTopologyContext) {
   const retiring: Retiring[] = [];
   /** Motion for buildings baked next frame: where each was drawn before. */
   const pendingMotion = new Map<string, Omit<TownBuildingMotion, "t">>();
+  /**
+   * The parts of a building that crossfade with its old drawing: the
+   * interior, its rooms' dimming and the desks' pods. Walls, the roof and
+   * walking agents (in `dynamic`, beside the pods) stay opaque.
+   */
+  const crossfade = (view: BuildingView, alpha: number) => {
+    view.interior.alpha = view.dim.alpha = alpha;
+    for (const pod of view.pods) pod.container.alpha = alpha;
+  };
   /** A replaced building's roof keeps its fade. */
   const pendingRoof = new Map<string, number>();
   let bakeKeys: TownBakeKeys | null = null;
@@ -188,13 +203,19 @@ export function createTownTopology(ctx: TownTopologyContext) {
     const at = view.container.position;
     const dx = next ? (next.x - view.x) * T : at.x;
     const dy = next ? (next.y - view.y) * T : at.y;
+    const fade = view.motion?.crossfade ? view.motion.t : null;
     view.motion = null;
     view.container.zIndex -= 0.5;
     retiring.push({
       kind: "building",
       view,
       t: 0,
-      under: next !== undefined,
+      cover: !next
+        ? "none"
+        : next.w >= view.w && next.h >= view.h
+          ? "whole"
+          : "part",
+      fade,
       from: { x: at.x, y: at.y, alpha: view.container.alpha },
       dx,
       dy,
@@ -205,6 +226,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
         dx: (view.x - next.x) * T + at.x,
         dy: (view.y - next.y) * T + at.y,
         enter: false,
+        crossfade: true,
       });
   };
 
@@ -216,7 +238,12 @@ export function createTownTopology(ctx: TownTopologyContext) {
     if (!building) return;
     pendingBuildings.push(building);
     if (!had && !instant) {
-      pendingMotion.set(hostKey, { dx: 0, dy: 0, enter: true });
+      pendingMotion.set(hostKey, {
+        dx: 0,
+        dy: 0,
+        enter: true,
+        crossfade: false,
+      });
       stats.transitions += 1;
     }
   };
@@ -232,6 +259,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
       const pose = townMotionPose(motion);
       view.container.position.set(pose.x, pose.y);
       view.container.alpha = pose.alpha;
+      if (motion.crossfade) crossfade(view, townCrossfadeAlpha(motion));
       if (motion.t >= 1) view.motion = null;
       else active = true;
     }
@@ -257,7 +285,13 @@ export function createTownTopology(ctx: TownTopologyContext) {
         from.y + (entry.dy - from.y) * e,
       );
       entry.view.container.alpha =
-        from.alpha * townRetiringAlpha(entry.t, entry.under);
+        from.alpha * townRetiringAlpha(entry.t, entry.cover);
+      // A drawing replaced mid-crossfade finishes it under its replacement,
+      // so the one under it is never uncovered.
+      if (entry.fade !== null) {
+        entry.fade = Math.min(1, entry.fade + step);
+        crossfade(entry.view, townEase(entry.fade));
+      }
     }
     return active;
   };
@@ -287,6 +321,10 @@ export function createTownTopology(ctx: TownTopologyContext) {
       const pose = townMotionPose(view.motion);
       view.container.position.set(pose.x, pose.y);
       view.container.alpha = pose.alpha;
+      if (motion.crossfade) {
+        crossfade(view, townCrossfadeAlpha(view.motion));
+        stats.crossfades += 1;
+      }
     }
     pendingPods.set(building.hostKey, pendingCells);
     sceneLayer.addChild(view.container);
@@ -396,7 +434,11 @@ export function createTownTopology(ctx: TownTopologyContext) {
             if (seen) podsPending = true;
             continue;
           }
-          building.pods.push(buildPod(cell, building.dynamic));
+          const pod = buildPod(cell, building.dynamic);
+          // A desk drawn during a crossfade joins it.
+          if (building.motion?.crossfade)
+            pod.container.alpha = townCrossfadeAlpha(building.motion);
+          building.pods.push(pod);
         }
         pendingPods.set(building.hostKey, remaining);
       }

@@ -2,10 +2,12 @@
  * What the renderer bakes, and what to bake again after a change. Each
  * building's interior (tables in their desks' colours, carpets in their rooms'
  * colours), façade and roof (its host's theme and colour, and whether the
- * host is stale) and its desks' pins are baked into textures and pods. A change re-bakes only the buildings whose own bake
- * inputs changed (a building's key holds its rooms' and desks' places, so a
- * building that moves bakes again); a change to the town's size or any
- * building's rectangle also paints the ground and outdoor items again.
+ * host is stale) and its desks' pins are baked into textures and pods. A
+ * change re-bakes only the buildings whose own bake inputs changed (a
+ * building's key holds its own rectangle and its rooms' and desks' places, so
+ * a building that moves bakes again, even one without rooms); a change to the
+ * town's size or any building's rectangle also paints the ground and outdoor
+ * items again.
  */
 
 import type { TownLayout } from "../townLayout";
@@ -37,7 +39,11 @@ export function townBakeKeys(
       );
       return `${r.key}@${r.x},${r.y},${r.w},${r.h}=${carpet}:${cells.join(",")}`;
     });
-    buildings.set(b.hostKey, `${host}/${rooms.join("|")}`);
+    // Its own rectangle too: a building without rooms still moves.
+    buildings.set(
+      b.hostKey,
+      `${host}@${b.x},${b.y},${b.w},${b.h}/${rooms.join("|")}`,
+    );
   }
   return {
     scene: `${layout.width}x${layout.height}:${layout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}`).join(";")}`,

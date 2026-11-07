@@ -213,6 +213,11 @@ export class TownSceneCamera {
     // Still flying home after the last change counts as home.
     const homeBound = this.flyingHome();
     const wasHome = homeBound || this.atHome();
+    // The camera as drawn, before the new town's bounds clamp it: a reflow
+    // glides from here, so what the user was looking at stays put.
+    const drawn = { x: camera.x, y: camera.y };
+    const focus = camera.focusPoint();
+    const at = camera.toWorld(focus.x, focus.y);
     camera.configure(layout, viewport);
     if (shapeChanged) {
       const saved = this.poses.get(shapeKey);
@@ -236,11 +241,9 @@ export class TownSceneCamera {
       // stays rather than follow a room that made way.
       !townRoomsMoved(previous, layout)
     ) {
-      const focus = camera.focusPoint();
-      const at = camera.toWorld(focus.x, focus.y);
       const shift = townReflowShift(previous, layout, at);
-      if (shift.x || shift.y) {
-        camera.glideBy(shift.x, shift.y, TOWN_TRANSITION_SECONDS);
+      if (shift.x || shift.y || camera.x !== drawn.x || camera.y !== drawn.y) {
+        camera.glideBy(shift.x, shift.y, TOWN_TRANSITION_SECONDS, drawn);
         this.invalidate("reflow");
       }
     }

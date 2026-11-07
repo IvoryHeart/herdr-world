@@ -25,6 +25,12 @@ export type TownBuildingMotion = {
   dy: number;
   /** A new building fades in; a moved or rebaked one is opaque. */
   enter: boolean;
+  /**
+   * Baked again over its old drawing: its interior and desks fade in over
+   * the old ones (townCrossfadeAlpha), while its walls, plaques and walking
+   * agents stay opaque.
+   */
+  crossfade: boolean;
   /** Progress, 0..1. */
   t: number;
 };
@@ -39,13 +45,28 @@ export function townMotionPose(motion: TownBuildingMotion) {
   };
 }
 
+/** The opacity of a rebaked building's interior and desks as they fade in. */
+export function townCrossfadeAlpha(motion: TownBuildingMotion) {
+  return motion.crossfade ? townEase(motion.t) : 1;
+}
+
 /**
- * The opacity of a drawing being replaced. One under its replacement holds
- * for the first half, so the change crossfades without showing the ground
- * through; one leaving on its own fades all the way.
+ * How a drawing being replaced is covered by its replacement: wholly (the
+ * new building is at least as large), in part (it shrank), or not at all
+ * (its host is gone).
  */
-export function townRetiringAlpha(t: number, under: boolean) {
-  if (!under) return 1 - townEase(t);
+export type TownCover = "whole" | "part" | "none";
+
+/**
+ * The opacity of a drawing being replaced. One wholly under its replacement
+ * stays opaque until the replacement has faded in over it, so what changed
+ * crossfades and the rest never changes; one partly under holds for the
+ * first half, then fades where the smaller replacement leaves ground; one
+ * leaving on its own fades all the way.
+ */
+export function townRetiringAlpha(t: number, cover: TownCover) {
+  if (cover === "none") return 1 - townEase(t);
+  if (cover === "whole") return t < 1 ? 1 : 0;
   return t < 0.5 ? 1 : 1 - townEase((t - 0.5) * 2);
 }
 

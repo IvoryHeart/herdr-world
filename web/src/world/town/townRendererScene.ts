@@ -83,6 +83,9 @@ export type BuildingView = {
   /** Where it was baked, in tiles; its drawings are placed in world pixels. */
   x: number;
   y: number;
+  /** Its baked size, in tiles. */
+  w: number;
+  h: number;
   /** The bake key it was drawn from (scene/townSceneBake.ts). */
   key: string;
   /** Gliding or fading in after a topology change (townTransition.ts). */
@@ -293,6 +296,8 @@ export function bakeTownBuilding(
       hostKey: building.hostKey,
       x: building.x,
       y: building.y,
+      w: building.w,
+      h: building.h,
       key: bake.key,
       motion: null,
       container,

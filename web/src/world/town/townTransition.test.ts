@@ -2,10 +2,11 @@ import { expect, test } from "bun:test";
 import { TownBuildingLayers } from "./townBuildingLayers";
 import { TownCamera, townZoomLimits } from "./townCamera";
 import { layoutTown, TOWN_TILE as T, type TownLayout } from "./townLayout";
-import { townBakeKeys } from "./scene/townSceneBake";
+import { townBakeDirty, townBakeKeys } from "./scene/townSceneBake";
 import {
   TOWN_TRANSITION_SECONDS,
   townBuildingRect,
+  townCrossfadeAlpha,
   townEase,
   townGroundChunks,
   townMotionPose,
@@ -78,18 +79,34 @@ test("transitions start where things were drawn and end where they belong", () =
   expect(townEase(0)).toBe(0);
   expect(townEase(1)).toBe(1);
   expect(townEase(0.5)).toBeCloseTo(0.5);
-  const glide = { dx: 120, dy: -40, enter: false, t: 0 };
+  const glide = { dx: 120, dy: -40, enter: false, crossfade: false, t: 0 };
   expect(townMotionPose(glide)).toEqual({ x: 120, y: -40, alpha: 1 });
   expect(townMotionPose({ ...glide, t: 1 })).toEqual({ x: 0, y: 0, alpha: 1 });
-  const enter = { dx: 0, dy: 0, enter: true, t: 0 };
+  const enter = { dx: 0, dy: 0, enter: true, crossfade: false, t: 0 };
   expect(townMotionPose(enter).alpha).toBe(0);
   expect(townMotionPose({ ...enter, t: 1 }).alpha).toBe(1);
-  // A drawing under its replacement holds until the replacement is mostly
-  // in, so the ground never shows through; a leaving one fades throughout.
-  expect(townRetiringAlpha(0.4, true)).toBe(1);
-  expect(townRetiringAlpha(1, true)).toBe(0);
-  expect(townRetiringAlpha(0.5, false)).toBeCloseTo(0.5);
-  expect(townRetiringAlpha(1, false)).toBe(0);
+  // A building baked again (a desk added or closed) keeps its place and
+  // walls opaque while its interior and desks fade in over the old drawing,
+  // which stays whole under it until they are in: the changed desk
+  // crossfades, the rest never changes and the ground never shows through.
+  const rebaked = { dx: 0, dy: 0, enter: false, crossfade: true, t: 0 };
+  expect(townMotionPose(rebaked).alpha).toBe(1);
+  expect(townCrossfadeAlpha(rebaked)).toBe(0);
+  expect(townCrossfadeAlpha({ ...rebaked, t: 0.3 })).toBeGreaterThan(0);
+  expect(townCrossfadeAlpha({ ...rebaked, t: 0.3 })).toBeLessThan(1);
+  expect(townCrossfadeAlpha({ ...rebaked, t: 1 })).toBe(1);
+  expect(townCrossfadeAlpha(glide)).toBe(1);
+  for (const t of [0, 0.3, 0.6, 0.99]) {
+    const over = townCrossfadeAlpha({ ...rebaked, t });
+    const under = townRetiringAlpha(t, "whole");
+    expect(over + (1 - over) * under).toBe(1);
+  }
+  // One partly covered (its building shrank) holds for the first half; a
+  // leaving one fades throughout.
+  expect(townRetiringAlpha(0.4, "part")).toBe(1);
+  expect(townRetiringAlpha(1, "part")).toBe(0);
+  expect(townRetiringAlpha(0.5, "none")).toBeCloseTo(0.5);
+  expect(townRetiringAlpha(1, "none")).toBe(0);
 });
 
 test("a whole frame has no gaps; a missing chunk, building or desk is one", () => {
@@ -196,7 +213,7 @@ test("the camera glides with the buildings and stays in step with them", () => {
   expect([camera.x, camera.y]).toEqual([start.x, start.y]);
   expect(camera.flying).toBe(false);
   // A building gliding from 160 px to its right stays put on screen.
-  const motion = { dx: 160, dy: -32, enter: false, t: 0 };
+  const motion = { dx: 160, dy: -32, enter: false, crossfade: true, t: 0 };
   const screen = () => {
     const pose = townMotionPose(motion);
     return camera.toScreen(640 + pose.x, 320 + pose.y);
@@ -226,4 +243,20 @@ test("the camera glides with the buildings and stays in step with them", () => {
   camera.glideBy(40, 0, TOWN_TRANSITION_SECONDS);
   expect(camera.x).toBeCloseTo(x + 40);
   expect(camera.moving).toBe(false);
+});
+
+test("a building without rooms that moves is baked again in its new place", () => {
+  // Hide the middle of three hosts when the rightmost has no rooms.
+  const roomless = (hosts: string[]) => {
+    const all = input(hosts);
+    return { ...all, rooms: all.rooms.filter((room) => room.hostKey !== "c") };
+  };
+  const before = layoutTown(roomless(["a", "b", "c"]), "wide").layout;
+  const after = layoutTown(roomless(["a", "c"]), "wide").layout;
+  const at = (layout: TownLayout) =>
+    layout.buildings.find((building) => building.hostKey === "c")!.x;
+  expect(at(after)).toBeLessThan(at(before));
+  const dirty = townBakeDirty(keysOf(before), keysOf(after));
+  expect(dirty.removed).toEqual(new Set(["b"]));
+  expect(dirty.buildings).toEqual(new Set(["c"]));
 });

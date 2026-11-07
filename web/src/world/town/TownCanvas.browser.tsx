@@ -3742,6 +3742,7 @@ async function run() {
     );
     const gaps = diagnostics.topologyGaps;
     const transitions = diagnostics.transitions;
+    const crossfades = diagnostics.crossfades;
     const buildings = diagnostics.layout!.buildings;
     let followed = false;
     const watch = new MutationObserver(() => {
@@ -3785,6 +3786,12 @@ async function run() {
     check(
       diagnostics.transitions >= transitions + 4,
       `buildings did not fade when a host turned off and on (${diagnostics.transitions - transitions} transitions)`,
+    );
+    // A building that moves is baked again: its interior and desks fade in
+    // over its old drawing as both glide.
+    check(
+      diagnostics.crossfades > crossfades,
+      "no moved building crossfaded when a host turned off and on",
     );
     check(
       followed,
