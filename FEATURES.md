@@ -139,15 +139,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     gardens and ponds carry on as far as the window shows, with no plain border.
     It is the same on every reload and in every browser, and
     when the town grows only the land next to the change is regenerated. It
-    keeps clear of buildings, roads, the town center and its forecourt, bus
+    keeps clear of buildings, roads, the town center and its paved apron, bus
     stops and the verge above the first street.
-  - The **town center** stands on the first street among the buildings, in
-    the middle of their first row with a side road and bus stop beside it: a
-    domed hall with a clock, a columned portico, banners, wings and a paved
-    forecourt down to the next street. Wide screens open Town with it in view
-    beside the buildings. Where buildings stack (phones, portrait screens) it
-    stands just above the first street, over the first building; phones open
-    Town with it at the top and the first building under it; on a short screen the view keeps
+  - The **town center** stands at the top of the town, just across the first
+    street from the buildings and centred over their first row: a domed hall
+    with a clock, a columned portico, banners and wings, whose front steps
+    open straight onto the street's pavement. Buildings stand side by side
+    below it with only the normal streets between them. Phones open Town with
+    it at the top and the first building under it; on a short screen the view keeps
     the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,
     preselecting the open room when it can start one there), **Town master**
