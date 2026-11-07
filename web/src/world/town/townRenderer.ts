@@ -1,3 +1,4 @@
+import type { TownRoomPlacement } from "./townRoomPlace";
 import {
   TownAmbient,
   townSpriteVisible,
@@ -94,8 +95,13 @@ export type TownRendererHandle = {
   invalidate(reason?: string): void;
   actorPosition(key: string): { x: number; y: number; seated: boolean } | null;
   roofAlpha(hostKey: string): number;
-  /** Lift a desk or agent under the pointer for a drag. */
-  beginDrag(kind: "desk" | "agent", key: string, x: number, y: number): void;
+  /** Lift a desk, agent or room under the pointer for a drag. */
+  beginDrag(
+    kind: "desk" | "agent" | "room",
+    key: string,
+    x: number,
+    y: number,
+  ): void;
   /** Follow the pointer (world point) and show where it would land. */
   /** `snap`: the target is a desk the carried desk groups with. */
   moveDrag(
@@ -103,6 +109,8 @@ export type TownRendererHandle = {
     y: number,
     targetKey: string | null,
     snap?: boolean,
+    /** A carried room: where every room would stand if it landed here. */
+    room?: TownRoomPlacement | null,
   ): void;
   /** Spring back to its spot, or wait at the target while Herdr moves it. */
   endDrag(mode: "cancel" | "park"): void;
@@ -875,6 +883,7 @@ export async function createTownRenderer(
     state: () => state,
     layoutCells: () => layoutCells,
     podOf,
+    buildingOf: (hostKey) => buildingByHost.get(hostKey)?.container,
     deskColor,
     lookOf,
     clock: () => clock,

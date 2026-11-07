@@ -10,10 +10,32 @@
 import {
   placeTownCenter,
   townCenterForecourt,
-  townCenterStreet,
   townCenterWidth,
   type TownCenterLot,
 } from "./townCenter";
+import {
+  LOBBY_HEIGHT,
+  MARGIN,
+  ROAD_GAP,
+  ROOM_TOP,
+  SOFA_CORNER,
+  TOWN_FACADE,
+  townFloor,
+  townPlaceLots,
+  YARD,
+} from "./townLots";
+import {
+  NO_ROOM_SPOTS,
+  townArrangeRooms,
+  townRanksOutOfOrder,
+  townRoomSpans,
+  townStackRooms,
+  type TownRoomSpots,
+} from "./townRoomPlace";
+
+export { TOWN_FACADE, TOWN_PHONE_BOARD_ROWS } from "./townLots";
+/** The reception lobby's rows from `lobbyY`, above the rooms. */
+export { LOBBY_HEIGHT as TOWN_LOBBY_HEIGHT } from "./townLots";
 
 export const TOWN_TILE = 16;
 
@@ -94,34 +116,14 @@ export const townShapeKey = (shape: TownShape) =>
 const CELL = 5; // tiles per desk cell: aisle column plus a four-tile table
 /** The reception lobby's top row, under the back wall; rooms start below it. */
 const LOBBY_TOP = 2;
-const ROOM_TOP = 9;
-/** The bar's height with the wall row under it, and the lobby's height. */
-const LOBBY_HEIGHT = 7;
-/** The reception lobby's rows from `lobbyY`, above the rooms. */
-export const TOWN_LOBBY_HEIGHT = LOBBY_HEIGHT;
-/** The bar's sofa corner: its first twelve tiles keep the old lounge's spots. */
-const SOFA_CORNER = 12;
-/** The bar's widest: the sofa corner, then a short counter with three stools. */
-const BAR_WIDTH = SOFA_CORNER + 8;
-const MIN_BUILDING_WIDTH = 38;
-/** A phone's one-column building: the bar, counter and queue still fit. */
-const MIN_PHONE_BUILDING_WIDTH = 26;
-const MARGIN = 3;
-const ROAD_GAP = 5;
 /** Walkable top-road tiles kept right of the last crossing for the bus stop. */
 const BUS_STOP_CLEARANCE = 4;
-/** Phones keep the reception board in the yard above each building. */
-export const TOWN_PHONE_BOARD_ROWS = 8;
-export const TOWN_FACADE = 2;
 
 /**
  * Agents are drawn larger than the furniture's pixel grid so they read as the
  * subject of a room, not as props. Hit-testing and drawing share it.
  */
 export const TOWN_AGENT_SCALE = 1.4;
-const YARD = 2;
-/** The most rows a building sits below the street above its row. */
-const FRONT_YARD = 12;
 const PARK_HEIGHT = 12;
 const QUEUE_OFFSETS = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5];
 
@@ -172,6 +174,8 @@ export type TownBuilding = {
   y: number;
   w: number;
   h: number;
+  /** The floor's own height, before its lot grew it toward its street. */
+  floorH: number;
   /** The reception counter's axis. */
   doorX: number;
   /** The bar's street door in the facade, onto the street below. */
@@ -234,6 +238,8 @@ export type TownLayout = {
   trees: TownTree[];
   /** Desk key to room key and cell index. */
   deskCells: ReadonlyMap<string, { roomKey: string; cellIndex: number }>;
+  /** The saved room spots the town was laid out with (townRoomPlace.ts). */
+  roomSpots?: TownRoomSpots;
 };
 
 export type TownInputRoom = {
@@ -259,6 +265,8 @@ type RoomMemory = {
   cells: Map<string, { col: number; row: number }>;
   /** The building column the room keeps while the scene is live. */
   column?: number;
+  /** The room's place in its building's room (workspace) order. */
+  rank?: number;
 };
 
 /**
@@ -387,6 +395,7 @@ function draftBuilding(
   nextMemory: TownPlacementMemory,
   shape: TownShape,
   pins: TownPinnedCells | undefined,
+  spots: TownRoomSpots,
 ): DraftBuilding {
   const placed = rooms.map((room) => {
     const previous = memory.get(room.key);
@@ -417,62 +426,48 @@ function draftBuilding(
       ry: 0,
     };
   });
-  // Rooms stack in columns, in workspace order. Each room keeps the column it
-  // was given while the scene is live (a new one joins the shortest), so a
-  // room that grows moves only the rooms below it in its own column.
-  const columnCount = Math.max(1, Math.min(shape.roomColumns, placed.length));
-  const columns: (typeof placed)[] = Array.from(
-    { length: columnCount },
-    () => [],
-  );
-  const heights = new Array<number>(columnCount).fill(0);
-  for (const room of placed) {
-    const kept = memory.get(room.key)?.column;
-    const column =
-      kept !== undefined && kept < columnCount
-        ? kept
-        : heights.indexOf(Math.min(...heights));
-    columns[column]!.push(room);
-    heights[column]! += room.h + 2;
-    nextMemory.get(room.key)!.column = column;
-  }
-  let x = 2;
-  const spans: { x0: number; x1: number; bottom: number }[] = [];
-  for (const column of columns) {
-    let y = ROOM_TOP;
-    let widest = 0;
-    for (const room of column) {
-      room.rx = x;
-      room.ry = y;
-      y += room.h + 2;
-      widest = Math.max(widest, room.w);
-    }
-    spans.push({ x0: x, x1: x + widest, bottom: y });
-    if (column.length) x += widest + 2;
-  }
-  const w = Math.max(
-    x,
-    shape.formFactor === "narrow" && shape.roomColumns === 1
-      ? MIN_PHONE_BUILDING_WIDTH
-      : MIN_BUILDING_WIDTH,
-  );
-  // The bar: the bottom corner under the last room column, 12-20 tiles back
-  // from its right end; other columns may run down to the bottom wall.
-  const last = spans.filter((span) => span.x1 > span.x0).pop();
-  const right = last ? Math.min(last.x1 + 1, w - 2) : w - 2;
-  const left = Math.max(2, last ? last.x0 - 1 : 2);
-  const barWidth = Math.min(BAR_WIDTH, Math.max(SOFA_CORNER, right - left));
-  const barX = right - barWidth;
-  const bottomOf = (over: boolean) =>
-    Math.max(
-      ROOM_TOP,
-      ...spans
-        .filter(
-          (span) => (span.x0 < barX + barWidth && span.x1 > barX) === over,
-        )
-        .map((span) => span.bottom),
+  // Once the user has moved a room of this building, every room keeps the
+  // spot World saved for it (townRoomPlace.ts), clear of the others.
+  // Otherwise rooms stack in columns, in workspace order. Each room keeps the
+  // column it was given while the scene is live (a new one joins the
+  // shortest), so a room that grows moves only the rooms below it in its own
+  // column. A building whose rooms were reordered (a room moved in Spaces or
+  // Herdr) is stacked afresh, as a reload would show it.
+  const arranged = placed.some((room) => spots.has(room.key))
+    ? townArrangeRooms(placed, spots)
+    : null;
+  let spans: ReturnType<typeof townStackRooms>["spans"];
+  let x: number;
+  if (arranged) {
+    ({ spans, width: x } = townRoomSpans(placed, arranged));
+    placed.forEach((room, index) => {
+      const spot = arranged.get(room.key)!;
+      room.rx = spot.x;
+      room.ry = spot.y;
+      nextMemory.get(room.key)!.rank = index;
+    });
+  } else {
+    const reordered = townRanksOutOfOrder(
+      placed.map((room) => memory.get(room.key)?.rank),
     );
-  const h = Math.max(bottomOf(true) + LOBBY_HEIGHT, bottomOf(false));
+    const stacked = townStackRooms(
+      placed,
+      shape.roomColumns,
+      (room) => (reordered ? undefined : memory.get(room.key)?.column),
+      ROOM_TOP,
+    );
+    ({ spans, width: x } = stacked);
+    stacked.columns.forEach((column, index) => {
+      const roomMemory = nextMemory.get(placed[index]!.key)!;
+      roomMemory.column = column;
+      roomMemory.rank = index;
+    });
+    placed.forEach((room, index) => {
+      room.rx = stacked.positions[index]!.rx;
+      room.ry = stacked.positions[index]!.ry;
+    });
+  }
+  const { w, h, barX, barWidth } = townFloor(spans, x, shape);
   const barY = h - LOBBY_HEIGHT;
   const doorX = Math.floor(w / 2);
   const bar = { x: barX, y: barY, w: barWidth, h: LOBBY_HEIGHT - 1 };
@@ -480,6 +475,7 @@ function draftBuilding(
     hostKey,
     w,
     h,
+    floorH: h,
     doorX,
     barDoorX: barX + Math.floor(barWidth / 2),
     entryX: doorX + 4,
@@ -534,6 +530,8 @@ export function layoutTown(
   shapeOrFormFactor: TownShape | TownFormFactor,
   memory: TownPlacementMemory = new Map(),
   pins?: TownPinnedCells,
+  /** Where the user put rooms (townRoomPlace.ts); others stack. */
+  roomSpots: TownRoomSpots = NO_ROOM_SPOTS,
 ): { layout: TownLayout; memory: TownPlacementMemory } {
   const shape = shapeOf(shapeOrFormFactor);
   const formFactor = shape.formFactor;
@@ -551,6 +549,7 @@ export function layoutTown(
       nextMemory,
       shape,
       pins,
+      roomSpots,
     ),
   );
   const seatsOf = new Map<string, number>();
@@ -558,65 +557,20 @@ export function layoutTown(
     room.deskKeys.forEach((key, index) =>
       seatsOf.set(key, room.deskSeats?.[index] ?? 4),
     );
-  // Lots are the hosts' buildings. Up to four share one street; larger
-  // towns wrap into a grid of streets, under the town center.
-  const lots = drafts.map((draft) => ({ w: draft.w, h: draft.h, draft }));
-  const perRow =
-    formFactor === "narrow"
-      ? 1
-      : lots.length <= 4
-        ? lots.length
-        : Math.ceil(Math.sqrt(lots.length * 1.6));
-  const rowsOfLots: (typeof lots)[] = [];
-  for (let i = 0; i < lots.length; i += perRow)
-    rowsOfLots.push(lots.slice(i, i + perRow));
-  const placedBuildings: (DraftBuilding & {
-    x: number;
-    y: number;
-    roadY: number;
-    topRoadY: number;
-  })[] = [];
-  const verticalRoads: TownLayout["verticalRoads"] = [];
-  const widestLot = Math.max(...lots.map((lot) => lot.w));
-  // Every row of lots has a street above and below it (neighbouring rows
-  // share one), and a road right of every lot from street to street.
-  let road = townCenterStreet(formFactor === "narrow");
-  const roads: number[] = [road];
-  let width = MARGIN;
-  for (const row of rowsOfLots) {
-    const tallest = Math.max(...row.map((lot) => lot.h));
-    const top =
-      road +
-      ROAD_GAP +
-      YARD +
-      (formFactor === "narrow" ? TOWN_PHONE_BOARD_ROWS : 0);
-    const roadY = top + tallest + TOWN_FACADE + YARD;
-    let x = MARGIN;
-    for (const lot of row) {
-      // A single stacked lot is centred on its street so every floor plan
-      // shares one vertical axis on phones; its side road runs beside it.
-      const lx =
-        row.length === 1 ? MARGIN + Math.floor((widestLot - lot.w) / 2) : x;
-      // A lot far shorter than its row grows (a building gains floor above
-      // its bar), so it sits at most FRONT_YARD rows below the street above.
-      const h = Math.max(lot.h, tallest + YARD - FRONT_YARD);
-      const ly = top + tallest - h;
-      const draft = lot.draft;
-      draft.lounge.y += h - draft.h;
-      draft.lounge.bar.y += h - draft.h;
-      draft.h = h;
-      placedBuildings.push({ ...draft, x: lx, y: ly, roadY, topRoadY: road });
-      x = lx + lot.w;
-      verticalRoads.push({ x, y0: road + ROAD_GAP, y1: roadY });
-      x += ROAD_GAP;
-    }
-    width = Math.max(width, x);
-    roads.push(roadY);
-    road = roadY;
-  }
+  // The hosts' buildings stand on the streets, under the town center.
+  const lots = townPlaceLots(drafts, shape);
+  const { verticalRoads, roads } = lots;
+  const placedBuildings = drafts.map((draft, index) => {
+    const { x, y, h, roadY, topRoadY } = lots.buildings[index]!;
+    draft.lounge.y += h - draft.h;
+    draft.lounge.bar.y += h - draft.h;
+    draft.h = h;
+    return { ...draft, x, y, roadY, topRoadY };
+  });
   // The topmost street runs on past the last crossing for the bus stop.
   const centerW = townCenterWidth(shape.roomColumns === 1);
-  width = Math.max(width + BUS_STOP_CLEARANCE, 37, centerW + MARGIN) + MARGIN;
+  const width =
+    Math.max(lots.width + BUS_STOP_CLEARANCE, 37, centerW + MARGIN) + MARGIN;
   const lastRoad = roads[roads.length - 1]!;
   const height = lastRoad + ROAD_GAP + PARK_HEIGHT + MARGIN;
   const ground = new Uint8Array(width * height);
@@ -738,6 +692,7 @@ export function layoutTown(
       y: by,
       w: draft.w,
       h: draft.h,
+      floorH: draft.floorH,
       doorX,
       barDoorX,
       entryX,
@@ -861,6 +816,7 @@ export function layoutTown(
       bushes,
       trees,
       deskCells,
+      ...(roomSpots.size ? { roomSpots } : {}),
     },
     memory: nextMemory,
   };
