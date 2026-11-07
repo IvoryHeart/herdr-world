@@ -453,10 +453,10 @@ export function createTownTopology(ctx: TownTopologyContext) {
     const view = viewRect(0);
     const near = viewRect(200);
     if (urgent)
-      for (const { key, region } of townGroundChunks(view))
+      for (const { key, region } of townGroundChunks(layout, view))
         if (!into.chunks.has(key)) paintChunk(into, key, region);
     let budget = 1;
-    for (const { key, region } of townGroundChunks(near)) {
+    for (const { key, region } of townGroundChunks(layout, near)) {
       if (budget <= 0) break;
       if (into.chunks.has(key)) continue;
       paintChunk(into, key, region);

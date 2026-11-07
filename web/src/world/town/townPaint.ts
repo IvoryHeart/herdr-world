@@ -230,6 +230,10 @@ export function paintTownGroundPlan(plan: TownGroundPlan) {
     g.fillRect(mark.x, mark.y, mark.w, mark.h);
   }
   paintTownLandObjects(g, plan.objects);
+  for (const mark of plan.shade) {
+    g.fillStyle = mark.fill;
+    g.fillRect(mark.x, mark.y, mark.w, mark.h);
+  }
   return canvas;
 }
 

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { TownBuildingLayers } from "./townBuildingLayers";
 import { TownCamera, townZoomLimits } from "./townCamera";
+import { townGroundPlan } from "./townGroundPlan";
 import { layoutTown, TOWN_TILE as T, type TownLayout } from "./townLayout";
 import { townBakeDirty, townBakeKeys } from "./scene/townSceneBake";
 import {
@@ -11,7 +12,9 @@ import {
   townGroundChunks,
   townMotionPose,
   townRetiringAlpha,
+  townLandRect,
   townSceneGaps,
+  TOWN_LAND_MARGIN,
   type TownDrawnScene,
   type TownRect,
 } from "./townTransition";
@@ -41,12 +44,12 @@ const keysOf = (layout: TownLayout) =>
 
 /**
  * Everything a layout needs drawn through `view`, as a whole frame draws it:
- * the ground runs on past the town's edges.
+ * the ground runs on past the town's edges, through its margin of land.
  */
 function whole(layout: TownLayout, view: TownRect): TownDrawnScene {
   const keys = keysOf(layout);
   return {
-    ground: new Set(townGroundChunks(view).map((chunk) => chunk.key)),
+    ground: new Set(townGroundChunks(layout, view).map((chunk) => chunk.key)),
     buildings: new Map(
       layout.buildings.map((building) => [
         building.hostKey,
@@ -155,7 +158,9 @@ test("only what is in view must be drawn", () => {
     keys.buildings.get(building.hostKey)!;
   const [first] = layout.buildings;
   const view = townBuildingRect(first!);
-  const chunks = new Set(townGroundChunks(view).map((chunk) => chunk.key));
+  const chunks = new Set(
+    townGroundChunks(layout, view).map((chunk) => chunk.key),
+  );
   const drawn: TownDrawnScene = {
     ground: chunks,
     buildings: new Map([[first!.hostKey, { key: key(first!), pods: null }]]),
@@ -254,4 +259,50 @@ test("a building without rooms that moves is baked again in its new place", () =
   const dirty = townBakeDirty(keysOf(before), keysOf(after));
   expect(dirty.removed).toEqual(new Set(["b"]));
   expect(dirty.buildings).toEqual(new Set(["c"]));
+});
+
+test("the ground stops a margin of land past the town, shaded into the woods", () => {
+  const { layout } = layoutTown(input(["a", "b"]), "wide");
+  const land = townLandRect(layout);
+  expect(land).toEqual({
+    x: -TOWN_LAND_MARGIN * T,
+    y: -TOWN_LAND_MARGIN * T,
+    w: (layout.width + 2 * TOWN_LAND_MARGIN) * T,
+    h: (layout.height + 2 * TOWN_LAND_MARGIN) * T,
+  });
+  // However far the camera sees, chunks tile exactly the land, no farther.
+  const chunks = townGroundChunks(layout, {
+    x: -10_000,
+    y: -10_000,
+    w: 30_000,
+    h: 30_000,
+  });
+  let area = 0;
+  for (const { region } of chunks) {
+    expect(region.x).toBeGreaterThanOrEqual(land.x);
+    expect(region.y).toBeGreaterThanOrEqual(land.y);
+    expect(region.x + region.w).toBeLessThanOrEqual(land.x + land.w);
+    expect(region.y + region.h).toBeLessThanOrEqual(land.y + land.h);
+    area += region.w * region.h;
+  }
+  expect(area).toBe(land.w * land.h);
+  expect(townGroundChunks(layout, { x: -9000, y: 0, w: 100, h: 100 })).toEqual(
+    [],
+  );
+  // The outer tile row is the page's woodland green; the shading thins
+  // inward and stops before the town.
+  const corner = chunks.find(
+    ({ region }) => region.x === land.x && region.y === land.y,
+  )!;
+  const plan = townGroundPlan(layout, corner.region);
+  const alphaAt = (x: number, y: number) =>
+    plan.shade
+      .filter((m) => x >= m.x && x < m.x + m.w && y >= m.y && y < m.y + m.h)
+      .map((m) => Number(/,([\d.]+)\)$/.exec(m.fill)![1]));
+  expect(alphaAt(land.x + T * 12, land.y)).toEqual([1]);
+  const inner = alphaAt(land.x + T * 12, land.y + T * 7)[0]!;
+  expect(inner).toBeGreaterThan(0);
+  expect(inner).toBeLessThan(0.5);
+  expect(alphaAt(land.x + T * 12, land.y + T * 8)).toEqual([]);
+  expect(alphaAt(0, 0)).toEqual([]);
 });

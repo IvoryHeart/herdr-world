@@ -92,30 +92,49 @@ export const townRectsMeet = (a: TownRect, b: TownRect) =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
 /** The ground is painted in square chunks of this many world pixels. */
-export const TOWN_GROUND_CHUNK = 256;
+export const TOWN_GROUND_CHUNK = 512;
 
 /**
- * The ground chunks that meet `view`. The ground covers the whole map, the
- * town and the generated land beyond it (townLandscape.ts), so chunks
- * continue past the town's edges wherever the camera looks.
+ * Tiles of generated land painted past the town's edges (townLandscape.ts);
+ * the outer ones shade into the woods' dark green behind the map.
  */
-export function townGroundChunks(view: TownRect) {
+export const TOWN_LAND_MARGIN = 16;
+
+/** The painted ground in world pixels: the town and its margin of land. */
+export function townLandRect(layout: TownLayout): TownRect {
+  const m = TOWN_LAND_MARGIN * T;
+  return {
+    x: -m,
+    y: -m,
+    w: layout.width * T + 2 * m,
+    h: layout.height * T + 2 * m,
+  };
+}
+
+/** The ground chunks of `layout` that meet `view`, cut to its land. */
+export function townGroundChunks(layout: TownLayout, view: TownRect) {
   const chunks: { key: string; region: TownRect }[] = [];
-  const cx0 = Math.floor(view.x / TOWN_GROUND_CHUNK);
-  const cy0 = Math.floor(view.y / TOWN_GROUND_CHUNK);
-  const cx1 = Math.ceil((view.x + view.w) / TOWN_GROUND_CHUNK);
-  const cy1 = Math.ceil((view.y + view.h) / TOWN_GROUND_CHUNK);
-  for (let cy = cy0; cy < cy1; cy += 1)
-    for (let cx = cx0; cx < cx1; cx += 1)
+  const land = townLandRect(layout);
+  const x0 = Math.max(view.x, land.x);
+  const y0 = Math.max(view.y, land.y);
+  const x1 = Math.min(view.x + view.w, land.x + land.w);
+  const y1 = Math.min(view.y + view.h, land.y + land.h);
+  if (x1 <= x0 || y1 <= y0) return chunks;
+  const C = TOWN_GROUND_CHUNK;
+  for (let cy = Math.floor(y0 / C); cy < Math.ceil(y1 / C); cy += 1)
+    for (let cx = Math.floor(x0 / C); cx < Math.ceil(x1 / C); cx += 1) {
+      const x = Math.max(cx * C, land.x);
+      const y = Math.max(cy * C, land.y);
       chunks.push({
         key: `${cx},${cy}`,
         region: {
-          x: cx * TOWN_GROUND_CHUNK,
-          y: cy * TOWN_GROUND_CHUNK,
-          w: TOWN_GROUND_CHUNK,
-          h: TOWN_GROUND_CHUNK,
+          x,
+          y,
+          w: Math.min((cx + 1) * C, land.x + land.w) - x,
+          h: Math.min((cy + 1) * C, land.y + land.h) - y,
         },
       });
+    }
   return chunks;
 }
 
@@ -149,7 +168,7 @@ export function townSceneGaps(
   detailed: boolean,
 ) {
   const gaps: string[] = [];
-  for (const { key } of townGroundChunks(view))
+  for (const { key } of townGroundChunks(layout, view))
     if (!drawn.ground.has(key)) gaps.push(`ground ${key}`);
   for (const building of layout.buildings) {
     if (!townRectsMeet(townBuildingRect(building), view)) continue;

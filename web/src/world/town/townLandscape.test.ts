@@ -307,7 +307,8 @@ test("growth regenerates only the land next to what changed", () => {
 test("unchanged ground chunks keep their plan through a layout change", () => {
   const a = layoutTown(town({ a: [4, 2], b: [3] }), TOWN_SHAPES.wide).layout;
   const b = layoutTown(town({ a: [4, 2], b: [3, 1] }), TOWN_SHAPES.wide).layout;
-  const far = { x: -2048, y: -1024, w: 512, h: 512 };
+  // The margin of land left of the town, away from the change.
+  const far = { x: -256, y: 0, w: 256, h: 512 };
   expect(townGroundPlan(b, far).key).toBe(townGroundPlan(a, far).key);
   // Under the grown building the plan, and its key, changes.
   const building = b.buildings[1]!;

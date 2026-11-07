@@ -180,7 +180,7 @@ hosts stay usable.
 2. Use **+** and **−** to move between town, building, room and desk detail;
    **ALL** shows the whole town. Zoomed out, the land around it is generated
    woods, meadows, gardens, ponds and footpaths, with each street running on as
-   a country lane; it looks the same after a reload, and only the land next to
+   a country lane, shading into dark woods a little past the town; it looks the same after a reload, and only the land next to
    a growing building changes. Drag the background to pan, or use arrow keys
    when the scene has focus. Tap a room to zoom in. Large towns may initially
    show roofs; zoom in to see room summaries and desks. Phones stack buildings

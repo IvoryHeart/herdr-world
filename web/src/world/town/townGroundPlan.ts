@@ -21,7 +21,14 @@ import {
   TownGround,
   type TownLayout,
 } from "./townLayout";
-import type { TownRect } from "./townTransition";
+import {
+  TOWN_LAND_MARGIN,
+  townLandRect,
+  type TownRect,
+} from "./townTransition";
+
+/** Tiles over which the land's edge shades into the woods. */
+const SHADE_TILES = 8;
 
 /** A tile's code: the layout's ground (0–5), or LAND + a TownLand kind. */
 export const TOWN_GROUND_LAND = 16;
@@ -47,6 +54,8 @@ export type TownGroundPlan = {
   marks: TownGroundMark[];
   /** The landscape objects whose drawings reach the region, in drawing order. */
   objects: TownLandObject[];
+  /** The land's outer tiles shading into the woods, drawn over everything. */
+  shade: TownGroundMark[];
   /** Equal for plans that paint the same pixels. */
   key: string;
 };
@@ -116,6 +125,36 @@ export function townGroundPlan(
   }
 
   const objects = townLandObjects(land, tx0 + 1, ty0 + 1, tx1 - 1, ty1 - 1);
+
+  // The land ends TOWN_LAND_MARGIN tiles past the town (townLandRect): its
+  // outer tiles darken step by step to the page's woodland green (town.css),
+  // so the painted map has no edge.
+  const shade: TownGroundMark[] = [];
+  const edge = {
+    x0: -TOWN_LAND_MARGIN,
+    y0: -TOWN_LAND_MARGIN,
+    x1: width + TOWN_LAND_MARGIN - 1,
+    y1: height + TOWN_LAND_MARGIN - 1,
+  };
+  const depth = (tx: number, ty: number) =>
+    Math.min(tx - edge.x0, edge.x1 - tx, ty - edge.y0, edge.y1 - ty);
+  const outer = townLandRect(layout);
+  for (let ty = ty0 + 1; ty < ty1 - 1; ty += 1)
+    for (let tx = tx0 + 1; tx < tx1 - 1; ) {
+      const d = depth(tx, ty);
+      let end = tx + 1;
+      while (end < tx1 - 1 && depth(end, ty) === d) end += 1;
+      if (d >= 0 && d < SHADE_TILES) {
+        const fill = `rgba(47,74,43,${(1 - d / SHADE_TILES).toFixed(3)})`;
+        const x = Math.max(tx * T, outer.x);
+        const w = Math.min(end * T, outer.x + outer.w) - x;
+        const before = marks.length;
+        mark(fill, x, ty * T, w, T);
+        shade.push(...marks.splice(before));
+      }
+      tx = end;
+    }
+
   return {
     region,
     tx0,
@@ -125,7 +164,8 @@ export function townGroundPlan(
     tiles,
     marks,
     objects,
-    key: planKey(region, tiles, marks, objects),
+    shade,
+    key: planKey(region, tiles, [...marks, ...shade], objects),
   };
 }
 
