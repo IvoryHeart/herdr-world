@@ -95,3 +95,16 @@ Tokens SHALL remain visible independently of pricing. USD cost SHALL be labelled
 #### Scenario: Source unavailable after success
 - **WHEN** a source that previously succeeded cannot be refreshed
 - **THEN** its retained bounded observation is explicitly stale and is never presented as fresh zero
+
+### Requirement: Subscription limit observations
+
+The usage read SHALL report, per qualified host, the newest subscription-limit observation each supported harness persists on that host: each window's length, percent used and reset time, and the observation time. It SHALL carry no account IDs, plan names, credit balances, credentials, prompts, paths or raw provider errors. An observation older than a few hours or past any window's reset SHALL be stale; a host with no observation SHALL be missing; a harness that persists no usable limits record SHALL be unsupported with a fixed reason. None of these SHALL be presented as zero or full.
+
+#### Scenario: Codex reports limit windows
+- **WHEN** a Codex rollout on a host records token counts with primary and secondary rate-limit windows
+- **THEN** that host's limits list both windows from its newest such record, attributed to the Codex session log
+
+#### Scenario: Limits age or disappear
+- **WHEN** the newest observation passes a window's reset, grows old, cannot be refreshed, or its logs are removed
+- **THEN** it is reported stale, or missing once a successful read finds none, and Town shows stale or no gauge rather than a level
+

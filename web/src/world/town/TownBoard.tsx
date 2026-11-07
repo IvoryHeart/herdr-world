@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Fuel } from "lucide-react";
 import {
   formatOfficeCost,
   formatOfficeModelNames,
@@ -11,6 +12,13 @@ import type {
   TownSummaryCounts,
 } from "./townSummary";
 import type { TownPlaceEconomy } from "./townPlaceUsage";
+import {
+  townFuelGauges,
+  townFuelNotes,
+  townLimits,
+  useTownLimits,
+} from "./townLimits";
+import { TownFuel, townFuelLowest } from "./TownFuelGauge";
 
 /**
  * The Town board counts the whole town from the Town summary (townSummary.ts):
@@ -20,10 +28,13 @@ export function TownBoard({
   counts,
   observability,
   onOpenSummary,
+  sinceYouLeft,
 }: {
   counts: TownSummary["counts"];
   observability: OfficeObservability;
   onOpenSummary?: () => void;
+  /** "Since you left" after a return: on the sign, and under the phone chip. */
+  sinceYouLeft?: { board: ReactNode; chip: ReactNode };
 }) {
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
@@ -36,7 +47,18 @@ export function TownBoard({
     }
   };
   const population = `${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} in ${counts.buildings} ${counts.buildings === 1 ? "building" : "buildings"}`;
-  const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}`;
+  // Subscription fuel: each harness's limit windows, from harness usage.
+  const usage = useTownLimits();
+  const now = Date.now();
+  const limits = townLimits(usage);
+  const gauges = townFuelGauges(limits, now);
+  const notes = townFuelNotes(limits, gauges);
+  const lowest = townFuelLowest(gauges);
+  const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}${
+    lowest
+      ? `; ${lowest.gauge.name} ${lowest.window.label} ${lowest.window.left} % left${lowest.window.low ? ", low" : ""}`
+      : ""
+  }`;
   return (
     <>
       <button
@@ -62,7 +84,14 @@ export function TownBoard({
         <span data-status="working">{counts.working}</span>
         <span data-status="blocked">!{counts.needsYou}</span>
         <span data-status="done">✓{counts.finished}</span>
+        {lowest ? (
+          <span data-status="fuel" data-low={lowest.window.low}>
+            <Fuel size={12} aria-hidden="true" />
+            {lowest.window.left}%
+          </span>
+        ) : null}
       </button>
+      {sinceYouLeft?.chip}
       <div
         id="town-board"
         className="town-board"
@@ -83,6 +112,7 @@ export function TownBoard({
             </button>
           ) : null}
         </div>
+        {sinceYouLeft?.board}
         <TownBoardCounts counts={counts} />
         <p className="town-board-population">
           {population}
@@ -103,6 +133,7 @@ export function TownBoard({
                   "No cost data. Configure a metrics provider in settings.",
               })}
         />
+        <TownFuel gauges={gauges} notes={notes} now={now} />
       </div>
     </>
   );

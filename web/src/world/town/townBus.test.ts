@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { BinEntry } from "../../../../shared/bin";
+import { binClockLabel } from "../bin/binStore";
 import {
   TOWN_BUS_DWELL_MS,
   townBinRiders,
@@ -9,7 +10,10 @@ import {
   townBusRoute,
   townBusTimeline,
   townNearestStop,
+  townRiderFirstOuting,
+  townRiderOuting,
   townRiderWalk,
+  townStopClock,
 } from "./townBus";
 import { TOWN_WALK_SPEED } from "./townActors";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
@@ -255,4 +259,78 @@ test("a binned agent walks out to its stop as it walks indoors, then stands ther
       walking: false,
     });
   expect(townRiderWalk(door, stop, Infinity).walking).toBe(false);
+});
+
+test("an agent seen indoors walks out of the door however long it took to reach it", () => {
+  const start = { indoors: false, out: null };
+  // Not drawn yet, then walking indoors to its front door for a long while
+  // (a phone draws fewer frames, so its walk indoors takes longer).
+  let outing = townRiderOuting(start, null, 0, false);
+  expect(outing).toEqual({ indoors: false, out: null });
+  outing = townRiderOuting(outing, false, 1_000, false);
+  expect(outing).toEqual({ indoors: true, out: null });
+  outing = townRiderOuting(outing, false, 40_000, false);
+  // Out of the door: its walk to the stop starts now, and keeps that start.
+  outing = townRiderOuting(outing, true, 41_000, false);
+  expect(outing).toEqual({ indoors: true, out: 41_000 });
+  expect(townRiderOuting(outing, true, 42_000, false).out).toBe(41_000);
+  // Already out when Town first draws it (Town opened again): at its stop.
+  expect(townRiderOuting(start, true, 5_000, false).out).toBe(-Infinity);
+  // Binned on Board, then Town opened: never shown here, it walks from its door.
+  expect(
+    townRiderOuting(townRiderFirstOuting(false), true, 5_000, false).out,
+  ).toBe(5_000);
+  // Shown outside before, then Town opened again: at its stop.
+  expect(
+    townRiderOuting(townRiderFirstOuting(true), true, 5_000, false).out,
+  ).toBe(-Infinity);
+  // With reduced motion, at its stop too.
+  expect(
+    townRiderOuting({ indoors: true, out: null }, true, 5_000, true).out,
+  ).toBe(-Infinity);
+});
+
+test("a stop's clock reads due only just before the bus pulls in there", () => {
+  const TRIP = 120_000;
+  const { layout } = layoutTown(
+    town({ a: [2], b: [2], c: [1] }),
+    TOWN_SHAPES.phone,
+  );
+  const route = townBusRoute(layout);
+  const stop = [...route.stops].sort((a, b) => b.at - a.at)[0]!;
+  const timeline = townBusTimeline(route, new Set([stop.key]), TRIP);
+  const halt = timeline.halts.get(stop.key)!;
+  // The trip sets off with the bus off the map: it reaches a stop well after.
+  expect(halt).toBeGreaterThan(30);
+  const clock = (elapsed: number | null, next = 200_000, riding = true) =>
+    townStopClock({
+      elapsed,
+      next,
+      stopped: false,
+      riding,
+      halt,
+      nextHalt: halt,
+    });
+  // Waiting for the next trip: until it sets off and drives to this stop.
+  expect(clock(null, 60_000, false)).toBe(binClockLabel(60_000 + halt * 1000));
+  expect(clock(null, 0, false)).not.toBe("due");
+  // Riding this trip: it counts down to the bus pulling in here.
+  expect(clock(0)).not.toBe("due");
+  expect(clock((halt - 10) * 1000)).toBe("0:10");
+  expect(clock((halt - 4) * 1000)).toBe("due");
+  // Due, the bus is a few seconds away: in sight, slowing to the stop.
+  const along = townBusAlong(timeline, (halt - 4) * 1000);
+  expect(along).not.toBeNull();
+  expect(stop.at - along!).toBeLessThan(timeline.cruise * 5);
+  expect(clock((halt + 3) * 1000)).toBe("due");
+  expect(
+    townStopClock({
+      elapsed: 1_000,
+      next: 0,
+      stopped: true,
+      riding: true,
+      halt,
+      nextHalt: halt,
+    }),
+  ).toBe("stopped");
 });

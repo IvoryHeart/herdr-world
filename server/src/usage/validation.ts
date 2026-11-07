@@ -98,5 +98,45 @@ export function validateHostUsage(raw: any): HostUsage {
     ).size !== title_matches.length
   )
     throw new Error("Ambiguous usage title matches");
-  return { rows, sources, truncated: raw.truncated, title_matches };
+  if (
+    raw.limits !== undefined &&
+    (!Array.isArray(raw.limits) || raw.limits.length > 4)
+  )
+    throw new Error("Invalid usage limits");
+  const limitHarnesses = new Set<string>();
+  const limits = (raw.limits ?? []).map((limit: any) => {
+    if (
+      limit?.harness !== "codex" ||
+      limitHarnesses.has(limit.harness) ||
+      !count(limit.at) ||
+      !Array.isArray(limit.windows) ||
+      limit.windows.length < 1 ||
+      limit.windows.length > 2
+    )
+      throw new Error("Invalid usage limit");
+    limitHarnesses.add(limit.harness);
+    return {
+      harness: limit.harness as string,
+      at: limit.at as number,
+      windows: limit.windows.map((w: any) => {
+        if (
+          !Number.isSafeInteger(w?.window_minutes) ||
+          w.window_minutes <= 0 ||
+          w.window_minutes > 366 * 24 * 60 ||
+          typeof w.used_percent !== "number" ||
+          !Number.isFinite(w.used_percent) ||
+          w.used_percent < 0 ||
+          w.used_percent > 100 ||
+          (w.resets_at !== null && !count(w.resets_at))
+        )
+          throw new Error("Invalid usage limit window");
+        return {
+          window_minutes: w.window_minutes as number,
+          used_percent: w.used_percent as number,
+          resets_at: w.resets_at as number | null,
+        };
+      }),
+    };
+  });
+  return { rows, sources, truncated: raw.truncated, limits, title_matches };
 }

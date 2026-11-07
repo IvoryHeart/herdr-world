@@ -1,5 +1,9 @@
 import type * as Fs from "node:fs/promises";
-import type { createUsageProjection, NumericUsageRow } from "./projection";
+import type {
+  createUsageProjection,
+  LimitObservation,
+  NumericUsageRow,
+} from "./projection";
 import type { UsageState } from "../../../shared/usage";
 
 export type HostUsage = {
@@ -11,6 +15,8 @@ export type HostUsage = {
   })[];
   sources: { harness: string; state: UsageState }[];
   truncated: boolean;
+  /** The newest subscription-limit observation per harness on this host. */
+  limits?: (LimitObservation & { harness: string })[];
   /** Private, hashed title-prefix resolutions; never exposed by World usage. */
   title_matches?: { prefix_key: string; session_key: string }[];
 };
@@ -707,6 +713,7 @@ export async function collectHarnessUsage(
     rows: [],
     sources: [],
     truncated,
+    limits: [],
     title_matches: [],
   };
   for (const [sessionKey, session] of cache.sessions) {
@@ -716,6 +723,13 @@ export async function collectHarnessUsage(
     }
     const projected = session.reader.finish();
     if (projected.partial) fail(session.harness);
+    if (projected.limits) {
+      const prior = result.limits!.find((l) => l.harness === session.harness);
+      if (!prior)
+        result.limits!.push({ harness: session.harness, ...projected.limits });
+      else if (projected.limits.at > prior.at)
+        Object.assign(prior, projected.limits);
+    }
     for (const row of projected.rows) {
       if (result.rows.length >= 1024) {
         result.truncated = true;

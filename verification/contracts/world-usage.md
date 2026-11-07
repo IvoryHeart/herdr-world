@@ -22,6 +22,12 @@ and verb-policy models continue to supply operation authority.
   admission. No raw content, native session IDs, paths or errors enter output.
 - Unknown prices preserve tokens and null estimates. OTel comparison data cannot
   change canonical log totals without disjoint-scope/event identity evidence.
+- Subscription limits are the newest numeric Codex `rate_limits` observation per
+  host: window length, percent used, reset time and observation time only. Plan,
+  credits, limit names and other limit IDs never leave the host. A failed read
+  keeps the last observation as stale; an observation past a window's reset or
+  three hours old is stale; no observation is missing, never zero or full.
+  Harnesses without an on-disk limits record report unsupported with a fixed reason.
 - Closing the service drains its collectors and fences further publication and
   resources before storage closes; reads never allocate durable identity records.
 
@@ -48,6 +54,10 @@ new platform conformance is claimed.
 - `service.test.ts`: host isolation, rollups, unique complete revalidation, lease
   replacement, stale/missing sources, windows, deterministic IDs without writes,
   estimates, telemetry exclusion, frame limits and shutdown.
+- `limits.test.ts`: Codex limit parsing (null secondary, missing and malformed
+  windows, foreign limit IDs, future timestamps), newest-per-host collection
+  locally and through the SSH program, remote reply validation and staleness;
+  `service.test.ts` covers per-host limit states and failed-read retention.
 - `server/src/rpc/usage.test.ts`: real verb admission, window validation, socket
   revocation and absence of default-runtime routing.
 - `server/src/bridge/herdr-client.test.ts`: cancellation destroys the owned

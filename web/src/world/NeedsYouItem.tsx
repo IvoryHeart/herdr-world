@@ -65,6 +65,8 @@ export function NeedsYouMessage({
   onAttach,
   onDismiss,
   onReviewed,
+  fresh = false,
+  onOpened,
 }: {
   item: NeedsYouItem;
   now: number;
@@ -78,6 +80,10 @@ export function NeedsYouMessage({
   onAttach?: AskAttachmentUpload;
   onDismiss(): Promise<string | null>;
   onReviewed(stop: string): Promise<boolean>;
+  /** Arrived while the owner was away and not opened since: a "new" dot. */
+  fresh?: boolean;
+  /** The owner's own input on the item opens it, so its dot goes. */
+  onOpened?(): void;
 }) {
   const { leaf } = item;
   const name = itemName(item);
@@ -147,8 +153,18 @@ export function NeedsYouMessage({
     <article
       className={`needs-you-item is-${item.kind}${focused ? " is-focused" : ""}`}
       data-needs-you-item={item.key}
-      aria-label={`${who}: ${item.kind === "asks" ? "asks you" : item.kind === "needs" ? "needs you" : "done, not reviewed"}`}
+      aria-label={`${fresh ? "New: " : ""}${who}: ${item.kind === "asks" ? "asks you" : item.kind === "needs" ? "needs you" : "done, not reviewed"}`}
+      {...(fresh && onOpened
+        ? { onPointerDown: onOpened, onKeyDown: onOpened }
+        : {})}
     >
+      {fresh ? (
+        <span
+          className="needs-you-new"
+          title="New since you left"
+          aria-hidden="true"
+        />
+      ) : null}
       {item.kind === "asks" ? (
         <NeedsYouAsk
           ask={item.ask}

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { binBusClock, binClockLabel, type WorldBin } from "../bin/binStore";
+import { binBusClock, type WorldBin } from "../bin/binStore";
 import { openWorldBin } from "../bin/worldBinEvents";
 import { useWorldBin, worldBinStore } from "../bin/useWorldBin";
 import {
@@ -11,9 +11,13 @@ import {
   townBusOpacity,
   townBusRoute,
   townBusTimeline,
+  townRiderFirstOuting,
+  townRiderOuting,
   townRiderWalk,
+  townStopClock,
   type TownBinRider,
   type TownBusRoute,
+  type TownRiderOuting,
 } from "./townBus";
 import { createTownLookResolver } from "./townAppearance";
 import { TOWN_AGENT_SCALE, type TownLayout } from "./townLayout";
@@ -27,10 +31,14 @@ import {
 } from "./townSprites";
 import "./townBus.css";
 
-/** An entry this page first saw longer ago has already walked to its stop. */
-const WALKED_MS = 15_000;
 /** A rider steps aboard this long after the bus has stopped for it. */
 const BOARD_S = 1.5;
+
+/**
+ * Bin entries this page has shown outside, across Town's mounts: one binned
+ * on Board walks from its door the first time Town shows it, not again.
+ */
+const shownOutside = new Set<string>();
 
 /**
  * The bin as Town shows it: the agents it takes out of their rooms (`away`,
@@ -79,16 +87,6 @@ const SPRITE = { width: 14, height: 20 };
 /** Seats shown in the bus's windows: upstairs, then downstairs. */
 const SEATS = [4, 3] as const;
 
-/** A waiting rider's walk, from when its actor was seen out of the door. */
-type Walk = { out: number | null };
-
-/** What a stop's clock reads: the next bus, or the one at the stops now. */
-function stopClock(bin: WorldBin, now: number, riding: boolean) {
-  const { elapsed, next } = binBusClock(bin, now);
-  if (elapsed !== null && riding) return bin.bus.stopped ? "stopped" : "due";
-  return binClockLabel(next);
-}
-
 /** A clock that ticks each second while `running`. */
 function useSecondClock(running: boolean) {
   const [now, setNow] = useState(() => performance.now());
@@ -119,7 +117,6 @@ export const TownBusLayer = memo(function TownBusLayer({
   lookOf,
   framed,
   renderer,
-  firstSeen,
 }: {
   bin: WorldBin;
   route: TownBusRoute;
@@ -128,12 +125,11 @@ export const TownBusLayer = memo(function TownBusLayer({
   /** Set to a step the canvas calls on each drawn frame. */
   framed: { current: (() => void) | null };
   renderer: { readonly current: TownRendererHandle | null };
-  firstSeen(id: string): number;
 }) {
   const bus = useRef<HTMLButtonElement>(null);
   const riderRefs = useRef(new Map<string, HTMLElement>());
   const passengerRefs = useRef(new Map<string, HTMLCanvasElement>());
-  const walks = useRef(new Map<string, Walk>());
+  const walks = useRef(new Map<string, TownRiderOuting>());
   const waiting = new Map<string, TownBinRider[]>();
   for (const rider of riders) {
     const list = waiting.get(rider.stop.key) ?? [];
@@ -156,6 +152,19 @@ export const TownBusLayer = memo(function TownBusLayer({
     () => townBusTimeline(route, new Set(haltKey.split("\n")), bin.bus.trip_ms),
     [route, haltKey, bin.bus.trip_ms],
   );
+  // The next trip halts where those not yet riding wait.
+  const nextKey = [
+    ...new Set(
+      riders.filter((r) => !r.entry.riding).map((rider) => rider.stop.key),
+    ),
+  ]
+    .sort()
+    .join("\n");
+  const nextTimeline = useMemo(
+    () => townBusTimeline(route, new Set(nextKey.split("\n")), bin.bus.trip_ms),
+    [route, nextKey, bin.bus.trip_ms],
+  );
+  const busClock = binBusClock(bin, now);
 
   useEffect(() => {
     let frame = 0;
@@ -163,6 +172,10 @@ export const TownBusLayer = memo(function TownBusLayer({
     const live = new Set(riders.map((rider) => rider.entry.id));
     for (const id of walks.current.keys())
       if (!live.has(id)) walks.current.delete(id);
+    const binned = new Set(
+      [...bin.entries, ...bin.closing].map((entry) => entry.id),
+    );
+    for (const id of shownOutside) if (!binned.has(id)) shownOutside.delete(id);
     const tick = () => {
       frame = 0;
       const time = performance.now();
@@ -185,17 +198,17 @@ export const TownBusLayer = memo(function TownBusLayer({
         const node = riderRefs.current.get(id);
         const canvas = node?.querySelector("canvas");
         if (!node || !canvas) continue;
-        let walk = walks.current.get(id);
-        if (!walk) walks.current.set(id, (walk = { out: null }));
         // Shown once its actor has gone out of the front door (the frame
         // just drawn); from then it walks to its stop.
-        const out = handle
-          ? handle.actorPosition(rider.agentKey) === null
-          : false;
-        if (!out) walk.out = null;
-        else if (walk.out === null)
-          walk.out =
-            !still && time - firstSeen(id) < WALKED_MS ? time : -Infinity;
+        const walk = townRiderOuting(
+          walks.current.get(id) ?? townRiderFirstOuting(shownOutside.has(id)),
+          handle ? handle.actorPosition(rider.agentKey) === null : null,
+          time,
+          still,
+        );
+        walks.current.set(id, walk);
+        const out = walk.out !== null;
+        if (out) shownOutside.add(id);
         if (node.hasAttribute("data-out") !== out)
           node.toggleAttribute("data-out", out);
         const pose = townRiderWalk(
@@ -235,7 +248,7 @@ export const TownBusLayer = memo(function TownBusLayer({
       framed.current = null;
       cancelAnimationFrame(frame);
     };
-  }, [bin, route, riders, timeline, lookOf, framed, renderer, firstSeen]);
+  }, [bin, route, riders, timeline, lookOf, framed, renderer]);
 
   const [upstairs, downstairs] = SEATS;
   const seats = [
@@ -262,11 +275,13 @@ export const TownBusLayer = memo(function TownBusLayer({
         const queue = waiting.get(stop.key) ?? [];
         const count = queue.length;
         const clock = count
-          ? stopClock(
-              bin,
-              now,
-              queue.some((rider) => rider.entry.riding),
-            )
+          ? townStopClock({
+              ...busClock,
+              stopped: bin.bus.stopped,
+              riding: queue.some((rider) => rider.entry.riding),
+              halt: timeline.halts.get(stop.key),
+              nextHalt: nextTimeline.halts.get(stop.key),
+            })
           : null;
         const shown = Math.min(count, TOWN_STOP_QUEUE);
         return [

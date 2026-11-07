@@ -200,13 +200,23 @@ hosts stay usable.
 3. Look at reception, at the top of each building, for blocked agents waiting
    for input, oldest first. Finished agents also wait there until you open
    their terminal or mark that completion reviewed, then join idle agents at
-   the bar in the building's bottom corner. These locations visualize
+   the bar in the building's bottom corner. When the queue is full, the rest
+   crowd the lobby and grumble, then nap on the floor after about 90 seconds;
+   the front of the crowd takes the next free spot. These locations visualize
    status; they do not move the underlying pane or change its host. For the
    whole picture, the Town board counts every building's agents, quiet ones
-   included; press **Summary** on it (on a phone, tap the
+   included. Its **FUEL** gauges show how much of each Codex subscription
+   window is left (amber and **low** under 15 %); hover or tap one for its reset
+   time and how old the numbers are. Claude reads **not available**, since
+   Claude Code saves no record of how much of its limits is used. Press **Summary** on the board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
-   rooms with their counts, and spend. Answer a question from its offered
+   rooms with their counts and its subscription limits, and spend. When you come back after 30 minutes
+   or more away, the board sign starts with **Since you left**: what is new
+   for you, what finished and what merged while you were away. Each line
+   opens **Needs you** at that item, which carries a "new" dot (the merged
+   line opens **Needs you** itself); **✕** clears
+   the recap. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound
@@ -436,12 +446,21 @@ Opening a finished agent's terminal also clears its reception stop; neither acti
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
 
-To close an agent you no longer need, drag it onto the **bin** icon at the
+To close an agent you no longer need, drag it onto the **bin** at the
 bottom of Town or Board, or onto a Town bus stop; or open its window and choose
-**Put in bin** from **⋯** (this also works from Desk). Nothing closes yet: in
+**Put in bin** from **⋯** (this also works from Desk). The bin floats at the
+bottom of the screen and lights up while you drag, so on a phone a short drag
+is enough wherever you have scrolled; the town holds still while you rest on
+it. Nothing closes yet: in
 Town the agent walks out of the front door to the nearest bus stop, a London
-stop with a red roundel at a road crossing. A small board over the waiting
-agents, and the bin, show the time to the next bus. Every four minutes a red double-decker comes in, slows to each stop where
+stop with a red roundel at a road crossing, whichever you dropped it on (an
+agent you binned on Board walks out too the first time you open Town). Its
+seat fades into the carpet and crumbles, so the desk reads as going; when
+every agent at a desk is binned the whole desk fades. A
+small board over the waiting agents counts down to the bus reaching that stop
+and reads **due** a few seconds before it pulls in; Town's bin shows the time
+to the next bus. Elsewhere there is no bus: on Board the bin reads **Cleaning
+up** and how many, and its tray says when they close. Every four minutes a red double-decker comes in, slows to each stop where
 someone waits, stands there about ten seconds while they board (you can see
 them in its windows), then speeds up
 and drives off the map; only then does World close their agents. Changed your

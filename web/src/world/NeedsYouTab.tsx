@@ -35,6 +35,8 @@ import {
 import { itemName, NeedsYouMessage } from "./NeedsYouItem";
 import { askAttachmentUpload } from "./askAttachments";
 import { preloadWorkspaceInspector } from "./inspectorPreload";
+import { sharedPresence, useOwnerPresence } from "./presence";
+import { arrivedWhileAway } from "./sinceYouLeft";
 import "./needsYouTab.css";
 
 /**
@@ -372,6 +374,15 @@ export function NeedsYouList({
   const asks = useWorldAsks(asksStore);
   const work = useReviewedWork(deskStore);
   const all = needsYouItems(world, asks, (leaf) => work.toReview(leaf, now));
+  // What arrived while the owner was away keeps a "new" dot until opened.
+  const presence = useOwnerPresence();
+  const fresh = new Set(
+    presence.away
+      ? arrivedWhileAway(presence.away, all, work.stoppedAt)
+          .map((item) => item.key)
+          .filter((key) => !presence.away!.opened.includes(key))
+      : [],
+  );
   const [page, setPage] = useState({ start: 0, follow: true });
   const [pagedFor, setPagedFor] = useState(request.sequence);
   if (pagedFor !== request.sequence) {
@@ -438,6 +449,8 @@ export function NeedsYouList({
           now={now}
           focused={item.key === focused}
           stop={item.kind === "asks" ? null : work.stopOf(item.leaf)}
+          fresh={fresh.has(item.key)}
+          onOpened={() => sharedPresence().opened(item.key)}
           onChat={onChat}
           onOpenTerminal={onOpenTerminal}
           onAnswer={async (text) => {

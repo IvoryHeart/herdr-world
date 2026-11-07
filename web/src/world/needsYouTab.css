@@ -43,6 +43,16 @@
 .needs-you-item.is-focused {
   border-color: var(--accent);
 }
+/* Arrived while the owner was away, until opened. */
+.needs-you-new {
+  position: absolute;
+  top: 6px;
+  left: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 .needs-you-item.is-answered {
   color: var(--muted);
   font-size: 12px;

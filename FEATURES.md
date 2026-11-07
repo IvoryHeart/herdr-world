@@ -67,18 +67,50 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     items), **Done** (finished) and **Quiet** agents. A line under the counts
     gives every agent in the town and its buildings (and any of unknown
     status). It shows spend when a metrics provider
-    is configured. Its **Summary** button, or on a phone the compact chip under
+    is configured. Under **FUEL**, a gauge per harness with subscription-limit
+    data (today Codex, from its session logs) shows a short bar per window
+    (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
+    says **low**. Hover, focus or tap a gauge for each reset time, how long ago
+    the numbers were seen, and their source. Old numbers read **stale** with no
+    level; with several hosts the board shows the one with the least left.
+    Claude reads **not available**; hover, focus or tap it for the reason. On a
+    phone the compact chip adds the lowest percent left. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
-    with its counts (tap a room to go there), and spend per model ("No cost
+    with its counts (tap a room to go there) and its subscription limits
+    (each window's percent used, reset time, source and age; stale or missing
+    labelled; Claude shows why its limits are not available), and spend per model ("No cost
     data" without a provider). Press **Summary** again to restore its minimized
     window or bring it to the front.
+  - **Since you left**: after 30 minutes or more away (no visible World tab
+    with input, on any device using this World service), the Town board sign
+    starts with "Since 11:40 · away 3 h ✕" and up to four lines, most
+    important first: new questions and newly blocked agents ("2 new for
+    you"), who asked ("1 new question from builder"), finished work still to
+    review ("5 finished"), and, with the GitHub source configured, pull
+    requests merged meanwhile. Each line opens **Needs you** at its first item
+    (the merged line, which names no item there, opens **Needs you** itself),
+    where everything that arrived while you were away has a small "new" dot
+    until you click or type in it. The recap only counts what still waits, so
+    answering and reviewing shrink it; **✕** clears its lines on this browser
+    without touching any item, until your next return. A phone shows it as one
+    line under the summary chip ("Since 11:40: 2 for you, 5 finished ›"),
+    which opens **Needs you**. Calm motion shows it without animation. The
+    service remembers your last sighting in memory; after a service restart,
+    each browser's own last sighting decides.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
+  - When reception's queue is full, the rest crowd the lobby beside it in the
+    same order, grumbling with a `#@!` bubble; after about 90 seconds a
+    grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
+    the front of the crowd, and the others move up. Under calm motion the
+    crowd stands still, still grumbling or napping. An agent whose state is
+    unknown sits at its desk scratching its head under a purple `??` instead
+    of dozing.
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right.
   - The **town center** stands at the top of the map, centred over the
@@ -304,8 +336,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;
     nothing closes yet. In Town it walks out of its building's front door to
     the London bus stop (red roundel) nearest its room, the same character
-    walking as it does indoors; there is a stop at every road crossing, and a
-    countdown board over those waiting shows the time to the next bus. A red
+    walking as it does indoors, whether it was dropped on the bin or a stop
+    (one binned on Board walks out the first time Town shows it); its seat
+    fades into the carpet and crumbles, the whole desk when all its agents
+    are binned;
+    there is a stop at every road crossing, and a countdown board over those
+    waiting counts down to the bus reaching that stop (**due** a few seconds
+    before it pulls in). The bin floats at the bottom of the screen and
+    lights up during a drag, so a phone needs only a short drag, and the town
+    does not scroll while the drag rests on it. A red
     double-decker comes every four minutes on a
     fixed schedule when someone is waiting: it comes in, slows to each stop
     with riders, waits about ten seconds, speeds up and drives off the map,
@@ -320,7 +359,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Close now**. A pinned desk's or pinned tab's last agent cannot go
     in the bin, and its close never takes a pinned tab's last pane. Closes are qualified by host
     and runtime: a host that restarts keeps its agents, and restarting World
-    drops the bin without closing anything.
+    drops the bin without closing anything. Only Town speaks of the bus:
+    elsewhere the bin reads **Cleaning up** and how many, and its tray says
+    when they close.
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
     reception and Board's host label. When the local connection is failing and

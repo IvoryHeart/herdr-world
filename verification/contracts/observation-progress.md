@@ -33,6 +33,30 @@ The independently accepted executable alternative is the actual `WorldSnapshotSe
   workload or machine. Retirement/construction and ordinary-task-turn regressions
   separately retain authority and control responsiveness evidence.
 
+## Terminal repaint activity
+
+Terminal repaints are activity only when consecutive same-pane payloads differ
+solely in `revision`, `terminal_title`, `terminal_title_stripped` or `scroll`.
+Allowed: such activity advances the revision, dirties the cache and admits the
+current-generation in-flight read. Forbidden: activity hides a real change in
+either event order, a first update counts as activity, or comparison history
+survives another event or subscription ACK.
+
+`server/src/utils/herdr-events.test.ts` checks repaint and semantic-field
+boundaries, unknown/removed fields, malformed payloads, per-pane isolation and
+history resets. Nested object key order is insignificant; changed nested values
+and reordered arrays remain hard invalidations.
+`server/src/connections/runtime.test.ts` checks classification forwarding and the
+actual subscription ACK reset. The controlled reads in
+`server/src/world/snapshot-activity.test.ts` check actionability, revision
+advancement, cache reacquisition after activity both during and outside a read,
+and rejection with a real invalidation in either order. Interleaved two-pane
+event streams also exercise the classifier into snapshot admission with reordered
+metadata and with a changed metadata value. These direct event/read
+schedules are the selected evidence for this classification boundary; existing
+lease, observation-base and browser-epoch models retain their authority claims.
+No new transport, lifecycle or all-schedules progress claim is made.
+
 ## Assumptions and excluded claims
 
 The event loop must eventually run timers and cooperative turns. Projection is

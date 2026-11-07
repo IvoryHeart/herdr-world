@@ -166,10 +166,18 @@ export function useReviewedWork(
     (leaf: WorldLeafObject, stop?: string) => markReviewed(store, leaf, stop),
     [store],
   );
+  // When the agent stopped (blocked or finished): the service's stop, else
+  // Herdr's last activity.
+  const stoppedAt = useCallback(
+    (leaf: WorldLeafObject) =>
+      recordOf(leaf)?.stopped_at ?? leaf.lastActivityAt ?? null,
+    [recordOf],
+  );
   return {
     reviewed,
     stopOf,
     toReview,
+    stoppedAt,
     mark,
     verified: shown.verified,
   };
