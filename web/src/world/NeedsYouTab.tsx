@@ -451,7 +451,9 @@ export function NeedsYouList({
             return problem;
           }}
           onAttach={
-            item.kind === "asks" ? attachmentUpload(item.leaf) : undefined
+            item.kind === "asks"
+              ? attachmentUpload(item.ask, item.leaf)
+              : undefined
           }
           onDismiss={() =>
             item.kind === "asks"

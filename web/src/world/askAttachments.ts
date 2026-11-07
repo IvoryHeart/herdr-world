@@ -6,6 +6,7 @@ import {
   type UploadProgress,
 } from "../terminalImageUpload";
 import { leafOwner } from "./conversationRead";
+import type { WorldAsk } from "./worldAsks";
 import type { WorldLeafObject } from "./worldObject";
 
 /**
@@ -39,11 +40,15 @@ export function answerWithAttachments(text: string, paths: readonly string[]) {
 }
 
 /**
- * Where an answer's files are stored: on the asker's host, through its
- * agent's connection, as Chat stores files; for an asker World has not
- * placed, on the World host (its ready local connection, the default first).
+ * Where an answer's files are stored: on the asker's host, as Chat stores
+ * files. A placed asker's files go through its agent's connection; an asker
+ * whose pane is not placed now (its connection restarted, say) through its
+ * own connection's current runtime, never another host's, so the paths stay
+ * ones it can open. Only an asker World never placed on a connection stores
+ * on the World host (its ready local connection, the default first).
  */
 export function askAttachmentClient(
+  ask: Pick<WorldAsk, "actor">,
   leaf: WorldLeafObject | null,
   connections: readonly ConnectionSummary[] = store.get().connections,
   connect: (id: string, generation: number) => ConnectionClient = (
@@ -52,13 +57,14 @@ export function askAttachmentClient(
   ) => bridge.connection(id, generation),
 ): ConnectionClient | null {
   if (leaf) return leafOwner(leaf);
-  const local = connections
-    .filter(
-      (connection) =>
-        connection.type === "local" && connection.state === "ready",
+  const own = ask.actor.connection_id;
+  const candidates = connections
+    .filter((connection) =>
+      own === undefined ? connection.type === "local" : connection.id === own,
     )
+    .filter((connection) => connection.state === "ready")
     .sort((left, right) => Number(right.is_default) - Number(left.is_default));
-  for (const connection of local) {
+  for (const connection of candidates) {
     const client = connect(connection.id, connection.generation);
     if (client.isCurrent()) return client;
   }
@@ -67,13 +73,14 @@ export function askAttachmentClient(
 
 /** Stores a file for an answer: images as Chat's paste does, others as files. */
 export function askAttachmentUpload(
+  ask: Pick<WorldAsk, "actor">,
   leaf: WorldLeafObject | null,
 ): AskAttachmentUpload {
   return async (file, onProgress) => {
-    const client = askAttachmentClient(leaf);
+    const client = askAttachmentClient(ask, leaf);
     if (!client)
       throw new Error(
-        leaf
+        leaf || ask.actor.connection_id !== undefined
           ? "The asker's host is not connected"
           : "The World host is not connected",
       );
