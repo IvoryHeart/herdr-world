@@ -37,6 +37,7 @@ import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { TownQuestPennant, type TownQuestMark } from "./townQuestPennant";
 import { townReceptionVisitors } from "./townReception";
 import type { TownRendererHandle } from "./townRenderer";
+import type { TownBuildingLayers } from "./townBuildingLayers";
 import type { TownTarget } from "./townTargets";
 import type { TownTeams } from "./townTeams";
 import type { TownVisible } from "./townVisibleHosts";
@@ -115,6 +116,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   renderer,
   pennants,
   signs,
+  layers,
   summary,
   openDeskKey,
   openRoomKey,
@@ -128,6 +130,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   /** The room under the mouse on the canvas: zoomed out, its card is open. */
   openRoomKey: string | null;
   signs: TownBuildingSigns;
+  /** Moves each building's layer with its building (townBuildingLayers.ts). */
+  layers: TownBuildingLayers;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
   onActivateAsk?: (nodeId: string) => void;
@@ -255,6 +259,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         return (
           <div
             key={building.hostKey}
+            ref={layers.ref(building.hostKey)}
             className="town-building-layer"
             data-stale={host?.stale || undefined}
           >

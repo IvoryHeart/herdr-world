@@ -484,5 +484,7 @@ export function createTownDragEffects(ctx: TownDragContext) {
     /** Advance drag effects and dust; true while anything still moves. */
     update: updateDrag,
     clear: clearDrag,
+    /** A desk, agent or room is carried, or landing: the scene changes in place. */
+    active: () => drag !== null,
   };
 }

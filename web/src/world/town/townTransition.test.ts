@@ -1,0 +1,229 @@
+import { expect, test } from "bun:test";
+import { TownBuildingLayers } from "./townBuildingLayers";
+import { TownCamera, townZoomLimits } from "./townCamera";
+import { layoutTown, TOWN_TILE as T, type TownLayout } from "./townLayout";
+import { townBakeKeys } from "./scene/townSceneBake";
+import {
+  TOWN_TRANSITION_SECONDS,
+  townBuildingRect,
+  townEase,
+  townGroundChunks,
+  townMotionPose,
+  townRetiringAlpha,
+  townSceneGaps,
+  type TownDrawnScene,
+  type TownRect,
+} from "./townTransition";
+
+const input = (hosts: string[]) => ({
+  hosts: hosts.map((key, displayOrder) => ({ key, displayOrder })),
+  rooms: hosts.flatMap((hostKey) =>
+    Array.from({ length: 2 }, (_, order) => ({
+      key: `${hostKey}/${order}`,
+      hostKey,
+      order,
+      deskKeys: Array.from({ length: 4 }, (_, i) => `${hostKey}/${order}/${i}`),
+    })),
+  ),
+});
+
+const keysOf = (layout: TownLayout) =>
+  townBakeKeys(
+    {
+      deskColors: new Map(),
+      deskPins: new Map(),
+      placeColors: { hosts: new Map(), rooms: new Map() },
+      hosts: new Map(),
+    } as unknown as Parameters<typeof townBakeKeys>[0],
+    layout,
+  );
+
+/** Everything a layout needs drawn, as a whole frame draws it. */
+function whole(layout: TownLayout): TownDrawnScene {
+  const keys = keysOf(layout);
+  const all: TownRect = {
+    x: 0,
+    y: 0,
+    w: layout.width * T,
+    h: layout.height * T,
+  };
+  return {
+    ground: new Set(townGroundChunks(layout, all).map((chunk) => chunk.key)),
+    buildings: new Map(
+      layout.buildings.map((building) => [
+        building.hostKey,
+        {
+          key: keys.buildings.get(building.hostKey)!,
+          pods: new Set(
+            building.rooms.flatMap((room) =>
+              room.cells.flatMap((cell) =>
+                cell.deskKey ? [cell.deskKey] : [],
+              ),
+            ),
+          ),
+        },
+      ]),
+    ),
+  };
+}
+
+const everything = (layout: TownLayout): TownRect => ({
+  x: -100,
+  y: -100,
+  w: layout.width * T + 200,
+  h: layout.height * T + 200,
+});
+
+test("transitions start where things were drawn and end where they belong", () => {
+  expect(townEase(0)).toBe(0);
+  expect(townEase(1)).toBe(1);
+  expect(townEase(0.5)).toBeCloseTo(0.5);
+  const glide = { dx: 120, dy: -40, enter: false, t: 0 };
+  expect(townMotionPose(glide)).toEqual({ x: 120, y: -40, alpha: 1 });
+  expect(townMotionPose({ ...glide, t: 1 })).toEqual({ x: 0, y: 0, alpha: 1 });
+  const enter = { dx: 0, dy: 0, enter: true, t: 0 };
+  expect(townMotionPose(enter).alpha).toBe(0);
+  expect(townMotionPose({ ...enter, t: 1 }).alpha).toBe(1);
+  // A drawing under its replacement holds until the replacement is mostly
+  // in, so the ground never shows through; a leaving one fades throughout.
+  expect(townRetiringAlpha(0.4, true)).toBe(1);
+  expect(townRetiringAlpha(1, true)).toBe(0);
+  expect(townRetiringAlpha(0.5, false)).toBeCloseTo(0.5);
+  expect(townRetiringAlpha(1, false)).toBe(0);
+});
+
+test("a whole frame has no gaps; a missing chunk, building or desk is one", () => {
+  const { layout } = layoutTown(input(["a", "b", "c"]), "wide");
+  const keys = keysOf(layout);
+  const key = (building: TownLayout["buildings"][number]) =>
+    keys.buildings.get(building.hostKey)!;
+  const view = everything(layout);
+  const drawn = whole(layout);
+  expect(townSceneGaps(layout, view, drawn, key, true)).toEqual([]);
+  // The ground cleared before the new one is painted (the old scene reset).
+  expect(
+    townSceneGaps(layout, view, { ...drawn, ground: new Set() }, key, false),
+  ).toContain("ground 0,0");
+  // A building dropped before its replacement is baked.
+  const [first, second] = layout.buildings;
+  const without = new Map(drawn.buildings);
+  without.delete(first!.hostKey);
+  expect(
+    townSceneGaps(layout, view, { ...drawn, buildings: without }, key, false),
+  ).toEqual([`building ${first!.hostKey}`]);
+  // A building still drawn from an older layout is a gap too.
+  const stale = new Map(drawn.buildings);
+  stale.set(second!.hostKey, { key: "older", pods: null });
+  expect(
+    townSceneGaps(layout, view, { ...drawn, buildings: stale }, key, false),
+  ).toEqual([`building ${second!.hostKey}`]);
+  // Desks drawn without their people and screens, when zoomed in.
+  const bare = new Map(drawn.buildings);
+  bare.set(first!.hostKey, { key: key(first!), pods: new Set() });
+  const missing = townSceneGaps(
+    layout,
+    view,
+    { ...drawn, buildings: bare },
+    key,
+    true,
+  );
+  expect(missing.length).toBeGreaterThan(0);
+  expect(missing.every((gap) => gap.startsWith("desk a/"))).toBe(true);
+  expect(
+    townSceneGaps(layout, view, { ...drawn, buildings: bare }, key, false),
+  ).toEqual([]);
+});
+
+test("only what is in view must be drawn", () => {
+  const { layout } = layoutTown(input(["a", "b", "c"]), "wide");
+  const keys = keysOf(layout);
+  const key = (building: TownLayout["buildings"][number]) =>
+    keys.buildings.get(building.hostKey)!;
+  const [first] = layout.buildings;
+  const view = townBuildingRect(first!);
+  const chunks = new Set(
+    townGroundChunks(layout, view).map((chunk) => chunk.key),
+  );
+  const drawn: TownDrawnScene = {
+    ground: chunks,
+    buildings: new Map([[first!.hostKey, { key: key(first!), pods: null }]]),
+  };
+  const gaps = townSceneGaps(layout, view, drawn, key, false);
+  expect(gaps.filter((gap) => !gap.startsWith("building "))).toEqual([]);
+  // A neighbour whose roof edge meets the view must be drawn as well.
+  for (const gap of gaps)
+    expect(
+      layout.buildings.some(
+        (b) =>
+          gap === `building ${b.hostKey}` &&
+          b !== first &&
+          townBuildingRect(b).x < view.x + view.w,
+      ),
+    ).toBe(true);
+});
+
+test("each building's plaques move and fade with it, and are plain at rest", () => {
+  const layers = new TownBuildingLayers();
+  const node = { style: { transform: "", opacity: "" } };
+  const other = { style: { transform: "", opacity: "" } };
+  layers.ref("a")(node as never);
+  layers.ref("b")(other as never);
+  layers.update((host) =>
+    host === "a" ? { x: -48, y: 0, alpha: 1 } : { x: 0, y: 0, alpha: 0.25 },
+  );
+  expect(node.style).toEqual({
+    transform: "translate(-48.0px, 0.0px)",
+    opacity: "",
+  });
+  expect(other.style).toEqual({ transform: "", opacity: "0.25" });
+  layers.update(() => null);
+  expect(node.style).toEqual({ transform: "", opacity: "" });
+  expect(other.style).toEqual({ transform: "", opacity: "" });
+});
+
+test("the camera glides with the buildings and stays in step with them", () => {
+  const { layout } = layoutTown(input(["a", "b", "c"]), "wide");
+  const viewport = {
+    width: 1440,
+    height: 900,
+    inset: { top: 0, right: 0, bottom: 0, left: 0 },
+  };
+  const camera = new TownCamera();
+  camera.configure(layout, viewport);
+  camera.jumpTo(800, 400, townZoomLimits(layout, viewport).home);
+  const start = { x: camera.x, y: camera.y };
+  camera.glideBy(-160, 32, TOWN_TRANSITION_SECONDS);
+  expect([camera.x, camera.y]).toEqual([start.x, start.y]);
+  expect(camera.flying).toBe(false);
+  // A building gliding from 160 px to its right stays put on screen.
+  const motion = { dx: 160, dy: -32, enter: false, t: 0 };
+  const screen = () => {
+    const pose = townMotionPose(motion);
+    return camera.toScreen(640 + pose.x, 320 + pose.y);
+  };
+  const before = screen();
+  for (let frame = 0; frame < 30; frame += 1) {
+    camera.update(1 / 60);
+    motion.t = Math.min(1, motion.t + 1 / 60 / TOWN_TRANSITION_SECONDS);
+    expect(screen().x).toBeCloseTo(before.x, 3);
+    expect(screen().y).toBeCloseTo(before.y, 3);
+  }
+  expect(camera.moving).toBe(false);
+  expect(camera.x).toBeCloseTo(start.x - 160);
+  expect(camera.y).toBeCloseTo(start.y + 32);
+  // A second change mid-glide carries what was left of the first.
+  camera.glideBy(100, 0, TOWN_TRANSITION_SECONDS);
+  camera.update(TOWN_TRANSITION_SECONDS / 2);
+  camera.glideBy(50, 0, TOWN_TRANSITION_SECONDS);
+  for (let frame = 0; frame < 60; frame += 1) camera.update(1 / 60);
+  expect(camera.x).toBeCloseTo(start.x - 10);
+  // The user's own pan ends a glide; reduced motion never glides.
+  camera.glideBy(100, 0, TOWN_TRANSITION_SECONDS);
+  camera.panBy(0, 0);
+  expect(camera.moving).toBe(false);
+  camera.reducedMotion = true;
+  const x = camera.x;
+  camera.glideBy(40, 0, TOWN_TRANSITION_SECONDS);
+  expect(camera.x).toBeCloseTo(x + 40);
+  expect(camera.moving).toBe(false);
+});

@@ -22,6 +22,15 @@ export type TownRendererDiagnostics = {
   sceneRenders: number;
   /** Single buildings baked again after their colours, pins or desks changed. */
   buildingBakes: number;
+  /** Buildings that glided, faded in or faded out after a topology change. */
+  transitions: number;
+  /**
+   * Frames drawn after a topology change with part of the scene in view
+   * missing (ground, a building or a desk); always 0 (townTransition.ts).
+   */
+  topologyGaps: number;
+  /** What the last such frame was missing. */
+  lastTopologyGap: string | null;
   /** Navigation grids built (unchanged buildings keep theirs). */
   navigationsBuilt: number;
   /** Agents reconciled by actor syncs (unchanged hosts are skipped). */
@@ -83,6 +92,9 @@ export function diagnostics(): TownRendererDiagnostics {
     frames: 0,
     sceneRenders: 0,
     buildingBakes: 0,
+    transitions: 0,
+    topologyGaps: 0,
+    lastTopologyGap: null,
     navigationsBuilt: 0,
     actorsReconciled: 0,
     hostSyncs: {},

@@ -49,10 +49,12 @@ export type TownSceneFrame = {
   layout: TownLayout;
   state: TownSceneState;
   dirty: TownSceneDirty;
+  /** What each building is baked from now. */
+  bakeKeys: TownBakeKeys;
 };
 
 const NONE: ReadonlySet<string> = new Set();
-const CLEAN: TownBakeDirty = { scene: false, buildings: NONE };
+const CLEAN: TownBakeDirty = { scene: false, buildings: NONE, removed: NONE };
 
 /** Tracks what one renderer has applied, and what it must apply next. */
 export class TownSceneDiff {
@@ -122,6 +124,7 @@ export class TownSceneDiff {
       layout,
       state,
       dirty: { first, scene, bake, actors },
+      bakeKeys: this.bakeKeys!,
     };
   }
 }

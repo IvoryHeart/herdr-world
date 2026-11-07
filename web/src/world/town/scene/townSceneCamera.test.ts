@@ -59,7 +59,7 @@ function setup(
 
 /** Let a flight finish, as the renderer's frames would. */
 function settle(camera: TownCamera) {
-  for (let frame = 0; frame < 600 && camera.flying; frame += 1)
+  for (let frame = 0; frame < 600 && camera.moving; frame += 1)
     camera.update(1 / 60);
   camera.update(1 / 60);
   expect(camera.flying).toBe(false);
@@ -386,9 +386,14 @@ test("rooms that move under a still camera keep the room in view where it was", 
   camera.jumpTo((last.x + last.w / 2) * T, (last.y + last.h / 2) * T, 2);
   const before = camera.toScreen((last.x + 1) * T, (last.y + 1) * T);
   reasons.length = 0;
+  const from = { x: camera.x, y: camera.y };
   view.follow(grown, viewport);
-  const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
   expect(reasons).toEqual(["reflow"]);
+  // The camera glides with the room rather than jumping.
+  expect([camera.x, camera.y]).toEqual([from.x, from.y]);
+  expect(camera.moving).toBe(true);
+  settle(camera);
+  const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
   expect(after.x).toBeCloseTo(before.x, 0);
   expect(after.y).toBeCloseTo(before.y, 0);
 });
@@ -485,6 +490,19 @@ test("a town viewed whole is framed again when it grows, then fits a narrower vi
     WIDE,
   );
   view.follow(grown, viewport);
+  // It flies to the new home framing with the buildings, and is home there.
+  expect(camera.flying).toBe(true);
+  settle(camera);
+  expect(view.atHome()).toBe(true);
+  // A change while it flies frames the newest town.
+  const shrunk = layoutFor(
+    office({ alpha: working(2), beta: working(3) }),
+    WIDE,
+  );
+  view.follow(shrunk, viewport);
+  camera.update(0.05);
+  view.follow(grown, viewport);
+  settle(camera);
   expect(view.atHome()).toBe(true);
   // Opening a panel narrows the view; the home view fits the town again, so
   // every building stays on screen.
