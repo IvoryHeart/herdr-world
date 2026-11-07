@@ -261,7 +261,11 @@ test.skipIf(!chrome)(
           );
         }),
         "World terminal handoff",
-        resumeCaptureDir ? 160_000 : 120_000,
+        // The fixture makes about 330 bounded waits and runs ~50 s locally,
+        // but 83-115 s on CI runners (scripts/world-browser-timings.json), so
+        // a 120 s deadline failed on ordinary runner variance. A stalled step
+        // still fails sooner: each wait gives up after 16 s and reports.
+        resumeCaptureDir ? 220_000 : 180_000,
       );
       if (Array.isArray(observed) && observed.length)
         console.info("World handoff failure detail", JSON.stringify(observed));
@@ -273,5 +277,5 @@ test.skipIf(!chrome)(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  150_000 + BROWSER_STARTUP_TIMEOUT_MS,
+  250_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );
