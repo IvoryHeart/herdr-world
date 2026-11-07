@@ -20,7 +20,7 @@ import {
 
 /**
  * Town's expenses boards (#213): the city billboard by the town center and a
- * board beside each building's reception. A read model over the service's
+ * building's expenses on its reception board. A read model over the service's
  * harness usage (`world.usage.get`, docs/usage.md) with its honesty rules:
  *
  * - Totals are the service's own projections, one rollup level per figure.
@@ -90,7 +90,7 @@ export type TownHostExpenses =
       coverage: TownExpenseCoverage;
     };
 
-/** A building's board lists its three costliest rooms. */
+/** A reception's expenses list its three costliest rooms. */
 export const TOWN_TOP_ROOMS = 3;
 
 function figure(total: UsageTotal, counted: readonly UsageEntity[]) {
@@ -204,7 +204,7 @@ const spend = (a: TownExpenseRoom, b: TownExpenseRoom, byCost: boolean) =>
   (byCost ? b.total.costUsd! - a.total.costUsd! : 0) ||
   b.total.tokens - a.total.tokens;
 
-/** One host's expenses, for the board beside its reception. */
+/** One host's expenses, for its reception board. */
 export function townHostExpenses(
   state: TownCurrentUsage,
   connectionId: string,

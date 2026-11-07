@@ -1,8 +1,8 @@
-/* Expenses boards (TownExpenseBoards.tsx): the city billboard by the first street
-   and a board beside each reception, in Town's pixel skin. A dark board in a
-   wooden frame (the plaque's wood) on two posts; the folded phone sign is a
-   room plaque's wooden plate. Popovers portal out of Town, so they use
-   literal colours. */
+/* Expenses (TownExpenseBoards.tsx), in Town's pixel skin: the city billboard by
+   the first street, a dark board in a wooden frame (the plaque's wood) on two
+   posts, and each building's expenses as a section of its reception board.
+   The folded phone sign is a room plaque's wooden plate. Popovers portal out
+   of Town, so they use literal colours. */
 
 .town-world .town-expenses {
   position: absolute;
@@ -21,11 +21,24 @@
   transform-origin: 50% 100%;
 }
 
-/* A building's board stands just right of its reception, inside the
-   reception's own scale. */
-.town-reception > .town-expenses-host {
-  left: calc(100% + 10px);
-  bottom: 0;
+/* A building's expenses: the reception board's last section, under a rule. */
+.town-reception-expenses {
+  display: grid;
+  gap: 3px;
+  max-width: 260px;
+  padding-top: 6px;
+  border-top: 1px dashed #4b5568;
+  font-size: 11px;
+}
+
+.town-reception-expenses-title {
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: #ffd166;
 }
 
 .town-world[data-level="desk"] .town-expenses-city {

@@ -214,10 +214,11 @@ export function TownCityBillboard({
 }
 
 /**
- * A building's expenses board beside its reception: the host's totals today
- * and its costliest rooms. On a phone it folds to a sign on the reception.
+ * A building's expenses, part of its reception board: the host's totals today
+ * and its costliest rooms under the queue. On a phone, where the reception is
+ * compact, they fold to a sign in its title that opens them.
  */
-export function TownHostExpensesBoard({
+export function TownReceptionExpenses({
   connectionId,
   hostLabel,
   roomLabel,
@@ -232,18 +233,12 @@ export function TownHostExpensesBoard({
   store?: TownUsageStore;
 }) {
   const expenses = townHostExpenses(useTownExpensesUsage(store), connectionId);
-  return (
-    <Board
-      folded={folded}
-      label={`${hostLabel} expenses`}
-      summary={spokenText(expenses)}
-      sign={signText(expenses)}
-      className="town-expenses-host"
-    >
-      <header className="town-expenses-title">
-        <span>EXPENSES</span>
-      </header>
-      <Headline span="today" expenses={expenses} />
+  const label = `${hostLabel} expenses`;
+  const details = (
+    <>
+      <p className="town-expenses-headline">
+        <b>{spokenText(expenses)}</b>
+      </p>
       {expenses.status === "ready" && expenses.rooms.length ? (
         <ol className="town-expenses-rooms" aria-label="Top rooms by spend">
           {expenses.rooms.map((room) => (
@@ -267,6 +262,46 @@ export function TownHostExpensesBoard({
           notes={townCoverageNotes(expenses.coverage, expenses.unattributed)}
         />
       ) : null}
-    </Board>
+    </>
+  );
+  if (!folded)
+    return (
+      <section
+        className="town-reception-expenses"
+        role="group"
+        aria-label={label}
+      >
+        <header className="town-reception-expenses-title">
+          EXPENSES TODAY
+        </header>
+        {details}
+      </section>
+    );
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="town-expenses-sign"
+          aria-label={`${label}: ${spokenText(expenses)}. Open`}
+          title={label}
+        >
+          <Coins size={12} aria-hidden="true" />
+          <span>{signText(expenses)}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="town-expenses-popover"
+        collisionPadding={8}
+        aria-label={label}
+      >
+        <div className="town-expenses-panel">
+          <header className="town-expenses-title">
+            <span>EXPENSES TODAY</span>
+          </header>
+          {details}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

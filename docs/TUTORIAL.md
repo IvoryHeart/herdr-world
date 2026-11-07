@@ -213,8 +213,8 @@ hosts stay usable.
    the same marks. Counts, Board and Needs you are
    unchanged, and World keeps the filter for every browser. Zoomed in to
    desks the boards are put away: tap the reception lobby to bring its board
-   and sign back. Beside each reception, the building's **Expenses** board
-   shows that host's tokens and estimated cost today and its three costliest
+   and sign back. Each reception board ends with the building's **Expenses
+   today**: that host's tokens and estimated cost and its three costliest
    rooms; the **City expenses** billboard by the top street, beside the town
    center, shows the whole World, with **Today** and **7 days** buttons.
    Without a price table they show tokens and "no price table"; a host whose

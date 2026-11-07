@@ -18,7 +18,7 @@ import {
   type TownPlaceCardContent,
 } from "./TownRoomPlaque";
 import { TownDeskTitle } from "./TownDeskTitle";
-import { TownCityBillboard, TownHostExpensesBoard } from "./TownExpenseBoards";
+import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
@@ -241,7 +241,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     usage: { kind: place.kind, target },
   });
   const folded = layout.formFactor === "narrow";
-  /** A host's room by its workspace, for its expenses board. */
+  /** A host's room by its workspace, for its reception's expenses. */
   const roomLabel =
     (hostKey: string) => (workspaceId: string, generation: number) => {
       for (const room of model.rooms.values())
@@ -384,7 +384,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                   roomActions={roomActions}
                 />
                 {host && folded ? (
-                  <TownHostExpensesBoard
+                  <TownReceptionExpenses
                     connectionId={host.connectionId}
                     hostLabel={host.displayLabel}
                     roomLabel={roomLabel(building.hostKey)}
@@ -464,7 +464,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                 }
               />
               {host && !folded ? (
-                <TownHostExpensesBoard
+                <TownReceptionExpenses
                   connectionId={host.connectionId}
                   hostLabel={host.displayLabel}
                   roomLabel={roomLabel(building.hostKey)}

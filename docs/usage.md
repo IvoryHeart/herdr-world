@@ -3,7 +3,7 @@
 World collects token usage on demand from supported harness session files by
 default. The service owns the numeric records; Town and Board can both read
 `world.usage.get`. Town's expenses boards read it: the city billboard (today
-or 7 days), a board beside each reception and the Economy line on room and
+or 7 days), the expenses on each reception board and the Economy line on room and
 table cards; see [Town expenses boards](#town-expenses-boards). Existing Town
 Summary spend controls still use their configured metrics provider.
 
@@ -149,11 +149,11 @@ so a new reading reaches the sign within about a minute. A harness reported as `
 Town reads `world.usage.get` for its boards (`web/src/world/town/townExpenses.ts`):
 
 - The city billboard shows `total` for the chosen window, plus `unattributed`
-  (usage tied to no pane). A building's board shows that host's `host` rollup
+  (usage tied to no pane). A building's reception board shows that host's `host` rollup
   and its three costliest `workspace` rollups (by cost when all are priced,
   otherwise by tokens), plus the host's entities with no workspace as
   unattributed. Each figure is one rollup level; levels are never added.
-- A host's board uses the connection's newest runtime generation in the read
+- A reception's expenses use the connection's newest runtime generation in the read
   and never another connection's numbers.
 - Stale entities stay out of the figures; the board says "stale data left
   out". A partial source or a truncated read says "partial".

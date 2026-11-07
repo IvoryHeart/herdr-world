@@ -10,7 +10,7 @@ import {
   townHostExpenses,
   townUsd,
 } from "./townExpenses";
-import { TownCityBillboard, TownHostExpensesBoard } from "./TownExpenseBoards";
+import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
 import {
   TOWN_USAGE_MAX_AGE_MS,
   TownUsageStore,
@@ -266,7 +266,7 @@ test("the boards render the figures, rooms and what they leave out", async () =>
   expect(billboard).toContain("no data from 1 host");
 
   const board = renderToStaticMarkup(
-    createElement(TownHostExpensesBoard, {
+    createElement(TownReceptionExpenses, {
       connectionId: "studio",
       hostLabel: "Studio",
       roomLabel: (id) => (id === "gamma" ? null : id.toUpperCase()),
@@ -275,6 +275,10 @@ test("the boards render the figures, rooms and what they leave out", async () =>
     }),
   );
   expect(board).toContain('aria-label="Studio expenses"');
+  // Part of the reception board: a section under its queue, not a board of its own.
+  expect(board).toContain('class="town-reception-expenses"');
+  expect(board).toContain("EXPENSES TODAY");
+  expect(board).not.toContain("town-expenses-posts");
   expect(board).toContain("<span>ALPHA</span>");
   expect(board).toContain("<span>BETA</span>");
   expect(board).toContain("<span>closed room</span>");
@@ -282,7 +286,7 @@ test("the boards render the figures, rooms and what they leave out", async () =>
   expect(board).toContain("45.5k unattributed");
 
   const missing = renderToStaticMarkup(
-    createElement(TownHostExpensesBoard, {
+    createElement(TownReceptionExpenses, {
       connectionId: "archive",
       hostLabel: "Archive",
       roomLabel: () => null,
@@ -362,7 +366,7 @@ test("a read kept through failed refreshes goes stale, and never past UTC midnig
   expect(billboard).toContain("Today</span> · <b>out of date</b>");
   expect(billboard).not.toContain("tokens");
   const sign = renderToStaticMarkup(
-    createElement(TownHostExpensesBoard, {
+    createElement(TownReceptionExpenses, {
       connectionId: "studio",
       hostLabel: "Studio",
       roomLabel: () => "ALPHA",

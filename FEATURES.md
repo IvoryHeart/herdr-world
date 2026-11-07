@@ -126,8 +126,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Town shows what the crew spends. The **City expenses** billboard stands
     by the top street across from the town center: the whole World's tokens
     and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a
-    **Today** / **7 days** toggle. Each building's **Expenses** board stands
-    beside its reception: the host's tokens and cost today and its three
+    **Today** / **7 days** toggle. Each building's reception board ends with
+    its **Expenses today**: the host's tokens and cost and its three
     costliest rooms. Figures come from [harness usage](./docs/usage.md). The
     boards never show a missing number as zero: without a price table they
     show tokens and say "no price table" (or "some models unpriced"); a host
@@ -137,7 +137,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     data. The boards re-read usage about once a minute and when the page
     regains focus; when re-reads fail, the last figures stay for at most five
     minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
-    center's corner and each building's board to a sign on its reception;
+    center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
     reception.
   - When reception's queue is full, the rest crowd the lobby beside it in the
