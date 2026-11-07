@@ -8,6 +8,7 @@ import {
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
 import { handleBinRpc } from "./bin";
+import { ownerPresence } from "./presence";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -61,6 +62,10 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     } catch {
       sendError("world-usage-error", new Error("World usage is unavailable"));
     }
+    return;
+  }
+  if (method === "world.presence.seen") {
+    sendReply({ id, result: ownerPresence.seen() }, method);
     return;
   }
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);

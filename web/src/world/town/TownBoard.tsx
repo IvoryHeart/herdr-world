@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Fuel } from "lucide-react";
 import {
   formatOfficeCost,
@@ -28,10 +28,13 @@ export function TownBoard({
   counts,
   observability,
   onOpenSummary,
+  sinceYouLeft,
 }: {
   counts: TownSummary["counts"];
   observability: OfficeObservability;
   onOpenSummary?: () => void;
+  /** "Since you left" after a return: on the sign, and under the phone chip. */
+  sinceYouLeft?: { board: ReactNode; chip: ReactNode };
 }) {
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
@@ -88,6 +91,7 @@ export function TownBoard({
           </span>
         ) : null}
       </button>
+      {sinceYouLeft?.chip}
       <div
         id="town-board"
         className="town-board"
@@ -108,6 +112,7 @@ export function TownBoard({
             </button>
           ) : null}
         </div>
+        {sinceYouLeft?.board}
         <TownBoardCounts counts={counts} />
         <p className="town-board-population">
           {population}

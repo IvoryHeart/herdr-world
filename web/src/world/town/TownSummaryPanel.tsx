@@ -32,6 +32,7 @@ import {
   type TownSummaryCounts,
   type TownSummaryItem,
 } from "./townSummary";
+import { TownSinceYouLeft } from "./TownSinceYouLeft";
 import {
   townFuelGauge,
   townHarnessName,
@@ -361,6 +362,8 @@ export function useTownSummary({
   openTerminal(nodeId: string): void;
   open(): void;
   window: ReactNode;
+  /** "Since you left" after a return, for the board sign and phone chip. */
+  sinceYouLeft: { board: ReactNode; chip: ReactNode };
 } {
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -425,12 +428,20 @@ export function useTownSummary({
     setFocusKey((key) => key + 1);
     setDeliveryFocus((key) => key + 1);
   }, []);
+  const sinceYouLeft = useMemo(
+    () => ({
+      board: <TownSinceYouLeft world={world} variant="board" />,
+      chip: <TownSinceYouLeft world={world} variant="chip" />,
+    }),
+    [world],
+  );
   const open = useCallback(() => {
     townUsageStore().request();
     setOpen(true);
     setFocusKey((key) => key + 1);
   }, []);
   return {
+    sinceYouLeft,
     summary,
     deliveries,
     deliveryCount,
