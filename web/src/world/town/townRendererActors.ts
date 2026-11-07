@@ -28,6 +28,8 @@ type ActorView = { sprite: Sprite; shadow: Graphics; look: TownLook };
 
 /** Grumbling frames a second. */
 const GRUMBLE_RATE = 2.5;
+/** Which way a napping agent's head points along the floor. */
+const napSide = (key: string) => (townHash(key) % 2 ? 1 : -1);
 
 /** What the agents' sprites read from the renderer that owns them. */
 export type TownActorViewsContext = {
@@ -112,15 +114,16 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           : 0;
       const bob = (moving && frame % 2) || grumble ? -1 : 0;
       view.look = lookOf(actor.key);
-      // A napping agent lies along the floor, head to the left or the right.
-      const lying = mood === "nap" ? (townHash(actor.key) % 2 ? 1 : -1) : 0;
+      // A napping agent lies along the floor, head to the left or the right;
+      // `rest` turns it down and back up rather than snapping.
+      const lying = actor.rest * napSide(actor.key);
       view.sprite.rotation = (lying * Math.PI) / 2;
       view.sprite.position.set(
         Math.round(actor.x - lying * 10 * TOWN_AGENT_SCALE),
-        Math.round(actor.y + 1 + bob - (lying ? 6 : 0)),
+        Math.round(actor.y + 1 + bob - actor.rest * 6),
       );
       view.sprite.zIndex = actor.y;
-      view.shadow.scale.x = TOWN_AGENT_SCALE * (lying ? 2.4 : 1);
+      view.shadow.scale.x = TOWN_AGENT_SCALE * (1 + 1.4 * actor.rest);
       view.shadow.position.set(Math.round(actor.x), Math.round(actor.y));
       view.shadow.zIndex = actor.y - 0.5;
       view.sprite.alpha = view.shadow.alpha = standingAlpha;
@@ -128,10 +131,10 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
       view.sprite.texture = textureOf(
         townCharacter(
           view.look,
-          lying ? "down" : actor.dir,
+          actor.rest > 0 ? "down" : actor.dir,
           frame,
           mood === "grumble" && frame === 0 ? "carry" : "stand",
-          lying
+          actor.rest > 0.5
             ? true
             : ctx.blink(
                 actor.key,
@@ -190,9 +193,9 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
         );
         let headX = actor.x;
         let headY = actor.y - 20 * TOWN_AGENT_SCALE;
-        if (mood === "nap") {
-          headX += (townHash(actor.key) % 2 ? 1 : -1) * 8 * TOWN_AGENT_SCALE;
-          headY = actor.y - 12;
+        if (actor.rest > 0) {
+          headX += napSide(actor.key) * 8 * TOWN_AGENT_SCALE * actor.rest;
+          headY += (actor.y - 12 - headY) * actor.rest;
         }
         if (actor.mode === "seat") {
           const seat = model.agentSeats.get(actor.key);

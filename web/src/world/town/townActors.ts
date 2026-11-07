@@ -5,9 +5,10 @@
  * unknown; at its host reception while blocked (oldest first) or finished
  * (after the waiting agents); and in the bar (the lounge) while idle. When
  * the reception queue is full, the rest, in the same order, crowd the lobby
- * beside it and grumble; after `TOWN_OVERFLOW_DOZE` seconds of overflow a
- * grumbler naps on the floor. A freed queue slot takes the front of the
- * crowd, and the crowd moves up. When the bar is full, the rest stay at their
+ * beside it and grumble (however many: past the lobby's spots they huddle
+ * between neighbours); after `TOWN_OVERFLOW_DOZE` seconds of overflow a
+ * grumbler lies down and naps on the floor. A freed queue slot takes the
+ * front of the crowd, and the crowd moves up; a napper gets up first. When the bar is full, the rest stay at their
  * desks. An agent the user opened
  * (summoned) walks back to its desk whatever its status, until that status
  * changes. An agent at a pinned desk never goes to the lounge: it leaves its
@@ -58,8 +59,13 @@ export type TownActor = {
   blockedSince: number;
   /** Session clock time this agent was first seen finished, or 0. */
   doneSince: number;
-  /** Session clock time this agent joined the reception overflow, or 0. */
+  /**
+   * Session clock time this agent joined the reception overflow, 0 outside
+   * it, or `CROWD_PENDING` until the next step brings the clock current.
+   */
   crowdSince: number;
+  /** How far this agent lies on the floor: 0 standing, 1 napping. */
+  rest: number;
 };
 
 /** How an agent in the reception overflow crowd looks once it stands there. */
@@ -78,8 +84,28 @@ export const TOWN_WALK_SPEED = 76;
 const SEAT_TWEEN = 0.26;
 /** Seconds of reception overflow before a grumbling agent gives up and naps. */
 export const TOWN_OVERFLOW_DOZE = 90;
-/** The most agents the lobby crowd holds; any more wait at their desks. */
+/** The most lobby crowd spots; more overflow huddles between them. */
 const CROWD_LIMIT = 16;
+/**
+ * Pixel offsets from a crowd spot's tile centre for each further agent that
+ * shares it, inside the tile, so a big crowd still reads as many agents.
+ */
+const CROWD_HUDDLE: readonly (readonly [number, number])[] = [
+  [5, -3],
+  [-5, -3],
+  [5, 3],
+  [-5, 3],
+  [0, -5],
+  [0, 4],
+];
+/**
+ * `crowdSince` for an agent that joined the crowd at a sync: the next step
+ * stamps the then-current clock, so a long quiet spell before the sync (no
+ * frames, no clock) is never charged to the new crowd.
+ */
+const CROWD_PENDING = -1;
+/** Seconds to lie down on the lobby floor, or to get up again. */
+const LIE_TWEEN = 0.5;
 
 const tileCenter = (tx: number, ty: number): [number, number] => [
   tx * T + 8,
@@ -395,6 +421,7 @@ export class TownActors {
           blockedSince: agent.semanticStatus === "blocked" ? this.clock : 0,
           doneSince: agent.semanticStatus === "done" ? this.clock : 0,
           crowdSince: 0,
+          rest: 0,
         };
         this.actors.set(agent.key, actor);
         fresh.add(agent.key);
@@ -512,13 +539,10 @@ export class TownActors {
       list
         .slice(0, building.queue.length)
         .forEach((actor, slot) => queueSlots.set(actor.key, slot));
-      // The rest crowd the lobby in the same order: the front of the crowd
-      // takes the next free queue slot, and the others move up.
+      // All the rest crowd the lobby in the same order: the front of the
+      // crowd takes the next free queue slot, and the others move up.
       list
-        .slice(
-          building.queue.length,
-          building.queue.length + crowdSpotsOf(world, hostKey).length,
-        )
+        .slice(building.queue.length)
         .forEach((actor, slot) => crowdSlots.set(actor.key, slot));
     }
     for (const actor of actors) {
@@ -559,7 +583,7 @@ export class TownActors {
       actor.queueSlot = goal.kind === "queue" ? goal.slot : null;
       // Overflow time runs from joining the crowd, across moves within it.
       if (goal.kind !== "crowd") actor.crowdSince = 0;
-      else if (actor.crowdSince === 0) actor.crowdSince = this.clock || 1e-6;
+      else if (actor.crowdSince === 0) actor.crowdSince = CROWD_PENDING;
       // A shrink can remove the floor under an in-flight actor even when the
       // building origin is unchanged. Settle invalid motion at its new goal;
       // never use a straight fallback path through the removed floor.
@@ -592,6 +616,8 @@ export class TownActors {
 
   private destination(actor: TownActor): {
     tile: [number, number];
+    /** Where to stand, in world pixels, when not the tile's centre. */
+    point?: [number, number];
     seat?: { x: number; y: number; dir: TownFacing };
     face: TownFacing;
   } | null {
@@ -612,12 +638,23 @@ export class TownActors {
     // The front door, in the building's top wall.
     if (goal.kind === "door")
       return { tile: [building.entryX, building.y + 1], face: "up" };
-    const spot =
-      goal.kind === "queue"
-        ? building.queue[goal.slot]
-        : goal.kind === "crowd"
-          ? crowdSpotsOf(world, actor.hostKey)[goal.slot]
-          : goal.spot;
+    if (goal.kind === "crowd") {
+      // Past the last spot, the crowd huddles between earlier agents.
+      const spots = crowdSpotsOf(world, actor.hostKey);
+      const spot = spots[goal.slot % spots.length];
+      if (!spot) return null;
+      const layer = Math.floor(goal.slot / spots.length);
+      const [cx, cy] = tileCenter(spot.x, spot.y);
+      const [dx, dy] = layer
+        ? CROWD_HUDDLE[(layer - 1) % CROWD_HUDDLE.length]!
+        : [0, 0];
+      return {
+        tile: [spot.x, spot.y],
+        point: [cx + dx, cy + dy],
+        face: spot.face,
+      };
+    }
+    const spot = goal.kind === "queue" ? building.queue[goal.slot] : goal.spot;
     if (!spot) return null;
     return { tile: [spot.x, spot.y], face: spot.face };
   }
@@ -634,7 +671,7 @@ export class TownActors {
         (actor.mode === "stand" || actor.mode === "out") &&
         !target.seat
       ) {
-        [actor.x, actor.y] = tileCenter(...target.tile);
+        [actor.x, actor.y] = standPoint(target);
       }
       return;
     }
@@ -642,13 +679,14 @@ export class TownActors {
       this.afterTween.delete(actor.key);
       actor.path = [];
       actor.tween = null;
+      actor.rest = 0;
       if (target.seat) {
         actor.x = target.seat.x;
         actor.y = target.seat.y;
         actor.dir = target.seat.dir;
         actor.mode = "seat";
       } else {
-        [actor.x, actor.y] = tileCenter(...target.tile);
+        [actor.x, actor.y] = standPoint(target);
         actor.dir = target.face;
         actor.mode = actor.goal?.kind === "door" ? "out" : "stand";
       }
@@ -671,9 +709,23 @@ export class TownActors {
       actor.path = (path?.length ? path : [target.tile]).map(([x, y]) =>
         tileCenter(x, y),
       );
+      actor.path[actor.path.length - 1] = standPoint(target);
       actor.mode = "walk";
     };
-    if (actor.mode === "seat") {
+    if (actor.mode === "stand" && actor.rest > 0) {
+      // A napper gets up where it lies before walking anywhere.
+      actor.tween = {
+        x0: actor.x,
+        y0: actor.y,
+        x: actor.x,
+        y: actor.y,
+        t: 0,
+        duration: LIE_TWEEN * actor.rest,
+        next: "stand",
+      };
+      actor.mode = "tween";
+      this.afterTween.set(actor.key, begin);
+    } else if (actor.mode === "seat") {
       const [ex, ey] = this.seatExit(actor);
       actor.dir = ex > actor.x ? "right" : "left";
       actor.tween = {
@@ -717,7 +769,7 @@ export class TownActors {
     }
     const end = actor.path[actor.path.length - 1];
     if (!end) return;
-    const [x, y] = tileCenter(...target.tile);
+    const [x, y] = standPoint(target);
     if (end[0] !== x || end[1] !== y) this.travel(actor, false);
   }
 
@@ -737,12 +789,23 @@ export class TownActors {
    */
   mood(actor: TownActor): TownCrowdMood | null {
     if (actor.goal?.kind !== "crowd" || actor.mode !== "stand") return null;
-    return this.dozeIn(actor) > 0 ? "grumble" : "nap";
+    return actor.rest > 0 || this.dozeIn(actor) <= 0 ? "nap" : "grumble";
   }
 
   /** Seconds until a grumbling agent in the crowd naps. */
   dozeIn(actor: TownActor) {
+    if (actor.crowdSince === CROWD_PENDING) return TOWN_OVERFLOW_DOZE;
     return actor.crowdSince + TOWN_OVERFLOW_DOZE - this.clock;
+  }
+
+  /** How far this agent should lie: 1 once a standing crowd agent naps. */
+  private restGoal(actor: TownActor) {
+    return actor.goal?.kind === "crowd" &&
+      actor.mode === "stand" &&
+      actor.crowdSince > 0 &&
+      this.dozeIn(actor) <= 0
+      ? 1
+      : 0;
   }
 
   /**
@@ -754,7 +817,19 @@ export class TownActors {
     this.clock += elapsed;
     let moved = false;
     for (const actor of this.actors.values()) {
+      if (actor.crowdSince === CROWD_PENDING)
+        actor.crowdSince = this.clock || 1e-6;
       if (this.world?.model.agents.get(actor.key)?.stale) continue;
+      // Lie down on the lobby floor, or get up, over LIE_TWEEN seconds.
+      const restGoal = this.restGoal(actor);
+      if (actor.rest !== restGoal) {
+        moved = true;
+        const change = dt / LIE_TWEEN;
+        actor.rest =
+          restGoal > actor.rest
+            ? Math.min(restGoal, actor.rest + change)
+            : Math.max(restGoal, actor.rest - change);
+      }
       if (actor.mode === "walk") {
         moved = true;
         let remaining = TOWN_WALK_SPEED * dt;
@@ -838,7 +913,9 @@ export class TownActors {
     for (const actor of this.actors.values())
       if (
         !this.world?.model.agents.get(actor.key)?.stale &&
-        (actor.mode === "walk" || actor.mode === "tween")
+        (actor.mode === "walk" ||
+          actor.mode === "tween" ||
+          actor.rest !== this.restGoal(actor))
       )
         return true;
     return false;
@@ -857,6 +934,12 @@ function sameGoal(a: TownGoal | null, b: TownGoal) {
 }
 
 const spotKey = (spot: TownSpot) => `${spot.x},${spot.y}`;
+
+/** Where a non-seat destination stands, in world pixels. */
+const standPoint = (target: {
+  tile: [number, number];
+  point?: [number, number];
+}): [number, number] => target.point ?? tileCenter(...target.tile);
 
 const easeInOut = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;

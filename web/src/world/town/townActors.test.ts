@@ -237,8 +237,9 @@ test("a grumbler naps after the overflow timeout, counted from joining the crowd
   const first = actors.actors.get(keys[10]!)!;
   const second = actors.actors.get(keys[11]!)!;
   expect(actors.mood(first)).toBe("grumble");
-  // agent-10 joined one second before agent-11.
-  actors.step(TOWN_OVERFLOW_DOZE - 1.5);
+  // agent-10 joined one second before agent-11, and agent-11 joined at the
+  // last step.
+  actors.step(TOWN_OVERFLOW_DOZE - 0.5);
   expect(actors.mood(first)).toBe("nap");
   expect(actors.mood(second)).toBe("grumble");
   expect(actors.dozeIn(second)).toBeCloseTo(0.5);
@@ -278,7 +279,16 @@ test("a freed queue slot takes the front of the crowd, which walks there while t
     kind: "crowd",
     slot: 1,
   });
-  // Every move walks: nobody teleports into the slot or the next spot.
+  // Every move transitions: a napper gets up where it lies, then walks;
+  // nobody teleports into the slot or the next spot.
+  const [x, y] = [front.x, front.y];
+  expect(front.mode).toBe("tween");
+  expect(front.rest).toBe(1);
+  actors.step(0.25);
+  expect(front.rest).toBeCloseTo(0.5);
+  expect([front.x, front.y]).toEqual([x, y]);
+  actors.step(0.26);
+  expect(front.rest).toBe(0);
   expect(front.mode).toBe("walk");
   expect(actors.actors.get(keys[11]!)!.mode).toBe("walk");
   settle(actors);
@@ -314,6 +324,63 @@ for (const form of ["wide", "phone"] as const)
       const actor = actors.actors.get(key)!;
       expect(tileOf(actor)).toEqual([spots[slot]!.x, spots[slot]!.y]);
     }
+  });
+
+test("a grumbler lies down on the floor gradually rather than snapping", () => {
+  const { actors, keys } = overflowing(11);
+  settle(actors);
+  const actor = actors.actors.get(keys[10]!)!;
+  // The renderer caps motion per frame (dt) but not the clock (elapsed).
+  actors.step(0, actors.dozeIn(actor));
+  expect(actors.mood(actor)).toBe("nap");
+  expect(actor.rest).toBe(0);
+  expect(actors.busy).toBe(true);
+  actors.step(0.25);
+  expect(actor.rest).toBeCloseTo(0.5);
+  actors.step(0.25);
+  expect(actor.rest).toBe(1);
+  expect(actors.busy).toBe(false);
+});
+
+test("a sync after a long quiet spell doesn't charge it to the new crowd", () => {
+  const { actors, keys, make, statuses } = overflowing(10);
+  settle(actors);
+  // The renderer drew nothing for two minutes; then overflow appears, and
+  // the next frame advances the clock by the whole gap.
+  statuses["late"] = "blocked";
+  actors.sync(make({ ...statuses }).actorWorld, false);
+  const late = actors.actors.get("late")!;
+  expect(late.goal).toEqual({ kind: "crowd", slot: 0 });
+  actors.step(0.05, 120);
+  expect(actors.dozeIn(late)).toBe(TOWN_OVERFLOW_DOZE);
+  settle(actors);
+  expect(actors.mood(late)).toBe("grumble");
+  expect(keys.length).toBe(10);
+});
+
+for (const form of ["wide", "phone"] as const)
+  test(`${form}: every overflow agent gathers at reception, however many`, () => {
+    const { actors, keys, make, statuses } = overflowing(30, "blocked", form);
+    settle(actors);
+    const { layout, actorWorld } = make({ ...statuses });
+    const building = layout.buildings[0]!;
+    const spots = townCrowdSpots(building, actorWorld.navigation.get("host")!);
+    const overflow = keys.slice(10).map((key) => actors.actors.get(key)!);
+    expect(overflow.map((actor) => actor.goal)).toEqual(
+      overflow.map((_, slot) => ({ kind: "crowd", slot })),
+    );
+    const points = new Set<string>();
+    for (const [slot, actor] of overflow.entries()) {
+      expect(actor.mode).toBe("stand");
+      const spot = spots[slot % spots.length]!;
+      expect(tileOf(actor)).toEqual([spot.x, spot.y]);
+      points.add(`${actor.x},${actor.y}`);
+    }
+    // Agents sharing a spot huddle apart rather than stack exactly.
+    expect(points.size).toBe(overflow.length);
+    expect(
+      [...actors.actors.values()].filter((actor) => actor.mode === "seat"),
+    ).toEqual([]);
   });
 
 test("an unknown agent stays at its desk", () => {
