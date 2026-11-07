@@ -139,7 +139,8 @@ future-dated windows are ignored. World never calls a provider API, reads
 credentials or types `/usage` into a pane.
 
 Town shows these as fuel gauges on the board sign and per host in the Summary;
-see FEATURES.md. A harness reported as `unsupported` appears on the sign as
+see FEATURES.md. The board re-reads them every 30 seconds while it is shown,
+so a new reading reaches the sign within about a minute. A harness reported as `unsupported` appears on the sign as
 **not available** with its reason, never as an empty or full gauge.
 
 ## Optional local price table

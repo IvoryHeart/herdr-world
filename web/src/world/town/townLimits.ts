@@ -209,10 +209,14 @@ export function townSeenAge(at: number, now: number) {
   return hours < 24 ? `${hours} h ago` : `${Math.floor(hours / 24)} d ago`;
 }
 
-/** Re-read usage while the board is shown; the store limits the rate. */
-const LIMITS_REFRESH_MS = 120_000;
+/**
+ * Re-read usage while the board is shown, as often as the service refreshes
+ * a host (every 30 s), so a reading taken at an agent's answer reaches the
+ * sign within about a minute. The store limits the rate.
+ */
+export const LIMITS_REFRESH_MS = 30_000;
 
-/** The usage read, refreshed on mount and every two minutes while mounted. */
+/** The usage read, refreshed on mount and every 30 seconds while mounted. */
 export function useTownLimits(
   store: TownUsageStore = townUsageStore(),
 ): TownUsageState {

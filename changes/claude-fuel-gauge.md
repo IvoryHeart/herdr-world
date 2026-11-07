@@ -5,4 +5,5 @@
   left, with reset times. Claude agents started from World's launcher get a
   per-launch status line tap that records these numbers and then shows your
   own status line unchanged; your Claude settings files are never edited.
-  When Claude refuses work at its limit, the gauge reads **reached, resets …**.
+  It appears within about a minute of the agent's first answer. When Claude
+  refuses work at its limit, the gauge reads **reached, resets …**.
