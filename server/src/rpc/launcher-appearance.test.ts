@@ -110,7 +110,10 @@ for (const mode of ["ready", "retired", "refused-settings"])
     expect(errors).toEqual([]);
     // A Claude launch adds the per-launch status line tap after the profile's own arguments.
     expect(profile.harness).toBe("claude");
-    expect((args as string[]).slice(-2)).toEqual(claudeTapArgs());
+    // On World's own host the tap runs on World's executable.
+    expect((args as string[]).slice(-2)).toEqual(
+      claudeTapArgs({ kind: "bun", path: process.execPath }),
+    );
     expect(args as string[]).toContain("--agent");
     expect(result).toMatchObject({
       status: mode === "refused-settings" ? "failed" : "started",

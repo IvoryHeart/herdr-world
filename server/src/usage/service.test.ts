@@ -796,3 +796,55 @@ test("one native revalidation preserves changed, new and previously unlinked cla
   expect((await s.service.get()).entities[0]?.pane_id).toBeNull();
   await s.service.close();
 });
+
+test("an unreadable status line reading keeps the last Claude numbers stale through the collector", async () => {
+  const s = setup();
+  const home = await fs.mkdtemp(join(tmpdir(), "usage-claude-tap-read-"));
+  const dir = join(home, ".cache", "herdr-world");
+  await fs.mkdir(dir, { recursive: true });
+  const windows = [
+    { window_minutes: 300, used_percent: 87, resets_at: at + 3_600_000 },
+  ];
+  await fs.writeFile(
+    join(dir, "claude-status-line.json"),
+    JSON.stringify({ version: 1, at: at - 60_000, windows }),
+  );
+  let denied = false;
+  const denying = {
+    ...fs,
+    readFile: (async (path: string, encoding: BufferEncoding) => {
+      if (denied && path.endsWith("claude-status-line.json"))
+        throw Object.assign(new Error("denied"), { code: "EACCES" });
+      return fs.readFile(path, encoding);
+    }) as typeof fs.readFile,
+  };
+  s.read(async () => ({
+    ...(await collectHarnessUsage({ now: at }, createUsageProjection, {
+      fs: denying,
+      home,
+      env: { CLAUDE_CONFIG_DIR: join(home, "claude") },
+      join,
+      hash: usageDigest,
+    })),
+    bindings: [],
+    unsupported: [],
+  }));
+  try {
+    expect((await s.service.get()).limits[1]).toMatchObject({
+      harness: "claude",
+      state: "available",
+      windows,
+    });
+    denied = true;
+    s.advance(31_000);
+    expect((await s.service.get()).limits[1]).toMatchObject({
+      harness: "claude",
+      state: "stale",
+      observed_at: at - 60_000,
+      windows,
+    });
+  } finally {
+    await s.service.close();
+    await fs.rm(home, { recursive: true, force: true });
+  }
+});

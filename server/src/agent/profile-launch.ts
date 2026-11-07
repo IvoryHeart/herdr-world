@@ -1,6 +1,6 @@
 import { type AgentProfile, launchPlan } from "../../../shared/agentProfile";
 import type { LaunchRequest } from "./launch";
-import { claudeTapArgs } from "../usage/claude-tap";
+import { claudeTapArgs, type ClaudeTapRuntime } from "../usage/claude-tap";
 
 /**
  * What one launch from the dialog asks of the launcher: a profile (or a
@@ -28,19 +28,22 @@ export function profileLaunch(
 /**
  * Add the status line tap (usage/claude-tap.ts) to a Claude launch, so World
  * reads that agent's subscription limits. Only this launch gets it; the
- * user's settings files stay untouched. The tap is a POSIX shell command, so
- * a Windows host launches without it.
+ * user's settings files stay untouched. Without a runtime for the tap on the
+ * agent's host, the launch is unchanged and so is the user's status line.
  */
 export function withClaudeLimitsTap<
   T extends Pick<LaunchRequest, "kind" | "args">,
->(launch: T, windows: boolean): Omit<T, "args"> & Pick<LaunchRequest, "args"> {
-  if (launch.kind !== "claude" || windows) return launch;
+>(
+  launch: T,
+  runtime: ClaudeTapRuntime | null,
+): Omit<T, "args"> & Pick<LaunchRequest, "args"> {
+  if (launch.kind !== "claude" || !runtime) return launch;
   const args = launch.args;
   return {
     ...launch,
     args: (name: string) => [
       ...(typeof args === "function" ? args(name) : (args ?? [])),
-      ...claudeTapArgs(),
+      ...claudeTapArgs(runtime),
     ],
   };
 }

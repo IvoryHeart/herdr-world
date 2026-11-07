@@ -724,10 +724,12 @@ export async function collectHarnessUsage(
       result.limits![index] = { harness, ...value };
   };
   // The World status line tap's newest Claude reading (claude-tap.ts): a
-  // small regular file of numbers, validated again here.
+  // small regular file of numbers, validated again here. Any file but a
+  // valid one marks Claude partial, so an earlier reading is kept as stale.
   try {
     const path = join(home, ".cache", "herdr-world", "claude-status-line.json");
     const info = await fs.lstat(path);
+    let valid = false;
     if (info.isFile() && info.size <= 4096) {
       const raw = JSON.parse(await fs.readFile(path, "utf8"));
       const at = raw?.at,
@@ -755,7 +757,8 @@ export async function collectHarnessUsage(
                 w.resets_at > 0 &&
                 w.resets_at < 1e14)),
         )
-      )
+      ) {
+        valid = true;
         newestLimit("claude", {
           at,
           source: "claude-status-line",
@@ -765,9 +768,12 @@ export async function collectHarnessUsage(
             resets_at: w.resets_at,
           })),
         });
+      }
     }
-  } catch {
-    // No reading, or an unreadable one: transcripts may still have a refusal.
+    if (!valid) fail("claude");
+  } catch (error) {
+    // No reading yet is not a failure; transcripts may still have a refusal.
+    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") fail("claude");
   }
   for (const [sessionKey, session] of cache.sessions) {
     if (!session.files.size) {

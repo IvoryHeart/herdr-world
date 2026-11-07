@@ -422,7 +422,13 @@ test("the host collector takes the newest of the status line tap and a refusal, 
     },
   ]) {
     await tapReading(home, bad);
-    expect((await collect()).limits).toEqual([]);
+    const read = await collect();
+    expect(read.limits).toEqual([]);
+    // An invalid reading is a failed read, so the service keeps the last one stale.
+    expect(read.sources).toContainEqual({
+      harness: "claude",
+      state: "partial",
+    });
   }
   // A symlinked reading is not followed.
   const target = join(home, "elsewhere.json");
@@ -432,5 +438,16 @@ test("the host collector takes the newest of the status line tap and a refusal, 
     target,
     join(home, ".cache", "herdr-world", "claude-status-line.json"),
   );
-  expect((await collect()).limits).toEqual([]);
+  const linked = await collect();
+  expect(linked.limits).toEqual([]);
+  expect(linked.sources).toContainEqual({
+    harness: "claude",
+    state: "partial",
+  });
+  // No reading at all is not a failure.
+  await fs.rm(join(home, ".cache", "herdr-world", "claude-status-line.json"));
+  expect((await collect()).sources).not.toContainEqual({
+    harness: "claude",
+    state: "partial",
+  });
 });
