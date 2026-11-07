@@ -682,6 +682,7 @@ export async function createTownRenderer(
       hosts,
       state.awayKeys ?? new Set(),
       state.heldKeys ?? new Set(),
+      state.arrivingKeys ?? new Set(),
     );
     stats.actorsReconciled += actors.reconciled;
     for (const hostKey of hosts ?? actorWorld.buildings.keys())

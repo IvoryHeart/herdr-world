@@ -687,7 +687,12 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    If the new window opens on Terminal before Chat can read the agent, a line
    under its header says Chat is not available yet; Chat opens by
    itself when it can, or choose **Stay on Terminal**.
-   The launcher closes when the start is confirmed. After an uncertain
+   The launcher closes when the start is confirmed, and Town shows the new
+   agent arriving: it steps out at the town center (when you used the town
+   center's **New agent**) or at the bus stop nearest its room, walks to its
+   building, goes in and sits at its desk with a short sparkle and its name.
+   Reloading never replays an arrival, and a failed start has none. With
+   reduced motion it is at its desk at once, highlighted briefly. After an uncertain
    start, its start choices stay disabled: open the existing tab, or
    close the launcher before deliberately starting another agent. A definite
    failure lets you retry, log in or edit profiles. Closing it
