@@ -11,6 +11,7 @@ import type {
   TownSummaryCounts,
 } from "./townSummary";
 import type { TownPlaceEconomy } from "./townPlaceUsage";
+import { townPriceNote } from "./townExpenses";
 import {
   townFuelGauges,
   townFuelNotes,
@@ -186,6 +187,7 @@ const PLACE_ECONOMY: Record<
   loading: "Reading today's usage…",
   unavailable: "Usage is unavailable right now.",
   none: "No usage recorded here today.",
+  "no-data": "No usage data from this host.",
 };
 
 /**
@@ -212,12 +214,18 @@ export function TownPlaceSummaryCard({
       {economy.status === "ready" ? (
         <TownBoardEconomy
           label="ECONOMY TODAY"
-          cost={formatOfficeCost(economy.costUsd, "estimated")}
+          cost={
+            economy.price === "priced"
+              ? formatOfficeCost(economy.costUsd, "estimated")
+              : undefined
+          }
           detail={`${formatOfficeUsage(economy.tokens)} tokens${
             economy.models.length
               ? ` · ${formatOfficeModelNames(economy.models.map((model) => ({ model })))}`
               : ""
-          }${economy.partial ? " · partial" : ""}`}
+          }${economy.price === "priced" ? "" : ` · ${townPriceNote(economy.price)}`}${
+            economy.partial ? " · partial" : ""
+          }`}
         />
       ) : (
         <TownBoardEconomy

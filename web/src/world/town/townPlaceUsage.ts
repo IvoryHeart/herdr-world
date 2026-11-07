@@ -21,11 +21,13 @@ export type TownUsageState =
   | { status: "ready"; snapshot: WorldUsageSnapshot };
 
 export type TownPlaceEconomy =
-  | { status: "loading" | "unavailable" | "none" }
+  | { status: "loading" | "unavailable" | "none" | "no-data" }
   | {
       status: "ready";
       /** Estimated from the operator's price table; null when unpriced. */
       costUsd: number | null;
+      /** Why a null cost is null: no table at all, or models it lacks. */
+      price: TownUsagePrice;
       tokens: number;
       /** Models used there, most tokens first. */
       models: string[];
@@ -35,6 +37,49 @@ export type TownPlaceEconomy =
 
 /** The service refreshes usage at most every 30 seconds per runtime. */
 const REFRESH_MS = 30_000;
+
+/** `world.usage.get`'s windows: since UTC midnight, or the last 7 UTC days. */
+export type TownUsageWindow = "today" | "7d";
+
+/**
+ * A total's estimate: priced, or null because the instance has no price
+ * table, or because some of its models are not in the table. A null cost is
+ * never shown as $0.
+ */
+export type TownUsagePrice = "priced" | "no-table" | "unpriced";
+
+/** Entity states the service counts in current totals (totals.ts). */
+export const townUsageCounted = (entity: UsageEntity) =>
+  entity.state === "available" || entity.state === "partial";
+
+/** Why a total's estimated cost is (or is not) null. */
+export function townUsagePrice(
+  cost: number | null,
+  counted: readonly UsageEntity[],
+): TownUsagePrice {
+  if (cost !== null) return "priced";
+  return counted.some((entity) => entity.price_table_version !== null)
+    ? "unpriced"
+    : "no-table";
+}
+
+/**
+ * Whether any harness on a host could be read: available or partial. A host
+ * with none (no source, or only missing, unavailable, stale or unsupported
+ * ones) has no data, which is not zero usage.
+ */
+export function townHostHasData(
+  snapshot: WorldUsageSnapshot,
+  connectionId: string,
+  generation: number,
+) {
+  return snapshot.sources.some(
+    (source) =>
+      source.connection_id === connectionId &&
+      source.connection_generation === generation &&
+      (source.state === "available" || source.state === "partial"),
+  );
+}
 
 type UsageClient = {
   call(method: string, params?: Record<string, unknown>): Promise<unknown>;
@@ -49,6 +94,7 @@ export class TownUsageStore {
   constructor(
     private readonly client: UsageClient,
     private readonly clock: () => number = Date.now,
+    readonly window: TownUsageWindow = "today",
   ) {}
 
   subscribe = (listener: () => void) => {
@@ -61,7 +107,7 @@ export class TownUsageStore {
   get = () => this.state;
 
   /**
-   * A card opened: read today's usage, at most once per refresh interval.
+   * A card opened: read the window's usage, at most once per refresh interval.
    * A failed read keeps the last numbers it had.
    */
   request() {
@@ -70,7 +116,7 @@ export class TownUsageStore {
     this.requestedAt = now;
     this.pending = true;
     if (this.state.status !== "ready") this.set({ status: "loading" });
-    void this.client.call("world.usage.get", { window: "today" }).then(
+    void this.client.call("world.usage.get", { window: this.window }).then(
       (result) => {
         this.pending = false;
         const snapshot = result as WorldUsageSnapshot | null;
@@ -91,14 +137,31 @@ export class TownUsageStore {
   }
 }
 
-let shared: TownUsageStore | null = null;
-export function townUsageStore() {
-  shared ??= new TownUsageStore(bridge);
-  return shared;
+const shared = new Map<TownUsageWindow, TownUsageStore>();
+/** The one store per window that every Town reader shares. */
+export function townUsageStore(window: TownUsageWindow = "today") {
+  let store = shared.get(window);
+  if (!store)
+    shared.set(window, (store = new TownUsageStore(bridge, Date.now, window)));
+  return store;
 }
 
 export function useTownUsage(store: TownUsageStore = townUsageStore()) {
   return useSyncExternalStore(store.subscribe, store.get, store.get);
+}
+
+/** Whether some harness on a host could be read only in part. */
+export function townHostPartial(
+  snapshot: WorldUsageSnapshot,
+  connectionId: string,
+  generation: number,
+) {
+  return snapshot.sources.some(
+    (source) =>
+      source.connection_id === connectionId &&
+      source.connection_generation === generation &&
+      source.state === "partial",
+  );
 }
 
 /** A place's usage: a room is a Herdr workspace, a table a tab. */
@@ -172,9 +235,17 @@ export function townPlaceEconomy(
       target.nativeId,
     ),
   );
-  if (!usage || usage.rollup.records === 0) return { status: "none" };
+  if (!usage || usage.rollup.records === 0)
+    return townHostHasData(
+      state.snapshot,
+      target.connectionId,
+      target.generation,
+    )
+      ? { status: "none" }
+      : { status: "no-data" };
+  const counted = usage.entities.filter(townUsageCounted);
   const byModel = new Map<string, number>();
-  for (const entity of usage.entities)
+  for (const entity of counted)
     byModel.set(
       entity.model,
       (byModel.get(entity.model) ?? 0) + entity.total_tokens,
@@ -182,12 +253,14 @@ export function townPlaceEconomy(
   return {
     status: "ready",
     costUsd: usage.rollup.estimated_cost_usd,
+    price: townUsagePrice(usage.rollup.estimated_cost_usd, counted),
     tokens: usage.rollup.total_tokens,
     models: [...byModel]
       .sort(([, left], [, right]) => right - left)
       .map(([model]) => model),
     partial:
       state.snapshot.truncated ||
-      usage.entities.some((entity) => entity.state !== "available"),
+      usage.entities.some((entity) => entity.state !== "available") ||
+      townHostPartial(state.snapshot, target.connectionId, target.generation),
   };
 }

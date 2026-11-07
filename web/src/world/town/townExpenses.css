@@ -1,0 +1,212 @@
+/* Expenses boards (TownExpenseBoards.tsx): the city billboard by the first street
+   and a board beside each reception, in Town's pixel skin. A dark board in a
+   wooden frame (the plaque's wood) on two posts; the folded phone sign is a
+   room plaque's wooden plate. Popovers portal out of Town, so they use
+   literal colours. */
+
+.town-world .town-expenses {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  pointer-events: auto;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s;
+}
+
+/* The billboard stands on its world point above the street, keeping a
+   readable size as the town zooms, like the center's plaque. */
+.town-world .town-expenses-city {
+  transform: translate(-50%, -100%) scale(clamp(0.55, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+}
+
+/* A building's board stands just right of its reception, inside the
+   reception's own scale. */
+.town-reception > .town-expenses-host {
+  left: calc(100% + 10px);
+  bottom: 0;
+}
+
+.town-world[data-level="desk"] .town-expenses-city {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.town-expenses-panel {
+  display: grid;
+  gap: 4px;
+  min-width: 168px;
+  max-width: 240px;
+  padding: 6px 9px 7px;
+  color: #f1efe6;
+  background: #1b2230;
+  border: 3px solid #6e4a2e;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 2px #3b2414,
+    0 3px 0 #3b2414;
+  font-size: 11px;
+  image-rendering: pixelated;
+}
+
+.town-expenses-city .town-expenses-panel {
+  min-width: 220px;
+}
+
+.town-expenses-posts {
+  display: flex;
+  justify-content: space-between;
+  width: 60%;
+  height: 12px;
+}
+
+.town-expenses-posts::before,
+.town-expenses-posts::after {
+  content: "";
+  width: 6px;
+  background: #6e4a2e;
+  border: 1px solid #3b2414;
+  border-top: 0;
+}
+
+.town-expenses-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font:
+    700 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: #ffd166;
+}
+
+.town-expenses-window {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.town-expenses-window button {
+  min-height: 22px;
+  padding: 1px 6px;
+  color: #a9b2a4;
+  background: #273141;
+  border: 1px solid #4b5568;
+  border-radius: 2px;
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.town-expenses-window button[aria-pressed="true"] {
+  color: #2a1a04;
+  background: #ffd166;
+  border-color: #3b2414;
+}
+
+.town-expenses-window button:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+.town-expenses-headline {
+  margin: 0;
+  white-space: nowrap;
+  color: #a9b2a4;
+}
+
+.town-expenses-headline b {
+  font:
+    700 12px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  color: #f1efe6;
+}
+
+.town-expenses-rooms {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-expenses-rooms li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.town-expenses-rooms span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.town-expenses-rooms b {
+  font-weight: 600;
+  white-space: nowrap;
+  color: #ffe9c2;
+}
+
+.town-expenses-more,
+.town-expenses-notes {
+  margin: 0;
+  font-size: 10px;
+  color: #a9b2a4;
+}
+
+/* Folded: a wooden plate that opens the board. */
+.town-expenses-sign {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #ffe9c2;
+  background: #6e4a2e;
+  border: 2px solid #3b2414;
+  border-radius: 4px;
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-expenses-sign:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-world .town-expenses-sign.town-expenses-city {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
+}
+
+.town-reception-title .town-expenses-sign {
+  margin: -4px 0;
+}
+
+.popover-content.town-expenses-popover {
+  z-index: 6100;
+  width: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
