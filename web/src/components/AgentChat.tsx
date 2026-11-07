@@ -46,6 +46,8 @@ import type {
 } from "./chat/types";
 import "./chat/blocks/now.css";
 import { ChatStatusBadge } from "./chat/blocks/status-badge";
+// After every Chat style it re-skins.
+import "./AgentChat.town.css";
 
 export type {
   Conversation,
