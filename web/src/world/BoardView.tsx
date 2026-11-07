@@ -146,6 +146,8 @@ import {
   type TerminalRef,
 } from "../../../shared/relations";
 import { inheritedColorKey } from "../../../shared/terminalColor";
+import { aimAtBin } from "./bin/binDrop";
+import { putAgentInBin } from "./bin/WorldBin";
 import {
   groupTerminals,
   terminalsAreGrouped,
@@ -633,9 +635,27 @@ export default function BoardView({
   );
   /** The card under the pointer while dragged, and where it was grabbed. */
   const held = useRef<{ key: string; grab: Point } | null>(null);
+  /** The held card is over the bin: a drop puts its agents in it. */
+  const overBin = useRef(false);
+  /** Put the panes' agents in the bin; a pane that is not an agent stays. */
+  const binPanes = (panes: readonly BoardPane[]) => {
+    const agents = panes.filter(
+      (pane) =>
+        pane.isAgent &&
+        pane.leaf.kind === "agent" &&
+        !pane.leaf.stale &&
+        pane.leaf.actionable,
+    );
+    if (!agents.length) {
+      setToast({ text: "Only an agent can go in the bin" });
+      return;
+    }
+    for (const pane of agents) void putAgentInBin(pane.leaf, "board", world);
+  };
   const paneMoves = useBoardPaneMoves({
     model,
     move: movePane,
+    bin: (panes) => binPanes(panes),
     notice: (text) => setToast({ text }),
     moved: () => {
       void boardStore.refresh();
@@ -2064,6 +2084,18 @@ export default function BoardView({
     warmUp();
     const tab = latest.current.model.tabByKey.get(h.key);
     if (!tab) return;
+    // Over the bin, a drop puts the card's agents in it; nothing else glows.
+    overBin.current = aimAtBin(screen);
+    if (overBin.current) {
+      if (teammate.current)
+        cardEls.current.get(teammate.current)?.classList.remove("board-glue");
+      if (glue.current)
+        cardEls.current.get(glue.current)?.classList.remove("board-glue");
+      cardEls.current.get(h.key)?.classList.remove("board-gluing");
+      teammate.current = null;
+      glue.current = null;
+      return;
+    }
     // Over another tab card it glows, and a drop there groups the two. No
     // dwell as in Town: Board's elastic cards slide away from a resting one,
     // and they do not overlap unless dragged onto each other.
@@ -2127,7 +2159,17 @@ export default function BoardView({
     const m = latest.current.model;
     const card = cards.current.get(h.key);
     cardEls.current.get(h.key)?.classList.remove("board-lifted");
+    const binned = overBin.current;
+    overBin.current = false;
+    aimAtBin(null);
     if (!card) return;
+    if (binned && !isNoteKey(h.key)) {
+      // The card goes back to its place; its agents wait for the bus.
+      travelToLayout(m);
+      const tab = m.tabByKey.get(h.key);
+      if (tab) binPanes(tab.panes);
+      return;
+    }
     if (isNoteKey(h.key)) {
       const note = latest.current.saved?.notes.find(
         (n) => NOTE_PREFIX + n.id === h.key,

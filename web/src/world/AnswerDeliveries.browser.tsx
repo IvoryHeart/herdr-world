@@ -211,7 +211,15 @@ function Fixture() {
           >
             <TownSummaryPanel
               summary={{
-                counts: { needsYou: mixed ? 2 : 0, working: 0, finished: 0 },
+                counts: {
+                  needsYou: mixed ? 2 : 0,
+                  working: 0,
+                  finished: 0,
+                  quiet: 0,
+                  unknown: 0,
+                  agents: 0,
+                  buildings: 0,
+                },
                 needsYou: [],
                 asks: mixed ? [openQuestion] : [],
                 finished: [],

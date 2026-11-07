@@ -1,6 +1,6 @@
 /**
  * Which hosts' agents to reconcile after a change. An agent's goal and path
- * read its own status, seat, pin and summoned/asking marks, the
+ * read its own status, seat, pin and summoned/asking/away marks, the
  * other agents of its host (the reception queue and lounge are per host) and
  * its building (seats, queue, lounge and navigation). A host whose key below
  * is unchanged would be left exactly as it is by a full reconciliation, so it
@@ -19,6 +19,7 @@ export function townActorKeys(
   layout: TownLayout,
   summoned: ReadonlySet<string>,
   asking: ReadonlySet<string>,
+  away: ReadonlySet<string> = new Set(),
 ): TownActorKeys {
   const agents = new Map<string, string[]>();
   for (const agent of model.agents.values()) {
@@ -32,6 +33,7 @@ export function townActorKeys(
         seat && model.deskPins.has(seat.deskKey) ? "pin" : "",
         summoned.has(agent.key) ? "summoned" : "",
         asking.has(agent.key) ? "asking" : "",
+        away.has(agent.key) ? "away" : "",
       ].join("|"),
     );
     agents.set(agent.hostKey, list);

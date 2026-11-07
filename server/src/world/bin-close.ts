@@ -43,6 +43,7 @@ const GONE = {
 const GONE_REASONS = new Set<string>(Object.values(GONE));
 const WORKTREE_ROOT =
   "A worktree root's pane closes only with its workspace; close its other panes first.";
+const PINNED_TAB = "A pinned tab keeps its last pane, so it was not closed.";
 
 class NotSent extends Error {}
 
@@ -69,7 +70,7 @@ function panesOf(result: unknown, workspaceId: string): Pane[] {
     }));
 }
 
-/** What the intent captured when the countdown ended. */
+/** What the intent captured when the bus left. */
 function captured(entry: EffectEntry) {
   const contract = entry.contract;
   const target = contract?.targets[0];
@@ -80,6 +81,7 @@ function captured(entry: EffectEntry) {
         tab_id?: string;
         connection_generation?: number;
         service_incarnation?: string;
+        preserve_tab?: boolean;
       }
     | undefined;
   if (
@@ -107,10 +109,11 @@ function captured(entry: EffectEntry) {
     tab_id: params.tab_id,
     pane_id: target.native_id,
     terminal_id: target.evidence.terminal_id,
+    preserve_tab: params.preserve_tab === true,
   };
 }
 
-/** The durable intent for one entry whose countdown ended. */
+/** The durable intent for one rider whose bus left (or on Close now). */
 export function binCloseEffect(
   entry: BinEntry,
   incarnation: string,
@@ -136,6 +139,7 @@ export function binCloseEffect(
         workspace_id: entry.workspace_id,
         tab_id: entry.tab_id,
         connection_generation: entry.connection_generation,
+        ...(entry.preserve_tab ? { preserve_tab: true } : {}),
       },
       targets: [target],
       actor: { kind: "browser", subject: "owner", evidence: {} },
@@ -155,7 +159,7 @@ export function binCloseEffect(
  * The bin's close, as a durable effect. One runner per connection, so closes
  * on one host run one at a time (each reads the panes the previous one left)
  * and a stalled host never holds back another's. Every attempt is fenced by
- * the runtime generation and terminal captured when the countdown ended.
+ * the runtime generation and terminal captured when the bus left.
  */
 export function createBinCloser(deps: {
   ledger(): LedgerStore;
@@ -302,6 +306,14 @@ export function createBinCloser(deps: {
         pane.tab_id !== target.tab_id
       )
         return { state: "refused", reason: GONE.moved, not_submitted: true };
+      if (
+        target.preserve_tab &&
+        !layout.some(
+          (item) =>
+            item.tab_id === target.tab_id && item.pane_id !== target.pane_id,
+        )
+      )
+        return { state: "refused", reason: PINNED_TAB, not_submitted: true };
       const closesWorkspace = layout.length === 1;
       if (!closesWorkspace) {
         const workspace = (await lease.call(
