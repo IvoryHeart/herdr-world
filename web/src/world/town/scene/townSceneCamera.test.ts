@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../../herdrOfficeProjection";
 import { TownCamera, townHostsWidth } from "../townCamera";
+import { townCenterEmblem } from "../townCenter";
 import {
+  TOWN_FACADE,
   TOWN_PHONE_BOARD_ROWS,
   layoutTown,
   TOWN_TILE as T,
@@ -105,24 +107,48 @@ test("a wide town opens at home: every building, centred", () => {
   expect(reasons).toEqual(["home"]);
 });
 
-test("a phone opens at home: the town center on top, the first reception in view", () => {
-  const { view, layout, viewport, camera } = setup(PHONE);
-  expect(layout.formFactor).toBe("narrow");
-  view.attach(camera, layout, viewport);
-  const first = layout.buildings[0]!;
-  expect(camera.z).toBe(camera.limits!.home);
-  // The center's flag sits just under the top inset, centred on the axis.
-  expect(camera.toScreen(0, layout.center.y * T - 40).y).toBeCloseTo(
-    viewport.inset.top,
-  );
-  expect(
-    camera.toScreen((layout.center.x + layout.center.w / 2) * T, 0).x,
-  ).toBeCloseTo(camera.toScreen((first.x + first.w / 2) * T, 0).x);
-  // The reception board stands in the yard above the building, on screen.
-  const board = camera.toScreen(0, (first.y - TOWN_PHONE_BOARD_ROWS) * T).y;
-  expect(board).toBeGreaterThan(viewport.inset.top);
-  expect(board).toBeLessThan(viewport.height - viewport.inset.bottom);
-  expect(view.atHome()).toBe(true);
+test("a phone opens at home: the town center on top, the first building under it", () => {
+  for (const [size, projection, framed] of [
+    // A short first building fits whole under the whole center.
+    [{ width: 390, height: 1200 }, office({ alpha: working(2) }), "flag"],
+    // A taller one keeps its lounge, where idle agents rest, in view.
+    [{ width: 390, height: 844 }, office({ alpha: working(2) }), "lounge"],
+    // One taller than the screen leaves the center its plaque and doors.
+    [PHONE, town, "plaque"],
+  ] as const) {
+    const { view, layout, viewport, camera } = setup(
+      size,
+      new Map(),
+      projection,
+    );
+    expect(layout.formFactor).toBe("narrow");
+    view.attach(camera, layout, viewport);
+    const first = layout.buildings[0]!;
+    expect(camera.z).toBe(camera.limits!.home);
+    const top = viewport.inset.top;
+    const bottom = viewport.height - viewport.inset.bottom;
+    // The center's plaque is on screen, centred on the buildings' axis.
+    const plaque = townCenterEmblem(layout.center, T);
+    const sign = camera.toScreen(plaque.x, plaque.y);
+    expect(sign.y).toBeGreaterThan(top);
+    expect(sign.x).toBeCloseTo(
+      camera.toScreen((first.x + first.w / 2) * T, 0).x,
+    );
+    const flag = camera.toScreen(0, layout.center.y * T - 40).y;
+    const lounge = camera.toScreen(0, (first.y + first.h + TOWN_FACADE) * T).y;
+    expect(flag).toBeLessThanOrEqual(top + 0.01);
+    if (framed === "flag") expect(flag).toBeCloseTo(top);
+    if (framed === "lounge") expect(lounge).toBeCloseTo(bottom);
+    if (framed === "plaque") {
+      expect(camera.toScreen(0, plaque.y - 28).y).toBeCloseTo(top);
+      expect(lounge).toBeGreaterThan(bottom);
+    } else expect(lounge).toBeLessThanOrEqual(bottom + 0.01);
+    // The reception board stands in the yard above the building, on screen.
+    const board = camera.toScreen(0, (first.y - TOWN_PHONE_BOARD_ROWS) * T).y;
+    expect(board).toBeGreaterThan(sign.y);
+    expect(board).toBeLessThan(bottom);
+    expect(view.atHome()).toBe(true);
+  }
 });
 
 test("each town shape keeps its own camera across visits", () => {

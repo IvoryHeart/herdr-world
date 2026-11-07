@@ -59,8 +59,11 @@ export async function checkTownCenter(
     sign()!.getAttribute("aria-expanded") === "true",
     "the plaque does not report its open menu",
   );
-  // Measured once the ring's opening motion has finished.
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  // Measured at the end of the ring's opening motion. A busy software
+  // renderer can hold the animation clock for longer than the motion lasts,
+  // so the check settles it rather than waiting a fixed time.
+  for (const animation of ring()!.getAnimations({ subtree: true }))
+    animation.finish();
   for (const action of actions()) {
     const box = action
       .querySelector(".town-center-medallion")!

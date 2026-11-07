@@ -84,7 +84,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - The **town center** stands at the top of the map, centred over the
     buildings above the first street: a domed hall with a clock, a columned
     portico, banners, wings and a paved forecourt. Phones open Town with it at
-    the top. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
+    the top and the first building under it; on a short screen the view keeps
+    the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,
     preselecting the open room when it can start one there), **Town master**
     (the role holder from **Menu → Sounds**, else the agent named in **Menu →
