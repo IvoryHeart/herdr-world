@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
-import { townActorWorld, TownActors } from "./townActors";
-import { layoutTown, TOWN_TILE, townSeat } from "./townLayout";
+import {
+  TOWN_ARRIVAL_INDOOR_S,
+  TOWN_OVERFLOW_DOZE,
+  townActorWorld,
+  TownActors,
+  townCrowdSpots,
+} from "./townActors";
+import { layoutTown, TOWN_SHAPES, TOWN_TILE, townSeat } from "./townLayout";
 import type { TownModel } from "./townModel";
 
 type Status = "working" | "blocked" | "done" | "idle" | "unknown";
@@ -130,19 +136,260 @@ test("the reception queue is ordered by when agents became blocked", () => {
   expect(actors.actors.get("a")!.queueSlot).toBe(1);
 });
 
-test("blocked agents beyond the queue stay at their seat", () => {
-  const statuses = Object.fromEntries(
-    Array.from({ length: 13 }, (_, i) => [`agent-${i}`, "blocked" as Status]),
+/** `count` agents with `status`, blocked one second apart in index order. */
+function overflowing(
+  count: number,
+  status: Status = "blocked",
+  form: "wide" | "phone" = "wide",
+) {
+  const keys = Array.from(
+    { length: count },
+    (_, i) => `agent-${String(i).padStart(2, "0")}`,
   );
+  const make = (statuses: Record<string, Status>) =>
+    form === "wide" ? world(statuses, count) : phoneWorld(statuses);
   const actors = new TownActors();
-  actors.sync(world(statuses, 13).actorWorld, true);
-  const queued = [...actors.actors.values()].filter(
-    (a) => a.queueSlot !== null,
+  const statuses: Record<string, Status> = Object.fromEntries(
+    keys.map((key) => [key, "working" as Status]),
   );
-  expect(queued.length).toBe(10);
-  expect(
-    [...actors.actors.values()].filter((a) => a.mode === "seat").length,
-  ).toBe(3);
+  actors.sync(make(statuses).actorWorld, true);
+  for (const key of keys) {
+    statuses[key] = status;
+    actors.sync(make({ ...statuses }).actorWorld, true);
+    actors.step(1);
+  }
+  return { actors, keys, make, statuses };
+}
+
+function phoneWorld(statuses: Record<string, Status>) {
+  const keys = Object.keys(statuses);
+  const deskKeys = keys.map((_, i) => `room/desk-${i}`);
+  const { layout } = layoutTown(
+    {
+      hosts: [{ key: "host", displayOrder: 0 }],
+      rooms: [{ key: "room", hostKey: "host", order: 0, deskKeys }],
+    },
+    TOWN_SHAPES.phone,
+  );
+  const model = {
+    agents: new Map(
+      keys.map((key) => [
+        key,
+        {
+          key,
+          hostKey: "host",
+          roomKey: "room",
+          semanticStatus: statuses[key],
+        },
+      ]),
+    ),
+    agentSeats: new Map(
+      keys.map((key, i) => [key, { deskKey: deskKeys[i]!, seat: 0 }]),
+    ),
+    deskPins: new Map(),
+  } as unknown as TownModel;
+  return { layout, model, actorWorld: townActorWorld(layout, model) };
+}
+
+const tileOf = (actor: { x: number; y: number }) => [
+  Math.floor(actor.x / TOWN_TILE),
+  Math.floor((actor.y - 1) / TOWN_TILE),
+];
+
+test("agents beyond the reception queue crowd the lobby in queue order", () => {
+  const { actors, keys } = overflowing(13);
+  settle(actors);
+  expect(keys.map((key) => actors.actors.get(key)!.goal)).toEqual([
+    ...Array.from({ length: 10 }, (_, slot) => ({
+      kind: "queue" as const,
+      slot,
+    })),
+    ...Array.from({ length: 3 }, (_, slot) => ({
+      kind: "crowd" as const,
+      slot,
+    })),
+  ]);
+  for (const key of keys.slice(10)) {
+    const actor = actors.actors.get(key)!;
+    expect(actor.mode).toBe("stand");
+    expect(actors.mood(actor)).toBe("grumble");
+  }
+});
+
+test("finished agents overflow after waiting ones, and the crowd keeps that order", () => {
+  const { actors, make, statuses } = overflowing(12, "done");
+  // Two agents block later than every finish, yet wait ahead of finished ones.
+  statuses["agent-11"] = "blocked";
+  actors.sync(make({ ...statuses }).actorWorld, true);
+  actors.step(1);
+  statuses["agent-10"] = "blocked";
+  actors.sync(make({ ...statuses }).actorWorld, true);
+  const goal = (key: string) => actors.actors.get(key)!.goal;
+  expect(goal("agent-11")).toEqual({ kind: "queue", slot: 0 });
+  expect(goal("agent-10")).toEqual({ kind: "queue", slot: 1 });
+  expect(goal("agent-07")).toEqual({ kind: "queue", slot: 9 });
+  expect(goal("agent-08")).toEqual({ kind: "crowd", slot: 0 });
+  expect(goal("agent-09")).toEqual({ kind: "crowd", slot: 1 });
+});
+
+test("a grumbler naps after the overflow timeout, counted from joining the crowd", () => {
+  const { actors, keys, make, statuses } = overflowing(12);
+  settle(actors);
+  const first = actors.actors.get(keys[10]!)!;
+  const second = actors.actors.get(keys[11]!)!;
+  expect(actors.mood(first)).toBe("grumble");
+  // agent-10 joined one second before agent-11, and agent-11 joined at the
+  // last step.
+  actors.step(TOWN_OVERFLOW_DOZE - 0.5);
+  expect(actors.mood(first)).toBe("nap");
+  expect(actors.mood(second)).toBe("grumble");
+  expect(actors.dozeIn(second)).toBeCloseTo(0.5);
+  actors.step(0.5);
+  expect(actors.mood(second)).toBe("nap");
+  // Napping is presentation only; an answered agent walks back to its desk.
+  statuses[keys[11]!] = "working";
+  actors.sync(make({ ...statuses }).actorWorld, false);
+  expect(actors.mood(second)).toBeNull();
+  expect(second.crowdSince).toBe(0);
+  settle(actors);
+  expect(second.mode).toBe("seat");
+});
+
+test("reduced motion keeps the doze timer on real time", () => {
+  const { actors, keys } = overflowing(11);
+  const actor = actors.actors.get(keys[10]!)!;
+  actors.step(10, 1 / 60);
+  expect(actors.mood(actor)).toBe("grumble");
+});
+
+test("a freed queue slot takes the front of the crowd, which walks there while the rest move up", () => {
+  const { actors, keys, make, statuses } = overflowing(13);
+  settle(actors);
+  actors.step(TOWN_OVERFLOW_DOZE);
+  const front = actors.actors.get(keys[10]!)!;
+  expect(actors.mood(front)).toBe("nap");
+  statuses[keys[0]!] = "working";
+  actors.sync(make({ ...statuses }).actorWorld, false);
+  expect(front.goal).toEqual({ kind: "queue", slot: 9 });
+  expect(actors.mood(front)).toBeNull();
+  expect(actors.actors.get(keys[11]!)!.goal).toEqual({
+    kind: "crowd",
+    slot: 0,
+  });
+  expect(actors.actors.get(keys[12]!)!.goal).toEqual({
+    kind: "crowd",
+    slot: 1,
+  });
+  // Every move transitions: a napper gets up where it lies, then walks;
+  // nobody teleports into the slot or the next spot.
+  const [x, y] = [front.x, front.y];
+  expect(front.mode).toBe("tween");
+  expect(front.rest).toBe(1);
+  actors.step(0.25);
+  expect(front.rest).toBeCloseTo(0.5);
+  expect([front.x, front.y]).toEqual([x, y]);
+  actors.step(0.26);
+  expect(front.rest).toBe(0);
+  expect(front.mode).toBe("walk");
+  expect(actors.actors.get(keys[11]!)!.mode).toBe("walk");
+  settle(actors);
+  expect(front.queueSlot).toBe(9);
+  // A shuffled napper keeps its overflow time and lies back down.
+  expect(actors.mood(actors.actors.get(keys[11]!)!)).toBe("nap");
+});
+
+for (const form of ["wide", "phone"] as const)
+  test(`${form} crowd spots stay clear of the queue rug, counter, door and plants`, () => {
+    const { actors, keys, make, statuses } = overflowing(14, "blocked", form);
+    settle(actors);
+    const { layout, actorWorld } = make({ ...statuses });
+    const building = layout.buildings[0]!;
+    const spots = townCrowdSpots(building, actorWorld.navigation.get("host")!);
+    expect(spots.length).toBeGreaterThanOrEqual(form === "phone" ? 10 : 16);
+    expect(new Set(spots.map((s) => `${s.x},${s.y}`)).size).toBe(spots.length);
+    for (const spot of spots) {
+      expect(spot.x < building.doorX - 6 || spot.x > building.doorX + 5).toBe(
+        true,
+      );
+      expect(spot.x).not.toBe(building.entryX);
+      expect(spot.x).toBeGreaterThan(building.x + 1);
+      expect(spot.x).toBeLessThan(building.x + building.w - 2);
+      expect(spot.y).toBeGreaterThan(building.lobbyY);
+      expect(spot.y).toBeLessThan(building.lobbyY + 6);
+      for (const plant of building.plants)
+        expect([spot.x, spot.y]).not.toEqual([plant.x, plant.y]);
+      // Facing the counter.
+      expect(spot.face).toBe(spot.x < building.doorX ? "right" : "left");
+    }
+    for (const [slot, key] of keys.slice(10).entries()) {
+      const actor = actors.actors.get(key)!;
+      expect(tileOf(actor)).toEqual([spots[slot]!.x, spots[slot]!.y]);
+    }
+  });
+
+test("a grumbler lies down on the floor gradually rather than snapping", () => {
+  const { actors, keys } = overflowing(11);
+  settle(actors);
+  const actor = actors.actors.get(keys[10]!)!;
+  // The renderer caps motion per frame (dt) but not the clock (elapsed).
+  actors.step(0, actors.dozeIn(actor));
+  expect(actors.mood(actor)).toBe("nap");
+  expect(actor.rest).toBe(0);
+  expect(actors.busy).toBe(true);
+  actors.step(0.25);
+  expect(actor.rest).toBeCloseTo(0.5);
+  actors.step(0.25);
+  expect(actor.rest).toBe(1);
+  expect(actors.busy).toBe(false);
+});
+
+test("a sync after a long quiet spell doesn't charge it to the new crowd", () => {
+  const { actors, keys, make, statuses } = overflowing(10);
+  settle(actors);
+  // The renderer drew nothing for two minutes; then overflow appears, and
+  // the next frame advances the clock by the whole gap.
+  statuses["late"] = "blocked";
+  actors.sync(make({ ...statuses }).actorWorld, false);
+  const late = actors.actors.get("late")!;
+  expect(late.goal).toEqual({ kind: "crowd", slot: 0 });
+  actors.step(0.05, 120);
+  expect(actors.dozeIn(late)).toBe(TOWN_OVERFLOW_DOZE);
+  settle(actors);
+  expect(actors.mood(late)).toBe("grumble");
+  expect(keys.length).toBe(10);
+});
+
+for (const form of ["wide", "phone"] as const)
+  test(`${form}: every overflow agent gathers at reception, however many`, () => {
+    const { actors, keys, make, statuses } = overflowing(30, "blocked", form);
+    settle(actors);
+    const { layout, actorWorld } = make({ ...statuses });
+    const building = layout.buildings[0]!;
+    const spots = townCrowdSpots(building, actorWorld.navigation.get("host")!);
+    const overflow = keys.slice(10).map((key) => actors.actors.get(key)!);
+    expect(overflow.map((actor) => actor.goal)).toEqual(
+      overflow.map((_, slot) => ({ kind: "crowd", slot })),
+    );
+    const points = new Set<string>();
+    for (const [slot, actor] of overflow.entries()) {
+      expect(actor.mode).toBe("stand");
+      const spot = spots[slot % spots.length]!;
+      expect(tileOf(actor)).toEqual([spot.x, spot.y]);
+      points.add(`${actor.x},${actor.y}`);
+    }
+    // Agents sharing a spot huddle apart rather than stack exactly.
+    expect(points.size).toBe(overflow.length);
+    expect(
+      [...actors.actors.values()].filter((actor) => actor.mode === "seat"),
+    ).toEqual([]);
+  });
+
+test("an unknown agent stays at its desk", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "working" }).actorWorld, false);
+  actors.sync(world({ a: "unknown" }).actorWorld, false);
+  expect(actors.actors.get("a")!.goal?.kind).toBe("seat");
+  expect(actors.actors.get("a")!.mode).toBe("seat");
 });
 
 test("idle agents take distinct lounge spots", () => {
@@ -431,11 +678,13 @@ for (const [status, elapsed] of [
 }
 
 for (const count of [24, 4]) {
-  test(`a reception walker stays on the current floor after 80 desks shrink to ${count}`, () => {
+  // The bar is at the bottom of the building, so an idle agent walking there
+  // from a large room passes below where a shrunken building ends.
+  test(`a bar walker stays on the current floor after 80 desks shrink to ${count}`, () => {
     const actors = new TownActors();
     actors.sync(world({ a: "working" }, 80).actorWorld, false);
-    const large = world({ a: "blocked" }, 80);
-    const small = world({ a: "blocked" }, count);
+    const large = world({ a: "idle" }, 80);
+    const small = world({ a: "idle" }, count);
     const building = small.actorWorld.buildings.get("host")!;
     const bottom = (building.y + building.h) * TOWN_TILE;
     actors.sync(large.actorWorld, false);
@@ -455,10 +704,131 @@ for (const count of [24, 4]) {
       actors.step(1 / 30);
     }
     settle(actors);
-    const spot = building.queue[actor.queueSlot!]!;
+    const spot = actor.spot!;
+    expect(building.lounge.spots).toContainEqual(spot);
     expect([actor.x, actor.y]).toEqual([
       spot.x * TOWN_TILE + 8,
       spot.y * TOWN_TILE + 13,
     ]);
   });
 }
+
+test("an agent in the bin walks out of the front door, and back to its desk when put back", () => {
+  const { actorWorld, layout } = world({ a: "blocked", b: "working" });
+  const actors = new TownActors();
+  actors.sync(actorWorld, false);
+  const binned = new Set(["a"]);
+  actors.sync(actorWorld, false, undefined, undefined, undefined, binned);
+  const actor = actors.actors.get("a")!;
+  // In the bin it leaves even the reception queue it was waiting in.
+  expect(actor.goal).toEqual({ kind: "door" });
+  expect(actor.queueSlot).toBeNull();
+  expect(actors.busy).toBe(true);
+  settle(actors);
+  const building = layout.buildings[0]!;
+  expect(actor.mode).toBe("out");
+  expect(Math.floor(actor.x / TOWN_TILE)).toBe(building.entryX);
+  expect(actors.actors.get("b")!.mode).toBe("seat");
+  // Put back: it walks in through the door and waits at reception again.
+  actors.sync(actorWorld, false, undefined, undefined, undefined, new Set());
+  expect(actors.busy).toBe(true);
+  settle(actors);
+  expect(actor.mode).toBe("stand");
+  expect(actor.queueSlot).toBe(0);
+});
+
+test("an agent already in the bin when Town opens is out at once", () => {
+  const { actorWorld } = world({ a: "working" });
+  const actors = new TownActors();
+  actors.sync(
+    actorWorld,
+    false,
+    undefined,
+    undefined,
+    undefined,
+    new Set(["a"]),
+  );
+  expect(actors.actors.get("a")!.mode).toBe("out");
+  expect(actors.busy).toBe(false);
+});
+
+test("an arriving agent waits outside its front door at once, then hurries in to its desk", () => {
+  const { actorWorld, layout } = world({ a: "working", b: "working" });
+  const actors = new TownActors();
+  const arrive = (keys: string[]) =>
+    actors.sync(
+      actorWorld,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Set(keys),
+    );
+  // New to Town and arriving: out of the door from its first frame.
+  arrive(["a"]);
+  const actor = actors.actors.get("a")!;
+  const building = layout.buildings[0]!;
+  expect(actor.mode).toBe("out");
+  expect(Math.floor(actor.x / TOWN_TILE)).toBe(building.entryX);
+  expect(actors.actors.get("b")!.mode).toBe("seat");
+  expect(actors.busy).toBe(false);
+  // Already seated when its arrival starts: out at once, never seen leaving.
+  arrive(["a", "b"]);
+  expect(actors.actors.get("b")!.mode).toBe("out");
+  expect(actors.busy).toBe(false);
+  // At the door it walks in, however far its desk, in a few seconds.
+  arrive([]);
+  expect(actors.busy).toBe(true);
+  let seconds = 0;
+  for (; seconds < 30 && actors.busy; seconds += 1 / 30) actors.step(1 / 30);
+  expect(actor.mode).toBe("seat");
+  expect(seconds).toBeLessThan(TOWN_ARRIVAL_INDOOR_S + 0.5);
+  expect(actor.pace).toBeUndefined();
+  // Its next walk is at walking pace again.
+  actors.sync(
+    actorWorld,
+    false,
+    undefined,
+    undefined,
+    undefined,
+    new Set(["a"]),
+  );
+  actors.step(1 / 30);
+  expect(actor.pace).toBeUndefined();
+});
+
+test("an idle agent arriving sits at its desk for its welcome, not in the lounge", () => {
+  const { actorWorld } = world({ a: "idle" });
+  // TownCanvas keeps a welcoming agent at its desk as a summoned one.
+  const welcoming = new Set(["a"]);
+  const sync = (actors: TownActors, instant: boolean, arriving: string[]) =>
+    actors.sync(
+      actorWorld,
+      instant,
+      welcoming,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Set(arriving),
+    );
+  // Reduced motion (instant): seated at its desk from the first frame.
+  const still = new TownActors();
+  sync(still, true, []);
+  expect(still.actors.get("a")!.mode).toBe("seat");
+  expect(still.actors.get("a")!.goal?.kind).toBe("seat");
+  // Walking in from the front door, it goes to its desk and sits.
+  const walking = new TownActors();
+  sync(walking, false, ["a"]);
+  sync(walking, false, []);
+  const actor = walking.actors.get("a")!;
+  for (let seconds = 0; seconds < 30 && walking.busy; seconds += 1 / 30)
+    walking.step(1 / 30);
+  expect(actor.goal?.kind).toBe("seat");
+  expect(actor.mode).toBe("seat");
+  // Once its welcome is over, its status takes it to the lounge.
+  walking.sync(actorWorld, false, new Set());
+  expect(actor.goal?.kind).toBe("lounge");
+});

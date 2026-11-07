@@ -631,11 +631,18 @@ mounted Spaces or live terminal ownership.
 
 ### Requirement: Shared qualified pane watchlist
 
-World SHALL keep at most 128 terminal-backed watches in service memory, keyed by
-connection ID, runtime generation and terminal ID. Pins are shared across browser
-connections, survive a browser reload, and clear on service restart or runtime
-generation replacement. Pin validates a current live pane, while exact Unpin may
-remove an unavailable record. A watch is observational only and grants no resource
+World SHALL keep at most 128 terminal-backed watches in world.sqlite, keyed by
+store-issued World IDs and verified source bindings. Pins are shared across browser
+connections and survive browser reloads, service restarts and runtime replacement.
+Only a complete current unambiguous observation of the witnessed terminal on the
+original source SHALL attach a saved watch to a fresh runtime projection. Complete
+current terminal absence SHALL clear it. Pin validates a current live pane, while exact Unpin may
+remove an unavailable saved record. Replies SHALL include its `watch_id`; Unpin
+SHALL preserve that exact capture across retirement and SHALL NOT remove a newer
+replacement watch. If the same saved watch reattaches in a newer runtime generation,
+Unpin SHALL remove its current projection before replying and invalidate that
+generation so the reply, list and shared clients agree. Legacy tuples SHALL be accepted only while a remembered capture
+is unambiguous. A watch is observational only and grants no resource
 or mutation authority.
 
 #### Scenario: Native IDs collide across hosts
@@ -648,8 +655,8 @@ or mutation authority.
 The service SHALL return a process-local watchlist revision and notify browsers on
 real mutations. Browsers SHALL reload the list after connection and notification,
 reject older replies for that socket, and mark cached records unverified while
-disconnected. A reconnect SHALL accept a new empty revision-zero list after a
-service restart.
+disconnected. A reconnect SHALL accept a new revision-zero unresolved projection after a
+service restart and refresh after fresh binding resolution.
 
 #### Scenario: Service restart
 
@@ -840,8 +847,20 @@ Within the shared shell, Desk SHALL participate in the shell Actions menu, windo
 Inspectors it opens, and view-local failure isolation. On wide screens it SHALL select the agent shown
 in its reading pane only to dock that agent's Inspector; other selection-driven behavior
 (visual-route Action targets, the shared view-control search and watched visual projection) SHALL
-NOT apply to it. Managed hosts outside the filter
-SHALL appear only as non-actionable summaries drawn from the aggregate observation. Review marks, observed stops and recent opens SHALL be scoped to the connection, runtime generation,
+NOT apply to it. Managed hosts outside the filter SHALL appear as read-only summaries drawn from
+the aggregate observation. Expanding a summary SHALL list its observed agents without changing the
+filter or admitting receipt, screen or Inspector resources. Each current agent SHALL offer an
+explicit Reveal & open action naming the agent and destination host. After validating the captured
+connection, runtime, pane, terminal and agent session against the current observation and a qualified
+live pane read, this action SHALL add that host to the existing filter before opening that agent's
+Inspector. All hosts SHALL remain All hosts. Existing Inspectors and their resources SHALL retain
+their owning hosts. Qualified focus admission SHALL recheck the captured agent session before
+focusing. A later opening, leaving Desk or unmounting SHALL permanently supersede pending reveal
+reads and Inspector admission, including queued native focus; returning to Desk SHALL NOT revive
+them. Filter changes already explicitly applied SHALL remain. Supersession SHALL NOT classify a
+current agent as unavailable, disable its next reveal attempt or record a recent open. Cached, unavailable, retired or replaced agents SHALL explain their state and SHALL NOT
+open a replacement session, fall back to another host or broadcast an operation.
+Review marks, observed stops and recent opens SHALL be scoped to the connection, runtime generation,
 pane and agent session across host filter and operational focus changes, so they never carry over
 to another session or a same-named pane on another host.
 
@@ -849,7 +868,7 @@ to another session or a same-named pane on another host.
 
 - **WHEN** an agent within the host filter is blocked on an approval
 - **THEN** its Needs you card shows the approval question and choices from its screen, and Answer
-  opens that pane's terminal Inspector without sending any input
+  opens the Needs you tab at that agent without Desk sending any input
 
 #### Scenario: Review a finished turn
 
@@ -887,31 +906,77 @@ to another session or a same-named pane on another host.
 - **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
   stop does not mark the other host's stop reviewed
 
+#### Scenario: Reveal an agent outside the host filter
+
+- **WHEN** an operator expands an outside-filter host summary and chooses Reveal & open for a current agent
+- **THEN** the action names that agent and host, validates its captured identity, adds the host to the existing
+  filter and opens its own Inspector while preserving previously open contexts and their resources
+- **AND** merely expanding the summary does not change the filter or read that agent's receipt or screen
+
+#### Scenario: An outside-filter agent retires before opening
+
+- **WHEN** an expanded summary is cached, its host becomes unavailable or its runtime or agent session changes
+- **THEN** Desk explains why the captured agent cannot open, without opening another host or replacement session
+
+#### Scenario: Leave and return while a reveal read is pending
+
+- **WHEN** an operator leaves Desk and returns before a captured live read completes
+- **THEN** the old reveal stays cancelled and cannot widen Hosts or open an Inspector
+
+#### Scenario: Supersede queued Inspector admission and retry
+
+- **WHEN** an operator leaves Desk, unmounts it or starts a newer reveal while Inspector admission is pending
+- **THEN** cancellation stops subsequent queued native focus dispatch and Inspector publication
+- **AND** already applied filter changes remain, current agents stay retryable and no recent open is recorded
+- **AND** genuine identity and live-read failures continue to explain why their captured agent cannot open
+
 ### Requirement: Shared bounded Desk state
 
 The World service SHALL hold review marks, observed stop times and recent Desk
-opens in process-local memory, shared by every connected browser. It SHALL retain
-at most 500 qualified metadata records, 40 recent-open timestamps and 4,096 prior
-agent-status observations. Each record SHALL belong to one connection ID, runtime
-generation, terminal ID and agent-session fingerprint (or the explicit unknown
-session identity). Review marks SHALL store only the latest marked stop per agent
+opens in world.sqlite, shared by every connected browser after COMMIT. It SHALL retain
+current terminal/session stop records for as long as their source and session
+remain current. Current stops SHALL NOT be evicted by a record-count limit or by
+history. Inactive/ended captures SHALL form history, bounded to 500 rows with
+oldest-first eviction; history may yield earlier to the byte budget. Known-session
+restart captures SHALL remain unprojected and protected while their source is
+recovering, until fresh classification or confirmed unavailability. There SHALL
+still be at most 40 recent-open timestamps and 4,096 prior status observations in
+memory. Both the Desk projection and its serialized SQLite rows SHALL fit a
+768 KiB metadata budget, leaving headroom below the unchanged 1 MiB frame limit.
+An over-budget observation or mutation SHALL produce a labelled capacity refusal
+without evicting current stops or acknowledging an uncommitted review. Each durable record SHALL have a World ID and
+a verified binding to its original source, terminal and known agent-session
+fingerprint (or terminal alone for explicit unknown session). Runtime generation
+SHALL qualify only the current projection and admitted work. Review marks SHALL store only the latest marked stop per agent
 session; Reviewed SHALL retain its existing latest-stop presentation for idle or
 done agents. Exact Undo SHALL remove only the stop it names, preserving any newer
 mark from another browser. Metadata SHALL survive browser reloads and host-filter
-changes, clear on service restart and retire on runtime or observed session
-replacement. Browser-local Desk metadata SHALL NOT be imported.
+changes and service restarts. Runtime replacement SHALL hide projections until
+fresh verification; complete current terminal absence or positive known session
+replacement SHALL clear records. Browser-local Desk metadata SHALL NOT be imported.
 A shared stop identity SHALL be independent of a browser's receipt polling or
 read failures: the same service stop and native activity observation SHALL have
 one identity with or without a receipt. A later observed stop or native activity
 SHALL invalidate the older mark. Receipt content SHALL remain presentation data.
 The service SHALL assign a stable observed-stop identity separate from the
-12-hour display timestamp. Retained review marks SHALL keep that identity when
-only the timestamp expires. Qualified native `state_change_seq` progress in an
+12-hour display timestamp. Every fresh admitted stopped agent, including one
+already done on first observation/startup/new connection/runtime generation,
+SHALL receive a current stop identity. First observation SHALL NOT invent a
+historical transition or stop time: its display timestamp remains absent unless
+World observed a transition or qualified native progress. Timestamp expiry SHALL
+retain the identity even before the stop is reviewed or opened. The existing
+12-hour idle presentation window SHALL remain unchanged. Qualified native `state_change_seq` progress in an
 already stopped state SHALL reveal a subsequent stop even if no browser observed
 the intervening working state. Native progress checkpoints on retained metadata
 SHALL survive display/observation expiry. Equal, older, malformed or ambiguous
 native progress SHALL NOT invalidate a mark. Without a native sequence, a known
-idle/blocked-to-done transition SHALL still advance the stop.
+idle/blocked-to-done or blocked-to-idle completion transition SHALL still advance
+the stop. Unknown-session Desk captures SHALL NOT inherit review or stop identity
+across World/runtime restart or null-to-known ownership changes without native
+continuity proof. The currently supported native observations provide no runtime
+instance proof: old unknown captures remain unassociated bounded history and a
+fresh current stop is created. Returning to an earlier known fingerprint after
+an intervening owner SHALL NOT restore its old review.
 The stable observed-stop identity SHALL participate in receipt refresh and
 currency admission. A read started for a preceding stop SHALL NOT become current
 for its successor. While a new stop's receipt is pending or failing, the previous
@@ -945,7 +1010,9 @@ state as unverified, and accept a restarted service's empty revision-zero state.
 
 - **WHEN** a browser reloads while the World service still runs
 - **THEN** it reads the same qualified marks, stop times and recent opens; after
-  a service restart, reconnect replaces them with the new process's empty state
+  a service restart, captures remain unresolved until fresh complete identity
+  verification; known sessions restore their exact stop and review, while unknown
+  sessions receive fresh stops without inheriting unproven acknowledgements
 
 ### Requirement: Bounded turn receipts
 
@@ -1248,10 +1315,22 @@ as active. Needs-you items such as open asks SHALL NOT add to either agent count
 The counter SHALL explain its working/waiting breakdown in a tooltip and accessible
 label. Its numerals SHALL be tabular, its total fraction muted, and its whole count
 muted when ACTIVE is zero; it SHALL stay fixed ahead of the blocked badge while
-only the room name truncates. Rename and Close SHALL
-appear below the plate on hover or keyboard focus, and on a touch of the plate,
-with targets at least 40 CSS pixels wide and tall. These controls SHALL NOT
-reserve name width while hidden. The dashed empty-seat **+** inside a room
+only the room name truncates. One card SHALL
+appear below the plate on hover or keyboard focus, and on a touch of the plate:
+the Town board's numbers for that room without its agents list (working,
+needs-you, finished and quiet counted as the board counts them, its agents,
+and its economy today from the harness usage of its exactly qualified Herdr
+workspace), then Rename and Close with targets at least 40 CSS
+pixels wide and tall. These controls SHALL NOT reserve name width while hidden.
+A table's nameplate SHALL open the same kind of card for that table on hover,
+focus or a touch, from the same summary read model and the usage of its
+exactly qualified Herdr tab. The card SHALL read usage only once opened. Hovering the table itself
+on the canvas SHALL open that card without covering the table; on a touch
+screen, a tap on a table whose card is closed SHALL open the card instead of
+the table, and a second tap SHALL open the table as a tap does. At the
+overview level, where rooms show cards instead of plates, a mouse anywhere over
+a room or its card SHALL show the room's numbers, as its plate's card does,
+below its card without taking the pointer from the town. The dashed empty-seat **+** inside a room
 SHALL open the existing launcher with that qualified room selected; Terminal
 SHALL be its first choice for a plain tab, alongside profiles and agent kinds.
 The plate SHALL NOT contain a separate New agent text button. If the selected
@@ -1307,8 +1386,8 @@ building column. There SHALL be no hard expanded desk ceiling: repeated Expand
 actions SHALL eventually reveal every observed desk. While partially expanded,
 the room SHALL offer Fold alongside Expand, with separate non-overlapping targets
 of at least 40 CSS pixels, so one Fold click can restore the folded target at any step.
-An ordinary room's size SHALL follow its current desks and shrink when tabs
-close. An explicitly expanded room SHALL retain its capacity through tab
+An ordinary or explicitly expanded room's size SHALL follow its current desks
+and shrink when tabs close. An expanded room SHALL remain expanded after
 closures, including at or below 24 desks, until the user folds it. A folded
 room SHALL show exactly the first 24 observed tabs
 (or all tabs when fewer exist) in the same native tab order as Spaces. Each
@@ -1321,7 +1400,7 @@ beside the same-height new-seat tile, using two reserved cells without overlap.
 The tile SHALL show a red exclamation at its top-left when hidden desks have
 blocked calls or open questions from placed, qualified asking identities, and
 a green tick at its top-right when hidden desks have unreviewed completions.
-These indicators SHALL use the shared rail calls after the finished/seen overlay
+These indicators SHALL use Town's shared attention calls after the finished/seen overlay
 and the indexed qualified Ask source, not raw done status or actor labels. They
 SHALL have accessible descriptions and no extra visible numbers, and SHALL clear
 when those desks are revealed or their attention items are removed or reviewed.
@@ -1334,9 +1413,9 @@ without moving other desks, and a closed tab SHALL leave no gap: the desks after
 it in reading order SHALL close up in their existing order while the desks
 before it keep their spots. A room that reaches a new capacity step MAY shift
 later rooms and rows of the same building without reordering rooms, and its
-desks MAY reflow to the step's columns. Ordinary rooms SHALL resize to their
-current desk count; explicitly expanded rooms SHALL retain their capacity until
-Fold. Room placement SHALL be re-derived from native order when the scene is
+desks MAY reflow to the step's columns. Ordinary and explicitly expanded rooms
+SHALL resize to their current desk count; expanded rooms SHALL retain their
+expanded state until Fold. Room placement SHALL be re-derived from native order when the scene is
 rebuilt. Town SHALL take its shape from its container's size rather than one
 breakpoint: on a phone, rooms SHALL stack in one column and buildings in one
 vertical column; on a portrait screen or a half-width window, rooms SHALL form
@@ -1375,13 +1454,13 @@ waiting for that ambient quiet period.
 - **WHEN** a tab closes in an ordinary room
 - **THEN** the room resizes to fit its remaining desks
 
-#### Scenario: An expanded room keeps capacity through tab closures
+#### Scenario: An expanded room shrinks after tab closures
 
 - **WHEN** tabs close in an explicitly expanded room
-- **THEN** its capacity stays unchanged, even at or below 24 desks, until Fold
+- **THEN** its room resizes to fit its remaining desks and stays expanded
 - **AND WHEN** the user folds the room
-- **THEN** it resizes to fit its folded desks while retaining pinned cells and
-  its building column
+- **THEN** it shows its folded desks while retaining pinned cells and its
+  building column
 
 #### Scenario: A room fills its capacity step
 
@@ -1586,14 +1665,27 @@ Because Herdr may report a finished agent as idle, Town SHALL also treat an
 agent it observes going from working or blocked to idle as done until checked.
 A check covers one completion: when the agent works, asks or finishes again,
 its next completion SHALL be unchecked. The World service SHALL hold checks in
-memory, keyed by connection, runtime generation and terminal, so every browser
+world.sqlite through World IDs and verified source bindings, so every browser
 of that World shows the same checks, including for a finish Town inferred. The
 service SHALL end a check when its own host reads show that agent working or
 blocked, and SHALL ignore a check made while they do, so no browser's late
-view can end or create a check for the wrong completion. A World restart, or a
-new runtime generation for that connection, SHALL forget the checks. Checks SHALL NOT represent approval or mutate Herdr. Desks
-SHALL carry their tab's name from the room level, and each seat its agent's or
-terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
+view can end or create a check for the wrong completion. Checks SHALL survive a
+World restart or runtime replacement, remaining unresolved until the original
+terminal and captured session (when known) are verified. Complete current absence,
+a positive known session replacement or later native completion progress SHALL
+clear them; lower native progress SHALL NOT clear a newer check. Town, Desk and Needs you
+SHALL read one reviewed record: a completion is checked when Desk's review mark
+names its current stop or the service holds such a check for its terminal.
+Marking it reviewed in any view SHALL write Desk's review mark for the stop
+whose report is shown when Desk can name that stop (the service saw it end, or
+Herdr reports the agent's last activity), and otherwise this check; a mark the
+service did not save SHALL be reported and leave the completion unchecked.
+Town's peek SHALL mark the stop whose report it shows: Mark reviewed SHALL wait
+while a new stop's report is read, offer Retry when that read fails, and confirm
+only a mark the service saved. Checks SHALL NOT represent approval or mutate Herdr. A desk SHALL show its sole
+agent's Herdr name when exactly one named agent occupies the tab; otherwise it
+SHALL show the tab label, or `Tab N` when the tab has no label. Each seat SHALL
+show its agent's or terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
 building, or remain seated with an idle cue when no spot is free. When an
 agent's status changes, it SHALL move to its new location, and an answered agent
 SHALL return to its seat. Location and movement SHALL be presentation only: they
@@ -1607,12 +1699,33 @@ unchecked finishes SHALL follow both. Opening the asking agent SHALL preserve
 the ask. Answering or withdrawal SHALL remove its question marker and restore
 its normal status-based location. These cues SHALL respect existing scene and
 queue bounds without changing the native-order desk prefix. Hidden asking
-agents SHALL remain represented by reception counts and the existing question
-rail. Board and Desk SHALL show the same qualified question mark, and Desk
+agents SHALL remain represented by reception counts, the Needs you tab and
+Summary. Board and Desk SHALL show the same qualified question mark, and Desk
 SHALL include a current asking agent in Needs you regardless of working/idle
-status. A reception question entry SHALL open its original pane in one action. An
+status. A reception question letter SHALL open the Needs you tab at its question in one action. An
 asking shell pane, such as the watcher, SHALL receive a reception entry
 and Board/Desk marks without inventing an agent harness or changing Herdr status.
+
+#### Scenario: A desk has one named agent
+
+- **WHEN** a tab named `Claude` contains exactly one agent named `example-seat`
+- **THEN** its desk nameplate shows `example-seat`
+
+#### Scenario: A desk's agent has no Herdr name
+
+- **WHEN** a tab named `Claude` contains one agent with no Herdr name
+- **THEN** its desk nameplate shows `Claude`
+
+#### Scenario: A tab contains multiple agents
+
+- **WHEN** a tab named `Claude` contains more than one agent, even if one has a
+  Herdr name
+- **THEN** its desk nameplate shows `Claude`
+
+#### Scenario: A tab has no name to fall back to
+
+- **WHEN** a tab has no name and does not contain exactly one named agent
+- **THEN** its desk nameplate shows `Tab N` using the tab's number
 
 #### Scenario: An agent asks for input and is answered
 
@@ -1643,8 +1756,18 @@ and Board/Desk marks without inventing an agent harness or changing Herdr status
 #### Scenario: World restarts with checked completions
 
 - **WHEN** the World service restarts
-- **THEN** every browser shows the completions as unchecked again, because
-  checks are kept only in the service's memory
+- **THEN** saved Desk reviews remain unresolved until fresh terminal and known
+  session verification, and every browser shows the same verified review
+- **AND** unknown sessions receive fresh current stops without inherited review
+
+#### Scenario: Upgrade from separate completion checks
+
+- **WHEN** World upgrades legacy completion receipts after compatible Chat delivery
+- **THEN** only fresh same-source/terminal/known-session/unchanged native sequence
+  proof converts them into the current Desk review; unknown receipts may need
+  review once again
+- **AND** the old completion API and browser fallback are absent; missing Desk
+  stop metadata refreshes authoritatively and remains retryable if unverified
 
 ### Requirement: Pinned Town desks
 
@@ -1684,44 +1807,102 @@ order, including any hidden pinned or selected tab.
 - **THEN** the pinned desk keeps its cell and the other desks fill the free
   cells in tab order
 
-### Requirement: Town attention rail
+### Requirement: Needs you tab
 
-Town SHALL present the agents that need the user in the same order as Desk
-attention triage: blocked agents oldest first, then done agents newest first. On
-desktop the list SHALL be a left rail grouped by host and then room, with
-collapsible host groups, and the user SHALL be able to hide it to a count and
-restore it; this choice SHALL persist per browser. On phones the list SHALL be a
-bottom tray that remains reachable while a peek or card is open. Hovering an
-entry SHALL show its card, and activating an entry SHALL open that agent's
-window on Chat, where replies go. A keyboard command SHALL open the next agent
-that needs the user.
-The rail SHALL list a bounded number of entries and count the rest.
+World SHALL present what waits on the user in one Needs you tab, the same in
+Town, Board, Desk and on phones: open owner questions oldest first, then blocked
+agents oldest first, then finished work not yet reviewed newest first (done
+agents, and idle agents whose turn the service saw end within Desk's 12-hour
+window). On wide landscape screens the open tab SHALL sit on the left beside the
+view, on narrower screens over it, and on phones it SHALL be a full-screen list
+with Back that takes keyboard focus (the requested item, else Back), keeps the
+app behind it inert, and returns focus to its opener when it closes; an agent
+window opened from it SHALL cover it until that window closes, and focus SHALL
+then return to the list. Whether it is open SHALL persist per device, and while it is closed
+and something waits a handle at the left edge SHALL open it. Each item SHALL be
+a short message from its agent, name its agent, mark an asker World could not
+verify, show why an owner alert may not have arrived, and offer a chat icon,
+which opens that exact agent's Chat; the agent's name SHALL open that same Chat
+on every item whose agent World can place. Every item SHALL have one compact
+anatomy: a header row with the agent's mark, name, place and age and its icon
+actions, the message, and answer controls only when the agent asked something.
+Every icon SHALL have an accessible name and a tooltip. A ✕ icon SHALL keep its
+kind's own action, never another kind's: Dismiss on a question, Mark reviewed on
+finished work, and none on a blocked agent. Every item's message SHALL show its
+first two lines with a visible more while it runs longer, and SHALL expand in place
+to the whole message, links included, on more or a tap on the clipped text (a
+link opens rather than expands), and less SHALL clip it again. Keyboard focus
+entering a clipped message SHALL reveal its content without moving focus;
+collapsing with less SHALL keep focus on that control. Expanding SHALL
+move nothing above the item and keep its answer controls on it; hovering its agent's name
+SHALL show the agent's card with its latest message. A question SHALL be
+answerable with its options as quick replies or typed text (one answer field
+when it offers no options), or dismissed. A blocked agent's own
+question SHALL be answered with Chat's checked answer and show Chat's receipt,
+including an unconfirmed answer's warning and the agent's Terminal; a prompt
+Chat cannot answer SHALL offer the Terminal, never Chat. Finished work SHALL
+offer Mark reviewed for the stop whose report is shown, unavailable while the
+current stop's report is being read, SHALL say when that report could not be
+read and offer to read it again, and SHALL report a mark the service did not
+save. A report the service could not read SHALL count as a failed read, never
+as the current stop's report. An answer's receipt, question and pending result
+SHALL belong to the exact pane owner and agent session: a new session on the
+same pane SHALL start without them. Blocked and finished items SHALL come from
+the hosts the Hosts filter admits. A Needs you counter in the existing top bar (in the view picker in Zen; a phone's top bar
+outside Zen, as an inbox icon with a count badge, hidden at zero, right after the view's name, never an agent window's bar) SHALL count open questions and the admitted blocked agents and
+open the tab; Town's reception letters, Desk's Answer and Board's attention
+badges SHALL open it at their item. The tab SHALL show and observe one bounded
+page of items at a time, with actions to show the next and earlier pages, and
+every opener request, including a repeated one for the same item, SHALL turn
+to the page holding that item. When Town has saved answers to check, the tab
+SHALL offer a route to Town's Summary Outbox. A keyboard command in Town SHALL
+open the next agent that needs the user.
 
 #### Scenario: Work through waiting agents on desktop
 
-- **WHEN** three agents in two hosts are blocked and the user presses the next-agent key repeatedly
-- **THEN** Town opens each agent's exact pane in age order and the rail
-  reflects each answer without reordering unrelated entries
+- **WHEN** three agents in two hosts are blocked and the user presses Town's next-agent key repeatedly
+- **THEN** Town opens each agent's exact pane in age order and the Needs you
+  tab reflects each answer without reordering unrelated entries
 
-#### Scenario: Hide the rail
+#### Scenario: Read a long question before answering
 
-- **WHEN** the user hides the desktop rail and reloads Town
-- **THEN** the rail stays hidden, shows the waiting count, and can be restored with one action
+- **WHEN** an agent asks a question longer than two lines, with a link to its pull request
+- **THEN** its Needs you item shows the first two lines with more, a tap shows the whole question in
+  place with the link working, its answer controls and Dismiss stay on the item, and the agent's name opens its Chat
+
+#### Scenario: Open Needs you at an agent past the limit
+
+- **WHEN** more agents are blocked than the tab shows and the user uses Desk's Answer on one past the first page
+- **THEN** the tab opens at the page showing that agent's item, the others stay a page away, and turning pages never observes more than one page of agents
+- **AND** after turning back a page, using Answer on the same agent again turns to its page
+
+#### Scenario: Review where the report is shown
+
+- **WHEN** the service observes a new stop for a finished agent while Needs you still shows the earlier report
+- **THEN** Mark reviewed stays unavailable until the new report is read, and then marks the new stop
+- **AND** a read that fails says so and offers Retry instead of waiting for a change that a finished agent never makes
+
+#### Scenario: Review work Desk names no stop for
+
+- **WHEN** a finished agent has no stop the service saw and Herdr reports no activity time, and the user marks it reviewed
+- **THEN** the service records a check for its terminal, and Town, Desk and Needs you all show it reviewed until the agent works or asks again
 
 ### Requirement: Town summary
 
 Town SHALL derive its board sign, its phone counts chip and its summary window
-from one summary read model built from the attention rail's entries, so they
+from one summary read model built from Town's attention entries, so they
 show the same attention items and needs-you count as the reception tray and
-rail. Needs-you SHALL count blocked agents plus open questions as separate
+the Needs you counter. Needs-you SHALL count blocked agents plus open questions as separate
 items, including when one blocked agent also raised a question. Reception as
 a place continues to seat agents. Host and room counts describe agents;
-questions SHALL NOT acquire a guessed host or room. The board sign SHALL show
-agents working and finished, items needing the user, and spend when a metrics
-provider reports it. Its Summary action, and
+questions SHALL NOT acquire a guessed host or room. The board sign SHALL count
+the whole town, every building, from that read model and never from the
+scene's admitted rooms or desks: agents working, finished and quiet, items
+needing the user, every agent in the town with its number of buildings, and
+spend when a metrics provider reports it. Its Summary action, and
 on phones its counts chip, SHALL open a Town summary window in the shared
 window frame. Launching an already-open Summary SHALL restore and raise it
-through the shared window manager. It lists, in this order: open questions using the rail's Ask
+through the shared window manager. It lists, in this order: open questions using the shared Ask
 cards and answer action, then blocked agents with their reason, waiting age
 and one action; unreviewed finishes with when each was last
 active when Herdr reports activity times, never presented as the finish time; every host with its rooms and their counts (needing
@@ -1731,7 +1912,7 @@ selected room. A room request SHALL wait for renderer setup and its admitted
 layout, be consumed once, and retrigger for a later click on the same room.
 The list SHALL use the complete room roster, including rooms outside the current
 presentation bound. Blocked entries SHALL show the supplied state label, with
-"needs input" only as a fallback. Spend lists each model with its source and age. Without a
+"needs you" only as a fallback. Spend lists each model with its source and age. Without a
 metrics provider the summary SHALL say there is no cost data and SHALL NOT show
 zero spend.
 
@@ -1739,7 +1920,7 @@ zero spend.
 
 - **WHEN** two agents are blocked, one of them also has an open question,
   and one agent has an unreviewed finish
-- **THEN** the board sign, phone chip, reception tray, rail and summary all
+- **THEN** the board sign, phone chip, reception tray, Needs you counter and summary all
   show three items needing the user, with one finished agent in the summary
 - **AND** answering that question updates every needs-you count to two while
   both blocked agents remain waiting
@@ -1751,7 +1932,7 @@ zero spend.
 
 ### Requirement: Town agent peek
 
-Hovering an agent, a reception entry or a rail entry with a pointer SHALL open a
+Hovering an agent or a reception entry with a pointer SHALL open a
 peek after a short delay, and tapping one SHALL open a pinned peek. The peek SHALL
 show the agent's name, location and status, its latest message (the question
 when it is waiting), answer options only when the pane's latest lines present a
@@ -1809,7 +1990,7 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 - **WHEN** Agents open names Chat and the user taps the table of an agent that is
   waiting at reception
-- **THEN** that agent's window opens on Chat, the agent walks back to its desk,
+- **THEN** that agent's window opens on Chat when its conversation exists (otherwise on Terminal under the startup rule), the agent walks back to its desk,
   and no terminal or peek card opens
 
 #### Scenario: Board opens an agent on Chat
@@ -1817,7 +1998,7 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** Agents open names Chat and the user opens an agent's tab in Board
   whose harness Chat reads, then a plain shell's tab and an agent whose harness
   Chat cannot read
-- **THEN** the first window opens on Chat and the other two on their terminals
+- **THEN** the first window opens on Chat when a conversation exists, otherwise on Terminal under the startup rule, and the other two open on their terminals
 
 #### Scenario: Town opens Terminal
 
@@ -1831,6 +2012,44 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** a blocked agent's latest lines contain neither a numbered menu nor a
   yes/no prompt
 - **THEN** the peek offers Reply and the terminal without answer buttons
+
+### Requirement: Honest agent startup presentation
+
+When Chat is the chosen opening view, an agent SHALL open on Terminal until
+Chat can show its conversation. No session, unsupported harness, missing
+integration and unreadable records SHALL all keep it on Terminal; a reported
+session alone is insufficient. When the same agent's conversation becomes
+readable, the window SHALL switch to Chat unless the user has chosen a view.
+Replacing the terminal or harness SHALL cancel that automatic switch, including
+late replies after the original identity is restored.
+
+Unavailable Chat explanations SHALL appear only when the user chooses Chat.
+Chat before a conversation exists SHALL show an empty conversation, plain
+starting/waiting guidance and Open Terminal. A named record that is missing or
+unreadable SHALL keep its error. Startup presentation SHALL NOT allow sending
+messages or answering prompts without their existing authority checks.
+
+#### Scenario: An agent is waiting at a startup question
+
+- **WHEN** the agent has not reported a conversation
+- **THEN** its window opens on Terminal; manually opened Chat explains startup
+  without suggesting an integration install
+
+#### Scenario: Chat becomes available
+
+- **WHEN** the same agent's conversation becomes readable and no view was chosen by hand
+- **THEN** the existing window switches to Chat
+
+#### Scenario: A reported session has an unreadable record
+
+- **WHEN** the agent is opened and Chat cannot read its reported record
+- **THEN** the window stays on Terminal; choosing Chat manually shows the
+  original record error and Open Terminal
+
+#### Scenario: A view was chosen or the agent was replaced
+
+- **WHEN** a session is later reported
+- **THEN** the old automatic switch does not change the chosen view
 
 ### Requirement: Shared Chat composer and honest send receipts
 
@@ -1904,6 +2123,48 @@ question reloads in the same owner scope until the next answer attempt, even
 when the question disappears. Herdr's lack
 of conditional input remains a documented gap between the last check and dispatch.
 
+Claude Code's ask-the-user questions SHALL be read from the newest open call in
+the pane's reported session transcript, bounded and complete, and joined with
+the screen. Answer keys SHALL be offered only when the screen shows one of those
+questions with exactly its options and descriptions (wrapping aside) and, for a
+form, the same header chips, or the form's own review. Otherwise, and for
+multi-select or typed questions, Chat SHALL show every recorded question,
+header, option, description and selection mode with no keys, the reason, and
+the Terminal. The prompt fingerprint SHALL cover the call and its questions as
+well as the screen. A guessed conversation SHALL NOT supply questions. An
+unrecognized prompt SHALL be shown as its whole bottom block, with the reason,
+never as a clipped tail, with its final row initially in view and after updates.
+Supplied transcript fields SHALL be validated atomically. A rejected pending ask
+SHALL remain Terminal-only without retaining screen keys. Literal wildcard and
+code contents SHALL remain significant when matching. Ambiguous asterisk markup
+SHALL NOT be discarded to grant keys. A failed transcript check SHALL preserve
+the screen question without answer keys. A form review SHALL match
+its complete ordered question list as well as its headers before keeping keys.
+History read errors SHALL remain visible alongside question cards.
+Needs you SHALL show the same card.
+
+Claude Code's folder-trust question before a session SHALL be recognized only
+as the complete dialog: its edge, "Accessing workspace:" heading and absolute
+folder, nonempty "Quick safety check" text, the unnumbered choices "No, exit"
+(or "No, continue without these permissions" for pre-approved tool grants) then
+"Yes, I trust this folder" with exactly one cursor, and the "Enter to confirm ·
+Esc to cancel" footer. The alternate decline choice SHALL continue Claude without
+those grants rather than exiting. Chat and Needs you SHALL display the full
+folder, safety question and warnings above the choices without clamping them.
+Menu identity SHALL ignore only the parsed option cursor, preserving every
+folder and question character. Its input SHALL be bound to a
+service-owned pre-session witness: the source's connection runtime, the pane,
+its terminal, Claude with no reported session, and the pane's foreground
+process group and processes. Every key SHALL follow a fresh read of the witness
+and the exact question, with Herdr's record unchanged across that check, under
+the per-pane input lock. A click SHALL move the cursor with one arrow key only
+when needed, confirm the same question with the cursor on that choice, and only
+then press Enter. A session arriving, a replaced process or terminal, another
+question, a stale or partial read, an unmoved cursor or concurrent input SHALL
+refuse further keys. Digit shortcuts, automatic acceptance, a fabricated
+session fingerprint or relaxed session-bound answer, key or send paths SHALL
+NOT be used.
+
 #### Scenario: Codex waits without hooks
 
 - **WHEN** Herdr reports a bound Codex pane blocked on a complete question dialog
@@ -1929,6 +2190,138 @@ of conditional input remains a documented gap between the last check and dispatc
   its new turn, and progress arrives during the bounded wait
 - **THEN** Chat acknowledges only same-owner working progress or a completed
   turn with at least two sequence advances, and otherwise leaves it unconfirmed
+
+#### Scenario: A recorded question the screen does not show
+
+- **WHEN** Claude's transcript records a question whose options or text differ
+  from the screen, or that allows several options
+- **THEN** Chat shows the recorded question whole with no answer keys, says
+  why, and refuses any answer to that card
+
+#### Scenario: Folder trust before a session
+
+- **WHEN** Claude shows its folder-trust question with no session and the user
+  picks the choice not under the cursor
+- **THEN** the service checks the witness and question, presses one arrow key,
+  confirms the cursor moved on the same question, and presses Enter
+
+#### Scenario: A session or process change during folder trust
+
+- **WHEN** a session arrives, the foreground process changes or the question
+  changes between the card and a key
+- **THEN** no further key is sent and the card shows the refusal
+
+### Requirement: Chat completes harness command menus and composer keys
+
+Chat SHALL show a harness's own command menu (such as Claude Code's or Codex's
+`/model` and `/permissions`) that is open while Herdr reports the bound agent
+idle or done, read from the bottom of its screen only on Chat's request. When
+Herdr reports the pane blocked, Chat SHALL show a menu only if the prompt
+parser reads no question there and the transcript is readable with no open
+tool call; otherwise the screen remains a question. A Codex menu drawn above
+its idle composer SHALL NOT be offered when the agent's last message quotes its
+title or footer or the transcript cannot be read. Only a
+complete recognized panel SHALL be offered: a Claude Code panel between its top
+edge and a footer of key segments including Escape, or a Codex title paragraph,
+numbered option block and such a footer at the bottom of the screen or directly
+above its idle composer. Options SHALL come only from numbered rows with at most
+one cursor and consecutive numbers; Chat SHALL NOT infer choices from prose. A
+digit SHALL pick an option only when no longer option number starts with it and
+the menu has no text field. Key buttons SHALL come only from keys the footer or
+an arrow hint names, plus the arrows of a list.
+
+The service MAY report `menu_unreadable` with reason `terminal_too_small` and the
+measured rows only when no prompt/menu was read for the current same-session
+command and `pane.get` reports positive integer viewport rows below the shared
+`TERMINAL_SIZE_FLOOR.rows`. Connection/runtime/pane ownership, native read witness
+and current command SHALL remain qualified across the read. Unknown rows,
+layout dimensions and default sizes SHALL NOT supply a size claim. With no
+prompt, Chat SHALL show “The terminal is too small to show this menu — open or
+click Terminal to fix.” and its existing Open Terminal action for that fact.
+The note SHALL grant no send, press, answer or refusal authority.
+
+Each menu key SHALL carry the session and menu fingerprint Chat showed. The
+service SHALL refuse with nothing sent unless the pane's session matches, the
+pane still shows a menu under those rules, the screen shows that menu, the key is one it names and
+the pane's agent, session, terminal, title, revision and state sequence are
+unchanged on a second read. Field text SHALL be one line of at most 500
+characters without control characters and SHALL be typed without Enter. A
+refusal SHALL return the menu now shown; a sent key SHALL return the next menu
+or none. Menu keys and answers to one pane SHALL NOT interleave.
+
+The composer's ellipsis menu SHALL offer the Terminal's configured key
+controls on desktop and phone, with the characters and modifiers the Terminal
+would send; a combination Herdr cannot name that way SHALL be disabled. Each SHALL be sent only as a Herdr key name for
+the session Chat shows and only after a second unchanged pane read; scrolling
+and keys Herdr does not name SHALL be disabled. A new connection, runtime, pane
+or session SHALL retire a shown menu and its notice. Chat SHALL NOT type a
+message or slash command into a pane that may show a menu: Send SHALL be
+disabled while a menu card is shown, and after its last preparation await the
+service SHALL read the screen regardless of reported status and refuse with
+nothing typed when the read fails or is malformed or the screen shows a menu,
+a question or a menu-like footer or cursor, including boxed options in an
+incomplete capture; blank screen padding SHALL NOT conceal that evidence.
+The final native read SHALL retain the terminal, session, state sequence and
+other identity captured for the screen check, or the send SHALL refuse.
+Ordinary prose quoted by the same
+session's last assistant message SHALL remain sendable, including Claude's
+recognized message prefix and over SSH
+with a browser delivery baseline; that baseline SHALL NOT supply quote authority.
+World inputs to one pane SHALL NOT
+overlap. A slash command SHALL be reserved per pane, session and text before
+dispatch; it SHALL be released only when nothing reached the pane and SHALL
+otherwise stay reserved, and show as waiting, until a successful qualified
+read begun after dispatch shows another session or an idle/done status. Known
+native non-submission, including `agent_not_ready`, SHALL release the reservation
+so a legitimate retry can succeed. Unknown, failed, blocked or older observations
+SHALL NOT retire a live reservation or remove its waiting presentation.
+Dismissing its receipt SHALL NOT release it. Keyboard focus SHALL stay on
+the menu card across the menu's steps, unless the user moved it outside the card
+while a key was pending. Opening, changing or
+closing a menu SHALL keep the transcript, its scroll position, the composer
+draft, attachments and send receipts. Herdr's lack of conditional input
+remains a documented gap between the last check and the key.
+
+#### Scenario: Quoted terminal instructions in an SSH reply
+
+- **WHEN** a bound SSH session's last assistant reply quotes terminal footer instructions and Chat supplies a delivery baseline
+- **THEN** ordinary text may be sent after checking quote text from that session; actual menus and unknown screen reads still refuse
+
+#### Scenario: A partial question or blank padding hides menu structure
+
+- **WHEN** a question's top edge is missing, or a cut-off menu is followed by blank terminal rows
+- **THEN** Chat refuses text without sending input even when it cannot offer answer controls
+
+#### Scenario: The final observation reports a replacement terminal
+
+- **WHEN** a screen is checked under one terminal/state witness and the final native read reports a changed witness with the same session
+- **THEN** Chat refuses without sending input; an ordinary quoted footer with Claude's message prefix remains sendable when the witness is unchanged
+
+#### Scenario: Retry a command after native refusal
+
+- **WHEN** the native runtime rejects a command before submitting input and the same session becomes ready
+- **THEN** an identical retry may submit once; a lost acknowledgement keeps it reserved
+
+#### Scenario: A late idle observation arrives after queue admission
+
+- **WHEN** an idle read starts before a command is admitted to a working session and returns after dispatch
+- **THEN** the command remains reserved and its receipt remains waiting; a malformed observation also cannot clear either
+
+#### Scenario: Pick a model from Chat
+
+- **WHEN** a user sends `/model` from Chat and picks a numbered model
+- **THEN** Chat shows the harness's menu, presses that digit only if the same
+  session still shows the same menu, and shows the next step or none
+
+#### Scenario: The menu changes before the key
+
+- **WHEN** the menu, session or pane changes between Chat's card and the key
+- **THEN** the service sends nothing and returns the menu now shown
+
+#### Scenario: Press a terminal key from Chat
+
+- **WHEN** a user presses Ctrl+C in the composer's ellipsis menu
+- **THEN** the service presses it only for the session Chat shows
 
 ### Requirement: Town peeks show recent chatter and take replies
 
@@ -2148,7 +2541,7 @@ SHALL convey a failed deployment with text as well as colour.
 ### Requirement: Town targets, motion and phone layout
 
 Town SHALL provide keyboard- and pointer-accessible semantic targets for
-buildings, rooms, desks, seats, agents, reception entries and rail entries, with
+buildings, rooms, desks, seats, agents and reception entries, with
 names that include status text. Compact targets inside desks and the reception
 SHALL be at least 24 by 24 CSS pixels and other targets at least 48 by 48. Every
 gesture SHALL have a visible control. Town SHALL honour reduced-motion
@@ -2203,6 +2596,15 @@ zoom in/out; Work SHALL retain its visible slot and text. The bar SHALL NOT wrap
 A full-screen Inspector SHALL continue to cover Board until closed by X/Back;
 Work SHALL NOT be duplicated inside it.
 
+Next SHALL cycle through actionable panes needing the user: waiting agents or
+shared questions placed on their pane, including shell questions. It SHALL use
+Board's native order, retaining the selected pane's position after it stops
+qualifying, and open the pane's shared Inspector. It SHALL skip stale hosts and
+shells without questions and be unavailable when none qualify. Next SHALL remain reachable through overflow when the row
+cannot fit it. The Board menu SHALL also offer Help and a surface override:
+Follow theme, Whiteboard or Blackboard, saved in this browser when storage is
+available. A surface override SHALL NOT change the application's theme.
+
 A workspace card SHALL count its agents by status and its shells. The user MAY
 give any workspace or tab card a colour from a fixed palette, saved with the
 board; a tab card SHALL show its terminal colour (see Terminal colour), so a tab
@@ -2211,6 +2613,18 @@ SHALL never stand for or hide a status: status keeps its own colours on the dot,
 ring, badge and overview squares. From an actionable workspace card the user MAY
 open a plain terminal tab or start an agent in a new tab without a note, and
 from a live host's label MAY open World's New workspace dialog.
+
+#### Scenario: Next needs attention
+
+- **WHEN** the user chooses Next with waiting agents or shared questions placed on their pane
+- **THEN** Board opens the next qualifying pane on its exact host, wraps after
+  the last, and does not select a stale card or a shell without a question
+
+#### Scenario: Choose Board's surface
+
+- **WHEN** the user chooses Whiteboard or Blackboard from the Board menu
+- **THEN** that palette overrides the theme for Board alone and remains chosen
+  after reopening Board in this browser; Follow theme removes the override
 
 #### Scenario: Find Work and detached notes on a narrow phone
 
@@ -2748,6 +3162,34 @@ will close. A tab SHALL NOT be dropped on another host.
 - **WHEN** the user drops a workspace's only tab onto another workspace, even with "Don't ask again" chosen
 - **THEN** Board asks first and says the workspace will close
 
+A single-pane tab SHALL expose a distinct pane-drag grip, while the rest of
+its card SHALL retain whole-card arrangement. Dragging that grip or a pane row
+onto another tab SHALL move only that pane through Town's
+qualified pane-move service, leaving the source card and its other panes in
+place. A touch hold SHALL lift the pane; a quick swipe SHALL remain a pan.
+Cancellation or a drop on empty board SHALL send no move. A tab covered by
+another window or overlay SHALL NOT be a drop target. Host/runtime changes
+or a stale/foreign destination SHALL refuse the move. A move that would close
+the source room SHALL require explicit confirmation and revalidate the captured
+pane before retrying. Strings to that pane SHALL follow the service's move result.
+
+#### Scenario: Move one pane and preserve its peers
+
+- **WHEN** the user drags one pane row onto another tab of the same current host
+- **THEN** only that pane is moved with its terminal running and strings attached;
+  other panes and the source card retain their position
+
+#### Scenario: Move a single-pane tab's last room pane
+
+- **WHEN** the user drags a single-pane tab's grip onto a tab in another room
+- **THEN** Board moves only that pane and asks for confirmation before closing
+  its source room; dragging the rest of the card still arranges the whole card
+
+#### Scenario: Cancel a pane move
+
+- **WHEN** a pane drag is cancelled, or the last-room warning is dismissed
+- **THEN** no further native move is sent and the old room remains open
+
 ### Requirement: Board semantic zoom
 
 Board SHALL zoom with the mouse wheel around the pointer, with pinch on touch
@@ -2771,6 +3213,18 @@ working, and the selected tab, SHALL pulse; idle, finished, waiting and
 no-signal tabs SHALL stay still, with needs you marked by its border and badge.
 Pulses SHALL be switchable from the view's ⋯ menu and SHALL stop under reduced
 motion; status SHALL remain visible by colour and badge without them.
+
+The Board menu SHALL offer separate status colours for working, needs you,
+finished, idle and no signal, saved in this browser when storage is available.
+Those choices SHALL affect status dots, rings, badges and overview squares
+without changing shared card colours. Reset status colours SHALL restore the
+current surface's defaults.
+
+#### Scenario: Set a status colour without recolouring a card
+
+- **WHEN** the user changes Needs you in Status colours
+- **THEN** its status marks use the chosen colour, the card's own colour remains
+  unchanged, and Reset status colours restores the selected surface's default
 
 #### Scenario: Turn pulses off
 
@@ -3666,7 +4120,7 @@ tab window before a visual Inspector can attach that qualified pane.
 
 Town SHALL be a World view with its own route and entries in the shell's view switcher and phone
 navigation. Town SHALL render inside the shared World shell and SHALL NOT add a second application
-top bar. Its attention rail SHALL live inside the Town view and be hideable there. Town search,
+top bar. What needs the user SHALL open in the shared Needs you tab, as in every view. Town search,
 settings and full terminals SHALL use the shell's search, common menu and shared Inspector, so a
 terminal opened from Town remains the same presentation after switching views.
 

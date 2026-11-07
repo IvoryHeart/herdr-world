@@ -236,7 +236,7 @@ test("observation eviction cannot make a replaced admission current again", asyn
   for (let n = 0; n < 4096; n++)
     f.desk.observeAgent(
       { ...identity, terminal_id: `other-${n}` },
-      "idle",
+      "working",
       now,
     );
   const before = f.desk.list();

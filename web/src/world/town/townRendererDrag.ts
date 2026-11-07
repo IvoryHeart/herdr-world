@@ -1,6 +1,6 @@
 /**
- * The Town renderer's drag and move effects: the carried desk or agent with
- * its shadow, target highlight and slot; its lift, spring, park, landing and
+ * The Town renderer's drag and move effects: the carried desk, agent or room
+ * with its shadow, target highlight and slot; its lift, spring, park, landing and
  * fade (townDragMotion.ts); and the dust raised where it lifts and lands. The
  * renderer owns the layers and steps these each frame through `update`.
  */
@@ -8,6 +8,7 @@
 import {
   Container,
   Graphics,
+  Rectangle,
   Sprite,
   type Application,
   type Texture,
@@ -30,7 +31,9 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
+import type { TownRoomPlacement } from "./townRoomPlace";
 import type { TownMoveResult } from "./townMoves";
+import { createTownRoomGlide } from "./townRendererGlide";
 import { textureOf, type PodView } from "./townRendererScene";
 import {
   townCharacter,
@@ -53,6 +56,10 @@ export type TownDragContext = {
   state(): { calm: boolean };
   layoutCells(): ReadonlyMap<string, TownCell>;
   podOf(deskKey: string): PodView | undefined;
+  /** The container a building's interior, desks and agents are drawn in. */
+  buildingOf(hostKey: string): Container | undefined;
+  /** How much of a building its roof hides: 1 under the roof, 0 open. */
+  roofAlpha(hostKey: string): number;
   deskColor(deskKey: string): TerminalColor;
   lookOf(key: string): TownLook;
   /** The renderer's animation clock, in seconds. */
@@ -82,8 +89,10 @@ export function createTownDragEffects(ctx: TownDragContext) {
     }
     return true;
   };
+  const glide = createTownRoomGlide(ctx, quiet, puffAt);
+  type Rect = { x: number; y: number; w: number; h: number };
   type DragVisual = {
-    kind: "desk" | "agent";
+    kind: "desk" | "agent" | "room";
     key: string;
     ghost: Container;
     /** A carried agent, drawn kicking its legs. */
@@ -94,6 +103,11 @@ export function createTownDragEffects(ctx: TownDragContext) {
     dimmed: Container | null;
     /** The desk snapshot made for this drag; cached textures are never ours. */
     snapshot: Texture | null;
+    /** A carried room: where it was grabbed from its centre, and its size. */
+    room: { dx: number; dy: number; w: number; h: number } | null;
+    /** The carried room's empty spot, and where the other rooms would go. */
+    hole: Rect | null;
+    makeWay: Rect[];
   } & TownDragMotion;
   let drag: DragVisual | null = null;
   const clearDrag = () => {
@@ -109,7 +123,7 @@ export function createTownDragEffects(ctx: TownDragContext) {
     drag = null;
   };
   const beginDrag = (
-    kind: "desk" | "agent",
+    kind: "desk" | "agent" | "room",
     key: string,
     x: number,
     y: number,
@@ -117,13 +131,44 @@ export function createTownDragEffects(ctx: TownDragContext) {
     clearDrag();
     const model = ctx.model();
     const layoutCells = ctx.layoutCells();
-    if (!model || !ctx.layout()) return;
+    const layout = ctx.layout();
+    if (!model || !layout) return;
     const ghost = new Container();
     let home = { x, y };
     let dimmed: Container | null = null;
     let snapshot: Texture | null = null;
+    let room: DragVisual["room"] = null;
+    let hole: Rect | null = null;
     let image: Sprite;
-    if (kind === "desk") {
+    if (kind === "room") {
+      const placed = layout.buildings
+        .flatMap((b) => b.rooms)
+        .find((candidate) => candidate.key === key);
+      if (!placed) return;
+      hole = {
+        x: placed.x * T,
+        y: placed.y * T,
+        w: placed.w * T,
+        h: placed.h * T,
+      };
+      home = { x: hole.x + hole.w / 2, y: hole.y + hole.h / 2 };
+      room = { dx: home.x - x, dy: home.y - y, w: hole.w, h: hole.h };
+      // A snapshot of the room as drawn: floor, desks and the people in it.
+      const building = ctx.buildingOf(placed.hostKey);
+      if (building) {
+        snapshot = ctx.app.renderer.generateTexture({
+          target: building,
+          frame: new Rectangle(hole.x, hole.y, hole.w, hole.h),
+        });
+        image = new Sprite(snapshot);
+      } else {
+        image = new Sprite();
+        image.width = hole.w;
+        image.height = hole.h;
+      }
+      image.anchor.set(0.5);
+      ghost.addChild(image);
+    } else if (kind === "desk") {
       const cell = layoutCells.get(key);
       const pod = ctx.podOf(key);
       if (cell) home = { x: (cell.x + 3) * T, y: cell.y * T + 30 };
@@ -160,9 +205,13 @@ export function createTownDragEffects(ctx: TownDragContext) {
       image.y = -0.7 * 18 * TOWN_AGENT_SCALE;
       ghost.addChild(image);
     }
-    const shadow = new Graphics()
-      .ellipse(0, 0, kind === "desk" ? 30 : 8, kind === "desk" ? 6 : 3)
-      .fill({ color: 0x000000, alpha: 0.32 });
+    const shadow = room
+      ? new Graphics()
+          .roundRect(-room.w / 2, -room.h / 2, room.w, room.h, 6)
+          .fill({ color: 0x000000, alpha: 0.28 })
+      : new Graphics()
+          .ellipse(0, 0, kind === "desk" ? 30 : 8, kind === "desk" ? 6 : 3)
+          .fill({ color: 0x000000, alpha: 0.32 });
     const highlight = new Graphics();
     dragLayer.addChild(highlight, shadow, ghost);
     drag = {
@@ -179,6 +228,9 @@ export function createTownDragEffects(ctx: TownDragContext) {
       target: null,
       dimmed,
       snapshot,
+      room,
+      hole,
+      makeWay: [],
       // It lifts off from where it stood and springs after the pointer.
       phase: { name: "drag", t: 0 },
       shown: townGroundedPose(home.x, home.y),
@@ -189,8 +241,8 @@ export function createTownDragEffects(ctx: TownDragContext) {
     stats.drags.lifts += 1;
     puffAt(
       home.x,
-      home.y + (kind === "desk" ? 24 : 8),
-      kind === "desk" ? 8 : 4,
+      home.y + (room ? room.h / 2 : kind === "desk" ? 24 : 8),
+      room ? 16 : kind === "desk" ? 8 : 4,
     );
     moveDrag(x, y, null);
   };
@@ -199,16 +251,47 @@ export function createTownDragEffects(ctx: TownDragContext) {
     y: number,
     targetKey: string | null,
     snap = false,
+    placement: TownRoomPlacement | null = null,
   ) => {
     const layout = ctx.layout();
     const layoutCells = ctx.layoutCells();
     if (!drag || !layout || drag.phase.name !== "drag") return;
-    drag.x = x;
-    drag.y = y - (drag.kind === "desk" ? 24 : 14);
+    const room = drag.room;
+    drag.x = room ? x + room.dx : x;
+    drag.y = room ? y + room.dy : y - (drag.kind === "desk" ? 24 : 14);
     drag.target = null;
+    drag.makeWay = [];
     drag.slot?.destroy();
     drag.slot = null;
-    if (targetKey && drag.kind === "desk") {
+    if (room) {
+      // Where the room would land, and where the rooms making way would go
+      // (townRoomPlacement), as the town will stand once it is saved.
+      const preview = targetKey ? placement?.rooms : null;
+      const landing = preview?.get(drag.key);
+      if (preview && landing) {
+        // The ghost rests 8 px above a target's centre (townDragMotion).
+        drag.target = {
+          x: landing.x * T,
+          y: landing.y * T + 8,
+          w: landing.w * T,
+          h: landing.h * T,
+        };
+        const now = new Map(
+          layout.buildings.flatMap((b) => b.rooms).map((r) => [r.key, r]),
+        );
+        for (const [key, at] of preview) {
+          const was = now.get(key);
+          if (key === drag.key || !was || (was.x === at.x && was.y === at.y))
+            continue;
+          drag.makeWay.push({
+            x: at.x * T,
+            y: at.y * T,
+            w: at.w * T,
+            h: at.h * T,
+          });
+        }
+      }
+    } else if (targetKey && drag.kind === "desk") {
       // Another desk's slot when reordering in the room or grouping with
       // that desk, or else the next free spot of the target room.
       const room = layout.buildings
@@ -303,11 +386,12 @@ export function createTownDragEffects(ctx: TownDragContext) {
     if (!drag) return puffs.length > 0;
     const { pose, done, landed } = stepTownDrag(drag, dt, clock, quiet());
     const desk = drag.kind === "desk";
+    const room = drag.room;
     // The ground under the ghost: its shadow, and where the dust rises.
-    const ground = desk ? 40 : 12;
+    const ground = room ? room.h / 2 + 8 : desk ? 40 : 12;
     if (landed) {
       stats.drags.landings += 1;
-      if (puffAt(pose.x, pose.y + ground - 2, desk ? 16 : 8))
+      if (puffAt(pose.x, pose.y + ground - 2, room ? 24 : desk ? 16 : 8))
         stats.drags.dust += 1;
     }
     if (done) {
@@ -316,14 +400,31 @@ export function createTownDragEffects(ctx: TownDragContext) {
     }
     const { x, y, tilt, alpha, scale, lift, squash } = pose;
     const phase = drag.phase;
-    // Lifted, the ghost rises off its shadow, which spreads and fades.
-    drag.ghost.position.set(x, y - lift * (desk ? 14 : 10));
-    drag.ghost.rotation = tilt;
-    drag.ghost.alpha = alpha;
-    drag.ghost.scale.set(scale * Math.sqrt(squash), scale / Math.sqrt(squash));
-    drag.shadow.position.set(x, y + ground);
-    drag.shadow.scale.set(1 + 0.35 * lift);
-    drag.shadow.alpha = alpha * (1 - 0.4 * Math.min(1, lift));
+    if (room) {
+      // A whole room barely tilts or squashes; it floats over its shadow.
+      const squashed = 1 + (squash - 1) * 0.25;
+      drag.ghost.position.set(x, y - lift * 10);
+      drag.ghost.rotation = tilt * 0.12;
+      drag.ghost.alpha = alpha * (phase.name === "drag" ? 0.92 : 1);
+      drag.ghost.scale.set(
+        scale * Math.sqrt(squashed),
+        scale / Math.sqrt(squashed),
+      );
+      drag.shadow.position.set(x + 6 * lift, y + 8 * lift);
+      drag.shadow.alpha = alpha * Math.min(1, lift);
+    } else {
+      // Lifted, the ghost rises off its shadow, which spreads and fades.
+      drag.ghost.position.set(x, y - lift * (desk ? 14 : 10));
+      drag.ghost.rotation = tilt;
+      drag.ghost.alpha = alpha;
+      drag.ghost.scale.set(
+        scale * Math.sqrt(squash),
+        scale / Math.sqrt(squash),
+      );
+      drag.shadow.position.set(x, y + ground);
+      drag.shadow.scale.set(1 + 0.35 * lift);
+      drag.shadow.alpha = alpha * (1 - 0.4 * Math.min(1, lift));
+    }
     if (drag.agent) {
       // A carried agent swings from where it is held and kicks its legs.
       const kicking = lift > 0.3 && phase.name !== "land";
@@ -338,13 +439,43 @@ export function createTownDragEffects(ctx: TownDragContext) {
         : 0;
     }
     drag.highlight.clear();
+    // A carried room leaves its spot empty while the town still draws it
+    // there: until it springs back home, or the town shows its new place.
+    const hole = drag.hole;
+    const placed = hole
+      ? ctx
+          .layout()
+          ?.buildings.flatMap((b) => b.rooms)
+          .find((candidate) => candidate.key === drag!.key)
+      : undefined;
+    if (
+      hole &&
+      placed &&
+      placed.x * T === hole.x &&
+      placed.y * T === hole.y &&
+      phase.name !== "back"
+    )
+      drag.highlight
+        .rect(hole.x, hole.y, hole.w, hole.h)
+        .fill({ color: 0x1b1d24, alpha: 0.45 * alpha })
+        .stroke({ color: 0xe8dcc4, width: 2, alpha: 0.5 * alpha });
     if (drag.target && phase.name !== "back") {
       const pulse = 0.12 + 0.08 * Math.sin(clock * 4);
-      const r = drag.target;
+      // A room's landing outline sits where the room will stand.
+      const r = room ? { ...drag.target, y: drag.target.y - 8 } : drag.target;
       drag.highlight
         .rect(r.x, r.y, r.w, r.h)
-        .fill({ color: 0x7be08f, alpha: phase.name === "drag" ? 0.3 : pulse })
-        .stroke({ color: 0x7be08f, width: 1.5, alpha: 0.9 });
+        .fill({
+          color: 0x7be08f,
+          alpha: (phase.name === "drag" ? 0.3 : pulse) * (room ? 0.6 : 1),
+        })
+        .stroke({ color: 0x7be08f, width: room ? 3 : 1.5, alpha: 0.9 });
+      // The rooms that make way: outlines where each would go.
+      if (phase.name === "drag")
+        for (const way of drag.makeWay)
+          drag.highlight
+            .rect(way.x, way.y, way.w, way.h)
+            .stroke({ color: 0xe8dcc4, width: 2, alpha: 0.55 });
     }
     return true;
   };
@@ -354,8 +485,24 @@ export function createTownDragEffects(ctx: TownDragContext) {
     moveDrag,
     endDrag,
     finishMove,
-    /** Advance drag effects and dust; true while anything still moves. */
-    update: updateDrag,
-    clear: clearDrag,
+    /** Tidy rooms: snapshot a building's rooms to glide to their new spots. */
+    beginGlide: glide.begin,
+    /** How the tidy's save ended: one not saved glides nothing. */
+    finishGlide: glide.finish,
+    /** Advance drag effects, glides and dust; true while anything moves. */
+    update: (dt: number) => {
+      // The glide first: the dust of a landing room moves this frame.
+      const gliding = glide.update();
+      return updateDrag(dt) || gliding;
+    },
+    clear: () => {
+      clearDrag();
+      glide.clear();
+    },
+    /**
+     * A desk, agent or room is carried or landing, or rooms are being
+     * tidied: the scene changes in place.
+     */
+    active: () => drag !== null || glide.active(),
   };
 }

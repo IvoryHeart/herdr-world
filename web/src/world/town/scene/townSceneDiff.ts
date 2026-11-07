@@ -27,6 +27,18 @@ export type TownSceneState = {
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys: ReadonlySet<string>;
   askingKeys?: ReadonlySet<string>;
+  /** Agents in the bin, who leave by the front door (townBus.ts). */
+  awayKeys?: ReadonlySet<string>;
+  /**
+   * Agents whose mark their reception does not take, who stay at their desks
+   * (townReceptionFilter.ts).
+   */
+  heldKeys?: ReadonlySet<string>;
+  /**
+   * New agents on their way in from the town center or a bus stop, who wait
+   * outside their front door until they reach it (townArrivals.ts).
+   */
+  arrivingKeys?: ReadonlySet<string>;
   /** Building currently held open (for example while moving a desk). */
   openHostKey: string | null;
   calm: boolean;
@@ -47,10 +59,12 @@ export type TownSceneFrame = {
   layout: TownLayout;
   state: TownSceneState;
   dirty: TownSceneDirty;
+  /** What each building is baked from now. */
+  bakeKeys: TownBakeKeys;
 };
 
 const NONE: ReadonlySet<string> = new Set();
-const CLEAN: TownBakeDirty = { scene: false, buildings: NONE };
+const CLEAN: TownBakeDirty = { scene: false, buildings: NONE, removed: NONE };
 
 /** Tracks what one renderer has applied, and what it must apply next. */
 export class TownSceneDiff {
@@ -89,15 +103,30 @@ export class TownSceneDiff {
       bake = townBakeDirty(this.bakeKeys, keys);
       this.bakeKeys = keys;
     }
-    // Agents follow the model, the layout and the summoned and asking marks.
+    // Agents follow the model, the layout and the summoned, asking, away,
+    // held and arriving marks.
     let actors = NONE;
     const asking = state.askingKeys ?? NONE;
+    const away = state.awayKeys ?? NONE;
+    const held = state.heldKeys ?? NONE;
+    const arriving = state.arrivingKeys ?? NONE;
     if (
       scene ||
       state.summonedKeys !== this.state?.summonedKeys ||
-      asking !== (this.state?.askingKeys ?? NONE)
+      asking !== (this.state?.askingKeys ?? NONE) ||
+      away !== (this.state?.awayKeys ?? NONE) ||
+      held !== (this.state?.heldKeys ?? NONE) ||
+      arriving !== (this.state?.arrivingKeys ?? NONE)
     ) {
-      const keys = townActorKeys(model, layout, state.summonedKeys, asking);
+      const keys = townActorKeys(
+        model,
+        layout,
+        state.summonedKeys,
+        asking,
+        away,
+        held,
+        arriving,
+      );
       actors =
         this.actorKeys === null
           ? new Set(keys.keys())
@@ -112,6 +141,7 @@ export class TownSceneDiff {
       layout,
       state,
       dirty: { first, scene, bake, actors },
+      bakeKeys: this.bakeKeys!,
     };
   }
 }

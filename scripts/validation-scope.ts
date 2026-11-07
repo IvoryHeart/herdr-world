@@ -1,4 +1,5 @@
 import { affected, buildGraph, gitChanges, TEST, type Graph } from "./affected";
+import { readFileSync } from "node:fs";
 import { readCoverageScope } from "./coverage-scope";
 import {
   worldBrowserSuites,
@@ -17,11 +18,7 @@ export function isToolingPath(path: string): boolean {
     return false;
   return (
     path.startsWith("scripts/agent/") ||
-    [
-      "docs/agent-development.md",
-      "docs/crew-runbook.md",
-      "docs/dispatch-runbook.md",
-    ].includes(path) ||
+    path === "docs/agent-development.md" ||
     /^changes\/[a-z0-9][a-z0-9-]*\.md$/.test(path)
   );
 }
@@ -64,6 +61,25 @@ const NATIVE =
   /^(?:server\/|shared\/|scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
 const WORLD_RUNTIME =
   /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
+
+// Native jobs are the authority for their explicitly named test consumers.
+// Derive these paths so adding a native test cannot leave scoped PR CI skipping it.
+const nativeTestConsumers = new Set<string>();
+for (const [file, jobs] of [
+  ["ci.yml", ["plugin-windows", "launchd"]],
+  ["installer-upgrade.yml", ["upgrade"]],
+] as const) {
+  const workflow = Bun.YAML.parse(
+    readFileSync(
+      new URL(`../.github/workflows/${file}`, import.meta.url),
+      "utf8",
+    ),
+  ) as { jobs: Record<string, { steps: { run?: string }[] }> };
+  for (const job of jobs)
+    for (const step of workflow.jobs[job]!.steps)
+      for (const path of step.run?.match(/[\w./-]+\.test\.[cm]?[jt]sx?/g) ?? [])
+        nativeTestConsumers.add(path.replace(/^\.\//, ""));
+}
 
 export function ordinaryDocumentation(
   paths: readonly string[],
@@ -199,7 +215,11 @@ export function selectValidation(
     packaging:
       !tooling &&
       (full ||
-        paths.some((path) => NATIVE.test(path) && !TEST.test(path)) ||
+        paths.some(
+          (path) =>
+            nativeTestConsumers.has(path) ||
+            (NATIVE.test(path) && !TEST.test(path)),
+        ) ||
         (!browserPlanOnly &&
           chosen.some((path) =>
             /^scripts\/(?:install|plugin|package|homebrew)/.test(path),

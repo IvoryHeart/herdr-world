@@ -66,7 +66,7 @@ const open = async () => {
     { clock: systemClock, scheduler: systemScheduler },
   );
   stores.push(store);
-  store.board().patch([
+  await store.board().patch([
     {
       op: "appearance.set",
       target: {

@@ -388,9 +388,9 @@ export function formatOfficeUsage(value: number) {
   return Math.round(value).toString();
 }
 
-export function formatOfficeModelNames(
-  models: readonly OfficeObservabilityModel[],
-) {
+export function formatOfficeModelNames<
+  Model extends Pick<OfficeObservabilityModel, "model">,
+>(models: readonly Model[]) {
   const names = models
     .slice(0, 3)
     .map(({ model }) => formatOfficeModelName(model));

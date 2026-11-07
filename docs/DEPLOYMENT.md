@@ -25,7 +25,8 @@ directory; a lock left by a World that is no longer running is taken over.
 ### Durable questions, results and backups
 
 `world.sqlite` in that instance's data directory holds agent questions, answers,
-task-result notices, undo history, the attention outbox, agent profiles and chimes. One in-process worker
+task-result notices, undo history, the attention outbox, agent profiles, chimes,
+auto-sync runtime status and Board state. One in-process worker
 owns it; SQLite uses WAL and `synchronous=FULL`. Responses acknowledge a durable
 commit. Grouping up to 32 operations or 5 ms reduces synchronization frequency;
 these settings do not promise a particular response latency on every platform.
@@ -49,6 +50,14 @@ asking session records not sent, leaving `ask get` available. Existing questions
 are not backfilled, and dismissals send no pane input. CLI callers on other
 platforms, SSH callers and asks without a supported verified binding remain
 retrieval-only.
+
+After World restarts, existing alert and answer intents cannot submit to Herdr:
+the current protocol supplies no native boot witness, and a recycled generation
+or matching session label does not establish runtime continuity. Provably unsent
+intents record not sent; possible sends stay uncertain for manual resolution.
+Missing legacy authority also refuses dispatch. Questions, answers and receipts
+are retained, with `herdr-world ask get ID` available for retrieval. New alerts
+and newly captured recipients have authority for the current World run only.
 
 A possible pane send is **opaque**: after a crash or lost receipt World records
 uncertain and never automatically repeats it. Town Summary’s Outbox exposes
@@ -126,6 +135,33 @@ trusted private network or VPN. Keep password/token recovery available. PIN logi
 has separate per-client throttling and a global cooldown after ten failures;
 that cooldown does not block password/token login.
 
+### Board storage
+
+Board notes, strings, appearance, layout preferences, interest and relations live
+in separate `world.sqlite` tables. The Board, Town, Spaces and CLI keep their
+existing controls and document/revision protocol. Saved strings, appearance,
+qualified tab colours and terminal interest use the existing identity bindings;
+layout positions, pins, folds and workspace/host colours remain native-keyed
+preferences. Runtime claims remain in memory.
+
+Before the first Board import, World preserves exact `boards/board.json` bytes
+(or `HERDR_WORLD_BOARD_PATH`) beside the source as
+`<source>.<sha256>.sqlite-import.bak`, private to the service user. Rows, bindings
+and the completion marker commit together before the listener starts. A missing
+source initializes an empty Board once. The override selects the legacy import
+source; new Board writes go only to the instance database. Later starts ignore
+all retained JSON versions, including malformed ones, and never restore deleted
+notes or overwrite SQLite edits.
+
+Malformed initial input or an unsafe/conflicting backup stops startup without
+partial Board data. Preserve the source and backup, repair the source or safely
+move a conflicting backup aside, then restart. World never overwrites a
+conflicting backup. Recover the migrated Board from a stopped, consistent
+whole-directory backup as described above. A binary predating this migration
+sees only retained JSON; its edits are not reimported when upgrading again.
+Reconcile such edits explicitly from preserved copies. Do not delete SQLite
+import records to force a replay.
+
 ### Agent profile storage
 
 Agent profiles, chimes, pending legacy terminal settings, their per-connection
@@ -182,7 +218,7 @@ previous result and a later scheduled run. Runtime field claims remain in memory
 
 ## Requirements
 
-- A supported Linux, macOS, or Windows release, or Bun 1.4.1+ for a source build.
+- A supported Linux, macOS, or Windows release, or Bun 1.4.4+ for a source build.
 - Herdr 0.9.0 / terminal protocol 22 for the current endpoint path. The bridge also
   recognizes the older protocol range covered by its compatibility tests.
 - OpenSSH on Linux or macOS for saved SSH profiles. Windows supports local profiles.
@@ -394,7 +430,7 @@ verified release:
 
 ```bash
 herdr-world herdr status
-herdr-world herdr setup             # install if missing, then start a user service
+herdr-world herdr setup             # register future startup; start only if down
 herdr-world herdr upgrade           # Herdr, harness integrations and plugin
 herdr-world herdr upgrade --install # also install Herdr when none is found
 ```
@@ -404,6 +440,23 @@ location: `~/.local/bin/herdr` on Linux and macOS, or
 `%LOCALAPPDATA%\Programs\Herdr\bin\herdr.exe` on Windows (`HERDR_INSTALL_DIR`
 overrides both, as it does for Herdr's own installers). A Herdr that World installs
 lands there, so `herdr` and `herdr update` find it afterwards.
+
+Explicit `herdr setup` configures the default local user service even when Herdr
+is already reachable. A running server is preserved: systemd reloads/enables its
+unit without restarting, macOS writes/enables its LaunchAgent for the next login
+without bootout/bootstrap, and Windows registers its logon task without starting
+or stopping it. An unmanaged live process is not adopted by a new supervisor.
+The registered definition takes effect at the next user login (or a later
+explicit service start). If the running server's executable cannot be found,
+setup fails with guidance to set `HERDR_BIN_PATH`; it does not download a second
+runtime. Registration errors are failures, not reachability-only success.
+Before registering a running server's future startup, setup requires the selected
+binary to be a regular executable file. A directory or non-executable entry is
+preserved and reported for repair, without changing service registration.
+SSH, named sessions and custom control/render sockets remain ineligible for
+managed setup. Normal World startup reconnects to Herdr without registering a
+service. World service activation, downstream runtime readiness and browser/PWA
+reopening are separate; this setup behavior does not verify macOS login recovery.
 
 When it runs:
 
@@ -551,6 +604,30 @@ herdr-world --socket-path /path/to/herdr.sock \
 herdr-world --ssh-host workbox
 ```
 
+### SSH command sharing and port forwards
+
+World keeps a private command connection for each SSH runtime, alongside its
+independent terminal tunnel. Repeated file, Git and transcript reads can reuse
+that command connection. If it is unavailable, commands still use the same
+configured destination; they never borrow another profile's master. Set
+`HERDR_WORLD_DISABLE_SSH_MASTER=1` in the service environment and restart to use
+individual command connections. This does not change your OpenSSH authentication
+or host-key policy. Fixed keepalives end established sessions that stop answering.
+
+The service also supports explicit local and reverse port-forward RPCs after
+login, bound to the selected connection and runtime. World does not offer
+upstream's web forwarding controls yet (see the
+[follow-up](upstream-follow-ups.md#browser-port-forward-controls)). As upstream,
+they belong only on a page served over loopback: the forward binds where the World
+server runs, so a remote browser would address the wrong machine. Authentication
+is the access boundary; the service adds no forwarding-specific WebSocket-peer
+restriction. An authenticated terminal can already run forwarding commands.
+A forward ends with its owning runtime and is never automatically reopened.
+Local forwards bind `127.0.0.1`. Reverse forwards request remote `127.0.0.1`,
+but the host's `GatewayPorts yes` policy can expose the remote listener to its
+network; check that host's SSH policy before exposing a local service. World's
+own listener and the development proxy cannot be exposed through its reverse-forward API.
+
 ## Agent profiles and the launcher
 
 **New agent** starts a harness in a new Herdr tab through the connection that
@@ -617,9 +694,18 @@ Jira or SSH lookup finishes in the background.
   source says **Sign in with gh auth login**. World stores no GitHub token.
   Merged pull requests cover the last 7 days by default (1 to 90 in
   **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
-  World follows cursor pages of 100 results through GitHub search's 1,000-result
-  limit. The configured window filters this history; there is no smaller
-  client-side count cap.
+  World reads open authored, review-requested and assigned pull requests in
+  separate requests of at most 50 each, then reads your own pull requests'
+  action details before merged history. History uses cursor pages of 50, up to
+  400 pull requests, under the same one-minute refresh deadline. These smaller
+  requests reduce the risk of GitHub's ten-second GraphQL timeout; they cannot
+  guarantee a response time. The first history page checks the count once;
+  over 400 stops immediately. If the count or deadline shortens history, the
+  source reports an error and keeps its last complete list. The message names
+  the oldest valid merge date actually observed, or says no merge date could
+  be confirmed. That date describes an observation, not continuous coverage or
+  a retention cutoff. Shorten the merged window in **Settings → Sources** and
+  refresh. A shortened refresh never replaces the list or authorizes actions.
 - **Your open pull requests** are read in more detail: checks on the head,
   changed files, and the last 30 reviews and 50 comments, which stay in the
   service (the browser gets only reviewer results and an image count). World
@@ -847,6 +933,18 @@ investigation, run `herdr-world --log-level debug` or set
 redact diagnostic logs before sharing them. Authentication tokens are kept in
 protected files rather than logged startup URLs.
 
+Debug transport samples include Herdr method, byte counts, connection and response
+latency; SSH command labels, queue/process counts and startup failures; and terminal
+input-to-next-surface timing. The latter is an upper bound on echo, because unrelated
+output can produce the next surface, and expires after five seconds. These samples
+do not log terminal input or RPC payloads and do not establish a latency guarantee.
+
+Browser latency samples are opt-in per browser: add `?debugLatency` to the World
+URL, or set the local-storage key `herdr-world:foundation-v2:debugLatency` to `1`
+and reload. They go to the console's Verbose level, time a typed key to the next
+written terminal frame and record attach watchdog firings. They carry timings and
+identifiers, never input.
+
 ## User service
 
 ```bash
@@ -976,6 +1074,22 @@ retain endpoint, Herdr server and workspace identity; a changed identity prevent
 recovery. Interactive requests capture the current connection generation and
 cannot continue against a replacement runtime.
 
+**Claude Code** is an additional Ranger provider. The `claude` executable and its
+sign-in must belong to the account running the World service. Ranger uses the
+CLI's existing authentication rather than copying it into model-provider settings.
+Its internal MCP listener is private to the service-owned driver, binds loopback
+on an ephemeral port, and issues a separate capability token for each turn. It
+provides Ranger's qualified tools; browsers continue to use only the World origin.
+Disposing that driver stops its listener. An interrupted Claude turn fails closed
+and holds queued messages for an explicit continuation.
+
+Tasks may select **All workspaces, new ones too** over their current explicitly
+allowed workspaces without enabling broader high-permission access. Membership
+is recomputed for each run, then that run captures current owners. Dynamic
+membership intent and run omission notices survive service restart. Fixed-scope tasks retain their existing endpoint/workspace recovery checks.
+Showing a workspace or session affects only the browser that asked and still
+requires its captured runtime; an unavailable target never falls back to a profile.
+
 Ranger state and credentials live in the World data directory's `assistant`
 subdirectory. `HERDR_WORLD_ASSISTANT_DIR` overrides that location. Keep this data
 private. Models receive the selected workspace context; choose providers and
@@ -1022,3 +1136,103 @@ Task edits preserve saved model, scope and agent references; a confirmed manual
 edit downgrades future execution to manual approval. Delete requires prior
 cancellation. Close-agent, close-pane and close-workspace previews recheck captured
 occupants before dispatch and do not delete checkout files or agent history.
+
+## Desk, watchlist and completion storage
+
+Desk review marks, recent opens and stop metadata, watchlist pins live in `world.sqlite` in the instance data directory. All browsers
+share committed changes. Include the database in a stopped data-folder backup;
+its schema upgrade first preserves the existing private SQLite migration backup.
+
+After a restart or runtime replacement, saved records remain unresolved until
+World reads a complete, unambiguous list from the original connection. The same
+terminal and captured known session restore Desk records. Watches
+follow the terminal across pane moves. A complete current terminal absence clears
+watch records and ends the Desk capture; a positive known session
+replacement ends the old Desk capture as history. Ended Desk captures
+are unassociated history and cannot attach again. Missing known-session evidence
+and duplicate identities never attach that saved Desk capture. Agents first seen
+stopped receive a fresh stop identity without inventing a historical stop time.
+The 12-hour idle display window expires only the display timestamp, retaining an
+unreviewed stop for later review. Unknown-session Desk reviews remain shared
+within their admitted live ownership, but cannot safely carry across World or
+Herdr/runtime restart: supported Herdr observations expose no runtime-instance
+proof. Their acknowledgements stay in unassociated history; fresh observation
+gets a new current stop. Admitting an unknown agent durably ends an earlier
+known capture, preserving its acknowledgement as ended history; a later World
+restart cannot forget that replacement. A null-to-known owner never inherits
+the earlier review. Renewed work or later native completion progress names a new
+Desk stop. Herdr restarting with new terminals therefore does not inherit old marks.
+
+Unpin removes its exact saved watch even while the host is unavailable. The browser
+carries the returned `watch_id`, so an older Unpin cannot remove a replacement.
+If the same saved watch reattaches after a runtime change, Unpin removes its
+current projection from the reply and every browser.
+Older API callers without this field can use an unambiguous runtime-qualified
+capture remembered by the current service; repeated reuse requires the returned
+ID. Disconnecting one host cannot restore its old projection when another host's
+storage write finishes. Pending Desk commands also lose admission
+on observed agent replacement, including unknown identities and a return to the
+original session. Controls and their visible wording are unchanged.
+
+The first upgrade cannot adopt the stopped service's process memory: those stores
+had no file/export with original binding evidence. Current browsers only hold
+service projections. Obsolete browser-local Desk and completion keys are not
+imported, because they can predate newer clears and lack original binding proof.
+The first upgrade starts these families empty; subsequent committed marks survive
+restarts. Board layout/Town pinned cells use the separate Board migration. Ordinary
+Town placement and device preferences retain their current ownership.
+
+No terminal text, receipt content, credentials or runtime fences enter this family.
+Current Desk stops follow source/session lifetime and are never displaced by
+history. Inactive/ended Desk history retains at most 500 rows, oldest-first;
+known-session restart captures stay unresolved/protected during source recovery,
+and are classified only by fresh observation or confirmed unavailability.
+Entering reconnect recovery protects known captures again before any history
+trimming, including sources already observed earlier in the process. There
+are still at most 40 recent opens and 128 watches. Desk
+wire metadata and serialized SQLite rows each have a 768 KiB budget, leaving
+headroom below the unchanged 1 MiB frame ceiling. History yields first to the byte
+budget; if current metadata alone exceeds it, World reports `Desk capacity
+exceeded` and refuses the operation without evicting current stops, acknowledging
+a failed review or stopping the service. Capacity preflight uses the writer's
+canonical unresolved binding representation for the entire resulting plan,
+reserves for the worker's commit timestamp and applies shrinking updates before
+growth, so a capacity-refused observation cannot leave a committed prefix.
+Malformed native identities refuse the whole observation before writes or
+absence classification. The refusal is nonfatal, leaves existing rows intact,
+and clears after a valid current observation; no partial filtered listing can
+prove terminal absence. Without native progress, World cannot discover a complete
+work/completion cycle it never observed. Process-crash tests do not establish
+physical power-loss durability.
+
+### Upgrade from separate completion checks
+
+Schema 10 retires `world.completion_seen.list` and `.mark`: Town, Desk and Needs
+you use only Desk's stop-qualified review. Upgrade atomically preserves the
+original Desk/watch rows and bindings. A private service-only archive retains at
+most the newest 4,096 legacy receipts, with a separate 64 MiB canonical serialized
+row budget. A budget violation refuses the upgrade with a labelled error and
+leaves schema 9 intact; it never raises the 1 MiB frame limit. Receipts never
+appear in Desk responses and add no controls or service verbs.
+
+After upgrade, a fresh complete unambiguous observation can convert a receipt
+only for the same connection ID, terminal, known session and unchanged native
+state-change sequence. It marks the current canonical Desk stop in the same
+SQLite transaction that removes the receipt. Replacement, unknown ownership or
+native progress permanently disqualifies it; a newer Desk review or exact Undo
+cannot be overwritten. Unknown-session receipts never transfer review, because
+Herdr exposes no checkable runtime-instance proof. Such work can need review once
+again after upgrade. Missing sequence proof defers conversion.
+
+Unresolved receipts drain when a fresh complete original-source observation proves
+the terminal gone, or 30 days after migration, even if the source stays offline.
+Restart retains the original migration deadline. The archive accepts no new
+receipts; a later release will remove its table. Ordinary Desk history and current
+stop protection keep their existing independent bounds.
+
+An archive proof admitted before the 30-day deadline cannot transfer review if
+the resolving Desk write reaches the deadline: the writer rechecks it within
+that same SQLite savepoint. Activity must also agree with the actual World leaf.
+Sparse or duplicate agent metadata that would name a different activity token
+defers transfer and retains the receipt until a safe matching observation; it
+never substitutes that metadata for session or native-sequence authority.

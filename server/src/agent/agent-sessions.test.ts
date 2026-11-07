@@ -105,7 +105,16 @@ function remotePiFiles(text: string): AgentSessionFileAccess {
     async findCodexSessionByPrefix() {
       return null;
     },
+    async findPiSessionForCwd() {
+      return null;
+    },
     async findPiSessionById() {
+      return null;
+    },
+    async findClaudeSessionById() {
+      return null;
+    },
+    async findClaudeSuccessor() {
       return null;
     },
     async findCodexSessionById() {
@@ -207,6 +216,97 @@ describe("Pi agent sessions", () => {
       },
     ]);
   });
+  test("returns persisted OMP skill prompts and execution messages in history and summaries", async () => {
+    const path = remotePiSessionPath;
+    const records = [
+      { type: "session", version: 3, id: "omp-session", cwd: "/tmp/project" },
+      {
+        type: "custom_message",
+        id: "skill-1",
+        timestamp: "2026-07-24T00:00:00.000Z",
+        customType: "skill-prompt",
+        attribution: "user",
+        display: true,
+        content: "<skill>Expanded instructions</skill>",
+        details: {
+          name: "review",
+          args: "this change",
+          prompt: "/skill:review this change",
+        },
+      },
+      {
+        type: "message",
+        id: "execution-1",
+        timestamp: "2026-07-24T00:00:01.000Z",
+        message: {
+          role: "bashExecution",
+          command: "false",
+          output: "failure-output",
+          exitCode: 1,
+          cancelled: false,
+          timestamp: 1,
+        },
+      },
+    ];
+    const handlers = createAgentSessionHandlers({
+      herdrCall: async () => ({
+        agent: {
+          agent: "omp",
+          workspace_id: "w1",
+          tab_id: "t1",
+          cwd: "/tmp/project",
+          agent_session: {
+            source: "herdr:omp",
+            agent: "omp",
+            kind: "path",
+            value: path,
+          },
+        },
+      }),
+      files: remotePiFiles(
+        `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+      ),
+    });
+    const history = await handlers.readHistory({
+      pane_id: "p1",
+      agent: "omp",
+      history_version: 2,
+    });
+
+    if (!("mode" in history) || history.mode !== "snapshot")
+      throw new Error("Expected history snapshot");
+    expect(history.entries).toHaveLength(2);
+    expect(history.entries[0]).toMatchObject({
+      role: "user",
+      kind: "message",
+      text: "/skill:review this change",
+    });
+    expect(history.entries[1]).toMatchObject({
+      role: "tool",
+      kind: "tool_result",
+      tool_name: "bash",
+      is_error: true,
+      text: "",
+    });
+    const entry = await handlers.readEntry({
+      pane_id: "p1",
+      agent: "omp",
+      entry_id: history.entries[1]!.id,
+    });
+    expect(entry.text).toBe(
+      "Ran `false`\n\nOutput:\nfailure-output\n\nCommand exited with code 1",
+    );
+    const summary = await handlers.readSummary({
+      pane_id: "p1",
+      agent: "omp",
+      include_trajectory: true,
+    });
+    expect(summary.stats.turns).toBe(1);
+    expect(summary.trajectory?.steps[0]).toMatchObject({
+      source: "user",
+      message: "/skill:review this change",
+    });
+  });
 
   test("includes Pi statistics and ATIF in Session Inspect", async () => {
     const path = await createPiSession();
@@ -234,26 +334,27 @@ describe("Pi agent sessions", () => {
     });
   });
 
-  test("shows the official integration command when Pi has no session", async () => {
+  test("shows startup guidance when Pi has not yet reported a session", async () => {
     const result = await readAgentMessageHistory(
       { pane_id: "p1", agent: "pi" },
       async () => ({ agent: { agent: "pi" } }),
     );
 
     expect(result.status).toBe("missing_session");
-    expect(result.command).toBe("herdr integration install pi");
+    expect(result.command).toBeUndefined();
+    expect(result.detail).toContain("Terminal");
   });
 
-  test("explains how to identify a Codex pane's conversation", async () => {
+  test("directs an unidentified Codex pane to Terminal before integration advice", async () => {
     const result = await readAgentMessageHistory(
       { pane_id: "p1", agent: "codex" },
       async () => ({ agent: { agent: "codex" } }),
     );
 
     expect(result.status).toBe("missing_session");
-    expect(result.detail).toContain("/title");
-    expect(result.detail).toContain("--no-daemon");
-    expect(result.command).toBe("herdr integration install codex");
+    expect(result.detail).toContain("Terminal");
+    expect(result.detail).not.toContain("--no-daemon");
+    expect(result.command).toBeUndefined();
   });
 
   test("binds Herdr and file access inside each runtime handler bundle", async () => {

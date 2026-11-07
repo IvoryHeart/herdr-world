@@ -1,14 +1,24 @@
+import { useDrawReadiness } from "./useDrawReadiness";
 import { worldRuntimeStore } from "./runtimeStore";
 import { AppearanceAvatar } from "./AppearanceAvatar";
 import { visibleAppearanceColors, saveAppearance } from "./appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
 import { useWorldAsks } from "./worldAsks";
+import { agentStateWord } from "./agentMarks";
+import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
 import { boardObservation } from "./board/boardObservation";
 import { ConnectionRecoveryBanner } from "./ConnectionRecoveryBanner";
 import { bridge } from "../api";
-import { ChevronDown, ChevronUp, Pin, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  Pin,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import {
   type CSSProperties,
   lazy,
@@ -107,6 +117,12 @@ import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
 import { BoardZoneColor } from "./board/BoardZoneColor";
 import { WorkLens } from "./board/WorkLens";
 import { BoardControls } from "./board/BoardControls";
+import { boardAppearanceStyle } from "./board/boardAppearance";
+import { useBoardAppearance } from "./board/useBoardAppearance";
+import { nextBoardAttention } from "./board/boardAttention";
+import { BoardStatusSummary } from "./board/BoardStatusSummary";
+import { useBoardPaneMoves } from "./board/useBoardPaneMoves";
+import type { BoardPaneMove } from "./board/boardPaneMove";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { TraceOverlay } from "./devtools/TraceOverlay";
 import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
@@ -122,6 +138,7 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
+import "./board/boardBadge.css";
 import "./board/boardRelations.css";
 import {
   relationTeams,
@@ -129,6 +146,8 @@ import {
   type TerminalRef,
 } from "../../../shared/relations";
 import { inheritedColorKey } from "../../../shared/terminalColor";
+import { aimAtBin } from "./bin/binDrop";
+import { putAgentInBin } from "./bin/WorldBin";
 import {
   groupTerminals,
   terminalsAreGrouped,
@@ -143,13 +162,12 @@ import {
  * comes to rest within about a second. See openspec/changes/board-view.
  */
 
-const STATUS_LABEL: Record<WorldAgentStatus, string> = {
-  blocked: "Needs you",
-  working: "Working",
-  done: "Finished, not checked",
-  idle: "Idle",
-  unknown: "No signal",
-};
+const STATUS_LABEL = Object.fromEntries(
+  (["blocked", "working", "done", "idle", "unknown"] as const).map((status) => [
+    status,
+    agentStateWord(status),
+  ]),
+) as Record<WorldAgentStatus, string>;
 const OVERVIEW_IN = 0.44;
 const OVERVIEW_OUT = 0.5;
 const MIN_ZOOM = 0.12;
@@ -382,12 +400,12 @@ function rowsByUrgency(tab: BoardTab): BoardPane[] {
 }
 
 function paneName(pane: BoardPane) {
-  if (!pane.isAgent) return "shell";
+  if (!pane.isAgent) return "terminal";
   return pane.leaf.agentName ?? pane.leaf.agentLabel ?? "agent";
 }
 
 function paneLine(pane: BoardPane, status: WorldAgentStatus) {
-  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "shell";
+  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "terminal";
   return (
     pane.leaf.taskSummary ?? pane.leaf.terminalTitle ?? STATUS_LABEL[status]
   );
@@ -436,6 +454,7 @@ export default function BoardView({
   checkAnchor = checkAnchorThroughService,
   startAgent = startAgentThroughService,
   moveTab = moveTabThroughService,
+  movePane,
   createTab = createTabThroughStore,
   conversationNodeIds = NO_IDS,
   onNodeAnchorsChange,
@@ -462,6 +481,7 @@ export default function BoardView({
     space: BoardWorkspace,
     allowClose: boolean,
   ) => Promise<TabMoveOutcome>;
+  movePane?: BoardPaneMove;
   /** Start an agent in a workspace with a note; World's service by default. */
   startAgent?: (
     space: BoardWorkspace,
@@ -575,6 +595,11 @@ export default function BoardView({
     stringFrom?: StringEnd;
   } | null>(null);
   const [pulses, setPulses] = useState(readPulses);
+  const { appearance, change: changeAppearance } = useBoardAppearance();
+  const nextAttention = useMemo(
+    () => nextBoardAttention(fullModel.tabs, selectedId, asking),
+    [fullModel, selectedId, asking],
+  );
   // The event trace exists only in development builds (devtools/flag.ts).
   const trace = useMemo(() => (DEVTOOLS ? openTrace("board") : NO_TRACE), []);
   // Read at mount: setting it from an effect re-rendered the Board once.
@@ -610,6 +635,32 @@ export default function BoardView({
   );
   /** The card under the pointer while dragged, and where it was grabbed. */
   const held = useRef<{ key: string; grab: Point } | null>(null);
+  /** The held card is over the bin: a drop puts its agents in it. */
+  const overBin = useRef(false);
+  /** Put the panes' agents in the bin; a pane that is not an agent stays. */
+  const binPanes = (panes: readonly BoardPane[]) => {
+    const agents = panes.filter(
+      (pane) =>
+        pane.isAgent &&
+        pane.leaf.kind === "agent" &&
+        !pane.leaf.stale &&
+        pane.leaf.actionable,
+    );
+    if (!agents.length) {
+      setToast({ text: "Only an agent can go in the bin" });
+      return;
+    }
+    for (const pane of agents) void putAgentInBin(pane.leaf, "board", world);
+  };
+  const paneMoves = useBoardPaneMoves({
+    model,
+    move: movePane,
+    bin: (panes) => binPanes(panes),
+    notice: (text) => setToast({ text }),
+    moved: () => {
+      void boardStore.refresh();
+    },
+  });
   /** A string being drawn from a card or note. */
   const stringDrag = useRef<{
     from: StringEnd;
@@ -632,6 +683,7 @@ export default function BoardView({
   // data-moving says whether the board still has work to draw: true from a
   // request until a frame finds nothing moving (tests wait on it).
   const invalidate = (reason: string) => {
+    if (reason !== "capture") capture.current?.invalidate(reason);
     const board = boardRef.current;
     if (board && board.dataset.moving !== "true") board.dataset.moving = "true";
     loopRef.current?.invalidate(reason);
@@ -641,6 +693,9 @@ export default function BoardView({
     invalidate("physics");
   };
   const fitted = useRef(false);
+  const capture = useDrawReadiness("board", boardRef, () =>
+    invalidate("capture"),
+  );
   const farRef = useRef(far);
   const yarnEls = useRef(new Map<string, SVGPathElement[]>());
   /** Strings between cards whose terminals know each other (relations). */
@@ -775,6 +830,7 @@ export default function BoardView({
     return cards.current.get(key)?.size ?? DEFAULT_SIZE[kind];
   }, []);
 
+  const placedModel = useRef<BoardModel | null>(null);
   /* ---------- Model changes: measure, place new cards, keep the rest ---------- */
   useLayoutEffect(() => {
     large.current = model.workspaces.length + model.tabs.length > CULL_ABOVE;
@@ -791,6 +847,7 @@ export default function BoardView({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [model, sizeOf]);
   function placeModel() {
+    placedModel.current = model;
     if (!farRef.current && !large.current)
       for (const [key, el] of cardEls.current) {
         const card = cards.current.get(key);
@@ -1188,6 +1245,16 @@ export default function BoardView({
     }
     const svg = svgRef.current;
     if (svg) paint(svg, m);
+    capture.current?.drawn(
+      !built ||
+        shownWorld !== world ||
+        placedModel.current !== model ||
+        (cards.current.size > 0 && !fitted.current) ||
+        renderKeys !== renderKeysRef.current ||
+        !saved
+        ? "placement/observation"
+        : undefined,
+    );
     return (
       tweens.current.size > 0 ||
       physics.current.heat > 0 ||
@@ -1286,7 +1353,7 @@ export default function BoardView({
           el =
             shown(
               card?.querySelector<HTMLElement>(
-                `[data-pane="${CSS.escape(pane.key)}"]`,
+                `.board-pane[data-pane="${CSS.escape(pane.key)}"]`,
               ),
             ) ??
             card ??
@@ -1530,7 +1597,7 @@ export default function BoardView({
     if (key === target.cardKey && target.paneKey) {
       const el = cardEls.current.get(key);
       const row = el?.querySelector<HTMLElement>(
-        `[data-pane="${CSS.escape(target.paneKey)}"]`,
+        `.board-pane[data-pane="${CSS.escape(target.paneKey)}"]`,
       );
       if (el && row)
         return {
@@ -1876,6 +1943,7 @@ export default function BoardView({
         return;
       }
       case "liftCard": {
+        if (paneMoves.begin(effect.target, effect.at)) return;
         const card = cards.current.get(effect.key);
         if (!card) return;
         const grab = toWorld(effect.grab.x, effect.grab.y);
@@ -1891,12 +1959,15 @@ export default function BoardView({
         return;
       }
       case "moveCard":
+        if (paneMoves.move(effect.at)) return;
         moveHeld(effect.at);
         return;
       case "dropCard":
+        if (paneMoves.drop(effect.at)) return;
         dropHeld(effect.vx / cam.current.s, effect.vy / cam.current.s);
         return;
       case "settleCard":
+        if (paneMoves.cancel()) return;
         dropHeld(0, 0);
         return;
       case "tap":
@@ -2013,6 +2084,18 @@ export default function BoardView({
     warmUp();
     const tab = latest.current.model.tabByKey.get(h.key);
     if (!tab) return;
+    // Over the bin, a drop puts the card's agents in it; nothing else glows.
+    overBin.current = aimAtBin(screen);
+    if (overBin.current) {
+      if (teammate.current)
+        cardEls.current.get(teammate.current)?.classList.remove("board-glue");
+      if (glue.current)
+        cardEls.current.get(glue.current)?.classList.remove("board-glue");
+      cardEls.current.get(h.key)?.classList.remove("board-gluing");
+      teammate.current = null;
+      glue.current = null;
+      return;
+    }
     // Over another tab card it glows, and a drop there groups the two. No
     // dwell as in Town: Board's elastic cards slide away from a resting one,
     // and they do not overlap unless dragged onto each other.
@@ -2076,7 +2159,17 @@ export default function BoardView({
     const m = latest.current.model;
     const card = cards.current.get(h.key);
     cardEls.current.get(h.key)?.classList.remove("board-lifted");
+    const binned = overBin.current;
+    overBin.current = false;
+    aimAtBin(null);
     if (!card) return;
+    if (binned && !isNoteKey(h.key)) {
+      // The card goes back to its place; its agents wait for the bus.
+      travelToLayout(m);
+      const tab = m.tabByKey.get(h.key);
+      if (tab) binPanes(tab.panes);
+      return;
+    }
     if (isNoteKey(h.key)) {
       const note = latest.current.saved?.notes.find(
         (n) => NOTE_PREFIX + n.id === h.key,
@@ -3045,6 +3138,7 @@ export default function BoardView({
         }
       }
       if (event.key === "Escape") {
+        paneMoves.cancel();
         setPicked(null);
         setStringFrom(null);
       }
@@ -3232,8 +3326,11 @@ export default function BoardView({
       {/* Search covers everything observed, including what the board leaves
           out, as in the other views. */}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+      {paneMoves.dialog}
       <div
         ref={boardRef}
+        data-surface={appearance.surface}
+        style={boardAppearanceStyle(appearance)}
         className={`board${far ? " board-far" : ""}${pulses ? "" : " board-no-pulse"}${culling ? " board-culling" : ""}`}
         aria-label="Board of hosts, workspaces and tabs"
         onPointerDown={onPointerDown}
@@ -3436,16 +3533,23 @@ export default function BoardView({
                   />
                   <div className="board-counts">{workspaceCounts(space)}</div>
                   <div className="board-sum" aria-hidden="true">
-                    {space.squares.map((square, i) => (
-                      <span
-                        key={i}
-                        className={
-                          square.isAgent
-                            ? `board-s-${square.status}`
-                            : "board-sq-shell"
-                        }
+                    {space.squares.length > (culling ? 0 : 64) ? (
+                      <BoardStatusSummary
+                        squares={space.squares}
+                        overview={far}
                       />
-                    ))}
+                    ) : (
+                      space.squares.map((square, i) => (
+                        <span
+                          key={i}
+                          className={
+                            square.isAgent
+                              ? `board-s-${square.status}`
+                              : "board-sq-shell"
+                          }
+                        />
+                      ))
+                    )}
                   </div>
                 </div>
               );
@@ -3526,6 +3630,15 @@ export default function BoardView({
                           ? paneName(pane)
                           : ""}
                     </span>
+                    {!multi && pane ? (
+                      <span
+                        className="board-pane-handle"
+                        data-pane={pane.key}
+                        title="Drag pane to another tab; hold first on a phone"
+                      >
+                        <GripVertical size={16} aria-hidden="true" />
+                      </span>
+                    ) : null}
                   </div>
                   {multi ? (
                     <div className="board-panes">
@@ -3537,7 +3650,7 @@ export default function BoardView({
                           role="button"
                           aria-pressed={selectedId === row.leaf.id}
                           className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
-                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
+                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "terminal"}`}
                         >
                           {row.isAgent ? (
                             <span className="board-dot" />
@@ -3557,7 +3670,9 @@ export default function BoardView({
                             <QuestChip quest={quests.get(row.leaf.id)!} />
                           ) : null}
                           <span className="board-pane-state">
-                            {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                            {row.isAgent
+                              ? STATUS_LABEL[row.status]
+                              : "terminal"}
                           </span>
                         </div>
                       ))}
@@ -3588,7 +3703,20 @@ export default function BoardView({
                       {pane.leaf.appearance.status}
                     </div>
                   ) : null}
-                  <span className="board-badge" aria-hidden="true" />
+                  {/* Its ! or ✓ opens Needs you at this agent. */}
+                  <button
+                    type="button"
+                    className="board-badge"
+                    aria-label={`Open ${tab.label} in Needs you`}
+                    disabled={tab.status === "unknown"}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openNeedsYou(
+                        pane ? needsYouLeafKey(pane.leaf.id) : undefined,
+                      );
+                    }}
+                  />
                   <span
                     className="board-handle"
                     title="Drag to string this to a note or card"
@@ -3985,13 +4113,24 @@ export default function BoardView({
                 )}
                 <span className="board-pane-name">{paneName(row)}</span>
                 <span className="board-pane-state">
-                  {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                  {row.isAgent ? STATUS_LABEL[row.status] : "terminal"}
                 </span>
               </button>
             ))}
           </div>
         ) : null}
         <BoardControls
+          appearance={appearance}
+          onAppearance={changeAppearance}
+          onNext={
+            nextAttention
+              ? () => {
+                  focusWorkspace(nextAttention.tab.workspaceKey);
+                  onSelect(nextAttention.pane.leaf.id);
+                  onOpen(nextAttention.pane.leaf.id);
+                }
+              : undefined
+          }
           workRef={workButtonRef}
           workOpen={workOpen}
           onWork={() => setWorkOpen(!workOpen)}
@@ -4301,14 +4440,10 @@ function NewTabDialog({
   );
 }
 
-/** A workspace's agents by status, and its shells: "3 agents · 1 working · 2 idle". */
-const COUNT_ORDER: [WorldAgentStatus, string][] = [
-  ["blocked", "waiting"],
-  ["working", "working"],
-  ["done", "done"],
-  ["idle", "idle"],
-  ["unknown", "unknown"],
-];
+/** A workspace's agents by state word, and its terminals: "3 agents · 1 working · 2 idle". */
+const COUNT_ORDER = (
+  ["blocked", "working", "done", "idle", "unknown"] as const
+).map((status) => [status, STATUS_LABEL[status].toLowerCase()] as const);
 function workspaceCounts(space: BoardWorkspace) {
   const agents = space.squares.filter((square) => square.isAgent);
   const shells = space.squares.length - agents.length;
@@ -4317,7 +4452,7 @@ function workspaceCounts(space: BoardWorkspace) {
     const n = agents.filter((square) => square.status === status).length;
     if (n) parts.push(`${n} ${word}`);
   }
-  if (shells) parts.push(`${shells} shell${shells === 1 ? "" : "s"}`);
+  if (shells) parts.push(`${shells} terminal${shells === 1 ? "" : "s"}`);
   return parts.join(" · ");
 }
 const NO_IDS: readonly string[] = [];

@@ -3,22 +3,25 @@ import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentQuests } from "./agentQuests";
 import { useCreationProgress } from "../creationRequests";
-import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
+import { isMobileLayout } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useTownFinished, withTownFinished } from "./town/townFinished";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { openTrace, rememberTrace, TRACE_TOGGLE_EVENT } from "./devtools/trace";
 import { TraceOverlay } from "./devtools/TraceOverlay";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { useStoreSelector } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
+import { offerTownSummary } from "./town/townSummaryRequest";
 import { useTownOffice } from "./town/useTownOffice";
+import { useTownToasts } from "./town/TownToasts";
 import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
+import { putTownDropInBin } from "./town/townBinDrop";
 import type { TownQuestMark } from "./town/townQuestPennant";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
 import { TOWN_HOST_THEMES } from "./town/townPaint";
@@ -41,7 +44,6 @@ import {
   townPaneIdentity,
   townQuestion,
   townScreenLines,
-  useTownConversation,
   useTownScreen,
 } from "./town/townChat";
 import { requestTerminalComposer } from "./terminalComposerRequest";
@@ -52,8 +54,6 @@ import {
   townCalls,
   townLocation,
   unseenTownCompletions,
-  readTownRailCollapsed,
-  TownRail,
 } from "./town/TownRail";
 import { useNow } from "./handoffs";
 import type {
@@ -76,7 +76,8 @@ import {
   type OfficePreferences,
 } from "./officePreferences";
 import { worldNodeOpenView } from "./worldInspectorSelection";
-import { useTownMaster } from "./town/useTownMaster";
+import { useTownCenter } from "./town/useTownCenter";
+import { TownHerdrSetupOffer, TownNoHosts } from "./WorldStatus";
 import {
   TownRoomDialogs,
   useTownRoomActions,
@@ -84,16 +85,19 @@ import {
 } from "./town/useTownRoomActions";
 import { townMoveActions, type TownMoveConfirm } from "./town/townMoveActions";
 import type { TownMoveFlow } from "./town/townMoveMenu";
+import { useTownReception } from "./town/useTownReception";
+import { townDeskAgentKey } from "./town/townOpen";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
-import {
-  checkedAgentKeys,
-  completionSeenStore,
-  useCompletionSeen,
-} from "./completionSeenState";
+import { reviewedAgentKeys, useReviewedWork } from "./useReviewedWork";
+import { useShownReport } from "./shownReport";
+import { needsYouLeafKey, offerNeedsYouOutbox, openNeedsYou } from "./needsYou";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
+
+/** Town's chrome insets: Needs you is a World tab now, not a Town rail. */
+const TOWN_CHROME = { left: 0, right: 0 };
 
 /** A keyed index of a list, built the first time it is read. */
 function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
@@ -108,6 +112,7 @@ function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
 
 export default function TownView({
   world,
+  aggregate = world,
   toolbarPortal = null,
   selectedId,
   onSelect,
@@ -127,6 +132,8 @@ export default function TownView({
     focus?: boolean,
   ) => void;
   world: WorldObject;
+  /** Unfiltered connection observation for local setup admission. */
+  aggregate?: WorldObject;
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string, signal?: AbortSignal): void | Promise<boolean>;
@@ -137,10 +144,10 @@ export default function TownView({
     anchors: Record<string, WorldCanvasAnchor> | null,
   ): void;
 }) {
-  const layoutPreferences = useLayoutPreferences();
   const {
     office: observedOffice,
     deskPins,
+    roomPins,
     toggleRoomFold,
     foldRevision,
     roomFocus,
@@ -159,7 +166,10 @@ export default function TownView({
   );
   const preferencesRef = useRef(preferences);
   const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
-  const completionSeen = useCompletionSeen();
+  // The one reviewed record, Desk's stop mark. Town
+  // sees only reviewed records, so the service's stop notices do not
+  // re-render a busy Town.
+  const work = useReviewedWork(undefined, false);
   const [sceneHover, setSceneHover] = useState<WorldCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
     EMPTY_OFFICE_OBSERVABILITY,
@@ -214,9 +224,22 @@ export default function TownView({
       );
   }, []);
 
+  // Town's reviewed agents: recomputed only when the roster, Town's finishes
+  // or the reviewed record change, and the same set while its keys are.
+  const latestWorld = useRef(world);
+  latestWorld.current = world;
+  const checkedKeys = useRef<ReadonlySet<string>>(new Set());
+  const reviewedLeaf = work.reviewed;
   const completionSeenKeys = useMemo(
-    () => checkedAgentKeys(completionSeen, observedOffice.roster),
-    [completionSeen, observedOffice],
+    () =>
+      (checkedKeys.current = reviewedAgentKeys(
+        observedOffice.roster,
+        townFinished.finished,
+        (nodeId) => townLeaf(latestWorld.current, nodeId),
+        reviewedLeaf,
+        checkedKeys.current,
+      )),
+    [observedOffice, townFinished.finished, reviewedLeaf],
   );
   const office = useMemo(
     () =>
@@ -286,9 +309,10 @@ export default function TownView({
     onSelect(key);
   };
   const markCompletionSeen = (agent: OfficeAgent) => {
-    // The service's check, shared by every browser, ends it; the service
-    // also ends the check when the agent works or asks again.
-    void completionSeenStore.mark(agent);
+    // The one reviewed record, shared by every view and browser; a new stop
+    // (or the agent working or asking again) ends it.
+    const leaf = townLeaf(world, agent.nodeId);
+    if (leaf) void work.mark(leaf);
   };
   /**
    * Open the terminal for a pane, agent or desk. Opening a finished agent's
@@ -308,7 +332,6 @@ export default function TownView({
 
   /* ---------- Town attention, peek, replies and toasts ---------- */
   const now = useNow(5_000);
-  const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
   const blockedSince = useRef(new Map<string, number>());
   // Built on first use: a dense town's roster is large, and these lookups are
   // only needed by taps, hovers and an open peek.
@@ -358,7 +381,6 @@ export default function TownView({
     [office.roster, unseenCompletions, agentByKey],
   );
   const townSummary = useTownSummary({
-    railCollapsed,
     world,
     office,
     calls,
@@ -368,6 +390,11 @@ export default function TownView({
     openTerminal: (id) => void onOpenTerminal(id).catch(() => undefined),
     showRoom: focusRoom,
   });
+  // Needs you's Outbox row and Board's hub open Town's Summary from outside.
+  const openOutbox = townSummary.openOutbox;
+  useEffect(() => offerNeedsYouOutbox(openOutbox), [openOutbox]);
+  const openSummary = townSummary.open;
+  useEffect(() => offerTownSummary(openSummary), [openSummary]);
   const askingKeys = useMemo(() => {
     return askingKeysForWorld(townSummary.summary.asks, world);
   }, [townSummary.summary.asks, world]);
@@ -405,9 +432,6 @@ export default function TownView({
     [office.paneRoster],
   );
 
-  type Toast = { id: number; kind: "ok" | "error"; text: string };
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastId = useRef(0);
   // The event trace exists only in development builds (devtools/flag.ts).
   const trace = useMemo(() => (DEVTOOLS ? openTrace("town") : NO_TRACE), []);
   const [tracing, setTracing] = useState(trace.enabled);
@@ -429,18 +453,7 @@ export default function TownView({
     window.addEventListener(TRACE_TOGGLE_EVENT, toggle);
     return () => window.removeEventListener(TRACE_TOGGLE_EVENT, toggle);
   }, [trace]);
-  const toast = useCallback(
-    (kind: Toast["kind"], text: string) => {
-      if (DEVTOOLS) trace.record("toast", { kind, text });
-      const id = ++toastId.current;
-      setToasts((current) => [...current.slice(-2), { id, kind, text }]);
-      window.setTimeout(
-        () => setToasts((current) => current.filter((item) => item.id !== id)),
-        kind === "error" ? 6_000 : 2_600,
-      );
-    },
-    [trace],
-  );
+  const { toast, view: toastsView } = useTownToasts(trace);
 
   // A finished agent announces itself once; the rail keeps it until inspected.
   const announced = useRef<Set<string> | null>(null);
@@ -480,6 +493,12 @@ export default function TownView({
     peekTimer.current = window.setTimeout(() => setPeek(next), delay);
   };
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  // Reception's filter keeps some agents at their desks; find shows them (#501).
+  const reception = useTownReception(office, askingKeys, (key, anchor) => {
+    window.clearTimeout(peekTimer.current);
+    holdPeek.current = true;
+    setPeek({ key, anchor });
+  });
   const hoverAgent = (
     key: string | null,
     anchor?: { x: number; y: number },
@@ -504,6 +523,7 @@ export default function TownView({
     runDeskMove,
     runDeskReorder,
     runAgentMove,
+    roomMoves,
     teams,
     dialogs: moveDialogs,
   } = townMoveActions({
@@ -593,7 +613,13 @@ export default function TownView({
     Boolean(peekAgent) && peekBlocked,
     2_000,
   );
-  const peekConversation = useTownConversation(peekLeaf, Boolean(peekAgent));
+  // The peek's report and its stop: Mark reviewed names only that stop.
+  const peekReport = useShownReport(
+    peekLeaf,
+    Boolean(peekAgent),
+    peekAgent?.semanticStatus === "done",
+  );
+  const peekConversation = peekReport.conversation;
   const peekCanReply =
     Boolean(peekLeaf) && !!peekAgent?.canOpenInSpaces && !peekAgent.stale;
   // Answers come only from the question at the bottom of a waiting screen.
@@ -660,37 +686,10 @@ export default function TownView({
       onOpenInspectorView(agent.nodeId, "history", focus);
     else void onSelect(agent.nodeId);
   };
-  useTownMaster(
-    office.roster,
-    preferences.townMaster,
-    layoutPreferences.mobile,
-    (key) => openChat(key, false),
-  );
+  const center = { selectedRoomKey, townRoomActions, townSummary, openChat };
+  const townCenter = useTownCenter(world, office, preferences, center, toast);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
-  /**
-   * The agent a table stands for: one that needs you (waiting, then
-   * finished) even while it is away at reception, else the one seated there.
-   */
-  const deskAgentKey = (deskKey: string) => {
-    const rank = (agent: OfficeAgent) =>
-      agent.semanticStatus === "blocked"
-        ? 0
-        : agent.semanticStatus === "done"
-          ? 1
-          : 2;
-    const occupant = office.deskRoster.find(({ desk }) => desk.key === deskKey)
-      ?.desk.occupantAgentKey;
-    let best: OfficeAgent | null = null;
-    for (const { agent } of office.roster)
-      if (
-        agent.deskKey === deskKey &&
-        (!best ||
-          rank(agent) < rank(best) ||
-          (rank(agent) === rank(best) && agent.key === occupant))
-      )
-        best = agent;
-    return best?.key ?? occupant ?? null;
-  };
+  const deskAgentKey = (deskKey: string) => townDeskAgentKey(office, deskKey);
   /**
    * Tapping an agent, or its desk even while the agent is away at reception
    * or in the lounge, opens the agent (openAgent). A desk without an agent
@@ -753,15 +752,7 @@ export default function TownView({
     };
   };
 
-  if (!world.hosts.length) {
-    return (
-      <div className="world-empty" role="status">
-        <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
-        <h2>No connected spaces yet</h2>
-        <p>Add or connect a local or SSH Herdr profile from Spaces.</p>
-      </div>
-    );
-  }
+  if (!world.hosts.length) return <TownNoHosts />;
 
   const toolbar = (
     <WorldViewToolbar
@@ -801,28 +792,6 @@ export default function TownView({
             onClose={() => setTrace(false)}
           />
         ) : null}
-        <TownRail
-          needsYouCount={townSummary.summary.counts.needsYou}
-          asks={townSummary.summary.asks}
-          deliveryCount={townSummary.deliveryCount}
-          deliveryWaiting={townSummary.deliveryWaiting}
-          onOpenOutbox={townSummary.openOutbox}
-          askActions={townSummary.askActions}
-          collapsed={railCollapsed}
-          onCollapsedChange={setRailCollapsed}
-          calls={calls}
-          activeKey={peek?.key ?? null}
-          now={now}
-          onPeek={(key, rect) =>
-            key && rect
-              ? hoverAgent(key, {
-                  x: rect.right,
-                  y: rect.top + rect.height / 2,
-                })
-              : hoverAgent(null)
-          }
-          onOpen={(key) => openAgent(key)}
-        />
         {moveDialogs}
         {chooserDesk ? (
           <TownChooser
@@ -862,22 +831,28 @@ export default function TownView({
               void reply(peekLeaf, peekAgent.displayLabel, key, false)
             }
             deskColor={peekDeskColor(peekAgent.key)}
-            onReviewed={() => {
-              markCompletionSeen(peekAgent);
-              toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
-            }}
+            review={peekReport.review}
+            onReviewed={() =>
+              void peekReport.markShown(
+                work.mark,
+                peekAgent.displayLabel,
+                toast,
+              )
+            }
             onChat={() => openChat(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);
               openOfficeTerminal(peekAgent.key);
             }}
             onNext={
-              nextCall(peekAgent.key)
+              reception.step(peekAgent.key, peek!.anchor) ??
+              (nextCall(peekAgent.key)
                 ? () => openAgent(nextCall(peekAgent.key)!.agent.key)
-                : null
+                : null)
             }
             onClose={() => {
               holdPeek.current = false;
+              reception.clear();
               setPeek(null);
             }}
             onHold={(hold) => {
@@ -887,15 +862,9 @@ export default function TownView({
             }}
           />
         ) : null}
-        <div className="town-toasts" role="status" aria-live="polite">
-          {toasts.map((item) => (
-            <div key={item.id} className={`town-toast town-toast-${item.kind}`}>
-              <i aria-hidden="true">{item.kind === "ok" ? "✓" : "!"}</i>
-              {item.text}
-            </div>
-          ))}
-        </div>
+        {toastsView}
         <div className="town-stage">
+          <TownHerdrSetupOffer world={world} aggregate={aggregate} />
           <TownCanvas
             trace={trace}
             projection={office}
@@ -903,12 +872,17 @@ export default function TownView({
             relations={relations}
             terminalColors={terminalColors}
             deskPins={deskPins}
+            roomPins={roomPins}
             foldRevision={foldRevision}
             selectedKey={peek?.key ?? selectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
             askingKeys={askingKeys}
-            onActivateAsk={townSummary.openTerminal}
+            receptionHeldKeys={reception.held}
+            receptionTakes={reception.takes}
+            onFindHeld={reception.find}
+            // A letter at reception: its question in Needs you.
+            onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
@@ -942,24 +916,23 @@ export default function TownView({
             }}
             selectedRoomKey={selectedRoomKey}
             observability={observability}
-            summaryCounts={townSummary.summary.counts}
+            summary={townSummary.summary}
             onOpenSummary={townSummary.open}
+            sinceYouLeft={townSummary.sinceYouLeft}
             roomFocus={roomFocus}
             calm={preferences.townCalm}
-            chrome={{
-              left: townSummary.railInset,
-              right: 0,
-            }}
+            chrome={TOWN_CHROME}
+            centerActions={townCenter}
             roomActions={{
               onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
-              onGroupDesk: (deskKey, targetKey) =>
-                teams.runGroupDesk(deskKey, targetKey),
+              onGroupDesk: teams.runGroupDesk,
               onUngroupDesk: (deskKey) => teams.runUngroupDesk(deskKey),
-              onReorderDesk: (deskKey, ontoKey) =>
-                runDeskReorder(deskKey, ontoKey),
-              onDropAgent: (agentKey, deskKey) =>
-                runAgentMove(agentKey, deskKey),
+              onReorderDesk: runDeskReorder,
+              onDropAgent: runAgentMove,
+              ...roomMoves,
+              onBinDrop: (kind, key) =>
+                putTownDropInBin(office, world, kind, key),
               onMoveDesk: (deskKey) => {
                 setPeek(null);
                 setMoveFlow({ step: "room", deskKey });

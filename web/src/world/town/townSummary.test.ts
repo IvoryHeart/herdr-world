@@ -445,7 +445,15 @@ test("the summary counts what the call rail shows, room by room", () => {
   );
   // One shared needs-you count: the rail's blocked calls, which reception
   // also shows, and which the sign, the chip and the window all read.
-  expect(summary.counts).toEqual({ needsYou: 1, working: 2, finished: 1 });
+  expect(summary.counts).toEqual({
+    needsYou: 1,
+    working: 2,
+    finished: 1,
+    quiet: 1,
+    unknown: 0,
+    agents: 5,
+    buildings: 1,
+  });
   const atReception = projection.receptions
     .flatMap((reception) => reception.waitingAgents)
     .filter((agent) => agent.semanticStatus === "blocked").length;
@@ -599,18 +607,13 @@ test("the summary panel reads in attention order and never shows zero spend", as
       },
     }),
   );
-  const order = [
-    "Needs you",
-    "Finished, not reviewed",
-    "Hosts and rooms",
-    "Spend",
-  ];
+  const order = ["Needs you", "Done, not reviewed", "Hosts and rooms", "Spend"];
   const at = order.map((heading) => html.indexOf(heading));
   expect(at.every((index) => index >= 0)).toBe(true);
   expect([...at].sort((a, b) => a - b)).toEqual(at);
   expect(html).toContain("waiting 12 m");
   expect(html).toContain("asks: Ship the synthetic change?");
-  expect(html).toContain("blocked: needs input");
+  expect(html).toContain("blocked: needs you");
   // The asker reads as Town names its desk, with Open agent and Dismiss.
   expect(html).toContain("<b>Synthetic seat</b> asks:");
   expect(html).toContain('aria-label="Your answer to Synthetic seat"');
@@ -620,7 +623,7 @@ test("the summary panel reads in attention order and never shows zero spend", as
   );
   // A finish's time is its last activity, never claimed as the finish.
   expect(html).toContain("last active");
-  expect(html).not.toContain("finished 1");
+  expect(html).not.toContain("done 1");
   expect(html).toContain("Show room alpha in Town");
   expect(html).toContain("No cost data");
   expect(html).not.toContain("$0.00");
@@ -650,7 +653,7 @@ test("blocked rows show supplied reasons and fall back for missing or blank labe
     }),
   );
   expect(html).toContain("blocked: Approve the synthetic change");
-  expect(html.match(/blocked: needs input/g)).toHaveLength(2);
+  expect(html.match(/blocked: needs you/g)).toHaveLength(2);
 });
 
 test("the call rail stamps newly waiting agents with the time it is made", () => {

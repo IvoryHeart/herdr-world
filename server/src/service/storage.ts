@@ -5,8 +5,7 @@ import {
   type GuiSettingsStore,
 } from "../config/gui-settings";
 import { ConnectionProfileStore } from "../connections/profiles";
-import type { BoardStore } from "../world/board-store";
-import { BindingBoardStore } from "../storage/binding-board-store";
+import type { BoardStorePort } from "../world/board-store";
 import type { LedgerStore } from "../world/world-ledger";
 import { openWorldLedger } from "../storage/world-storage";
 import type { AttentionOutbox } from "../storage/world-protocol";
@@ -19,13 +18,14 @@ import type { Clock, Scheduler } from "./ports";
  * folder stay plain files under DataPaths, outside this port.
  */
 export type WorldStorage = {
+  terminalMarks: import("../storage/terminal-marks").TerminalMarksPort;
   runtimeStatus: import("../storage/runtime-status").RuntimeStatusPort;
   bindings: import("../storage/world-bindings").WorldBindings;
   ids: import("../storage/world-ids").WorldIds;
   settings: GuiSettingsStore;
   connections: ConnectionProfileStore;
-  /** Opened on first use. */
-  board(): BoardStore;
+  /** Committed cache; the worker imports before the listener binds. */
+  board(): BoardStorePort;
   /** Committed reads; SQLite is opened before the listener can bind. */
   ledger(): LedgerStore;
   attention(): AttentionOutbox;
@@ -46,21 +46,17 @@ export type OpenStorage = (
   ports: { clock: Clock; scheduler: Scheduler },
 ) => Promise<WorldStorage>;
 
-/** Private JSON configuration/Board and worker-owned SQLite domain families. */
+/** Private JSON configuration and worker-owned SQLite domain families. */
 export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
-  const options = {
-    now: () => clock.now(),
-    log: (message: string) => console.warn(message),
-  };
   const connections = new ConnectionProfileStore({ path: paths.connections });
-  let board: BindingBoardStore | null = null;
-  const bindingFailure = Promise.withResolvers<Error>();
+  let board: BoardStorePort | null = null;
   const world = await openWorldLedger(
     {
       database: join(paths.root, "world.sqlite"),
       ledger: paths.ledger,
       profiles: paths.agentProfiles,
       settings: paths.settings,
+      board: paths.board,
     },
     { clock, scheduler },
   );
@@ -76,26 +72,18 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     return create();
   };
   return {
+    terminalMarks: world.terminalMarks,
     runtimeStatus: world.runtimeStatus,
     ids: world.ids,
     bindings: world.bindings,
     settings,
     connections,
-    board: () =>
-      (board = open(board, () => {
-        const store = new BindingBoardStore(
-          paths.board,
-          options,
-          world.bindings,
-        );
-        void store.failed.then(bindingFailure.resolve);
-        return store;
-      })),
+    board: () => (board = open(board, () => world.board)),
     // Eager committed cache only: this accessor never opens/imports/migrates.
     ledger: () => world.ledger,
     attention: () => world.outbox,
     effects: () => world.effects,
-    failed: Promise.race([world.failed, bindingFailure.promise]),
+    failed: world.failed,
     incarnation: world.incarnation,
     profiles: () => (profiles = open(profiles, () => world.profiles)),
     async close() {

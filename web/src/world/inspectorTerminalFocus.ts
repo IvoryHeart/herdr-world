@@ -1,5 +1,6 @@
 import type { MutableRefObject } from "react";
 import { connectionSnapshot, store } from "../store";
+import { openLayerCount } from "../layerStack";
 import { inspectorPaneInput } from "./inspectorTerminalHandoff";
 import {
   worldInspectorWindowId,
@@ -15,10 +16,13 @@ import {
 export function inspectorFocusBlocked(
   document: Pick<Document, "querySelector">,
 ) {
-  return Boolean(
-    document.querySelector(
-      '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"], [data-radix-popper-content-wrapper]',
-    ),
+  return (
+    openLayerCount() > 0 ||
+    Boolean(
+      document.querySelector(
+        '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"], [data-radix-popper-content-wrapper], .popover-content[data-state="open"]',
+      ),
+    )
   );
 }
 

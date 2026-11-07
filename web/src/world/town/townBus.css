@@ -1,0 +1,313 @@
+/* Town's bus: stops at road crossings, binned agents and the bus (TownBusLayer). */
+.town-bus-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/*
+ * A London bus stop: a tall dark pole topped by a white flag with the red
+ * roundel (a red ring crossed by a red bar). The flag turns red while
+ * agents wait. The button is also the stop's drop area: the sign and the
+ * queue on the pavement beside it. It is placed at its waiting point
+ * (where the first agent stands); the pole stands just to its right.
+ */
+.town-bus-stop {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  width: 96px;
+  height: 70px;
+  padding: 0;
+  translate: calc(28px - 100%) calc(4px - 100%);
+  /* Never smaller on screen than at room zoom, so a phone can tap it. */
+  scale: max(1, var(--iz));
+  transform-origin: calc(100% - 14px) calc(100% - 4px);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.town-bus-stop:focus-visible,
+.town-bus-stop[data-bin-over] {
+  outline: 2px dashed #ffd54a;
+  outline-offset: 0;
+}
+.town-bus-stop[data-bin-over] {
+  background: rgb(255 213 74 / 0.18);
+}
+.town-bus-pole {
+  position: absolute;
+  right: 13px;
+  bottom: 3px;
+  width: 3px;
+  height: 44px;
+  background: #3b3b3b;
+  border-radius: 1px 1px 0 0;
+  box-shadow: 0 1px 0 1px rgb(0 0 0 / 0.25);
+}
+.town-bus-flag {
+  position: absolute;
+  right: 2px;
+  bottom: 45px;
+  width: 24px;
+  height: 20px;
+  background: #f6f2e6;
+  border: 1px solid #3b3b3b;
+  border-radius: 2px;
+  box-shadow: 0 2px 0 -1px rgb(0 0 0 / 0.35);
+}
+.town-bus-roundel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  translate: -50% -50%;
+  border: 3px solid #d4252b;
+  border-radius: 50%;
+}
+.town-bus-roundel::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  background: #d4252b;
+}
+/* Someone waits: the flag shows red with a white roundel. */
+.town-bus-stop[data-waiting] .town-bus-flag {
+  background: #d4252b;
+}
+.town-bus-stop[data-waiting] .town-bus-roundel {
+  border-color: #fff;
+}
+.town-bus-stop[data-waiting] .town-bus-roundel::after {
+  background: #fff;
+}
+
+/*
+ * The queue's last place when more wait than its two rows hold: a little
+ * board in the stop's colours, held at head height, counting the rest.
+ */
+.town-bus-more {
+  position: absolute;
+  z-index: 2;
+  padding: 2px 3px;
+  translate: -50% calc(-100% - 8px);
+  scale: max(1, var(--iz));
+  transform-origin: 50% calc(100% + 8px);
+  color: #fff;
+  font:
+    700 9px / 1 ui-monospace,
+    monospace;
+  white-space: nowrap;
+  background: #d4252b;
+  border: 1px solid #3b3b3b;
+  border-radius: 2px;
+  box-shadow: 0 2px 0 -1px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+.town-bus-more::before {
+  content: "+" attr(data-more);
+}
+.town-bus-more[hidden] {
+  display: none;
+}
+/* Its handle, down to the pavement. */
+.town-bus-more::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
+  background: #3b3b3b;
+}
+
+/*
+ * The stop's countdown: a small black board with amber figures, over the
+ * heads of those waiting and on the stop's pole, showing the time to the
+ * next bus.
+ */
+.town-bus-clock {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 3px;
+  translate: -50% -100%;
+  scale: max(1, var(--iz));
+  transform-origin: 50% 100%;
+  color: #ffb300;
+  font:
+    700 9px / 1 ui-monospace,
+    monospace;
+  white-space: nowrap;
+  background: #1c1722;
+  border: 1px solid #3b3b3b;
+  border-radius: 2px;
+}
+/* A clock face with its hands at ten past. */
+.town-bus-clock i {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.town-bus-clock i::before,
+.town-bus-clock i::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: currentColor;
+  transform-origin: 50% 100%;
+}
+.town-bus-clock i::before {
+  height: 2px;
+}
+.town-bus-clock i::after {
+  height: 2px;
+  rotate: 70deg;
+}
+
+/*
+ * A waiting agent, drawn as Town draws it indoors (the same character and
+ * size), once its actor is out of the front door. The layer moves it as it
+ * walks to its stop.
+ */
+.town-bin-rider {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, calc(1px - 100%));
+  pointer-events: none;
+}
+.town-bin-rider canvas {
+  display: block;
+  width: calc(14px * 1.4);
+  height: calc(20px * 1.4);
+  image-rendering: pixelated;
+}
+/* Its shadow, as indoors. */
+.town-bin-rider::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  width: 14px;
+  height: 3px;
+  margin-left: -7px;
+  background: rgb(0 0 0 / 0.22);
+}
+.town-bin-rider:not([data-out]),
+.town-bin-rider[data-boarded],
+.town-bin-rider[data-queued] {
+  visibility: hidden;
+}
+
+/*
+ * A red London double-decker, side on: two decks of windows (where its
+ * riders sit), a dark destination blind at the front and two wheels. It
+ * faces its way along the street (data-facing).
+ */
+.town-bus {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  width: 62px;
+  height: 42px;
+  margin: -34px 0 0 -31px;
+  padding: 0;
+  background: linear-gradient(#d4252b 0 44%, #f6f2e6 44% 51%, #d4252b 51% 100%);
+  border: 2px solid #3b3b3b;
+  border-radius: 7px 10px 2px 2px;
+  box-shadow: 0 3px 0 -1px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.2s linear;
+}
+.town-bus[hidden] {
+  display: none;
+}
+.town-bus-deck {
+  position: absolute;
+  left: 4px;
+  right: 11px;
+  top: 3px;
+  height: 11px;
+  overflow: hidden;
+  background: repeating-linear-gradient(90deg, #bfe3f2 0 9px, #d4252b 9px 11px);
+  border-radius: 1px;
+}
+.town-bus-lower {
+  top: 21px;
+  right: 14px;
+}
+/* A rider in a window: head and shoulders over the sill. */
+.town-bus-passenger {
+  position: absolute;
+  top: 1px;
+  width: 14px;
+  height: 20px;
+  image-rendering: pixelated;
+  visibility: hidden;
+}
+.town-bus-passenger[data-boarded] {
+  visibility: visible;
+}
+/* The destination blind above the windscreen, and the windscreen. */
+.town-bus::before {
+  content: "";
+  position: absolute;
+  right: 1px;
+  top: 3px;
+  width: 8px;
+  height: 4px;
+  background: #222;
+  box-shadow:
+    0 6px 0 #bfe3f2,
+    0 18px 0 #bfe3f2;
+}
+/* The wheels. */
+.town-bus::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  bottom: -6px;
+  width: 9px;
+  height: 9px;
+  background: #222;
+  border-radius: 50%;
+  box-shadow: 32px 0 0 #222;
+}
+.town-bus[data-facing="left"] {
+  scale: -1 1;
+}
+/* Stopped: its hazard lights blink until it goes on. */
+.town-bus[data-stopped] {
+  outline: 2px solid #ffb300;
+  outline-offset: 1px;
+  animation: town-bus-hazard 1s steps(2, jump-none) infinite;
+}
+@keyframes town-bus-hazard {
+  50% {
+    outline-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-bus[data-stopped] {
+    animation: none;
+  }
+}

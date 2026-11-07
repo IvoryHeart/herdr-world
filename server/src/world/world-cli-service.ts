@@ -56,6 +56,7 @@ export function createWorldCliService(deps: {
   const board: TownMoveContext["board"] = {
     get: () => deps.board().get(),
     patch: (ops) => deps.board().patch(ops),
+    patchIf: (revision, ops) => deps.board().patchIf(revision, ops),
     captureColorChanges: () => deps.board().captureColorChanges(),
     captureAppearanceChanges: () => deps.board().captureAppearanceChanges(),
   };

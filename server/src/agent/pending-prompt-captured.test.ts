@@ -144,3 +144,26 @@ test("text-option prefixes inside native draft contents are not placeholders", (
     ).toEqual([]);
   }
 });
+
+test("an unrecognised prompt keeps its whole visible block, not a clipped tail", () => {
+  const rows = Array.from({ length: 12 }, (_, index) => `  line ${index + 1}`);
+  const prompt = parsePendingPrompt(
+    "claude",
+    ["", "", ...rows.slice(0, 5), "", "", "", ...rows.slice(5), ""].join("\n"),
+    context,
+  )!;
+  expect(prompt.options).toEqual([]);
+  expect(prompt.unanswerable).toContain("does not recognise");
+  // Blank runs fold to one row; edges are trimmed; every row is kept.
+  expect(prompt.screen).toEqual([...rows.slice(0, 5), "", ...rows.slice(5)]);
+  expect(prompt.question.length).toBe(6);
+  // A recognised question whose choices cannot be read shows its rows too.
+  const cut = parsePendingPrompt(
+    "claude",
+    screen("claude-question").replace("❯ 1. Red", "  1. Red"),
+    context,
+  )!;
+  expect(cut.options).toEqual([]);
+  expect(cut.unanswerable).toContain("cannot read every choice");
+  expect(cut.screen?.join("\n")).toContain("4. Chat about this");
+});

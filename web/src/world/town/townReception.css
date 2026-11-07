@@ -1,0 +1,135 @@
+/* Reception's sign and filter (#501): the marks it takes, greyed when not. */
+.town-reception-title .town-reception-sign {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 24px;
+  margin: -4px -4px -4px auto;
+  padding: 2px 4px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid #4b5568;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.town-reception-title .town-reception-sign:hover,
+.town-reception-title .town-reception-sign:focus-visible {
+  border-color: #ffd166;
+  outline: none;
+}
+.town-reception-sign-mark[data-taken="false"] {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.popover-content.town-reception-filter {
+  z-index: 6100;
+  display: grid;
+  gap: 4px;
+  width: 210px;
+  padding: 10px;
+  color: #f1efe6;
+  background: rgba(14, 17, 24, 0.96);
+  border: 2px solid #4b5568;
+}
+.town-reception-filter strong {
+  font:
+    700 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: #a9b2a4;
+}
+.town-reception-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.town-reception-filter-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #ffd166;
+}
+.town-reception-filter-note,
+.town-reception-filter-error {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: #a9b2a4;
+}
+.town-reception-filter-error {
+  color: #ff9d8a;
+}
+.town-reception-filter-reset {
+  min-height: 32px;
+  margin-top: 4px;
+  color: #ffd79a;
+  background: rgba(255, 181, 71, 0.12);
+  border: 1px solid #5a4410;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.town-reception-filter-reset:hover,
+.town-reception-filter-reset:focus-visible {
+  border-color: #ffd166;
+  outline: none;
+}
+
+/* Who the filter keeps at their desks, and find: "✓ 4 at desks · find". */
+.town-reception-held {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #a9b2a4;
+}
+.town-reception-held-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+}
+.town-reception .town-reception-find {
+  min-height: 24px;
+  padding: 0 4px;
+  color: #ffd79a;
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.town-reception .town-reception-find:focus-visible {
+  outline: 1px solid #ffd166;
+}
+
+/* Phones and touch: every control gets a 44 px hit area (style guide). */
+@media (max-width: 640px), (pointer: coarse) {
+  .town-reception-title .town-reception-sign,
+  .town-reception .town-reception-find {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .town-reception-filter-row,
+  .town-reception-filter-reset {
+    min-height: 44px;
+  }
+  .town-reception-filter-row input {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Zoomed in to desks boards hide; a tap on the lobby brings its board back,
+   with the reception filter (TownCanvas). */
+.town-world[data-level="desk"] .town-reception[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}

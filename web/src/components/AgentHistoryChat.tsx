@@ -18,9 +18,12 @@ import {
   ChevronRight,
   CircleSlash,
   Copy,
+  Square,
+  Volume2,
   Wrench,
   X,
 } from "lucide-react";
+import { useChatSpeech } from "../useChatSpeech";
 import { copyTextWithFeedback } from "../copyText";
 import { formatUiDateTime } from "../uiLocale";
 import { HISTORY_PREVIEW_CHARS } from "./AgentHistoryCard";
@@ -50,6 +53,7 @@ import {
 } from "./historyDecoration";
 import { useHistoryCatchUp } from "./useHistoryCatchUp";
 import { RECEIPT_MEMORY_NOTE } from "./chat/pendingSends";
+import { chatRows, type ChatRow } from "./chat/chatSenders";
 import "./AgentHistoryChat.css";
 
 // Treat the list as pinned while the reader is within this distance of the
@@ -68,17 +72,38 @@ const ChatBubble = memo(function ChatBubble({
   matched = null,
   decorate,
   decorationToken,
+  speech,
   onOpen,
+  from = null,
+  fromKind = "agent",
+  continued = false,
 }: {
   entry: HistoryEntry;
   sequence: number;
+  /** The transcript's sender name; null outside the wide transcript. */
+  from?: string | null;
+  fromKind?: ChatRow["sender"]["kind"];
+  /** Continues the previous message's sender, so its name is not repeated. */
+  continued?: boolean;
   highlighted: boolean;
   /** Has the same words as a message Chat sent: matched, not proven. */
   matched?: "words" | "order" | null;
   decorate?: HistoryDecorator;
   decorationToken?: unknown;
+  speech: ReturnType<typeof useChatSpeech>;
   onOpen: (entry: HistoryEntry) => void;
 }) {
+  // A compaction summary is long and written by Claude Code, not the user:
+  // one line, with the summary a tap away.
+  if (entry.compact_summary)
+    return (
+      <div className="agent-history-chat-compacted" data-sequence={sequence}>
+        <span>Conversation compacted</span>
+        <button type="button" onClick={() => onOpen(entry)}>
+          Show the summary
+        </button>
+      </div>
+    );
   // A user's paste shows as the words they pasted, marked as a paste.
   const shown =
     entry.role === "user"
@@ -108,12 +133,51 @@ const ChatBubble = memo(function ChatBubble({
         ) : null}
       </article>
     );
+  const playback = speech.state?.messageId === entry.id ? speech.state : null;
+  const speaking = playback?.status === "speaking";
+  const status =
+    playback?.status === "failed"
+      ? playback.error
+      : playback?.status === "completed"
+        ? "Speech completed"
+        : playback?.status === "stopped"
+          ? "Speech stopped"
+          : speaking
+            ? "Speaking"
+            : "";
   return (
     <article
-      className={`agent-history-chat-message ${tone} ${highlighted ? "is-minimap-target" : ""}`}
+      className={[
+        "agent-history-chat-message",
+        tone,
+        entry.queued && "is-queued",
+        fromKind === "relayed" && "is-relayed",
+        continued && "is-continued",
+        highlighted && "is-minimap-target",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-sequence={sequence}
       data-delivery={matched ? "matched" : undefined}
     >
+      {from !== null ? (
+        <header className="agent-history-chat-from">
+          <span className="agent-history-chat-avatar" aria-hidden="true">
+            {fromKind === "user" ? "you" : from.slice(0, 2)}
+          </span>
+          <span className="agent-history-chat-name">
+            {from}
+            {fromKind === "relayed" ? (
+              <span
+                className="agent-history-chat-relayed"
+                title={`Typed into this terminal starting “${from}:”, the name of a live agent. World shows it as that agent's message; it cannot prove who typed it.`}
+              >
+                relayed
+              </span>
+            ) : null}
+          </span>
+        </header>
+      ) : null}
       <div className="agent-history-chat-bubble">
         {entry.role === "user" ? (
           <p>{preview}</p>
@@ -135,6 +199,14 @@ const ChatBubble = memo(function ChatBubble({
         ) : null}
       </div>
       <div className="agent-history-chat-meta">
+        {entry.queued ? (
+          <span
+            className="agent-history-chat-queued"
+            title="Waiting in the agent's queue: it reads it when it can"
+          >
+            Queued
+          </span>
+        ) : null}
         <time dateTime={entry.sent_at} title={entry.sent_at}>
           {formatUiDateTime(entry.sent_at)}
         </time>
@@ -165,6 +237,32 @@ const ChatBubble = memo(function ChatBubble({
         >
           <Copy size={12} />
         </button>
+        {entry.role === "assistant" ? (
+          <button
+            type="button"
+            className={`agent-history-copy agent-history-speak${speaking ? " is-speaking" : ""}`}
+            disabled={!speech.supported || !entry.text.trim()}
+            aria-label={
+              speaking ? "Stop speaking message" : "Speak assistant message"
+            }
+            aria-pressed={speaking}
+            title={
+              !speech.supported
+                ? "Speech is not supported by this browser"
+                : speaking
+                  ? "Stop"
+                  : "Speak"
+            }
+            onClick={() => speech.toggle(entry.id, entry.text)}
+          >
+            {speaking ? <Square size={12} /> : <Volume2 size={12} />}
+          </button>
+        ) : null}
+        {status ? (
+          <span className="agent-history-speech-status" role="status">
+            {status}
+          </span>
+        ) : null}
       </div>
       {decoration?.after}
     </article>
@@ -553,6 +651,8 @@ export function AgentHistoryChat({
   followKey,
   toolLoading = EMPTY_LOADING,
   onLoadTool = noop,
+  speechActive = true,
+  speechScopeKey = "",
   onOpen,
   matchedIds,
   decorate,
@@ -564,8 +664,15 @@ export function AgentHistoryChat({
   onAtLatest,
   placed,
   countNewAgentMessages = false,
+  transcript,
 }: {
   countNewAgentMessages?: boolean;
+  /**
+   * Chat's sender names: a window 900px or wider shows the conversation as
+   * transcript rows (sender, text, time at the right edge) instead of
+   * bubbles. `agents` are other live agents whose "name: …" relays count.
+   */
+  transcript?: { agent: string; agents: ReadonlySet<string> };
   /** Shown among the messages at their time, such as an unseen send. */
   placed?: readonly { key: string; at: string; node: ReactNode }[];
   /** Entries older than the shown ones exist; onLoadOlder fetches a page. */
@@ -585,17 +692,24 @@ export function AgentHistoryChat({
   /** Shown after the newest message (Chat's sends not yet seen). */
   after?: ReactNode;
   items: HistoryChatItem[];
-  listRef: RefObject<HTMLDivElement>;
-  contentRef: RefObject<HTMLDivElement>;
+  listRef: RefObject<HTMLDivElement | null>;
+  contentRef: RefObject<HTMLDivElement | null>;
   highlightedSequence?: number | null;
   // Changing this (e.g. a new search) jumps back to the newest message.
   followKey?: string;
   // Tool entries whose redacted payload is being fetched.
   toolLoading?: ReadonlySet<string>;
   onLoadTool?: (entry: HistoryEntry) => void;
+  speechActive?: boolean;
+  speechScopeKey?: string;
   onOpen: (entry: HistoryEntry) => void;
 }) {
+  const speech = useChatSpeech(speechActive, speechScopeKey);
   const followRef = useRef(true);
+  const rows = useMemo(
+    () => (transcript ? chatRows(items, transcript.agents) : null),
+    [items, transcript],
+  );
   const { unread, clear: clearUnread } = useHistoryCatchUp(
     items,
     followKey,
@@ -719,7 +833,9 @@ export function AgentHistoryChat({
   return (
     <div
       ref={listRef}
-      className="agent-history-chat"
+      className={
+        transcript ? "agent-history-chat is-transcript" : "agent-history-chat"
+      }
       onScroll={(event) => {
         const list = event.currentTarget;
         // A hidden list reports zero geometry; keep the last pin state.
@@ -795,7 +911,9 @@ export function AgentHistoryChat({
               decorationToken={decorationTokens?.get(
                 historyDecorationKey(item.entry),
               )}
+              speech={speech}
               onOpen={onOpen}
+              {...senderProps(rows?.get(item.entry.id), transcript?.agent)}
             />
           ) : (
             <ToolBlock
@@ -814,4 +932,19 @@ export function AgentHistoryChat({
       </div>
     </div>
   );
+}
+
+function senderProps(row: ChatRow | undefined, agent: string | undefined) {
+  if (!row || agent === undefined) return {};
+  const { sender } = row;
+  return {
+    from:
+      sender.kind === "relayed"
+        ? sender.name
+        : sender.kind === "user"
+          ? "You"
+          : agent,
+    fromKind: sender.kind,
+    continued: row.continued,
+  };
 }

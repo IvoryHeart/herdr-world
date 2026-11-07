@@ -1,11 +1,13 @@
+import { planBoardPatch } from "../world/board-plan";
 import { moveWorkspaceIds } from "../world/move-workspace-ids";
 import { stampLaunchParent } from "../herdr/spawn-stamp";
 import { tabCardKey } from "../../../shared/terminalColor";
 import { openHarnessLogin } from "../agent/harness-readiness";
 import { launchAgent } from "../agent/launch";
-import { profileLaunch } from "../agent/profile-launch";
+import { profileLaunch, withClaudeLimitsTap } from "../agent/profile-launch";
 import type { ConnectionRpcContext } from "./context";
 import { probeLauncher } from "./launcher-probe";
+import { claudeTapRuntime } from "../usage/claude-tap";
 
 /** The launcher on one connection: harness readiness, login, catalog and start (launcher.*). */
 export function handleLauncherRpc(
@@ -52,7 +54,11 @@ async function dispatchLauncherRpc(
   // status command (agent/harness-readiness.ts). Onboarding uses it too.
   if (method === "launcher.readiness") {
     try {
-      const { readiness } = await probeLauncher(rpc, false);
+      const { readiness } = await probeLauncher(
+        rpc,
+        false,
+        rpc.connection.runProcessWithCodeTimeout,
+      );
       sendReply({ id, result: { readiness } }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
@@ -84,7 +90,11 @@ async function dispatchLauncherRpc(
   }
   if (method === "launcher.catalog") {
     try {
-      const result = await probeLauncher(rpc, true);
+      const result = await probeLauncher(
+        rpc,
+        true,
+        rpc.connection.runProcessWithCodeTimeout,
+      );
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
@@ -100,15 +110,27 @@ async function dispatchLauncherRpc(
         throw new Error("That profile no longer exists.");
       const call = (rpc: string, rpcParams: Record<string, unknown>) =>
         herdr.call(rpc, rpcParams, 70_000);
+      const launch = profileLaunch(profile ?? null, {
+        kind: String(p.kind ?? ""),
+        label: String(p.label ?? "")
+          .trim()
+          .slice(0, 64),
+        text: String(p.text ?? "").slice(0, 16_000),
+      });
+      const host = sshHost();
+      const tapRuntime =
+        launch.kind === "claude"
+          ? await claudeTapRuntime({
+              host,
+              windows: host
+                ? connection.remotePlatform === "windows"
+                : process.platform === "win32",
+              run: connection.runProcessWithCodeTimeout,
+            })
+          : null;
       let result = await launchAgent(call, {
         workspace_id: String(p.workspace_id ?? ""),
-        ...profileLaunch(profile ?? null, {
-          kind: String(p.kind ?? ""),
-          label: String(p.label ?? "")
-            .trim()
-            .slice(0, 64),
-          text: String(p.text ?? "").slice(0, 16_000),
-        }),
+        ...withClaudeLimitsTap(launch, tapRuntime),
         isCurrent: requestIsCurrent,
       });
       if (
@@ -131,6 +153,8 @@ async function dispatchLauncherRpc(
           );
           settingsSaved = true;
           if (profile.color && result.tab_id) {
+            const tabId = result.tab_id,
+              terminalId = result.terminal_id;
             const workspaceIds = await moveWorkspaceIds(call, {
               workspace_id: String(p.workspace_id ?? ""),
             });
@@ -139,23 +163,36 @@ async function dispatchLauncherRpc(
                 "Launch runtime changed before saving appearance",
               );
             publishBoardChanged(
-              board().patch([
-                {
-                  op: "appearance.set",
-                  target: {
-                    connection_id: route.connectionId,
-                    kind: "tab",
-                    native_id: result.tab_id,
-                    witness: [result.terminal_id],
-                    color_key: tabCardKey(
-                      route.connectionId,
-                      result.tab_id,
-                      workspaceIds,
-                    ),
-                  },
-                  fields: { color: profile.color },
-                },
-              ]).revision,
+              (
+                await board().patch(
+                  planBoardPatch(
+                    [p, profile, result, [...workspaceIds]],
+                    () => {
+                      if (!requestIsCurrent())
+                        throw new Error(
+                          "Launch runtime changed before saving appearance",
+                        );
+                      return [
+                        {
+                          op: "appearance.set",
+                          target: {
+                            connection_id: route.connectionId,
+                            kind: "tab",
+                            native_id: tabId,
+                            witness: [terminalId],
+                            color_key: tabCardKey(
+                              route.connectionId,
+                              tabId,
+                              workspaceIds,
+                            ),
+                          },
+                          fields: { color: profile.color },
+                        },
+                      ];
+                    },
+                  ),
+                )
+              ).revision,
             );
           }
         } catch (error) {

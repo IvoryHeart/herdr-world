@@ -1,5 +1,6 @@
 export type BoardControl =
   | "work"
+  | "next"
   | "home"
   | "zoomOut"
   | "fit"
@@ -29,6 +30,7 @@ export function boardControlsLayout({
 }): BoardControlsLayout {
   let inline: BoardControl[] = [
     "work",
+    "next",
     ...(count > 0 ? ["home" as const] : []),
     "zoomOut",
     "fit",
@@ -40,14 +42,21 @@ export function boardControlsLayout({
     chrome +
     Math.max(0, inline.length - 1) * gap +
     inline.reduce((total, control) => total + widths[control], 0);
-  for (const control of ["home", "fit", "zoomIn", "zoomOut", "tidy"] as const) {
+  for (const control of [
+    "home",
+    "fit",
+    "zoomIn",
+    "zoomOut",
+    "tidy",
+    "next",
+  ] as const) {
     if (Math.ceil(occupied()) <= Math.floor(available)) break;
     inline = inline.filter((entry) => entry !== control);
   }
   return {
     inline,
-    overflow: (["home", "tidy", "fit", "zoomIn", "zoomOut"] as const).filter(
-      (control) => !inline.includes(control),
-    ),
+    overflow: (
+      ["home", "tidy", "fit", "zoomIn", "zoomOut", "next"] as const
+    ).filter((control) => !inline.includes(control)),
   };
 }

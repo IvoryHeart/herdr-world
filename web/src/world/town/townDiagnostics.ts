@@ -22,6 +22,20 @@ export type TownRendererDiagnostics = {
   sceneRenders: number;
   /** Single buildings baked again after their colours, pins or desks changed. */
   buildingBakes: number;
+  /** Buildings that glided, faded in or faded out after a topology change. */
+  transitions: number;
+  /**
+   * Buildings baked again over their old drawing, whose interior and desks
+   * crossfade in (an added or closed desk fades rather than pops).
+   */
+  crossfades: number;
+  /**
+   * Frames drawn after a topology change with part of the scene in view
+   * missing (ground, a building or a desk); always 0 (townTransition.ts).
+   */
+  topologyGaps: number;
+  /** What the last such frame was missing. */
+  lastTopologyGap: string | null;
   /** Navigation grids built (unchanged buildings keep theirs). */
   navigationsBuilt: number;
   /** Agents reconciled by actor syncs (unchanged hosts are skipped). */
@@ -36,10 +50,22 @@ export type TownRendererDiagnostics = {
   zoom: number;
   /** True until the current camera flight reaches its target. */
   flying: boolean;
+  /**
+   * True while buildings glide or fade after a topology change, or the
+   * camera glides with them (townTransition.ts).
+   */
+  transitioning: boolean;
+  /** Building views drawn now; a slow device draws them over several frames. */
+  buildingsDrawn: number;
   actors: number;
   walking: number;
   /** Agents opened by the user whose goal is their own desk. */
   summoned: string[];
+  /**
+   * Agents the reception filter keeps at their desks, seated there
+   * (townReceptionFilter.ts).
+   */
+  held: string[];
   desks: number;
   /** Animated node counts, kept compatible with existing browser evidence. */
   animation: {
@@ -83,6 +109,10 @@ export function diagnostics(): TownRendererDiagnostics {
     frames: 0,
     sceneRenders: 0,
     buildingBakes: 0,
+    transitions: 0,
+    crossfades: 0,
+    topologyGaps: 0,
+    lastTopologyGap: null,
     navigationsBuilt: 0,
     actorsReconciled: 0,
     hostSyncs: {},
@@ -93,9 +123,12 @@ export function diagnostics(): TownRendererDiagnostics {
     level: null,
     zoom: 1,
     flying: false,
+    transitioning: false,
+    buildingsDrawn: 0,
     actors: 0,
     walking: 0,
     summoned: [],
+    held: [],
     desks: 0,
     animation: { characters: 0, monitors: 0, statuses: 0 },
     layout: null,

@@ -1339,6 +1339,47 @@ describe("independent qualified operational sessions", () => {
     });
   });
 
+  test("a pane picked from a list on screen opens at once in browser-local mode", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const snapshot = partitionState();
+      __storeTesting.replaceState({
+        ...snapshot,
+        sessionsByConnectionId: {
+          ...snapshot.sessionsByConnectionId,
+          beta: session("beta", 1, {
+            navigationMode: "browser-local",
+            selectedPaneId: null,
+          }),
+        },
+      });
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const target = {
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: "same-pane",
+      };
+      const paneReads = () =>
+        calls.filter(
+          (call) => call.host === "beta" && call.method === "pane.get",
+        );
+      // Listed on screen: shown at once, without asking the host first.
+      expect(
+        await store.focusWorkspaceSource(target, { fromKnownList: true }),
+      ).toBe(true);
+      expect(paneReads()).toEqual([]);
+      expect(owned.get().selectedPaneId).toBe("same-pane");
+      // Other callers still check the pane with its host first.
+      expect(await store.focusWorkspaceSource(target)).toBe(true);
+      expect(paneReads()).toHaveLength(1);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
   test("opening a cold host waits for its already running topology refresh", async () => {
     await withIndependentClients(async (_calls, held) => {
       held.resolve({});
@@ -1392,6 +1433,184 @@ describe("independent qualified operational sessions", () => {
       }
     });
   });
+
+  test.each(
+    [
+      { name: "unchanged", change: {}, expected: "opened" },
+      {
+        name: "changed value",
+        change: { value: "new-synthetic-id" },
+        expected: "refused",
+      },
+      {
+        name: "changed harness",
+        change: { source: "herdr:claude_code", agent: "claude_code" },
+        expected: "refused",
+      },
+      {
+        name: "changed source",
+        change: { source: "synthetic-replacement-source" },
+        expected: "refused",
+      },
+      { name: "changed kind", change: { kind: "path" }, expected: "refused" },
+    ].flatMap((scenario) =>
+      ["pane", "session"].map((replaceAt) => ({ ...scenario, replaceAt })),
+    ),
+  )(
+    "queued reveal preserves complete session identity: %j",
+    async ({ change, expected, replaceAt }) => {
+      const { revealDeskAgent } = await import("./world/deskReveal");
+      const { focusWorldNode } = await import(
+        "./world/worldInspectorSelection"
+      );
+      const { taskSummarySessionFingerprint } = await import(
+        "./world/worldObject"
+      );
+      await withIndependentClients(async (calls, held) => {
+        held.resolve({});
+        const capturedSession = {
+          source: "herdr:codex",
+          agent: "codex",
+          kind: "id",
+          value: "shared-synthetic-id",
+        };
+        const replacementSession = { ...capturedSession, ...change };
+        const captured = {
+          id: "beta-agent",
+          nativeId: "same-pane",
+          kind: "agent",
+          connectionId: "beta",
+          generation: 1,
+          hostLabel: "Synthetic beta",
+          actionable: true,
+          stale: false,
+          terminalId: "same-terminal",
+          workspaceId: "same-workspace",
+          tabId: "same-tab",
+          agentSessionFingerprint:
+            taskSummarySessionFingerprint(capturedSession),
+          pane: { ...pane("codex", "idle"), agent_session: capturedSession },
+        } as any;
+        const original = bridge.connection;
+        let paneReads = 0;
+        bridge.connection = ((id, generation) => {
+          const client = original(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (id === "beta" && method === "pane.get") {
+                paneReads++;
+                calls.push({ host: id, method });
+                return {
+                  pane: {
+                    ...captured.pane,
+                    agent_session:
+                      paneReads === 1 || replaceAt === "session"
+                        ? capturedSession
+                        : replacementSession,
+                  },
+                };
+              }
+              if (id === "beta" && method === "agent_session.get") {
+                calls.push({ host: id, method });
+                return { session: replacementSession };
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        const world = { nodeById: new Map([[captured.id, captured]]) } as any;
+        const result = await revealDeskAgent(captured, {
+          signal: new AbortController().signal,
+          world: () => world,
+          filter: () => ["alpha"],
+          client: () => bridge.connection("beta", 1),
+          reveal: () => {},
+          open: async (leaf, _world, session, signal) => {
+            await focusWorldNode(leaf, store, session, () => !signal.aborted);
+            return "opened";
+          },
+        }).catch(() => "refused");
+        expect(result).toBe(expected);
+        if (expected === "refused")
+          expect(
+            calls.some(
+              (c) =>
+                c.host === "beta" &&
+                (c.method === "workspace.focus" || c.method === "tab.focus"),
+            ),
+          ).toBe(false);
+      });
+    },
+  );
+  test.each(["pane.get", "agent_session.get", "workspace.focus", "tab.focus"])(
+    "aborting qualified focus during %s prevents subsequent dispatch and selection",
+    async (heldMethod) => {
+      await withIndependentClients(async (calls, heldWorkspace) => {
+        heldWorkspace.resolve({});
+        const snapshot = store.get();
+        __storeTesting.replaceState({
+          ...snapshot,
+          sessionsByConnectionId: {
+            ...snapshot.sessionsByConnectionId,
+            beta: {
+              ...snapshot.sessionsByConnectionId.beta,
+              selectedPaneId: null,
+            },
+          },
+        });
+        const original = bridge.connection;
+        const started = Promise.withResolvers<void>();
+        const held = Promise.withResolvers<void>();
+        const controller = new AbortController();
+        bridge.connection = ((id, generation) => {
+          const client = original(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (id === "beta" && method === heldMethod) {
+                started.resolve();
+                await held.promise;
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        try {
+          const focus = store.focusQualifiedTarget({
+            connectionId: "beta",
+            runtimeGeneration: 1,
+            workspaceId: "same-workspace",
+            paneId: "same-pane",
+            agentSessionId: "synthetic-replacement-session",
+            isCurrent: () => !controller.signal.aborted,
+          });
+          await started.promise;
+          controller.abort();
+          held.resolve();
+          expect(await focus).toBe(false);
+          const sequence = [
+            "pane.get",
+            "agent_session.get",
+            "workspace.focus",
+            "tab.focus",
+          ];
+          const forbidden = sequence.slice(sequence.indexOf(heldMethod) + 1);
+          expect(
+            calls.some(
+              (call) => call.host === "beta" && forbidden.includes(call.method),
+            ),
+          ).toBe(false);
+          expect(
+            store.get().sessionsByConnectionId.beta.selectedPaneId,
+          ).toBeNull();
+        } finally {
+          held.resolve();
+          bridge.connection = original;
+        }
+      });
+    },
+  );
 
   test("focuses a ready sibling host's colliding pane without replacing another session", async () => {
     await withIndependentClients(async (calls, held) => {
@@ -2289,6 +2508,65 @@ describe("connection-partitioned store state", () => {
     }
   });
 
+  test("opens the connection this browser was last on, else the default", () => {
+    const originalSetActiveConnection = bridge.setActiveConnection;
+    bridge.setActiveConnection = (() =>
+      22) as typeof bridge.setActiveConnection;
+    const previousStorage = globalThis.localStorage;
+    const stored = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: (key: string) => stored.delete(key),
+      },
+    });
+    try {
+      const pick = (last: string) => {
+        stored.set("herdr-world:foundation-v2:lastConnection", last);
+        const snapshot = { ...partitionState(), activeConnectionId: "gone" };
+        __storeTesting.replaceState(snapshot);
+        __storeTesting.applyCatalog(snapshot.connections, "alpha");
+        return store.get().activeConnectionId;
+      };
+      expect(pick("beta")).toBe("beta");
+      // One the catalog no longer has gives way to the default.
+      expect(pick("removed")).toBe("alpha");
+      expect(stored.get("herdr-world:foundation-v2:lastConnection")).toBe(
+        "alpha",
+      );
+      store.selectConnection("beta");
+      expect(stored.get("herdr-world:foundation-v2:lastConnection")).toBe(
+        "beta",
+      );
+
+      __storeTesting.replaceState({
+        ...partitionState(),
+        activeConnectionId: "startup-default",
+        connections: [],
+      });
+      __storeTesting.handleBridgeHello({
+        default_connection_id: "startup-default",
+      });
+      expect(store.get().activeConnectionId).toBe("beta");
+      // Reconnecting preserves this tab's choice even if another tab switched.
+      store.selectConnection("startup-default");
+      stored.set("herdr-world:foundation-v2:lastConnection", "beta");
+      __storeTesting.handleBridgeHello({
+        default_connection_id: "startup-default",
+      });
+      expect(store.get().activeConnectionId).toBe("startup-default");
+    } finally {
+      bridge.setActiveConnection = originalSetActiveConnection;
+      Object.defineProperty(globalThis, "localStorage", {
+        configurable: true,
+        value: previousStorage,
+      });
+      __storeTesting.replaceState(partitionState());
+    }
+  });
+
   test("publishes an empty active session before replacement refresh", () => {
     const originalAdvanceGeneration = bridge.advanceActiveConnectionGeneration;
     bridge.advanceActiveConnectionGeneration = (() =>
@@ -2673,6 +2951,43 @@ describe("connection-partitioned store state", () => {
       bridge.connection = originalConnection;
       bridge.setActiveConnection = originalSetActiveConnection;
       __storeTesting.replaceState(partitionState());
+    }
+  });
+});
+
+describe("plugin popup toggle", () => {
+  test("focuses the target Space even when this browser already shows it", async () => {
+    const previousState = store.get();
+    const originalConnection = bridge.connection;
+    const methods: string[] = [];
+    bridge.connection = ((connectionId = "alpha", runtimeGeneration = 1) => ({
+      connectionId,
+      generation: 10,
+      serverRuntimeGeneration: runtimeGeneration,
+      isCurrent: () => true,
+      acceptsServerGeneration: (value: unknown) => value === runtimeGeneration,
+      call: async (method: string) => {
+        methods.push(method);
+        if (method === "popup.close") throw new Error("popup_not_open");
+        return {};
+      },
+    })) as typeof bridge.connection;
+    try {
+      // The workspace is already marked focused, as browser-local navigation
+      // projects it, but Herdr's own focus may sit on another Space.
+      __storeTesting.replaceState(partitionState());
+      expect(store.get().workspaces[0]?.focused).toBe(true);
+      await store.togglePluginPopup("float", "toggle", {
+        workspace_id: "same-workspace",
+      });
+      expect(methods.slice(0, 3)).toEqual([
+        "popup.close",
+        "workspace.focus",
+        "plugin.action.invoke",
+      ]);
+    } finally {
+      bridge.connection = originalConnection;
+      __storeTesting.replaceState(previousState);
     }
   });
 });

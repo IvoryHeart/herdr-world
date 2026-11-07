@@ -163,3 +163,140 @@
 .agent-chat-answered b {
   color: var(--text);
 }
+
+/* A command menu: the option under the harness's cursor, and its keys. */
+.agent-chat-ask-options button.is-cursor {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.agent-chat-menu-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-chat-menu-keys button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 10px;
+  color: var(--text);
+  font-size: 12.5px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.agent-chat-menu-keys button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.agent-chat-menu-keys kbd {
+  min-width: 1.4em;
+  font: 600 11px var(--font-mono, ui-monospace, monospace);
+  text-align: center;
+}
+
+/* An unread prompt as the terminal draws it, scrolled when tall. */
+.agent-chat-ask pre.agent-chat-ask-screen {
+  max-height: 22em;
+  overflow: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+/* Claude's recorded questions, read-only until answered in the Terminal. */
+.agent-chat-asked {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-chat-asked > li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-chat-asked > li[aria-current="step"] {
+  padding-left: 8px;
+  box-shadow: inset 3px 0 0 var(--warning-text, var(--accent));
+}
+
+.agent-chat-asked-header {
+  align-self: flex-start;
+  padding: 1px 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+}
+
+.agent-chat-asked-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-chat-asked-options li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
+
+.agent-chat-asked-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-chat-asked-more input {
+  flex: 1 1 12em;
+  min-width: 0;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px dashed var(--border-soft);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.agent-chat-asked-more button {
+  min-height: 36px;
+  padding: 4px 10px;
+  color: var(--text);
+  font-size: 12.5px;
+  background: transparent;
+  border: 1px dashed var(--border-soft);
+  border-radius: 9px;
+}
+
+.agent-chat-asked-more :disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.agent-chat-asked-note {
+  color: var(--muted);
+  font-size: 12px;
+}

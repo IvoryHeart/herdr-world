@@ -1,13 +1,22 @@
 import type { TownLevel } from "./townCamera";
 import type { TownHit } from "./townHitTest";
 import type { TownModel } from "./townModel";
+import { TOWN_TILE, type TownLayout } from "./townLayout";
+import {
+  townRoomPlacement,
+  townRoomSpotAt,
+  type TownRoomPlacement,
+} from "./townRoomPlace";
 
-/** A desk or agent being dragged, and where it would land. */
+/** A desk, agent or room being dragged, and where it would land. */
 export type TownDrag = {
-  kind: "desk" | "agent";
+  kind: "desk" | "agent" | "room";
   key: string;
   hostKey: string;
-  /** The desk's room, or the agent's desk: dropping there does nothing. */
+  /**
+   * The desk's room, the agent's desk, or the room itself: dropping there
+   * does nothing.
+   */
   from: string;
   label: string;
   target?: TownDropTarget;
@@ -23,17 +32,52 @@ export type TownDrag = {
 export type TownDropTarget = {
   key: string | null;
   label: string;
-  action?: "move" | "reorder" | "group" | "ungroup";
+  /** bin: over the bin or a bus stop, where a drop puts it in the bin. */
+  action?: "move" | "reorder" | "group" | "ungroup" | "bin";
 };
 
-/** What a held press picks up: a desk or a seated agent, zoomed in. */
+/**
+ * A room picked up by its name, its edge or its Move handle: it moves
+ * anywhere in its own building. A stale room, one Spaces cannot open, or one
+ * alone in its building stays where it is.
+ */
+export function townRoomDrag(
+  roomKey: string,
+  model: TownModel,
+): TownDrag | null {
+  const room = model.rooms.get(roomKey);
+  if (!room || !room.canOpenInSpaces || room.stale) return null;
+  if (
+    ![...model.rooms.values()].some(
+      (other) => other.key !== room.key && other.hostKey === room.hostKey,
+    )
+  )
+    return null;
+  return {
+    kind: "room",
+    key: room.key,
+    hostKey: room.hostKey,
+    from: room.key,
+    label: `Move ${room.displayLabel}`,
+  };
+}
+
+/**
+ * What a held press picks up: a seated agent zoomed in, a desk from the
+ * room-card zoom (overview) in, where desks are already finger-sized, or a
+ * room by its edge.
+ */
 export function townDragFor(
   hit: TownHit | null,
   model: TownModel,
   level: TownLevel,
 ): TownDrag | null {
-  if (!hit || (level !== "room" && level !== "desk")) return null;
+  if (!hit || level === "town") return null;
+  if (hit.kind === "room")
+    return hit.edge ? townRoomDrag(hit.key, model) : null;
+  const zoomedIn = level === "room" || level === "desk";
   if (hit.kind === "agent") {
+    if (!zoomedIn) return null;
     const agent = model.agents.get(hit.key);
     const seat = model.agentSeats.get(hit.key);
     if (!agent || !seat || !agent.canOpenInSpaces || agent.stale) return null;
@@ -85,7 +129,8 @@ export function townMagnetDesk(
  * Where a drag would land under the pointer, or why it can't. A desk dropped
  * at once on another desk reorders (same room) or moves (another room); held
  * still on it for TOWN_MAGNET_MS (`magnet`), it snaps to that desk and groups
- * with it, so moving, reordering and grouping stay separate gestures.
+ * with it, so moving, reordering and grouping stay separate gestures. A
+ * carried room is aimed by townRoomDropTarget.
  */
 export function townDropTarget(
   drag: TownDrag,
@@ -98,6 +143,8 @@ export function townDropTarget(
   /** Desks in a manual group: only these can leave one. */
   groupedDesks: ReadonlySet<string> = new Set(),
 ): TownDropTarget {
+  // A carried room is aimed by where it is, not what it is over.
+  if (drag.kind === "room") return { key: null, label: drag.label };
   if (drag.kind === "desk") {
     const mate = magnet ? model.desks.get(magnet) : undefined;
     if (mate && magnet === townMagnetDesk(drag, hit, model)) {
@@ -196,4 +243,48 @@ export function townDropTarget(
   if (desk.key === drag.from)
     return { key: null, label: `${drag.label}: already at this desk` };
   return { key: desk.key, label: `${drag.label} to ${desk.displayLabel}` };
+}
+
+/**
+ * Where a carried room would land with its top-left at world point (x, y)
+ * and the pointer at (px, py): anywhere in its own building, whole tiles,
+ * kept inside the walls, with the other rooms moving out of its way
+ * (townRoomPlacement). Over another host's building, or back on its own
+ * spot, it goes back.
+ */
+export function townRoomDropTarget(
+  drag: TownDrag,
+  layout: TownLayout,
+  model: TownModel,
+  x: number,
+  y: number,
+  px: number,
+  py: number,
+): { target: TownDropTarget; placement: TownRoomPlacement | null } {
+  const name = model.rooms.get(drag.key)?.displayLabel ?? "room";
+  const over = layout.buildings.find(
+    (b) =>
+      px >= b.x * TOWN_TILE &&
+      px < (b.x + b.w) * TOWN_TILE &&
+      py >= b.y * TOWN_TILE &&
+      py < (b.y + b.h) * TOWN_TILE,
+  );
+  if (over && over.hostKey !== drag.hostKey)
+    return {
+      target: { key: null, label: "Rooms stay in their own host’s building" },
+      placement: null,
+    };
+  const spot = townRoomSpotAt(layout, drag.key, x / TOWN_TILE, y / TOWN_TILE);
+  const placement = spot
+    ? townRoomPlacement(layout, drag.hostKey, new Map([[drag.key, spot]]))
+    : null;
+  if (!placement?.changed)
+    return {
+      target: { key: null, label: `Move ${name}: drag it to a new spot` },
+      placement: null,
+    };
+  return {
+    target: { key: drag.key, label: `Move ${name} here`, action: "move" },
+    placement,
+  };
 }

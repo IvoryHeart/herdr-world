@@ -12,12 +12,10 @@ import {
   type Relation,
   type TerminalRef,
 } from "../../../../shared/relations";
+import { officeDeskKey } from "../officeRoom";
 import { townDeskColorTarget } from "./townModel";
-import {
-  requestDeskReorder,
-  type TownMoveOutcome,
-  type TownMoveResult,
-} from "./townMoves";
+import type { TownMoveResult } from "./townMoves";
+import type { TownJoinRequest } from "./townJoinSeats";
 
 /** What Town's team actions need from the view (TownView.tsx). */
 export type TownTeamDeps = {
@@ -39,11 +37,12 @@ export type TownTeamDeps = {
   /** Close the desk's menu, or open its "Group with…" step. */
   closeMenu(): void;
   openGroupMenu(deskKey: string): void;
-  /** Board's and Herdr's writes; tests replace them. */
+  /** Seat a desk beside its new teammate in Town (townJoinSeats.ts). */
+  seatJoin(request: TownJoinRequest): void;
+  /** Board's writes; tests replace them. */
   io?: {
     groupTerminals: typeof groupTerminals;
     ungroupTerminals: typeof ungroupTerminals;
-    requestDeskReorder: typeof requestDeskReorder;
   };
 };
 
@@ -56,16 +55,13 @@ export type TownMenuEntry = {
 
 /**
  * Group and ungroup desks in Town (relations.ts): by a magnetic drag, or from
- * a desk's move menu (M) without one. Herdr owns the tab order, so joining a
- * team moves the desk's tab beside its teammate's through Herdr.
+ * a desk's move menu (M) without one. Joining moves no other desk: the desk
+ * takes a free cell beside its teammate and Herdr's tab order stays as it is
+ * (townJoinSeats.ts).
  */
 export function townTeamActions(deps: TownTeamDeps) {
   const { toast } = deps;
-  const io = deps.io ?? {
-    groupTerminals,
-    ungroupTerminals,
-    requestDeskReorder,
-  };
+  const io = deps.io ?? { groupTerminals, ungroupTerminals };
   /** Pinned in Town (useDeskPins.ts, keyed like the desk's colour). */
   const deskPinned = (desk: OfficeDesk) => {
     const target = townDeskColorTarget(deps.office, desk);
@@ -87,35 +83,6 @@ export function townTeamActions(deps: TownTeamDeps) {
         connection_id: desk.tabRef.connectionId,
         terminal_id: leaf.terminalId,
       }));
-  /**
-   * Seat a desk's tab next to its teammate's in Herdr, which owns the order:
-   * it takes the teammate's slot, as a reorder does. Town and Spaces follow
-   * what Herdr then reports.
-   */
-  const seatBeside = async (
-    desk: OfficeDesk,
-    tabId: string,
-    target: OfficeDesk,
-  ) => {
-    // After a move to the team's room the tab has a new ID there.
-    const moved = {
-      ...desk,
-      roomKey: target.roomKey,
-      tabRef: { ...desk.tabRef, nativeId: tabId },
-    };
-    const outcome = await io.requestDeskReorder(moved, target).catch(
-      (cause): TownMoveOutcome => ({
-        status: "refused",
-        reason: "tab_move",
-        message: String(cause),
-      }),
-    );
-    if (outcome.status !== "moved")
-      toast(
-        "error",
-        `${desk.displayLabel} joined the team but kept its place: ${outcome.message}`,
-      );
-  };
   const runGroupDesk = async (
     deskKey: string,
     targetKey: string,
@@ -159,16 +126,23 @@ export function townTeamActions(deps: TownTeamDeps) {
       return "returned";
     }
     toast("ok", `${desk.displayLabel} joined ${target.displayLabel}`);
-    // Bring it to the team's room and next to its teammate, through Herdr.
+    const from = { fromDeskKey: desk.key, fromRoomKey: desk.roomKey };
+    // Bring it to the team's room (its tab gets a new ID there), then seat it
+    // next to its teammate.
     if (desk.roomKey !== target.roomKey)
       return deps.runDeskMove(
         deskKey,
         target.roomKey,
         allowCloseRoom,
-        (tabId) => seatBeside(desk, tabId, target),
+        async (tabId) =>
+          deps.seatJoin({
+            ...from,
+            deskKey: officeDeskKey(desk.tabRef.connectionId, tabId),
+            targetKey: target.key,
+          }),
       );
-    // A pinned desk keeps its cell whatever the tab order: leave Herdr be.
-    if (!pinned) await seatBeside(desk, desk.tabRef.nativeId, target);
+    // A pinned desk keeps its cell.
+    if (!pinned) deps.seatJoin({ ...from, deskKey, targetKey: target.key });
     return "returned";
   };
   const runUngroupDesk = async (deskKey: string): Promise<TownMoveResult> => {

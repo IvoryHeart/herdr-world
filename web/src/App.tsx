@@ -88,6 +88,8 @@ import {
   loadZenMode,
   zenCovers,
   zenModeKey,
+  normalizeBlackBackground,
+  serializeBlackBackground,
   serializeZenMode,
   UI_SCALE_DEFAULT,
   type ResolvedTheme,
@@ -95,7 +97,7 @@ import {
   SYSTEM_THEME_QUERY,
   type ThemePreference,
 } from "./appearance";
-import { AgentIcon } from "./components/AgentIcon";
+import { PaneJumpOverlay } from "./components/PaneJumpOverlay";
 import { agentStateKind, paneHasAgentHistory } from "./components/agentSession";
 import { CloseButton } from "./components/CloseButton";
 import { focusIfUnchanged } from "./components/dialogFocus";
@@ -132,6 +134,7 @@ import { useLayer } from "./layerStack";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
 import type { WindowArrangementControl } from "./components/TabBar";
 import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
+import { MinimizedWindowDock } from "./world/windows/MinimizedWindowDock";
 import type { TerminalWorkspaceFileRequest } from "./components/TerminalView";
 import { WorkspaceTree } from "./components/WorkspaceTree";
 import { isIosDevice } from "./downloadFile";
@@ -160,11 +163,16 @@ import {
 } from "./terminalThemes";
 import {
   activePaneIdForSnapshot,
-  type PaneJumpEntry,
   paneJumpEntries,
-  paneSearchEntries,
   paneJumpTargetId,
+  paneSearchEntries,
+  serverPaneSearchEntries,
 } from "./paneJump";
+import { sortAgentPanes } from "./agentOrder";
+import {
+  openServerSession,
+  useAllServerAgentSessions,
+} from "./useAllServerAgentSessions";
 import {
   connectionSnapshot,
   useOperationalStore,
@@ -200,7 +208,6 @@ import {
   connectionClientScopeKey,
   useConnectionClient,
 } from "./useConnectionClient";
-import { agentClass } from "./utils";
 import {
   INSPECTOR_MIN_BOTTOM,
   INSPECTOR_MIN_RIGHT,
@@ -279,6 +286,7 @@ const THEME_KEY = "theme";
 const ACCENT_COLOR_KEY = "accentColor";
 const UI_SCALE_KEY = "uiScale";
 const TERMINAL_FONT_FAMILY_KEY = "terminalFontFamily";
+const BLACK_BACKGROUND_KEY = "blackBackground";
 const LazyTerminalView = lazyWithReload("terminal-view", () =>
   import("./components/TerminalView").then((module) => ({
     default: module.TerminalView,
@@ -408,6 +416,12 @@ function loadTerminalFontScale(): number {
 function loadTerminalFontFamily(): string {
   return normalizeTerminalFontFamily(
     worldLocalStorage.getItem(TERMINAL_FONT_FAMILY_KEY),
+  );
+}
+
+function loadBlackBackground(): boolean {
+  return normalizeBlackBackground(
+    worldLocalStorage.getItem(BLACK_BACKGROUND_KEY),
   );
 }
 
@@ -654,156 +668,6 @@ function tabShortcutIndex(e: KeyboardEvent) {
   return number === undefined ? null : number - 1;
 }
 
-function PaneJumpOverlay({
-  entries,
-  selectedIndex,
-  search,
-  onSearchChange,
-  onSelectIndex,
-  onCommit,
-  onClose,
-}: {
-  entries: PaneJumpEntry[];
-  selectedIndex: number;
-  search: string | null;
-  onSearchChange: (value: string) => void;
-  onSelectIndex: (index: number) => void;
-  onCommit: (index: number) => void;
-  onClose: (restoreFocus?: boolean) => void;
-}) {
-  const selectedItemRef = useRef<HTMLButtonElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searching = search !== null;
-  const selectedPaneId = entries[selectedIndex]?.paneId;
-
-  useEffect(() => {
-    selectedItemRef.current?.scrollIntoView({ block: "nearest" });
-  }, [selectedIndex, selectedPaneId]);
-  useEffect(() => {
-    if (searching) searchInputRef.current?.focus();
-  }, [searching]);
-
-  if (entries.length === 0 && !searching) return null;
-  const listId = "pane-jump-list";
-  return (
-    <div className="pane-jump-backdrop">
-      <div
-        className="pane-jump-popover"
-        role="listbox"
-        aria-label="Recent panes"
-      >
-        <div className="pane-jump-head">
-          <strong>{searching ? "Find Pane" : "Switch Pane"}</strong>
-          <span>
-            {searching
-              ? "Filters every open pane. Use Up / Down and Enter"
-              : "K to search; Enter or release modifier to switch"}
-          </span>
-        </div>
-        {searching ? (
-          <input
-            ref={searchInputRef}
-            className="pane-jump-search"
-            type="text"
-            value={search}
-            spellCheck={false}
-            autoComplete="off"
-            placeholder="Workspace, tab, directory, or agent"
-            role="combobox"
-            aria-label="Search panes"
-            aria-expanded={true}
-            aria-autocomplete="list"
-            aria-controls={listId}
-            aria-activedescendant={
-              selectedPaneId
-                ? `${listId}-${encodeURIComponent(selectedPaneId)}`
-                : undefined
-            }
-            onChange={(event) => onSearchChange(event.target.value)}
-            onBlur={() => onClose()}
-          />
-        ) : null}
-        {entries.length === 0 ? (
-          <p className="pane-jump-empty" role="status">
-            No panes match this search.
-          </p>
-        ) : null}
-        <div
-          className="pane-jump-list"
-          id={listId}
-          role="listbox"
-          aria-label={searching ? "Matching panes" : "Recent panes"}
-        >
-          {entries.map((entry, index) => (
-            <button
-              key={entry.paneId}
-              id={`${listId}-${encodeURIComponent(entry.paneId)}`}
-              ref={index === selectedIndex ? selectedItemRef : undefined}
-              type="button"
-              tabIndex={-1}
-              className={`pane-jump-item ${
-                index === selectedIndex ? "is-selected" : ""
-              } ${entry.current ? "is-current" : ""}`}
-              role="option"
-              aria-selected={index === selectedIndex}
-              onPointerEnter={() => onSelectIndex(index)}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => onCommit(index)}
-            >
-              {entry.agent ? (
-                <span className="pane-jump-agent-identity">
-                  <AgentIcon agent={entry.agent} compact />
-                  <span
-                    className={`pane-jump-status status-${entry.agentStatus ?? "unknown"}`}
-                  />
-                </span>
-              ) : null}
-              <span className="pane-jump-text">
-                <span className="pane-jump-title-line">
-                  <strong>{entry.title}</strong>
-                  {entry.current ? (
-                    <span className="pane-jump-current-badge">Current</span>
-                  ) : null}
-                  {entry.agentStatus ? (
-                    <span
-                      className={`${agentClass(entry.agentStatus)} pane-jump-agent-status`}
-                    >
-                      {entry.agentStatus}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="pane-jump-subtitle">
-                  {entry.agent ? (
-                    <>
-                      <span className="pane-jump-agent-name">
-                        {entry.agent}
-                      </span>
-                      {" · "}
-                    </>
-                  ) : null}
-                  <span className="pane-jump-tab" title={entry.tabLabel}>
-                    {entry.tabLabel}
-                  </span>
-                  <span className="pane-jump-id" title={entry.paneId}>
-                    {" · "}
-                    {entry.paneLabel}
-                  </span>
-                  {entry.cwd ? (
-                    <span className="pane-jump-cwd" title={entry.cwd}>
-                      {" · "}
-                      {entry.cwd}
-                    </span>
-                  ) : null}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function appShouldHandleGlobalShortcut(
   operationalShortcutsEnabled: boolean,
   event: Pick<KeyboardEvent, "defaultPrevented" | "isComposing" | "keyCode">,
@@ -1043,6 +907,7 @@ export default function App({
     loadSystemTheme(),
   );
   const resolvedTheme: ResolvedTheme = theme === "system" ? systemTheme : theme;
+  const [blackBackground, setBlackBackground] = useState(loadBlackBackground);
   const [accentColor, setAccentColor] = useState<AccentColor>(() =>
     loadAccentColor(),
   );
@@ -1070,8 +935,14 @@ export default function App({
         resolvedTheme,
         terminalThemeSelection,
         customTerminalThemes,
+        blackBackground,
       ),
-    [resolvedTheme, terminalThemeSelection, customTerminalThemes],
+    [
+      resolvedTheme,
+      terminalThemeSelection,
+      customTerminalThemes,
+      blackBackground,
+    ],
   );
   const zenKey = zenModeKey(zenScope);
   const zenKeyRef = useRef(zenKey);
@@ -1128,6 +999,10 @@ export default function App({
   const [paneJumpOpen, setPaneJumpOpen] = useState(false);
   const [paneJumpIndex, setPaneJumpIndex] = useState(0);
   const [paneJumpSearch, setPaneJumpSearch] = useState<string | null>(null);
+  // Pane search also lists agents on the other ready servers.
+  const searchServerPanes = useAllServerAgentSessions(
+    paneJumpSearch !== null,
+  ).panes;
   const paneJumpModifierRef = useRef<"ctrlKey" | "altKey" | "metaKey" | null>(
     null,
   );
@@ -1346,12 +1221,34 @@ export default function App({
       tabs: s.tabs,
       workspaces: s.workspaces,
     };
-    return paneJumpSearch === null
-      ? paneJumpEntries(snapshot, activePaneId)
-      : paneSearchEntries(snapshot, paneJumpSearch, activePaneId);
+    if (paneJumpSearch === null) return paneJumpEntries(snapshot, activePaneId);
+    const multiServer = searchServerPanes.some(
+      (pane) => pane.connectionId !== s.activeConnectionId,
+    );
+    const activeServerLabel = multiServer
+      ? s.connections.find(
+          (connection) => connection.id === s.activeConnectionId,
+        )?.label
+      : undefined;
+    return [
+      ...paneSearchEntries(
+        snapshot,
+        paneJumpSearch,
+        activePaneId,
+        activeServerLabel,
+      ),
+      ...serverPaneSearchEntries(
+        sortAgentPanes(searchServerPanes, [], "attention"),
+        paneJumpSearch,
+        s.activeConnectionId,
+      ),
+    ];
   }, [
     activePaneId,
     paneJumpSearch,
+    searchServerPanes,
+    s.activeConnectionId,
+    s.connections,
     s.layout,
     s.panes,
     s.recentPaneIds,
@@ -2940,10 +2837,13 @@ export default function App({
   const commitPaneJump = useCallback(
     (index = paneJumpIndexRef.current) => {
       const targetPaneId = paneJumpTargetId(paneJumpOptions, index);
+      const source = paneJumpOptions[index]?.source;
       closePaneJump(!targetPaneId);
       if (!targetPaneId) return;
       if (!inspectorStateRef.current?.open) setMobileView("session");
-      void operations.focusPane(targetPaneId);
+      if (source)
+        void openServerSession(source, source.workspaceId, targetPaneId);
+      else void operations.focusPane(targetPaneId);
     },
     [closePaneJump, paneJumpOptions, operations],
   );
@@ -3641,6 +3541,8 @@ export default function App({
     worldLocalStorage.setItem(THEME_KEY, theme);
     document.documentElement.dataset.accent = accentColor;
     worldLocalStorage.setItem(ACCENT_COLOR_KEY, accentColor);
+    if (blackBackground) document.documentElement.dataset.black = "";
+    else delete document.documentElement.dataset.black;
     document.documentElement.style.zoom =
       uiScale === UI_SCALE_DEFAULT ? "" : String(uiScale / 100);
     if (uiScale === UI_SCALE_DEFAULT) {
@@ -3677,7 +3579,11 @@ export default function App({
       String(zoomRectRatio),
     );
     worldLocalStorage.setItem(UI_SCALE_KEY, String(uiScale));
-  }, [accentColor, resolvedTheme, theme, uiScale]);
+    worldLocalStorage.setItem(
+      BLACK_BACKGROUND_KEY,
+      serializeBlackBackground(blackBackground),
+    );
+  }, [accentColor, blackBackground, resolvedTheme, theme, uiScale]);
   useTextScales(terminalFontScale);
   // A view switch moves to that view's own Zen choice, or its default.
   const applyZenModeRef = useRef(applyZenMode);
@@ -3713,6 +3619,8 @@ export default function App({
     () =>
       subscribeLocalStorage((key) => {
         if (key === null || key === THEME_KEY) setTheme(loadTheme());
+        if (key === null || key === BLACK_BACKGROUND_KEY)
+          setBlackBackground(loadBlackBackground());
         if (key === null || key === ACCENT_COLOR_KEY)
           setAccentColor(loadAccentColor());
         if (key === null || key === UI_SCALE_KEY) setUiScale(loadUiScale());
@@ -4198,7 +4106,9 @@ export default function App({
       </div>
       <div className="topbar-actions">
         {mobile ? <MobileTerminalAppBar /> : null}
-        {arrangementControl ? (
+        {mobile ? (
+          <MinimizedWindowDock entries={arrangementControl?.windows} />
+        ) : arrangementControl ? (
           <WindowArrangementMenu control={arrangementControl} />
         ) : null}
         {mobile ? null : (
@@ -4254,6 +4164,8 @@ export default function App({
               terminalThemeSelection={terminalThemeSelection}
               customTerminalThemes={customTerminalThemes}
               onThemeChange={setTheme}
+              blackBackground={blackBackground}
+              onBlackBackgroundChange={setBlackBackground}
               onAccentColorChange={setAccentColor}
               uiScale={uiScale}
               onUiScaleChange={setUiScale}

@@ -47,6 +47,8 @@ export type Conversation = {
   deliveries?: ConversationDelivery[];
   /** The question a blocked agent is waiting on, read from its screen. */
   pending_prompt?: PendingPrompt | null;
+  /** A qualified read-only size fact, never a send/key refusal or authority. */
+  menu_unreadable?: { reason: "terminal_too_small"; rows: number };
 };
 
 export type PendingPrompt = {
@@ -60,14 +62,76 @@ export type PendingPrompt = {
     description?: string;
     input?: "text" | "chat";
     active?: boolean;
+    /** A command menu's cursor is on this option. */
+    cursor?: boolean;
   }[];
   /**
    * A multi-question form's questions by their headers, in order: the agent
    * shows one at a time, then a review that submits them all.
    */
   steps?: { label: string; answered: boolean }[];
+  /**
+   * The harness's own command menu (such as `/model`), read from its screen
+   * while the agent is idle or done; its title is the question.
+   */
+  menu?: {
+    footer: string;
+    after: string[];
+    controls: { key: string; label: string; action: string }[];
+    field?: string;
+  };
+  /** A multi-question form's review of its answers, before submitting. */
+  review?: true;
+  /**
+   * The questions Claude recorded in its transcript; the options above carry
+   * keys only when the screen showed the same question (`current`).
+   */
+  asked?: {
+    call_id: string;
+    questions: {
+      question: string;
+      header?: string;
+      options: { label: string; description?: string }[];
+      multi_select: boolean;
+      kind: "choice" | "text" | "number";
+    }[];
+    current: number | null;
+  };
+  /** Why Chat offers no answers here. */
+  unanswerable?: string;
+  /** The prompt as the terminal shows it, when Chat cannot read it whole. */
+  screen?: string[];
+  /** Claude's folder-trust question before a session: its cursor's choice. */
+  trust?: { cursor: TrustChoice };
   fingerprint: string;
 };
+
+export type TrustChoice = "cancel" | "confirm";
+
+// Mirrors TrustResult in server/src/agent/trust-prompt.ts.
+export type TrustResult =
+  | {
+      status: "sent";
+      choice: TrustChoice;
+      label: string;
+      acknowledged: boolean;
+    }
+  | {
+      status: "refused";
+      reason: string;
+      message: string;
+      prompt: PendingPrompt | null;
+    };
+
+// Mirrors ConversationKeyResult in server/src/agent/conversation.ts.
+export type KeyResult =
+  | { status: "sent"; key: string; text?: string; menu: PendingPrompt | null }
+  | {
+      status: "refused";
+      reason: string;
+      message: string;
+      menu: PendingPrompt | null;
+    };
 
 export type AnswerResult =
   | {
@@ -93,6 +157,8 @@ export type UnconfirmedReason =
 export type ConversationDelivery = {
   kind?: "command";
   queued?: boolean;
+  /** The service still holds this command as queued for the agent. */
+  waiting?: boolean;
   id: string;
   text: string;
   sent_at: string;

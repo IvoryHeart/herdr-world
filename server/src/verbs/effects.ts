@@ -1,4 +1,5 @@
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
+import { Type } from "typebox";
 import { declare, object, policies, text } from "./declaration";
 
 /** Only record deliveries outlive their request; interactive input stays direct. */
@@ -33,5 +34,34 @@ export const effectVerbs = [
     ],
     [],
     ANSWER_DELIVERY_VERB,
+  ),
+  // The bin's close, recorded once its bus leaves the map. A queued intent is
+  // conditioned on the captured runtime generation and terminal, so a host that
+  // returns with another runtime or occupant never gets a late close.
+  declare(
+    "effect",
+    "world.bin.close",
+    object({
+      bin_id: text,
+      workspace_id: text,
+      tab_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      // The World run that recorded it: generations are per-run counters.
+      service_incarnation: text,
+      // A pinned tab: the close never takes the tab's last pane.
+      preserve_tab: Type.Optional(Type.Boolean()),
+    }),
+    object(),
+    "reconcilable",
+    policies({ browser: "allow" }),
+    ["runtime"],
+    [
+      "captured runtime generation is current",
+      "the pane still holds the captured terminal",
+      "a worktree root closes only as its workspace's last pane",
+      "a pinned tab keeps its last pane",
+    ],
+    [],
+    { queueable: true, version: 1 },
   ),
 ] as const;

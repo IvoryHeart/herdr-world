@@ -11,7 +11,7 @@ import {
   Pin,
   X,
 } from "lucide-react";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   type ColorChoice,
@@ -21,7 +21,6 @@ import {
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
-import { registerCompactWindowHeader } from "./windowSwitcherHeader";
 import "./windows.css";
 import "../../components/WorkspaceInspectorActions.css";
 
@@ -41,6 +40,8 @@ export type ManagedWindowControls = {
   } | null;
   /** An agent window's Town desk pin (useDeskPins.ts), toggled in its menu. */
   pin?: { pinned: boolean; onPin(pinned: boolean): void } | null;
+  /** An agent window: put the agent in the bin (bin/WorldBin.tsx). */
+  bin?: { onBin(): void } | null;
   /** Close is shown as Back at the start of the bar, as Town's window does. */
   back?: { label: string };
   /** A narrow window: maximize joins ⋯ so the bar still fits. */
@@ -217,12 +218,11 @@ export function WindowControls({
           { label: "Float window", run: controls.onFloat },
         ]),
     ...(!controls.compact ? pinItems : []),
+    ...(controls.bin
+      ? [{ key: "bin", label: "Put in bin", run: controls.bin.onBin }]
+      : []),
   ];
   const host = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (!controls.compact || !host.current) return;
-    return registerCompactWindowHeader(host.current);
-  }, [controls.compact]);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   useLayer(open, () => setOpen(false), {

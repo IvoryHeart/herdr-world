@@ -1,4 +1,6 @@
+import { createTerminalMarksPort } from "./terminal-marks";
 import { createEffectStore } from "./effect-client";
+import { createBoardPort } from "./board-port";
 import { createRuntimeStatusPort } from "./runtime-status";
 import { createProfilePort } from "./profile-port";
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
@@ -49,6 +51,7 @@ export async function openWorldLedger(
     ledger: string;
     profiles?: string;
     settings?: string;
+    board?: string;
   },
   ports: StoragePorts,
 ): Promise<WorldLedgerStorage> {
@@ -61,6 +64,7 @@ export async function openWorldLedger(
     incarnation,
     paths.profiles,
     paths.settings,
+    paths.board,
   );
   let document = client.snapshot.document;
   const byRecord = new Map<string, AttentionEntry[]>();
@@ -84,6 +88,10 @@ export async function openWorldLedger(
         );
       return client.request<T>(request);
     },
+  );
+  const board = createBoardPort(
+    client.snapshot.board ?? null,
+    <T>(request: StorageRequest) => client.request<T>(request),
   );
   const runtimeStatus = createRuntimeStatusPort(
     client.snapshot.runtimeStatus ?? {},
@@ -263,6 +271,17 @@ export async function openWorldLedger(
     },
   };
   return {
+    board,
+    terminalMarks: createTerminalMarksPort(
+      client.snapshot.terminalMarks ?? [],
+      <T>(request: StorageRequest) =>
+        closing
+          ? Promise.reject<T>(
+              new StorageWriteRejected("World storage is closing"),
+            )
+          : client.request<T>(request),
+      client.snapshot.legacyReviewArchive,
+    ),
     runtimeStatus,
     profiles,
     ids,
@@ -416,9 +435,10 @@ export async function openWorldLedger(
       if (closed) return closed;
       closing = true;
       profiles.close();
+      board.close();
       runtimeStatus.close();
-      closed = Promise.allSettled([tail, bindingTail]).then(() =>
-        client.close(),
+      closed = Promise.allSettled([tail, bindingTail, board.settled()]).then(
+        () => client.close(),
       );
       return closed;
     },

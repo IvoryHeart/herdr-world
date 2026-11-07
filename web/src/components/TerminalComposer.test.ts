@@ -125,6 +125,9 @@ test.each(["claude", "grok-build", "agy"])(
       spyOn(React, "useEffect").mockImplementation((run, deps) => {
         nextEffects.push({ run, deps });
       }),
+      spyOn(React, "useLayoutEffect").mockImplementation((run, deps) => {
+        nextEffects.push({ run, deps });
+      }),
       // Stable across renders like React's, via the ref slots above.
       spyOn(React, "useCallback").mockImplementation(
         (callback) => React.useRef(callback).current,
@@ -176,10 +179,7 @@ test.each(["claude", "grok-build", "agy"])(
           return;
         }
         elements.push(child);
-        const ref =
-          (child as typeof child & { ref?: React.MutableRefObject<unknown> })
-            .ref ??
-          (child.props.ref as React.MutableRefObject<unknown> | undefined);
+        const ref = child.props.ref as React.RefObject<unknown> | undefined;
         if (ref && typeof ref === "object") {
           const key = String(
             child.props.className ??

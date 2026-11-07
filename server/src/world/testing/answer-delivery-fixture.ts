@@ -85,6 +85,8 @@ export async function productionAnswerFixture(
         process_info: { pane_id: info.pane_id, shell_pid: process.pid },
       };
     if (method === "notification.show") return { shown: true };
+    // An idle composer: no menu where Chat's text goes.
+    if (method === "pane.read") return { read: { text: "❯ " } };
     if (method === "agent.get") return { agent: info };
     if (method === "agent.prompt") {
       await hooks.prompt?.(String(params.text));

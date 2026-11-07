@@ -54,7 +54,7 @@ export function drawTownSelectionEffects(
     if (!key) continue;
     const alpha = color === 0xffd166 ? 0.7 + 0.3 * Math.sin(clock * 5) : 0.45;
     const actor = actors.actors.get(key);
-    if (actor) {
+    if (actor && actor.mode !== "out") {
       if (actor.mode === "seat") {
         const seat = model.agentSeats.get(key);
         const cell = seat && layoutCells.get(seat.deskKey);

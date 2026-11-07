@@ -2,6 +2,8 @@ import { createTerminalUploadHandler } from "./terminal-upload";
 
 export function createImageUploadHandler(args: {
   sshHost: () => string | undefined;
+  sshControlPath?: string;
+  runtimeSignal?: AbortSignal;
   tempRoot?: () => string;
   platform?: NodeJS.Platform;
 }) {

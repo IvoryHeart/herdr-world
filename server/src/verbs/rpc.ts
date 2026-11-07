@@ -25,6 +25,10 @@ const rpc = (
 
 /** Static reviewed inventory; never generated from a live adapter or its capabilities. */
 export const rpcVerbs = [
+  rpc("forward.list", "read", "runtime"),
+  rpc("forward.candidates", "read", "runtime"),
+  rpc("forward.open", "reconcilable", "runtime"),
+  rpc("forward.close", "reconcilable", "runtime", object({ id: text })),
   rpc("agent.list", "read", "runtime"),
   rpc("agent_checkout.get", "read", "runtime"),
   rpc(
@@ -42,12 +46,24 @@ export const rpcVerbs = [
   rpc("agent_conversation.get", "read", "runtime", object({ pane_id: text })),
   rpc("agent_conversation.latest", "read", "runtime"),
   rpc(
+    "agent_conversation.press",
+    "opaque",
+    "runtime",
+    object({ pane_id: text }),
+  ),
+  rpc(
     "agent_conversation.send",
     "opaque",
     "runtime",
     object({ pane_id: text }),
   ),
   rpc("agent_conversation.steps", "read", "runtime", object({ pane_id: text })),
+  rpc(
+    "agent_conversation.trust",
+    "opaque",
+    "runtime",
+    object({ pane_id: text }),
+  ),
   rpc(
     "agent_conversation.unwatch",
     "reconcilable",
@@ -104,6 +120,8 @@ export const rpcVerbs = [
   rpc("bridge.pause_others", "reconcilable", "world"),
   rpc("bridge.ping", "read", "world", object()),
   rpc("bridge.status", "read", "world"),
+  rpc("bridge.ui_settings.get", "read", "world"),
+  rpc("bridge.ui_settings.update", "reconcilable", "world"),
   rpc("connections.connect", "reconcilable", "world"),
   rpc("connections.create", "reconcilable", "world"),
   rpc("connections.disconnect", "reconcilable", "world"),
@@ -169,6 +187,8 @@ export const rpcVerbs = [
   rpc("settings.workspace_auto_sync.list", "read", "runtime"),
   rpc("settings.workspace_auto_sync.update", "reconcilable", "runtime"),
   rpc("settings.workspace_auto_sync.update_key", "reconcilable", "runtime"),
+  rpc("settings.worktree_command.update", "reconcilable", "runtime"),
+  rpc("settings.worktree_directory.get", "read", "runtime"),
   rpc("settings.worktree_hooks.get", "read", "runtime"),
   rpc("tab.close", "reconcilable", "runtime"),
   rpc("tab.create", "reconcilable", "runtime"),
@@ -211,6 +231,36 @@ export const rpcVerbs = [
   rpc("world.ask.delivery.resend", "reconcilable", "world"),
   rpc("world.ask.dismiss", "reconcilable", "world"),
   rpc("world.asks.get", "read", "world"),
+  // The handler qualifies the named host's current runtime itself: world.*
+  // requests are bridge-global and never carry the runtime capability.
+  rpc(
+    "world.bin.add",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      tab_id: text,
+      pane_id: text,
+      terminal_id: text,
+      label: Type.Optional(Type.String({ maxLength: 200 })),
+      view: Type.Optional(Type.String({ maxLength: 16 })),
+      preserve_tab: Type.Optional(Type.Boolean()),
+    }),
+  ),
+  rpc(
+    "world.bin.close_now",
+    "reconcilable",
+    "world",
+    // Explicit IDs of one service run: never an unscoped "everything".
+    object({ ids: Type.Array(text, { minItems: 1, maxItems: 64 }) }),
+  ),
+  rpc("world.bin.list", "read", "world"),
+  // Stop the bus on the map (pause) so riders can be put back, or let it go.
+  rpc("world.bin.pause", "reconcilable", "world"),
+  rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
+  rpc("world.bin.resume", "reconcilable", "world"),
   rpc("world.board.get", "read", "world"),
   rpc(
     "world.board.patch",
@@ -219,17 +269,27 @@ export const rpcVerbs = [
     object({ ops: Type.Array(Type.Unknown()) }),
   ),
   rpc("world.chimes.save", "reconcilable", "world"),
-  rpc("world.completion_seen.list", "read", "world"),
-  rpc("world.completion_seen.mark", "reconcilable", "world"),
   rpc("world.desk.get", "read", "world"),
   rpc("world.desk.observe", "reconcilable", "world"),
   rpc("world.desk.open", "reconcilable", "world"),
   rpc("world.desk.review", "reconcilable", "world"),
   rpc("world.focused.observe", "reconcilable", "world"),
+  // The owner's last sighting across browsers, for "Since you left".
+  rpc("world.presence.seen", "reconcilable", "world"),
   rpc("world.profiles.delete", "reconcilable", "world"),
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),
   rpc("world.snapshot", "read", "world"),
+  rpc(
+    "world.usage.get",
+    "read",
+    "world",
+    object({
+      window: Type.Optional(
+        Type.Union([Type.Literal("today"), Type.Literal("7d")]),
+      ),
+    }),
+  ),
   rpc("world.town_master.set", "reconcilable", "world"),
   rpc("world.watchlist.list", "read", "world"),
   rpc("world.watchlist.pin", "reconcilable", "world"),

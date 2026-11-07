@@ -1,3 +1,4 @@
+import { useDrawReadiness } from "./useDrawReadiness";
 import { agentDirectory } from "./deskDirectory";
 export { agentDirectory, type DirectoryGroup } from "./deskDirectory";
 import { AppearanceAvatar } from "./AppearanceAvatar";
@@ -43,7 +44,12 @@ import {
 } from "./paneScreen";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { useDeskState } from "./useDeskState";
+import { AgentState } from "../components/AgentMark";
+import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
+import type { DeskRevealResult } from "./deskReveal";
+import { DeskOtherHosts } from "./DeskOtherHosts";
+export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
 
 type Lane = "needs" | "review" | "working";
@@ -133,47 +139,6 @@ export function partitionDesk(
   return { needs, review, working, quiet };
 }
 
-type Elsewhere = {
-  connectionId: string;
-  label: string;
-  stale: boolean;
-  needs: number;
-  done: number;
-  working: number;
-};
-
-/** Read-only summaries of managed hosts other than the selected one. */
-export function otherHostSummaries(
-  world: WorldObject,
-  filtered?: WorldObject,
-): Elsewhere[] {
-  const included = filtered
-    ? new Set(filtered.hosts.map((host) => host.connectionId))
-    : null;
-  const hosts = new Map<string, Elsewhere>();
-  for (const leaf of world.leaves) {
-    if (
-      leaf.kind !== "agent" ||
-      (included ? included.has(leaf.connectionId) : leaf.selectedHost)
-    )
-      continue;
-    const host = hosts.get(leaf.connectionId) ?? {
-      connectionId: leaf.connectionId,
-      label: leaf.hostLabel,
-      stale: false,
-      needs: 0,
-      done: 0,
-      working: 0,
-    };
-    host.stale ||= leaf.stale;
-    if (leaf.status === "blocked") host.needs += 1;
-    else if (leaf.status === "done") host.done += 1;
-    else if (leaf.status === "working") host.working += 1;
-    hosts.set(leaf.connectionId, host);
-  }
-  return [...hosts.values()];
-}
-
 function Screen({
   lines,
   live,
@@ -258,6 +223,7 @@ export function DeskView(props: {
   world: WorldObject;
   aggregate?: WorldObject;
   onOpen(id: string): Promise<void>;
+  onReveal?: (leaf: WorldLeafObject) => Promise<DeskRevealResult>;
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
@@ -276,6 +242,7 @@ export function DeskBoard({
   aggregate,
   client,
   onOpen,
+  onReveal,
   reading = null,
   onPreview = null,
   onCloseReading,
@@ -286,6 +253,7 @@ export function DeskBoard({
   aggregate?: WorldObject;
   client: DeskClients;
   onOpen(id: string): Promise<void>;
+  onReveal?: (leaf: WorldLeafObject) => Promise<DeskRevealResult>;
   /** The agent shown in the docked reading pane, on wide screens. */
   reading?: string | null;
   onPreview?: ((id: string) => Promise<void>) | null;
@@ -338,6 +306,7 @@ export function DeskBoard({
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  useDrawReadiness("desk", rootRef);
 
   const { needs, review, working, quiet } = partitionDesk(
     agents,
@@ -412,8 +381,6 @@ export function DeskBoard({
               ].map((leaf) => [leaf.id, { leaf }]),
             ).values(),
           ];
-  // Hosts outside the filter remain read-only aggregate summaries.
-  const others = otherHostSummaries(aggregate ?? world, world);
   const hostLabel =
     world.hosts.length === 1
       ? world.hosts[0]?.label
@@ -482,7 +449,8 @@ export function DeskBoard({
     const index = order.findIndex((entry) => entry.leaf.id === item.leaf.id);
     const neighbour =
       index >= 0 ? (order[index + 1] ?? order[index - 1]) : undefined;
-    if (!(await mark(item.handoffId, !item.handled))) {
+    const saved = await mark(item.handoffId, !item.handled);
+    if (!saved) {
       setError(
         "Could not save the review mark. Try again when the connection is ready.",
       );
@@ -755,7 +723,11 @@ export function DeskBoard({
           <button
             type="button"
             className="is-primary"
-            onClick={() => open(leaf)}
+            onClick={() =>
+              item.lane === "needs"
+                ? openNeedsYou(needsYouLeafKey(leaf.id))
+                : open(leaf)
+            }
           >
             {item.lane === "needs"
               ? "Answer"
@@ -782,13 +754,6 @@ export function DeskBoard({
     );
   };
 
-  const statusLabel: Record<string, string> = {
-    blocked: "Needs you",
-    done: "Done",
-    working: "Working",
-    idle: "Idle",
-    unknown: "Unknown",
-  };
   const row = (leaf: WorldLeafObject, showWorkspace = false) => {
     const { receipt } = receiptFor(leaf);
     const line =
@@ -797,7 +762,7 @@ export function DeskBoard({
     const meta = [
       agentRuntime(leaf),
       showWorkspace ? leaf.spaceLabel : null,
-      leaf.tabLabel ? `tab ${leaf.tabLabel}` : null,
+      leaf.tabLabel ? `desk ${leaf.tabLabel}` : null,
       agentFolder(leaf),
     ].filter(Boolean);
     return (
@@ -810,7 +775,7 @@ export function DeskBoard({
           onClick={() => open(leaf)}
         >
           <span className="desk-row-status">
-            {statusLabel[leaf.status] ?? leaf.status}
+            <AgentState status={leaf.status} asking={asking.has(leaf.id)} />
           </span>
           <span className="desk-row-main">
             <span className="desk-row-title">
@@ -900,27 +865,22 @@ export function DeskBoard({
             <strong>{quiet.length}</strong>
             <span>quiet</span>
           </button>
-          <div className="desk-hosts">
-            <span className="desk-host is-selected">{hostLabel}</span>
-            {others.map((host) => (
-              <span
-                key={host.connectionId}
-                className={`desk-host${host.needs ? " has-needs" : ""}`}
-                title={
-                  host.stale
-                    ? "Cached observation; switch hosts to act"
-                    : "Observed in the background; switch hosts to act"
-                }
-              >
-                {host.label}
-                {host.needs ? ` · ${host.needs} need you` : ""}
-                {host.done ? ` · ${host.done} done` : ""}
-                {host.working ? ` · ${host.working} working` : ""}
-                {!host.needs && !host.done && !host.working ? " · quiet" : ""}
-              </span>
-            ))}
-          </div>
         </div>
+        <DeskOtherHosts
+          world={aggregate ?? world}
+          filtered={world}
+          label={hostLabel}
+          onReveal={
+            onReveal
+              ? async (leaf) => {
+                  cancelPreview();
+                  const result = await onReveal(leaf);
+                  if (result === "opened") void recordOpen(leaf);
+                  return result;
+                }
+              : undefined
+          }
+        />
         <div className="desk-controls">
           <div className="desk-modes" role="tablist" aria-label="Desk views">
             {DESK_MODES.map((candidate) => (

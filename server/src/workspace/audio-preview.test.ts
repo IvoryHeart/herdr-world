@@ -1,3 +1,7 @@
+import {
+  runProcessWithInputTimeout,
+  runBinaryProcessWithTimeout,
+} from "./process";
 import { expect, test } from "bun:test";
 import { mkdtemp, open, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,7 +11,6 @@ import { publishConnectionHttpResponse } from "../connections/http-routing";
 import { shQuote } from "../utils/process-utils";
 import { createFileHandlers } from "./files";
 import { fileDownloadRange } from "./file-download";
-import { runBinaryProcessWithTimeout } from "./process";
 
 test("audio range parsing handles boundaries and ignores unsupported ranges", () => {
   for (const [range, expected] of [
@@ -66,6 +69,9 @@ test.each([false, true])(
     let current = true;
     let changeBeforeRead = false;
     const handlers = createFileHandlers({
+      runBinaryProcessWithTimeout,
+      bindProcess: (argv) => argv,
+      runProcessWithInputTimeout,
       herdr: {
         call: async () => ({
           workspace: { worktree: { checkout_path: root } },

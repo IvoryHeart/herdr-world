@@ -13,6 +13,8 @@ export type TownGestureTarget = {
   hit: TownHit | null;
   /** What dragging from here would carry; null when nothing can move. */
   drag: TownDrag | null;
+  /** A press on a room's plaque name: its taps are the plaque's own. */
+  nameOnly?: true;
 };
 
 /** Touch holds still this long on a desk or agent before it lifts. */

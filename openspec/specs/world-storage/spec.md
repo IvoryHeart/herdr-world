@@ -3,7 +3,7 @@
 ## Purpose
 
 Keep World-owned questions, answers, results, attention intents, agent profiles,
-chimes and auto-sync runtime status durable while retaining bootstrap configuration
+chimes, Board concerns and auto-sync runtime status durable while retaining bootstrap configuration
 and secrets as private files.
 
 ## Requirements
@@ -114,6 +114,58 @@ later writes and retain committed cached reads without reopening storage.
 - **THEN** it uses its committed SQLite profiles without import writes
 - **AND** it neither restores deleted profiles nor repeats a completed terminal import
 
+### Requirement: Durable Board concerns with compatible revisions and bindings
+
+World SHALL store Board notes, strings, appearance, layout concerns, interest and
+relations in separate SQLite tables through the instance's single asynchronous
+writer. Board patches SHALL remain all-or-none, retain existing document and
+per-note/Group conflict wire behavior, and commit identity captures with their
+records. Only acknowledged commits SHALL advance synchronous reads, replies or
+revision events. Independent edits SHALL use fresh transaction-local state;
+unchanged rows SHALL retain their row revision. Queued planning SHALL recheck
+captured runtime authority. Conditional undo SHALL NOT overwrite newer admitted
+edits, and native-move reconciliation SHALL preserve concurrent explicit fields.
+Existing identity binding policies SHALL remain unchanged. Layout positions,
+pins, folds and workspace/host colours SHALL remain native-keyed preferences.
+Runtime claims SHALL remain in memory. Existing valid Board document and patch
+capacity, including multibyte text, SHALL fit the bounded storage admission port.
+Queued plans SHALL reserve their retained payload bytes before entering the
+queue, including client RPC parameters. Wrappers SHALL preserve reservations,
+and every completion, refusal or skipped plan SHALL release its reservation.
+Validation and runtime-authority rechecks SHALL still use acknowledged state
+when planning runs.
+Snapshot-driven metadata plans SHALL project only their consumer's observation
+inputs before reservation. Dense aggregate labels or agent metadata SHALL NOT
+prevent a small relationship or legacy appearance update. Projections SHALL
+preserve completeness, captured generation and current-runtime authority checks,
+and reconciliation SHALL still use acknowledged Board state when its plan runs.
+
+Before its initial import, World SHALL preserve exact private content-hash backup
+bytes of the configured Board JSON. Concern rows, ID reservations, bindings and
+the completion marker SHALL commit atomically before the listener starts. Missing
+JSON SHALL initialize empty state once. Malformed initial JSON or an unsafe or
+conflicting backup SHALL stop startup without partial Board data and leave the
+source intact. After initialization, SQLite SHALL take precedence over all
+retained JSON versions without reimport or source writes. Existing note, string
+and Group IDs SHALL survive import and remain reserved against generated reuse.
+Close SHALL drain admitted Board writes, refuse later writes and retain committed
+cached reads without reopening storage. Configuration and secrets remain files.
+
+#### Scenario: Independent note edits and a stale draft
+- **WHEN** independent notes are edited while another writer submits a stale note revision
+- **THEN** both independent edits commit and the stale draft receives the current document
+- **AND** its refused patch changes no concern rows or bindings
+
+#### Scenario: An edit is queued during native move reconciliation
+- **WHEN** an explicit appearance edit is admitted before a move's Board follow-up commits
+- **THEN** reconciliation rechecks its Board revision and preserves the explicit fields
+- **AND** no retired runtime can authorize queued metadata changes
+
+#### Scenario: Initial Board import or edit is interrupted
+- **WHEN** the process is killed before or after COMMIT
+- **THEN** recovery contains all affected records and bindings or none of them
+- **AND** import retry completes once without restoring later-deleted records or modifying the source
+
 ### Requirement: Durable auto-sync runtime status separate from configuration
 
 World SHALL store auto-sync last-run time, outcome, message and branch in typed
@@ -200,3 +252,83 @@ answer to a different ask.
 #### Scenario: Allocator draws an existing ID
 - **WHEN** a generated ID already exists in the store
 - **THEN** allocation draws another ID rather than replacing the existing record
+
+### Requirement: Durable terminal marks
+
+Desk review marks/recent opens and watchlist SHALL use bounded
+World-ID rows paired atomically with verified bindings in the single SQLite writer.
+Their current wire projections and shared change notices SHALL publish only after
+COMMIT and after captured runtime currency is rechecked. Restart captures SHALL
+remain unresolved until current complete unambiguous original-source evidence
+attaches them under each kind's declared lifetime. No runtime generation or service
+incarnation SHALL be stored as durable identity. A refused row operation SHALL NOT
+roll back neighboring accepted operations; close SHALL drain admitted writes.
+
+There is no current file-owned or browser-owned state to import. The first upgrade
+SHALL start empty rather than inventing continuity for old process memory or
+obsolete browser keys. Subsequent starts SHALL retain committed rows and World IDs.
+Board layout and ordinary Town placement SHALL NOT enter this family.
+Publication SHALL merge against the latest live state without restoring another
+connection's retired projection or decreasing its notice revisions. Pending agent
+commands SHALL be fenced by observed ownership even when session identity is
+unknown or omitted. Exact saved-watch removal SHALL remain available while its
+source is unavailable and SHALL NOT delete a replacement record.
+
+#### Scenario: Restart after acknowledgement
+- **WHEN** a process dies after acknowledging a terminal mark
+- **THEN** SQLite retains its complete record and binding
+- **AND** it reappears only after fresh identity verification
+
+#### Scenario: Runtime retires while storage replies
+- **WHEN** a mark commits but its captured runtime retires before publication
+- **THEN** the old projection is not published and the saved binding must be
+  freshly verified before it appears in another runtime
+
+Desk stop identity SHALL survive the 12-hour display expiry independently of a
+review/open timestamp. Fresh initial stopped observations SHALL acquire identity
+without an invented historical time. Current stop captures SHALL be protected
+from history eviction; inactive/ended history SHALL retain at most 500 rows,
+oldest-first, and may yield earlier to the 768 KiB serialized Desk-row budget.
+Known-session captures recovering after World restart SHALL remain unresolved
+and protected until complete source classification or confirmed unavailability.
+Unknown-session captures SHALL require process-local live ownership to project;
+terminal-only evidence SHALL NOT carry a Desk review through World/runtime
+restart or null-to-known ownership. Distinct current captures MAY coexist with
+unassociated historical captures for the same terminal, using separate World IDs
+and original bindings. No durable runtime/incarnation identity SHALL be invented.
+Capacity refusals SHALL preserve every current capture, publish no partial
+projection, acknowledge no failed mutation and keep the service available.
+Schema 10 SHALL atomically retire the completion-seen operational row kind and
+verbs after compatible Chat rebuild delivery, preserving original Desk/watch rows
+and bindings. Legacy receipts SHALL enter a private service-only draining archive,
+never a Desk response or a new verb/UI. It SHALL retain at most 4,096 receipts,
+oldest-first eviction, with a separate 64 MiB canonical serialized-row budget;
+exceeding that budget SHALL refuse upgrade with a labelled error and leave schema
+9 intact. The existing 1 MiB frame ceiling SHALL NOT increase.
+
+A receipt SHALL resolve only after fresh complete unambiguous evidence from the
+same connection ID, terminal and known session, with an unchanged native
+state-change sequence. The normal canonical current-stop Desk review and receipt
+removal SHALL commit atomically. Unknown-session receipts SHALL never resolve;
+missing sequence proof SHALL defer. Positive ownership replacement, unknown
+ownership or changed sequence SHALL permanently disqualify the old receipt even
+if its former proof returns after restart. Current/newer review and exact Undo
+SHALL be preserved. Unresolved receipts SHALL drain on complete fresh
+original-source terminal absence or 30 days after the original migration time.
+The archive SHALL accept no new receipts; a later release removes the table. The resolving Desk
+savepoint SHALL enforce the original deadline with its writer timestamp, even
+when the earlier proof preceded expiry. Transfer SHALL defer without consuming
+the receipt whenever strictly qualified activity proof disagrees with the actual
+World leaf's canonical activity; display metadata SHALL NOT authorize session or
+native-sequence continuity.
+
+Re-entering source recovery SHALL protect known captures again before history
+trimming, even after prior successful observation. Admitting unknown ownership
+SHALL durably end preceding known Desk captures before a later restart can
+restore them; their acknowledgements SHALL remain ended, unassociated history.
+Capacity admission SHALL validate the complete resulting canonical writer state
+before the first row operation, including commit-time width and shrinking/growing
+write order. A capacity-refused observation SHALL leave durable current rows and
+the published projection unchanged. Malformed native identifiers SHALL refuse
+the entire observation nonfatally before any row operation or absence proof;
+filtering malformed rows SHALL NOT make a partial listing authoritative.

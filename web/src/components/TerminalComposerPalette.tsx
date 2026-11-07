@@ -22,7 +22,7 @@ export function TerminalComposerPalette({
   commandListRef,
   matches,
 }: {
-  commandPickerRef: RefObject<HTMLElement>;
+  commandPickerRef: RefObject<HTMLElement | null>;
   selectedCommand?: ComposerCommand;
   pickerId: string;
   activeCommand: number;
@@ -30,13 +30,13 @@ export function TerminalComposerPalette({
   keepTextareaFocus: (event: MouseEvent<HTMLButtonElement>) => void;
   closeCommandPicker: () => void;
   replacement: { command: ComposerCommand; draft: string } | null;
-  replacementCancelRef: RefObject<HTMLButtonElement>;
+  replacementCancelRef: RefObject<HTMLButtonElement | null>;
   setReplacement: (value: null) => void;
   focusPickerWithoutKeyboard: () => void;
   busy: boolean;
   composing: boolean;
   selectCommand: (command: ComposerCommand, confirmed?: boolean) => void;
-  commandListRef: RefObject<HTMLDivElement>;
+  commandListRef: RefObject<HTMLDivElement | null>;
   matches: readonly ComposerCommand[];
 }) {
   return (

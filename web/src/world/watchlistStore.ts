@@ -6,6 +6,7 @@ export type WorldWatch = {
   generation: number;
   terminalId: string;
   label: string;
+  watchId?: string;
 };
 
 export type WorldWatchlistState = {
@@ -55,11 +56,19 @@ function parse(
       typeof item.label !== "string"
     )
       continue;
+    if (
+      item.watch_id !== undefined &&
+      (typeof item.watch_id !== "string" ||
+        !item.watch_id ||
+        item.watch_id.length > 512)
+    )
+      continue;
     const watch = {
       connectionId: item.connection_id,
       generation: item.connection_generation as number,
       terminalId: item.terminal_id,
       label: item.label,
+      ...(typeof item.watch_id === "string" ? { watchId: item.watch_id } : {}),
     };
     const key = JSON.stringify([
       watch.connectionId,
@@ -139,12 +148,23 @@ export class WorldWatchlistStore {
       return false;
     }
     try {
+      const capture =
+        watch.watchId ??
+        this.state.records.find(
+          (record) =>
+            record.connectionId === watch.connectionId &&
+            record.generation === watch.generation &&
+            record.terminalId === watch.terminalId,
+        )?.watchId;
       const result = parse(
         await this.client.call(method, {
           connection_id: watch.connectionId,
           connection_generation: watch.generation,
           terminal_id: watch.terminalId,
           label: watch.label,
+          ...(method === "world.watchlist.unpin" && capture
+            ? { watch_id: capture }
+            : {}),
         }),
       );
       if (result) {

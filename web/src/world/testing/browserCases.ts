@@ -1,4 +1,20 @@
-export const hostFilterCases = [
+export const hostFilterCases: {
+  width: number;
+  height?: number;
+  operation: string;
+  view: string;
+}[] = [
+  ...[
+    { width: 390, height: 844 },
+    { width: 1512, height: 982 },
+    { width: 1280, height: 1440 },
+    { width: 2560, height: 1440 },
+    { width: 1440, height: 2560 },
+  ].map((viewport) => ({
+    ...viewport,
+    operation: "desk-reveal",
+    view: "desk",
+  })),
   ...[1440, 390].flatMap((width) => [
     ...[
       "pending-inspector-scope",
@@ -9,7 +25,13 @@ export const hostFilterCases = [
     { width, operation: "spaces-navigator", view: "spaces" },
     { width, operation: "spaces-notifications", view: "spaces" },
     { width, operation: "bare-navigator", view: "town" },
-    { width, operation: "town-idle", view: "town" },
+    // Idle agents rest in the lounge, the fixture's only motion. A phone's
+    // home view reaches it only when the screen fits the town center and the
+    // whole first building (townSceneCamera's frameHome), so the phone case
+    // runs on a tall phone rather than at that framing's edge.
+    width === 390
+      ? { width, height: 1200, operation: "town-idle", view: "town" }
+      : { width, operation: "town-idle", view: "town" },
     { width, operation: "town-idle-draws", view: "town" },
   ]),
   ...[1440, 390].flatMap((width) =>
@@ -169,6 +191,8 @@ export const productionContextCases = [
   { view: "uncertain", entry: "popup" },
   { view: "board", entry: "" },
   { view: "town", entry: "" },
+  { view: "board", entry: "maximum-scale" },
+  { view: "town", entry: "maximum-scale" },
   { view: "town", entry: "animated" },
 ].flatMap((item) => [1440, 390].map((width) => ({ ...item, width })));
 export function productionContextGroup({

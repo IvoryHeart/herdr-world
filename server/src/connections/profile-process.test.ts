@@ -342,32 +342,48 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
   roots.push(root);
   mkdirSync(root, { recursive: true, mode: 0o700 });
   chmodSync(root, 0o700);
-  const alpha = await fakeHerdr(root, "alpha", 14, undefined, ({ method }) =>
-    method === "workspace.get"
-      ? {
-          workspace: {
-            worktree: { checkout_path: root, is_linked_worktree: true },
-          },
-        }
-      : method === "pane.list"
+  let paneLookup = Promise.withResolvers<void>();
+  let lookupStarted = Promise.withResolvers<void>();
+  let lookupComplete = false;
+  const alpha = await fakeHerdr(
+    root,
+    "alpha",
+    14,
+    undefined,
+    async ({ method, params }) => {
+      if (method === "pane.get" && params?.pane_id === "clipboard-pane") {
+        lookupStarted.resolve();
+        await paneLookup.promise;
+        lookupComplete = true;
+        return { pane: { terminal_id: "clipboard-terminal" } };
+      }
+      if (method.startsWith("pane.send_")) return { lookupComplete };
+      return method === "workspace.get"
         ? {
-            panes: [
-              {
-                pane_id: "alpha-pane",
-                terminal_id: "alpha-terminal",
-                agent: "codex",
-                agent_session: {
-                  source: "reported",
-                  agent: "codex",
-                  kind: "id",
-                  value: "synthetic-alpha-session",
-                },
-                workspace_id: "shared-workspace",
-                tab_id: "shared-tab",
-              },
-            ],
+            workspace: {
+              worktree: { checkout_path: root, is_linked_worktree: true },
+            },
           }
-        : undefined,
+        : method === "pane.list"
+          ? {
+              panes: [
+                {
+                  pane_id: "alpha-pane",
+                  terminal_id: "alpha-terminal",
+                  agent: "codex",
+                  agent_session: {
+                    source: "reported",
+                    agent: "codex",
+                    kind: "id",
+                    value: "synthetic-alpha-session",
+                  },
+                  workspace_id: "shared-workspace",
+                  tab_id: "shared-tab",
+                },
+              ],
+            }
+          : undefined;
+    },
   );
   const beta = await fakeHerdr(root, "beta");
   const registryPath = join(root, "connections.json");
@@ -523,6 +539,34 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     const oldAlphaGeneration = catalog.connections.find(
       ({ id }: { id: string }) => id === "alpha",
     ).generation as number;
+    for (const method of [
+      "pane.send_input",
+      "pane.send_text",
+      "pane.send_keys",
+    ]) {
+      paneLookup = Promise.withResolvers<void>();
+      lookupStarted = Promise.withResolvers<void>();
+      lookupComplete = false;
+      const input = rpc(
+        method,
+        { pane_id: "clipboard-pane", text: "copy", keys: ["enter"] },
+        "alpha",
+        oldAlphaGeneration,
+      );
+      try {
+        await lookupStarted.promise;
+        // This independent round trip lets already-dispatched input reach Herdr.
+        await browserB.rpc(
+          "pane.get",
+          { pane_id: "barrier" },
+          "alpha",
+          oldAlphaGeneration,
+        );
+      } finally {
+        paneLookup.resolve();
+      }
+      expect(await input).toEqual({ lookupComplete: true });
+    }
     const browserBCatalog = await browserB.rpc("connections.list");
     expect(
       browserBCatalog.connections.find(
@@ -784,30 +828,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       ),
     ).toBe(true);
 
-    // Town's checked completions are shared the same way.
-    const seenIdentity = {
-      connection_id: "alpha",
-      connection_generation: oldAlphaGeneration,
-      terminal_id: "alpha-terminal",
-    };
-    const seenNotice = browserB.nextControl(
-      (control) => control.type === "world_completion_seen_changed",
-    );
-    expect(
-      await browserA.rpc("world.completion_seen.mark", seenIdentity),
-    ).toMatchObject({
-      revision: 1,
-      records: [{ ...seenIdentity, revision: 1 }],
-    });
-    expect(await seenNotice).toEqual({
-      type: "world_completion_seen_changed",
-      revision: 1,
-    });
-    expect(await browserB.rpc("world.completion_seen.list")).toMatchObject({
-      revision: 1,
-      records: [seenIdentity],
-    });
-
+    // Town, Desk and Needs you share the Desk review record.
     const deskIdentity = {
       connection_id: "alpha",
       connection_generation: oldAlphaGeneration,
@@ -859,10 +880,6 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     ).generation as number;
     expect(newAlphaGeneration).not.toBe(oldAlphaGeneration);
     expect(await browserA.rpc("world.desk.get")).toMatchObject({ records: [] });
-    expect(await browserA.rpc("world.completion_seen.list")).toMatchObject({
-      revision: 2,
-      records: [],
-    });
 
     const betaPaneCloseCalls = () =>
       (controlCalls.get("beta") ?? []).filter(

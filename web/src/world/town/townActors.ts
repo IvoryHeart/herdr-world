@@ -3,14 +3,21 @@
  *
  * Where an agent stands follows its authoritative status: seated while working,
  * unknown; at its host reception while blocked (oldest first) or finished
- * (after the waiting agents); and in the lounge while idle. When reception or
- * the lounge is full, the rest stay at their desks. An agent the user opened
+ * (after the waiting agents); and in the bar (the lounge) while idle. When
+ * the reception queue is full, the rest, in the same order, crowd the lobby
+ * beside it and grumble (however many: past the lobby's spots they huddle
+ * between neighbours); after `TOWN_OVERFLOW_DOZE` seconds of overflow a
+ * grumbler lies down and naps on the floor. A freed queue slot takes the
+ * front of the crowd, and the crowd moves up; a napper gets up first. When the bar is full, the rest stay at their
+ * desks. An agent the user opened
  * (summoned) walks back to its desk whatever its status, until that status
- * changes. An agent at a pinned desk never goes to the lounge: it leaves its
+ * changes. An agent whose mark its reception does not take (held, see
+ * townReceptionFilter.ts) stays seated at its desk with its mark. An agent at a pinned desk never goes to the lounge: it leaves its
  * desk only to wait at reception (blocked, or finished and not yet seen), and
  * walks straight back once seen. Movement never delays operational state,
  * and every actor keeps its agent key, so its exact pane target is unchanged
- * wherever it stands.
+ * wherever it stands. An agent in the bin (away) walks out of its building's
+ * front door and is drawn outside by the bus layer until it is put back.
  */
 
 import {
@@ -23,7 +30,8 @@ import {
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 
-export type TownActorMode = "seat" | "stand" | "walk" | "tween";
+/** `out`: through the front door, not drawn in the building. */
+export type TownActorMode = "seat" | "stand" | "walk" | "tween" | "out";
 export type TownFacing = "down" | "up" | "left" | "right";
 
 export type TownActor = {
@@ -52,15 +60,57 @@ export type TownActor = {
   blockedSince: number;
   /** Session clock time this agent was first seen finished, or 0. */
   doneSince: number;
+  /**
+   * Session clock time this agent joined the reception overflow, 0 outside
+   * it, or `CROWD_PENDING` until the next step brings the clock current.
+   */
+  crowdSince: number;
+  /** How far this agent lies on the floor: 0 standing, 1 napping. */
+  rest: number;
+  /** A walk's speed over TOWN_WALK_SPEED: an arriving agent hurries in. */
+  pace?: number;
 };
+
+/** How an agent in the reception overflow crowd looks once it stands there. */
+export type TownCrowdMood = "grumble" | "nap";
 
 export type TownGoal =
   | { kind: "seat"; deskKey: string; seat: number }
   | { kind: "queue"; slot: number }
-  | { kind: "lounge"; spot: TownSpot };
+  /** The reception overflow crowd: spot `slot` of townCrowdSpots. */
+  | { kind: "crowd"; slot: number }
+  | { kind: "lounge"; spot: TownSpot }
+  | { kind: "door" };
 
-const WALK_SPEED = 76;
+/** How fast agents walk, in world pixels a second (also outdoors, townBus). */
+export const TOWN_WALK_SPEED = 76;
 const SEAT_TWEEN = 0.26;
+/** An arriving agent walks in from the front door in at most this long. */
+export const TOWN_ARRIVAL_INDOOR_S = 2.5;
+/** Seconds of reception overflow before a grumbling agent gives up and naps. */
+export const TOWN_OVERFLOW_DOZE = 90;
+/** The most lobby crowd spots; more overflow huddles between them. */
+const CROWD_LIMIT = 16;
+/**
+ * Pixel offsets from a crowd spot's tile centre for each further agent that
+ * shares it, inside the tile, so a big crowd still reads as many agents.
+ */
+const CROWD_HUDDLE: readonly (readonly [number, number])[] = [
+  [5, -3],
+  [-5, -3],
+  [5, 3],
+  [-5, 3],
+  [0, -5],
+  [0, 4],
+];
+/**
+ * `crowdSince` for an agent that joined the crowd at a sync: the next step
+ * stamps the then-current clock, so a long quiet spell before the sync (no
+ * frames, no clock) is never charged to the new crowd.
+ */
+const CROWD_PENDING = -1;
+/** Seconds to lie down on the lobby floor, or to get up again. */
+const LIE_TWEEN = 0.5;
 
 const tileCenter = (tx: number, ty: number): [number, number] => [
   tx * T + 8,
@@ -79,6 +129,7 @@ export class TownNavigation {
         if (y < 2 || x === 0 || x === w - 1) this.grid[y * w + x] = Infinity;
     const L = building.lounge;
     for (const dx of [1, 2, 3, 7, 8]) this.block(L.x + dx, L.y + 1);
+    for (let x = L.bar.x; x < L.bar.x + L.bar.w; x += 1) this.block(x, L.bar.y);
     for (
       let x = building.counter.x;
       x < building.counter.x + building.counter.w;
@@ -189,6 +240,64 @@ export class TownNavigation {
   }
 }
 
+/**
+ * Lobby spots for agents the reception queue cannot take, front of the crowd
+ * first: on both sides of the queue rug, beside and behind the counter, two
+ * tiles apart so a napping agent fits. Spots stay off the rug (the queue and
+ * the path to it), the counter, the front door's column, plants and the row
+ * above the rooms; facing the counter.
+ */
+export function townCrowdSpots(
+  building: TownBuilding,
+  navigation: TownNavigation,
+): TownSpot[] {
+  const { doorX, lobbyY, entryX } = building;
+  const rugLeft = doorX - 6;
+  const rugRight = doorX + 5;
+  const queueY = lobbyY + 4;
+  const spots: (TownSpot & { distance: number; side: number })[] = [];
+  for (const [index, y] of [lobbyY + 5, lobbyY + 3, lobbyY + 1].entries()) {
+    const stagger = index % 2;
+    for (const side of [-1, 1]) {
+      const start = side < 0 ? rugLeft - 1 - stagger : rugRight + 1 + stagger;
+      for (let x = start; ; x += 2 * side) {
+        const gx = x - building.x;
+        if (gx < 2 || gx > building.w - 3) break;
+        const gy = y - building.y;
+        if (
+          x === entryX ||
+          !Number.isFinite(navigation.grid[gy * building.w + gx]!)
+        )
+          continue;
+        spots.push({
+          x,
+          y,
+          face: side < 0 ? "right" : "left",
+          distance:
+            (side < 0 ? rugLeft - x : x - rugRight) + Math.abs(y - queueY),
+          side,
+        });
+      }
+    }
+  }
+  return spots
+    .sort((a, b) => a.distance - b.distance || a.side - b.side || b.y - a.y)
+    .slice(0, CROWD_LIMIT)
+    .map(({ x, y, face }) => ({ x, y, face }));
+}
+
+const crowdSpotCache = new WeakMap<TownNavigation, TownSpot[]>();
+/** A building's crowd spots, kept with its navigation grid. */
+function crowdSpotsOf(world: TownActorWorld, hostKey: string) {
+  const navigation = world.navigation.get(hostKey)!;
+  let spots = crowdSpotCache.get(navigation);
+  if (!spots) {
+    spots = townCrowdSpots(world.buildings.get(hostKey)!, navigation);
+    crowdSpotCache.set(navigation, spots);
+  }
+  return spots;
+}
+
 export type TownActorWorld = {
   layout: TownLayout;
   model: TownModel;
@@ -212,7 +321,7 @@ export function townNavigationKey(building: TownBuilding) {
     y,
     w,
     h,
-    [lounge.x, lounge.y],
+    [lounge.x, lounge.y, lounge.bar.x, lounge.bar.y, lounge.bar.w],
     [counter.x, counter.y, counter.w],
     plants.map((plant) => [plant.x, plant.y]),
     desks,
@@ -257,6 +366,11 @@ export class TownActors {
   private clock = 0;
   private summoned: ReadonlySet<string> = new Set();
   private asking: ReadonlySet<string> = new Set();
+  private away: ReadonlySet<string> = new Set();
+  private held: ReadonlySet<string> = new Set();
+  private arriving: ReadonlySet<string> = new Set();
+  /** Arrived at the front door: their next walk in is hurried. */
+  private readonly entering = new Set<string>();
 
   get time() {
     return this.clock;
@@ -267,7 +381,11 @@ export class TownActors {
 
   /**
    * Reconcile actors with a new model or layout. `instant` skips walking;
-   * `summoned` agents go to their desks rather than reception or the lounge.
+   * `summoned` agents go to their desks rather than reception or the lounge;
+   * `away` agents (in the bin) leave by the front door; `held` agents, whose
+   * mark their reception does not take, stay at their desks; `arriving`
+   * agents (townArrivals.ts) wait outside the front door from the start, then
+   * walk in once they leave the set.
    * With `hosts`, only those hosts' agents are reconciled: the caller vouches
    * that nothing any other host's actors read has changed
    * (scene/townSceneActors.ts), so a full sync would leave them as they are.
@@ -278,11 +396,18 @@ export class TownActors {
     summoned: ReadonlySet<string> = this.summoned,
     asking: ReadonlySet<string> = this.asking,
     hosts?: ReadonlySet<string>,
+    away: ReadonlySet<string> = this.away,
+    held: ReadonlySet<string> = this.held,
+    arriving: ReadonlySet<string> = this.arriving,
   ) {
     const previousWorld = this.world;
+    const wasArriving = this.arriving;
+    this.arriving = arriving;
     this.world = world;
     this.summoned = summoned;
     this.asking = asking;
+    this.away = away;
+    this.held = held;
     const { model } = world;
     const seen = new Set<string>();
     const fresh = new Set<string>();
@@ -312,6 +437,8 @@ export class TownActors {
           spot: null,
           blockedSince: agent.semanticStatus === "blocked" ? this.clock : 0,
           doneSince: agent.semanticStatus === "done" ? this.clock : 0,
+          crowdSince: 0,
+          rest: 0,
         };
         this.actors.set(agent.key, actor);
         fresh.add(agent.key);
@@ -365,7 +492,13 @@ export class TownActors {
         const actor = this.actors.get(key)!;
         if (actor.spot) actor.spot = null;
         this.actors.delete(key);
+        this.entering.delete(key);
       }
+    // An arriving agent is outside at once, never seen walking out; one
+    // that reached the door walks in.
+    for (const key of arriving) if (!wasArriving.has(key)) fresh.add(key);
+    for (const key of wasArriving)
+      if (!arriving.has(key) && seen.has(key)) this.entering.add(key);
     this.assignGoals(
       instant,
       fresh,
@@ -399,6 +532,9 @@ export class TownActors {
     for (const actor of actors) {
       const agent = model.agents.get(actor.key)!;
       if (
+        this.away.has(actor.key) ||
+        this.arriving.has(actor.key) ||
+        this.held.has(actor.key) ||
         (agent.semanticStatus !== "blocked" &&
           agent.semanticStatus !== "done" &&
           !this.asking.has(actor.key)) ||
@@ -410,6 +546,7 @@ export class TownActors {
       queues.set(actor.hostKey, list);
     }
     const queueSlots = new Map<string, number>();
+    const crowdSlots = new Map<string, number>();
     for (const [hostKey, list] of queues) {
       // Waiting agents first, oldest first; finished agents after them.
       const waiting = (actor: TownActor) => actor.blockedSince > 0;
@@ -427,6 +564,11 @@ export class TownActors {
       list
         .slice(0, building.queue.length)
         .forEach((actor, slot) => queueSlots.set(actor.key, slot));
+      // All the rest crowd the lobby in the same order: the front of the
+      // crowd takes the next free queue slot, and the others move up.
+      list
+        .slice(building.queue.length)
+        .forEach((actor, slot) => crowdSlots.set(actor.key, slot));
     }
     for (const actor of actors) {
       const agent = model.agents.get(actor.key)!;
@@ -438,7 +580,11 @@ export class TownActors {
         seat: seat.seat,
       };
       const slot = queueSlots.get(actor.key);
-      if (slot !== undefined) goal = { kind: "queue", slot };
+      const crowd = crowdSlots.get(actor.key);
+      if (this.away.has(actor.key) || this.arriving.has(actor.key))
+        goal = { kind: "door" };
+      else if (slot !== undefined) goal = { kind: "queue", slot };
+      else if (crowd !== undefined) goal = { kind: "crowd", slot: crowd };
       else if (
         agent.semanticStatus === "idle" &&
         !this.summoned.has(actor.key) &&
@@ -461,6 +607,9 @@ export class TownActors {
       if (goal.kind !== "lounge" && actor.spot) actor.spot = null;
       if (goal.kind === "lounge") actor.spot = goal.spot;
       actor.queueSlot = goal.kind === "queue" ? goal.slot : null;
+      // Overflow time runs from joining the crowd, across moves within it.
+      if (goal.kind !== "crowd") actor.crowdSince = 0;
+      else if (actor.crowdSince === 0) actor.crowdSince = CROWD_PENDING;
       // A shrink can remove the floor under an in-flight actor even when the
       // building origin is unchanged. Settle invalid motion at its new goal;
       // never use a straight fallback path through the removed floor.
@@ -476,7 +625,11 @@ export class TownActors {
           actor.path.some(([x, y]) => outside(x, y)));
       const instant = instantAll || fresh.has(actor.key) || invalidMotion;
       if (sameGoal(actor.goal, goal) && !instant) {
-        if (actor.mode === "seat" || actor.mode === "stand")
+        if (
+          actor.mode === "seat" ||
+          actor.mode === "stand" ||
+          actor.mode === "out"
+        )
           this.travel(actor, true, true);
         else if (actor.mode === "walk" || actor.mode === "tween")
           this.retarget(actor);
@@ -489,6 +642,8 @@ export class TownActors {
 
   private destination(actor: TownActor): {
     tile: [number, number];
+    /** Where to stand, in world pixels, when not the tile's centre. */
+    point?: [number, number];
     seat?: { x: number; y: number; dir: TownFacing };
     face: TownFacing;
   } | null {
@@ -506,7 +661,27 @@ export class TownActors {
       };
     }
     const building = world.buildings.get(actor.hostKey)!;
-    const spot = goal.kind === "queue" ? building.queue[goal.slot]! : goal.spot;
+    // The front door, in the building's top wall.
+    if (goal.kind === "door")
+      return { tile: [building.entryX, building.y + 1], face: "up" };
+    if (goal.kind === "crowd") {
+      // Past the last spot, the crowd huddles between earlier agents.
+      const spots = crowdSpotsOf(world, actor.hostKey);
+      const spot = spots[goal.slot % spots.length];
+      if (!spot) return null;
+      const layer = Math.floor(goal.slot / spots.length);
+      const [cx, cy] = tileCenter(spot.x, spot.y);
+      const [dx, dy] = layer
+        ? CROWD_HUDDLE[(layer - 1) % CROWD_HUDDLE.length]!
+        : [0, 0];
+      return {
+        tile: [spot.x, spot.y],
+        point: [cx + dx, cy + dy],
+        face: spot.face,
+      };
+    }
+    const spot = goal.kind === "queue" ? building.queue[goal.slot] : goal.spot;
+    if (!spot) return null;
     return { tile: [spot.x, spot.y], face: spot.face };
   }
 
@@ -518,24 +693,29 @@ export class TownActors {
       if (actor.mode === "seat" && target.seat) {
         actor.x = target.seat.x;
         actor.y = target.seat.y;
-      } else if (actor.mode === "stand" && !target.seat) {
-        [actor.x, actor.y] = tileCenter(...target.tile);
+      } else if (
+        (actor.mode === "stand" || actor.mode === "out") &&
+        !target.seat
+      ) {
+        [actor.x, actor.y] = standPoint(target);
       }
       return;
     }
     if (instant) {
       this.afterTween.delete(actor.key);
+      this.entering.delete(actor.key);
       actor.path = [];
       actor.tween = null;
+      actor.rest = 0;
       if (target.seat) {
         actor.x = target.seat.x;
         actor.y = target.seat.y;
         actor.dir = target.seat.dir;
         actor.mode = "seat";
       } else {
-        [actor.x, actor.y] = tileCenter(...target.tile);
+        [actor.x, actor.y] = standPoint(target);
         actor.dir = target.face;
-        actor.mode = "stand";
+        actor.mode = actor.goal?.kind === "door" ? "out" : "stand";
       }
       return;
     }
@@ -551,10 +731,40 @@ export class TownActors {
         target.tile[0],
         target.tile[1],
       );
-      actor.path = (path ?? [target.tile]).map(([x, y]) => tileCenter(x, y));
+      // Already in the goal tile (an empty path), still walk to its centre:
+      // arriving off-centre would leave the actor where a later settle snaps.
+      actor.path = (path?.length ? path : [target.tile]).map(([x, y]) =>
+        tileCenter(x, y),
+      );
+      actor.path[actor.path.length - 1] = standPoint(target);
       actor.mode = "walk";
+      if (this.entering.delete(actor.key)) {
+        let length = 0;
+        let [x, y] = [actor.x, actor.y];
+        for (const [px, py] of actor.path) {
+          length += Math.hypot(px - x, py - y);
+          [x, y] = [px, py];
+        }
+        actor.pace = Math.max(
+          1,
+          length / (TOWN_WALK_SPEED * TOWN_ARRIVAL_INDOOR_S),
+        );
+      }
     };
-    if (actor.mode === "seat") {
+    if (actor.mode === "stand" && actor.rest > 0) {
+      // A napper gets up where it lies before walking anywhere.
+      actor.tween = {
+        x0: actor.x,
+        y0: actor.y,
+        x: actor.x,
+        y: actor.y,
+        t: 0,
+        duration: LIE_TWEEN * actor.rest,
+        next: "stand",
+      };
+      actor.mode = "tween";
+      this.afterTween.set(actor.key, begin);
+    } else if (actor.mode === "seat") {
       const [ex, ey] = this.seatExit(actor);
       actor.dir = ex > actor.x ? "right" : "left";
       actor.tween = {
@@ -598,7 +808,7 @@ export class TownActors {
     }
     const end = actor.path[actor.path.length - 1];
     if (!end) return;
-    const [x, y] = tileCenter(...target.tile);
+    const [x, y] = standPoint(target);
     if (end[0] !== x || end[1] !== y) this.travel(actor, false);
   }
 
@@ -612,15 +822,56 @@ export class TownActors {
     return tileCenter(entry.x, entry.y);
   }
 
-  /** Advance movement by `dt` seconds. Returns whether anything moved. */
-  step(dt: number) {
-    this.clock += dt;
+  /**
+   * How an agent in the overflow crowd looks once it stands at its spot:
+   * grumbling, then napping after `TOWN_OVERFLOW_DOZE` seconds of overflow.
+   */
+  mood(actor: TownActor): TownCrowdMood | null {
+    if (actor.goal?.kind !== "crowd" || actor.mode !== "stand") return null;
+    return actor.rest > 0 || this.dozeIn(actor) <= 0 ? "nap" : "grumble";
+  }
+
+  /** Seconds until a grumbling agent in the crowd naps. */
+  dozeIn(actor: TownActor) {
+    if (actor.crowdSince === CROWD_PENDING) return TOWN_OVERFLOW_DOZE;
+    return actor.crowdSince + TOWN_OVERFLOW_DOZE - this.clock;
+  }
+
+  /** How far this agent should lie: 1 once a standing crowd agent naps. */
+  private restGoal(actor: TownActor) {
+    return actor.goal?.kind === "crowd" &&
+      actor.mode === "stand" &&
+      actor.crowdSince > 0 &&
+      this.dozeIn(actor) <= 0
+      ? 1
+      : 0;
+  }
+
+  /**
+   * Advance movement by `dt` seconds and the session clock by `elapsed`
+   * (reduced motion finishes movement at once but keeps real time).
+   * Returns whether anything moved.
+   */
+  step(dt: number, elapsed = dt) {
+    this.clock += elapsed;
     let moved = false;
     for (const actor of this.actors.values()) {
+      if (actor.crowdSince === CROWD_PENDING)
+        actor.crowdSince = this.clock || 1e-6;
       if (this.world?.model.agents.get(actor.key)?.stale) continue;
+      // Lie down on the lobby floor, or get up, over LIE_TWEEN seconds.
+      const restGoal = this.restGoal(actor);
+      if (actor.rest !== restGoal) {
+        moved = true;
+        const change = dt / LIE_TWEEN;
+        actor.rest =
+          restGoal > actor.rest
+            ? Math.min(restGoal, actor.rest + change)
+            : Math.max(restGoal, actor.rest - change);
+      }
       if (actor.mode === "walk") {
         moved = true;
-        let remaining = WALK_SPEED * dt;
+        let remaining = TOWN_WALK_SPEED * (actor.pace ?? 1) * dt;
         while (remaining > 0 && actor.path.length) {
           const [px, py] = actor.path[0]!;
           const dx = px - actor.x;
@@ -673,6 +924,7 @@ export class TownActors {
   }
 
   private arrive(actor: TownActor) {
+    delete actor.pace;
     const target = this.destination(actor);
     if (!target) {
       actor.mode = "stand";
@@ -691,7 +943,7 @@ export class TownActors {
       };
       actor.mode = "tween";
     } else {
-      actor.mode = "stand";
+      actor.mode = actor.goal?.kind === "door" ? "out" : "stand";
       actor.dir = target.face;
     }
   }
@@ -701,7 +953,9 @@ export class TownActors {
     for (const actor of this.actors.values())
       if (
         !this.world?.model.agents.get(actor.key)?.stale &&
-        (actor.mode === "walk" || actor.mode === "tween")
+        (actor.mode === "walk" ||
+          actor.mode === "tween" ||
+          actor.rest !== this.restGoal(actor))
       )
         return true;
     return false;
@@ -713,12 +967,19 @@ function sameGoal(a: TownGoal | null, b: TownGoal) {
   if (a.kind === "seat" && b.kind === "seat")
     return a.deskKey === b.deskKey && a.seat === b.seat;
   if (a.kind === "queue" && b.kind === "queue") return a.slot === b.slot;
+  if (a.kind === "crowd" && b.kind === "crowd") return a.slot === b.slot;
   if (a.kind === "lounge" && b.kind === "lounge")
     return spotKey(a.spot) === spotKey(b.spot);
-  return false;
+  return a.kind === "door";
 }
 
 const spotKey = (spot: TownSpot) => `${spot.x},${spot.y}`;
+
+/** Where a non-seat destination stands, in world pixels. */
+const standPoint = (target: {
+  tile: [number, number];
+  point?: [number, number];
+}): [number, number] => target.point ?? tileCenter(...target.tile);
 
 const easeInOut = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;

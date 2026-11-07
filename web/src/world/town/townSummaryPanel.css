@@ -126,3 +126,40 @@
   display: flex;
   justify-content: space-between;
 }
+
+/* A host's subscription limits (HostLimits in TownSummaryPanel.tsx). */
+.town-summary-limits {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-summary-limits li {
+  display: grid;
+  gap: 2px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--border-soft, rgba(127, 127, 127, 0.3));
+}
+
+.town-summary-limits small,
+.town-summary-limits-note {
+  color: var(--muted, #8a8f98);
+  font-variant-numeric: tabular-nums;
+}
+
+.town-summary-limits-note {
+  margin: 0;
+  font-size: 12px;
+}
+
+.town-summary-limits em {
+  font-style: normal;
+  color: var(--muted, #8a8f98);
+}
+
+.town-summary-limits small[data-low="true"] {
+  color: var(--warning-text, #ffb547);
+  font-weight: 600;
+}

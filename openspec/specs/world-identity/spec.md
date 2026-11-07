@@ -219,13 +219,33 @@ Several claims SHALL coexist for one field.
 
 Each kind of World record SHALL declare what happens when its binding ends: archive,
 clear, keep unresolved, or move to "Needs a home". Durable identity alone SHALL NOT
-extend a record's lifetime. Records whose current contract clears them on restart or
-runtime replacement SHALL keep that contract until it is changed by its own approved
-requirement. This includes the watchlist, Desk marks and completion "seen".
+extend a record's lifetime. The owner-approved terminal-mark persistence changes
+Desk marks/recent opens and watchlist to the following lifetimes:
+
+- Watchlist follows its witnessed terminal on its original source, including a
+  uniquely observed terminal move. Complete current absence clears it.
+- Desk metadata requires its captured known session. Complete current terminal
+  absence or a replacement ends the capture as bounded unassociated history.
+  Missing known-session evidence never silently retargets a saved mark.
+- Unknown-session Desk captures require process-local live ownership; terminal
+  reuse cannot carry review through World/runtime restart or null-to-known
+  ownership. A later returning known fingerprint cannot inherit an intervening
+  owner's review. No durable runtime/incarnation identity is invented.
+- Offline, partial, stale and duplicate observations attach nothing. Known
+  restart captures remain unresolved/protected until fresh complete source
+  classification or confirmed unavailability. Fresh native progress names a new
+  Desk stop; older progress cannot erase a newer mark. Exact Undo and bounded
+  recency/display expiry retain their existing behavior.
+- Retired completion receipts remain in a private draining archive under the
+  storage contract. Only fresh same-source/terminal/known-session/unchanged native
+  sequence evidence can convert one into Desk. Unknown receipts never resolve;
+  neither a name nor terminal-only evidence establishes continuity.
 
 #### Scenario: Watchlist after a restart
-- **WHEN** World restarts after this change while its watchlist contract is unchanged
-- **THEN** the watchlist is empty, as before, even though durable bindings exist
+- **WHEN** World restarts and then verifies the original terminal in a complete,
+  current, unambiguous observation of its original source
+- **THEN** its saved watch reappears with the same World ID and a fresh runtime
+  projection; before verification it remains unresolved
 
 #### Scenario: A bound tab closes
 - **WHEN** a tab bound to a Board string is closed on the current runtime

@@ -47,6 +47,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           ? null
           : createDenseSnapshotFixture({
               workingInitially: entry === "animated",
+              maximumScale: entry === "maximum-scale",
             });
       const initialSnapshot = fixture ? await fixture.service.snapshot() : null;
       const payload = initialSnapshot ? JSON.stringify(initialSnapshot) : "";
@@ -108,7 +109,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         const text = stringify(value, replacer, space);
         if (diagnostic && performance.now() - began > 15)
           serviceTasks.push({ stage: "serialize", beginAt, endAt: Date.now() });
-        if (value?.connections?.length === 64)
+        if (fixture && value?.connections?.length === fixture.hostCount)
           serializationMs = Math.max(
             serializationMs,
             performance.now() - began,

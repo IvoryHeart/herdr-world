@@ -644,6 +644,15 @@ export function AgentHistoryDrawer({
         <div className="agent-history-chat-frame">
           <AgentHistoryChat
             items={chatItems}
+            speechActive={open}
+            // Speech belongs to this connection's pane and session.
+            speechScopeKey={JSON.stringify([
+              connectionClient.connectionId,
+              connectionClient.generation,
+              pane.pane_id,
+              history?.path,
+              session?.session?.value,
+            ])}
             listRef={contentRef}
             contentRef={timelineRef}
             highlightedSequence={highlightedSequence}
@@ -751,7 +760,9 @@ export function AgentHistoryDrawer({
         } ${wide ? "is-wide" : ""}`}
         aria-label="Agent session"
         aria-hidden={!open}
-        ref={(node) => node?.toggleAttribute("inert", !open)}
+        ref={(node) => {
+          node?.toggleAttribute("inert", !open);
+        }}
       >
         <div className="agent-history-drawer-head">
           <div className="agent-history-identity">

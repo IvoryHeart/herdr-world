@@ -327,6 +327,8 @@ test("production bridge supervises two independent SSH profile tunnels", async (
       HERDR_WORLD_CONNECTIONS_PATH: registryPath,
       ...fakeSsh.env,
       HERDR_WORLD_NOTIFICATION_SOURCE: "status",
+      // This fixture emulates tunnels; master lifecycle has separate OpenSSH coverage.
+      HERDR_WORLD_DISABLE_SSH_MASTER: "1",
       HERDR_SOCKET_PATH: undefined,
       HERDR_CLIENT_SOCKET_PATH: undefined,
       HERDR_SSH_HOST: "legacy-host",

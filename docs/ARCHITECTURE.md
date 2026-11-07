@@ -6,6 +6,25 @@ This document describes Herdr World's current system contracts. See
 
 ## System overview
 
+`WorldStorage.terminalMarks` stores Desk marks/recent opens, watchlist and completion
+seen as bounded rows paired with verified bindings. Service admission serializes
+mutations, rechecks runtime currency across storage waits, and publishes the old
+RPC projections/change notices only after COMMIT. Restart captures are unresolved
+until complete unambiguous original-source evidence verifies terminal/session
+continuity. Fresh initial stopped observations get stable identity without a
+historical timestamp; expiry removes display time only. Current stop rows are
+protected from the 500-row inactive history budget. Both the projection and
+serialized Desk rows have a 768 KiB budget below the unchanged 1 MiB frame limit;
+capacity is a labelled refusal, not current-row eviction. Known-session recovery
+waits for native verification; unknown-session history cannot reattach through
+terminal-only evidence. Live capture ownership remains process memory, and no
+runtime fence is a durable key. Re-entering recovery protects known captures
+before history trimming, and unknown ownership durably ends preceding known
+captures. Whole-plan capacity admission shares the writer's canonical binding
+accounting and reserves commit-time width; shrinking writes precede growth.
+Native identity validation shares the binding writer's limits and refuses an
+invalid complete observation nonfatally before mutation or absence inference. See [storage and migration limits](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
+
 The composition root exposes `WorldStorage.ids.issue(kind)` through the existing
 SQLite worker. IDs have a kind prefix and eight random base32 symbols and become
 visible only after their shared reservation commits. Existing SQLite/imported
@@ -15,10 +34,21 @@ the boundary with legacy JSON families and the claim read models.
 `WorldStorage.bindings` persists per-kind source evidence independently of runtime
 fences. Its resolver admits only complete current unambiguous matches; Board
 strings retain their World-move/qualified-absence policy, while appearance and
-interest retain complete-list terminal absence. Legacy Board captures drain
-through the same worker; interrupted imports cannot authorize targets. The Board
+interest retain complete-list terminal absence. Board rows and their complete
+binding captures commit atomically through the same worker; interrupted imports cannot authorize targets. The Board
 Send RPC resolves its saved string before its existing recipient checks. Layout
 preferences never enter the binding store and retain native-ID reuse behavior.
+`WorldStorage.board()` projects the existing Board document from separate SQLite
+tables for notes, strings, appearance, layout concerns, interest and relations.
+Queued plans reserve bytes for retained payloads, including RPC parameters,
+before admission; guard wrappers preserve that reservation and every outcome
+releases it. Snapshot metadata plans retain compact native IDs, spawn tokens and
+appearance witnesses with completeness/generation fences; unrelated aggregate
+labels and agent metadata do not consume the Board admission budget. Mutations
+plan against acknowledged state; the worker validates each
+patch against its transaction-local document. Replies, revision events and the
+read cache advance after COMMIT. Per-note conflicts and revision-bound Group
+confirmations retain their existing wire responses. See [Board storage and recovery](DEPLOYMENT.md#board-storage).
 Conversation and source-service read models carry per-field status, session and PR
 link claims with provenance and explicit display rules. Channels remove only their
 own complete/retracted claims; runtime occupant replacement retires its read model.
@@ -62,7 +92,7 @@ Bun bridge serves the frontend, authenticates browsers, and connects to Herdr:
 Browser (React + Vite)
    |  same-origin HTTP / WebSocket
    v
-Bridge (Bun + TypeScript) -- node:net --> Herdr sockets
+Bridge (Bun + TypeScript) -- Bun.connect / node:net --> Herdr sockets
 ```
 
 `herdr.sock` carries NDJSON control requests; `herdr-client.sock` carries binary
@@ -99,7 +129,16 @@ within four observation slots, releases an unused priority reservation, and retu
 topology or no children. Per-host work is shared across overlapping requests; a late
 result enters the cache only for its original current runtime generation and triggers
 a coalesced refresh when its observed data changes. A current result may be reused for
-15 seconds unless that host receives an explicit topology invalidation. The browser
+15 seconds unless that host receives an explicit invalidation. Consecutive
+`pane_updated` payloads for the same pane that differ only in `revision`,
+`terminal_title`, `terminal_title_stripped` or `scroll` count as activity: they
+advance the observation revision and dirty the cache without rejecting a read
+in flight. The first update for a pane, any other event and every subscription
+ACK retain hard invalidation; other events and ACKs also clear the per-pane
+comparison history. Payload comparison ignores object key order at every depth
+(including Herdr's metadata maps), while preserving values and array order.
+A real change during the same read still rejects it even
+when activity also arrives. The browser
 uses one World WebSocket with a transport epoch independent of runtime generations.
 The hello advertises `world_observation_v1` and a random `service_incarnation`
 shared with snapshot replies. A caller may send `base: { service_incarnation,
@@ -304,7 +343,29 @@ remains available for cropping and cursor delivery. Each patch replaces the
 complete cursor state, including `null` to clear it. Pane topology changes
 require a full surface; patches naming unknown panes are discarded.
 
-`terminal.attach` carries pane content dimensions in `cols`/`rows`. When layout
+`terminal.attach` carries pane content dimensions in `cols`/`rows`. Herdr
+applies every attach's size to the pane for all of its viewers, so a terminal
+that is not displayed (World's parked creation endpoint, or a window showing
+Chat) attaches at the pane's current size from the tab layout, or from one
+`pane.layout` read, instead of its unfitted xterm size; it resizes the pane
+only once shown and fitted. Herdr sizes a terminal by the client that last
+attached or focused it, so a hidden terminal never adopts a squeezed size: when
+its tab's area is below 30×5 (`shared/terminalSize.ts`; observed squeezes are
+12–24 columns by 1–3 rows, while split panes and narrow viewers are legitimately
+small), it uses the last size this page saw for that pane (connection, runtime
+and pane; from a layout read or a visible fit whose tab was healthy; bounded,
+in memory), or 100×30. After a failed layout read, that size is reused too.
+The selected pane, shown after being hidden while the page is visible, sends
+its fitted size and focuses the pane once, claiming the size back; a click on a
+shown terminal claims it the same way. Herdr's frames arrive at each viewer's
+own size, so a squeeze by another client while a terminal stays shown is not
+observable from them: reveal or a click heals it. A remembered size is a
+fallback only if its implied tab is not squeezed.
+Other panes only resize, since Herdr's focus is also the tab's cursor.
+The service's popup observer is an app client and
+connects at the session's current app size (`pane.layout` area plus offset;
+a squeezed area becomes 100×30 with the same offsets),
+since an app client's handshake resizes every pane. When layout
 is available, the browser also supplies `surface_cols`/`surface_rows` for the
 complete tab, including pane borders but excluding app sidebar/tab-bar insets.
 The bridge validates this optional pair as integers in 1..65535 and uses it in
@@ -368,6 +429,11 @@ history requests and preserves the already captured selection.
 Input waits for attachment readiness and revalidates the attachment, session,
 and routing lease. It is never replayed into a detached or replaced terminal.
 Disconnect rejects pending endpoint requests and invalidates clipboard ownership.
+A clipboard write caused by a composer's `pane.send_input`, `pane.send_text` or
+`pane.send_keys` returns to the browser socket that sent the command. World's
+verb dispatcher notes that recipient in the same before-send step as its
+request recheck, bound to the runtime, socket and terminal; a failed pane lookup
+never blocks input, and OSC 52 reads stay refused.
 
 Mermaid file previews and Markdown fences share a lazy renderer and independent
 zoomable viewports. Source wrappers and leading metadata/comments are removed
@@ -443,8 +509,10 @@ A bridge-global `ConnectionManager` owns shared profiles and independent
 `ConnectionRuntime` instances. Each runtime owns its transport, clients, viewers,
 clipboard relay, subscriptions, services, caches, and reconnect lifecycle.
 Browser selection does not start or stop other runtimes; render streams open
-only while viewed. Disconnect/removal disposes the bridge runtime and SSH tunnel,
-not Herdr or its workspaces.
+while viewed, and the runtime keeps up to 20 recently viewed streams warm for
+10 minutes so switching back is immediate. Warm streams are keyed by the owning
+runtime and close with it. Disconnect/removal disposes the bridge runtime and SSH
+tunnel, not Herdr or its workspaces.
 
 Downstream RPC/HTTP requires an immutable connection ID, runtime generation, and
 request-local ready-runtime lease. Replies, errors, events, terminal frames, and
@@ -540,21 +608,81 @@ UI so opening a terminal does not load the file-search matcher or browser contro
 
 ## SSH transport
 
-Each SSH runtime supervises one OpenSSH process forwarding both sockets into a
-private temporary directory. Readiness requires control `ping` and a render
-handshake. Transient failures use cancellable backoff capped at 30 seconds and
-six attempts, resetting after 30 seconds stable-ready; authentication, host-key,
-and permanent protocol failures do not retry. Post-ready exit retires the runtime
-generation before retry. CLI SSH uses the same validation/probes but does not
-persist or automatically retry.
+Each SSH runtime supervises its own OpenSSH socket tunnel and a separate private
+command master. The control/render tunnel never shares the command master's
+session budget. Runtime process boundaries bind commands to that runtime's private
+control path; matching a destination alone never selects another runtime's master.
+A missing master uses a fresh connection to the same configured destination.
+Only explicitly read-only commands may retry once after their master dies;
+mutating commands are never replayed. The master drains active command sessions
+before stopping, and startup sweeps only private, current-user directories with a
+dead recorded owner. `HERDR_WORLD_DISABLE_SSH_MASTER=1` disables the command master.
+
+Readiness requires control `ping` and a render handshake. Transient failures use
+cancellable capped recovery; authentication, host-key and permanent protocol
+failures require intervention. Post-ready exit retires the runtime generation
+before retry. Keepalives bound established sessions that stop responding; the
+remote-home probe also has a deadline. CLI SSH uses the same validation/probes
+without persisting a profile. The first terminal attach reuses its resolved protocol.
+One-shot control calls use Bun sockets on Unix and retain node:net on Windows;
+subscriptions remain long-lived node:net connections. UTF-8 request lines over
+Herdr's 1 MiB limit are refused before connecting; the browser frame limit remains
+1 MiB. Runtime stop cancels pending calls on either socket implementation.
+
+Host commands retain at most eight SSH sessions per destination, with at most five
+held by background reads. Interactive work is admitted first; each queue is bounded
+to 64 waiters; queueing, recovery health checks and safe read retries spend the
+caller's deadline. Runtime retirement aborts queued commands before process dispatch
+and cancels active command/upload children without affecting another runtime.
+Workspace Files uploads, streamed file search, remote path checks and worktree base
+synchronization receive that runtime capability explicitly; remote path checks
+refuse a missing owner rather than using a global process helper.
+Ignore detection, local directory archives, launcher probes and integration-version
+enrichment also require their caller's runner; no transitive helper supplies a
+global default. The [required call-site audit](reviews/roamgate-runner-audit.md)
+records production injection sites and the shared retirement controls. Browser
+background calls run at most four per connection and share identical in-flight
+reads within their captured transport/runtime scope. Scheduled focused-list reads
+use the background lane. Git status returns cached values, refreshing stale entries
+in the background and pushing changed checkout statuses. A first read waits at most
+300 ms; transport failures retain previous status and stopped runtimes publish
+nothing. Qualified browser stores retain newer pushes over older catalogue replies,
+including for inactive hosts. Untracked line counts use 100-file shell batches;
+above 500 untracked files, Changes lists files without those counts.
 
 Only an OpenSSH alias or `user@host` is accepted, passed after `--` with fixed
 options. Host-key checking stays enabled; service authentication is noninteractive.
 Credentials/options remain in the service user's OpenSSH configuration. Stderr is
-bounded and sanitized, not relayed as raw banners. Cleanup removes owned paths
-only after confirmed child exit; unconfirmed termination preserves paths and
-reports failure. Remote file, Git, hook, and supported session operations use the
-same runtime host boundary. See [connection setup](./DEPLOYMENT.md#local-and-ssh-connections).
+bounded and sanitized. Cleanup removes owned paths only after confirmed child
+exit; a failed startup retains its unconfirmed child and prevents socket unlink
+or replacement. Unconfirmed termination preserves paths and reports failure.
+
+### On-demand SSH port forwarding
+
+The service owns a shared, memory-only registry of at most 32 live forwards.
+`forward.list`, `forward.open`, `forward.close` and `forward.candidates` are browser
+RPCs requiring login, an explicit current connection ID and runtime generation. They never fall through to Herdr or the default profile.
+List, close and runtime shutdown are scoped to the captured owner; retiring an old
+generation cannot close a replacement's forward. No forward is restored automatically.
+As upstream, the web offers forwarding controls only on a page served over loopback,
+because listeners bind on the server's machine. Authentication remains the access
+boundary; there is no additional forwarding-specific WebSocket-peer gate.
+An authenticated terminal can already run forwarding commands.
+Retiring runtimes await their forward children, escalate termination within a bounded
+deadline and report unconfirmed exits; closing children still consume the live-process
+budget. Each forward has an independent supervised OpenSSH process, so opening one never
+restarts the Herdr transport. Readiness requires an accepting local listener or
+OpenSSH's remote-forward acknowledgement. Scans are requested explicitly, coalesce
+per direction and runtime, expire after 10 seconds and return at most 64 owned ports.
+
+Local forwards request a loopback listener and the remote service's `localhost`.
+Reverse forwards request remote loopback and expose a local service to processes
+on that host; an SSH server with `GatewayPorts yes` can override that requested
+bind and expose it to its network. OpenSSH policy controls that remote boundary.
+World refuses reverse forwarding its own actual listener port and, in development,
+the Vite proxy port. The web controls are delivered in the later integration part;
+these service RPCs do not change the current connection or terminal controls.
+See [connection setup](./DEPLOYMENT.md#local-and-ssh-connections).
 
 ## Distribution model
 
@@ -638,5 +766,29 @@ tokens and transcript lookup live inside the isolated runtime, including Unix SS
 file access. A token binds the pane occupant and transcript identity, is consumed
 once, and rechecks runtime authority before the reporting RPC. Herdr does not
 provide an atomic process-and-link operation; see [History limits](HISTORY.md#chat-and-explicit-codex-links).
-World retains React 18 callback freshness and screen/panel/navigation/popup Back
+World retains callback freshness and screen/panel/navigation/popup Back
 priority, with navigation between Inspector details below transient menus.
+
+## Ranger engines and session navigation
+
+The service-owned Ranger driver selects Pi-backed providers or the service account's
+Claude Code CLI. Each driver owns its MCP listener, turn tokens and teardown;
+there is no process-global listener shared across World services. Both engines use
+the same captured workspace reads, proposed actions, approvals and task tools.
+Engine-specific checkpoints cannot be resumed by the other engine. Semantic
+configuration comparison preserves recovery across equivalent serialized key order.
+
+A show tool publishes the originating request ID, connection ID, captured runtime
+generation, workspace and optional pane. Only the browser that sent that request
+follows it through the shared Inspector admission handler. Replayed snapshots are
+deduplicated; a service-instance change retires earlier navigation requests. The
+service reports a request to show, rather than claiming the browser rendered it.
+Scheduled runs have no show handler. All-workspace task intent selects current
+permitted membership at each admission; each admitted run then uses its own stable
+identity and generation fences. Existing fixed-scope recovery is unchanged.
+
+Claude continuation/queue projection is isolated from common ATIF construction.
+Remote append caching keeps World's 32 MiB text budget and existing full bounded
+trajectory/Quest consumers, rather than adopting a larger upstream cache or
+removing their trajectory data. Native/platform and long-session resource evidence
+remain separate from protocol and synthetic consumer results.

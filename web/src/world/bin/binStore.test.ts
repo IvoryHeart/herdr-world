@@ -1,0 +1,237 @@
+import { expect, test } from "bun:test";
+import type { BridgeControlMsg, ConnectionStatus } from "../../api";
+import type { BinState } from "../../../../shared/bin";
+import type { WorldLeafObject } from "../worldObject";
+import {
+  binAddRequest,
+  binBusClock,
+  binBusLabel,
+  binClockLabel,
+  binCloseLabel,
+  WorldBinStore,
+} from "./binStore";
+
+const state = (over: Partial<BinState> = {}): BinState => ({
+  epoch: "run1",
+  revision: 1,
+  entries: [],
+  closing: [],
+  outcomes: [],
+  bus: {
+    interval_ms: 180_000,
+    trip_ms: 20_000,
+    next_ms: 60_000,
+    elapsed_ms: null,
+    stopped: false,
+    trip: null,
+  },
+  ...over,
+});
+
+const entry = (id: string, riding = false) => ({
+  id,
+  connection_id: "studio",
+  connection_generation: 1,
+  workspace_id: "w",
+  tab_id: "t",
+  pane_id: `p-${id}`,
+  terminal_id: `term-${id}`,
+  label: `Agent ${id}`,
+  view: "town" as const,
+  riding,
+  preserve_tab: false,
+});
+
+function fixture() {
+  let now = 1_000;
+  const replies: unknown[] = [];
+  const calls: [string, Record<string, unknown> | undefined][] = [];
+  let control: ((message: BridgeControlMsg) => void) | null = null;
+  let status: ((value: ConnectionStatus) => void) | null = null;
+  const store = new WorldBinStore(
+    {
+      call: async (method, params) => {
+        calls.push([method, params]);
+        const reply = replies.shift();
+        if (reply instanceof Error) throw reply;
+        return reply;
+      },
+      onControl: (callback) => {
+        control = callback;
+        return () => (control = null);
+      },
+      onStatus: (callback) => {
+        status = callback;
+        return () => (status = null);
+      },
+    },
+    () => now,
+  );
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  return {
+    store,
+    replies,
+    calls,
+    flush,
+    tick: (ms: number) => (now += ms),
+    control: (message: BridgeControlMsg) => control?.(message),
+    status: (value: ConnectionStatus) => status?.(value),
+    listening: () => control !== null,
+  };
+}
+
+test("the store follows revision notices and ignores older replies of the same run", async () => {
+  const f = fixture();
+  f.replies.push(state({ revision: 3, entries: [entry("a")] }));
+  f.store.start();
+  await f.flush();
+  expect(f.store.get().entries.map((e) => e.id)).toEqual(["a"]);
+  f.replies.push(state({ revision: 2 }));
+  f.control({ type: "world_bin_changed", revision: 2 });
+  await f.flush();
+  expect(f.store.get().revision).toBe(3);
+  // A restarted service counts again from 1: its state replaces the old run's.
+  f.replies.push(state({ epoch: "run2", revision: 1 }));
+  f.control({ type: "world_bin_changed", revision: 1 });
+  await f.flush();
+  expect(f.store.get()).toMatchObject({ epoch: "run2", entries: [] });
+  f.status("disconnected");
+  expect(f.store.get().verified).toBe(false);
+});
+
+test("the subscription is shared and ends with its last user", async () => {
+  const f = fixture();
+  f.replies.push(state(), state());
+  f.store.start();
+  f.store.start();
+  f.store.stop();
+  expect(f.listening()).toBe(true);
+  f.store.stop();
+  expect(f.listening()).toBe(false);
+});
+
+test("actions take the service's reply, and report its refusal", async () => {
+  const f = fixture();
+  f.replies.push(state({ revision: 2, entries: [entry("a")] }));
+  expect(
+    await f.store.add({
+      ...entry("a"),
+      label: "Agent a",
+      view: "town",
+      preserve_tab: true,
+    }),
+  ).toBeNull();
+  expect(f.calls[0]![0]).toBe("world.bin.add");
+  expect(f.calls[0]![1]).toMatchObject({ pane_id: "p-a", preserve_tab: true });
+  expect(f.store.get().entries).toHaveLength(1);
+  f.replies.push(new Error("invalid bin target"), state());
+  expect(await f.store.restore("a")).toBe("invalid bin target");
+  f.replies.push(state({ revision: 4 }));
+  expect(await f.store.closeNow(["a"])).toBeNull();
+  expect(f.calls[f.calls.length - 1]).toEqual([
+    "world.bin.close_now",
+    { ids: ["a"] },
+  ]);
+});
+
+test("malformed replies and entries are dropped", async () => {
+  const f = fixture();
+  f.replies.push({ epoch: "run1", revision: 1, entries: [] });
+  await f.store.refresh();
+  expect(f.store.get().verified).toBe(false);
+  f.replies.push(
+    state({
+      entries: [entry("a"), { id: "b" } as never],
+      closing: [entry("c", true)],
+    }),
+  );
+  await f.store.refresh();
+  expect(f.store.get().entries.map((e) => e.id)).toEqual(["a"]);
+  expect(f.store.get().closing.map((e) => e.riding)).toEqual([true]);
+});
+
+test("the bus clock runs from when the state was read", async () => {
+  const f = fixture();
+  f.replies.push(
+    state({
+      bus: {
+        interval_ms: 180_000,
+        trip_ms: 20_000,
+        next_ms: 5_000,
+        elapsed_ms: null,
+        stopped: false,
+        trip: null,
+      },
+    }),
+  );
+  await f.store.refresh();
+  const read = f.store.get();
+  expect(binBusClock(read, read.readAt + 2_000)).toEqual({
+    elapsed: null,
+    next: 3_000,
+  });
+  // The schedule repeats even before the next state arrives.
+  expect(binBusClock(read, read.readAt + 6_000).next).toBe(179_000);
+  const driving = {
+    ...read,
+    bus: { ...read.bus, next_ms: 170_000, elapsed_ms: 10_000 },
+  };
+  expect(binBusClock(driving, read.readAt + 5_000).elapsed).toBe(15_000);
+  // Past its trip the bus has left the map.
+  expect(binBusClock(driving, read.readAt + 10_000).elapsed).toBeNull();
+  // A stopped bus stands where it was stopped, however long it waits.
+  const stopped = { ...driving, bus: { ...driving.bus, stopped: true } };
+  expect(binBusClock(stopped, read.readAt + 60_000).elapsed).toBe(10_000);
+  expect(binClockLabel(125_000)).toBe("2:05");
+  expect(binClockLabel(0)).toBe("0:00");
+});
+
+test("only Town's bin speaks of a bus; elsewhere it says when it closes", () => {
+  // What it holds closes once the bus that takes it has left the map:
+  // departure plus the trip.
+  const bin = { ...state(), readAt: 0, verified: true };
+  expect(binBusLabel(bin, 0)).toBe("bus in 1:00");
+  expect(binCloseLabel(bin, 0)).toBe("closes in 1:20");
+  const trip = { ...bin.bus, next_ms: 170_000, elapsed_ms: 5_000 };
+  const riding = { ...bin, entries: [entry("a", true)], bus: trip };
+  expect(binBusLabel(riding, 0)).toBe("bus on its way");
+  expect(binCloseLabel(riding, 0)).toBe("closes in 0:15");
+  expect(binCloseLabel(riding, 4_000)).toBe("closes in 0:11");
+  // Put in after the bus set off, it waits for the next one.
+  const waiting = { ...riding, entries: [entry("b")] };
+  expect(binCloseLabel(waiting, 0)).toBe("closes in 3:10");
+  const stopped = { ...riding, bus: { ...trip, stopped: true } };
+  expect(binBusLabel(stopped, 0)).toBe("bus stopped");
+  expect(binCloseLabel(stopped, 0)).toBe("paused");
+  for (const label of [
+    binCloseLabel(bin, 0),
+    binCloseLabel(riding, 0),
+    binCloseLabel(stopped, 0),
+  ])
+    expect(label).not.toContain("bus");
+  expect(binCloseLabel({ ...bin, verified: false }, 0)).toBe("bin unavailable");
+});
+
+test("a pinned desk or a tab pinned in Spaces keeps its tab's last pane", () => {
+  const leaf = {
+    connectionId: "studio",
+    generation: 3,
+    workspaceId: "w",
+    tabId: "w:t1",
+    nativeId: "p1",
+    terminalId: "term-1",
+    label: "Agent",
+  } as WorldLeafObject;
+  const request = (desk: boolean, tabs: string[]) =>
+    binAddRequest(leaf, "town", desk, new Set(tabs));
+  expect(request(false, [])).toMatchObject({
+    connection_id: "studio",
+    connection_generation: 3,
+    tab_id: "w:t1",
+    pane_id: "p1",
+    preserve_tab: false,
+  });
+  expect(request(true, []).preserve_tab).toBe(true);
+  expect(request(false, ["w:t1"]).preserve_tab).toBe(true);
+  expect(request(false, ["w:t2"]).preserve_tab).toBe(false);
+});

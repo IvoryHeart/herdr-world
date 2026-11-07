@@ -1,9 +1,14 @@
+import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
-import { legacyAppearanceOps } from "../world/appearance-observation";
+import {
+  legacyAppearanceObservations,
+  legacyAppearanceObservationOps,
+} from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
-import { handleCompletionSeenRpc } from "./completion-seen";
+import { handleBinRpc } from "./bin";
+import { ownerPresence } from "./presence";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -11,7 +16,7 @@ import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
 
-/** Aggregate World methods: snapshot, board document, profiles, watchlist and completion seen (world.*). */
+/** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
   rpc: BridgeRpcContext,
 ): false | Promise<false | void> {
@@ -49,10 +54,23 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
+  if (method === "world.usage.get") {
+    try {
+      const usage = rpc.services.worldUsage;
+      if (!usage) throw new Error("World usage service is unavailable");
+      sendReply({ id, result: await usage.get(params ?? {}) }, method);
+    } catch {
+      sendError("world-usage-error", new Error("World usage is unavailable"));
+    }
+    return;
+  }
+  if (method === "world.presence.seen") {
+    sendReply({ id, result: ownerPresence.seen() }, method);
+    return;
+  }
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
-  if (method.startsWith("world.completion_seen."))
-    return handleCompletionSeenRpc(rpc);
+  if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {
@@ -86,20 +104,39 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
           detail: String(error),
         }),
       );
-      recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
+      await recordSpawnClaims(
+        board(),
+        snapshot,
+        publishBoardChanged,
+        logger,
+        rpc.services.clock.now(),
+        (id, generation) => {
+          const lease = connectionManager.readyRuntimeLease(id);
+          return Boolean(
+            lease && lease.generation === generation && lease.isCurrent(),
+          );
+        },
+      );
       try {
-        const appearanceOps = legacyAppearanceOps(
-          board().get(),
-          snapshot,
-          (connectionId, generation) => {
-            const lease = connectionManager.readyRuntimeLease(connectionId);
-            return Boolean(
-              lease && lease.generation === generation && lease.isCurrent(),
+        const observations = legacyAppearanceObservations(snapshot);
+        let changed = false;
+        const document = await board().patch(
+          planBoardPatch([observations], (current) => {
+            const appearanceOps = legacyAppearanceObservationOps(
+              current,
+              observations,
+              (connectionId, generation) => {
+                const lease = connectionManager.readyRuntimeLease(connectionId);
+                return Boolean(
+                  lease && lease.generation === generation && lease.isCurrent(),
+                );
+              },
             );
-          },
+            changed = appearanceOps.length > 0;
+            return changed ? appearanceOps : null;
+          }),
         );
-        if (appearanceOps.length)
-          publishBoardChanged(board().patch(appearanceOps).revision);
+        if (changed) publishBoardChanged(document.revision);
       } catch (error) {
         logger.warn("World could not bind legacy tab colours", {
           detail: String(error),
@@ -148,9 +185,22 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.board.patch") {
     try {
-      const { ops, observed } = clientBoardOps(
-        (params as { ops?: unknown } | undefined)?.ops,
-        board().get(),
+      let ops: import("../world/board-store").BoardOp[] = [];
+      let observed = new Map<
+        string,
+        import("../world/board-recipient").ObservedAgent
+      >();
+      const prepare = planBoardPatch(
+        [params],
+        (document: import("../world/board-store").BoardDocument) => {
+          if (!rpc.requestIsCurrent())
+            throw new Error("Board request is no longer current");
+          ({ ops, observed } = clientBoardOps(
+            (params as { ops?: unknown } | undefined)?.ops,
+            document,
+          ));
+          return ops;
+        },
       );
       const revision = (params as { revision?: unknown } | undefined)?.revision;
       if (
@@ -158,10 +208,9 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         (!Number.isSafeInteger(revision) || Number(revision) < 0)
       )
         throw new Error("invalid Board revision");
-      const result =
-        revision === undefined
-          ? board().patch(ops)
-          : board().patchIf(Number(revision), ops);
+      const result = await (revision === undefined
+        ? board().patch(prepare)
+        : board().patchIf(Number(revision), prepare));
       if (!result)
         throw new BoardConflictError(
           "The Board changed. Review the current Group before editing again.",
@@ -236,6 +285,53 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         !terminalId
       ) {
         throw new Error("invalid World watch identity");
+      }
+      if (rpc.services.persistentMarks) {
+        if (
+          method === "world.watchlist.unpin" &&
+          identity?.watch_id !== undefined &&
+          (typeof identity.watch_id !== "string" ||
+            !identity.watch_id ||
+            identity.watch_id.length > 512)
+        )
+          throw new Error("invalid World watch capture");
+        const watch = {
+          connection_id: connectionId,
+          connection_generation: generation as number,
+          terminal_id: terminalId,
+          ...(method === "world.watchlist.unpin" &&
+          typeof identity?.watch_id === "string"
+            ? { watch_id: identity.watch_id }
+            : {}),
+        };
+        const before = worldWatchlist.list().revision;
+        if (method === "world.watchlist.unpin")
+          await rpc.services.persistentMarks.unpin(watch);
+        else
+          await rpc.services.persistentMarks.mutate(
+            watch,
+            (draft) => {
+              draft.watchlist.pin({
+                ...watch,
+                label:
+                  typeof identity?.label === "string"
+                    ? identity.label
+                    : "Watch",
+              });
+            },
+            "terminal",
+          );
+        sendReply(
+          {
+            id,
+            result: {
+              ...worldWatchlist.list(),
+              changed: worldWatchlist.list().revision !== before,
+            },
+          },
+          "world-watchlist",
+        );
+        return;
       }
       if (method === "world.watchlist.unpin") {
         const result = worldWatchlist.unpin({

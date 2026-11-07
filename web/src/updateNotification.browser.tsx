@@ -4,6 +4,11 @@ import { type ComponentType, Suspense, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import App from "./App";
+import { AppToasts } from "./components/AppToasts";
+import { StaleBuildToast } from "./components/StaleBuildToast";
+import { UpdateToast } from "./components/UpdateToast";
+import { NeedsYouMessage } from "./world/NeedsYouItem";
+import "./world/world.css";
 import { bridge, type ConnectionClient } from "./api";
 import { lazyWithReload } from "./lazyWithReload";
 import { __storeTesting, store } from "./store";
@@ -174,7 +179,306 @@ async function checkIndependentContexts() {
   }
 }
 
+async function checkDismissPointerIsolation() {
+  let dismissals = 0;
+  const events: string[] = [];
+  const trace = (event: Event) => {
+    const target = event.target as Element;
+    events.push(
+      `${event.type}:${target.closest("button")?.getAttribute("aria-label") ?? target.tagName}`,
+    );
+  };
+  for (const type of ["pointerdown", "pointerup", "click"])
+    document.addEventListener(type, trace, true);
+  const input = async (method: string, params: object) => {
+    await nativeFetch("/input", {
+      method: "POST",
+      body: JSON.stringify({ method, params }),
+    });
+  };
+  function Probe({ kind }: { kind: "notice" | "update" | "reload" }) {
+    const [visible, setVisible] = useState(true);
+    store.clearNotice = () => setVisible(false);
+    return (
+      <>
+        <div
+          id="dismiss-underlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            right: 0,
+            width: 360,
+            zIndex: 5000,
+          }}
+        >
+          <NeedsYouMessage
+            item={{
+              kind: "asks",
+              key: "ask:synthetic-pointer",
+              leaf: null,
+              ask: {
+                id: "synthetic-pointer",
+                at: 0,
+                actor: { label: "Synthetic agent", verified: true },
+                question: "Keep this question open",
+                options: ["Keep"],
+                owner_only: true,
+              },
+            }}
+            now={0}
+            focused={false}
+            stop={null}
+            onChat={() => {
+              dismissals++;
+            }}
+            onOpenTerminal={() => {
+              dismissals++;
+            }}
+            onAnswer={async () => {
+              dismissals++;
+              return null;
+            }}
+            onDismiss={async () => {
+              dismissals++;
+              return null;
+            }}
+            onReviewed={async () => {
+              dismissals++;
+              return true;
+            }}
+          />
+        </div>
+        {kind === "notice" ? (
+          <AppToasts
+            status="disconnected"
+            updateInfo={null}
+            dismissedUpdateVersion={null}
+            updateInstalling={false}
+            notice={
+              visible
+                ? { id: 42, kind: "info", message: "Synthetic notice" }
+                : null
+            }
+            onNoticeAction={() => {}}
+          />
+        ) : visible ? (
+          <div className="toast-viewport">
+            {kind === "update" ? (
+              <UpdateToast
+                info={{
+                  current_version: "1.0.0",
+                  latest_version: "1.2.3",
+                  update_available: true,
+                  can_auto_update: false,
+                  platform: "linux-x64",
+                }}
+                dismissedVersion={null}
+                installing={false}
+                onDismiss={() => setVisible(false)}
+                onInstall={() => {
+                  throw new Error("No native actions in pointer fixture");
+                }}
+              />
+            ) : (
+              <StaleBuildToast
+                offer={{
+                  kind: "build",
+                  loaded: "synthetic-old",
+                  served: "synthetic-new",
+                }}
+                onDismiss={() => setVisible(false)}
+              />
+            )}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+  const originalClear = store.clearNotice;
+  try {
+    for (const kind of ["notice", "update", "reload"] as const) {
+      for (const touch of [false, true, null]) {
+        events.length = 0;
+        dismissals = 0;
+        flushSync(() =>
+          root.render(<Probe key={`${kind}-${touch}`} kind={kind} />),
+        );
+        await frame();
+        await Promise.all(
+          document
+            .querySelector(".toast")!
+            .getAnimations()
+            .map((a) => a.finished.catch(() => {})),
+        );
+        const close = document.querySelector<HTMLButtonElement>(
+          ".toast .close-button",
+        )!;
+        const r = close.getBoundingClientRect();
+        const underlay = document.getElementById("dismiss-underlay")!;
+        const under =
+          underlay.querySelector<HTMLButtonElement>(".needs-you-icon")!;
+        const u = under.getBoundingClientRect();
+        underlay.style.transform = `translate(${r.x + r.width / 2 - u.x - u.width / 2}px, ${r.y + r.height / 2 - u.y - u.height / 2}px)`;
+        const point = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        let underlyingDowns = 0;
+        let underlyingClicks = 0;
+        underlay.addEventListener("pointerdown", () => underlyingDowns++);
+        underlay.addEventListener("click", () => underlyingClicks++);
+        check(
+          document.elementFromPoint(point.x, point.y) === close,
+          `${kind}: X not hit-testable before input`,
+        );
+        if (touch === null) {
+          close.focus();
+          for (const type of ["keyDown", "keyUp"])
+            await input("Input.dispatchKeyEvent", {
+              type,
+              key: "Enter",
+              windowsVirtualKeyCode: 13,
+              ...(type === "keyDown" ? { text: "\r" } : {}),
+            });
+        } else if (touch) {
+          await input("Emulation.setTouchEmulationEnabled", {
+            enabled: true,
+            maxTouchPoints: 1,
+          });
+          await input("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...point, id: 1 }],
+          });
+          await input("Input.dispatchTouchEvent", {
+            type: "touchEnd",
+            touchPoints: [],
+          });
+        } else {
+          await input("Input.dispatchMouseEvent", {
+            ...point,
+            type: "mouseMoved",
+          });
+          for (const type of ["mousePressed", "mouseReleased"])
+            await input("Input.dispatchMouseEvent", {
+              ...point,
+              type,
+              button: "left",
+              clickCount: 1,
+            });
+        }
+        await frame();
+        check(
+          !document.querySelector(".toast"),
+          `${kind}: ${touch ? "touch" : "mouse"} did not dismiss: ${events.join(",")}`,
+        );
+        check(
+          dismissals === 0,
+          `${kind}: clicked Needs you behind toast: ${events.join(",")}`,
+        );
+        if (touch === null) {
+          for (const type of ["mousePressed", "mouseReleased"])
+            await input("Input.dispatchMouseEvent", {
+              ...point,
+              type,
+              button: "left",
+              clickCount: 1,
+            });
+          await frame();
+          check(
+            dismissals === 1,
+            `${kind}: keyboard dismissal incorrectly blocked a later pointer action`,
+          );
+          continue;
+        }
+        if (touch) {
+          await input("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...point, id: 2 }],
+          });
+          if (kind === "notice") {
+            const started = performance.now();
+            await until(() => performance.now() - started > 550);
+          }
+          await input("Input.dispatchTouchEvent", {
+            type: "touchEnd",
+            touchPoints: [],
+          });
+        } else {
+          await input("Input.dispatchMouseEvent", {
+            ...point,
+            type: "mousePressed",
+            button: "left",
+            clickCount: 2,
+          });
+          await input("Input.dispatchMouseEvent", {
+            x: point.x - 30,
+            y: point.y,
+            type: "mouseMoved",
+            buttons: 1,
+          });
+          await input("Input.dispatchMouseEvent", {
+            x: point.x - 30,
+            y: point.y,
+            type: "mouseReleased",
+            button: "left",
+            clickCount: 2,
+          });
+        }
+        await frame();
+        check(
+          underlyingDowns === 0,
+          `${kind}: repeat pointerdown reached Needs you`,
+        );
+        check(
+          underlyingClicks === 0,
+          `${kind}: repeat release clicked the underlying card`,
+        );
+        check(
+          dismissals === 0,
+          `${kind}: repeated ${touch ? "touch" : "mouse"} dismissal activated Needs you: ${events.join(",")}`,
+        );
+        // A separate control remains usable immediately, outside the repeat area.
+        const answer = underlay.querySelector<HTMLButtonElement>(
+          ".needs-you-replies button",
+        )!;
+        const answerRect = answer.getBoundingClientRect();
+        const other = {
+          x: answerRect.x + answerRect.width / 2,
+          y: answerRect.y + answerRect.height / 2,
+        };
+        check(
+          Math.hypot(other.x - point.x, other.y - point.y) > 24,
+          "Unrelated action must be outside guard",
+        );
+        for (const type of ["mousePressed", "mouseReleased"])
+          await input("Input.dispatchMouseEvent", {
+            ...other,
+            type,
+            button: "left",
+            clickCount: 1,
+          });
+        await frame();
+        check(dismissals === 1, `${kind}: unrelated answer stopped working`);
+        const ended = performance.now();
+        await until(() => performance.now() - ended > 550);
+        for (const type of ["mousePressed", "mouseReleased"])
+          await input("Input.dispatchMouseEvent", {
+            ...point,
+            type,
+            button: "left",
+            clickCount: 1,
+          });
+        await frame();
+        check(dismissals === 2, `${kind}: guard did not expire`);
+      }
+    }
+  } finally {
+    store.clearNotice = originalClear;
+    for (const type of ["pointerdown", "pointerup", "click"])
+      document.removeEventListener(type, trace, true);
+    flushSync(() => root.render(null));
+  }
+}
+
 async function run() {
+  await checkDismissPointerIsolation();
   // Reproduce a permitted read/write interleaving with actual origin storage.
   const second = createUpdateNotificationHistory(worldLocalStorage);
   let secondClaim: boolean | Promise<boolean> | undefined;

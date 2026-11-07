@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { townCanvasCases } from "../town/TownCanvas.cases";
+import { type TownCanvasCase, townCanvasCases } from "../town/TownCanvas.cases";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,6 +7,7 @@ import { basename, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
+  waitForChromePort,
 } from "../../browserChrome";
 import { chromeRenderingFlags } from "./chromeRendering";
 
@@ -31,9 +32,15 @@ const unavailableObservability = {
 };
 
 export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
-  test.skipIf(!chrome).each(townCanvasCases[group])(
+  test.skipIf(!chrome).each(
+    // Bun's typed `each` takes no optional tuple element; spell it out.
+    townCanvasCases[group].map(
+      ([width, height, scale, delay, viewport]: TownCanvasCase) =>
+        [width, height, scale, delay, viewport ?? "window"] as const,
+    ),
+  )(
     "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s, %ims zoom frames)",
-    async (width, height, scale, flightFrameDelay) => {
+    async (width, height, scale, flightFrameDelay, viewport) => {
       const dir = await mkdtemp(join(tmpdir(), "office-town-test-"));
       const assets = new Map<string, Blob>();
       const result = Promise.withResolvers<unknown>();
@@ -61,6 +68,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         },
       });
       let browser: ReturnType<typeof Bun.spawn> | undefined;
+      let devtools: WebSocket | undefined;
       try {
         const build = await Bun.build({
           entrypoints: [
@@ -73,6 +81,8 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         for (const output of build.outputs)
           assets.set(`/${basename(output.path)}`, output);
         const browserLog = join(dir, "browser.log");
+        const exact = viewport === "exact";
+        const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}${exact ? `&viewport=${width}x${height}` : ""}`;
         browser = Bun.spawn(
           [
             chrome!,
@@ -84,10 +94,19 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             "--no-first-run",
             "--no-default-browser-check",
             `--user-data-dir=${join(dir, "profile")}`,
-            `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}`,
+            ...(exact
+              ? ["--remote-debugging-port=0", "about:blank"]
+              : [fixtureUrl]),
           ],
           { stdout: "ignore", stderr: Bun.file(browserLog) },
         );
+        if (exact)
+          devtools = await openAtExactViewport(
+            await waitForChromePort(browser, join(dir, "profile"), browserLog),
+            fixtureUrl,
+            width,
+            height,
+          );
         const failures = await waitForBrowserFixture(
           pageRequested.promise,
           result.promise,
@@ -97,11 +116,15 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             );
           }),
           "Office town browser check",
-          // Extended towns at large windows paint far more pixels in software.
-          scale === "extended" || scale === "protected" ? 80_000 : 40_000,
+          // Extended and max towns at large windows paint far more pixels in
+          // software, and each topology change glides over drawn frames.
+          scale === "extended" || scale === "protected" || scale === "max"
+            ? 80_000
+            : 40_000,
         );
         expect(failures).toEqual([]);
       } finally {
+        devtools?.close();
         if (browser) {
           browser.kill();
           await browser.exited;
@@ -112,4 +135,54 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
     },
     95_000 + BROWSER_STARTUP_TIMEOUT_MS,
   );
+}
+
+/**
+ * Pins the page's CSS viewport, then loads the fixture. The override lasts
+ * while the returned DevTools socket stays open.
+ */
+async function openAtExactViewport(
+  port: string,
+  url: string,
+  width: number,
+  height: number,
+) {
+  const targets = (await (
+    await fetch(`http://127.0.0.1:${port}/json/list`)
+  ).json()) as { type: string; webSocketDebuggerUrl: string }[];
+  const page = targets.find((target) => target.type === "page");
+  if (!page) throw new Error("Chrome exposed no page target");
+  const socket = new WebSocket(page.webSocketDebuggerUrl);
+  await new Promise<void>((resolve, reject) => {
+    socket.onopen = () => resolve();
+    socket.onerror = () => reject(new Error("DevTools socket failed"));
+  });
+  let serial = 0;
+  const pending = new Map<
+    number,
+    (message: { error?: { message: string } }) => void
+  >();
+  socket.onmessage = (event) => {
+    const message = JSON.parse(String(event.data));
+    pending.get(message.id)?.(message);
+    pending.delete(message.id);
+  };
+  const command = (method: string, params: Record<string, unknown>) =>
+    new Promise<void>((resolve, reject) => {
+      const id = ++serial;
+      pending.set(id, (message) =>
+        message.error
+          ? reject(new Error(`${method}: ${message.error.message}`))
+          : resolve(),
+      );
+      socket.send(JSON.stringify({ id, method, params }));
+    });
+  await command("Emulation.setDeviceMetricsOverride", {
+    width,
+    height,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await command("Page.navigate", { url });
+  return socket;
 }

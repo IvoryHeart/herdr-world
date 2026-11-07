@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { townDragFor, townDropTarget, townMagnetDesk } from "./townDrag";
+import {
+  townDragFor,
+  townDropTarget,
+  townMagnetDesk,
+  townRoomDrag,
+  townRoomDropTarget,
+} from "./townDrag";
+import { layoutTown, TOWN_SHAPES, TOWN_TILE } from "./townLayout";
+import { townRoomSpotAt } from "./townRoomPlace";
 import type { TownModel } from "./townModel";
 
 /** Two hosts: host a has rooms r1 (desks d1, d2) and r2 (d3); host b has r3 (d4). */
@@ -21,6 +29,8 @@ function model(pinned: string[] = []) {
       displayLabel: key.toUpperCase(),
       desks: desks.map((deskKey) => ({ key: deskKey })),
       omittedDeskCount,
+      canOpenInSpaces: true,
+      stale: false,
     },
   ];
   return {
@@ -55,9 +65,19 @@ function model(pinned: string[] = []) {
   } as unknown as TownModel;
 }
 
-test("a held press picks up a desk or a seated agent only when zoomed in", () => {
+test("a held press picks up a desk from the room-card zoom in, an agent only zoomed in", () => {
   const m = model();
-  expect(townDragFor({ kind: "desk", key: "d1" }, m, "overview")).toBeNull();
+  // Roofs: nothing lifts.
+  expect(townDragFor({ kind: "desk", key: "d1" }, m, "town")).toBeNull();
+  // Room cards: desks are finger-sized, so a desk lifts; agents wait for room zoom.
+  expect(townDragFor({ kind: "desk", key: "d1" }, m, "overview")).toMatchObject(
+    { kind: "desk", key: "d1", from: "r1" },
+  );
+  expect(townDragFor({ kind: "agent", key: "ag" }, m, "overview")).toBeNull();
+  // A pinned desk stays put at every zoom.
+  expect(
+    townDragFor({ kind: "desk", key: "d1" }, model(["d1"]), "overview"),
+  ).toBeNull();
   expect(townDragFor({ kind: "desk", key: "d1" }, m, "room")).toMatchObject({
     kind: "desk",
     key: "d1",
@@ -214,4 +234,76 @@ test("a pinned desk is not picked up, and no desk takes its place", () => {
     key: null,
     label: "d2 is pinned: unpin it to take its place",
   });
+});
+
+test("a room lifts by its edge, never its floor, and not from the roofs", () => {
+  const m = model();
+  expect(
+    townDragFor({ kind: "room", key: "r1", edge: true }, m, "room"),
+  ).toMatchObject({ kind: "room", key: "r1", hostKey: "a", from: "r1" });
+  expect(
+    townDragFor({ kind: "room", key: "r1", edge: true }, m, "overview"),
+  ).toMatchObject({ kind: "room", key: "r1" });
+  expect(townDragFor({ kind: "room", key: "r1" }, m, "room")).toBeNull();
+  expect(
+    townDragFor({ kind: "room", key: "r1", edge: true }, m, "town"),
+  ).toBeNull();
+  // Alone in its building, it has nowhere to go.
+  expect(
+    townDragFor({ kind: "room", key: "r3", edge: true }, m, "room"),
+  ).toBeNull();
+  // A stale room stays where it is.
+  const stale = model();
+  (stale.rooms.get("r1") as { stale: boolean }).stale = true;
+  expect(townRoomDrag("r1", stale)).toBeNull();
+});
+
+test("a room goes anywhere in its own building, never another host's", () => {
+  const m = model();
+  const { layout } = layoutTown(
+    {
+      hosts: [
+        { key: "a", displayOrder: 0 },
+        { key: "b", displayOrder: 1 },
+      ],
+      rooms: [
+        { key: "r1", hostKey: "a", order: 0, deskKeys: ["d1", "d2"] },
+        { key: "r2", hostKey: "a", order: 1, deskKeys: ["d3"] },
+        { key: "r3", hostKey: "b", order: 0, deskKeys: ["d4"] },
+      ],
+    },
+    TOWN_SHAPES.wide,
+  );
+  const drag = townRoomDrag("r1", m)!;
+  const [a, b] = layout.buildings;
+  const r1 = a!.rooms.find((room) => room.key === "r1")!;
+  const T = TOWN_TILE;
+  // Its top-left at tile (x, y), the pointer at (px, py).
+  const aim = (x: number, y: number, px = x, py = y) =>
+    townRoomDropTarget(drag, layout, m, x * T, y * T, px * T, py * T);
+  // Across: host a's floor is only as tall as its rooms.
+  const across = aim(r1.x + 3, r1.y);
+  expect(across.target).toMatchObject({
+    key: "r1",
+    label: "Move R1 here",
+    action: "move",
+  });
+  // Whole tiles, kept inside the building's walls (townRoomSpotAt).
+  expect(across.placement!.spots.get("r1")).toEqual(
+    townRoomSpotAt(layout, "r1", r1.x + 3, r1.y)!,
+  );
+  expect(across.placement!.spots.get("r1")!.x).toBeGreaterThan(r1.x - a!.x);
+  // Back on its own spot: it goes back.
+  expect(aim(r1.x, r1.y).target.key).toBeNull();
+  expect(aim(r1.x, r1.y).placement).toBeNull();
+  // The pointer over another host's building: it goes back.
+  expect(aim(r1.x, r1.y + 3, b!.x + 4, b!.y + 12).target).toMatchObject({
+    key: null,
+    label: "Rooms stay in their own host’s building",
+  });
+  // Over the street, it stays inside its own building's walls.
+  const far = aim(r1.x + 3, r1.y + 999);
+  expect(far.placement!.rooms.get("r1")!.y).toBeLessThan(
+    a!.y + a!.h + r1.h + 20,
+  );
 });

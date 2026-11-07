@@ -8,9 +8,14 @@ import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { fixturePullRequest as detailedPr } from "./testing/pullRequestFixture";
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installTestClock";
+import { setCapturePaintFrameForTesting } from "./useDrawReadiness";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import BoardView, { __boardDraftsTesting } from "./BoardView";
+import { WorldBin } from "./bin/WorldBin";
+import { worldBinStore } from "./bin/useWorldBin";
+import { boardHubActions, BoardHubDock } from "./board/BoardHub";
+import { WORLD_AGENT_LAUNCH_EVENT } from "./agentProfiles";
 import {
   BoardDocumentStore,
   type BoardDocument,
@@ -31,6 +36,10 @@ import {
 } from "../../../shared/relations";
 import { currentBoardCardPins } from "./board/boardCardPins";
 import { worldSourcesStore } from "./worldSources";
+import {
+  boardFollowupsAcceptance,
+  type PaneMoveCall,
+} from "./testing/boardFollowupsAcceptance";
 import "./world.css";
 
 /*
@@ -251,11 +260,40 @@ const emptyDocument = (): BoardDocument => ({
   relations: { spawns: [], groups: [] },
 });
 const askLedger = { revision: 0, asks: [] as WorldAsk[] };
+/** Agents put in the (fake) service's bin. */
+const binAdds: Record<string, unknown>[] = [];
+/** Every call to the (fake) bin, and whether its bus stands stopped. */
+const binCalls: string[] = [];
+let binStopped = false;
+/** Agents the (fake) bin holds. */
+let binEntries: Record<string, unknown>[] = [];
+const binState = () => ({
+  epoch: "test",
+  revision: binCalls.length,
+  entries: binEntries,
+  closing: [],
+  outcomes: [],
+  bus: {
+    interval_ms: 240_000,
+    trip_ms: 120_000,
+    next_ms: 60_000,
+    elapsed_ms: binStopped ? 30_000 : null,
+    stopped: binStopped,
+    trip: binStopped ? 1 : null,
+  },
+});
 const originalAskCall = bridge.call.bind(bridge);
-bridge.call = (async (method: string, params?: Record<string, unknown>) =>
-  method === "world.asks.get"
-    ? structuredClone(askLedger)
-    : originalAskCall(method, params)) as typeof bridge.call;
+bridge.call = (async (method: string, params?: Record<string, unknown>) => {
+  if (method === "world.asks.get") return structuredClone(askLedger);
+  if (method.startsWith("world.bin.")) {
+    binCalls.push(method);
+    if (method === "world.bin.add") binAdds.push(params ?? {});
+    if (method === "world.bin.pause") binStopped = true;
+    if (method === "world.bin.resume") binStopped = false;
+    return binState();
+  }
+  return originalAskCall(method, params);
+}) as typeof bridge.call;
 
 let saved: BoardDocument = emptyDocument();
 // `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
@@ -405,6 +443,7 @@ let lastAnchors: Record<
   { x: number; y: number; visible: boolean }
 > | null = null;
 const movedTabs: { tab: string; to: string }[] = [];
+const movedPanes: PaneMoveCall[] = [];
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
@@ -423,6 +462,27 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
         onSelect={(id) => selected.push(id)}
         onOpen={(id) => opened.push(id)}
         store={store}
+        movePane={async (request, allowClose) => {
+          movedPanes.push({
+            paneId: request.pane.leaf.pane.pane_id,
+            tabId: request.target.nativeId,
+            allowClose,
+          });
+          return request.sourceWorkspace.key !== request.targetWorkspace.key &&
+            request.sourceWorkspace.tabKeys.length === 1 &&
+            request.source.panes.length === 1 &&
+            !allowClose
+            ? {
+                status: "refused",
+                reason: "room_would_close",
+                message: "Moving this pane closes its old room.",
+              }
+            : {
+                status: "moved",
+                tab_id: request.target.nativeId,
+                workspace_id: request.targetWorkspace.nativeId,
+              };
+        }}
         sendNote={async (target, note, confirm) => {
           // As the service does: a replacement is sent to only once confirmed.
           if (replacedBy && confirm !== replacedBy)
@@ -654,7 +714,15 @@ async function fresh() {
   closedPanes.clear();
   heldChecks = null;
   lastAnchors = null;
-  for (const list of [selected, opened, sent, started, createdTabs, movedTabs])
+  for (const list of [
+    selected,
+    opened,
+    sent,
+    started,
+    createdTabs,
+    movedTabs,
+    movedPanes,
+  ])
     list.length = 0;
   try {
     localStorage.clear();
@@ -740,6 +808,22 @@ async function boardAction(selector: string) {
   }
   return button!;
 }
+
+/** Board's hub, with the town center's actions for the fixture's World. */
+const hubDock = () => (
+  <BoardHubDock
+    actions={boardHubActions({
+      world,
+      selectedId: null,
+      holder: null,
+      name: "",
+      openChat: () => {},
+      onOpenSummary: () => {},
+      onNewWorkspace: () => {},
+      toast: () => {},
+    })}
+  />
+);
 
 /** Board scenarios, each on a fresh board (see fresh()); run in order. */
 const scenarios: [name: string, run: () => Promise<void>][] = [
@@ -2534,6 +2618,237 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
     },
   ],
   [
+    "drags an agent's card onto the bin",
+    async () => {
+      // Board shows the bin; an agent's card dropped on it puts it in. (A
+      // phone's Board has no zoom controls to bring a card into view.)
+      if (innerWidth <= 720) return;
+      const binHost = document.createElement("div");
+      document.body.appendChild(binHost);
+      const binRoot = createRoot(binHost);
+      // As World shows it on Board: beside the hub.
+      binRoot.render(<WorldBin always dock={hubDock()} />);
+      await waitFor(
+        () =>
+          Boolean(document.querySelector(".world-bin-dock .world-bin-chip")),
+        "Board shows the bin",
+      );
+      const chip = document.querySelector(".world-bin-chip")!;
+      await bringIntoView(() => card("studio:w2:t1")!);
+      const moving = card("studio:w2:t1")!;
+      const from = centre(moving.querySelector(".board-label")!);
+      const to = centre(chip);
+      pointer(moving, "pointerdown", from.x, from.y, 17);
+      for (let i = 1; i <= 10; i++) {
+        pointer(
+          moving,
+          "pointermove",
+          from.x + ((to.x - from.x) * i) / 10,
+          from.y + ((to.y - from.y) * i) / 10,
+          17,
+        );
+        await settle(16);
+      }
+      check(
+        chip.hasAttribute("data-bin-over"),
+        "the bin is marked while an agent's card is over it",
+      );
+      pointer(moving, "pointerup", to.x, to.y, 17);
+      await waitFor(() => binAdds.length === 1, "the drop puts it in the bin");
+      const tutorial = world.leaves.find((leaf) => leaf.label === "tutorial");
+      check(
+        binAdds[0]!.view === "board" &&
+          (!tutorial || binAdds[0]!.pane_id === tutorial.nativeId),
+        "the agent on that card goes in, from Board",
+      );
+      check(!chip.hasAttribute("data-bin-over"), "the mark clears on drop");
+      // A bus stopped from Town opens the tray; closing it lets the bus go on.
+      await worldBinStore().stopBus();
+      await waitFor(
+        () => worldBinStore().get().bus.stopped,
+        "the bus is stopped",
+      );
+      (chip as HTMLButtonElement).click();
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-tray")),
+        "the tray opens",
+      );
+      check(
+        !binCalls.includes("world.bin.resume"),
+        "an open tray keeps the bus stopped",
+      );
+      // Board has no bus: its bin says when it closes what it holds.
+      const binText = `${chip.getAttribute("aria-label")} ${
+        document.querySelector(".world-bin-tray")!.textContent
+      }`;
+      check(
+        !/\bbus\b/i.test(binText) && binText.includes("closes in"),
+        `Board's bin speaks of no bus (${binText})`,
+      );
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Close the bin"]')!
+        .click();
+      await waitFor(
+        () => binCalls.includes("world.bin.resume"),
+        "closing the tray lets the stopped bus go on",
+      );
+      binRoot.unmount();
+      binHost.remove();
+      await rest();
+    },
+  ],
+  [
+    "Board's hub stands with the bin, clear of Board's controls",
+    async () => {
+      // An agent waits in the bin: the chip shows its count and the bus.
+      binEntries = [
+        {
+          id: "bin-1",
+          connection_id: "local",
+          connection_generation: 1,
+          workspace_id: "w1",
+          tab_id: "t1",
+          pane_id: "p1",
+          terminal_id: "term-1",
+          label: "tutorial",
+          view: "board",
+        },
+      ];
+      const dockHost = document.createElement("div");
+      document.body.appendChild(dockHost);
+      const dockRoot = createRoot(dockHost);
+      dockRoot.render(<WorldBin always dock={hubDock()} />);
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-dock .board-hub")),
+        "the hub stands in the bin's dock",
+      );
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-chip b")),
+        "the bin shows the agent it holds",
+      );
+      const dock = document.querySelector(".world-bin-dock")!;
+      const rect = (element: Element) => element.getBoundingClientRect();
+      const row = host.querySelector(
+        ".board-controls-space > .board-controls",
+      )!;
+      // The dock grew as the chip took its count. ResizeObserver tells
+      // Board's controls only at a painted frame, which the test clock never
+      // draws: give it a real one before the controls are measured.
+      await new Promise<void>((resolve) =>
+        clock.real.requestAnimationFrame!(() =>
+          clock.real.requestAnimationFrame!(() => resolve()),
+        ),
+      );
+      // Board's controls make room for the dock, then every one takes its
+      // own presses (an 800 px page once put Work under the bin).
+      await waitFor(
+        () =>
+          rect(row).left >= rect(dock).right ||
+          rect(row).bottom <= rect(dock).top ||
+          rect(row).top >= rect(dock).bottom,
+        "Board's controls leave the dock room",
+      );
+      const pressed = [...row.querySelectorAll<HTMLButtonElement>("button")];
+      check(
+        pressed.some((button) => button.textContent?.trim() === "Work") &&
+          pressed.every((button) =>
+            button.contains(
+              document.elementFromPoint(
+                rect(button).left + rect(button).width / 2,
+                rect(button).top + rect(button).height / 2,
+              ),
+            ),
+          ),
+        "Work and each Board control take their own presses",
+      );
+      const apart = (a: DOMRect, b: DOMRect) =>
+        a.right <= b.left ||
+        b.right <= a.left ||
+        a.bottom <= b.top ||
+        b.bottom <= a.top;
+      const hub = rect(dock.querySelector(".board-hub")!);
+      const chip = rect(dock.querySelector(".world-bin-chip")!);
+      check(
+        rect(dock).left >= 0 &&
+          rect(dock).right <= innerWidth &&
+          rect(dock).bottom <= innerHeight,
+        "the dock fits the viewport",
+      );
+      check(
+        hub.right <= chip.left &&
+          Math.abs(hub.top + hub.height / 2 - (chip.top + chip.height / 2)) <
+            1.5,
+        "the hub stands just left of the bin, centred on one row",
+      );
+      check(
+        apart(
+          rect(dock),
+          rect(host.querySelector(".board-controls-space > .board-controls")!),
+        ),
+        "the dock is clear of Board's controls",
+      );
+      const buttons = [
+        ...dock.querySelectorAll<HTMLButtonElement>(".board-hub-button"),
+      ];
+      check(
+        buttons.map((button) => button.dataset.action).join() ===
+          "launch,master,more" &&
+          buttons.every(
+            (button) =>
+              rect(button).height >= (innerWidth <= 720 ? 44 : 32) &&
+              button.contains(
+                document.elementFromPoint(
+                  rect(button).left + rect(button).width / 2,
+                  rect(button).top + rect(button).height / 2,
+                ),
+              ),
+          ),
+        "+, the Town master and ⋯ take presses at their touch size",
+      );
+      const launches: unknown[] = [];
+      const onLaunch = (event: Event) =>
+        launches.push((event as CustomEvent).detail);
+      window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+      buttons[0]!.click();
+      window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+      check(launches.length === 1, "+ opens the agent launcher");
+      buttons[2]!.click();
+      await waitFor(
+        () => Boolean(dock.querySelector('.board-hub-menu [role="menuitem"]')),
+        "⋯ opens the town center's menu",
+      );
+      const menu = rect(dock.querySelector(".board-hub-menu")!);
+      check(
+        menu.left >= 0 &&
+          menu.right <= innerWidth &&
+          menu.top >= 0 &&
+          menu.bottom <= rect(dock).top,
+        "the menu rises above the dock, inside the viewport",
+      );
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await waitFor(
+        () => !dock.querySelector(".board-hub-menu"),
+        "Escape closes the menu",
+      );
+      dock.querySelector<HTMLButtonElement>(".world-bin-chip")!.click();
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-tray")),
+        "the bin's tray still opens from its chip",
+      );
+      check(
+        rect(document.querySelector(".world-bin-tray")!).bottom <=
+          rect(dock).top,
+        "the tray clears the dock",
+      );
+      dockRoot.unmount();
+      dockHost.remove();
+      binEntries = [];
+      await rest();
+    },
+  ],
+  [
     "tidy carries strung notes",
     async () => {
       const noteKey = await seedStrungNote();
@@ -3293,6 +3608,22 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
   ],
 ];
 
+scenarios.push([
+  "Board follow-ups",
+  () =>
+    boardFollowupsAcceptance({
+      host,
+      mount,
+      settle,
+      waitFor,
+      check,
+      opened,
+      moves: movedPanes,
+      cardColors: () => JSON.stringify(saved.layout.colors),
+      placeCards: (pinned) => store.patch([{ op: "layout.set", pinned }]),
+    }),
+]);
+
 /**
  * Every scenario, or `?scenario=<name>[|<name>…]` alone, in order; one
  * failing does not stop the rest, and a name no scenario has is reported.
@@ -3347,6 +3678,31 @@ if (mode === "preview")
 if (mode === "test")
   run()
     .catch((error) => failures.push(String(error)))
-    .finally(() =>
-      fetch("/result", { method: "POST", body: JSON.stringify(failures) }),
-    );
+    .finally(() => {
+      // Optional evidence is requested after assertions on this manual clock.
+      const capture = window.__HERDR_WORLD_CAPTURE__;
+      if (capture) {
+        setCapturePaintFrameForTesting((callback) => {
+          const id = clock.real.requestAnimationFrame!(callback);
+          return () => clock.real.cancelAnimationFrame!(id);
+        });
+        const wait = capture.wait.bind(capture);
+        capture.wait = (options) => {
+          let finished = false;
+          let frame = 0;
+          const pump = async () => {
+            await clock.frame();
+            if (!finished) frame = clock.real.requestAnimationFrame!(pump);
+          };
+          frame = clock.real.requestAnimationFrame!(pump);
+          return wait(options).finally(() => {
+            finished = true;
+            clock.real.cancelAnimationFrame!(frame);
+          });
+        };
+      }
+      return fetch("/result", {
+        method: "POST",
+        body: JSON.stringify(failures),
+      });
+    });

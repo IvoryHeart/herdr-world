@@ -29,6 +29,7 @@ Setup installs the Herdr World-verified Herdr ${VERIFIED_HERDR_VERSION} release
 when no herdr binary is found, then installs and starts a user service running
 \`herdr server\` (systemd user service on Linux, launchd LaunchAgent on macOS,
 per-user Task Scheduler task on Windows). Status prints the detected state.
+If Herdr is already running, setup registers future startup without restarting it.
 
 Unix installers use --install --only-if-missing to preserve any existing Herdr,
 including one appearing during download, without integrations or service changes.
@@ -203,7 +204,7 @@ export async function runHerdrCommand(
     const result = await setup();
     if (result.outcome === "already-running") {
       log(
-        `Herdr is already running (version ${result.version}, protocol ${result.protocol}).`,
+        `Herdr is already running (version ${result.version}, protocol ${result.protocol}); user service registered for future logins.`,
       );
     } else {
       log(

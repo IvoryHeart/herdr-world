@@ -4,7 +4,9 @@ export type BindingPolicy =
   | "board-string"
   | "appearance"
   | "tab-colour"
-  | "interest";
+  | "interest"
+  | "desk"
+  | "watchlist";
 export type BindingIdentity = {
   adapter: string;
   instance: string;
@@ -62,6 +64,21 @@ export type BindingResolution = {
   target: (BindingIdentity & { fence: BindingFence }) | null;
 };
 export const bindingPolicies = {
+  desk: {
+    listingMove: true,
+    close: true,
+    notFound: true,
+    listingAbsence: true,
+    lifetime: "clear",
+    sessionEnd: true,
+  },
+  watchlist: {
+    listingMove: true,
+    close: true,
+    notFound: true,
+    listingAbsence: true,
+    lifetime: "clear",
+  },
   "board-string": {
     listingMove: false,
     close: true,

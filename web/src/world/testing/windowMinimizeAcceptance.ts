@@ -1,7 +1,139 @@
-import { updateLayoutPreferences } from "../../layoutPreferences";
-const captureControls = new URLSearchParams(location.search).has(
-  "window-control-captures",
-);
+const nextFrames = () =>
+  new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
+const tappable = (element: Element) => {
+  const bounds = element.getBoundingClientRect();
+  return (
+    bounds.left >= 0 &&
+    bounds.top >= 0 &&
+    bounds.right <= innerWidth &&
+    bounds.bottom <= innerHeight &&
+    document
+      .elementFromPoint(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2,
+      )
+      ?.closest("button") === element
+  );
+};
+const visibleCompactWindow = () =>
+  [
+    ...document.querySelectorAll<HTMLElement>(
+      ".world-managed-window.is-compact",
+    ),
+  ].find((frame) => {
+    const bounds = frame.getBoundingClientRect();
+    return bounds.width > 0 && bounds.height > 0;
+  });
+
+/**
+ * A phone shows one window at a time. With every window minimized, the view
+ * shows a dock where one tap restores a window; an open window reaches the
+ * other minimized ones through ⋯.
+ */
+async function phoneDockRestore(
+  id: string,
+  name: string,
+  currentFrame: () => HTMLElement | null,
+  until: (predicate: () => unknown, message: string) => Promise<void>,
+  check: (condition: boolean, message: string) => void,
+) {
+  const dockButton = (windowId: string) =>
+    document.querySelector<HTMLButtonElement>(
+      `.world-minimized-dock [data-restore-window-id="${CSS.escape(windowId)}"]`,
+    );
+  const others: string[] = [];
+  const names = new Map([[id, name]]);
+  for (let open = visibleCompactWindow(); open; open = visibleCompactWindow()) {
+    check(
+      !document.querySelector(".world-minimized-dock"),
+      "Minimized dock covers an open phone window",
+    );
+    others.push(open.dataset.windowId!);
+    names.set(open.dataset.windowId!, open.getAttribute("aria-label")!);
+    open
+      .querySelector<HTMLButtonElement>(
+        '.world-window-controls [aria-label^="Minimize "]',
+      )!
+      .click();
+    await until(
+      () => open.getBoundingClientRect().width === 0,
+      "every phone window minimized",
+    );
+  }
+  await until(() => dockButton(id), "minimized dock lists the window");
+  await nextFrames();
+  for (const windowId of [id, ...others]) {
+    const button = dockButton(windowId);
+    if (!button) throw new Error("Minimized dock lacks a window");
+    const bounds = button.getBoundingClientRect();
+    check(
+      bounds.width >= 44 && bounds.height >= 44,
+      "Minimized dock chip lacks a 44px touch target",
+    );
+    check(tappable(button), "Minimized dock chip cannot receive a tap");
+  }
+  // The mobile menu backdrop (z-index 79) must cover the dock.
+  const chip = dockButton(id)!.getBoundingClientRect();
+  const backdrop = document.createElement("button");
+  backdrop.className = "mobile-more-backdrop";
+  backdrop.setAttribute("aria-label", "Dismiss mobile menu backdrop");
+  document.body.appendChild(backdrop);
+  try {
+    check(
+      document.elementFromPoint(
+        chip.x + chip.width / 2,
+        chip.y + chip.height / 2,
+      ) === backdrop,
+      "Minimized dock intercepts the mobile more backdrop",
+    );
+  } finally {
+    backdrop.remove();
+  }
+  const reopen = async (windowId: string) => {
+    const open = visibleCompactWindow();
+    if (!open) {
+      dockButton(windowId)!.click();
+    } else {
+      const name = names.get(windowId)!.replace(/ Inspector$/, "");
+      open
+        .querySelector<HTMLButtonElement>('[aria-label^="More actions for "]')!
+        .click();
+      await until(
+        () => document.querySelector(".world-window-snap-menu"),
+        "phone window menu",
+      );
+      const target = [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '.world-window-snap-menu [role^="menuitem"]',
+        ),
+      ].find((item) => item.textContent?.trim().startsWith(name));
+      if (!target)
+        throw new Error("Phone window menu lacks a minimized window");
+      target.click();
+    }
+    await until(
+      () =>
+        currentWindow(windowId)?.classList.contains("is-active") &&
+        currentWindow(windowId)!.getBoundingClientRect().width > 0,
+      "phone window restored",
+    );
+    check(
+      !document.querySelector(".world-minimized-dock"),
+      "Minimized dock stays over an open phone window",
+    );
+  };
+  const currentWindow = (windowId: string) =>
+    windowId === id
+      ? currentFrame()
+      : document.querySelector<HTMLElement>(
+          `.world-managed-window[data-window-id="${CSS.escape(windowId)}"]`,
+        );
+  // One tap on the dock restores a window; the rest come back through ⋯,
+  // ending with the original window in front.
+  for (const windowId of [...others.reverse(), id]) await reopen(windowId);
+}
 
 /** Exercises production Inspector controls while the underlying sessions keep running. */
 export async function windowMinimizeAcceptance({
@@ -9,13 +141,11 @@ export async function windowMinimizeAcceptance({
   calls,
   until,
   check,
-  openComposer,
 }: {
   frame: HTMLElement;
   calls: readonly { method: string }[];
   until(predicate: () => unknown, message: string): Promise<void>;
   check(condition: boolean, message: string): void;
-  openComposer?(): void;
 }) {
   const id = frame.dataset.windowId!;
   const currentFrame = () =>
@@ -60,299 +190,38 @@ export async function windowMinimizeAcceptance({
       !currentFrame() || currentFrame()!.getBoundingClientRect().width === 0,
     "Inspector minimized through its header button",
   );
-  if (compact && captureControls) {
-    const stage = document.querySelector<HTMLElement>(".world-view-layout")!;
-    const { width, height } = stage.style;
-    try {
-      stage.style.width = stage.style.height = "";
-      updateLayoutPreferences({ mode: "auto" });
-      if (!(await fetch("/capture/window-controls")).ok)
-        throw new Error("Window controls capture failed");
-    } finally {
-      stage.style.width = width;
-      stage.style.height = height;
-      updateLayoutPreferences({ mode: "mobile" });
-    }
+  if (compact)
+    await phoneDockRestore(
+      id,
+      frame.getAttribute("aria-label")!,
+      currentFrame,
+      until,
+      check,
+    );
+  else {
+    const switcher = document.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Open windows ("]',
+    );
+    if (!switcher) throw new Error("Minimized Inspector lacks an open control");
+    switcher.click();
     await until(
-      () => document.documentElement.dataset.layout === "mobile",
-      "mobile layout after captures",
+      () => document.querySelector(".world-window-switcher-menu"),
+      "Open windows menu",
     );
-  }
-  let switcher = document.querySelector<HTMLButtonElement>(
-    'button[aria-label^="Open windows ("]',
-  );
-  if (!switcher) throw new Error("Minimized Inspector lacks an open control");
-  if (compact) {
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-    await Promise.all(
-      (document.querySelector(".topbar")?.getAnimations() ?? []).map(
-        (animation) => animation.finished.catch(() => {}),
-      ),
-    );
-    const visibleBounds = switcher.getBoundingClientRect();
-    check(
-      visibleBounds.left >= 0 &&
-        visibleBounds.top >= 0 &&
-        visibleBounds.right <= innerWidth &&
-        visibleBounds.bottom <= innerHeight,
-      "Open windows is outside the settled viewport",
-    );
-    check(
-      document
-        .elementFromPoint(
-          visibleBounds.x + visibleBounds.width / 2,
-          visibleBounds.y + visibleBounds.height / 2,
-        )
-        ?.closest("button") === switcher,
-      "Open windows cannot receive a tap",
-    );
-  }
-  if (compact) {
-    const visibleInspector = () =>
-      [
-        ...document.querySelectorAll<HTMLElement>(
-          ".world-managed-window.is-compact .workspace-inspector",
-        ),
-      ].find(
-        (el) =>
-          el.getBoundingClientRect().width > 0 &&
-          el.getBoundingClientRect().height > 0,
-      );
-    await until(() => visibleInspector(), "remaining compact Inspector");
-    const inspector = visibleInspector()!;
-    if (inspector.dataset.view !== "terminal") {
-      inspector
-        .querySelector<HTMLButtonElement>('[aria-label^="Inspector view:"]')!
-        .click();
-      await until(
-        () => document.querySelector('[aria-label="Inspector views"]'),
-        "remaining Inspector view menu",
-      );
-      document
-        .querySelector<HTMLButtonElement>(
-          '[aria-label="Inspector views"] [data-view="terminal"]',
-        )!
-        .click();
-    }
-    const terminal = inspector.querySelector<HTMLElement>(".xterm")!;
-    for (const type of ["pointerdown", "pointerup"])
-      terminal.dispatchEvent(
-        new PointerEvent(type, {
-          bubbles: true,
-          pointerId: 998,
-          pointerType: "touch",
-          isPrimary: true,
-          button: 0,
-          buttons: type === "pointerdown" ? 1 : 0,
-        }),
-      );
-    openComposer?.();
-    await until(
-      () => inspector.querySelector("textarea.terminal-composer-input"),
-      "remaining Inspector terminal composer",
-    );
-    const input = inspector.querySelector<HTMLTextAreaElement>(
-      "textarea.terminal-composer-input",
-    )!;
-    input.focus({ preventScroll: true });
-    input.click();
-    await until(
-      () =>
-        inspector
-          .querySelector<HTMLElement>(".terminal-composer-toolbar")!
-          .getBoundingClientRect().height > 0,
-      "remaining Inspector composer accessories",
-    );
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-    switcher = document.querySelector<HTMLButtonElement>(
-      ".world-managed-window.is-compact.is-active .world-window-switcher-trigger, .world-window-switcher-trigger.is-floating",
-    )!;
-    const bounds = switcher.getBoundingClientRect();
-    check(
-      inspector
-        .querySelector(".workspace-inspector-head")
-        ?.contains(switcher) === true,
-      "Open windows is not in the visible Inspector header",
-    );
-    for (const control of [
-      input,
-      ...inspector.querySelectorAll<HTMLElement>(
-        ".terminal-composer-toolbar button",
-      ),
-    ]) {
-      const rect = control.getBoundingClientRect();
-      if (!rect.width || !rect.height) continue;
-      check(
-        bounds.right <= rect.left ||
-          bounds.left >= rect.right ||
-          bounds.bottom <= rect.top ||
-          bounds.top >= rect.bottom,
-        "Open windows covers the composer input or toolbar",
-      );
-      check(
-        document
-          .elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
-          ?.closest("button,textarea") === control,
-        "Composer input or toolbar cannot receive a tap",
-      );
-    }
-  }
-  check(switcher.getBoundingClientRect().width > 0, "Open windows is hidden");
-  if (compact) {
-    const bounds = switcher.getBoundingClientRect();
-    check(
-      bounds.width >= 44 && bounds.height >= 44,
-      "Mobile Open windows lacks a 44px touch target",
-    );
-  }
-  switcher.click();
-  await until(
-    () => document.querySelector(".world-window-switcher-menu"),
-    "Open windows menu",
-  );
-  const restore = document
-    .querySelector<HTMLElement>(
-      '.world-window-switcher-menu [aria-label="Minimized"]',
-    )
-    ?.closest("button");
-  if (!restore)
-    throw new Error("Minimized Inspector is missing from Open windows");
-  if (compact) {
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-    const bounds = restore.getBoundingClientRect();
-    check(
-      document
-        .elementFromPoint(
-          bounds.x + bounds.width / 2,
-          bounds.y + bounds.height / 2,
-        )
-        ?.closest("button") === restore,
-      "Minimized window menu entry cannot receive a tap",
-    );
-  }
-  const windowCount = Number(switcher.querySelector("span")?.textContent);
-  restore.click();
-  await until(
-    () =>
-      currentFrame()?.classList.contains("is-active") &&
-      currentFrame()!.getBoundingClientRect().width > 0,
-    "Open windows restored the same Inspector",
-  );
-  if (compact) {
-    const originalLabel = restore.textContent?.trim();
-    const count = windowCount;
-    for (let i = 0; i < count; i++) {
-      const button = [
-        ...document.querySelectorAll<HTMLButtonElement>(
-          '.world-managed-window.is-compact [aria-label="Minimize Inspector window"]',
-        ),
-      ].find((button) => {
-        const bounds = button
-          .closest<HTMLElement>(".world-managed-window")!
-          .getBoundingClientRect();
-        return bounds.width > 0 && bounds.height > 0;
-      });
-      if (!button)
-        throw new Error("Expected another visible Inspector to minimize");
-      const owner = button.closest<HTMLElement>(".world-managed-window")!;
-      button.click();
-      await until(
-        () => owner.getBoundingClientRect().width === 0,
-        "all Inspector headers minimized",
-      );
-    }
-    await until(
-      () =>
-        document.querySelector(".world-window-switcher-trigger.is-floating"),
-      "stage restore fallback after all Inspectors minimize",
-    );
-    const floating = document.querySelector<HTMLButtonElement>(
-      ".world-window-switcher-trigger.is-floating",
-    )!;
-    const bounds = floating.getBoundingClientRect();
-    check(
-      document
-        .elementFromPoint(
-          bounds.x + bounds.width / 2,
-          bounds.y + bounds.height / 2,
-        )
-        ?.closest("button") === floating,
-      "Stage restore fallback cannot receive a tap",
-    );
-    // The production fixed backdrop must cover the viewport-level fallback.
-    const backdrop = document.createElement("button");
-    backdrop.className = "mobile-more-backdrop";
-    backdrop.setAttribute("aria-label", "Dismiss mobile menu backdrop");
-    document.body.appendChild(backdrop);
-    try {
-      check(
-        document.elementFromPoint(
-          bounds.x + bounds.width / 2,
-          bounds.y + bounds.height / 2,
-        ) === backdrop,
-        "Stage restore fallback intercepts the mobile more backdrop",
-      );
-    } finally {
-      backdrop.remove();
-    }
-    for (let i = 0; i < count; i++) {
-      await until(
-        () =>
-          document.querySelector(
-            ".world-window-switcher-trigger.is-floating, .world-managed-window.is-compact.is-active .world-window-switcher-trigger",
-          ),
-        "restore control follows visible Inspector",
-      );
-      document
-        .querySelector<HTMLButtonElement>(
-          ".world-window-switcher-trigger.is-floating, .world-managed-window.is-compact.is-active .world-window-switcher-trigger",
-        )!
-        .click();
-      await until(
-        () => document.querySelector(".world-window-switcher-menu"),
-        "restore all original Inspectors",
-      );
-      const items = [
-        ...document.querySelectorAll<HTMLButtonElement>(
-          ".world-window-switcher-menu button",
-        ),
-      ].filter((item) => item.querySelector('[aria-label="Minimized"]'));
-      const chosen = items.find((item) =>
-        i === count - 1
-          ? item.textContent?.trim() === originalLabel
-          : item.textContent?.trim() !== originalLabel,
-      );
-      if (!chosen) throw new Error("Original minimized Inspector disappeared");
-      chosen.click();
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      );
-    }
+    const restore = document
+      .querySelector<HTMLElement>(
+        '.world-window-switcher-menu [aria-label="Minimized"]',
+      )
+      ?.closest("button");
+    if (!restore)
+      throw new Error("Minimized Inspector is missing from Open windows");
+    restore.click();
     await until(
       () =>
         currentFrame()?.classList.contains("is-active") &&
         currentFrame()!.getBoundingClientRect().width > 0,
-      "original Inspector active after stage fallback",
+      "Open windows restored the same Inspector",
     );
-    // Return the terminal input owner after exercising the other window.
-    const terminal = currentFrame()!.querySelector<HTMLElement>(".xterm")!;
-    for (const type of ["pointerdown", "pointerup"])
-      terminal.dispatchEvent(
-        new PointerEvent(type, {
-          bubbles: true,
-          pointerId: 999,
-          pointerType: "touch",
-          isPrimary: true,
-          button: 0,
-          buttons: type === "pointerdown" ? 1 : 0,
-        }),
-      );
   }
   check(
     sessionEndCalls() === before,

@@ -132,6 +132,7 @@ if (process.env.WORLD_OBSERVATION_POLICY_TEST !== "1") {
     onActiveInspectorChange: presented,
     onVisualArrangementControlReady: presented,
     onGoToSpaces: presented,
+    onGoToTown: presented,
     onPresentedWorldChange: presented,
   };
   function Harness() {

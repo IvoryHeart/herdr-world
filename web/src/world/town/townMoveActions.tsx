@@ -1,5 +1,5 @@
 /**
- * Town's desk and agent moves: dropping or choosing a room or desk, the
+ * Town's desk, agent and room moves: dropping or choosing a room or desk, the
  * confirmation before a move closes its room, one move at a time, and the
  * move and group menus (townMoveMenu.ts, townTeamActions.ts).
  */
@@ -16,21 +16,27 @@ import type {
 } from "../herdrOfficeProjection";
 import type { Relation } from "../../../../shared/relations";
 import { terminalColorKey, type TerminalColor } from "../terminalColor";
+import { officeRoomActionCapabilities } from "../officeRoomActions";
 import type { WorldObject } from "../worldObject";
 import type { DeskPins } from "../useDeskPins";
 import { TownChooser } from "./TownChooser";
-import { townDeskColorTarget } from "./townModel";
+import type { TownToast } from "./TownToasts";
+import { townDeskColorTarget, townRoomColorKey } from "./townModel";
+import { saveRoomSpots } from "./townRoomPins";
+import type { TownRoomPlacement } from "./townRoomPlace";
 import { townMoveMenu, type TownMoveFlow } from "./townMoveMenu";
 import {
   requestAgentMove,
   requestDeskMove,
   requestDeskReorder,
+  requestRoomOrder,
   townMoveNotice,
   townMoveResult,
   type TownMoveOutcome,
   type TownMoveResult,
 } from "./townMoves";
 import { townTeamActions } from "./townTeamActions";
+import { sharedTownJoinSeats, type TownJoinSeats } from "./townJoinSeats";
 
 /** The confirmation asked before a move closes its room. */
 export type TownMoveConfirm = { message: string; run(): void };
@@ -55,6 +61,7 @@ export function townMoveActions({
   roomForKey,
   toast,
   trace,
+  joinSeats = sharedTownJoinSeats(),
 }: {
   /** A desk or agent move being chosen: what to move, then where. */
   moveFlow: TownMoveFlow | null;
@@ -71,8 +78,10 @@ export function townMoveActions({
   terminalColors: Readonly<Record<string, TerminalColor>>;
   agentByKey: { get(key: string): { agent: OfficeAgent } | undefined };
   roomForKey(roomKey: string | null): OfficeRoom | null;
-  toast(kind: "ok" | "error", text: string): void;
+  toast: TownToast;
   trace: ViewTrace;
+  /** Where Town seats a desk that joins a team. */
+  joinSeats?: TownJoinSeats;
 }) {
   const deskForKey = (key: string) =>
     office.deskRoster.find(({ desk }) => desk.key === key)?.desk ?? null;
@@ -111,6 +120,7 @@ export function townMoveActions({
       runDeskMove(deskKey, roomKey, allowCloseRoom, then),
     closeMenu: () => setMoveFlow(null),
     openGroupMenu: (deskKey) => setMoveFlow({ step: "group", deskKey }),
+    seatJoin: (request) => joinSeats.request(request),
   });
   const runDeskMove = async (
     deskKey: string,
@@ -231,6 +241,70 @@ export function townMoveActions({
       setMovingKey(null);
     }
   };
+  /** Whether a room's host can change its rooms now, as renaming needs. */
+  const canMoveRoom = (roomKey: string) => {
+    const room = roomForKey(roomKey);
+    return Boolean(room && officeRoomActionCapabilities(world, room).rename);
+  };
+  /**
+   * Save where a building's rooms stand (World keeps the spots, so a reload
+   * and every device show them), then put Herdr's workspace order in their
+   * reading order, so Spaces matches.
+   */
+  const runRoomPlace = async (
+    roomKey: string,
+    placement: TownRoomPlacement,
+    what?: string,
+  ): Promise<TownMoveResult> => {
+    const room = roomForKey(roomKey);
+    if (!room || movingKey) return "returned";
+    const label = what ?? room.displayLabel;
+    if (!canMoveRoom(roomKey)) {
+      toast("error", `${label} not moved: this host cannot change rooms now.`);
+      return "returned";
+    }
+    const rooms = placement.order.map(roomForKey);
+    if (rooms.some((other) => !other)) {
+      toast("error", `${label} not moved: the building changed.`);
+      return "returned";
+    }
+    const spots = Object.fromEntries(
+      [...placement.spots].map(([key, spot]) => [
+        townRoomColorKey(roomForKey(key)!),
+        spot,
+      ]),
+    );
+    setMovingKey(room.key);
+    try {
+      const conflict = await saveRoomSpots(
+        room.workspaceRef.connectionId,
+        spots,
+      );
+      if (conflict) {
+        toast("error", `${label} not moved: ${conflict}`);
+        return "returned";
+      }
+      const outcome = await requestRoomOrder(rooms as OfficeRoom[]).catch(
+        (cause: unknown) => ({
+          status: "refused" as const,
+          reason: "failed",
+          message: String(cause),
+        }),
+      );
+      if (DEVTOOLS) trace.record("move", { label, status: outcome.status });
+      if (outcome.status !== "moved")
+        toast(
+          "error",
+          `${label} moved, but Spaces may show the old order: ${outcome.message}`,
+        );
+      return "moved";
+    } catch (cause) {
+      toast("error", `${label} may not have moved: ${String(cause)}`);
+      return "uncertain";
+    } finally {
+      setMovingKey(null);
+    }
+  };
   /** The choices for each step of a move (townMoveMenu.ts). */
   const moveChooser = (flow: NonNullable<typeof moveFlow>) =>
     townMoveMenu(flow, {
@@ -272,6 +346,25 @@ export function townMoveActions({
     runDeskMove,
     runDeskReorder,
     runAgentMove,
+    /** Town's room move actions (TownRoomActions). */
+    roomMoves: {
+      onPlaceRooms: runRoomPlace,
+      canMoveRoom,
+      onRoomsTidied: (
+        hostLabel: string,
+        undo: (() => Promise<TownMoveResult>) | null,
+      ) => {
+        if (!undo) toast("ok", `${hostLabel}'s rooms are already tidy`);
+        else
+          toast("ok", `Tidied ${hostLabel}'s rooms`, {
+            label: "Undo",
+            run: () =>
+              void undo().then((result) => {
+                if (result === "moved") toast("ok", "Restored");
+              }),
+          });
+      },
+    },
     teams,
     dialogs,
   };

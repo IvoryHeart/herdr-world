@@ -51,7 +51,7 @@ import {
   type NewReviewAnnotation,
   type ReviewAnnotation,
 } from "../annotations";
-import { lazyWithReload } from "../lazyWithReload";
+import { DiffContentView, GitCommitHistory } from "./inspectorLazyViews";
 import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import type { GitDiffEntry, Pane, Workspace } from "../types";
 import {
@@ -96,17 +96,6 @@ import { InspectorSplitResizer } from "./InspectorSplitResizer";
 import "./WorkspaceInspectorActions.css";
 import "./WorkspaceInspectorFrame.css";
 import "./WorkspaceInspectorHost.css";
-
-const DiffContentView = lazyWithReload("diff-content-view", () =>
-  import("./DiffContentView").then((module) => ({
-    default: module.DiffContentView,
-  })),
-);
-const GitCommitHistory = lazyWithReload("git-commit-history", () =>
-  import("./GitCommitHistory").then((module) => ({
-    default: module.GitCommitHistory,
-  })),
-);
 
 const INSPECTOR_RESOURCE_HORIZONTAL_PADDING = 16;
 
@@ -156,8 +145,11 @@ export function WorkspaceInspectorHost({
   chatFocusIntent,
   agentWorktree,
   presentationStale = false,
+  notice,
 }: {
   agentWorktree?: AgentWorktreeView;
+  /** A wait or note from the window, shown with status, outside the body. */
+  notice?: ReactNode;
   state: WorkspaceInspectorState;
   onReady?: () => void;
   visible: boolean;
@@ -939,13 +931,14 @@ export function WorkspaceInspectorHost({
         stale={presentationStale}
         available={!!workspace}
       />
+      {notice}
 
       {workspace ? (
         <div
           className="workspace-inspector-body"
-          ref={(element) =>
-            element?.toggleAttribute("inert", presentationStale)
-          }
+          ref={(element) => {
+            element?.toggleAttribute("inert", presentationStale);
+          }}
         >
           <div
             className={`workspace-inspector-resource inspector-files-resource ${

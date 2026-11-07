@@ -1,5 +1,4 @@
 import { useLayer } from "../layerStack";
-import { useLayoutPreferences } from "../layoutPreferences";
 import {
   WindowSwitcher,
   type WindowSwitcherEntry,
@@ -87,7 +86,6 @@ export function WindowArrangementMenu({
   control: WindowArrangementControl;
   showWindowSwitcher?: boolean;
 }) {
-  const { mobile } = useLayoutPreferences();
   useShortcutPreferences();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -167,11 +165,6 @@ export function WindowArrangementMenu({
             items.length;
     items[next]?.focus();
   };
-
-  if (mobile && showWindowSwitcher)
-    return control.windows?.some((entry) => entry.minimized) ? (
-      <WindowSwitcher entries={control.windows} floating />
-    ) : null;
 
   return (
     <>

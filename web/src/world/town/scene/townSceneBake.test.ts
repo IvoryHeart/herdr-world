@@ -120,11 +120,16 @@ function dirtyAfter(from: string, to: string) {
 
 test("each change bakes only what it touches", () => {
   const same = dirtyAfter("base", "base");
-  expect(same.dirty).toEqual({ scene: false, buildings: new Set() });
+  expect(same.dirty).toEqual({
+    scene: false,
+    buildings: new Set(),
+    removed: new Set(),
+  });
   // Agent status is drawn each frame, never baked.
   expect(dirtyAfter("base", "status").dirty).toEqual({
     scene: false,
     buildings: new Set(),
+    removed: new Set(),
   });
   const studio = hostOf(same.after, "alpha");
   const lab = hostOf(same.after, "gamma");
@@ -139,9 +144,28 @@ test("each change bakes only what it touches", () => {
       change,
       scene: false,
       buildings: new Set([host]),
+      removed: new Set(),
     });
-  // A room that grows moves its building's walls: the whole scene.
-  expect(dirtyAfter("base", "grown").dirty.scene).toBe(true);
+  // A room that grows moves its building's walls: the ground is painted
+  // again, and only the buildings whose rooms or places changed bake.
+  const grown = dirtyAfter("base", "grown");
+  expect(grown.dirty.scene).toBe(true);
+  expect(grown.dirty.buildings.has(studio)).toBe(true);
+  expect(grown.dirty.removed).toEqual(new Set());
+  // A host turned off: its building is gone, the other moves and bakes.
+  const keys = townBakeKeys(same.after.model, same.after.layout);
+  const without = new Map(keys.buildings);
+  without.delete(lab);
+  const moved = new Map(
+    [...without].map(([host, key]) => [host, `${key}+moved`]),
+  );
+  expect(
+    townBakeDirty(keys, { scene: `${keys.scene}-`, buildings: moved }),
+  ).toEqual({
+    scene: true,
+    buildings: new Set(moved.keys()),
+    removed: new Set([lab]),
+  });
   // Nothing baked before: the first scene is built whole.
   const first = townBakeDirty(
     null,
@@ -177,14 +201,13 @@ test("baking only the dirty parts keeps every building as a full bake would", ()
     const semantics = derive(scene, all[name]!);
     const next = townBakeKeys(semantics.model, semantics.layout);
     const dirty = townBakeDirty(keys, next);
-    if (dirty.scene) {
-      baked.clear();
-      for (const [host, key] of next.buildings) baked.set(host, key);
-    } else
-      for (const host of dirty.buildings) {
-        baked.set(host, next.buildings.get(host)!);
-        rebakes += 1;
-      }
+    // A new ground never bakes buildings by itself: only the changed, new
+    // and gone ones.
+    for (const host of dirty.removed) baked.delete(host);
+    for (const host of dirty.buildings) {
+      baked.set(host, next.buildings.get(host)!);
+      if (keys) rebakes += 1;
+    }
     keys = next;
     expect(baked).toEqual(new Map(next.buildings));
   }
@@ -212,6 +235,7 @@ test("a room moved inside an unchanged building is baked again", () => {
   expect(townBakeDirty(keys, townBakeKeys(after.model, moved))).toEqual({
     scene: false,
     buildings: new Set([first!.hostKey]),
+    removed: new Set(),
   });
 });
 
@@ -232,6 +256,7 @@ test("a room's carpet alone, a desk's seats, the town's size and a building's wa
   expect(townBakeDirty(keys, townBakeKeys(carpeted, layout))).toEqual({
     scene: false,
     buildings: new Set([first!.hostKey]),
+    removed: new Set(),
   });
   const withBuilding = (change: (b: typeof first) => typeof first) => ({
     ...layout,
@@ -255,6 +280,7 @@ test("a room's carpet alone, a desk's seats, the town's size and a building's wa
   expect(townBakeDirty(keys, townBakeKeys(model, seated))).toEqual({
     scene: false,
     buildings: new Set([first!.hostKey]),
+    removed: new Set(),
   });
   const wider = { ...layout, width: layout.width + 1 };
   expect(townBakeDirty(keys, townBakeKeys(model, wider)).scene).toBe(true);
@@ -288,6 +314,7 @@ test("a host turning stale or taking another theme bakes its building", () => {
     expect(townBakeDirty(keys, townBakeKeys(next, layout))).toEqual({
       scene: false,
       buildings: new Set([lab]),
+      removed: new Set(),
     });
 });
 

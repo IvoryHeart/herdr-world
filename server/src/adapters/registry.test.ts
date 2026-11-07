@@ -22,6 +22,7 @@ test("release entrypoint cannot include the synthetic source or browser presenta
     entrypoints: [new URL("../index.ts", import.meta.url).pathname],
     target: "bun",
     packages: "external",
+    metafile: true,
   });
   expect(build.success).toBe(true);
   const bundled = (
@@ -31,6 +32,15 @@ test("release entrypoint cannot include the synthetic source or browser presenta
   expect(bundled).not.toContain("synthetic-test-only");
   expect(bundled).not.toContain("SyntheticSource");
   expect(bundled).not.toContain("adapters/testing/");
-  // A registration cannot eagerly pull React presentation into the service.
-  expect(bundled).not.toContain("react-dom");
+  // Inspect module identity: package metadata can legitimately name react-dom
+  // in patchedDependencies without pulling presentation into the service.
+  const inputs = Object.entries(build.metafile!.inputs);
+  expect(inputs.length).toBeGreaterThan(0);
+  const modules = inputs.flatMap(([path, input]) => [
+    path,
+    ...input.imports.map((entry) => entry.path),
+  ]);
+  expect(
+    modules.filter((path) => /(?:^|[/\\])react-dom(?:[/\\]|$)/.test(path)),
+  ).toEqual([]);
 }, 20000);

@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { memo, Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
@@ -12,7 +12,10 @@ import {
   WORLD_AGENT_LAUNCH_EVENT,
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
+import type { AgentStartFrom } from "./agentStarts";
+import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
+import { useStableCallback } from "./useStableCallback";
 import { GroupsWindow } from "./groups/GroupsWindow";
 import {
   floatingTerminalGeometryId,
@@ -21,11 +24,18 @@ import {
 } from "./floatingTerminalPreferences";
 import { terminalColorKey } from "./terminalColor";
 import { setDeskPinned, useDeskPins } from "./useDeskPins";
+import { putInBin, WorldBin } from "./bin/WorldBin";
+import { BoardHub } from "./board/BoardHub";
+import { requestTownSummary } from "./town/townSummaryRequest";
 import { useTerminalColorChoices } from "./useTerminalColors";
 import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
+import { NeedsYouHost } from "./NeedsYouTab";
+import { usePresenceWatch } from "./presence";
+import { launchedWorldLeaf } from "./worldTerminalPresentation";
+import { worldNodeOpenView } from "./worldInspectorSelection";
 import WorldIntentProfile from "./WorldIntentProfile";
 import { WorldConnectionRequired } from "./WorldStatus";
 import { WindowFrame } from "./windows/WindowFrame";
@@ -38,6 +48,7 @@ import { WindowSurface } from "./windows/WindowSurface";
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import {
   activateWorldNodeHost,
+  defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
 import type {
@@ -56,8 +67,13 @@ function switchToRank(status: WorldAgentStatus) {
   return status === "blocked" ? 0 : status === "done" ? 1 : 2;
 }
 
-const TownView = lazyWithReload("world-town", () => import("./TownView"));
-const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
+// Memoized: an agent window opening, moving or updating changes none of a
+// view's data, so the view must not re-render with the control plane.
+const TownView = memo(lazyWithReload("world-town", () => import("./TownView")));
+const BoardView = memo(
+  lazyWithReload("world-board", () => import("./BoardView")),
+);
+const MemoDeskView = memo(DeskView);
 
 const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
   import("./AgentLauncherDialog").then((module) => ({
@@ -81,13 +97,14 @@ const ProfileEditor = lazyWithReload("world-profile-editor", () =>
  */
 function AgentDialogs({
   world,
-  onOpenTerminal,
+  onOpenNode,
 }: {
   world: WorldObject;
-  onOpenTerminal(nodeId: string): void;
+  onOpenNode(nodeId: string): void;
 }) {
   const [launch, setLaunch] = useState<
-    (Partial<LaunchTarget> & { profileId?: string }) | null
+    | (Partial<LaunchTarget> & { profileId?: string; from?: AgentStartFrom })
+    | null
   >(null);
   const [editing, setEditing] = useState<{ profileId?: string } | null>(null);
   const [sounds, setSounds] = useState(false);
@@ -95,22 +112,21 @@ function AgentDialogs({
   // unlocked audio whichever view is open.
   useAgentProfiles();
   useChimeHost();
+  // Last seen and returns for "Since you left", whichever view is open.
+  usePresenceWatch();
   // A launched agent or login terminal opens once World's snapshot shows it.
   const [pendingOpen, setPendingOpen] = useState<{
     connectionId: string;
+    runtimeGeneration: number;
     terminalId: string;
   } | null>(null);
   useEffect(() => {
     if (!pendingOpen) return;
-    const leaf = world.leaves.find(
-      (candidate) =>
-        candidate.connectionId === pendingOpen.connectionId &&
-        candidate.terminalId === pendingOpen.terminalId,
-    );
+    const leaf = launchedWorldLeaf(world, pendingOpen);
     if (!leaf) return;
     setPendingOpen(null);
-    onOpenTerminal(leaf.id);
-  }, [world, pendingOpen, onOpenTerminal]);
+    onOpenNode(leaf.id);
+  }, [world, pendingOpen, onOpenNode]);
   useEffect(() => {
     const onLaunch = (event: Event) =>
       setLaunch({ ...(event as CustomEvent<LaunchTarget>).detail });
@@ -243,6 +259,27 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     openInBackground,
     focusInspectorPane,
   } = controller;
+  const revealDeskAgent = useDeskReveal({
+    active: active && view === "desk",
+    intentRequestRef,
+    world: aggregateWorld,
+    hostsFilter,
+    open: async (leaf, candidateWorld, session, signal) => {
+      const admittedIntent = intentRequestRef.current + 1;
+      const opened = await applySelection(
+        leaf.id,
+        defaultOpenView(leaf),
+        true,
+        candidateWorld,
+        signal,
+        session,
+      );
+      if (opened) return "opened";
+      return signal.aborted || intentRequestRef.current !== admittedIntent
+        ? "superseded"
+        : "unavailable";
+    },
+  });
   useWorldPanelFocus(panelRegistry, managedWindows, windowCommand);
   /**
    * Only Town reads where a window was left docked, so only Town writes it:
@@ -291,6 +328,46 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       : null;
   };
 
+  // An agent window puts its agent in the bin; a pinned desk or tab keeps
+  // its tab.
+  const inspectorBin = (conversation: WorldInspectorConversation) => {
+    const node = presentedWorld.nodeById.get(conversation.nodeId);
+    const tab = inspectorTab(conversation);
+    if (node?.kind !== "agent" || node.stale || !node.actionable) return null;
+    return {
+      onBin: () =>
+        void putInBin(
+          node,
+          view === "town" || view === "board" || view === "desk"
+            ? view
+            : "other",
+          Boolean(tab && deskPins[terminalColorKey(tab)]),
+        ).then((held) => {
+          if (held) closeInspector(conversation);
+        }),
+    };
+  };
+
+  // Stable identities for the memoized views; each always calls the
+  // current handler, so a view never acts on an older selection or host.
+  const stableOpenNodeById = useStableCallback(openNodeById);
+  const stableRevealDeskAgent = useStableCallback(revealDeskAgent);
+  const stablePreviewTerminalById = useStableCallback(previewTerminalById);
+  const stableCloseDeskReading = useStableCallback(closeDeskReading);
+  const stableSelectNode = useStableCallback(selectNode);
+  const stableOpenTerminalById = useStableCallback(openTerminalById);
+  const stableOpenInspectorView = useStableCallback(
+    (
+      id: string,
+      view: Parameters<typeof openInBackground>[1],
+      focus = true,
+    ) => {
+      // An unfocused open (the docked Town master) stays in the background:
+      // no selection, not raised.
+      if (focus) void applySelection(id, view);
+      else openInBackground(id, view);
+    },
+  );
   return (
     <main
       className="world-control-plane"
@@ -299,7 +376,27 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     >
       <AgentDialogs
         world={aggregateWorld}
-        onOpenTerminal={(nodeId) => void openTerminalById(nodeId)}
+        onOpenNode={(nodeId) => void openNodeById(nodeId)}
+      />
+      <WorldBin
+        always={view === "town" || view === "board"}
+        bus={view === "town"}
+        // Board's hub: the town center's actions beside the bin.
+        dock={
+          view === "board" ? (
+            <BoardHub
+              world={presentedWorld}
+              selectedId={selectedId}
+              openChat={(id) => stableOpenInspectorView(id, "history")}
+              onNewWorkspace={() => setWorkspaceCreationOpen(true)}
+              onOpenSummary={() => {
+                // Town's summary, the one there is: Town opens with it.
+                requestTownSummary();
+                props.onGoToTown();
+              }}
+            />
+          ) : null
+        }
       />
       <GroupsWindow
         world={aggregateWorld}
@@ -342,6 +439,22 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
           ref={worldViewLayoutRef}
           className={`world-view-layout ${showSelectionProfile || contextRailInspector ? "has-context" : ""}`}
         >
+          {active ? (
+            <NeedsYouHost
+              // The Hosts filter applies, as in every view.
+              world={world}
+              onChat={(id) => {
+                const node = world.nodeById.get(id);
+                void applySelection(
+                  id,
+                  node ? worldNodeOpenView(node, "chat") : null,
+                ).catch(() => undefined);
+              }}
+              onOpenTerminal={(id) =>
+                void openTerminalById(id).catch(() => undefined)
+              }
+            />
+          ) : null}
           <section className="world-view-stage" aria-label={`${view} view`}>
             {active ? (
               <Suspense
@@ -351,17 +464,20 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               >
                 <WorldViewErrorBoundary key={view}>
                   {view === "desk" ? (
-                    <DeskView
+                    <MemoDeskView
                       world={world}
                       aggregate={aggregateWorld}
-                      onOpen={openNodeById}
+                      onOpen={stableOpenNodeById}
+                      onReveal={stableRevealDeskAgent}
                       reading={
                         deskReadingPane && contextRailInspector
                           ? contextRailInspector.nodeId
                           : null
                       }
-                      onPreview={deskReadingPane ? previewTerminalById : null}
-                      onCloseReading={closeDeskReading}
+                      onPreview={
+                        deskReadingPane ? stablePreviewTerminalById : null
+                      }
+                      onCloseReading={stableCloseDeskReading}
                     />
                   ) : view === "town" ? (
                     <Suspense
@@ -371,20 +487,16 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <TownView
                         world={presentedWorld}
-                        onOpenInspectorView={(id, view, focus = true) => {
-                          // An unfocused open (the docked Town master) stays
-                          // in the background: no selection, not raised.
-                          if (focus) void applySelection(id, view);
-                          else openInBackground(id, view);
-                        }}
+                        aggregate={aggregateWorld}
+                        onOpenInspectorView={stableOpenInspectorView}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
-                        onSelect={selectNode}
+                        onSelect={stableSelectNode}
                         floatingTerminals={inspectorConversations}
                         onConversationNodeAnchorsChange={
                           setVisualConversationAnchors
                         }
-                        onOpenTerminal={openTerminalById}
+                        onOpenTerminal={stableOpenTerminalById}
                       />
                     </Suspense>
                   ) : (
@@ -398,8 +510,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
-                        onSelect={selectNode}
-                        onOpen={openNodeById}
+                        onSelect={stableSelectNode}
+                        onOpen={stableOpenNodeById}
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
@@ -754,6 +866,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                 });
               },
               pin: inspectorPin(conversation),
+              bin: inspectorBin(conversation),
               // The colour is chosen from the swatch beside the name.
               back: view === "town" ? { label: "Back to Town" } : undefined,
               // A phone switches between agents and terminals from ⋯, as

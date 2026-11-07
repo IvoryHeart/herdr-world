@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
-  DESK_RECORD_LIMIT,
+  assertDeskMetadataSize,
   DESK_OPENS_LIMIT,
   DESK_OBSERVATION_LIMIT,
   DESK_IDLE_WINDOW_MS,
@@ -25,7 +25,7 @@ const copyIdentity = (identity: DeskIdentity): DeskIdentity => ({
   agent_session_fingerprint: identity.agent_session_fingerprint,
 });
 
-type StoredDeskRecord = DeskRecord & { stateChangeSeq?: number };
+export type StoredDeskRecord = DeskRecord & { stateChangeSeq?: number };
 
 /** Browser-independent, process-local state. No transcript text is retained. */
 export class WorldDeskRegistry {
@@ -44,6 +44,81 @@ export class WorldDeskRegistry {
       stateChangeSeq?: number;
     }
   >();
+
+  fork() {
+    const next = new WorldDeskRegistry();
+    next.adopt(this);
+    return next;
+  }
+  adopt(next: WorldDeskRegistry) {
+    this.revision = next.revision;
+    this.ownershipRevision = next.ownershipRevision;
+    this.records = new Map(
+      [...next.records].map(([key, value]) => [key, { ...value }]),
+    );
+    this.recordByTerminal = new Map(next.recordByTerminal);
+    this.previous = new Map(
+      [...next.previous].map(([key, value]) => [key, { ...value }]),
+    );
+  }
+  adoptConnection(connectionId: string, next: WorldDeskRegistry) {
+    this.replaceConnection(
+      connectionId,
+      next
+        .storedRecords()
+        .filter((record) => record.connection_id === connectionId),
+    );
+    for (const [key, value] of this.previous)
+      if (value.identity.connection_id === connectionId)
+        this.previous.delete(key);
+    for (const [key, value] of next.previous)
+      if (value.identity.connection_id === connectionId)
+        this.previous.set(key, { ...value });
+    this.ownershipRevision = Math.max(
+      this.ownershipRevision,
+      next.ownershipRevision,
+    );
+    while (this.previous.size > DESK_OBSERVATION_LIMIT)
+      this.previous.delete(this.previous.keys().next().value!);
+  }
+  observedSession(
+    identity: Pick<
+      DeskIdentity,
+      "connection_id" | "connection_generation" | "terminal_id"
+    >,
+  ): string | null | undefined {
+    return this.previous.get(
+      terminalKey({ ...identity, agent_session_fingerprint: null }),
+    )?.identity.agent_session_fingerprint;
+  }
+  /** A stale whole-host list cannot end bindings accepted by newer metadata. */
+  canObserveConnection(connectionId: string, generation: number, at: number) {
+    for (const previous of this.previous.values())
+      if (
+        previous.identity.connection_id === connectionId &&
+        previous.identity.connection_generation === generation &&
+        (previous.at > at || (previous.mutation && previous.at === at))
+      )
+        return false;
+    return true;
+  }
+  storedRecords(): StoredDeskRecord[] {
+    return [...this.records.values()].map((record) => ({ ...record }));
+  }
+  replaceConnection(connectionId: string, records: StoredDeskRecord[]) {
+    const before = JSON.stringify(this.list().records);
+    const incoming = new Map(
+      records.map((record) => [deskKey(record), record]),
+    );
+    for (const [key, record] of this.records)
+      if (record.connection_id === connectionId && !incoming.has(key))
+        this.remove(key);
+    for (const record of records) {
+      this.records.set(deskKey(record), { ...record });
+      this.recordByTerminal.set(terminalKey(record), deskKey(record));
+    }
+    if (JSON.stringify(this.list().records) !== before) this.revision++;
+  }
 
   list(): DeskState {
     return {
@@ -144,15 +219,22 @@ export class WorldDeskRegistry {
     const transitioned =
       same &&
       (previous.status === "working" ||
+        (status === "idle" && previous.status === "blocked") ||
         (status === "done" && ["idle", "blocked"].includes(previous.status)));
-    if (stopped && (advanced || transitioned)) {
+    if (stopped && (advanced || transitioned || !existing?.observed_stop_id)) {
       const record = this.record(identity);
       record.observed_stop_id = randomUUID();
-      record.stopped_at = at;
+      // First observation proves the current stop, not when it began. Only a
+      // transition or native progress can start the 12-hour display window.
+      record.stopped_at = advanced || transitioned ? at : null;
       record.stateChangeSeq = nextSequence;
       this.save(record);
-    } else if (status === "working" && existing?.stopped_at != null) {
+    } else if (
+      status === "working" &&
+      (existing?.stopped_at != null || existing?.observed_stop_id != null)
+    ) {
       existing.stopped_at = null;
+      existing.observed_stop_id = null;
       this.removeEmpty(existing);
       this.revision++;
     }
@@ -251,32 +333,39 @@ export class WorldDeskRegistry {
   }
   private record(identity: DeskIdentity): StoredDeskRecord {
     this.retireSession(identity);
-    return (
-      this.records.get(deskKey(identity)) ?? {
-        ...copyIdentity(identity),
-        reviewed_stop: null,
-        stopped_at: null,
-        observed_stop_id: null,
-        stateChangeSeq: this.previous.get(terminalKey(identity))
-          ?.stateChangeSeq,
-        opened_at: null,
-      }
-    );
+    const existing = this.records.get(deskKey(identity));
+    return existing
+      ? { ...existing }
+      : {
+          ...copyIdentity(identity),
+          reviewed_stop: null,
+          stopped_at: null,
+          observed_stop_id: null,
+          stateChangeSeq: this.previous.get(terminalKey(identity))
+            ?.stateChangeSeq,
+          opened_at: null,
+        };
   }
   private save(record: StoredDeskRecord) {
     const key = deskKey(record);
+    assertDeskMetadataSize({
+      revision: this.revision + 1,
+      records: [...this.records]
+        .filter(([id]) => id !== key)
+        .map(([, value]) => value)
+        .concat(record),
+    });
     this.records.delete(key);
     this.records.set(key, record);
     this.recordByTerminal.set(terminalKey(record), key);
     this.removeEmpty(record);
-    while (this.records.size > DESK_RECORD_LIMIT)
-      this.remove(this.records.keys().next().value!);
     this.revision++;
   }
   private removeEmpty(record: StoredDeskRecord) {
     if (
       record.reviewed_stop === null &&
       record.stopped_at === null &&
+      record.observed_stop_id == null &&
       record.opened_at === null
     )
       this.remove(deskKey(record));

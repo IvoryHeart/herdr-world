@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../../herdrOfficeProjection";
-import { TownCamera } from "../townCamera";
+import { TownCamera, townHostsWidth } from "../townCamera";
+import { townCenterEmblem } from "../townCenter";
 import {
+  TOWN_FACADE,
+  TOWN_PHONE_BOARD_ROWS,
   layoutTown,
   TOWN_TILE as T,
   townGeometryKey,
@@ -10,7 +13,7 @@ import {
 } from "../townLayout";
 import { townModelFromProjection } from "../townModel";
 import type { TownTarget } from "../townTargets";
-import { office, working } from "./townScene.fixture";
+import { office, town as townOf, working } from "./townScene.fixture";
 import {
   TownSceneCamera,
   townViewport,
@@ -56,7 +59,7 @@ function setup(
 
 /** Let a flight finish, as the renderer's frames would. */
 function settle(camera: TownCamera) {
-  for (let frame = 0; frame < 600 && camera.flying; frame += 1)
+  for (let frame = 0; frame < 600 && camera.moving; frame += 1)
     camera.update(1 / 60);
   camera.update(1 / 60);
   expect(camera.flying).toBe(false);
@@ -80,27 +83,79 @@ test("a wide town opens at home: every building, centred", () => {
   const { view, layout, viewport, camera, reasons } = setup();
   view.attach(camera, layout, viewport);
   expect(camera.z).toBe(camera.limits!.home);
-  // The town's centre sits at the focus point, between the panels' insets.
+  // The hosts' centre sits at the focus point, between the panels' insets;
+  // the verge beyond them lies off-screen, and ALL shows it.
+  expect(camera.limits!.home).toBeGreaterThanOrEqual(camera.limits!.all);
+  const usable = viewport.width - viewport.inset.left - viewport.inset.right;
+  const fits = layout.width * T * camera.z <= usable;
+  if (!fits)
+    expect(camera.toScreen(0, 0).x).toBeLessThanOrEqual(
+      viewport.inset.left + 0.01,
+    );
   const centre = camera.toScreen(
-    (layout.width * T) / 2,
+    fits
+      ? (layout.width * T) / 2
+      : Math.max(
+          (townHostsWidth(layout) * T) / 2,
+          (camera.focusPoint().x - viewport.inset.left) / camera.z,
+        ),
     (layout.height * T) / 2,
   );
   expect(centre.x).toBeCloseTo(camera.focusPoint().x);
   expect(centre.y).toBeCloseTo(camera.focusPoint().y);
+  // The town center stands above the buildings, its plaque on screen.
+  const plaque = townCenterEmblem(layout.center, T);
+  const sign = camera.toScreen(plaque.x, plaque.y);
+  expect(sign.x).toBeGreaterThan(viewport.inset.left);
+  expect(sign.x).toBeLessThan(viewport.width - viewport.inset.right);
+  expect(sign.y).toBeGreaterThan(viewport.inset.top);
+  expect(sign.y).toBeLessThan(viewport.height - viewport.inset.bottom);
   expect(view.atHome()).toBe(true);
   expect(reasons).toEqual(["home"]);
 });
 
-test("a phone opens at home: the first building's top under the top inset", () => {
-  const { view, layout, viewport, camera } = setup(PHONE);
-  expect(layout.formFactor).toBe("narrow");
-  view.attach(camera, layout, viewport);
-  const first = layout.buildings[0]!;
-  expect(camera.z).toBe(camera.limits!.home);
-  expect(camera.toScreen(0, first.y * T - 24).y).toBeCloseTo(
-    viewport.inset.top,
-  );
-  expect(view.atHome()).toBe(true);
+test("a phone opens at home: the town center on top, the first building under it", () => {
+  for (const [size, projection, framed] of [
+    // A short first building fits whole under the whole center.
+    [{ width: 390, height: 1200 }, office({ alpha: working(2) }), "flag"],
+    // A taller one keeps its lounge, where idle agents rest, in view.
+    [{ width: 390, height: 844 }, office({ alpha: working(2) }), "lounge"],
+    // One taller than the screen leaves the center its plaque and doors.
+    [PHONE, town, "plaque"],
+  ] as const) {
+    const { view, layout, viewport, camera } = setup(
+      size,
+      new Map(),
+      projection,
+    );
+    expect(layout.formFactor).toBe("narrow");
+    view.attach(camera, layout, viewport);
+    const first = layout.buildings[0]!;
+    expect(camera.z).toBe(camera.limits!.home);
+    const top = viewport.inset.top;
+    const bottom = viewport.height - viewport.inset.bottom;
+    // The center's plaque is on screen, centred on the buildings' axis.
+    const plaque = townCenterEmblem(layout.center, T);
+    const sign = camera.toScreen(plaque.x, plaque.y);
+    expect(sign.y).toBeGreaterThan(top);
+    expect(sign.x).toBeCloseTo(
+      camera.toScreen((first.x + first.w / 2) * T, 0).x,
+    );
+    const flag = camera.toScreen(0, layout.center.y * T - 40).y;
+    const lounge = camera.toScreen(0, (first.y + first.h + TOWN_FACADE) * T).y;
+    expect(flag).toBeLessThanOrEqual(top + 0.01);
+    if (framed === "flag") expect(flag).toBeCloseTo(top);
+    if (framed === "lounge") expect(lounge).toBeCloseTo(bottom);
+    if (framed === "plaque") {
+      expect(camera.toScreen(0, plaque.y - 28).y).toBeCloseTo(top);
+      expect(lounge).toBeGreaterThan(bottom);
+    } else expect(lounge).toBeLessThanOrEqual(bottom + 0.01);
+    // The reception board stands in the yard above the building, on screen.
+    const board = camera.toScreen(0, (first.y - TOWN_PHONE_BOARD_ROWS) * T).y;
+    expect(board).toBeGreaterThan(sign.y);
+    expect(board).toBeLessThan(bottom);
+    expect(view.atHome()).toBe(true);
+  }
 });
 
 test("each town shape keeps its own camera across visits", () => {
@@ -111,7 +166,10 @@ test("each town shape keeps its own camera across visits", () => {
   first.camera.update(1 / 60);
   first.view.drew(first.camera, "overview", first.layout);
   const kept = { x: first.camera.x, y: first.camera.y, z: first.camera.z };
-  expect(poses.get(townShapeKey(first.layout.shape))).toEqual(kept);
+  expect(poses.get(townShapeKey(first.layout.shape))).toEqual({
+    ...kept,
+    home: false,
+  });
   // A later visit opens where the last one left, not at home.
   const again = setup(WIDE, poses);
   again.view.attach(again.camera, again.layout, again.viewport);
@@ -155,8 +213,9 @@ test("a drawn frame reports movement and saves only a changed pose", () => {
     posed: false,
   });
   expect(poses.size).toBe(0);
-  // Below the saved precision a pan moves the drawn camera but not the pose.
-  camera.x += 0.01;
+  // Below the saved precision (a tenth of a pixel) a pan moves the drawn
+  // camera but not the pose: it steps toward the middle of its tenth.
+  camera.x += (camera.x * 10 + 0.5) % 1 < 0.5 ? 0.01 : -0.01;
   expect(view.drew(camera, "overview", layout)).toEqual({
     moved: true,
     posed: false,
@@ -335,9 +394,54 @@ test("rooms that move under a still camera keep the room in view where it was", 
   camera.jumpTo((last.x + last.w / 2) * T, (last.y + last.h / 2) * T, 2);
   const before = camera.toScreen((last.x + 1) * T, (last.y + 1) * T);
   reasons.length = 0;
+  const from = { x: camera.x, y: camera.y };
   view.follow(grown, viewport);
-  const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
   expect(reasons).toEqual(["reflow"]);
+  // The camera glides with the room rather than jumping.
+  expect([camera.x, camera.y]).toEqual([from.x, from.y]);
+  expect(camera.moving).toBe(true);
+  settle(camera);
+  const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
+  expect(after.x).toBeCloseTo(before.x, 0);
+  expect(after.y).toBeCloseTo(before.y, 0);
+});
+
+test("a host hidden beside the viewed room keeps the room in place, never jumping", () => {
+  // Three hosts with one eight-desk room each; look closely at the rightmost
+  // room, then hide the middle host: the town shrinks under the camera.
+  const three = townOf({
+    a: { desks: working(8) },
+    b: { desks: working(8) },
+    c: { desks: working(8) },
+  });
+  const { view, layout, viewport, camera } = setup(WIDE, new Map(), three);
+  view.attach(camera, layout, viewport);
+  view.follow(layout, viewport);
+  const room = layout.buildings[2]!.rooms[0]!;
+  camera.jumpTo((room.x + room.w / 2) * T, (room.y + room.h / 2) * T, 2);
+  const before = camera.toScreen((room.x + 1) * T, (room.y + 1) * T);
+  const from = { x: camera.x, y: camera.y };
+  const two = layoutFor(
+    townOf({ a: { desks: working(8) }, c: { desks: working(8) } }),
+    WIDE,
+  );
+  const moved = two.buildings[1]!.rooms[0]!;
+  expect(moved.key).toBe(room.key);
+  expect(moved.x).toBeLessThan(room.x);
+  // The old position lies outside the smaller town.
+  expect(from.x).toBeGreaterThan(two.width * T);
+  view.follow(two, viewport);
+  // The camera stays where it was drawn, then glides with the room.
+  expect([camera.x, camera.y]).toEqual([from.x, from.y]);
+  let worst = 0;
+  for (let frame = 0; frame < 60 && camera.moving; frame += 1) {
+    const prev = camera.x;
+    camera.update(1 / 60);
+    worst = Math.max(worst, Math.abs(camera.x - prev) * camera.z);
+  }
+  // No frame steps more than an eased glide's share.
+  expect(worst).toBeLessThan(Math.abs(from.x - camera.x) * camera.z * 0.2);
+  const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
   expect(after.x).toBeCloseTo(before.x, 0);
   expect(after.y).toBeCloseTo(before.y, 0);
 });
@@ -417,4 +521,62 @@ test("only an instant home framing counts as home for re-framing", () => {
     (next) => camera.configure(layout, next),
   );
   expect(reasons).toEqual([]);
+});
+
+test("a town viewed whole is framed again when it grows, then fits a narrower view", () => {
+  const { view, layout, viewport, camera } = setup();
+  view.attach(camera, layout, viewport);
+  view.follow(layout, viewport);
+  expect(view.atHome()).toBe(true);
+  const grown = layoutFor(
+    office({
+      alpha: working(24),
+      beta: working(3),
+      gamma: working(2),
+      delta: working(4),
+    }),
+    WIDE,
+  );
+  view.follow(grown, viewport);
+  // It flies to the new home framing with the buildings, and is home there.
+  expect(camera.flying).toBe(true);
+  settle(camera);
+  expect(view.atHome()).toBe(true);
+  // A change while it flies frames the newest town.
+  const shrunk = layoutFor(
+    office({ alpha: working(2), beta: working(3) }),
+    WIDE,
+  );
+  view.follow(shrunk, viewport);
+  camera.update(0.05);
+  view.follow(grown, viewport);
+  settle(camera);
+  expect(view.atHome()).toBe(true);
+  // Opening a panel narrows the view; the home view fits the town again, so
+  // every building stays on screen.
+  const narrower = townViewport(1100, WIDE.height, NO_CHROME);
+  view.reframe(grown, narrower, (next) => camera.configure(grown, next));
+  for (const building of grown.buildings) {
+    const left = camera.toScreen(building.x * 16, building.y * 16);
+    const right = camera.toScreen(
+      (building.x + building.w) * 16,
+      (building.y + building.h) * 16,
+    );
+    expect(left.x).toBeGreaterThanOrEqual(0);
+    expect(right.x).toBeLessThanOrEqual(1100);
+  }
+});
+
+test("a saved home view is framed again for the view it returns to", () => {
+  const poses = new Map<string, TownPose>();
+  const first = setup(WIDE, poses);
+  first.view.attach(first.camera, first.layout, first.viewport);
+  first.view.drew(first.camera, "overview", first.layout);
+  expect(poses.get(townShapeKey(first.layout.shape))?.home).toBe(true);
+  // A later visit to a narrower view of the same shape fits the town to it.
+  const narrower = { width: 1240, height: WIDE.height };
+  const again = setup(narrower, poses);
+  again.view.attach(again.camera, again.layout, again.viewport);
+  expect(again.view.atHome()).toBe(true);
+  expect(again.camera.z).toBe(again.camera.limits!.home);
 });

@@ -44,6 +44,19 @@ change, an intent's targets SHALL be resolved by their binding state:
 - **ended or unconfirmed:** the intent SHALL be recorded as not sent, but only when none
   of its attempts reached dispatching. Otherwise its recovery class decides the outcome.
 
+Fresh attempt qualification SHALL NOT establish native runtime continuity across
+a World restart. A driver SHALL refuse a new submission without its required
+native continuity evidence or current World-run dispatch authority. Current
+Herdr has no checkable runtime boot token: alert and saved-answer drivers SHALL
+refuse old or missing World-run authority even when connection, generation and
+native/session values repeat. New alert contracts SHALL capture World-run
+authority in their authorization envelope at commit; migration SHALL NOT refresh
+it. Saved answers SHALL use the original recipient's captured service incarnation.
+An intent with no possible dispatch SHALL resolve not-sent; an intent with any
+possible dispatch SHALL retain uncertainty. Receipts and history SHALL survive.
+Explicit duplicate approval SHALL NOT bypass driver eligibility. Generic recovery
+classes and valid synthetic existing-source contracts remain unchanged.
+
 #### Scenario: Crash after commit
 - **WHEN** World commits a domain change and its intent, then stops before dispatching
 - **THEN** after restart the intent is still pending and is dispatched only after its
@@ -56,9 +69,9 @@ change, an intent's targets SHALL be resolved by their binding state:
 #### Scenario: Intent from before a restart
 - **WHEN** an intent captured a pane target under one service incarnation and World
   restarts at the same runtime generation number
-- **THEN** the intent waits while its host is not yet observed, and is dispatched once
-  its binding is attached again from the captured fields and evidence. It never
-  dispatches against the creation generation
+- **THEN** current Herdr drivers refuse submission without native continuity proof
+  or current World-run authority. Recycled native IDs or generation never establish
+  that proof. A valid synthetic source may reattach under its continuity contract
 
 #### Scenario: Host offline when the intent is due
 - **WHEN** an intent's target host is offline
@@ -76,8 +89,8 @@ change, an intent's targets SHALL be resolved by their binding state:
 
 #### Scenario: Owner alert after a restart
 - **WHEN** an owner alert's intent is pending when World restarts
-- **THEN** its retry binds to its connection's current runtime, not to the generation
-  it was created under
+- **THEN** it resolves not-sent if provably unsent, otherwise uncertain, without
+  submitting to its connection's replacement runtime
 
 ### Requirement: Fenced dispatch attempts
 
@@ -96,7 +109,8 @@ and SHALL record its receipt, refusal or uncertainty afterwards.
 #### Scenario: Claim left by a stopped process
 - **WHEN** World stops after claiming an attempt but before marking it dispatching
 - **THEN** the next incarnation does not honour the old claim, and claims a new attempt
-  after rechecking authorization
+  after rechecking authorization and driver eligibility; a new claim alone grants
+  no permission to submit
 
 #### Scenario: Two dispatchers
 - **WHEN** two dispatch paths try to claim the same intent
@@ -127,7 +141,8 @@ until it is resolved. World SHALL NOT claim exactly-once delivery for any class.
 
 #### Scenario: Owner alert after a crash
 - **WHEN** World crashes after dispatching an owner alert and before recording it
-- **THEN** after restart the alert is sent again, and the owner may see it twice
+- **THEN** after restart the alert remains uncertain and is not submitted without
+  native continuity proof; repeatable recovery still permits eligible same-run retries
 
 #### Scenario: Reattachable run
 - **WHEN** World crashes after starting an external run whose handle it recorded
@@ -194,6 +209,35 @@ recipient, such as an ask's answer to its asker, MAY be queueable only when it:
 - is conditioned on the recipient's binding and on the record still awaiting delivery;
 - uses the opaque recovery class;
 - dispatches through the same guarded send checks as an interactive send.
+
+A declared verb that closes one captured pane, such as the agent bin's
+`world.bin.close`, MAY be queueable only when it is conditioned on the captured
+connection, runtime generation and terminal and on the World run that recorded
+it, ends unsent once that generation is replaced, and uses the reconcilable
+recovery class. A runtime generation is a per-run counter, so in a later World run
+such a close SHALL NOT be dispatched or reconciled against the host's current
+runtime: an unsent one SHALL be recorded as not sent and a possibly sent one SHALL
+stay uncertain. A close captured for a pinned tab SHALL NOT be sent when its final
+read shows the pane is its tab's last.
+
+A dispatcher MAY run one lane per connection. Each lane SHALL select its
+connection before the dispatch query's bound, and lanes SHALL be found from
+storage, so one connection's backlog never hides or delays another's work.
+
+#### Scenario: One host's backlog
+- **WHEN** one offline host holds more queued intents than one query returns and
+  another host's intent is due
+- **THEN** that host's lane finds and dispatches its intent
+
+#### Scenario: A queued close after World restarts
+- **WHEN** World restarts and a host's new runtime reuses the old generation number
+  and native IDs
+- **THEN** an unsent pane close recorded before the restart is recorded as not sent,
+  a possibly sent one stays uncertain, and nothing reaches the new runtime
+
+#### Scenario: A queued close after the host restarted
+- **WHEN** a queued pane close's host returns with a new runtime generation
+- **THEN** the close is recorded as not sent and nothing reaches the new runtime
 
 #### Scenario: Unchanged target on reconnect
 - **WHEN** a host reconnects after a long outage and a queued intent's target state is

@@ -12,6 +12,8 @@ export function isExpectedRpcError(
   const message = detail?.toLowerCase() ?? "";
   if (!message) return false;
   if (message.includes("connection changed during request")) return true;
+  // Background work shed while the host is busy: it is tried again later.
+  if (message.includes("background commands already waiting")) return true;
   if (
     message.includes("connection runtime generation") ||
     message.includes("connection is not ready")
@@ -50,6 +52,8 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_conversation.send",
   "agent_conversation.dismiss",
   "agent_conversation.answer",
+  "agent_conversation.press",
+  "agent_conversation.trust",
   "agent_conversation.watch",
   "agent_conversation.unwatch",
   "agent_history.get",
@@ -71,6 +75,8 @@ const IMPORTANT_RPC_METHODS = new Set([
   "settings.workspace_auto_sync.list",
   "settings.workspace_auto_sync.update",
   "settings.workspace_auto_sync.update_key",
+  "settings.worktree_command.update",
+  "settings.worktree_directory.get",
   "settings.worktree_hooks.get",
   "worktree.create",
   "worktree.open",

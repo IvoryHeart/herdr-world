@@ -15,7 +15,10 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // headroom instead; total bytes and the initial budgets are what users pay for
 // and stay as they are.
 const maxFileCount = 180;
-const maxTotalBytes = 13.25 * 1024 * 1024;
+// PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
+// browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
+// total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
+const maxTotalBytes = 15.25 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
@@ -95,6 +98,47 @@ export function assertLazyGrammarAssets(manifest) {
   }
 }
 
+/** The PdfPages chunk, the assets it references and every pdfjs-dist file. */
+export function pdfAssetFiles(manifest) {
+  const pages = Object.values(manifest).find(
+    (chunk) => chunk.name === "PdfPages" && chunk.isDynamicEntry,
+  );
+  if (!pages) throw new Error("Missing lazy Vite feature chunk: PdfPages");
+  return [
+    ...new Set([
+      pages.file,
+      ...(pages.assets ?? []),
+      ...Object.entries(manifest)
+        .filter(([key]) => key.includes("/pdfjs-dist/"))
+        .map(([, chunk]) => chunk.file),
+    ]),
+  ];
+}
+
+/**
+ * PDF.js and its worker load only when a PDF is opened: no initial chunk may
+ * be, or reference, one of their files.
+ */
+export function assertLazyPdfAssets(manifest) {
+  const pdf = new Set(pdfAssetFiles(manifest));
+  const initial = new Set(initialAssetFiles(manifest));
+  for (const chunk of Object.values(manifest)) {
+    if (!initial.has(chunk.file)) continue;
+    for (const file of [chunk.file, ...(chunk.assets ?? [])])
+      if (pdf.has(file))
+        throw new Error(`The initial load includes PDF.js: ${file}`);
+  }
+}
+
+// eval( or Function( as a call, not a property or a longer name.
+const RUNTIME_CODE = /(?:^|[^\w$.])(?:eval|Function)\(/;
+
+/** PDF content must never become code: the shipped PDF.js has no eval path. */
+export function assertNoRuntimeCode(name, text) {
+  if (RUNTIME_CODE.test(text))
+    throw new Error(`${name} compiles code at run time (eval or Function)`);
+}
+
 export async function collectAssetStats(root = publicRoot) {
   const directories = [root];
   let fileCount = 0;
@@ -132,6 +176,13 @@ async function checkAssets() {
     );
   }
   assertLazyGrammarAssets(manifest);
+  assertLazyPdfAssets(manifest);
+  for (const file of pdfAssetFiles(manifest))
+    if (/\.m?js$/.test(file))
+      assertNoRuntimeCode(
+        file,
+        await readFile(`${publicRoot}/${file}`, "utf8"),
+      );
   let jsBytes = 0;
   let jsGzipBytes = 0;
   let cssBytes = 0;

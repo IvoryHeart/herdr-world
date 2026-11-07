@@ -1,7 +1,9 @@
 import type { TownLevel } from "./townCamera";
+import { townCenterContains } from "./townCenter";
 import {
   TOWN_AGENT_SCALE as S,
   TOWN_FACADE,
+  TOWN_LOBBY_HEIGHT,
   TOWN_TILE as T,
   townDeskSlots,
   townSeat,
@@ -16,8 +18,13 @@ export type TownHit =
   | { kind: "pane"; key: string; deskKey: string }
   | { kind: "desk"; key: string }
   | { kind: "cell"; roomKey: string; cellIndex: number }
-  | { kind: "room"; key: string }
-  | { kind: "building"; key: string };
+  /** `edge`: on or just outside the room's wall, where a drag lifts the room. */
+  | { kind: "room"; key: string; edge?: true }
+  /** The reception lobby at desk level, where its board is hidden. */
+  | { kind: "reception"; key: string }
+  | { kind: "building"; key: string }
+  /** The town center: a tap opens its radial menu. */
+  | { kind: "center" };
 
 export type TownHitContext = {
   layout: TownLayout;
@@ -55,12 +62,24 @@ export function townBuildingAt(
   );
 }
 
+/** World pixels outside a room's wall that still hold its edge. */
+const EDGE_OUTSIDE = 8;
+
+/**
+ * How deep a room's edge reaches inside its wall, in world pixels: about ten
+ * screen pixels at any zoom, and never deeper than a tile and a half.
+ */
+const edgeBand = (zoom: number) =>
+  Math.min(T * 1.5, Math.max(8, 10 / Math.max(zoom, 0.01)));
+
 /** Topmost target at world point (x, y). */
 export function townHitTest(
   context: TownHitContext,
   x: number,
   y: number,
 ): TownHit | null {
+  if (townCenterContains(context.layout.center, T, x, y))
+    return { kind: "center" };
   const building = townBuildingAt(context.layout, x, y);
   if (!building) return null;
   if (context.roofAlpha(building.hostKey) > 0.5)
@@ -124,8 +143,30 @@ export function townHitTest(
     );
     if (cellIndex >= 0 && detailed)
       return { kind: "cell", roomKey: room.key, cellIndex };
-    return { kind: "room", key: room.key };
+    const band = edgeBand(context.zoom);
+    return x < room.x * T + band ||
+      x >= (room.x + room.w) * T - band ||
+      y < room.y * T + band ||
+      y >= (room.y + room.h) * T - band
+      ? { kind: "room", key: room.key, edge: true }
+      : { kind: "room", key: room.key };
   }
+  // Just outside a wall still holds the room's edge.
+  const outside = Math.min(EDGE_OUTSIDE, edgeBand(context.zoom) / 2);
+  for (const room of building.rooms)
+    if (
+      x >= room.x * T - outside &&
+      x < (room.x + room.w) * T + outside &&
+      y >= room.y * T - outside &&
+      y < (room.y + room.h) * T + outside
+    )
+      return { kind: "room", key: room.key, edge: true };
+  if (
+    detailed &&
+    y >= building.lobbyY * T &&
+    y < (building.lobbyY + TOWN_LOBBY_HEIGHT) * T
+  )
+    return { kind: "reception", key: building.hostKey };
   return { kind: "building", key: building.hostKey };
 }
 
@@ -133,6 +174,11 @@ export function townHitTest(
 export function townHitKey(hit: TownHit | null) {
   if (!hit) return null;
   if (hit.kind === "cell") return hit.roomKey;
-  if (hit.kind === "building") return null;
+  if (
+    hit.kind === "building" ||
+    hit.kind === "reception" ||
+    hit.kind === "center"
+  )
+    return null;
   return hit.key;
 }

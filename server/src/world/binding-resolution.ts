@@ -138,6 +138,18 @@ export function resolveBinding(
     return finish("attached", true);
   }
   if (
+    "sessionEnd" in policy &&
+    policy.sessionEnd &&
+    binding.evidence.session &&
+    entities.some(
+      (entity) =>
+        entity.session &&
+        entity.session !== binding.evidence.session &&
+        binding.evidence.terminals.some((id) => entity.terminals.includes(id)),
+    )
+  )
+    return finish("ended", true);
+  if (
     bindingListingAbsent(
       binding.policy,
       binding.evidence.terminals,

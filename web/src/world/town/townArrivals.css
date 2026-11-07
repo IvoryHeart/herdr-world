@@ -1,0 +1,138 @@
+/* A new agent's arrival (TownArrivalLayer): its walk in and its welcome. */
+.town-arrivals {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* Its walk outdoors is placed by translate alone (the rider's look). */
+.town-arrival-walker {
+  left: 0;
+  top: 0;
+}
+
+/*
+ * The welcome, at the seated agent's feet: sparkles burst from its head and
+ * its name shows above it, then both fade.
+ */
+.town-arrival-welcome {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  visibility: hidden;
+  pointer-events: none;
+}
+.town-arrival-welcome[data-welcome] {
+  visibility: visible;
+}
+.town-arrival-sparkles {
+  position: absolute;
+  left: 0;
+  top: -18px;
+}
+.town-arrival-sparkles i {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px;
+  background: #ffe066;
+  clip-path: polygon(
+    50% 0,
+    62% 38%,
+    100% 50%,
+    62% 62%,
+    50% 100%,
+    38% 62%,
+    0 50%,
+    38% 38%
+  );
+  opacity: 0;
+}
+[data-welcome] .town-arrival-sparkles i {
+  animation: town-arrival-sparkle 0.9s ease-out forwards;
+}
+[data-welcome] .town-arrival-sparkles i:nth-child(even) {
+  animation-delay: 0.12s;
+}
+@keyframes town-arrival-sparkle {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.3);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-17px) scale(1);
+  }
+}
+.town-arrival-tag {
+  position: absolute;
+  left: 0;
+  top: -34px;
+  padding: 2px 4px;
+  translate: -50% -100%;
+  /* Readable at any zoom, as the bus stop's boards. */
+  scale: max(1, var(--iz));
+  transform-origin: 50% calc(100% + 34px);
+  color: #3b3b3b;
+  font:
+    700 9px / 1 ui-monospace,
+    monospace;
+  white-space: nowrap;
+  background: #fff6d0;
+  border: 1px solid #3b3b3b;
+  border-radius: 2px;
+  box-shadow: 0 2px 0 -1px rgb(0 0 0 / 0.35);
+  opacity: 0;
+}
+[data-welcome] .town-arrival-tag {
+  animation: town-arrival-tag 1.6s ease-out forwards;
+}
+@keyframes town-arrival-tag {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  15%,
+  70% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: no burst, a still highlight round the agent that fades. */
+@media (prefers-reduced-motion: reduce) {
+  .town-arrival-sparkles {
+    display: none;
+  }
+  .town-arrival-welcome::before {
+    content: "";
+    position: absolute;
+    left: -15px;
+    top: -34px;
+    width: 30px;
+    height: 38px;
+    border: 2px solid #ffe066;
+    border-radius: 50%;
+    background: rgb(255 224 102 / 0.25);
+    opacity: 0;
+  }
+  .town-arrival-welcome[data-welcome]::before,
+  [data-welcome] .town-arrival-tag {
+    animation: town-arrival-fade 2s linear forwards;
+  }
+}
+@keyframes town-arrival-fade {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

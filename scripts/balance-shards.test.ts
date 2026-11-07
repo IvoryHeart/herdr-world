@@ -34,7 +34,7 @@ test("every maintained model has a measured weight and each Town group is regist
   }
 });
 
-test("Town partitions retain exactly the 22 original width, mode and flight cases", () => {
+test("Town partitions retain exactly the 22 original width, mode and flight cases plus the two reception filter cases", () => {
   const cases = Object.values(townCanvasCases).flat();
   const original = [
     [1440, 900, "typical", 0],
@@ -47,7 +47,8 @@ test("Town partitions retain exactly the 22 original width, mode and flight case
     [1440, 900, "extended", 0],
     [1080, 1920, "extended", 0],
     [1080, 1920, "extended", 300],
-    [390, 844, "incremental", 0],
+    // Measured at an exact 390px CSS viewport (#643).
+    [390, 844, "incremental", 0, "exact"],
     [1440, 900, "plates", 0],
     [390, 844, "plates", 0],
     [390, 844, "fold", 0],
@@ -59,6 +60,9 @@ test("Town partitions retain exactly the 22 original width, mode and flight case
     [390, 844, "protected", 0],
     [390, 844, "navigation", 0],
     [1440, 900, "navigation", 0],
+    // The reception filter's visibility check (#501), at phone and desktop width.
+    [390, 844, "reception", 0],
+    [1440, 900, "reception", 0],
   ];
   expect(cases.map((item) => JSON.stringify(item)).sort()).toEqual(
     original.map((item) => JSON.stringify(item)).sort(),

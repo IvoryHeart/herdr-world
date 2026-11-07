@@ -82,12 +82,21 @@ function expectOwnFolders(
     const read = (path: string) => readFileSync(join(root, path), "utf8");
     const marker = MARKERS[name];
     expect(JSON.parse(read("settings.json")).title_suffix).toBe(marker);
-    expect(read("boards/board.json")).toContain(`${marker} note`);
+    expect(existsSync(join(root, "boards/board.json"))).toBeFalse();
     // runTwoServices has closed both workers, so read the persisted family.
     const database = new Database(join(root, "world.sqlite"), {
       readonly: true,
     });
     try {
+      const notes = database.query("SELECT body FROM board_notes").all() as {
+        body: string;
+      }[];
+      expect(
+        notes.some((row) => JSON.parse(row.body).text === `${marker} note`),
+      ).toBeTrue();
+      expect(
+        notes.every((row) => !row.body.includes(MARKERS[other])),
+      ).toBeTrue();
       const asks = database.query("SELECT body FROM asks").all() as {
         body: string;
       }[];

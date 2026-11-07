@@ -17,6 +17,7 @@ import {
   type TownCell,
   type TownLayout,
 } from "./townLayout";
+import { paintTownCenter } from "./townCenterPaint";
 import {
   paintTownFacade,
   paintTownInterior,
@@ -31,6 +32,7 @@ import {
   type TownCanvas,
   type TownStaticSprites,
 } from "./townSprites";
+import type { TownBuildingMotion } from "./townTransition";
 
 const textureCache = new WeakMap<TownCanvas, Texture>();
 export function textureOf(canvas: TownCanvas) {
@@ -78,6 +80,16 @@ export type PodView = {
 
 export type BuildingView = {
   hostKey: string;
+  /** Where it was baked, in tiles; its drawings are placed in world pixels. */
+  x: number;
+  y: number;
+  /** Its baked size, in tiles. */
+  w: number;
+  h: number;
+  /** The bake key it was drawn from (scene/townSceneBake.ts). */
+  key: string;
+  /** Gliding or fading in after a topology change (townTransition.ts). */
+  motion: TownBuildingMotion | null;
   container: Container;
   interior: Sprite;
   dim: Graphics;
@@ -176,6 +188,14 @@ export function townOutdoor(
     .fill(0xb9b2a5);
   fountain.zIndex = fy + 12;
   outdoor.addChild(fountain);
+  // The town center: Town's landmark, standing above the first street.
+  const center = layout.center;
+  add(
+    paintTownCenter(center.w),
+    center.x * T,
+    center.y * T,
+    (center.y + center.h) * T,
+  );
   return outdoorItems;
 }
 
@@ -192,6 +212,8 @@ export type TownBuildingBake = {
   /** The textures `own` made, destroyed with the building. */
   textures: Texture[];
   roofAlpha: number;
+  /** The building's bake key, kept on its view. */
+  key: string;
 };
 
 /** Bake one building's textures and retained sprites; its desks' pods come later. */
@@ -272,6 +294,12 @@ export function bakeTownBuilding(
   return {
     view: {
       hostKey: building.hostKey,
+      x: building.x,
+      y: building.y,
+      w: building.w,
+      h: building.h,
+      key: bake.key,
+      motion: null,
       container,
       interior,
       dim,

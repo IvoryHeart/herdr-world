@@ -12,14 +12,13 @@ import type { ConnectionManager } from "../connections/manager";
 import type { ConnectionProfileService } from "../connections/profile-service";
 import type { Logger } from "../utils/logger";
 import type { ObservedAgent } from "../world/board-recipient";
-import type { BoardOp, BoardStore } from "../world/board-store";
+import type { BoardOp, BoardStorePort } from "../world/board-store";
 import type { createMoveQueue } from "../world/desk-move";
 import type { createWorldDeskService } from "../world/desk-service";
 import type { WorldSnapshotService } from "../world/snapshot";
 import type { FocusedAcquisition } from "../world/focused-acquisition";
 import type { AgentActivityCache } from "../world/agent-activity-cache";
 import type { DeskWatches } from "../world/desk-watches";
-import type { WorldCompletionSeenRegistry } from "../world/completion-seen";
 import type { WorldWatchlistRegistry } from "../world/watchlist";
 import type { createWorldCliService } from "../world/world-cli-service";
 
@@ -28,13 +27,15 @@ type DeskService = ReturnType<typeof createWorldDeskService>;
 
 /** What the rpc/ namespace handlers share with their World service. */
 export type RpcServices = {
+  persistentMarks?: import("../world/persistent-terminal-marks").PersistentTerminalMarks;
+  clock: import("../service/ports").Clock;
   bindings?: import("../storage/world-bindings").WorldBindings;
   serviceIncarnation?: string;
   bindBoardRecipients(
     ops: readonly BoardOp[],
     observed: ReadonlyMap<string, ObservedAgent>,
   ): Promise<void>;
-  board(): BoardStore;
+  board(): BoardStorePort;
   clients: Set<Socket>;
   connectionManager: ConnectionManager<LegacyConnectionRuntime>;
   connectionProfiles: ConnectionProfileService<LegacyConnectionRuntime>;
@@ -57,11 +58,10 @@ export type RpcServices = {
   publishBoardChanged(revision: number): void;
   publishProfilesChanged(revision: number): void;
   publishWatchlistChanged(revision: number): void;
-  publishCompletionSeenChanged(revision: number): void;
   publishWorldInvalidation(
     connectionId: string,
     connectionGeneration: number,
-    observedLate?: boolean,
+    kind?: "late" | "activity",
   ): void;
   safeSend(
     ws: Socket,
@@ -71,12 +71,18 @@ export type RpcServices = {
   ): boolean;
   snapshotAdmission: WorldSnapshotAdmission;
   townMoveQueues: Map<string, ReturnType<typeof createMoveQueue>>;
+  /** Server-wide interface preferences (bridge.ui_settings.*). */
+  uiSettings: ReturnType<
+    typeof import("../bridge/settings-rpc").createUiSettingsRpcHandler
+  >;
   worldWatchlist: WorldWatchlistRegistry;
-  worldCompletionSeen: WorldCompletionSeenRegistry;
+  /** The agent bin; absent without World storage's effect outbox. */
+  bin?: import("../service/bin-service").BinService;
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null;
+  worldUsage?: import("../usage/service").WorldUsageService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

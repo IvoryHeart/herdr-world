@@ -12,6 +12,7 @@ import {
 export type { HarnessReadiness } from "../../../shared/harnessReadiness";
 import type { ChimeSettings } from "../../../shared/chimes";
 import type { TownLook } from "./town/townSprites";
+import type { AgentStartFrom } from "./agentStarts";
 
 /**
  * The browser's view of the service's agent profiles, the launcher's calls
@@ -143,7 +144,11 @@ export type LaunchOutcome = {
 export type RetainedOutcome = {
   message: string;
   failed: boolean;
-  terminal: { connectionId: string; terminalId: string } | null;
+  terminal: {
+    connectionId: string;
+    runtimeGeneration: number;
+    terminalId: string;
+  } | null;
   /** A login's command, for the user to copy and run in that terminal. */
   command?: string;
 };
@@ -159,7 +164,11 @@ export const retainedOutcome = (
   message: result.message ?? "",
   failed: result.status === "failed",
   terminal: result.terminal_id
-    ? { connectionId: target.connectionId, terminalId: result.terminal_id }
+    ? {
+        connectionId: target.connectionId,
+        runtimeGeneration: target.generation,
+        terminalId: result.terminal_id,
+      }
     : null,
   ...(result.command ? { command: result.command } : {}),
 });
@@ -265,12 +274,19 @@ export async function launchAgent(
 export const WORLD_AGENT_LAUNCH_EVENT = "herdr-world:agent-launch";
 export const WORLD_AGENT_PROFILES_EVENT = "herdr-world:agent-profiles";
 
-/** Open the launcher for a workspace, optionally with a profile chosen. */
-export function requestAgentLaunch(target: Partial<LaunchTarget>) {
+/**
+ * Open the launcher for a workspace, optionally with a profile chosen;
+ * `from` says where it was asked for, which Town's arrival starts from.
+ */
+export function requestAgentLaunch(
+  target: Partial<LaunchTarget>,
+  from?: AgentStartFrom,
+) {
   window.dispatchEvent(
-    new CustomEvent<Partial<LaunchTarget>>(WORLD_AGENT_LAUNCH_EVENT, {
-      detail: target,
-    }),
+    new CustomEvent<Partial<LaunchTarget> & { from?: AgentStartFrom }>(
+      WORLD_AGENT_LAUNCH_EVENT,
+      { detail: from ? { ...target, from } : target },
+    ),
   );
 }
 /** Open the profile editor (World settings, Town's tailor, Board). */

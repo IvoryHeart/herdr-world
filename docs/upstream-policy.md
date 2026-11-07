@@ -6,7 +6,8 @@ new feature deferral into standing policy. Protected human approval accepts new
 or changed deferrals/divergences, including resolving an outstanding item.
 
 Existing boundaries retain World identity, immutable connection/generation ownership,
-one-origin service architecture, isolated state, React 18 and browser evidence.
+one-origin service architecture, isolated state and browser evidence. React follows
+Roamgate at 19.3.1 with the [bounded development diagnostic fix](react-19.md).
 World owns its service, packaging, release and agent tooling. This is a compatibility
 constraint, not a blanket rejection of improvements in those areas. Compatible
 adaptation is preferred; a feature requiring a migration is deferred explicitly.

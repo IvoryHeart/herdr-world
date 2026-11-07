@@ -1,9 +1,13 @@
+import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
+import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import type { Server, ServerWebSocket } from "bun";
 import { createProfileServices } from "../agent/profile-service";
 import { createAssistantContext } from "../assistant/context";
 import { HerdrClient } from "../bridge/herdr-client";
+import { createServiceForwards } from "./forward-service";
+import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { authTokenPrintCommand } from "../config/auth-token";
@@ -28,7 +32,6 @@ import {
 } from "../connections/profiles";
 import {
   createLegacyRoutingLogger,
-  resolveReadyConnection,
   serializeHerdrEventEnvelope,
 } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
@@ -60,32 +63,22 @@ import {
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { createWorkspaceWorktree } from "../worktree/create";
 import { afterHerdrClose } from "../world/board-closing";
-import {
-  type ObservedAgent,
-  readPaneRecipient,
-  recipientOps,
-} from "../world/board-recipient";
-import type { BoardOp } from "../world/board-store";
+import { createBoardRecipientRecorder } from "./board-recipients";
+import { createBinService } from "./bin-service";
 import type { createMoveQueue } from "../world/desk-move";
-import { createWorldDeskService } from "../world/desk-service";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
-import { OfficeObservabilityService } from "../world/observability";
-import {
-  createOfficeObservabilityHttpHandler,
-  resolveOfficeObservabilityBootstrap,
-  withOfficeObservabilityEndpoint,
-} from "../world/observability-http";
+import { WorldUsageService } from "../usage/service";
+import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
-import { createTerminalMarks } from "../world/terminal-marks";
 import { createWorldCliService } from "../world/world-cli-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
 import { DeskWatches } from "../world/desk-watches";
 import { readDeskWatch } from "../world/desk-watch-read";
-import { createBrowserClients, logDetail } from "./clients";
+import { createBrowserClients, summarizeHerdrEvent } from "./clients";
 import { listen } from "./listener";
 import type { Clock, Scheduler, WorldAdapters } from "./ports";
 import { createRpcDispatcher } from "./rpc-dispatch";
@@ -108,20 +101,6 @@ export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
 /** How long stop waits for requests that were running when it began. */
 const DRAIN_TIMEOUT_MS = 2_000;
-
-function summarizeHerdrEvent(event: any): string {
-  const type = logDetail(String(event?.event ?? event?.type ?? "unknown"));
-  const data = event?.data && typeof event.data === "object" ? event.data : {};
-  const ids = ["workspace_id", "tab_id", "pane_id", "agent_id", "terminal_id"]
-    .map((key) => {
-      const value = data[key] ?? event?.[key];
-      return typeof value === "string" && value
-        ? `${key}=${logDetail(value)}`
-        : "";
-    })
-    .filter(Boolean);
-  return [`type=${type}`, ...ids].join(" ");
-}
 
 /**
  * Claim the data folder, open storage and build one World service. Nothing
@@ -173,25 +152,8 @@ async function compose(
     path: paths.webPush,
     warn: (message) => logger.warn(message),
   });
-  const officeObservabilityBootstrap = await settings
-    .read()
-    .then((current) => resolveOfficeObservabilityBootstrap(current))
-    .catch(() => {
-      logger.warn("invalid Office observability configuration was disabled");
-      return { endpoint: null, source: "none" as const };
-    });
-  const officeObservability = new OfficeObservabilityService({
-    ...officeObservabilityBootstrap,
-    now: () => clock.now(),
-  });
-  const handleOfficeObservability = createOfficeObservabilityHttpHandler({
-    service: officeObservability,
-    persist: async (endpoint) => {
-      await settings.update((current) =>
-        withOfficeObservabilityEndpoint(current, endpoint),
-      );
-    },
-  });
+  const { officeObservability, handleOfficeObservability } =
+    await createUsageTelemetry(settings, () => clock.now(), logger);
   const downstreamConnectionConfig = {
     socketPath: config.socketPath,
     clientSocketPath: config.clientSocketPath,
@@ -241,6 +203,12 @@ async function compose(
     countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
+  const forwards = createServiceForwards(
+    config,
+    logger,
+    broadcast,
+    () => stopping,
+  );
   const legacyRoutingLogger = createLegacyRoutingLogger({
     log: (message) =>
       logger.warn("deprecated request routing", { detail: message }),
@@ -288,9 +256,7 @@ async function compose(
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null =
     null;
-  const deskService = createWorldDeskService((line) =>
-    broadcast(line, "world-desk"),
-  );
+  let worldUsage: WorldUsageService | null = null;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
@@ -306,38 +272,15 @@ async function compose(
     () => clock.now(),
   );
 
-  /**
-   * Record which agent each newly strung pane end is for: the agent the
-   * browser showed, confirmed by reading the pane on its host's current
-   * runtime (see recipientOps). Saving never waits for this; a string left
-   * unbound makes Send ask the user which agent to send to.
-   */
-  async function bindBoardRecipients(
-    ops: readonly BoardOp[],
-    observed: ReadonlyMap<string, ObservedAgent>,
-  ) {
-    const recorded = await recipientOps(
-      board().get(),
-      ops,
-      observed,
-      async (connectionId, paneId) => {
-        const { runtime, isCurrent } = resolveReadyConnection(
-          connectionManager,
-          connectionId,
-        );
-        const read = await readPaneRecipient(
-          (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
-          paneId,
-        );
-        return isCurrent() ? read : null;
-      },
-    );
-    if (recorded.length) publishBoardChanged(board().patch(recorded).revision);
-  }
-
   const publishBoardChanged = revisionPublisher(
     "world_board_changed",
     "world-board",
+  );
+
+  const bindBoardRecipients = createBoardRecipientRecorder(
+    () => connectionManager,
+    board,
+    publishBoardChanged,
   );
 
   /** The agent CLI (world-cli-service.ts). */
@@ -357,21 +300,44 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
+  /** The agent bin: reversible holding, a scheduled bus, then a durable fenced close. */
+  const bin = createBinService({
+    incarnation: serviceIncarnation,
+    clock,
+    scheduler,
+    ledger: () => storage.ledger(),
+    outbox: () => storage.attention(),
+    effects: () => storage.effects(),
+    connections: () => connectionManager,
+    publish: revisionPublisher("world_bin_changed", "world-bin"),
+    log: (message) => logger.warn(message),
+  });
+  void bin.start();
 
   const {
-    retire: retireTerminalMarks,
     observe: observeHost,
+    retire: retireTerminalMarks,
+    close: closeTerminalMarks,
     ...terminalMarks
-  } = createTerminalMarks(revisionPublisher, deskService.observe);
+  } = createSharedTerminalMarks({
+    scheduler,
+    storage: storage.terminalMarks,
+    incarnation: serviceIncarnation,
+    publisher: revisionPublisher,
+    broadcast: (line) => broadcast(line, "world-desk"),
+    lease: (connectionId) => connectionManager.readyRuntimeLease(connectionId),
+    now: () => clock.now(),
+    invalidate: publishWorldInvalidation,
+    logger,
+    stop: () => (stopTask ??= stopService()),
+  });
 
   function publishWorldInvalidation(
     connectionId: string,
     connectionGeneration: number,
-    observedLate = false,
+    kind?: "late" | "activity",
   ) {
-    const revision = worldSnapshots?.invalidate(
-      observedLate ? undefined : connectionId,
-    );
+    const revision = worldSnapshots?.invalidate(connectionId, kind);
     if (revision === undefined) return;
     const line = serializeWorldInvalidation(
       connectionId,
@@ -398,11 +364,17 @@ async function compose(
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
     (status) => {
+      worldUsage?.connectionStatus(status);
       focusedAcquisition.reconcile();
       deskWatches.reconcile();
       publishConnectionsChanged();
-      deskService.retire(status.id, status.generation);
-      retireTerminalMarks(status.id, status.generation);
+      retireTerminalMarks(
+        status.id,
+        status.generation,
+        status.state === "ready",
+        !["error", "disconnected"].includes(status.state),
+      );
+      bin.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -501,7 +473,7 @@ async function compose(
     connectionManager,
     () => clock.now(),
     (connectionId, generation) =>
-      publishWorldInvalidation(connectionId, generation, true),
+      publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
     observeHost,
@@ -634,6 +606,7 @@ async function compose(
           config: profileConfig,
           settings,
           runtimeStatus: storage.runtimeStatus,
+          forwards: forwards.registry,
           logger: logger.child("connection"),
           safeSend,
           broadcast,
@@ -657,9 +630,13 @@ async function compose(
               context.isCurrent,
             );
           },
-          onEvent: (event, eventIdentity) => {
+          onEvent: (event, eventIdentity, kind) => {
             if (!context.isCurrent()) return;
-            publishWorldInvalidation(eventIdentity.id, context.generation);
+            publishWorldInvalidation(
+              eventIdentity.id,
+              context.generation,
+              kind,
+            );
             afterHerdrClose(
               board(),
               eventIdentity.id,
@@ -785,7 +762,17 @@ async function compose(
   });
   const handleWorldSources = createSourcesHttpHandler(worldSources);
 
+  worldUsage = new WorldUsageService({
+    incarnation: serviceIncarnation,
+    connections: connectionManager,
+    topology: () => worldSnapshots!.snapshot({}),
+    prices: async () => (await settings.read()).custom.world_usage_prices_v1,
+    telemetry: () => officeObservability.snapshot(),
+    now: () => clock.now(),
+    scheduler,
+  });
   const rpcServices: RpcServices = {
+    clock,
     bindings: storage.bindings,
     serviceIncarnation,
     bindBoardRecipients,
@@ -808,11 +795,16 @@ async function compose(
     safeSend,
     snapshotAdmission,
     townMoveQueues,
+    uiSettings: createUiSettingsRpcHandler({
+      readSettings: () => settings.read(),
+      updateSettings: (update, shouldCommit) =>
+        settings.update(update, shouldCommit),
+    }),
     ...terminalMarks,
-    worldDesk: deskService.registry,
-    publishDeskChanged: deskService.publish,
+    bin,
     worldCli,
     worldSnapshots,
+    worldUsage,
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -915,6 +907,7 @@ async function compose(
         },
       });
       worldCli.start();
+      forwards.listeningOn(server.port ?? config.port);
       return {
         port: server.port ?? config.port,
         connected: startTask!.catch(() => {}),
@@ -936,6 +929,8 @@ async function compose(
   };
 
   async function startConnections() {
+    await sweepOrphanedSshMasters();
+    if (stopping) return;
     await connectionProfiles.startConfigured();
     // Stopping fences startup: Ranger must not start after stop began.
     if (stopping) return;
@@ -968,24 +963,29 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
+    const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();
     connectionProfiles.stopSupervision();
     webPush.stop();
     await worldCli.stop();
+    await bin.stop();
     // Drop browser sockets as a process exit does; pages reconnect.
     for (const ws of [...browsers.clients]) ws.terminate();
     try {
       // Stop what in-flight work waits on: Ranger, then every runtime, which
       // also fails the Herdr calls still waiting. Startup then settles
       // fenced, and so does every request, within a bound.
+      await forwards.stop();
       await disposeAssistant();
       await connectionManager.stopAll();
+      await usageStopped;
       await startTask?.catch(() => {});
       await disposeAssistant();
       await drained();
     } finally {
       try {
+        await closeTerminalMarks();
         storageOpen = false;
         await storage.close();
       } finally {

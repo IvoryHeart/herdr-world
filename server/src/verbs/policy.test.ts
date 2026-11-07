@@ -29,6 +29,8 @@ test("P4: every legacy verb × actor equals the independently recorded policy ta
     "terminal.input",
     "agent_conversation.send",
     "agent_conversation.answer",
+    "agent_conversation.press",
+    "agent_conversation.trust",
   ])
     expect(registeredVerb("rpc", method)!.recovery).toBe("opaque");
 });

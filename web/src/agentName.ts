@@ -51,22 +51,4 @@ export function paneAgentListing(pane: Pane): string {
     .join(" · ");
 }
 
-/**
- * The agent.list record for a pane: the same pane, and the same terminal and
- * harness when the record names them, so a replacement agent's record (and
- * its name) never lands on another pane.
- */
-export function agentListRecord(
-  agents: readonly Record<string, unknown>[],
-  pane: Pick<Pane, "pane_id" | "terminal_id" | "agent">,
-): Record<string, unknown> | null {
-  return (
-    agents.find(
-      (candidate) =>
-        candidate.pane_id === pane.pane_id &&
-        (typeof candidate.terminal_id !== "string" ||
-          candidate.terminal_id === pane.terminal_id) &&
-        (typeof candidate.agent !== "string" || candidate.agent === pane.agent),
-    ) ?? null
-  );
-}
+export { agentListRecord } from "../../shared/agentMetadata";

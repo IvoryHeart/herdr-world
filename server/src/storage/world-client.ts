@@ -20,6 +20,7 @@ export async function openWorldClient(
   incarnation = randomBytes(16).toString("base64url"),
   legacyProfiles?: string,
   legacySettings?: string,
+  legacyBoard?: string,
 ) {
   // Bun bundles import.meta.url relative to the executable's main entry, whose
   // sibling storage/ directory contains the separately embedded worker entry.
@@ -75,7 +76,7 @@ export async function openWorldClient(
     while (
       queue.length &&
       batch.length < STORAGE_BOUNDS.operations &&
-      bytes + queue[0]!.bytes <= STORAGE_BOUNDS.batchBytes
+      (!batch.length || bytes + queue[0]!.bytes <= STORAGE_BOUNDS.batchBytes)
     ) {
       const entry = queue.shift()!;
       batch.push({ ticket: entry.ticket, request: entry.request });
@@ -127,6 +128,7 @@ export async function openWorldClient(
     legacy,
     ...(legacyProfiles !== undefined ? { legacyProfiles } : {}),
     ...(legacySettings !== undefined ? { legacySettings } : {}),
+    ...(legacyBoard !== undefined ? { legacyBoard } : {}),
     at: ports.clock.now(),
     incarnation,
   });
@@ -147,7 +149,10 @@ export async function openWorldClient(
         );
       const bytes = Buffer.byteLength(JSON.stringify(request));
       if (
-        bytes > STORAGE_BOUNDS.requestBytes ||
+        bytes >
+          (request.type === "board"
+            ? STORAGE_BOUNDS.boardRequestBytes
+            : STORAGE_BOUNDS.requestBytes) ||
         pending.size >= STORAGE_BOUNDS.queuedOperations ||
         queuedBytes + bytes > STORAGE_BOUNDS.queuedBytes
       )

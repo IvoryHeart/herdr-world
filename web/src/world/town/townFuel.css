@@ -1,0 +1,169 @@
+/* Subscription fuel gauges on the Town board sign (TownFuelGauge.tsx). */
+.town-fuel {
+  display: grid;
+  gap: 4px;
+}
+
+.town-fuel-title {
+  font:
+    700 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: #e7c48a;
+}
+
+.town-fuel-gauge {
+  position: relative;
+}
+
+.town-fuel-gauge > button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+  width: 100%;
+  padding: 4px 6px;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.town-fuel-gauge > button:focus-visible {
+  outline: 2px solid #e7c48a;
+  outline-offset: 1px;
+}
+
+.town-fuel-name {
+  grid-row: span 2;
+  font-size: 11px;
+  font-weight: 600;
+  color: #c9b79a;
+}
+
+.town-fuel-window {
+  display: grid;
+  grid-template-columns: 34px 1fr 52px;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.town-fuel-label {
+  color: #c9b79a;
+  white-space: nowrap;
+}
+
+.town-fuel-bar {
+  height: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid #7a5536;
+  border-radius: 2px;
+}
+
+.town-fuel-bar > span {
+  display: block;
+  height: 100%;
+  background: #c9b79a;
+  transition: width 400ms ease-out;
+}
+
+.town-fuel-value {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Low fuel: Town's warning colour, always with the word "low". */
+.town-fuel-window[data-low="true"] .town-fuel-bar > span {
+  background: var(--town-wait, #ffb547);
+}
+
+.town-fuel-window[data-low="true"] .town-fuel-value {
+  color: var(--town-wait, #ffb547);
+  font-weight: 600;
+}
+
+/* A refusal: the limit is used up; words and a reset time, no bar. */
+.town-fuel-reached {
+  grid-column: 2 / -1;
+  color: var(--town-wait, #ffb547);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* A reading more than 15 minutes old: its age, muted, under the bars. */
+.town-fuel-age {
+  grid-column: 2;
+  color: #c9b79a;
+  font-size: 10px;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.town-fuel-gauge > button[data-stale="true"] .town-fuel-bar {
+  border-style: dashed;
+}
+
+.town-fuel-gauge > button[data-stale="true"] .town-fuel-value {
+  color: #c9b79a;
+}
+
+/* A harness that keeps no readable limits: words, no bar. */
+.town-fuel-unavailable {
+  grid-column: 1 / -1;
+  color: #c9b79a;
+  font-style: italic;
+}
+
+.town-fuel-details {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  display: none;
+  padding: 6px 8px;
+  color: #f1efe6;
+  background: rgba(30, 22, 14, 0.98);
+  border: 1px solid #7a5536;
+  border-radius: 6px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.town-fuel-gauge:hover .town-fuel-details,
+.town-fuel-gauge:focus-within .town-fuel-details,
+.town-fuel-gauge[data-open="true"] .town-fuel-details {
+  display: block;
+}
+
+/* The phone chip's lowest fuel. */
+.town-board-chip [data-status="fuel"] {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.town-board-chip [data-status="fuel"][data-low="true"] {
+  color: var(--town-wait, #ffb547);
+}
+
+.town-board-chip [data-status="fuel"] .town-fuel-age {
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-fuel-bar > span {
+    transition: none;
+  }
+}

@@ -3,9 +3,13 @@ export type TownCanvasCase = [
   height: number,
   scale: string,
   flightFrameDelay: number,
+  /** Pin the CSS viewport over CDP: `--window-size` alone gives headless
+   * Chrome a wider viewport than a 390px phone (#643). */
+  viewport?: "exact",
 ];
 
-// The original 22 parameter tuples, partitioned without changing fixture behavior.
+// The original 22 parameter tuples, partitioned without changing fixture
+// behavior, plus the reception filter cases (#501).
 export const townCanvasCases = {
   baseline: [
     [1440, 900, "typical", 0],
@@ -13,6 +17,8 @@ export const townCanvasCases = {
     [390, 844, "recovery", 0],
     [1440, 900, "recovery", 0],
     [1440, 900, "max", 0],
+    [390, 844, "reception", 0],
+    [1440, 900, "reception", 0],
   ],
   extended: [
     [390, 844, "extended", 0],
@@ -32,7 +38,7 @@ export const townCanvasCases = {
     [390, 844, "fold-protected", 0],
   ],
   navigation: [
-    [390, 844, "incremental", 0],
+    [390, 844, "incremental", 0, "exact"],
     [1440, 900, "plates", 0],
     [390, 844, "plates", 0],
     [390, 844, "protected", 0],

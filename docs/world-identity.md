@@ -41,6 +41,8 @@ The declared policies are:
 | Appearance | World's moves and a uniquely witnessed terminal in a complete listing | Every witnessed terminal absent from a complete current list | Clear |
 | Tab colour | Appearance's paths | Appearance's absence or observed tab close | Drop |
 | Agent interest | Its terminal on its original source | Complete current pane list omits the terminal | Drop |
+| Watchlist | Uniquely witnessed terminal on its original source | Complete current terminal absence | Clear |
+| Desk marks/recent opens and completion seen | Witnessed terminal and captured known session; explicit unknown binds to terminal | Complete current terminal absence or positive known session replacement | Clear |
 
 Offline, partial, filtered and stale observations preserve saved native IDs and
 witnesses and authorize nothing. Duplicate native IDs, terminals or sessions make
@@ -49,15 +51,18 @@ ID with other evidence is unconfirmed for a Board string; appearance's existing
 complete-list reclamation rule still applies. Weak empty workspace/tab anchors
 remain attached while their target exists and never authorize Send.
 
-The Board JSON document remains its compatible owner representation. Opening it
-captures only strings, appearance, tab colours and terminal interest into SQLite;
-subsequent binding changes are serialized and drained on close. All capture
+The compatible Board document is now a committed read projection over separate
+SQLite concern tables. Startup imports its exact backed-up legacy JSON once;
+subsequent Board writes and binding captures commit in the same worker savepoint.
+Only strings, appearance, qualified tab colours and terminal interest create
+bindings; layout preferences retain native-ID reuse behavior. All capture
 pages are prepared before any identity is reassigned. Inheritance requires one
 old match for the new record and one new match for that old record across the
 complete capture set, so splits, merges and page order cannot choose an ID.
-Get/patch RPCs wait for admitted captures before replying. An unchanged capture performs no
-import work, so layout edits do not create identities. Captures are paged by
-bytes/count through the bounded storage queue. Interrupted imports cannot resolve
+Get/patch RPCs expose acknowledged state; a patch replies only after its rows and
+bindings commit. An unchanged capture performs no binding import work, so layout
+edits do not create identities. Capture pages are bounded inside the atomic Board
+operation. Interrupted imports cannot resolve
 legacy targets until their World document has been reconciled. Import keys locate
 legacy records and never become new World IDs. Appearance moves keep their
 existing World record and binding IDs when exactly one disappearing legacy key
@@ -78,8 +83,15 @@ Card positions, pins, folds, and workspace/host colours remain native-keyed layo
 preferences. They carry no binding and are inherited on ID reuse. Profiles and chimes now use the
 [SQLite storage port](DEPLOYMENT.md#agent-profile-storage); their existing
 browser record-creation protocol remains unchanged. Store-issued profile and
-remaining JSON-owned ID creation are separate work. Desk marks, watchlists and
-completion seen state keep their current memory lifetimes.
+remaining JSON-owned ID creation are separate work. Desk marks and watchlists use the [durable terminal-mark family](DEPLOYMENT.md#desk-watchlist-and-completion-storage).
+Watch replies carry the World record's `watch_id` for exact removal even while
+unresolved; a runtime-qualified tuple alone cannot distinguish a reused capture.
+Pending agent commands use separate process-local ownership tokens, including
+explicit unknown identities. These tokens fence admission without extending any
+saved record's lifetime. Schema-9 completion receipts migrate into a private
+draining archive; only fresh same-source/terminal/known-session/unchanged-sequence
+proof converts them into the current Desk review. Unknown receipts never confer
+continuity. See the [upgrade rules](DEPLOYMENT.md#upgrade-from-separate-completion-checks).
 
 The [identity contract](../verification/contracts/world-identity.md) maps M4,
 mutation controls and mandatory consumers. The complete `verification:gate`

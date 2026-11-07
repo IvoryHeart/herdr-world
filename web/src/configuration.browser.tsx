@@ -286,6 +286,8 @@ function Harness() {
       onShowShortcuts={() => {}}
       theme={theme}
       accentColor="blue"
+      blackBackground={false}
+      onBlackBackgroundChange={() => {}}
       uiScale={scale}
       terminalFontName=""
       onTerminalFontNameChange={() => {}}
@@ -782,6 +784,13 @@ async function run() {
     "transport description takes up dialog space",
   );
   const help = button("About terminal incremental transport");
+  // Returning from Layout replays the parent dialog's entrance animation.
+  // Let its layout and hit-test regions settle before sending pointer input;
+  // movement or a pending scroll can otherwise cancel the hover tooltip.
+  await Promise.all(
+    dialog.getAnimations().map((animation) => animation.finished),
+  );
+  await renderBoundary();
   const helpBounds = help.getBoundingClientRect();
   await input("Input.dispatchMouseEvent", {
     type: "mouseMoved",

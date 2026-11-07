@@ -41,13 +41,15 @@ test("closed storage refuses every family's writes and keeps its files", async (
     const storage = await openStorage(paths, ports);
     expect(await storage.ids.issue("n")).toMatch(/^n-[0-9a-z]{8}$/);
     await storage.settings.update((s) => ({ ...s, title_suffix: "before" }));
-    storage.board().patch([note("before")]);
+    const board = storage.board();
+    await board.patch([note("before")]);
     await storage.ledger().update(() => {});
     const [profile] = storage.profiles().get().profiles;
     await storage.profiles().save(profile);
     expect(existsSync(paths.agentProfiles)).toBe(false);
     await storage.connections.save(registry("before"));
-    const files = [paths.settings, paths.board, paths.connections];
+    const files = [paths.settings, paths.connections];
+    expect(existsSync(paths.board)).toBe(false);
     const before = files.map((path) => readFileSync(path, "utf8"));
 
     await storage.close();
@@ -58,7 +60,8 @@ test("closed storage refuses every family's writes and keeps its files", async (
     await expect(
       storage.settings.update((s) => ({ ...s, title_suffix: "after" })),
     ).rejects.toThrow(closed);
-    expect(() => storage.board().patch([note("after")])).toThrow(closed);
+    expect(storage.board().get()).toEqual(board.get());
+    await expect(board.patch([note("after")])).rejects.toThrow(closed);
     await expect(storage.ledger().update(() => {})).rejects.toThrow("closing");
     await expect(storage.profiles().save(profile)).rejects.toThrow(closed);
     // The import-backup entry point remains fenced after this family closes.
@@ -82,7 +85,8 @@ test("closed storage refuses every family's writes and keeps its files", async (
 test("a family not opened before close stays closed and sets nothing aside", async () => {
   const root = mkdtempSync(join(tmpdir(), "world-storage-late-"));
   const paths = resolveDataPaths({ HERDR_WORLD_DATA_DIR: root });
-  // Unreadable files: opening a family would set each one aside.
+  const storage = await openStorage(paths, ports);
+  // Once imported, the retained legacy file is no longer authoritative.
   const families = [["board", paths.board]] as const;
   for (const [, path] of families) {
     mkdirSync(dirname(path), { recursive: true });
@@ -91,7 +95,6 @@ test("a family not opened before close stays closed and sets nothing aside", asy
   const listing = () =>
     families.map(([, path]) => readdirSync(dirname(path)).sort());
   try {
-    const storage = await openStorage(paths, ports);
     await storage.close();
     const before = listing();
     for (const family of ["board", "profiles"] as const)

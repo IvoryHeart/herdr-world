@@ -28,6 +28,16 @@ with that World service rather than connecting to independently deployed bridges
 - **THEN** World keeps at most one browser refresh in flight, admits its current-generation result,
   and then services one coalesced follow-up refresh
 
+#### Scenario: Terminal repaint activity during aggregate observation
+- **WHEN** consecutive updates for the same pane differ only in `revision`,
+  `terminal_title`, `terminal_title_stripped` or `scroll`
+- **THEN** World advances the observation revision and marks the host cache dirty
+  without rejecting an in-flight snapshot solely for that activity
+- **AND** a pane's first update, any other event and every subscription ACK retain
+  fail-closed invalidation; other events and ACKs clear the per-pane comparison history
+- **AND** a real change during the same read still rejects that read, regardless
+  of the order of activity and real changes
+
 #### Scenario: User disconnects a connection
 - **WHEN** a user disconnects or removes a managed profile
 - **THEN** World stops only its runtime and transport without stopping that Herdr server, session,
@@ -49,6 +59,14 @@ with that World service rather than connecting to independently deployed bridges
 - **AND** cached Town/Board topology is visibly stale and non-actionable, with explicit
   per-host Reconnect controls; healthy sibling hosts keep their own authority
 - **AND** a ready lifecycle signal alone cannot promote an older cached generation
+
+#### Scenario: Local Herdr becomes available after initial startup
+- **WHEN** a configured local connection initially fails with a classified transient socket error
+- **THEN** World retries that exact connection with capped exponential jitter until recovery or
+  explicit cancellation, without starting or installing Herdr
+- **AND** permanent, permission, protocol and unclassified failures do not acquire indefinite retries
+- **AND** disconnect, removal, replacement, generation retirement and shutdown cancel old retry work;
+  explicit Reconnect remains available and failed topology remains non-actionable until freshly observed
 
 ### Requirement: Return bounded aggregate observation with host-local progress
 
@@ -534,3 +552,56 @@ SHALL equal complete preparation of the same observation, documents and marks.
 #### Scenario: Complete preparation equivalence
 - **WHEN** observations, documents and marks change in any supported sequence
 - **THEN** incremental presentation equals complete preparation of the latest inputs
+
+### Requirement: Runtime-owned SSH command sharing and forwarding
+
+World SHALL bind each reused SSH command connection to its owning runtime's private
+control path, preserve the service user's OpenSSH policy, and never substitute a
+master belonging to another connection or generation. Background command sessions
+SHALL leave capacity for interactive commands; queueing and any safe read retry
+SHALL spend the caller's deadline, including recovery health checks. Retirement
+SHALL abort queued work before process dispatch. Runtime command helpers SHALL
+require their owning caller's runner and SHALL NOT substitute a module-global
+command runner. A failed-start master whose exit
+is unconfirmed SHALL retain child/path ownership and prevent replacement.
+Mutating commands SHALL NOT be retried after an ambiguous master failure.
+
+On-demand local and reverse forwards SHALL require authentication, an explicit
+connection ID and current runtime generation. As upstream, browser forwarding
+controls SHALL be offered only on pages served over loopback, because listeners
+bind on the service host. The service SHALL NOT add a forwarding-specific
+WebSocket-peer gate. The service SHALL own
+forward state independently of views, bound live processes and discovery, refuse
+reverse exposure of its own listener/development proxy, and stop only the retiring
+runtime's forwards without automatically reopening them. Remote loopback is a
+requested bind subject to the SSH server's GatewayPorts policy.
+
+#### Scenario: Two runtimes use the same SSH destination
+
+- **WHEN** both runtimes have command masters and one runtime stops
+- **THEN** commands retain their own runtime's master or open a fresh connection
+  to their original destination, without borrowing the other master's transport
+
+#### Scenario: A retired forward request finishes after replacement
+
+- **WHEN** an old runtime's forward becomes ready after its request loses authority
+- **THEN** its own attempt is closed and cannot report success or close a newer attempt
+
+#### Scenario: A browser requests another runtime's forward
+
+- **WHEN** a browser's captured connection/generation differs from a forward's owner
+- **THEN** its scoped list omits that forward and its close request cannot stop it
+
+#### Scenario: A status push overlaps an older catalogue read
+
+- **WHEN** checkout status changes on a current inactive connection during a browser refresh
+- **THEN** that connection retains the newer status over the older catalogue reply,
+  without changing a different connection with the same checkout path
+
+#### Scenario: A workspace file upload waits while its runtime retires
+
+- **WHEN** a Files upload has read its body and is queued for an SSH command slot
+- **AND** its owning runtime stops before a slot becomes available
+- **THEN** it SHALL abort without spawning a process or writing the remote target
+- **AND** a current sibling runtime to the same destination SHALL retain its own
+  private master and remain able to upload

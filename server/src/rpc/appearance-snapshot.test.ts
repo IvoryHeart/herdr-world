@@ -6,6 +6,7 @@ import { WorldObservation } from "../world/observation-v1";
 import { BoardStore } from "../world/board-store";
 import { handleWorldRpc } from "./world";
 import type { BridgeRpcContext } from "./context";
+import { systemClock } from "../service/ports";
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0))
@@ -62,6 +63,7 @@ for (const mode of [
       sendReply: () => true,
       sendError: (_context: string, error: unknown) => errors.push(error),
       services: {
+        clock: systemClock,
         board: () => board,
         clients: new Set([ws]),
         safeSend: () => true,

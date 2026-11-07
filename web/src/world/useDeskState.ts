@@ -1,11 +1,12 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { deskKey, type DeskIdentity } from "../../../shared/deskState";
-import { bridge } from "../api";
 import { deskClient, receiptIdentity, type DeskClients } from "./handoffs";
 import {
+  sharedDeskStore,
+  useSharedDeskStore,
   useWorldDeskState,
-  WorldDeskStore,
   type DeskStoreState,
+  type WorldDeskStore,
 } from "./deskStateStore";
 import type { WorldLeafObject } from "./worldObject";
 
@@ -16,6 +17,30 @@ export function deskIdentity(leaf: WorldLeafObject): DeskIdentity {
     terminal_id: leaf.terminalId,
     agent_session_fingerprint: leaf.agentSessionFingerprint ?? null,
   };
+}
+
+/** Refresh missing metadata; a report without a service stop cannot name a review. */
+export async function qualifiedReviewRecord(
+  store: Pick<WorldDeskStore, "get" | "refresh">,
+  identity: DeskIdentity,
+  stop?: string,
+) {
+  const key = deskKey(identity);
+  const read = () => {
+    const state = store.get();
+    const record = state.verified
+      ? state.records.find((record) => deskKey(record) === key)
+      : undefined;
+    return record?.observed_stop_id != null || record?.stopped_at != null
+      ? record
+      : undefined;
+  };
+  let record = read();
+  if (!record) {
+    await store.refresh();
+    record = read();
+  }
+  return stop?.startsWith("stop:[null,") ? undefined : record;
 }
 
 export function deskMetadata(
@@ -50,22 +75,21 @@ export function useDeskState(
   clients: DeskClients,
   provided?: WorldDeskStore,
 ) {
-  const store = useMemo(
-    () => provided ?? new WorldDeskStore(bridge),
-    [provided],
-  );
+  // The one reviewed record Town and Needs you read too.
+  const store = useSharedDeskStore(provided ?? sharedDeskStore());
   const state = useWorldDeskState(store);
-  useEffect(() => {
-    store.start();
-    return () => store.stop();
-  }, [store]);
   const { handled, stops, stopIds, opens } = useMemo(() => {
     return deskMetadata(agents, state);
   }, [agents, state]);
   const mark = async (handoffId: string, reviewed: boolean) => {
     const [identity, stop] = JSON.parse(handoffId) as [string, string];
     const leaf = agents.find((agent) => receiptIdentity(agent) === identity);
-    if (!leaf || !deskClient(clients, leaf)) return false;
+    if (
+      !leaf ||
+      !deskClient(clients, leaf) ||
+      !(await qualifiedReviewRecord(store, deskIdentity(leaf), stop))
+    )
+      return false;
     return store.mutate("world.desk.review", deskIdentity(leaf), {
       stop_id: stop,
       reviewed,

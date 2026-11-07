@@ -62,7 +62,7 @@ jobs:
                   persist-credentials: false
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - run: bun install --frozen-lockfile
             - run: bun install --frozen-lockfile
@@ -128,7 +128,7 @@ jobs:
                   fetch-depth: 0
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - name: Check knowledge-map impact
               if: github.event_name == 'pull_request'
@@ -164,7 +164,7 @@ jobs:
                   fetch-depth: 0
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - run: bun install --frozen-lockfile
             - name: Run documentation checks
@@ -190,7 +190,7 @@ jobs:
                   persist-credentials: false
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - run: bun install --frozen-lockfile
             - name: Build process-test assets on this runner
@@ -247,7 +247,7 @@ jobs:
                   persist-credentials: false
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - name: Determine validation scope
               run: echo "Validation mode is $VALIDATION_MODE"
@@ -305,7 +305,7 @@ jobs:
                   persist-credentials: false
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - run: bun install --frozen-lockfile
               if: needs.validation-scope.outputs.packaging == 'true'
@@ -367,7 +367,7 @@ jobs:
                   persist-credentials: false
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - name: Verify native Windows installation and frozen actions
               run: bun test scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
@@ -396,7 +396,7 @@ jobs:
                   persist-credentials: false
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - run: bun install --frozen-lockfile
             - name: Build branch preview archive
@@ -426,7 +426,7 @@ jobs:
                   persist-credentials: false
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
-                  bun-version: "1.4.3"
+                  bun-version: "1.4.4"
                   no-cache: true
             - run: bun install --frozen-lockfile
             - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

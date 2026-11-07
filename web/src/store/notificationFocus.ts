@@ -1,4 +1,4 @@
-import type { Pane } from "../types";
+import type { AgentSessionIdentity, Pane } from "../types";
 import type {
   QualifiedFocusTarget,
   StoreConnectionLease,
@@ -11,9 +11,28 @@ export type NotificationFocusOptions = {
   activateConnection?: boolean;
 };
 
+/** A captured occupant must retain every runtime identity field. */
+export function matchesCapturedAgentSession(
+  expected: AgentSessionIdentity | undefined,
+  observed: unknown,
+): boolean {
+  if (!expected) return true;
+  if (!observed || typeof observed !== "object") return false;
+  const session = observed as Partial<AgentSessionIdentity>;
+  return (
+    session.source === expected.source &&
+    session.agent === expected.agent &&
+    session.kind === expected.kind &&
+    session.value === expected.value
+  );
+}
+
 /** Recheck the captured pane occupant when a notification is admitted or queued. */
 export function notificationPaneMatches(
-  target: Pick<QualifiedFocusTarget, "paneId" | "workspaceId" | "terminalId">,
+  target: Pick<
+    QualifiedFocusTarget,
+    "paneId" | "workspaceId" | "terminalId" | "agentSession"
+  >,
   pane: Pane | null | undefined,
 ): pane is Pane {
   return Boolean(
@@ -21,7 +40,8 @@ export function notificationPaneMatches(
       pane.pane_id === target.paneId &&
       pane.workspace_id === target.workspaceId &&
       (target.terminalId === undefined ||
-        pane.terminal_id === target.terminalId),
+        pane.terminal_id === target.terminalId) &&
+      matchesCapturedAgentSession(target.agentSession, pane.agent_session),
   );
 }
 

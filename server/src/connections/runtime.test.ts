@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { silentLogger } from "../utils/logger";
 import { createLastStepBaselineStore } from "../workspace/git-diff";
+import { serializeHerdrEventEnvelope } from "./protocol";
 import { createLegacyConnectionRuntime } from "./runtime";
 import { parseHerdrTaskNotification } from "../../../web/src/herdrTaskNotification";
 import { createChimeCenter } from "../../../web/src/chimes/chimeCenter";
@@ -14,6 +15,86 @@ import { createGuiSettingsStore } from "../config/gui-settings";
 const settings = createGuiSettingsStore(
   join(mkdtempSync(join(tmpdir(), "runtime-settings-")), "settings.json"),
 );
+
+test("runtime forwards pane activity and resets its baseline at the subscription ACK", async () => {
+  const kinds: Array<"activity" | undefined> = [];
+  let acknowledge!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    acknowledge = resolve;
+  });
+  let resynced!: () => void;
+  const resync = new Promise<void>((resolve) => {
+    resynced = resolve;
+  });
+  const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
+    config: {
+      socketPath: "/tmp/unused-pane-activity-control.sock",
+      clientSocketPath: "/tmp/unused-pane-activity-client.sock",
+      hasExplicitSocketPath: true,
+      hasExplicitClientSocketPath: true,
+    },
+    safeSend: () => true,
+    clientLabel: () => "test",
+    markRpcError: () => undefined,
+    onEvent: (event, _identity, kind) => {
+      if ((event as { event: string }).event === "session.resync_required") {
+        expect(kind).toBeUndefined();
+        resynced();
+      } else {
+        kinds.push(kind);
+      }
+    },
+  });
+  runtime.workspaceAutoSync.start = () => undefined;
+  runtime.herdr.call = async (method) =>
+    method === "ping" ? { protocol: 15 } : { panes: [] };
+  runtime.herdr.subscribe = () => ({
+    ready,
+    closed: new Promise<void>(() => undefined),
+    close: () => undefined,
+  });
+  const update = (revision: number) =>
+    runtime.herdr.emit("event", {
+      event: "pane_updated",
+      data: {
+        pane: {
+          pane_id: "pane-1",
+          revision,
+          terminal_title: `Working ${revision}`,
+          tokens:
+            revision % 2
+              ? { task: "Tests", role: "builder" }
+              : { role: "builder", task: "Tests" },
+        },
+      },
+    });
+  try {
+    update(1);
+    update(2);
+    expect(kinds).toEqual([undefined, "activity"]);
+    runtime.startBackground();
+    acknowledge();
+    await resync;
+    update(3);
+    update(4);
+    runtime.herdr.emit("event", { event: "tab.renamed", data: {} });
+    update(5);
+    expect(kinds).toEqual([
+      undefined,
+      "activity",
+      undefined,
+      "activity",
+      undefined,
+      undefined,
+    ]);
+  } finally {
+    await runtime.stop();
+  }
+});
 
 test("legacy runtime exposes and reports its configured connection identity", async () => {
   const events: Array<{ event: unknown; connectionId: string }> = [];
@@ -263,6 +344,96 @@ test("runtime stop drains an in-flight completion and suppresses publication", a
   await expect(
     baselines.captureWorkspace("w1", async () => "/repo"),
   ).rejects.toMatchObject({ code: "LAST_STEP_STORE_DISPOSED" });
+});
+
+test("runtime pushes git status under its identity and stops reading once stopped", async () => {
+  const branchReply = (branch: string) => ({
+    code: 0,
+    stdout: `## ${branch}\n`,
+    stderr: "",
+  });
+  const runs: Array<
+    PromiseWithResolvers<{ code: number; stdout: string; stderr: string }>
+  > = [];
+  const events: Array<{ event: unknown; connectionId: string }> = [];
+  const runtime = createLegacyConnectionRuntime({
+    clock: systemClock,
+    scheduler: systemScheduler,
+    runtimeStatus: memoryRuntimeStatus(),
+    settings,
+    identity: { id: "remote-dev", label: "Remote Dev", source: "test" },
+    connectionGeneration: 3,
+    config: {
+      socketPath: "/tmp/m3-runtime-git-control.sock",
+      clientSocketPath: "/tmp/m3-runtime-git-client.sock",
+      sshHost: undefined,
+      session: undefined,
+      hasExplicitSocketPath: true,
+      hasExplicitClientSocketPath: true,
+    },
+    safeSend: () => true,
+    clientLabel: () => "browser",
+    markRpcError: () => undefined,
+    onEvent: (event, identity) => {
+      events.push({ event, connectionId: identity.id });
+    },
+    runGitStatusProcess: () => {
+      const run = Promise.withResolvers<{
+        code: number;
+        stdout: string;
+        stderr: string;
+      }>();
+      // The first read answers at once, within the first list's cold budget.
+      if (runs.length === 0) run.resolve(branchReply("main"));
+      runs.push(run);
+      return run.promise;
+    },
+  });
+  const listed = await runtime.status.enrichWorkspacesWithGitStatus({
+    workspaces: [
+      {
+        workspace_id: "w1",
+        worktree: { repo_key: "repo", repo_root: "/a", checkout_path: "/a" },
+      },
+    ],
+  });
+  expect(runs).toHaveLength(1);
+  expect(
+    (listed as { workspaces: Array<{ worktree: { git_status?: unknown } }> })
+      .workspaces[0].worktree.git_status,
+  ).toMatchObject({ branch: "main" });
+  await runtime.status.gitStatusRefreshSettled();
+
+  expect(events).toHaveLength(1);
+  expect(events[0].connectionId).toBe("remote-dev");
+  expect(
+    JSON.parse(serializeHerdrEventEnvelope("remote-dev", events[0].event, 3)),
+  ).toEqual({
+    connection_id: "remote-dev",
+    connection_generation: 3,
+    event: "workspace.git_status",
+    data: {
+      type: "workspace.git_status",
+      statuses: [
+        {
+          checkout_path: "/a",
+          git_status: expect.objectContaining({ branch: "main", dirty: false }),
+        },
+      ],
+    },
+  });
+
+  // A read in flight at stop neither publishes nor schedules another.
+  runtime.status.invalidateGitStatus("/a");
+  expect(runs).toHaveLength(2);
+  const stopping = runtime.stop();
+  runs[1].resolve(branchReply("topic"));
+  await runtime.status.gitStatusRefreshSettled();
+  await stopping;
+  runtime.status.invalidateGitStatus("/a");
+  runtime.status.invalidateWorkspaceGitStatus("w1");
+  expect(runs).toHaveLength(2);
+  expect(events).toHaveLength(1);
 });
 
 test("layout subscription ACK and reconnect request browser reconciliation", async () => {

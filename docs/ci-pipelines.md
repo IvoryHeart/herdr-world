@@ -79,8 +79,7 @@ cancellation and missing reports still fail delivery.
 
 Tooling-only PRs use `scripts/validation-scope.ts` in CI and pre-push. The complete
 diff must contain only `scripts/agent/**` (including tests),
-`docs/agent-development.md`, `docs/crew-runbook.md`, `docs/dispatch-runbook.md` and
-`changes/<slug>.md`. Empty diffs and any other code path retain ordinary scope.
+`docs/agent-development.md` and `changes/<slug>.md`. Empty diffs and any other code path retain ordinary scope.
 Both sides of renames count. The mode runs the complete static lane and affected
 unit tests (or the agent test inventory for uncovered agent modules), and skips
 World browser suites, behavioral verification, Windows installation and installer
@@ -106,8 +105,15 @@ are the nearest consumers; web suites come from their maintained inventory.
 World runtime changes also select the dense end-to-end World suites
 (`worldRuntimeSuites`: production and concurrent contexts, terminal handoff).
 Native checks cover install/plugin/package inputs, server/shared binary sources,
-compiled `scripts/build-version.ts` metadata and installation consumers. The
-agent-tooling exception remains explicit.
+compiled `scripts/build-version.ts` metadata and installation consumers. Changes
+to tests explicitly named by the installer upgrade, Windows plugin and native
+launchd jobs also select packaging, including when incremental unit scope narrows.
+The selector derives these consumer paths from the workflow commands; there is
+no separate test allowlist to maintain. Other test-only changes retain their
+existing scoped selection. The agent-tooling exception remains explicit. The native storage
+command includes every maintained storage `*-crash.test.ts`; the installer
+workflow regression derives that inventory from the suites rather than keeping
+a second list.
 
 Main and non-PR dispatches force the full plan. Code receives all static checks;
 ordinary docs receive `check:docs`. Non-browser tests and web suites are partitioned

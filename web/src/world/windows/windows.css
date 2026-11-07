@@ -319,20 +319,37 @@
   background: transparent;
   color: var(--muted);
 }
-.world-window-controls > .world-window-switcher-trigger {
-  display: flex;
-  width: auto;
-  padding: 4px 7px;
-}
-.world-window-switcher-trigger.is-floating {
+/* A phone's minimized windows: one chip each, above the bottom controls and
+   below the mobile menu backdrop (79). */
+.world-minimized-dock {
   position: fixed;
   left: max(12px, env(safe-area-inset-left, 0px));
   bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   z-index: 78;
-  min-width: 44px;
+  display: flex;
+  gap: 6px;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+}
+.world-minimized-dock > button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 11rem;
   min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   background: var(--shell-panel);
   box-shadow: 0 3px 12px #0005;
+  color: var(--text);
+  font: inherit;
+}
+.world-minimized-dock > button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .world-window-switcher-menu {
   position: fixed;
@@ -398,10 +415,6 @@
   min-width: 44px;
   min-height: 44px;
 }
-[data-layout="mobile"] .world-window-switcher-trigger {
-  min-width: 44px;
-  min-height: 44px;
-}
 @media (max-width: 760px), (pointer: coarse) {
   .world-window-switcher-trigger {
     min-width: 44px;
@@ -411,14 +424,10 @@
     min-height: 44px;
   }
 }
-/* Town draws the agent's window as the Town prototype's chat panel: a dark
-   translucent panel with a 2px edge, chunky targets and a pixel name. The
-   look comes from the shell's own tokens, so every view inside follows. */
-.world-managed-window.is-town-skin {
-  --viewer-panel-bg: transparent;
-  --viewer-header-bg: transparent;
-  --viewer-content-bg: rgba(0, 0, 0, 0.25);
-  --viewer-border: rgba(255, 255, 255, 0.08);
+/* Town's palette for a Town window and for what it opens in a portal (a
+   popover marked .town-skin-portal): the values Town's own surfaces use. */
+.world-managed-window.is-town-skin,
+.is-town-skin.town-skin-portal {
   --text: #f1efe6;
   --text-strong: #f1efe6;
   --muted: #a9b2a4;
@@ -427,6 +436,19 @@
   --town-button: #273141;
   --town-button-on: #3a4459;
   --town-edge: #090c11;
+  --town-term: #0d1117;
+  --town-work: #6fc3ff;
+  --town-wait: #ffb547;
+  --town-done: #7be08f;
+}
+/* Town draws the agent's window as the Town prototype's chat panel: a dark
+   translucent panel with a 2px edge, chunky targets and a pixel name. The
+   look comes from the shell's own tokens, so every view inside follows. */
+.world-managed-window.is-town-skin {
+  --viewer-panel-bg: transparent;
+  --viewer-header-bg: transparent;
+  --viewer-content-bg: rgba(0, 0, 0, 0.25);
+  --viewer-border: rgba(255, 255, 255, 0.08);
   /* The 2px edge is a ring, so the window's content still fills it. */
   border: 0;
   border-radius: 12px;
@@ -564,40 +586,7 @@
   object-fit: contain;
   image-rendering: pixelated;
 }
-/* Chat in Town reads like the Town peek: message cards on the terminal
-   dark, a reply row with a 2px edge, and chunky buttons. The header already
-   shows the status pill, so Chat's own copy of it stays out. */
-.is-town-skin .agent-chat {
-  --input-bg: #0d1117;
-  --border-soft: rgba(255, 255, 255, 0.08);
-  --accent-soft: #2a3446;
-}
-.is-town-skin .agent-chat-toolbar {
-  border-bottom-color: rgba(255, 255, 255, 0.07);
-}
-.is-town-skin .agent-chat-status {
-  display: none;
-}
-.is-town-skin .agent-chat-bubble {
-  color: #c9d1c3;
-  border: 0;
-  border-radius: 8px;
-}
-.is-town-skin .agent-chat-message.is-user .agent-chat-bubble {
-  color: var(--text);
-  border: 0;
-  border-radius: 8px;
-}
-.is-town-skin .agent-chat-composer {
-  --chat-composer-edge: var(--town-edge);
-  --chat-composer-edge-width: 2px;
-  --chat-composer-input-bg: #0d1117;
-  --chat-composer-button-bg: var(--town-button);
-  --chat-composer-radius: 9px;
-  --chat-composer-button-shadow:
-    inset 0 -3px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.07);
-  border-top-color: rgba(255, 255, 255, 0.07);
-}
+/* Chat's Town skin is in components/AgentChat.town.css. */
 /* A phone-width window gives the name room: tighter gaps and narrower view
    icons, while every button stays a 40px target. */
 @container workspace-inspector (max-width: 399px) {

@@ -413,8 +413,15 @@ const fixtures: Fixture[] = [
   },
 ];
 
+// OMP uses the same transcript format; exercise its own reported harness binding.
+fixtures.push({
+  ...fixtures.find((fixture) => fixture.agent === "pi")!,
+  agent: "omp",
+});
+
 function herdr(agent: Record<string, unknown> | null, prompts: unknown[] = []) {
   const call: HerdrCall = async (method, params) => {
+    if (method === "pane.read") return { read: { text: "❯ " } };
     if (method === "agent.get") return { agent };
     if (method === "agent.list") return { agents: agent ? [agent] : [] };
     if (method === "agent.prompt") {
@@ -461,6 +468,7 @@ const unavailable = (conversation: Conversation) =>
 // Directory and ID fallbacks must search an empty home, never the real one.
 const HOME_VARIABLES = [
   "CODEX_HOME",
+  "CLAUDE_CONFIG_DIR",
   "GROK_HOME",
   "ANTIGRAVITY_HOME",
   "GEMINI_HOME",
@@ -590,7 +598,6 @@ describe("conversation availability", () => {
     "cursor",
     "devin",
     "cline",
-    "omp",
     "mastracode",
     "opencode",
     "copilot",
@@ -632,7 +639,7 @@ describe("conversation availability", () => {
   });
 
   test("a remote ID lookup never searches this machine", async () => {
-    for (const agent of ["claude", "kimi", "grok", "agy"]) {
+    for (const agent of ["kimi", "grok", "agy", "omp"]) {
       const conversation = await source(
         herdr(
           pane(agent, {
@@ -646,6 +653,43 @@ describe("conversation availability", () => {
       ).read({ pane_id: "w1:p1" });
       expect(unavailable(conversation)?.reason).toBe("remote_lookup");
     }
+  });
+
+  test("a remote Claude UUID uses only its supplied host lookup", async () => {
+    const id = "019a0000-1111-7222-8333-444455556666";
+    const lookups: string[] = [];
+    const files = {
+      ...localAgentSessionFiles,
+      remote: true,
+      async findClaudeSessionById(value: string) {
+        lookups.push(value);
+        return null;
+      },
+      async statFile(): Promise<never> {
+        throw new Error(
+          "A missing remote UUID must not fall back to a local path.",
+        );
+      },
+      async readText(): Promise<never> {
+        throw new Error("A missing remote UUID must not read local content.");
+      },
+    };
+    const chat = createHerdrConversationSource({
+      herdrCall: herdr(
+        pane("claude", {
+          source: "herdr:claude",
+          agent: "claude",
+          kind: "id",
+          value: id,
+        }),
+      ),
+      files,
+      context: createAgentSessionResolverContext(),
+      cache: createSessionProjectionCache(files),
+    });
+    const conversation = await chat.read({ pane_id: "w1:p1" });
+    expect(unavailable(conversation)?.reason).toBe("file_missing");
+    expect(lookups).toEqual([id]);
   });
 
   test("a transcript that cannot be read says so", async () => {
@@ -755,6 +799,7 @@ describe("conversation availability", () => {
       value: path,
     });
     const blocked: HerdrCall = async (method, params) => {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       if (method === "agent.prompt")
         throw new Error("agent_blocked: agent is blocked");
       return herdr(reported)(method, params);
@@ -863,6 +908,7 @@ describe("quests", () => {
     const calls: string[] = [];
     let listFails = false;
     const chat = source(async (method, params) => {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       calls.push(method);
       if (method === "agent.list" && listFails) throw new Error("offline");
       return inner(method, params);
@@ -1022,6 +1068,7 @@ describe("conversation binding and remote admission", () => {
     let current = reported(path);
     const log: string[] = [];
     const call: HerdrCall = async (method) => {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       log.push(method);
       if (method === "agent.get") return { agent: current };
       if (method === "agent.prompt") return { agent: current };
@@ -1137,6 +1184,7 @@ describe("conversation binding and remote admission", () => {
     };
     const prompts: unknown[] = [];
     const call: HerdrCall = async (method, params) => {
+      if (method === "pane.read") return { read: { text: "❯ " } };
       if (method === "agent.get") return { agent: current };
       if (method === "agent.prompt") {
         prompts.push(params);

@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: "1.4.3"
+          bun-version: "1.4.4"
       - name: Resolve the latest published stable release once
         id: plan
         env:
@@ -70,7 +70,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: "1.4.3"
+          bun-version: "1.4.4"
           no-cache: true
       # Linux installs take seconds; Windows and macOS spend up to 90 s
       # downloading packages. CI runs only for pull requests, so a cache serves
@@ -83,6 +83,9 @@ jobs:
           key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
       - name: Verify native SQLite and standalone compiled worker crash recovery
+        env:
+          HERDR_TEST_PARALLEL: "1"
+          HERDR_TEST_MAX_CONCURRENCY: "1"
         run: >-
           bun run test
           ./server/src/storage/world-storage.test.ts
@@ -92,6 +95,9 @@ jobs:
           ./server/src/storage/answer-migration.test.ts
           ./server/src/storage/answer-delivery-crash.test.ts
           ./server/src/storage/runtime-status-crash.test.ts
+          ./server/src/storage/board-crash.test.ts
+          ./server/src/storage/profile-crash.test.ts
+          ./server/src/storage/terminal-marks-crash.test.ts
       - name: Run native installer harness regressions
         if: runner.os == 'Windows'
         run: bun run test ./scripts/installer-upgrade.test.ts

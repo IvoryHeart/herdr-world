@@ -1,3 +1,6 @@
+import { captureScene } from "./testing/captureScene";
+import { registerCaptureReadinessTests } from "./testing/captureReadinessBrowser";
+registerCaptureReadinessTests();
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -35,6 +38,13 @@ const unavailableObservability = {
 test.skipIf(!chrome).each([
   [1440, 900, "", ""],
   [390, 844, "", ""],
+  // A narrow desktop: Board's controls share the bottom row with the dock.
+  [
+    800,
+    900,
+    " with the bin's dock",
+    "Board's hub stands with the bin, clear of Board's controls",
+  ],
   // Reduced motion: moves land at once, and still reach their places.
   [1440, 900, " with reduced motion", ""],
   [
@@ -90,6 +100,12 @@ test.skipIf(!chrome).each([
         }
         if (path.startsWith("/api/world/observability"))
           return Response.json(unavailableObservability);
+        if (path === "/herdr-world-logo.svg")
+          return new Response(
+            Bun.file(
+              join(import.meta.dir, "../../public/herdr-world-logo.svg"),
+            ),
+          );
         const asset = assets.get(path);
         if (asset) return new Response(asset);
         if (path === "/")
@@ -217,23 +233,49 @@ test.skipIf(!chrome).each([
         30_000,
       );
       expect(failures).toEqual([]);
-      if (Bun.env.BOARD_CAPTURE_DIR && cdp) {
-        await mkdir(Bun.env.BOARD_CAPTURE_DIR, { recursive: true });
-        await cdp("Runtime.evaluate", {
-          expression:
-            "document.querySelector('.board-tray button[aria-label=Close]')?.click()",
-        });
-        const capture = await cdp("Page.captureScreenshot", {
-          format: "png",
-          captureBeyondViewport: false,
-        });
-        await Bun.write(
-          join(
-            Bun.env.BOARD_CAPTURE_DIR,
-            `board-work-${width}x${height}${motion === " with reduced motion" ? "-reduced" : ""}.png`,
-          ),
-          Buffer.from(String(capture.data), "base64"),
-        );
+      if (cdp) {
+        const command = cdp;
+        const writeCapture = async (filename: string) => {
+          const capture = await captureScene(command, {
+            view: "board",
+            width,
+            height,
+            content: { selector: ".board-card:not(.board-note)" },
+          });
+          await Bun.write(filename, capture.bytes);
+        };
+        if (width === 1440 && height === 900 && motion === "") {
+          await command("Runtime.evaluate", {
+            expression: `(()=>{const s=document.createElement('style');s.id='missing-capture-content';s.textContent='.board-card{visibility:hidden!important}';document.head.append(s);})()`,
+          });
+          const missing = join(dir, "missing-content.png");
+          let failure = "";
+          try {
+            await writeCapture(missing);
+          } catch (error) {
+            failure = String(error);
+          } finally {
+            await command("Runtime.evaluate", {
+              expression:
+                "document.getElementById('missing-capture-content').remove()",
+            });
+          }
+          expect(failure).toContain("Capture expected content missing");
+          expect(existsSync(missing)).toBe(false);
+        }
+        if (Bun.env.BOARD_CAPTURE_DIR) {
+          await mkdir(Bun.env.BOARD_CAPTURE_DIR, { recursive: true });
+          await command("Runtime.evaluate", {
+            expression:
+              "document.querySelector('.board-tray button[aria-label=Close]')?.click()",
+          });
+          await writeCapture(
+            join(
+              Bun.env.BOARD_CAPTURE_DIR,
+              `board-work-${width}x${height}${motion === " with reduced motion" ? "-reduced" : ""}.png`,
+            ),
+          );
+        }
       }
     } finally {
       socket?.close();

@@ -2,7 +2,7 @@
 
 ## Development Setup
 
-1. Install Bun 1.4.3 or newer (CI uses 1.4.3) and start a local Herdr server.
+1. Install Bun 1.4.4 or newer (CI uses 1.4.4) and start a local Herdr server.
 2. From the repository root, run `bun install --frozen-lockfile`.
 3. Run these in separate terminals, then open <http://localhost:5173>:
 
@@ -68,7 +68,7 @@ every suite. Main always runs the full matrix; its integrated result remains the
 broader acceptance boundary. The hook uses `bun run check:docs`
 only if its local report proves a passed code gate on an ancestor and every
 change since then is eligible Markdown documentation. Behavioral contracts,
-OpenSpec, coverage-owned inputs and the named agent/crew/dispatch runbooks receive
+OpenSpec, coverage-owned inputs and the agent development guide receive
 the code gate even for Markdown edits; executable tooling also receives it.
 Eligible AGENTS.md, CONTRIBUTING.md and skill Markdown follow-ups may use
 `check:docs` under the same ancestral-pass rule. CI runs documentation
@@ -102,8 +102,8 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
 | Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
 
-The agent-tooling exception from #484 still covers `scripts/agent/**`, the named
-agent/crew/dispatch runbooks and `changes/<slug>.md`: static checks and affected
+The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
+helper), the agent development guide and `changes/<slug>.md`: static checks and affected
 unit tests, with the agent test inventory for uncovered modules. It skips heavy
 suites even though the inventory's broad scripts owner would otherwise apply.
 Contributor docs and skill Markdown run documentation checks or named consumer

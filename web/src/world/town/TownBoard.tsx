@@ -1,32 +1,46 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   formatOfficeCost,
   formatOfficeModelNames,
   formatOfficeUsage,
   type OfficeObservability,
 } from "../officeObservability";
-import type { TownModel } from "./townModel";
-import type { TownSummary } from "./townSummary";
+import type {
+  TownPlaceSummary,
+  TownSummary,
+  TownSummaryCounts,
+} from "./townSummary";
+import type { TownPlaceEconomy } from "./townPlaceUsage";
+import { townPriceNote } from "./townExpenses";
+import {
+  townFuelGauges,
+  townFuelNotes,
+  townLimits,
+  useTownLimits,
+} from "./townLimits";
+import {
+  TownFuel,
+  TownFuelChip,
+  townFuelLowest,
+  townFuelLowestText,
+} from "./TownFuelGauge";
 
+/**
+ * The Town board counts the whole town from the Town summary (townSummary.ts):
+ * every building's agents, whichever rooms and desks the scene has admitted.
+ */
 export function TownBoard({
-  model,
+  counts,
   observability,
-  summaryCounts,
   onOpenSummary,
+  sinceYouLeft,
 }: {
-  model: TownModel;
+  counts: TownSummary["counts"];
   observability: OfficeObservability;
-  summaryCounts?: TownSummary["counts"];
   onOpenSummary?: () => void;
+  /** "Since you left" after a return: on the sign, and under the phone chip. */
+  sinceYouLeft?: { board: ReactNode; chip: ReactNode };
 }) {
-  const counts = { working: 0, blocked: 0, done: 0, idle: 0, unknown: 0 };
-  for (const agent of model.agents.values()) counts[agent.semanticStatus] += 1;
-  // The shared summary's counts, when Town provides them (see townSummary).
-  if (summaryCounts) {
-    counts.working = summaryCounts.working;
-    counts.blocked = summaryCounts.needsYou;
-    counts.done = summaryCounts.finished;
-  }
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   // Phones show a compact chip; it opens the full board in place.
@@ -37,7 +51,17 @@ export function TownBoard({
       setOpen(false);
     }
   };
-  const summary = `${counts.working} working, ${counts.blocked} need you, ${counts.done} done`;
+  const population = `${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} in ${counts.buildings} ${counts.buildings === 1 ? "building" : "buildings"}`;
+  // Subscription fuel: each harness's limit windows, from harness usage.
+  const usage = useTownLimits();
+  const now = Date.now();
+  const limits = townLimits(usage);
+  const gauges = townFuelGauges(limits, now);
+  const notes = townFuelNotes(limits, gauges);
+  const lowest = townFuelLowest(gauges);
+  const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}${
+    lowest ? `; ${townFuelLowestText(lowest, now)}` : ""
+  }`;
   return (
     <>
       <button
@@ -61,9 +85,11 @@ export function TownBoard({
         onKeyDown={closeOnEscape}
       >
         <span data-status="working">{counts.working}</span>
-        <span data-status="blocked">!{counts.blocked}</span>
-        <span data-status="done">✓{counts.done}</span>
+        <span data-status="blocked">!{counts.needsYou}</span>
+        <span data-status="done">✓{counts.finished}</span>
+        {lowest ? <TownFuelChip lowest={lowest} now={now} /> : null}
       </button>
+      {sinceYouLeft?.chip}
       <div
         id="town-board"
         className="town-board"
@@ -84,39 +110,130 @@ export function TownBoard({
             </button>
           ) : null}
         </div>
-        <dl>
-          <div>
-            <dt>Working</dt>
-            <dd>{counts.working}</dd>
-          </div>
-          <div>
-            <dt>Need you</dt>
-            <dd>{counts.blocked}</dd>
-          </div>
-          <div>
-            <dt>Done</dt>
-            <dd>{counts.done}</dd>
-          </div>
-        </dl>
-        <div className="town-board-economy">
-          <span>ECONOMY</span>
-          {available ? (
-            <>
-              <b>{formatOfficeCost(observability.totalCostUsd)}</b>
-              <small>
-                {formatOfficeUsage(observability.totalUsage)} tokens
-                {observability.models.length
-                  ? ` · ${formatOfficeModelNames(observability.models)}`
-                  : ""}
-              </small>
-            </>
-          ) : (
-            <small>
-              No cost data. Configure a metrics provider in settings.
-            </small>
-          )}
-        </div>
+        {sinceYouLeft?.board}
+        <TownBoardCounts counts={counts} />
+        <p className="town-board-population">
+          {population}
+          {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
+        </p>
+        <TownBoardEconomy
+          {...(available
+            ? {
+                cost: formatOfficeCost(observability.totalCostUsd),
+                detail: `${formatOfficeUsage(observability.totalUsage)} tokens${
+                  observability.models.length
+                    ? ` · ${formatOfficeModelNames(observability.models)}`
+                    : ""
+                }`,
+              }
+            : {
+                detail:
+                  "No cost data. Configure a metrics provider in settings.",
+              })}
+        />
+        <TownFuel gauges={gauges} notes={notes} now={now} />
       </div>
     </>
+  );
+}
+
+/** The board's agent numbers, one short word per column: busy, waiting, done and quiet. */
+function TownBoardCounts({ counts }: { counts: TownSummaryCounts }) {
+  return (
+    <dl className="town-board-counts">
+      <div>
+        <dt>Busy</dt>
+        <dd>{counts.working}</dd>
+      </div>
+      <div>
+        <dt>Waiting</dt>
+        <dd>{counts.needsYou}</dd>
+      </div>
+      <div>
+        <dt>Done</dt>
+        <dd>{counts.finished}</dd>
+      </div>
+      <div>
+        <dt>Quiet</dt>
+        <dd>{counts.quiet}</dd>
+      </div>
+    </dl>
+  );
+}
+
+/** The board's economy numbers: a cost, then tokens and models, or why not. */
+function TownBoardEconomy({
+  label = "ECONOMY",
+  cost,
+  detail,
+}: {
+  label?: string;
+  cost?: string;
+  detail: string;
+}) {
+  return (
+    <div className="town-board-economy">
+      <span>{label}</span>
+      {cost === undefined ? null : <b>{cost}</b>}
+      <small>{detail}</small>
+    </div>
+  );
+}
+
+const PLACE_ECONOMY: Record<
+  Exclude<TownPlaceEconomy["status"], "ready">,
+  string
+> = {
+  loading: "Reading today's usage…",
+  unavailable: "Usage is unavailable right now.",
+  stale: "Usage is out of date: it could not be refreshed.",
+  none: "No usage recorded here today.",
+  "no-data": "No usage data from this host.",
+};
+
+/**
+ * A room's or table's card: the Town board without its agents list, for
+ * that place. The agent numbers are its part of the Town summary; the
+ * economy numbers are today's harness usage there (townPlaceUsage.ts), since
+ * the board's metrics provider has no places in it.
+ */
+export function TownPlaceSummaryCard({
+  place,
+  economy,
+}: {
+  place: TownPlaceSummary;
+  economy: TownPlaceEconomy;
+}) {
+  const { counts } = place;
+  return (
+    <div className="town-place-summary">
+      <TownBoardCounts counts={counts} />
+      <p className="town-board-population">
+        {counts.agents} {counts.agents === 1 ? "agent" : "agents"}
+        {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
+      </p>
+      {economy.status === "ready" ? (
+        <TownBoardEconomy
+          label="ECONOMY TODAY"
+          cost={
+            economy.price === "priced"
+              ? formatOfficeCost(economy.costUsd, "estimated")
+              : undefined
+          }
+          detail={`${formatOfficeUsage(economy.tokens)} tokens${
+            economy.models.length
+              ? ` · ${formatOfficeModelNames(economy.models.map((model) => ({ model })))}`
+              : ""
+          }${economy.price === "priced" ? "" : ` · ${townPriceNote(economy.price)}`}${
+            economy.partial ? " · partial" : ""
+          }`}
+        />
+      ) : (
+        <TownBoardEconomy
+          label="ECONOMY TODAY"
+          detail={PLACE_ECONOMY[economy.status]}
+        />
+      )}
+    </div>
   );
 }

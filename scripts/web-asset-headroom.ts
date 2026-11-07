@@ -75,9 +75,11 @@ export async function settleVerdict(options: {
   readMainSize: (sha: string) => Promise<Size | undefined>;
   post: (state: "success" | "failure", description: string) => Promise<void>;
   rounds?: number;
+  /** The web asset budget; the shipped one unless a test supplies its own. */
+  budget?: Size;
 }): Promise<ReturnType<typeof judge>> {
   let against = { sha: options.baseSha, size: options.base };
-  let verdict = judge(against.size, options.delta);
+  let verdict = judge(against.size, options.delta, options.budget);
   for (let round = 0; ; round++) {
     await options.post(verdict.state, verdict.description);
     if (round + 1 >= (options.rounds ?? 5)) {
@@ -99,7 +101,7 @@ export async function settleVerdict(options: {
     const size = await options.readMainSize(tip);
     if (!size) break;
     against = { sha: tip, size };
-    verdict = judge(size, options.delta);
+    verdict = judge(size, options.delta, options.budget);
   }
   return verdict;
 }

@@ -1,4 +1,4 @@
-import { projectAgent, target } from "./officeAgent";
+import { officeDeskLabel, projectAgent, target } from "./officeAgent";
 import type { OfficeHost } from "./officeHost";
 import type {
   OfficeAgent,
@@ -6,11 +6,10 @@ import type {
   OfficePaneDevice,
   OfficeRoom,
 } from "./officeProjectionTypes";
-import {
-  boundedOptionalText,
-  type WorldAgentStatus,
-  type WorldLeafObject,
-  type WorldSpaceObject,
+import type {
+  WorldAgentStatus,
+  WorldLeafObject,
+  WorldSpaceObject,
 } from "./worldObject";
 
 /**
@@ -72,13 +71,13 @@ export function* constructRoom(
   for (const [index, tab] of space.tabs.entries()) {
     const leaves = leavesByTab.get(tab.tab_id) ?? NO_LEAVES;
     desks.push({
-      key: JSON.stringify([space.connectionId, "tab", tab.tab_id]),
+      key: officeDeskKey(space.connectionId, tab.tab_id),
       hostKey: host.key,
       roomKey,
       tabRef: target(space, "tab", tab.tab_id),
       terminalSelectionKeys: leaves.map(({ id }) => id).sort(),
       observedGeneration: space.generation,
-      displayLabel: boundedOptionalText(tab.label, 100) ?? `Tab ${tab.number}`,
+      displayLabel: officeDeskLabel(leaves, tab),
       appearanceStatus: leaves[0]?.appearance?.status,
       order: index,
       stale: space.stale,
@@ -205,4 +204,9 @@ export function compareDeskCandidates(left: OfficeAgent, right: OfficeAgent) {
 
 function roomStatusOrder(status: WorldAgentStatus) {
   return status === "working" ? 0 : status === "unknown" ? 1 : 2;
+}
+
+/** A desk's key: its tab on its connection, whatever room it is in. */
+export function officeDeskKey(connectionId: string, tabId: string) {
+  return JSON.stringify([connectionId, "tab", tabId]);
 }

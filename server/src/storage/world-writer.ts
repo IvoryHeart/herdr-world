@@ -1,3 +1,5 @@
+import { createTerminalMarkWriter, readTerminalMarks } from "./terminal-marks";
+import { readLegacyReviewArchiveState } from "./legacy-review-archive";
 import {
   recordAnswerAttempt,
   answerAttemptEvidence,
@@ -17,6 +19,8 @@ import {
   originalAsker,
 } from "../world/ask-delivery-types";
 import { readProfiles, executeProfileOperation } from "./world-profiles";
+import { importBoard } from "./board-import";
+import { readBoard, executeBoardOperation } from "./world-board";
 import { importRuntimeStatus } from "./runtime-status-import";
 import { readRuntimeStatus, writeRuntimeStatus } from "./runtime-status";
 import { importLegacyProfiles } from "./profile-import";
@@ -36,7 +40,11 @@ import { dirname } from "node:path";
 import { assertSafeDataPath } from "../config/data-paths";
 import type { LedgerAsk, LedgerDocument } from "../world/world-ledger";
 import { importLegacyLedger } from "./world-import";
-import { migrateWorldDatabase, worldDatabaseVersion } from "./world-schema";
+import {
+  migrateWorldDatabase,
+  worldDatabaseVersion,
+  worldMigrations,
+} from "./world-schema";
 import {
   attentionFinished,
   attentionRetryDelay,
@@ -75,6 +83,10 @@ export function openWorldWriter(
     fault?: (stage: "before-commit" | "after-commit") => void;
   },
   effectVerbs: EffectVerbLookup = productionEffectVerb,
+  boardImport?: {
+    path: string;
+    fault?: (stage: "before-commit" | "after-commit") => void;
+  },
 ) {
   assertSafeDataPath(path);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -108,7 +120,7 @@ export function openWorldWriter(
     db.exec(
       "PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA wal_autocheckpoint=1000;",
     );
-    migrateWorldDatabase(db, path);
+    migrateWorldDatabase(db, path, worldMigrations, at);
     db.exec("PRAGMA busy_timeout=5000");
     importLegacyLedger(db, legacy, at);
     if (legacyProfiles !== undefined)
@@ -123,6 +135,14 @@ export function openWorldWriter(
   }
   const ids = createWorldIds(db, bytes);
   const bindings = createBindingWriter(db, ids);
+  const terminalMarks = createTerminalMarkWriter(db, ids, bindings);
+  try {
+    if (boardImport)
+      importBoard(db, boardImport.path, at, bindings, boardImport.fault);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   const revision = () =>
     (db.query("SELECT revision FROM ledger_meta").get() as { revision: number })
       .revision;
@@ -178,10 +198,14 @@ export function openWorldWriter(
       results: rows("results"),
     };
     const profiles = readProfiles(db);
+    const board = readBoard(db);
     const runtimeStatus = readRuntimeStatus(db);
     return {
       document,
+      terminalMarks: readTerminalMarks(db),
+      legacyReviewArchive: readLegacyReviewArchiveState(db),
       ...(profiles ? { profiles } : {}),
+      ...(board ? { board } : {}),
       ...(runtimeStatus ? { runtimeStatus } : {}),
       attention: (
         db.query("SELECT * FROM outbox ORDER BY rowid").all() as Record<
@@ -363,6 +387,7 @@ export function openWorldWriter(
         id,
         domain ? (JSON.parse(domain.body) as LedgerAsk) : null,
         effectVerbs,
+        incarnation,
       );
       if (contract && !contract.targets.length) {
         if (effect.contract && effect.initial_state !== "refused")
@@ -447,19 +472,25 @@ export function openWorldWriter(
   }
   function execute(request: StorageRequest, at: number): unknown {
     switch (request.type) {
+      case "terminal-mark":
+        return terminalMarks(request.operation, at);
       case "effect-read":
         return request.id
           ? {
               effect: effects.get(request.id),
               attention: attention(request.id),
             }
-          : effects.list(request.verb);
+          : request.lanes
+            ? effects.lanes(request.verb, request.after)
+            : effects.list(request.verb, request.connection);
       case "effect-transition":
         return effects.transition(request.change, at);
       case "load":
         return read();
       case "issue-id":
         return ids.issue(request.kind);
+      case "board":
+        return executeBoardOperation(db, request.operation, bindings, at);
       case "runtime-status":
         if (
           !db

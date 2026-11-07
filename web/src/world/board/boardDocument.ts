@@ -83,6 +83,8 @@ export type BoardString = {
 /** A desk's cell in its Town room (server/src/world/board-store.ts). */
 export type DeskCell = { col: number; row: number };
 export type DeskPin = { cell: DeskCell | null };
+/** A room's top-left in its Town building, in tiles from its corner. */
+export type RoomSpot = { x: number; y: number };
 export type BoardDocument = {
   appearance?: AppearanceRecords;
   version: 1;
@@ -96,6 +98,8 @@ export type BoardDocument = {
     colors?: Record<string, CardColor>;
     /** Town desks pinned by tab card key; absent before desk pins. */
     desk_pins?: Record<string, DeskPin>;
+    /** Town rooms the user placed, by workspace card key; absent before. */
+    room_pins?: Record<string, RoomSpot>;
     /** Terminal key to muted or focused; absent from older services. */
     interest?: Record<string, StoredInterest>;
     group_interest?: Record<string, GroupInterest>;
@@ -137,6 +141,7 @@ export type BoardOp =
   | { op: "desk.pin"; key: string; cell: DeskCell | null }
   | { op: "desk.unpin"; key: string }
   | { op: "desk.place"; key: string; cell: DeskCell }
+  | { op: "room.place"; connection_id: string; spots: Record<string, RoomSpot> }
   | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | { op: "group.interest"; id: string; interest: GroupInterest | null }
   | {

@@ -162,6 +162,7 @@ function fakeHerdr(initial: Record<string, unknown>) {
     prompts: [] as unknown[],
   };
   const call: HerdrCall = async (method, params) => {
+    if (method === "pane.read") return { read: { text: "❯ " } };
     if (method === "agent.get") return { agent: state.current };
     if (method === "agent.prompt") {
       state.prompts.push(params);
@@ -176,7 +177,10 @@ function fakeHerdr(initial: Record<string, unknown>) {
   return { state, call };
 }
 
-function chat(call: HerdrCall, files = localAgentSessionFiles) {
+function chat(
+  call: HerdrCall,
+  files: AgentSessionFileAccess = localAgentSessionFiles,
+) {
   return createHerdrConversationSource({
     herdrCall: call,
     files,
@@ -1146,4 +1150,78 @@ describe("durable record submission uses Chat's existing guarded path", () => {
       source.dispose();
     }
   });
+});
+
+test("a Pi directory guess can be read but cannot authorize a prompt", async () => {
+  const path = await transcript("pi-directory-guess");
+  const id = "11111111-1111-4111-8111-111111111111";
+  await writeFile(
+    path,
+    [
+      {
+        type: "session",
+        version: 3,
+        id,
+        cwd: "/synthetic/project",
+        timestamp: "2026-11-01T00:00:00Z",
+      },
+      {
+        type: "message",
+        id: "pi-user",
+        timestamp: "2026-11-01T00:00:01Z",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "A Pi question" }],
+        },
+      },
+      {
+        type: "message",
+        id: "pi-answer",
+        timestamp: "2026-11-01T00:00:02Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "A Pi answer" }],
+        },
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join("\n") + "\n",
+  );
+  let prompts = 0;
+  const call: HerdrCall = async (method) => {
+    if (method === "agent.get")
+      return {
+        agent: {
+          ...claude(path),
+          agent: "pi",
+          agent_session: null,
+          cwd: "/synthetic/project",
+        },
+      };
+    if (method === "agent.prompt") {
+      prompts++;
+      throw new Error("unexpected native prompt");
+    }
+    return {};
+  };
+  const file = await localAgentSessionFiles.statFile(path);
+  const source = chat(call, {
+    ...localAgentSessionFiles,
+    findPiSessionForCwd: async () => ({ ...file!, sessionId: id }),
+  });
+  const read = await source.read({ pane_id: "w1:p1" });
+  expect(read.status).toBe("ok");
+  expect(read.messages.some((message) => message.text === "A Pi answer")).toBe(
+    true,
+  );
+  expect(read.session_binding).toBe("guessed");
+  expect(read.session_fingerprint).toBeNull();
+  expect(
+    await source.send({
+      pane_id: "w1:p1",
+      text: "Do not send",
+      session_fingerprint: "",
+    }),
+  ).toMatchObject({ status: "refused", reason: "unavailable" });
+  expect(prompts).toBe(0);
 });

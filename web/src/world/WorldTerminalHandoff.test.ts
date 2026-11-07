@@ -1,9 +1,12 @@
+import { connectCapture } from "./testing/connectCapture";
+import { captureScene, resizeCapture } from "./testing/captureScene";
 import { captureResumeViewports } from "./testing/resumeVisualCapture";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { assetUrlImports } from "./testing/assetUrlImports";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
@@ -24,7 +27,6 @@ test.skipIf(!chrome)(
     const assets = new Map<string, Blob>();
     const captureDir = Bun.env.WORLD_WINDOW_CAPTURE_DIR;
     const resumeCaptureDir = Bun.env.WORLD_RESUME_CAPTURE_DIR;
-    const controlsCaptureDir = Bun.env.WORLD_WINDOW_CONTROLS_CAPTURE_DIR;
     const result = Promise.withResolvers<unknown>();
     const publicDir = join(import.meta.dir, "..", "..", "public");
     const pageRequested = Promise.withResolvers<void>();
@@ -60,18 +62,6 @@ test.skipIf(!chrome)(
           result.resolve(await request.json());
           return new Response("ok");
         }
-        if (path === "/capture/window-controls" && controlsCaptureDir) {
-          const [port] = (
-            await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
-          ).split("\n");
-          await captureResumeViewports(
-            port!,
-            controlsCaptureDir,
-            "window-controls",
-            `innerWidth > 768 || (() => { const b = document.querySelector('button[aria-label^="Open windows ("]'); if (!b) return false; const r = b.getBoundingClientRect(); return r.width >= 44 && r.height >= 44 && r.top >= 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button') === b && [...document.querySelectorAll('.world-managed-window.is-compact.is-active textarea.terminal-composer-input, .world-managed-window.is-compact.is-active .terminal-composer-toolbar button')].every(c => { const q = c.getBoundingClientRect(); return !q.width || !q.height || r.right <= q.left || r.left >= q.right || r.bottom <= q.top || r.top >= q.bottom; }); })()`,
-          );
-          return new Response(null, { status: 204 });
-        }
         if (
           path === "/capture/resume-disconnected" ||
           path === "/capture/resume-recovery"
@@ -84,6 +74,14 @@ test.skipIf(!chrome)(
               port!,
               resumeCaptureDir,
               path.endsWith("disconnected") ? "disconnected" : "recovery",
+              {
+                view: "board",
+                content: {
+                  selector:
+                    ".workspace-inspector .workspace-inspector-tabs, .workspace-inspector .workspace-inspector-view-select",
+                  scope: "document",
+                },
+              },
             );
           }
           return new Response(null, { status: 204 });
@@ -93,56 +91,46 @@ test.skipIf(!chrome)(
             const [port] = (
               await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
             ).split("\n");
-            const targets = (await (
-              await fetch(`http://127.0.0.1:${port}/json/list`)
-            ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-            const target = targets.find((target) => target.type === "page")!;
-            const socket = new WebSocket(target.webSocketDebuggerUrl);
-            await new Promise<void>((resolve, reject) => {
-              socket.onopen = () => resolve();
-              socket.onerror = () =>
-                reject(new Error("Screenshot browser connection failed"));
-            });
-            let id = 0;
-            const command = (
-              method: string,
-              params: Record<string, unknown> = {},
-            ) =>
-              new Promise<Record<string, string>>((resolve, reject) => {
-                const current = ++id;
-                const receive = (event: MessageEvent) => {
-                  const message = JSON.parse(String(event.data));
-                  if (message.id !== current) return;
-                  socket.removeEventListener("message", receive);
-                  if (message.error) reject(new Error(message.error.message));
-                  else resolve(message.result);
-                };
-                socket.addEventListener("message", receive);
-                socket.send(JSON.stringify({ id: current, method, params }));
-              });
+            const { command, close } = await connectCapture(port!);
             try {
-              if (path.endsWith("mobile")) {
-                await command("Emulation.setDeviceMetricsOverride", {
-                  width: 390,
-                  height: 844,
-                  deviceScaleFactor: 1,
-                  mobile: false,
-                });
-                await Bun.sleep(200);
-              }
-              const screenshot = await command("Page.captureScreenshot", {
-                format: "png",
+              const original = await command("Runtime.evaluate", {
+                expression: "({width:innerWidth,height:innerHeight})",
+                returnByValue: true,
+              });
+              const dimensions = path.endsWith("mobile")
+                ? { width: 390, height: 844 }
+                : original.result.value;
+              if (path.endsWith("mobile"))
+                await resizeCapture(
+                  command,
+                  dimensions.width,
+                  dimensions.height,
+                );
+              const screenshot = await captureScene(command, {
+                ...dimensions,
+                content: {
+                  selector:
+                    ".workspace-inspector .workspace-inspector-tabs, .workspace-inspector .workspace-inspector-view-select",
+                  scope: "document",
+                },
               });
               await Bun.write(
                 join(captureDir, `${path.split("/").pop()}.png`),
-                Buffer.from(screenshot.data!, "base64"),
+                screenshot.bytes,
               );
               if (path.endsWith("mobile")) {
-                await command("Emulation.clearDeviceMetricsOverride");
-                await Bun.sleep(200);
+                await resizeCapture(
+                  command,
+                  original.result.value.width,
+                  original.result.value.height,
+                );
+                await command("Runtime.evaluate", {
+                  expression: `window.__HERDR_WORLD_CAPTURE__.wait(${JSON.stringify({ ...original.result.value, timeoutMs: 15000 })})`,
+                  awaitPromise: true,
+                });
               }
             } finally {
-              socket.close();
+              close();
             }
           }
           return new Response(null, { status: 204 });
@@ -169,6 +157,7 @@ test.skipIf(!chrome)(
         target: "browser",
         define: { __HERDR_WORLD_VERSION__: JSON.stringify("9.8.7-test") },
         plugins: [
+          assetUrlImports,
           {
             name: "created-opener-clock-and-completion",
             setup(builder) {
@@ -248,7 +237,7 @@ test.skipIf(!chrome)(
         [
           chrome!,
           "--headless=new",
-          ...(captureDir || resumeCaptureDir || controlsCaptureDir
+          ...(captureDir || resumeCaptureDir
             ? ["--remote-debugging-port=0"]
             : []),
           "--window-size=1440,1000",
@@ -259,7 +248,7 @@ test.skipIf(!chrome)(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}town${resumeCaptureDir ? "?resume-gallery" : controlsCaptureDir ? "?window-control-captures" : ""}`,
+          `${server.url.href}town${resumeCaptureDir ? "?resume-gallery" : ""}`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
@@ -272,7 +261,11 @@ test.skipIf(!chrome)(
           );
         }),
         "World terminal handoff",
-        resumeCaptureDir ? 160_000 : 120_000,
+        // The fixture makes about 330 bounded waits and runs ~50 s locally,
+        // but 83-115 s on CI runners (scripts/world-browser-timings.json), so
+        // a 120 s deadline failed on ordinary runner variance. A stalled step
+        // still fails sooner: each wait gives up after 16 s and reports.
+        resumeCaptureDir ? 220_000 : 180_000,
       );
       if (Array.isArray(observed) && observed.length)
         console.info("World handoff failure detail", JSON.stringify(observed));
@@ -284,5 +277,5 @@ test.skipIf(!chrome)(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  150_000 + BROWSER_STARTUP_TIMEOUT_MS,
+  250_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

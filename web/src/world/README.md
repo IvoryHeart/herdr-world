@@ -105,7 +105,30 @@ reads for a preceding stop cannot enable its successor's review mark. Display
 expiry alone does not invalidate a receipt. Shared Desk metadata belongs to agent
 panes; verified asking shells still appear in Needs you and open their original
 terminal without attempting an agent-metadata mutation. Reads use fair bounded admission and
-independent host queues. Pending reads keep
+independent host queues. [DeskOtherHosts.tsx](DeskOtherHosts.tsx) expands aggregate
+summaries without operational reads and captures the displayed agent sessions.
+[deskReveal.ts](deskReveal.ts) admits the captured runtime, pane, terminal and
+session through a qualified live pane read before widening Hosts and opening the
+Inspector through the existing session-checked focus queue. Queued live pane
+and session reads revalidate the full captured source, harness, identity kind
+and value before native focus. Stale or replaced
+occupants remain explained and disabled; existing Inspector ownership is unchanged.
+Desktop and phone shell consumers run in [HostsFilter.test.ts](HostsFilter.test.ts)
+with the [reveal acceptance](testing/deskRevealAcceptance.ts); finite admission
+and retirement cases run in [deskReveal.test.ts](deskReveal.test.ts). Shell reveal
+cases minimize the phone Inspector through its menu and check actual viewport
+bounds and pointer hits for host chips and expanded reveal actions at all five
+review viewports. Desk reserves the snapped right half for its reading pane,
+including on wide monitors. Each reveal owns an AbortController: Desk departure,
+unmount and a newer reveal permanently abort the previous request, including its
+Inspector admission. The qualified focus queue rechecks the opening intent before
+subsequent native calls. Supersession stays distinct from real identity/read
+failures and neither disables a healthy agent nor records a recent open.
+[Hook lifecycle regressions](testing/deskRevealHookAcceptance.tsx) hold reads and
+Inspector admission across exit/return, replacement and unmount; the
+[real shell cancellation cases](testing/deskRevealCancellationAcceptance.ts) hold
+both the initial read and queued native focus at all five viewports.
+Pending reads keep
 their admission across refreshes; queued work coalesces to the latest observation.
 
 When `world_shared_acquisition` is negotiated, [useDeskWatch](useDeskWatch.ts)
@@ -134,21 +157,61 @@ carpet and each tab a team table with one seat per pane. Its contract is in the
 World surfaces spec. Town still reuses a few modules named after the retired
 Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 `officePreferences.ts`, `officeObservability.ts`); the names are historical.
+A desk shows its agent's Herdr name when exactly one agent occupies the tab and
+has a name; unnamed and multi-agent tabs keep the tab label.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
-| View composition, room dialogs and creation | [TownView.tsx](TownView.tsx) owns taps, peeks, replies through World's terminal composer, toasts, room dialogs and seat/room creation and mounts [TownCanvas.tsx](town/TownCanvas.tsx). | [Town browser fixture](town/TownCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
+| View composition, room dialogs and creation | [TownView.tsx](TownView.tsx) owns taps, peeks, replies through World's terminal composer, toasts ([TownToasts.tsx](town/TownToasts.tsx), with one optional action such as Undo), room dialogs and seat/room creation and mounts [TownCanvas.tsx](town/TownCanvas.tsx). | [Town browser fixture](town/TownCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
 | Needs-you rail and peek | [TownRail.tsx](town/TownRail.tsx) and [TownPeek.tsx](town/TownPeek.tsx); [townChat.ts](town/townChat.ts) reads pane screens and sends one-tap answers through each pane's own connection and generation; [terminalComposerRequest.ts](terminalComposerRequest.ts) asks the pane's terminal to open its composer. | [Town browser fixture](town/TownCanvas.browser.tsx) |
 | Herdr-to-Town data | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology and pane devices with `TOWN_PRESENTATION_BOUNDS`; [townModel.ts](town/townModel.ts) indexes presented rooms, desks, seats and per-room counts. | [Projection tests](herdrOfficeProjection.test.ts) |
-| Town scene model | [scene/townScene.ts](town/scene/townScene.ts) derives what the town is, headless: the model with colours and pins, placement with its memory per shape, the reflow hold and its explicit Fold/Expand bypass, teams, accessible targets, desk badges and blocked-since times. It reads time only through the [clock port](town/scene/ports.ts). A lint rule keeps browser clocks, timers, globals, frameworks, renderers and adapters out of `town/scene/`, and [a boundary test](town/townSceneBoundary.test.ts) checks that rule and the scene's whole module graph; `TownCanvas` is its adapter and passes the page clock ([townBrowserClock.ts](town/townBrowserClock.ts)). [scene/townSceneCamera.ts](town/scene/townSceneCamera.ts) owns where the camera goes: home and re-framing, keys, the zoom steps, focus, room requests, the drawn camera and the pose kept per shape; the renderer receives that camera and steps its motion. [scene/townInteraction.ts](town/scene/townInteraction.ts) carries out pointer and wheel input through World's gesture machine (holds, the magnet, edge pan, drops and pinches) with the renderer, drag ghost and callbacks as ports, and animation frames through a frames port; `TownCanvas` only reads DOM events. [scene/townSceneDiff.ts](town/scene/townSceneDiff.ts) hands the renderer each frame with its dirty sets (`apply`): bakes from [scene/townSceneBake.ts](town/scene/townSceneBake.ts) and the hosts whose agents to reconcile from [scene/townSceneActors.ts](town/scene/townSceneActors.ts); unchanged buildings keep their navigation. [scene/townHud.ts](town/scene/townHud.ts) holds what the HUD shows (`visible`, `level`, a 15 s `ages` clock), publishing only on change through `useTownHud`, follows drawn frames for HUD elements outside React (the badge popover) and computes the anchors for World's connector lines ([#522](https://github.com/IvoryHeart/herdr-world/issues/522)). | [Scene tests](town/scene/townScene.test.ts), [camera tests](town/scene/townSceneCamera.test.ts), [interaction tests](town/scene/townInteraction.test.ts), [bake tests](town/scene/townSceneBake.test.ts), [actor tests](town/scene/townSceneActors.test.ts), [diff tests](town/scene/townSceneDiff.test.ts), [HUD tests](town/scene/townHud.test.ts), [boundary test](town/townSceneBoundary.test.ts) |
-| Town placement | [townLayout.ts](town/townLayout.ts) places buildings, rooms, desk cells, lounge and reception from native order, keeping desks in place while a scene is live. | [Layout tests](town/townLayout.test.ts) |
+| Town scene model | [scene/townScene.ts](town/scene/townScene.ts) derives what the town is, headless: the model with colours and pins, placement with its memory per shape, the reflow hold and its explicit Fold/Expand bypass, teams, accessible targets, desk badges and blocked-since times. It reads time only through the [clock port](town/scene/ports.ts). A lint rule keeps browser clocks, timers, globals, frameworks, renderers and adapters out of `town/scene/`, and [a boundary test](town/townSceneBoundary.test.ts) checks that rule and the scene's whole module graph; `TownCanvas` is its adapter and passes the page clock ([townBrowserClock.ts](town/townBrowserClock.ts)). [scene/townSceneCamera.ts](town/scene/townSceneCamera.ts) owns where the camera goes: home and re-framing (a town at home flies to its new home framing when it grows or shrinks; elsewhere the camera glides with the room in view, from where it was drawn even when the smaller town's bounds would clamp it), keys, the zoom steps, focus, room requests, the drawn camera and the pose kept per shape; the renderer receives that camera and steps its motion. [scene/townInteraction.ts](town/scene/townInteraction.ts) carries out pointer and wheel input through World's gesture machine (holds, the magnet, edge pan, drops and pinches) with the renderer, drag ghost and callbacks as ports, and animation frames through a frames port; `TownCanvas` only reads DOM events. [scene/townSceneDiff.ts](town/scene/townSceneDiff.ts) hands the renderer each frame with its dirty sets (`apply`): bakes from [scene/townSceneBake.ts](town/scene/townSceneBake.ts) and the hosts whose agents to reconcile from [scene/townSceneActors.ts](town/scene/townSceneActors.ts); unchanged buildings keep their navigation. [scene/townHud.ts](town/scene/townHud.ts) holds what the HUD shows (`visible`, `level`, a 15 s `ages` clock), publishing only on change through `useTownHud`, follows drawn frames for HUD elements outside React (the badge popover) and computes the anchors for World's connector lines ([#522](https://github.com/IvoryHeart/herdr-world/issues/522)). | [Scene tests](town/scene/townScene.test.ts), [camera tests](town/scene/townSceneCamera.test.ts), [interaction tests](town/scene/townInteraction.test.ts), [bake tests](town/scene/townSceneBake.test.ts), [actor tests](town/scene/townSceneActors.test.ts), [diff tests](town/scene/townSceneDiff.test.ts), [HUD tests](town/scene/townHud.test.ts), [boundary test](town/townSceneBoundary.test.ts) |
+| Town placement | [townLayout.ts](town/townLayout.ts) places buildings, rooms, desk cells, reception (top) and the bar (a bottom corner, the lounge) from native order, keeping desks in place while a scene is live. Every row of lots has a street above and below it and a road right of every lot; [townLots.ts](town/townLots.ts) places the town center ([townCenter.ts](town/townCenter.ts) geometry) at the top, just across the first street from the buildings and centred over their first row. Rooms stack into columns in Herdr's workspace order until the user moves one: then every room of that building keeps the spot World saved for it (Board layout `room_pins`, read by [townRoomPins.ts](town/townRoomPins.ts)), clear of the others. [townRoomPlace.ts](town/townRoomPlace.ts) stacks and arranges rooms, previews where a carried room and the rooms in its way land, lays out a building's Tidy rooms (the never-moved stacking, in workspace order; [TownTidyRooms.tsx](town/TownTidyRooms.tsx) offers it on the building's sign and reception board) and its Undo, and detects a move (saved spots or workspace order changed), which applies at once and leaves the camera; [townMoves.ts](town/townMoves.ts) puts Herdr's workspace order in the rooms' reading order with `workspace.move`. | [Layout and room-order tests](town/townLayout.test.ts), [Tidy rooms tests](town/townRoomTidy.test.ts), [Tidy rooms button test](town/TownTidyRooms.test.ts) |
+| Town center | [townCenterPaint.ts](town/townCenterPaint.ts) paints the landmark; [TownCenterMenu.tsx](town/TownCenterMenu.tsx) is its plaque and radial menu, which `TownCanvas` opens from a canvas tap (hit `center`) and [useTownCenterRing.ts](town/useTownCenterRing.ts) keeps on the doors as the camera moves; [useTownCenter.ts](town/useTownCenter.ts) builds the actions from World's launcher, profiles, Town master, Needs you, Town summary and room creation. | [Menu geometry](town/TownCenterMenu.test.ts), [hit test](town/townHitTest.test.ts), [interaction](town/scene/townInteraction.test.ts), [center actions](town/useTownCenter.test.ts) |
+| Board hub | [board/BoardHub.tsx](board/BoardHub.tsx) offers the town center's actions on Board, beside the bin: `boardHubActions` builds them with the same helpers ([useTownCenter.ts](town/useTownCenter.ts)) from Board's selection and World, and `BoardHubDock` draws **+**, the Town master's crown and a **⋯** menu; `WorldControlPlane` passes it to [WorldBin](bin/WorldBin.tsx) as `dock`. Its **Summary** goes to Town and opens Town's summary through [townSummaryRequest.ts](town/townSummaryRequest.ts). The dock registers itself in [binDock.ts](bin/binDock.ts) so [BoardControls](board/BoardControls.tsx) measures its row without the dock's width. | [Hub actions](board/boardHub.test.ts), [hub DOM](board/BoardHub.dom.test.ts), [dock reserve](bin/binDock.test.ts), [summary request](town/townSummaryRequest.test.ts), [Board browser fixture](BoardView.browser.tsx) |
 | Pointer input | `TownCanvas` reads pointer events and [scene/townInteraction.ts](town/scene/townInteraction.ts) hit-tests the canvas as last drawn and feeds World's shared gesture machine; [townGesture.ts](town/townGesture.ts) holds Town's targets (a hit, and the desk or agent a drag would carry) and thresholds. | [Shared cases](interaction/gesture.test.ts), [Town browser test](town/TownCanvas.test.ts) |
 | Camera and zoom levels | [townCamera.ts](town/townCamera.ts) owns pan, zoom about a point, flights and the town/overview/room/desk thresholds; [townCameraTargets.ts](town/townCameraTargets.ts) resolves desk cells and room/building zoom targets. | [Camera tests](town/townCamera.test.ts) |
 | Agent locations and movement | [townActors.ts](town/townActors.ts) seats, queues and walks agents (presentation only) with per-building pathfinding. Reflow translates occupants and their in-flight paths/tweens with their building, keeping them inside its navigation grid; if a shrinking floor invalidates a current position, tween or path, the actor settles at its current assigned goal immediately; resting lounge occupants retain their building-local slot without walking across town. Lounge reservations follow building-local slot order across reflows; agents finishing a stand-up animation resolve their walking destination from the latest snapshot layout. | [Actor tests](town/townActors.test.ts) |
-| Pixi drawing and art | [townRenderer.ts](town/townRenderer.ts) owns renderer lifetime and per-frame updates, and bakes again only what [scene/townSceneBake.ts](town/scene/townSceneBake.ts) marks dirty (the whole scene, or single buildings); [townRendererScene.ts](town/townRendererScene.ts) builds the outdoor items and bakes each building and desk pod, [townRendererActors.ts](town/townRendererActors.ts) draws standing agents and status bubbles, and [townRendererDrag.ts](town/townRendererDrag.ts) draws the carried desk or agent and its dust; [townPaint.ts](town/townPaint.ts) bakes ground, interiors, façades and roofs; [townSprites.ts](town/townSprites.ts) holds the generated pixel art. See [world asset provenance](../../../docs/world-assets.md). | [Town browser test](town/TownCanvas.test.ts), [bake paint check](town/townBakePaint.test.ts) |
+| Bin and bus | [binStore.ts](bin/binStore.ts) mirrors the service bin and its bus clock; [WorldBin.tsx](bin/WorldBin.tsx) is the chip, tray and **Put in bin**; [binDrop.ts](bin/binDrop.ts) is the drop target that Town's carry and Board's card and pane drags aim at. In Town, [townBus.ts](town/townBus.ts) places a stop at every crossing, the route, each binned agent at the stop nearest its room and the bus's timeline (slowing to each stop with riders, about 10 s there, off the map as the trip ends); binned agents leave by the front door (`away` in [townActors.ts](town/townActors.ts)) and [TownBusLayer.tsx](town/TownBusLayer.tsx) draws them, the stops and the bus. | [Store tests](bin/binStore.test.ts), [bus tests](town/townBus.test.ts) |
+| New agent arrival | [agentStarts.ts](agentStarts.ts) keeps the starts this page made that World confirmed (the launcher notes them, with where they were asked for); [town/townArrivals.ts](town/townArrivals.ts) decides who arrives when (once per start, staggered, never for agents already there or after a reload) and the walk from the town center or the nearest bus stop by pavements and side roads to the front door; [town/TownArrivalLayer.tsx](town/TownArrivalLayer.tsx) draws the walk and the welcome, and passes `arrivingKeys` to the actors, which keep the agent outside the door until it is there and then hurry it in ([townActors.ts](town/townActors.ts)). | [Arrival tests](town/townArrivals.test.ts), [start tests](agentStarts.test.ts), [actor tests](town/townActors.test.ts) |
+| Pixi drawing and art | [townRenderer.ts](town/townRenderer.ts) owns renderer lifetime and per-frame updates; [townRendererTopology.ts](town/townRendererTopology.ts) owns the ground and building views and bakes again only what [scene/townSceneBake.ts](town/scene/townSceneBake.ts) marks dirty (the ground when the town's size or a building's rectangle changes; changed, new and gone buildings). When desks, rooms or hosts appear or disappear, what was drawn stays until its replacement is drawn: everything in view is baked in the change's first frame, then [townTransition.ts](town/townTransition.ts) fades new buildings in, gone ones out, crossfades rebaked ones (their interior and desks fade in over the old drawing, so an added or closed desk fades while the rest stays put) and glides moved ones (about 0.3 s, instant under reduced motion, while carrying a desk or room, or while tidying a building's rooms); [townBuildingLayers.ts](town/townBuildingLayers.ts) moves each building's DOM layer with it, and the scene camera glides or flies with the buildings. The diagnostics' `topologyGaps` counts frames after a change that miss ground, a building or a desk in view (always 0). [townRendererScene.ts](town/townRendererScene.ts) builds the outdoor items and bakes each building and desk pod, [townRendererActors.ts](town/townRendererActors.ts) draws standing agents and status bubbles, and [townRendererDrag.ts](town/townRendererDrag.ts) draws the carried desk or agent and its dust, with [townRendererGlide.ts](town/townRendererGlide.ts) gliding a tidied building's rooms to their new spots; [townPaint.ts](town/townPaint.ts) bakes ground, interiors, façades and roofs; [townSprites.ts](town/townSprites.ts) holds the generated pixel art. See [world asset provenance](../../../docs/world-assets.md). | [Town browser test](town/TownCanvas.test.ts), [bake paint check](town/townBakePaint.test.ts), [transition tests](town/townTransition.test.ts) |
 | Room cards, receptions, targets and room actions | The DOM world and team layers in [TownWorldLayer.tsx](town/TownWorldLayer.tsx) follow the camera, with visibility from [townVisibleHosts.ts](town/townVisibleHosts.ts), reception entries in [TownReceptionEntry.tsx](town/TownReceptionEntry.tsx), and batched accessible target buttons in [TownAccessibleTargets.tsx](town/TownAccessibleTargets.tsx); [townTargets.ts](town/townTargets.ts) builds accessible targets and [townHitTest.ts](town/townHitTest.ts) maps pointer hits to keys. Room plates use [TownRoomPlaque.tsx](town/TownRoomPlaque.tsx) and [their styles](town/townRoomPlaque.css) to fit the projected room width; only names truncate, the fixed active/total agent count reuses the room's `working + blocked` and `agents` counts (excluding plain terminals and asks), and management actions reveal below on hover, focus or touch. The dashed seat opens the room-qualified launcher (Terminal first). Other scene styles live in [town.css](town/town.css). | [Town browser test](town/TownCanvas.test.ts) |
 | New agent and agent profiles | [agentProfiles.ts](agentProfiles.ts) holds the profiles store, launcher calls and the events that open [AgentLauncherDialog.tsx](AgentLauncherDialog.tsx) and [ProfileEditor.tsx](ProfileEditor.tsx), which [WorldControlPlane.tsx](WorldControlPlane.tsx) mounts for every view; [ProfileSprite.tsx](ProfileSprite.tsx) draws a profile's look with Town's sprites, and `townRenderer` dresses agents launched from a profile. | [Browser helper tests](agentProfiles.test.ts) |
 | Town settings or the Town board's cost line | [officePreferences.ts](officePreferences.ts) (shared Inspector opening, Town calm motion), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx) (the optional Prometheus cost metrics), displayed by [TownBoard.tsx](town/TownBoard.tsx). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
+
+### Evidence capture
+
+[useDrawReadiness](useDrawReadiness.ts) adapts committed Town/Board/Desk surfaces to
+[the bounded controller](drawReadiness.ts). Town reports after Pixi renders and its
+visible materialization budget is complete; held Town reflow blocks readiness.
+Board reports from its paint seam after deferred observation, placement and
+culling commits; Desk uses committed DOM plus fonts/images and paint callbacks.
+Every commit/container resize invalidates the mount-qualified revision. Capture
+requests coalesce synchronous revision bursts, abort obsolete resource waits,
+retain at most two paint callbacks and create no
+React state updates or extra scene reconciliation. Hidden/unmounted owners and
+obsolete callbacks cannot publish fresh receipts. Only capture requests check
+resources or request an evidence frame; ordinary animation keeps its scheduler.
+Lifecycle-only DOM harnesses may lack FontFaceSet: mounting remains inert there,
+while actual capture still requires browser fonts, frames and pixel decoding.
+[captureAssets](captureAssets.ts) waits on removable font/image load listeners, then
+decoding; revision changes and deadlines cancel these waits without waiting for an
+obsolete network request to settle. [Resource regressions](captureAssets.test.ts)
+cover unresolved loads and decode cancellation.
+
+[The CDP helper](testing/captureScene.ts) fences resize, waits for a current receipt,
+checks fixture-specific content and sampled output, then rechecks currency before
+returning bytes. [The five-size consumer](testing/resumeVisualCapture.ts) and
+[queued PR entry](../../../scripts/capture-world.ts) share it. See
+[the recipe](../../../docs/SCREENSHOTS.md#pr-screenshot-viewports),
+[deterministic schedules](drawReadiness.test.ts) and the production surface browser
+consumer registered in [BoardView.test.ts](BoardView.test.ts).
+
+The manual-clock Board artifact consumer advances scene frames from the existing
+`TestClock.real` native frame port while a readiness promise is pending. Its paint
+barrier also uses native frames, so real ResizeObserver delivery precedes the
+receipt; simulated frames alone do not establish browser paint completion.
+[The clock regression](testing/testClock.test.ts) keeps these ports separate.
 
 ### Town rendering performance
 
@@ -157,13 +220,19 @@ agent roster during cooperative World preparation; aggregate coverage can includ
 agents outside that roster and remains separate. Summary memoises those immutable
 room contributions and groups room links by host.
 Finish/seen overlays change only the affected room totals. Ask, metrics and clock
-updates reuse that topology. Asking identities resolve through the snapshot's
-generation-qualified pane and agent indexes, without scanning the roster. The
-canvas uses the same native-order tab prefix as Spaces: 24 tabs folded, then
-20 more per expansion. Attention never changes this admission. Explicit fold
-requests carry a local revision alongside their admission state, so the scene
-model applies that requested layout immediately; background topology changes
-retain the interaction quiet-period guard.
+updates reuse that topology. An empty question list skips the roster and pane
+lookups entirely. Asking identities resolve through the snapshot's
+generation-qualified pane and agent indexes, without scanning the roster.
+Automatic Town-master docking skips name lookup on mobile; on wide screens its
+lookup runs outside render in batches of 256 agents, yielding through the shared
+background task scheduler. Native names still take priority over display labels,
+and the first matching agent in roster order wins. A newer roster, name, mobile
+layout or unmount retires pending lookup work; closing a docked master still
+keeps it closed for the page visit. The canvas uses the same native-order tab
+prefix as Spaces: 24 tabs folded, then 20 more per expansion. Attention never
+changes this admission. Explicit fold requests carry a local revision alongside
+their admission state, so the scene model applies that requested layout immediately;
+background topology changes retain the interaction quiet-period guard.
 [townFoldedActivity.ts](town/townFoldedActivity.ts) maps shared rail calls and
 qualified asking identities onto hidden desks; [TownFoldIndicators.tsx](town/TownFoldIndicators.tsx)
 shows red needs-you and green unreviewed-completion corner icons without extra
@@ -220,6 +289,13 @@ agents of presented rooms and precomputing per-room counts. Accessible targets
 are admitted 16 per task and memoized by identity, label and geometry, so
 refreshes do not remount unchanged targets.
 
+The summary's [asker lookup](town/townAskers.ts) returns a fresh empty map
+without reading World leaves or either office roster when there are no
+questions. Nonempty questions still resolve each original qualified target
+and use its Town label, falling back to the name recorded with the question.
+The [lookup regression](town/townAskers.test.ts) checks zero roster reads
+directly, alongside labels and agent-versus-terminal targets.
+
 Town has its own dense acceptance case (`ProductionContexts.town.test.ts`) under
 a 150 ms p95 / 450 ms maximum budget.
 
@@ -270,9 +346,16 @@ cache. Cards mount in their own container, so React appends them as one subtree.
 Mounted cards also keep their callback refs and resize-observer registrations
 across status refreshes; removal releases both. Re-registering unchanged cards
 would force fresh resize notifications and another drawing pass.
+Large boards batch every nonempty workspace's status squares into SVG paths,
+including small rooms; a room's own size is not enough to bound drawing work
+across many rooms. Each agent keeps its square and each shell its hollow contour,
+with the same status colours, pulse controls and close-up/overview geometry.
+Empty rooms add no drawing surface. Smaller boards keep individual squares up to
+64 panes, then use the same batching.
 `ConcurrentContexts.test.ts` records Board render time and observer work by phase
 at 1440 and 390 pixels. Its refresh also updates the mounted terminal stores and
 checks that no terminals open, dispose or fit, and no retained cards re-register.
+It also bounds summary drawing nodes.
 Board controls compare measured layouts before dispatching a state update:
 returning unchanged state from an updater can still add a React commit after the
 initial layout effect. `board/BoardControls.dom.test.ts` delivers that initial
@@ -333,7 +416,10 @@ Raise a ceiling only in a reviewed change that explains the new work.
 The Hosts filter fixture's `town-idle` case holds idle Town, with an
 Inspector and its line open, to the same file's idle ceiling: React commits in
 at most two frames of 2 s of test time. Town animates through Pixi alone; only
-its data polls render React, and views keep an unchanged anchor set. Its
+its data polls render React, and views keep an unchanged anchor set. The
+phone case runs at 390 × 1200 px: its only motion is the idle agent in the
+lounge, which a phone's home view shows only when the screen fits the town
+center and the whole first building. Its
 `town-walk-anchor` case mounts a bare Town whose host never renders again, so
 the Inspector line follows a walking agent under a still camera only through
 the anchors Town reports from its own drawn frames.
@@ -452,6 +538,12 @@ World window behavior stays in `windows/`; [WorldLayout.css](windows/WorldLayout
 coordinates the outer shell with the Roamgate-derived App. Mobile retains floating
 controls and hides the tab strip. The inherited keyboard viewport adapter, native
 pane layouts and terminal transport remain the compatibility boundary.
+
+Queued Inspector terminal focus yields to open transient layers, including the
+title's pane-map popover. The handoff checks the shared layer stack and open
+popover DOM before focusing, so delayed animation frames cannot dismiss a
+keyboard-opened map. Existing pane, terminal and runtime admission checks still
+apply after the layer closes.
 
 To capture the synthetic desktop and 390 px mobile fixture, set
 `WORLD_WINDOW_CAPTURE_DIR=/tmp/world-window-captures` when running

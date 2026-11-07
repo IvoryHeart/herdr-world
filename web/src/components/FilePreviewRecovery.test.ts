@@ -160,11 +160,16 @@ if (process.env.FILE_PREVIEW_RECOVERY_DOM !== "1") {
       const owner = client(undefined);
       const broken = {
         ...selection,
+        line: 1,
         preview: {
           ...selection.preview!,
-          get text(): string {
-            throw new Error("Private file-render diagnostic");
-          },
+          // Fail in the preview's line calculation. A throwing prop getter
+          // also fails React 19's diagnostics outside the render boundary.
+          text: {
+            split() {
+              throw new Error("Private file-render diagnostic");
+            },
+          } as unknown as string,
         },
       };
       await render(owner, broken);

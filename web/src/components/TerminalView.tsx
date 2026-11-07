@@ -21,7 +21,11 @@ import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
 import { paneAgentName } from "../agentName";
 import { MobileTerminalIdentity } from "./MobileControls";
 import { useSystemBack } from "../systemBack";
-import { runTerminalInput, sendTerminalInput } from "../terminalInput";
+import {
+  focusTerminalEndpoint,
+  runTerminalInput,
+  sendTerminalInput as sendBytes,
+} from "../terminalInput";
 import {
   ClipboardAddon,
   type ClipboardSelectionType,
@@ -71,7 +75,7 @@ import {
   AnnotationComposerPopover,
 } from "./AnnotationComposerPopover";
 import "@xterm/xterm/css/xterm.css";
-import { bridge, type ConnectionClient, type TerminalPush } from "../api";
+import { bridge, type TerminalPush } from "../api";
 import { useCreationSources } from "../creationRequests";
 import { directoryPreviewName } from "../filesystemPaths";
 import { mobileTerminalShortcutExecution } from "../mobileTerminalShortcutAction";
@@ -183,7 +187,14 @@ import {
   terminalWheelScroll,
 } from "../terminalScroll";
 import { TerminalSelectionDragGuard } from "../terminalSelectionGuard";
+import {
+  createEchoProbe,
+  latencyDebugEnabled,
+  logEchoSample,
+  logLatency,
+} from "../latencyDebug";
 import { applyTerminalTheme } from "../terminalThemes";
+import { useTerminalOptionAsMetaRef } from "../terminalOptionKey";
 import {
   TerminalTouchSelection,
   terminalSelectedText,
@@ -201,24 +212,9 @@ import {
   TerminalFileLinkMenu,
   type TerminalFileLinkMenuState,
 } from "./TerminalFileLinkMenu";
+import { TerminalAttachSize } from "../terminalAttachSize";
+import { withTimeout } from "../withTimeout";
 import "./TerminalView.css";
-
-function focusTerminalEndpoint(
-  client: ConnectionClient,
-  terminalId: string | undefined,
-) {
-  if (
-    !terminalId ||
-    !client.isCurrent() ||
-    !applicationStore
-      .getConnection(client.connectionId)
-      .endpointAvailability[terminalId]?.methods.includes("pane.focus")
-  )
-    return;
-  void client
-    .call("terminal.focus", { terminal_id: terminalId })
-    .catch(() => null);
-}
 
 const SYSTEM_CLIPBOARD = "c" as ClipboardSelectionType;
 
@@ -234,14 +230,6 @@ function b64toText(b64: string): string | null {
   } catch {
     return null;
   }
-}
-
-function sendBytes(
-  client: ConnectionClient,
-  bytes: Uint8Array,
-  terminalId: string,
-) {
-  return sendTerminalInput(client, bytes, terminalId);
 }
 
 const CLIPBOARD_READ_TIMEOUT_MS = 2000;
@@ -294,29 +282,6 @@ function isSafariBrowser() {
 
 function trimCopiedLinePadding(text: string) {
   return text.replace(/[ \t]+(?=\r?\n|$)/g, "");
-}
-
-function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  errorMessage: string,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error(errorMessage));
-    }, timeoutMs);
-
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (err) => {
-        window.clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
 }
 
 export type TerminalWorkspaceFileRequest = {
@@ -514,6 +479,7 @@ export function TerminalView({
   const [termInstance, setTermInstance] = useState<Terminal | null>(null);
   // Theme changes update xterm in place without recreating the terminal.
   const terminalThemeRef = useRef(terminalTheme);
+  const optionAsMetaRef = useTerminalOptionAsMetaRef(termInstance);
   const terminalFontFamilyRef = useRef(terminalFontFamily);
   const terminalFontScaleRef = useRef(terminalFontScale);
   const fitRef = useRef<FitAddon | null>(null);
@@ -521,6 +487,8 @@ export function TerminalView({
   const attachedRef = useRef<string | null>(null);
   const attachingRef = useRef<string | null>(null);
   const desiredTerminalRef = useRef<string | null>(null);
+  // Opt-in latency samples: input to the next written frame (?debugLatency).
+  const echoProbeRef = useRef(latencyDebugEnabled ? createEchoProbe() : null);
   const ownedAttachmentRef = useRef<{
     terminalId: string;
     attempt: number;
@@ -727,6 +695,19 @@ export function TerminalView({
   const paneIdRef = useRef(pane?.pane_id);
   const paneTabIdRef = useRef(pane?.tab_id);
   const paneLayoutRef = useRef(s.layout);
+  const [sizeRead, setSizeRead] = useState(0);
+  const [attachSize] = useState(
+    () =>
+      new TerminalAttachSize({
+        paneIdRef,
+        paneTabIdRef,
+        paneLayoutRef,
+        isActivePaneRef,
+        currentClientRef,
+        desiredTerminalRef,
+        retry: setSizeRead,
+      }),
+  );
   useLayoutEffect(() => {
     isActivePaneRef.current = isActivePane;
   }, [isActivePane]);
@@ -942,11 +923,11 @@ export function TerminalView({
     return { cols: term.cols, rows: term.rows };
   }, [container]);
   const relayViewportFor = useCallback(
-    (size: { cols: number; rows: number }) => {
+    (size: { cols: number; rows: number }, layout = paneLayoutRef.current) => {
       if (!isActivePaneRef.current) return null;
       const relaySize = terminalRelayViewportSize(
         size,
-        paneLayoutRef.current,
+        layout,
         paneIdRef.current,
       );
       const tabId = paneTabIdRef.current;
@@ -1136,6 +1117,7 @@ export function TerminalView({
     const renderer = createTerminalRenderer(
       container,
       {
+        macOptionIsMeta: optionAsMetaRef.current,
         fontFamily: terminalFontFamilyRef.current,
         ...terminalDensity(terminalFontScaleRef.current),
         theme: terminalThemeRef.current,
@@ -1159,6 +1141,10 @@ export function TerminalView({
             autoDismissMs: 8000,
           }),
       },
+      {
+        written: () =>
+          logEchoSample(echoProbeRef.current, desiredTerminalRef.current),
+      },
     );
     termRef.current = renderer.term;
     fitRef.current = renderer.fit;
@@ -1174,15 +1160,16 @@ export function TerminalView({
       renderedTerminalRef.current = null;
       setTermInstance(null);
     };
-  }, [container, terminalIdentity, pane?.terminal_id]);
+  }, [container, terminalIdentity, pane?.terminal_id, optionAsMetaRef]);
 
   // Rebind transport work and input handlers to one captured client at a time.
   useEffect(() => {
     const term = termInstance;
     const endpointPresentation = endpointPresentationRef.current;
     const historySelection = historySelectionRef.current;
-    if (!container || !term || !endpointPresentation || !historySelection)
-      return;
+    // Renderer state can still hold the disposed predecessor for this commit.
+    if (!term || term !== termRef.current) return;
+    if (!container || !endpointPresentation || !historySelection) return;
     let terminalEffectDisposed = false;
     const retireTouchLink = () => {
       touchLinkIntentRef.current++;
@@ -1405,6 +1392,7 @@ export function TerminalView({
       acceptsEndpointInput() &&
       isActivePaneRef.current &&
       (!shouldAvoidVirtualKeyboard() || inputActiveRef.current);
+    const echoProbe = echoProbeRef.current;
 
     const inputData = term.onData((data) => {
       invalidateLinks();
@@ -1435,6 +1423,7 @@ export function TerminalView({
       if (!terminalId) return;
       imeKeyEvent.recordXtermData(unsuppressedData);
       const bytes = new TextEncoder().encode(unsuppressedData);
+      echoProbe?.sent(unsuppressedData);
       sendBytes(connectionClient, bytes, terminalId).catch(() => {});
     });
 
@@ -1677,8 +1666,12 @@ export function TerminalView({
       }
       selectionBounds = bounds;
       const size = fitVisibleTerminal();
-      if (!size) return;
-      resizeSync.schedule(size);
+      if (!size) return attachSize.hide();
+      if (attachSize.shown()) return setSizeRead((value) => value + 1);
+      if (!attachSize.fitted(size)) return resizeSync.schedule(size);
+      // Shown after being hidden: claim the size (Herdr follows the last focus).
+      resizeSync.sendNow(size);
+      focusTerminalEndpoint(connectionClient, attachedRef.current ?? undefined);
     });
     ro.observe(container);
 
@@ -3216,6 +3209,7 @@ export function TerminalView({
     };
   }, [
     termInstance,
+    attachSize,
     detachOwnedTerminal,
     closeTerminalInput,
     store,
@@ -3268,7 +3262,7 @@ export function TerminalView({
       setTerminalAttachError("");
       return;
     }
-    if (!term) return;
+    if (!term || term !== termRef.current) return;
     focusTerminalSoon();
     if (attachedRef.current === paneTerminalId) return;
     if (attachingRef.current === paneTerminalId) return;
@@ -3290,6 +3284,9 @@ export function TerminalView({
     // defer the attach until the page is shown; the visibility recovery below
     // retries the desired terminal when it is neither attached nor attaching.
     if (document.visibilityState === "hidden") return;
+    const size = attachSize.resolve(terminalId, fitVisibleTerminal(), term);
+    if (!size) return;
+    const { cols, rows } = size;
     if (attachTimeoutTerminalRef.current !== terminalId) {
       attachTimeoutTerminalRef.current = terminalId;
       recoveryBudgetRef.current.reset();
@@ -3298,15 +3295,10 @@ export function TerminalView({
     setTerminalLoading(true);
     setTerminalAttachError("");
     const attachAttempt = attachWatchdogRef.current!.begin();
-    const fitSize = fitVisibleTerminal();
-    const cols = fitSize?.cols ?? term.cols;
-    const rows = fitSize?.rows ?? term.rows;
-    const relaySize = relayViewportFor({ cols, rows });
+    const relaySize = relayViewportFor({ cols, rows }, size.relayLayout);
     const surfaceSize = terminalEndpointViewportSize(
       { cols, rows },
-      paneLayoutRef.current?.tab_id === paneTabIdRef.current
-        ? paneLayoutRef.current
-        : null,
+      size.layout,
       paneIdRef.current,
     );
     // Keep the current buffer when re-attaching the same terminal (watchdog
@@ -3379,6 +3371,11 @@ export function TerminalView({
                 return;
               }
               const recovery = recoveryBudgetRef.current.fail();
+              logLatency("attach watchdog fired", {
+                terminal: terminalId,
+                watchdog_ms: watchdogMs,
+                recovery,
+              });
               attachedRef.current = null;
               attachingRef.current = null;
               detachOwnedTerminal(terminalId);
@@ -3422,11 +3419,13 @@ export function TerminalView({
     creationDemand,
     connectionClient,
     termInstance,
+    attachSize,
+    sizeRead,
   ]);
 
   useEffect(() => {
     terminalFontScaleRef.current = terminalFontScale;
-    if (!termInstance) return;
+    if (!termInstance || termInstance !== termRef.current) return;
     // Font geometry invalidates hit targets, not the current input session.
     linkRevisionRef.current++;
     termInstance.refresh(0, termInstance.rows - 1);
@@ -3440,7 +3439,7 @@ export function TerminalView({
 
   useEffect(() => {
     terminalFontFamilyRef.current = terminalFontFamily;
-    if (!termInstance) return;
+    if (!termInstance || termInstance !== termRef.current) return;
     termInstance.options.fontFamily = terminalFontFamily;
     const size = fitVisibleTerminal();
     if (size) resizeSyncRef.current?.sendNow(size);
@@ -3448,7 +3447,8 @@ export function TerminalView({
 
   useEffect(() => {
     terminalThemeRef.current = terminalTheme;
-    if (termInstance) applyTerminalTheme(termInstance, terminalTheme);
+    if (termInstance && termInstance === termRef.current)
+      applyTerminalTheme(termInstance, terminalTheme);
   }, [terminalTheme, termInstance]);
 
   // Mobile browsers freeze the page while hidden: the socket can die
@@ -4150,12 +4150,12 @@ export function TerminalView({
         <div
           className="terminal-pane-toolbar"
           aria-label="Pane actions"
-          ref={(element) =>
+          ref={(element) => {
             element?.toggleAttribute(
               "inert",
               s.status !== "connected" || !connectionClient.isCurrent(),
-            )
-          }
+            );
+          }}
         >
           {s.endpointAvailability[pane.terminal_id] &&
           store.terminalScrollReason(pane.terminal_id) ? (

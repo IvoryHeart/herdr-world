@@ -28,7 +28,7 @@ changes on desktop or mobile. **Requires a running Herdr server.**
   Board's **Work** lens and on Town desks, with confirmed merge, close and mark
   ready actions.
 - **A clearer Town.** Rooms follow Spaces' tab order and resize as tabs open or close;
-  explicitly expanded rooms keep their size until folded;
+  expanded rooms stay expanded as they shrink when tabs close, until folded;
   pin desks, colour hosts, workspaces and terminals, and open **Summary** for
   everything needing you. Every view opens in Zen.
 - **Herdr setup.** The published 0.2.7 standalone installer installs or upgrades
@@ -52,8 +52,8 @@ known limits.
 
 Town, Board and Desk share the **Hosts** filter. Open terminals and Inspectors
 retain their owning host when the filter changes. Use **Actions → New workspace**
-or **New tab** and confirm the destination; Town's **New room** and Board's **+**
-controls offer the same qualified creation flows.
+or **New tab** and confirm the destination; Town's **+ Add room** slots and
+Board's **+** controls offer the same qualified creation flows.
 
 Office, Tree and Graph have been retired: old `/office` addresses open Town, and
 `/graph` and `/tree` open Board. Board and these redirects are included in
@@ -76,7 +76,10 @@ open it at full resolution.
 [![Spaces with the workspace list and a live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
 
 Each agent has one window with Chat, Terminal, Files and Changes, whether
-opened from Town, Board or Desk. See [Chat](./docs/CHAT.md) and the
+opened from Town, Board or Desk. When set to open Chat, it starts on Terminal
+until Chat can show the conversation, including when a session exists but its
+record cannot be read. It switches once Chat is available, unless you chose
+a view yourself. See [Chat](./docs/CHAT.md) and the
 [tutorial's review exercise](./docs/TUTORIAL.md#daily) for the complete flow.
 
 | Chat | Files | Changes |
@@ -96,7 +99,10 @@ opened from Town, Board or Desk. See [Chat](./docs/CHAT.md) and the
    standalone installer installs or upgrades Herdr to the verified release; set
    `HERDR_WORLD_SKIP_HERDR=1` to leave yours untouched. With npm or a Windows
    archive, run `herdr-world herdr upgrade --install` once if needed.
-   `herdr-world herdr setup` starts Herdr as a user service.
+   `herdr-world herdr setup` configures future startup as a user service and starts
+   Herdr if down; an already-running server keeps running without a restart. If
+   you open World before Herdr is installed or running, Town offers **Set up
+   Herdr**, which installs or starts it only after you confirm.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash
@@ -162,7 +168,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Development
 
-Use Bun 1.4.3 or newer and a running Herdr server:
+Use Bun 1.4.4 or newer and a running Herdr server:
 
 ```bash
 bun install --frozen-lockfile

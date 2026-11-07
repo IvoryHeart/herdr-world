@@ -103,7 +103,7 @@ test.skipIf(!chrome)(
           mobile: viewport.name === "phone",
         });
         const result = await evaluate(
-          "new Promise(resolve => requestAnimationFrame(() => resolve({width:innerWidth, scroll:document.documentElement.scrollWidth, cards:document.querySelectorAll('.answer-delivery').length, rail:document.querySelector('.town-outbox-row')?.textContent})))",
+          "new Promise(resolve => requestAnimationFrame(() => resolve({width:innerWidth, scroll:document.documentElement.scrollWidth, cards:document.querySelectorAll('.answer-delivery').length, rail:document.querySelector('.needs-you-outbox')?.textContent})))",
         );
         expect(result.value.width).toBe(viewport.width);
         expect(result.value.scroll).toBeLessThanOrEqual(viewport.width);
@@ -111,13 +111,7 @@ test.skipIf(!chrome)(
         expect(result.value.rail).toContain("2 to check · 1 waiting");
       }
       if (Bun.env.WORLD_ANSWER_CAPTURE_DIR) {
-        for (const state of [
-          "rail",
-          "summary",
-          "confirm",
-          "collapsed",
-          "waiting",
-        ]) {
+        for (const state of ["rail", "summary", "confirm", "waiting"]) {
           await evaluate(
             `window.answerDeliveryScene(${JSON.stringify(state)})`,
           );
@@ -125,6 +119,7 @@ test.skipIf(!chrome)(
             port,
             Bun.env.WORLD_ANSWER_CAPTURE_DIR,
             state,
+            { view: "town", content: { selector: ".town-building-sign" } },
           );
         }
       }

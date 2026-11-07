@@ -97,9 +97,24 @@ export type LedgerCommit = {
   removed_attention: string[];
 };
 export type StorageRequest =
-  | { type: "effect-read"; id?: string; verb?: string }
+  | {
+      type: "terminal-mark";
+      operation: import("./terminal-marks").TerminalMarkOperation;
+    }
+  | {
+      type: "effect-read";
+      id?: string;
+      verb?: string;
+      /** Only this connection's entries (a per-connection lane). */
+      connection?: string;
+      /** The connections that have entries, instead of the entries. */
+      lanes?: boolean;
+      /** Lanes after this connection (the page cursor). */
+      after?: string;
+    }
   | { type: "effect-transition"; change: EffectTransition }
   | { type: "load" }
+  | { type: "board"; operation: import("./world-board").BoardOperation }
   | {
       type: "runtime-status";
       key: string;
@@ -208,6 +223,8 @@ export type AttentionOutbox = {
   ): Promise<AttentionEntry | null>;
 };
 export type WorldLedgerStorage = {
+  terminalMarks: import("./terminal-marks").TerminalMarksPort;
+  board: import("../world/board-store").BoardStorePort;
   runtimeStatus: import("./runtime-status").RuntimeStatusPort;
   profiles: import("../agent/profile-store").ProfileStorePort;
   bindings: import("./world-bindings").WorldBindings;
@@ -232,6 +249,7 @@ export type WorkerRequest =
       legacy: string;
       legacyProfiles?: string;
       legacySettings?: string;
+      legacyBoard?: string;
       at: number;
       incarnation: string;
     }
@@ -242,6 +260,9 @@ export type WorkerRequest =
     }
   | { type: "close" };
 export type StorageSnapshot = {
+  terminalMarks?: import("./terminal-marks").SavedTerminalMark[];
+  legacyReviewArchive?: import("./legacy-review-archive").LegacyReviewArchiveState;
+  board?: import("../world/board-store").BoardDocument;
   runtimeStatus?: Record<string, import("./runtime-status").AutoSyncRunStatus>;
   profiles?: import("../agent/profile-store").ProfilesDocument;
   document: LedgerDocument;
@@ -258,6 +279,8 @@ export type WorkerReply =
 export class StorageOutcomeUnknown extends Error {
   readonly outcome = "unknown";
 }
+/** Connections per lanes page (EffectStore.lanes). */
+export const EFFECT_LANE_PAGE = 256;
 export class StorageWriteRejected extends Error {
   readonly outcome = "not-committed";
 }
@@ -265,6 +288,7 @@ export const STORAGE_BOUNDS = {
   operations: 32,
   delayMs: 5,
   requestBytes: 1024 * 1024,
+  boardRequestBytes: 16 * 1024 * 1024,
   batchBytes: 4 * 1024 * 1024,
   queuedBytes: 16 * 1024 * 1024,
   queuedOperations: 256,

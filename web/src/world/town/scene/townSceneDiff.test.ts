@@ -70,7 +70,7 @@ test("an unchanged observation reconciles no agent and bakes nothing", () => {
   expect(dirty).toEqual({
     first: false,
     scene: true,
-    bake: { scene: false, buildings: new Set() },
+    bake: { scene: false, buildings: new Set(), removed: new Set() },
     actors: new Set(),
   });
   // Nothing new at all: not even a scene frame.
@@ -85,7 +85,11 @@ test("one agent's status reconciles only its host and bakes nothing", () => {
   const blocked = derive(scene, ["blocked", ...working(2)]);
   const { dirty } = diff.next(blocked.model, blocked.layout, marks());
   expect(dirty.actors).toEqual(new Set([studio]));
-  expect(dirty.bake).toEqual({ scene: false, buildings: new Set() });
+  expect(dirty.bake).toEqual({
+    scene: false,
+    buildings: new Set(),
+    removed: new Set(),
+  });
 });
 
 test("a summoned or asking mark reconciles only its agent's host", () => {
@@ -123,7 +127,7 @@ test("selection, hover and calm only ask for a frame", () => {
   expect(dirty).toEqual({
     first: false,
     scene: false,
-    bake: { scene: false, buildings: new Set() },
+    bake: { scene: false, buildings: new Set(), removed: new Set() },
     actors: new Set(),
   });
 });

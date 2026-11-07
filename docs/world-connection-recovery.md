@@ -37,13 +37,20 @@ No action falls back to a healthy host when the requested owner is unavailable.
 
 ## One existing recovery scheduler
 
-Classified retryable `SshTunnelError` / `ConnectionProbeError` failures use the
-existing per-profile scheduler. Default recovery continues beyond the former six
+Classified retryable `SshTunnelError` / `ConnectionProbeError` failures and local
+socket unavailability use the existing per-profile scheduler port. Default recovery continues beyond the former six
 attempts until recovery, explicit cancellation or a nonretryable failure. The
 exponential jitter window is capped at 30 seconds; after reaching the cap its
 scheduled delay is 15–30 seconds. The delay is separate from a connection
 attempt's own timeout and cleanup. An explicit finite `maxAttempts` policy in
 `ConnectionRetryOptions` remains supported; this is not a new browser setting.
+
+Local connections, including the startup default and saved custom sockets, retry
+missing/refused sockets, reset/broken connections and transport or handshake
+timeouts. If Herdr starts after World, recovery needs no manual action. World does
+not install or start Herdr during recovery. Permission, malformed-response,
+incompatible-protocol and arbitrary errors remain failures with explicit Reconnect.
+The composition root supplies the scheduler; no second recovery loop is created.
 
 Initial SSH HOME discovery uses the same classifier before a forwarding process
 exists. A structured subprocess exit 255 is classified from its captured stderr;
@@ -54,7 +61,7 @@ arbitrary errors remain unclassified, even if their text resembles a timeout.
 Authentication, host-key, permission, unsupported and unclassified failures do
 not gain indefinite recovery. Disconnect, removal, replacement and shutdown
 invalidate retry intent. A fired callback waits for failed-runtime cleanup and
-rechecks its existing token before starting; retired attempts cannot revive a
+rechecks its existing token and manager generation before starting; retired attempts cannot revive a
 profile or replace a newer runtime. Siblings have independent timers and leases.
 
 The server pings Herdr over the selected sockets. POSIX SSH forwarding only
@@ -80,3 +87,11 @@ recovery code with synthetic local child output, controlled timers and simulated
 forwarding/socket readiness. It covers eight failed preflights before success,
 permanent/unknown failures, queued and in-flight cancellation, and healthy sibling
 leases. It never invokes SSH or establishes a remote host's version or availability.
+
+Local consumer tests cover eight initial failures, capped backoff, cancellation
+before and during cleanup, explicit Reconnect and independent sibling leases.
+The production-composition test uses private synthetic control/render sockets,
+real protocol handshakes, authenticated browser RPC and World snapshots. It proves
+automatic late-local readiness, failed admission before recovery, fresh topology
+after recovery and refusal of the retired generation. These are current Linux/CI
+transport controls, not evidence about a historical macOS login incident.

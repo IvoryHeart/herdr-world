@@ -40,6 +40,7 @@ import {
 } from "./AnnotationComposerPopover";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { ImagePreview } from "./ImagePreview";
+import { PdfPreview } from "./PdfPreview";
 import {
   handlePreviewEditorCopy,
   isEditablePreviewTarget,
@@ -637,10 +638,9 @@ function FilePreviewBody({
           hasPdfPreview &&
           !pdfTooLarge &&
           inlinePreviewUrl ? (
-            <iframe
-              className="file-preview-pdf"
-              src={inlinePreviewUrl}
-              title={`PDF preview: ${entry?.name ?? previewPath}`}
+            <PdfPreview
+              url={inlinePreviewUrl}
+              name={entry?.name ?? previewPath}
             />
           ) : null}
           {!loading && !error && pdfTooLarge ? (

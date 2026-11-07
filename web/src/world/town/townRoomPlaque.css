@@ -43,6 +43,13 @@
   text-transform: uppercase;
 }
 
+/* The name is the room's handle: drag it (a touch hold) to move the room. */
+.town-room-plaque-name.is-movable,
+.town-room-plaque .town-plaque-action.town-plaque-move {
+  cursor: grab;
+  touch-action: none;
+}
+
 .town-room-plaque-count,
 .town-room-plaque-badge {
   flex: 0 0 auto;
@@ -107,26 +114,95 @@
   cursor: not-allowed;
 }
 
-.town-room-plaque-actions {
+/* A place's card: a room's or table's summary, in the Town board's look.
+   A room's card also holds Rename and Close, so one hover shows them all. */
+.town-place-card {
   position: absolute;
-  right: -2px;
-  top: calc(100% - 1px);
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
   gap: 4px;
   box-sizing: border-box;
-  max-width: calc(100% + 4px);
-  padding: 4px;
-  background: #6e4a2e;
-  border: 2px solid #3b2414;
-  border-radius: 0 0 5px 5px;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  color: #f1efe6;
+  background: rgba(30, 22, 14, 0.94);
+  border: 2px solid #7a5536;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  /* The board's text: the Town shell's font, not the plaque's lettering. */
+  font-family: var(--town-ui-font, "Rubik", system-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-align: left;
+  white-space: normal;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
 
-.town-room-plaque:is(:hover, :focus-within) .town-room-plaque-actions {
+.town-room-plaque-card {
+  left: -2px;
+  top: calc(100% - 1px);
+  min-width: calc(100% + 4px);
+}
+
+.town-room-plaque:is(:hover, :focus-within) {
+  z-index: 6;
+}
+
+.town-room-plaque:is(:hover, :focus-within) .town-place-card {
+  opacity: 1;
+  visibility: inherit;
+  pointer-events: auto;
+}
+
+.town-room-plaque-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* The card's summary is the Town board's numbers (townBoard.css) for one
+   place, at the board's width so its four counts fit. */
+.town-place-summary {
+  display: grid;
+  gap: 6px;
+  width: 216px;
+}
+
+/* A table's nameplate takes the pointer; its card opens below it. */
+.town-desk-title {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.town-desk-title:is(:hover, :focus-within, .is-open) {
+  z-index: 6;
+}
+
+.town-desk-title .town-desk-tag {
+  pointer-events: auto;
+  cursor: default;
+}
+
+.town-desk-title:focus-visible .town-desk-tag {
+  outline: 2px solid #ffd166;
+}
+
+/* The desk tags scale up to 1.6x when zoomed out; the card keeps the room
+   plaques' constant size and starts just under the plate. */
+.town-desk-card {
+  left: 32px;
+  top: calc(44px + 10px * clamp(1, var(--iz), 1.6));
+  border-radius: 5px;
+  transform: translateX(-50%) scale(var(--iz));
+  transform-origin: 50% 0;
+}
+
+.town-desk-title:is(:hover, :focus-within, .is-open) .town-desk-card {
   opacity: 1;
   visibility: inherit;
   pointer-events: auto;
@@ -145,5 +221,70 @@
   }
   .town-plaque-action.town-place-color {
     width: 40px;
+  }
+}
+
+/* Zoomed out, a room's overview card stands in for its plaque: a mouse over
+   the room, or over the card, shows the room's summary just under the card.
+   The summary only shows; the pointer passes through it to the town. */
+.town-room-overview {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.town-room-overview-card {
+  z-index: 7;
+  left: 50%;
+  top: calc(50% + 30px * var(--iz));
+  border-radius: 8px;
+  transform: translateX(-50%) scale(var(--iz));
+  transform-origin: 50% 0;
+}
+
+.town-world[data-level="overview"]
+  .town-room-overview:is(.is-open, :has(.town-room-card:hover))
+  .town-room-overview-card {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* A building's Tidy rooms: on its sign, and on its reception board beside
+   its colour. */
+.town-tidy-rooms {
+  position: static;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  cursor: pointer;
+}
+
+.town-tidy-rooms:hover,
+.town-tidy-rooms:focus-visible {
+  color: #ffd166;
+}
+
+/* On the sign, which takes no taps itself, the action does. */
+.town-building-sign .town-tidy-rooms-named {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: auto;
+  min-height: 28px;
+  padding: 3px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff7e0;
+  background: rgba(14, 17, 24, 0.9);
+  border: 2px solid #ffd166;
+  border-radius: 6px;
+  pointer-events: auto;
+}
+
+@media (max-width: 640px) {
+  .town-building-sign .town-tidy-rooms-named {
+    min-height: 40px;
   }
 }

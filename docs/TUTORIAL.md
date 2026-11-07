@@ -59,8 +59,11 @@ older World or Roamgate installation.
    the verified release. Set `HERDR_WORLD_SKIP_HERDR=1` to leave your Herdr
    untouched. Homebrew reuses existing Herdr and installs a missing runtime on
    first normal World launch; npm and Windows archives leave setup to you.
-   Run `herdr-world herdr setup` to install Herdr if needed and start its user
-   service before step 3. Explicit World updates retain a separate Herdr upgrade
+   Run `herdr-world herdr setup` to install Herdr if needed and configure its user
+   service before step 3. It starts Herdr if down; if already running, it registers
+   future startup without restarting the live server. Alternatively, open World
+   first: while Herdr is missing or stopped, Town offers **Set up Herdr**, and
+   nothing installs or starts until you confirm. Explicit World updates retain a separate Herdr upgrade
    step. See
    [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
@@ -166,6 +169,14 @@ hosts stay usable.
    bars. The choice is shared, so leaving Zen in one view leaves it in all.
    Each host is a building, each workspace a room, each tab a table and each pane a
    seat. Plain terminal panes show a prompt rather than an agent character.
+   The **town center**, the domed hall at the top of the town just across the
+   first street from the buildings, is Town's landmark. Tap it (or its **Town center** plaque, or Tab to the plaque and
+   press Enter) for a ring of actions around its doors: **New agent** opens the
+   launcher (in the room you have open, when it can start one there), **Town
+   master** opens your coordinating agent's Chat, **Needs you** opens that tab,
+   **Summary** the Town summary, **Profiles** the agent profiles and **New
+   room** creates a room. Arrow keys move around the ring; Escape, a tap
+   outside, the centre **✕** or **Back** on a phone closes it.
 2. Use **+** and **−** to move between town, building, room and desk detail;
    **ALL** shows the whole town. Drag the background to pan, or use arrow keys
    when the scene has focus. Tap a room to zoom in. Large towns may initially
@@ -174,19 +185,57 @@ hosts stay usable.
    hover the name for its full text. The colour, active/total agent count and
    blocked badge stay visible. Active means working or waiting on you; plain
    terminals are excluded from the total. Hover the count for the working/waiting
-   breakdown. Hover or focus a plate to reveal Rename and Close below it;
-   on a touch screen, tap the plate first. The dashed **+** seat inside a room
+   breakdown. Hover or focus a plate for the room's card below it: the Town
+   board's numbers for that room (working, need you, done, quiet and its
+   agents) and its economy today (estimated cost, tokens and models), then
+   Rename and Close. Cost shows when a price table is set; otherwise the card
+   says "no price table". See [harness usage](./usage.md). Hover a table or its nameplate for the
+   same card about that table. Zoomed out to the room cards, hover anywhere
+   over a room for its numbers under its card. On a touch screen, tap the plate or nameplate;
+   the first tap on a table opens its card, and a second tap (or a double tap)
+   opens the table as before. The dashed **+** seat inside a room
    opens its launcher with that room selected. Choose **Terminal** for a plain
    tab, a profile, or an agent kind. If the requested room is no longer
    available, choose a current room in the launcher before creating anything.
-3. Look at reception for blocked agents waiting for input, oldest first. Finished
-   agents also wait there until you open their terminal or mark that completion
-   reviewed, then join idle agents in the lounge. These locations visualize
-   status; they do not move the underlying pane or change its host. For the
-   whole picture, press **Summary** on the Town board (on a phone, tap the
+3. Look at reception, at the top of each building, for blocked agents waiting
+   for input, oldest first. Finished agents also wait there until you open
+   their terminal or mark that completion reviewed, then join idle agents at
+   the bar in the building's bottom corner. When the queue is full, the rest
+   crowd the lobby and grumble, then nap on the floor after about 90 seconds;
+   the front of the crowd takes the next free spot. These locations visualize
+   status; they do not move the underlying pane or change its host. To keep
+   reception for what matters now, press its sign (the **!** **?** **✓**
+   marks) and untick a mark, for example **✓** Done: those agents stay at
+   their desks with their mark, and reception shows `✓ N at desks · find`.
+   Press **find** to open the first of them and **Next ›** to step through
+   the rest; **Reset to default** brings everyone back. A change applies to
+   that building alone; tick **Apply to all buildings** to give every building
+   the same marks. Counts, Board and Needs you are
+   unchanged, and World keeps the filter for every browser. Zoomed in to
+   desks the boards are put away: tap the reception lobby to bring its board
+   and sign back. Each reception board ends with the building's **Expenses
+   today**: that host's tokens and estimated cost and its three costliest
+   rooms; the **City expenses** billboard by the top street, beside the town
+   center, shows the whole World, with **Today** and **7 days** buttons.
+   Without a price table they show tokens and "no price table"; a host whose
+   logs cannot be read says "no data", never 0. On a phone, tap the coin
+   signs to open them. For the
+   whole picture, the Town board counts every building's agents, quiet ones
+   included. Its **FUEL** gauges show how much of each Codex and Claude
+   subscription window is left (amber and **low** under 15 %). A reading more
+   than 15 minutes old says how old it is, such as "seen 1 h ago"; hover or tap
+   a gauge for its reset time, how old the numbers are and where they came from. The
+   Claude gauge appears within about a minute of the first answer from a
+   Claude agent you started from World, and reads **reached, resets …** while Claude is refusing work at
+   its limit. Press **Summary** on the board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
-   rooms with their counts, and spend. Answer a question from its offered
+   rooms with their counts and its subscription limits, and spend. When you come back after 30 minutes
+   or more away, the board sign starts with **Since you left**: what is new
+   for you, what finished and what merged while you were away. Each line
+   opens **Needs you** at that item, which carries a "new" dot (the merged
+   line opens **Needs you** itself); **✕** clears
+   the recap. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound
@@ -207,20 +256,42 @@ hosts stay usable.
    it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
+   Without a session yet it opens on Terminal for startup questions, then
+   switches to Chat when the session arrives; a view you choose by hand sticks.
    On a phone, the anchored header dropdown switches between **Chat**, **Terminal**,
    **Files** and **Changes**; the **⋯** menu contains attention settings.
    In Town it docks on the right at a readable width; drag its left edge to
    resize it (Town remembers the width), or drag its title to undock it.
    [Chat with an agent](#chat) explains reading, replying and answering there.
-   The **NEEDS YOU** list provides another route to waiting
-   agents and becomes a bottom tray on phones; it hides when no agent is
-   blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
-   default) opens docked once per visit on wide screens. Hover an agent for a
+   **Needs you** in the top bar (in the view picker in Zen and on a phone,
+   where outside Zen it is an inbox icon with a count badge after the view's
+   name) counts the questions and blocked agents waiting on you, in every view.
+   Tap it to open the **Needs you** tab on the left: each question, blocked
+   agent and finished task is a compact notification from its agent. When the
+   agent asked something, tap a quick reply (or **Other…** to type), or type in
+   the answer field and press Enter. To send a screenshot or file with a typed
+   answer, tap the paperclip in the answer field (on a phone it offers your
+   photos and files), paste an image into the field, or drop files on it. Each
+   file shows as a chip with a thumbnail while it uploads; **✕** removes it
+   before you send. The answer carries each stored file's path, so the asking
+   agent can open it. Tap a long message (or **more**) to read
+   all of it, links included; **less** shortens it again. Tabbing into a
+   message reveals its links. The agent's name and the chat icon open the
+   agent's Chat for the context behind it. **✕** dismisses a question, or marks
+   finished work reviewed; its tooltip says which. Hover an agent's name for
+   its card. The tab stays open or closed on this device; **✕** in its header
+   (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
+   default) opens docked once per visit on wide screens; **Town master** on
+   the town center (or the crown beside Board's bin) opens it at any time. That action finds the agent given the
+   role under **Menu → Sounds** first, then, when nobody holds the role, the
+   name set here. A role holder that is not in Town (for example, filtered
+   out) is reported as absent rather than replaced by a namesake; with neither
+   set it opens **Sounds** so you can choose one. Hover an agent for a
    small preview card: its latest message as **Chat** shows it, never terminal
    text; when the conversation cannot be read, it says why. It highlights a
    question when one can be identified, and refreshes when the conversation
    changes. Opening
-   an agent brings it back to its desk from reception or the lounge until its
+   an agent brings it back to its desk from reception or the bar until its
    status changes. To open terminals instead, set **Menu → Agents open** to
    **Terminal** (Board and Desk follow it too); that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
@@ -284,8 +355,10 @@ hosts stay usable.
    reception.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
-7. To move a table to another room, zoom in until you see tables, then drag it
-   with the mouse, or hold it for a moment on a phone and then drag. Drop it on
+7. To move a table to another room, zoom in until you see tables (room
+   summaries are close enough), then drag it with the mouse, or hold it for a
+   moment on a phone and then drag. A hold works even where a room summary
+   covers the table; a tap on the summary still zooms into the room. Drop it on
    another room of the same building; the plaque under your pointer says where
    it will land, or why it cannot. Hold it near the edge of the view to scroll
    the town toward rooms out of sight, as on a phone where rooms stack. The table lifts off and swings along behind
@@ -301,11 +374,13 @@ hosts stay usable.
    back, check both rooms before you carry on. Moving a room's last table
    closes that room, so Town asks first.
 8. Tables sit in the order of their tabs, left to right and then row by row.
+   A table's nameplate shows its sole agent's Herdr name when it has one;
+   otherwise it shows the tab's name, or `Tab N` for an unnamed tab.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as
-   tabs open and ordinary rooms shrink to fit when tabs close. An expanded room
-   keeps its capacity through closures until you use **« Fold**. Rooms grow up
+   tabs open and rooms shrink to fit when tabs close. An expanded room stays
+   expanded as it shrinks until you use **« Fold**. Rooms grow up
    to eight tables wide on a wide screen, six on a portrait or half-width screen
    and four on a phone, then row by row. A folded room normally
    shows the first 24 tabs in the same order as Spaces. Use the room's bottom-right
@@ -325,8 +400,11 @@ hosts stay usable.
    table.
 9. To group tables, drag one onto another table and rest it there a moment:
    it snaps to that table and the plaque says **Group with …**; let go. The
-   two get one wall, and Town brings the table to that room and beside the
-   other in Herdr's tab order. An agent started by another agent is grouped
+   two get one wall: Town brings the table to that room and seats it in a
+   free place touching the other, on the side it came from where it can.
+   No other table moves, so the shape you build is the shape you get; the
+   tables keep those places until the room's tab order changes or the page
+   reloads. An agent started by another agent is grouped
    automatically, with a solid connector to its parent and the parent's
    colour. To take a table you grouped out of its group, drag it onto its own
    room's bare floor, away from the free spot (**Leave the team**); a spawn
@@ -338,14 +416,36 @@ hosts stay usable.
    choose the same action from the window’s **⋯** menu.
    The table wears a pin, stays put
    when tabs are reordered or the room grows, and its agents stay at it rather
-   than taking breaks in the lounge; they still go to reception when they need
+   than taking breaks at the bar; they still go to reception when they need
    you or finish, and come straight back once seen. Choose **Unpin desk in
    Town** to let it follow the tab order again.
+11. To arrange a building, hover or focus a room's name plaque and drag the
+   **Move** handle in its card, or drag the room by its name or its wall (the
+   pointer shows a grab hand). The room moves freely within its building,
+   with all its tables and agents: a green outline shows where it will stand
+   and pale outlines show where rooms in its way will go (they move down),
+   and the building grows or shrinks to fit. Let go on its own spot or press
+   Escape and it goes back. On a phone, drag the Move handle, or touch and
+   hold the room's name or wall, then drag. From the keyboard, use the **←**
+   (**Move before …**) and **→** (**Move after …**) arrows in the card to
+   swap the room with its neighbour. A room never moves to another host's
+   building. World saves the arrangement, so it stays after a reload and
+   every device shows it, and Herdr's workspace order follows it (top to
+   bottom, left to right), so Spaces lists the rooms in the same order.
+   To put a building back in order, choose **Tidy rooms** (sparkles) on the
+   building's sign when you look over the town, or the sparkles button on
+   its reception board, next to its colour, when you are inside: the rooms
+   glide into neat columns in Herdr's order, without gaps or overlaps, and
+   the note at the top offers **Undo** for a few seconds. Tidying again
+   changes nothing.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room
-keeps no gap. **New room** creates a workspace; room actions also create tabs
-and manage the room. Check the destination host before creation. Stale buildings
+keeps no gap. Each building ends with a dashed **+ Add room** slot where its
+next room would stand: click or tap it to create a workspace on that
+building's host, and the new room appears in its place while the slot moves
+on. The town center's **New room** does the same. Room actions also create
+tabs and manage the room. Check the destination host before creation. Stale buildings
 remain visible but cannot accept operations. Use search and the Hosts filter to
 narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
@@ -354,20 +454,58 @@ A quiet **?** at reception means an agent has asked you a question with
 `herdr-world ask`. The question also arrives as a Herdr notification, which
 reaches Herdr and, when you enabled them, your phone notifications. It stays
 at reception until answered, dismissed or withdrawn;
-tapping its reception entry opens that agent. Read the question first in
-**Needs you** or **Summary**, where it names the asking agent, then choose an
-option or type an answer. The waiting agent receives that answer. **Open agent**
-opens the asker; **Dismiss** closes a stale or mistaken question without
-answering it. A question marked unverified came from a process World could not
-confirm runs in that pane. Board and Desk show the same question mark. **!** means urgent
-blocking, while **✓** means a finish still needs checking.
+tapping its reception entry opens that agent, and tapping its letter opens
+**Needs you** at that question. Read it there or in **Summary**, where it names
+the asking agent, then choose an option or type an answer. The waiting agent
+receives that answer. **Chat about this** (in Needs you) or **Open agent** (in
+Summary) opens the asker; **Dismiss** closes a stale or mistaken question
+without answering it. A question marked unverified came from a process World
+could not confirm runs in that pane. Town, Board, Desk and Chat share one set
+of marks, each with one glyph, colour and word: **•** Working, **!** Needs you
+(blocked on its own question), **?** Asks you, **✓** Done (not reviewed yet),
+**–** Idle or Reviewed, **~** No signal and **×** Offline.
 
-**Mark reviewed** acknowledges that completion in every browser connected to
-this World service, so your phone and desktop agree. The service keeps the mark
-in memory: restarting World, or Herdr starting a new runtime on that host,
-forgets it. Opening a finished agent's terminal also clears its reception stop; neither action proves the result
+**Mark reviewed** acknowledges that completion in one record on this World
+service, so Town, Desk, Needs you, your phone and your desktop agree. World saves the mark across
+restarts. It reappears after World verifies the same terminal and known agent
+session; a replacement session or later completion needs review again. Old
+separate completion checks transfer only with the same known session and native
+completion sequence. Work without session proof may need review once after an
+upgrade. If World cannot yet verify its Desk stop, retry Mark reviewed when the
+connection is ready.
+Opening a finished agent's terminal also clears its reception stop; neither action proves the result
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
+
+To close an agent you no longer need, drag it onto the **bin** at the
+bottom of Town or Board, or onto a Town bus stop; or open its window and choose
+**Put in bin** from **⋯** (this also works from Desk). The bin floats at the
+bottom of the screen and lights up while you drag, so on a phone a short drag
+is enough wherever you have scrolled; the town holds still while you rest on
+it. Nothing closes yet: in
+Town the agent walks out of the front door to the nearest bus stop, a London
+stop with a red roundel at a road crossing, whichever you dropped it on (an
+agent you binned on Board walks out too the first time you open Town).
+Everyone waiting at a stop lines up along the pavement, newest at the end; a
+long queue turns back in a second row, and past that a small red **+N** board
+at its end counts the rest. An agent you put back steps out of the queue and
+walks home to its front door, and those behind step up. Its
+seat fades into the carpet and crumbles, so the desk reads as going; when
+every agent at a desk is binned the whole desk fades. A
+small board over the waiting agents counts down to the bus reaching that stop
+and reads **due** a few seconds before it pulls in; Town's bin shows the time
+to the next bus. Elsewhere there is no bus: on Board the bin reads **Cleaning
+up** and how many, and its tray says when they close. Every four minutes a red double-decker comes in, slows to each stop where
+someone waits, stands there about ten seconds while they board (you can see
+them in its windows), then speeds up
+and drives off the map; only then does World close their agents. Changed your
+mind? Open the tray from the bin (or tap a stop or the bus) and choose **Put
+back** any time before the bus has left the screen, even after the agent has
+boarded: it walks back to its desk and stays open. Tap the bus while it drives
+to stop it where it is and open the tray: nothing closes while it stands, and
+**Let the bus go**, or closing the tray, sends it on. **Close now** skips the wait. A pinned desk or a tab pinned
+in Spaces keeps its last agent, and restarting World empties the bin without
+closing anything.
 
 **You are done when:** you can find an agent on the expected host, read its peek,
 and open its terminal or Inspector without losing its workspace context.
@@ -387,6 +525,10 @@ text. It works for any agent you open from Town, Board or Desk.
    **Load earlier messages**) to load older pages while keeping your place.
    While you read back, **Jump to latest** counts new agent messages.
    **Menu → Configuration → Appearance → Chat text** sets the text size.
+   Expanded or in Zen, Chat fills the window like Terminal: each run of
+   messages names its sender, with the time at the right edge. A report
+   another agent typed in as `name: …` shows as that agent's, marked
+   **relayed**; on a phone or in a narrow window, messages stay bubbles.
 2. Check what the agent is doing now. The Now bar shows its status circle
    (hover for the word: blue working, yellow needs you, green done, grey
    idle), the task from its terminal title and how long it has been at it.
@@ -432,6 +574,36 @@ text. It works for any agent you open from Town, Board or Desk.
    the option, type a single-line reply and choose **Send text answer**. Chat
    checks the native text editor before submitting. Already-open native text
    editors and unsupported menus stay in the Terminal.
+   Claude's questions also come from its own record, so the card shows each
+   question, header, option and description even when the terminal cuts them
+   off. Chat offers answer buttons only when the terminal shows that same
+   question and options; otherwise, and for questions where several options
+   can be picked, it shows the whole question with **Answer in the Terminal**
+   and says why. A prompt Chat does not recognise is shown as the terminal
+   draws it, never as a clipped last line.
+   Before Claude starts its session it may ask whether to trust the folder.
+   Chat and **Needs you** show that question with **No, exit** and **Yes, I
+   trust this folder**, the one under Claude's cursor marked. The full folder,
+   safety question and warnings appear above the choices. For pre-approved tool
+   grants the decline choice may be **No, continue without these permissions**:
+   it continues Claude without those grants instead of exiting. Your click is
+   the choice: Chat checks it is still the same question in the same Claude
+   process with no session, moves Claude's selection if needed, checks again
+   and presses Enter. Chat opens once the session starts.
+   Commands such as `/model` and `/permissions` open the harness's own menu;
+   Chat shows it on a menu card with the cursor marked. Pick a numbered
+   option, or use the key buttons the menu names (**↑**/**↓**, **Enter**,
+   **Esc**, **s**, **←**/**→**), or press those keys with the card focused.
+   Each step, such as Codex's effort level or Claude Code's rule field and
+   save location, replaces the card until the menu closes. A field takes one
+   line with **Type**; press the menu's **Enter** after checking it. Options
+   past 9, and lists with a search field, are reached with the arrows.
+   If Chat says the terminal is too small to show the menu, choose **Open
+   Terminal**, or click Terminal, to restore its size. Chat shows this only
+   after a measured row read for this session's current command; an unknown
+   size does not become a size warning.
+   **⋮** also holds the Terminal's key controls (**Esc**, **Tab**, arrows,
+   **Ctrl** keys) for anything else; they go to the session Chat shows.
 7. A known pull request named in an agent's **READY** or **opened**
    announcement, or its current work claim, gets a PR card. Open **Details**
    for CI and reviews. **Ask the author to fix** sends a `↳ #N` message when
@@ -495,15 +667,16 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    dress the character and watch it walk, turn and sit in the preview, and
    pick its **Chime** (or keep the class default). **What a
    launch runs** shows the exact Herdr command. Press **Save**.
-3. Open **New agent**: **Actions → New agent**, the dashed **+** seat inside
-   a Town room (zoom into the room first), or the robot beside **+** in Spaces'
-   tab bar. The seat preselects its room. Choose **Terminal**, the first choice,
+3. Open **New agent**: **Actions → New agent**, **New agent** on Town's town
+   center, **+** beside Board's bin, the dashed **+** seat inside a Town room (zoom into the room first),
+   or the robot beside **+** in Spaces' tab bar. The seat preselects its room. Choose **Terminal**, the first choice,
    for a plain shell tab; to start an agent, optionally type a task and tap a
    profile or a kind under **Quick start**.
 4. If a harness is logged out on that host, the launcher says so: **Log in**
    opens a small tab and shows the harness's own login command
    (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
    tab**, run it and finish the login there, then **Check again**.
+   The launcher finishes opening a login tab before accepting a start.
    Failed, incomplete or unsupported checks show **unknown**, never “not
    installed” or “logged out”. You can still try a supported harness; use
    **Check again** to retry or **Edit profiles** to review its configuration.
@@ -513,7 +686,24 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question
    first (for example Claude asking whether to trust a new folder), the
-   launcher says so and **Open its tab** lets you answer.
+   launcher says so and **Open its tab** lets you answer. While it starts, the
+   choice you pressed stays marked and **Starting …** says what World is doing;
+   after 10 seconds it says **Taking longer than usual**. Progress and the
+   outcome stay visible above the choices, even with a long readiness list.
+   If the new window opens on Terminal before Chat can read the agent, a line
+   under its header says Chat is not available yet; Chat opens by
+   itself when it can, or choose **Stay on Terminal**.
+   The launcher closes when the start is confirmed, and Town shows the new
+   agent arriving: it steps out at the town center (when you used the town
+   center's **New agent**) or at the bus stop nearest its room, walks to its
+   building, goes in and sits at its desk with a short sparkle and its name.
+   Reloading never replays an arrival, and a failed start has none. With
+   reduced motion it is at its desk at once, highlighted briefly. After an uncertain
+   start, its start choices stay disabled: open the existing tab, or
+   close the launcher before deliberately starting another agent. A definite
+   failure lets you retry, log in or edit profiles. Closing it
+   while a launch is pending leaves any created tab in its room; a late reply
+   does not reopen its window or close a new launcher.
 
 The profile assignment follows its terminal when you move it and is shared
 with other Worlds connected to that Herdr. Each World uses its own profile
@@ -559,6 +749,10 @@ on your phone and desktop.
    shells looks like a small terminal. A working agent's tab pulses (as does the
    selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
    turns the pulses off. Each workspace card counts its agents by status.
+   The same menu offers **Surface → Follow theme / Whiteboard / Blackboard**,
+   **Status colours…** and **Help**. Surface and status choices stay in this
+   browser; they do not change the card colours shared across your devices.
+   Reset status colours to use the chosen surface's defaults again.
    An agent's card shows a ⚑ chip with its quest progress, such as 2/5; hover
    the chip for the quest and its current step.
    The round **+** on a workspace's right edge (shown on hover or selection)
@@ -571,6 +765,14 @@ on your phone and desktop.
    returns to it. A faint string joins tabs whose agents know each other.
    Drag a tab onto another tab to group them, or select a tab, press
    **Group…** and tap the other; a grouped tab's bar offers **Ungroup**.
+   The hub beside the bin, at the bottom centre, holds the town center's
+   actions: **+** opens **New agent** (in the selected card's workspace, when
+   it can start one there), the crown opens your **Town master**'s Chat, and
+   **⋯** opens a menu with **New agent**, **Town master**, **Needs you**,
+   **Summary**, **Profiles** and **New workspace**. **Summary** takes you to
+   Town with its summary open. Escape, a tap outside or **Back** on a phone
+   closes the menu. Board's controls keep clear of the hub and bin, folding
+   into their **⋯** menu when the row is short of room.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
@@ -588,7 +790,10 @@ on your phone and desktop.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
    Changes and Chat; a line joins each Inspector window to its card. Tapping or
    double-clicking an agent's tab opens its Chat, as in Town; a plain shell, or an
-   agent without Chat, opens its terminal.
+   agent without Chat, opens its terminal. **Next**, beside Work, opens the next
+   pane needing you: a waiting agent or a shared question placed on its pane,
+   including a shell question. At narrow widths, Next remains available in the
+   Board menu. Stale hosts and shells without questions are skipped.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
    a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
@@ -615,6 +820,13 @@ on your phone and desktop.
    phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
+   To move just one pane, drag its row—or the grip on a single-pane tab—onto
+   another tab on the same host; on a phone, hold the row or grip first. Dragging
+   the rest of a single-pane card still arranges the whole card. During a pane
+   move, the other panes and the whole card stay in place.
+   Cancelling the drag or dropping on empty board sends no move. If moving the
+   pane would close its old room, Board asks for confirmation first. Strings
+   to that pane follow it.
 
 9. Press the labelled **Work** pill, first in Board's bottom-right controls:
    if an Inspector fills the phone screen, close it with **X** or **Back** first.
@@ -625,7 +837,12 @@ on your phone and desktop.
    working on it; tap one to close Work and jump to its card. **Merged**
    groups the week's pull requests you opened by the day they merged, with
    today open; tap a day to open
-   it, and change how many days it covers in **Settings → Sources**. Escape or a
+   it, and change how many days it covers in **Settings → Sources**. History
+   has a 400-PR bound and shares a one-minute refresh deadline with open work
+   and action details, which are read first. If Sources says history was
+   shortened, shorten the window there and refresh. World keeps its last
+   complete list; the reported merge date is only the oldest valid date
+   observed, not proof that every merge since that date was read. Escape or a
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull
@@ -678,7 +895,7 @@ work.
 Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
 to colour and pin its card, group with the agent that started it, report a
 task result, or ask you a question (`herdr-world ask "Ship it?" --options
-yes,no --wait`). A question shows first in Town's **Needs you** list with the
+yes,no --wait`). A question shows first in the **Needs you** tab with the
 agent's name and waits at reception with **?**; pick an option or type an answer,
 and the waiting agent carries on. An asker can withdraw a cleared question with
 `herdr-world ask withdraw <question-id>`, which clears its markers. If its
@@ -766,7 +983,8 @@ location. Use **Actions > New workspace** or **New tab** from a visual view;
 confirm the destination host. Creation needs a ready host and prepares the source
 terminal before opening the result in the current view.
 
-In **Desk**, start with **Needs you** for blocked agents, **To review** for
+In **Desk**, start with **Needs you** for blocked agents (**Answer** opens the
+Needs you tab at that agent), **To review** for
 finished turns and **In flight** for running work. Open a card to read its Chat or
 inspect the terminal, files or changes. Read the result and verify the diff before
 using **Mark reviewed**; the mark is shared by every browser connected to this
@@ -774,6 +992,19 @@ World service and does not commit files or certify success. **Undo** restores
 that exact stop across those browsers. **Agents** lists all agents in your Hosts
 filter, with recently opened agents shared too. **Reviewed** shows each agent's
 latest marked stop while it remains idle or done; older stops are not retained.
+
+Hosts outside the filter appear as summary chips, including beside an open Desk
+reading pane. On phones, the host chips and expanded list wrap below the counts.
+Select a host chip to see its
+observed agents, then choose **Reveal & open [agent] on [host]**. This explicitly
+adds that host to your current Hosts selection and opens the selected agent's
+Inspector; previously opened Inspectors keep their own hosts and resources.
+Reading a summary leaves the filter unchanged. Cached or unavailable agents
+explain why they cannot open. If the runtime or agent session changes while the
+summary is open, reopen the summary to choose a current agent. Leaving Desk or
+starting another opening cancels a pending reveal; returning does not resume it.
+A superseded reveal leaves a current agent available to retry. A host or session
+that is actually unavailable still explains why it cannot open.
 
 Desk marks, observed stop times and recent opens live in bounded service memory.
 They survive browser reloads and changes to the Hosts filter, but clear when the
@@ -798,15 +1029,16 @@ it does not verify the work for you.
 open its terminal on the expected host.
 
 Use the visible **− Minimize** button in an Inspector's header to hide its
-window, then **Open windows** to restore it. **Close** (or **‹ Back**) dismisses
+window. On desktop, **Open windows** restores it. **Close** (or **‹ Back**) dismisses
 the window; tap the agent or terminal again to reopen it. These controls leave
 agents and terminal sessions running and work in Town, Board and Desk.
 On touch tablets or without a pointing device, narrow Town columns keep 40px
 window controls and hide the pane map to leave room for the agent's name.
-While a window is minimized on a phone, **Open windows** sits beside
-**− Minimize** in any open Inspector's header, clear of its composer. When all
-Inspectors are minimized it floats at the bottom left above the bottom controls,
-even in Zen. **Tabs** in the expanded mobile controls also lists windows.
+On a phone, a minimized window waits as a chip at the bottom left of Town or
+Board, above the bottom controls and also in Zen: tap the chip once to bring the
+window back. While another window fills the screen, its **⋯** switches to the
+minimized agent or terminal; **Tabs** in the expanded mobile controls also lists
+windows.
 On desktop, **Arrange windows** can tile or cascade open Inspectors.
 On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
@@ -877,7 +1109,14 @@ attention, and `done`/`idle` suggest when to return. **Status is not verificatio
 
 Open **Chat** in the Inspector to read the conversation and reply. Chat shows
 user and agent messages, with one line for each run of tool calls, and updates
-while the agent works. If Chat cannot read the conversation it says why and
+while the agent works. A new agent without a session shows **No messages yet.**
+With Chat as the opening preference, its window starts on **Terminal** whenever
+Chat cannot show the conversation: no session, unsupported harness, missing
+integration or an unreadable record. It switches once Chat is available, unless
+you have chosen a view yourself. Pick Chat yourself to see its explanation and
+**Open Terminal**. A missing or unreadable reported transcript keeps its error;
+an agent still starting or waiting is not told to install an integration.
+If Chat cannot read the conversation it says why and
 offers the fix it names, or **Open Terminal**. A message you send shows as
 not yet seen until the transcript has the same words; if it went to another session, a red
 notice names it. Slash commands such as `/compact` work from Chat too (see
@@ -976,6 +1215,23 @@ on **+** to break the pane into a new tab.
 5. Expand **Thinking** above a reply when the model provides reasoning. Selecting
    text there or in the answer stays intact while terminal output updates.
 
+Ranger can also use **Claude Code** as its model provider. Install and sign in to
+`claude` as the account running World, then select **Claude Code** and a model in
+Ranger settings. It uses that CLI's sign-in. Other providers continue to use the
+configured Ranger or explicitly selected Pi credentials. Changing between these
+engines starts fresh model context; your conversation remains visible.
+
+For a scheduled task, **All workspaces, new ones too** follows the workspaces
+Ranger is permitted to use when each run starts. It follows the current explicit
+workspace grants; high-permission all-workspace access is not required. Use a fixed selection to stay on named workspaces.
+Each run still captures current connection generations, and confirmed actions
+retain the normal permission checks.
+
+Ask Ranger to show a workspace or session to open it in the shared Inspector.
+Only the World window that sent that question follows the reply. A replaced
+runtime or missing target produces an unavailable-target notice; it never selects
+another host as a fallback.
+
 Workspace reads and actions still use explicit permissions and captured ownership;
 steering does not enable high-permission mode or send a prompt to another agent.
 
@@ -988,13 +1244,16 @@ steering does not enable high-permission mode or send a prompt to another agent.
 For simultaneous tasks that edit files, use separate worktrees: each has its
 own checkout directory and branch.
 
-1. Confirm that the repository has a fetchable `origin/main`, and inspect
+1. If the repository has an `origin`, confirm that it is fetchable. Inspect
    `paseo.json` if it exists. If you do not trust its commands, disable hooks
    for this repository through **Worktree hooks** before proceeding.
 2. Open **Worktree Lifecycle** from the workspace context menu, or search for
-   `worktree lifecycle` in the command menu.
+   `worktree lifecycle` in the command menu. World's navigator offers the same
+   button and menu entries on desktop and phone. **Worktree location** there
+   chooses where this repository's new worktrees go.
 3. Create and open a documentation worktree. Herdr World starts it from the latest
-   fetched `origin/main`, without carrying over the source workspace's
+   fetched `origin/main` (a repository without an `origin` starts from the
+   checked-out commit), without carrying over the source workspace's
    uncommitted changes.
 4. In the new worktree's terminal, run `pwd` and `git status`. Confirm the
    directory and branch before starting the agent.

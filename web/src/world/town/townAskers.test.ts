@@ -36,6 +36,29 @@ const asked = (id: string, pane: string, terminal?: string): WorldAsk => ({
   },
 });
 
+test("empty questions return no askers without reading the World or office rosters", () => {
+  const reads = { leaves: 0, agents: 0, terminals: 0 };
+  const world = {
+    get leaves() {
+      reads.leaves++;
+      return [];
+    },
+  };
+  const office = {
+    get roster() {
+      reads.agents++;
+      return [];
+    },
+    get paneRoster() {
+      reads.terminals++;
+      return [];
+    },
+  };
+
+  expect(townAskers([], world, office)).toEqual(new Map());
+  expect(reads).toEqual({ leaves: 0, agents: 0, terminals: 0 });
+});
+
 test("every placed asker is named as Town labels its desk, others by what they carry", () => {
   const office = {
     roster: [{ agent: { key: "agent-leaf", displayLabel: "dispatch" } }],

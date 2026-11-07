@@ -792,8 +792,11 @@ async function runNativeCopy() {
   let copyBlurs = 0;
   const onCopyBlur = () => copyBlurs++;
   textarea.addEventListener("blur", onCopyBlur);
-  const apple = detectShortcutPlatform() === "mac";
-  selectShortcutPreset(apple ? "mac" : "windows");
+  // Roamgate #531 applies a preset only on the platform it was written for,
+  // so the copy binding goes into this platform's preset.
+  const platform = detectShortcutPlatform();
+  const apple = platform === "mac";
+  selectShortcutPreset(platform);
   updateShortcut("terminal.copy", [apple ? "Meta+C" : "Ctrl+C"]);
   const copyKey = new KeyboardEvent("keydown", {
     key: "c",

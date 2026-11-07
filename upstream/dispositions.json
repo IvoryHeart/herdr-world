@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "b84ccd53db19701308a8bfb4a7002db1e4559490",
+  "source": "2b16e991eeb2e90f55c948e249acaef1497d5254",
   "changes": [
     {
       "commit": "447f7196b9a23979b026d6b79619836d3337cc06",
@@ -28,7 +28,7 @@
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
-      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
     },
     {
       "commit": "20cb447a808a1e09359cef4f4fb632a385d4485e",
@@ -567,7 +567,7 @@
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync and relevant action security or platform change.",
-      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
     },
     {
       "commit": "3d95be35d72b7498c2e66fbf2b68b3c2b8c395da",
@@ -582,16 +582,16 @@
     {
       "commit": "e030b2e2e795a3839b64fafe1911853061dee0c2",
       "title": "chore(deps): update React and ReactDOM to 19.3.1 (#453)",
-      "status": "divergent",
-      "reason": "Retain React 18 under World policy; the React 19.3.1 patch requires an owner-approved major migration.",
+      "status": "adapted",
+      "reason": "Issue #679 migrates to React/React DOM 19.3.1 and 19.x types, with a version-scoped development-only diagnostic width-counter fix; production React and World focus/ownership contracts are unchanged.",
       "evidence": [
         "web/package.json",
         "docs/upstream-follow-ups.md#react-18-compatibility",
         "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026"
       ],
-      "followUp": "docs/upstream-follow-ups.md#react-18-compatibility",
-      "revisitWhen": "Every source sync, React security advisory, or owner-approved major migration.",
-      "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
     },
     {
       "commit": "25e85076e122dcbf83d5f475ee67c65749750c45",
@@ -902,6 +902,896 @@
       "followUp": null,
       "revisitWhen": null,
       "reviewedFor": "b84ccd53db19701308a8bfb4a7002db1e4559490"
+    },
+    {
+      "commit": "7179b653d8a2275d38f904ce1ffdd351c08196a4",
+      "title": "Upgrade Bun runtime and toolchain to 1.4.4 (#480)",
+      "status": "adapted",
+      "reason": "Bun 1.4.4 arrived through World #644 on main with World's own toolchain pins and workflows; upstream's workflow pins are not applied over World's controls.",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/644",
+        "package.json",
+        "docs/upstream-follow-ups.md#world-workflow-controls"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "d93251c5330e686fc9c4a12a75ba56ba488df3ff",
+      "title": "Fix PR/MR badge recovery across reloads and reconnects (#481)",
+      "status": "adapted",
+      "reason": "Badges recover across reloads and reconnects from a bounded browser cache keyed by connection destination in World's storage namespace; cached and last-good summaries stay stale and non-actionable until a ready connection revalidates them, and only http(s) forge URLs without credentials are kept.",
+      "evidence": [
+        "web/src/pullRequestCache.test.ts",
+        "web/src/components/WorktreePullRequestBadge.test.ts",
+        "server/src/workspace/pull-request.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "396d0cb018aa61f1d3f6ba0afef2c778fcfe0c90",
+      "title": "Consolidate mobile tab and pane navigation (#482)",
+      "status": "deferred",
+      "reason": "Deferred to one dedicated mobile PR after this one (firstmate-2 ruling, 2026-11-05). It ports this change onto World's MobileControls and layer Back order and includes an owner phone try comparing upstream's bottom bar with World's in-flow Message input. No code here.",
+      "evidence": [
+        "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
+        "web/src/components/MobileControls.tsx"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
+      "revisitWhen": "The dedicated mobile PR and its owner phone try; otherwise every source sync.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "498eb6ee68382baa13c0c12a1a5240caa4a06650",
+      "title": "Add Roamgate PR visual evidence skill (#483)",
+      "status": "adapted",
+      "reason": "Not imported: the skill posts visual evidence to Roamgate's GitHub. World keeps its own revision-qualified screenshot practice for the same purpose.",
+      "evidence": [
+        "docs/SCREENSHOTS.md",
+        ".agents/skills/candidate-delivery/SKILL.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "7057495ab431c8997acd745dbb4633622fbfbfb7",
+      "title": "Fix composer draft loss on reload and reconnect (#485)",
+      "status": "adapted",
+      "reason": "World drafts stay in memory only because terminal input can hold secrets: same-document reconnect retention moves unsent text to the same pane and terminal of an unchanged destination. Upstream's sessionStorage/localStorage persistence, logout epochs and reload recovery are not ported.",
+      "evidence": ["web/src/useTerminalComposerDraftScopes.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "7dc96c5fa1f2b9dd456e030e411ef8be922eef5d",
+      "title": "Fix SQLite fixture inspection on macOS (#486)",
+      "status": "adopted",
+      "reason": "Open closed SQLite fixture stores read-write so SQLite can recreate WAL sidecars on macOS.",
+      "evidence": [
+        "server/src/assistant/durable-storage.test.ts",
+        "server/src/assistant/pi-driver.test.ts",
+        "server/src/assistant/pi-azure-compat.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "2c67731651ade2592c798687636cd0a486547fb4",
+      "title": "Update DOMPurify to 3.4.17 for security fixes (#488)",
+      "status": "adopted",
+      "reason": "DOMPurify 3.4.17 was cherry-picked earlier (U1) and is unchanged; this merge records it inside the source range.",
+      "evidence": ["web/package.json", "UPSTREAM.md"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "1385c28b815427d783bf033d2aa36d072be54f11",
+      "title": "Release 0.8.9 (#487)",
+      "status": "adapted",
+      "reason": "Record release ancestry through this merge; World keeps its own version, changelog and release lifecycle, React 18 and its enforced asset budgets.",
+      "evidence": [
+        "UPSTREAM.md",
+        "package.json",
+        "web/package.json",
+        "docs/packaging.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "e724e17ee8b2acd4c8a0dadb0a7b65f196389394",
+      "title": "Keep mobile History input in the bottom bar (#489)",
+      "status": "deferred",
+      "reason": "Deferred to one dedicated mobile PR after this one (firstmate-2 ruling, 2026-11-05). It ports this change onto World's MobileControls and layer Back order and includes an owner phone try comparing upstream's bottom bar with World's in-flow Message input. No code here.",
+      "evidence": [
+        "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
+        "web/src/components/MobileControls.tsx"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
+      "revisitWhen": "The dedicated mobile PR and its owner phone try; otherwise every source sync.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "52cbea927a0cc58d4a895e900db784e0340e821f",
+      "title": "Make Chat the mobile entry point (#491)",
+      "status": "divergent",
+      "reason": "Town stays the phone's default view (owner direction); Chat remains one tap away and is not made the mobile entry point.",
+      "evidence": ["docs/upstream-follow-ups.md#mobile-entry-point"],
+      "followUp": "docs/upstream-follow-ups.md#mobile-entry-point",
+      "revisitWhen": "Every source sync, or when the owner changes the phone's default view.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "22ee302fa1e6d4ba0ece55defcaf9d57e22b3f00",
+      "title": "Compact mobile Ranger and share the Message input (#493)",
+      "status": "deferred",
+      "reason": "Deferred to one dedicated mobile PR after this one (firstmate-2 ruling, 2026-11-05). It ports this change onto World's MobileControls and layer Back order and includes an owner phone try comparing upstream's bottom bar with World's in-flow Message input. No code here.",
+      "evidence": [
+        "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
+        "web/src/components/MobileControls.tsx"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
+      "revisitWhen": "The dedicated mobile PR and its owner phone try; otherwise every source sync.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "6a7b7a48b7b01ce1b7bdbe203d4d0ef9f4bcbcad",
+      "title": "Show workspaces and agents from all servers (#494)",
+      "status": "adapted",
+      "reason": "All servers reads World's bounded, generation-qualified aggregate observation through useAllServerAgentSessions; upstream's connections.agent_sessions poller and server module are not ported. Stale hosts stay out and World's navigator keeps host-scoped trees.",
+      "evidence": [
+        "web/src/useAllServerAgentSessions.test.ts",
+        "web/src/components/WorkspaceTree.servers.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "3c0f108a6bec7fcb41d60eb758d906fc809a453e",
+      "title": "Choose the server when creating a workspace (#495)",
+      "status": "adapted",
+      "reason": "World's Create Workspace already asks for an explicit Destination host (connection and runtime generation) from every view without switching the focused connection; the Current/All servers switch shows only with more than one connected server.",
+      "evidence": [
+        "web/src/components/WorkspaceTree.servers.test.ts",
+        "web/src/components/ModalDialogs.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "02d72266bb3ddaec8d7e72ccf12d35e33755fcc4",
+      "title": "Update dependencies to fix security advisories (#496)",
+      "status": "adopted",
+      "reason": "happy-dom 21.0.4; its undici 8.12.2 pin is already superseded by World's 8.12.3.",
+      "evidence": ["package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "e7fb801e6c9f21d80b7d06cac1fc1c422dab2ad2",
+      "title": "Release 0.8.10 (#497)",
+      "status": "adapted",
+      "reason": "Record release ancestry through this merge; World keeps its own version, changelog and release lifecycle, React 18 and its enforced asset budgets.",
+      "evidence": [
+        "UPSTREAM.md",
+        "package.json",
+        "web/package.json",
+        "docs/packaging.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "e5b9ca09d446794b9adc9608faf047f8f26edd11",
+      "title": "Chat view: add a TTS button to read agent replies aloud (#505)",
+      "status": "adapted",
+      "reason": "Replies are read only with an on-device voice unless a labelled network voice is chosen; a missing saved voice falls back on-device, never to the network. Speech belongs to the pane's connection, generation and session, with preferences in World's storage namespace.",
+      "evidence": [
+        "web/src/components/Speech.dom.test.tsx",
+        "web/src/speechPlayback.test.ts",
+        "web/src/speechPreferences.test.ts",
+        "web/src/markdownToSpeech.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "adcfb64a4f98ce7d0800d75fade38ee5b2668ed1",
+      "title": "chore(deps): bump the actions group with 2 updates (#504)",
+      "status": "divergent",
+      "reason": "Retain World-owned workflow controls; this action update targets Roamgate's CodeQL workflow, which does not exist in World, and requires separate trusted control review.",
+      "evidence": ["docs/upstream-follow-ups.md#world-workflow-controls"],
+      "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
+      "revisitWhen": "Every source sync and relevant action security or platform change.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "666886b40b77c47e7b6509d0e16b297de89b6c4e",
+      "title": "chore(deps): bump @codemirror/view (#498)",
+      "status": "adopted",
+      "reason": "@codemirror/view 6.43.15 on World's lockfile.",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "f428337b9ed6b85687d030a60a03adfab32651d8",
+      "title": "chore(deps): bump undici from 8.12.2 to 8.12.3 (#500)",
+      "status": "adopted",
+      "reason": "undici 8.12.3 was cherry-picked earlier (U1) and is unchanged; this merge records it inside the source range.",
+      "evidence": ["server/package.json", "UPSTREAM.md"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "e0b4bcf3d44ceaf18e0bd3cf383f1af753551dec",
+      "title": "chore(deps): bump lucide-react from 1.49.0 to 1.61.0 (#501)",
+      "status": "adapted",
+      "reason": "lucide-react takes upstream's ^1.61 range; World's lockfile resolves 1.69.0 within it (upstream locks 1.61.0).",
+      "evidence": [
+        "web/package.json",
+        "bun.lock",
+        "scripts/dependency-notices.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "714f0b9b9a8c906595240928a447ec3738f82e54",
+      "title": "chore(deps-dev): bump jsdom from 30.1.1 to 30.1.3 (#503)",
+      "status": "adopted",
+      "reason": "jsdom 30.1.3 on World's lockfile.",
+      "evidence": ["package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "dbb5ad9a152f59a2655755cac83caf1d9d7c966a",
+      "title": "chore(deps): bump @earendil-works/chord from 1.1.0 to 1.4.0 (#502)",
+      "status": "adapted",
+      "reason": "Ranger's @earendil-works/chord 1.4.0 with World's package identity and pinned toolchain (World #645); notices regenerated.",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/package.json",
+        "DEPENDENCY_NOTICES.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "cdb6774a3db76ece3157c18b0d1b764a522b1354",
+      "title": "chore(deps-dev): bump the tooling group across 1 directory with 3 updates (#499)",
+      "status": "adapted",
+      "reason": "oxlint 1.89.0 adopted, and vite takes upstream's ^8.3.5 range, which World's lockfile resolves to 8.3.6 (upstream locks 8.3.5). Biome 2.6.2 is adopted with its Markdown and YAML formatters off in biome.json, so it rewrites no World document or workflow. Upstream's workflow, dependabot, Copilot and skill edits stay World's under its workflow controls.",
+      "evidence": [
+        "biome.json",
+        "package.json",
+        "bun.lock",
+        "docs/upstream-follow-ups.md#world-workflow-controls"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "f763cb1b5fded490c6758e8b9d4ed89f6d93de08",
+      "title": "chore(deps): bump @lobehub/icons-static-svg from 1.95.1 to 1.98.0 (#510)",
+      "status": "adapted",
+      "reason": "@lobehub/icons-static-svg takes upstream's ^1.98 range; World's lockfile resolves 1.102.0 within it (upstream locks 1.98.0).",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "0476112ba79f04fc4bb55673597e640cb57a69f7",
+      "title": "chore(deps): align Pi SDK packages at 1.4.0 (#506)",
+      "status": "adapted",
+      "reason": "Pi SDK packages aligned at 1.4.0 with World's dependency lock and current provider adapters (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/package.json",
+        "server/src/assistant/pi-driver.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "f4367c30ff7f3932beb13de6dae7193517a2b282",
+      "title": "chore(deps): bump @pierre/diffs from 1.5.1 to 1.6.1 (#508)",
+      "status": "deferred",
+      "reason": "@pierre/diffs 1.6's diff worker bundles both highlighter backends and a second copy of World's curated grammars: +56 files and +1.9 MiB, beyond World's 180-file and web total budgets. World stays on 1.5.x and raises no budget (firstmate-2 ruling, 2026-11-05).",
+      "evidence": [
+        "docs/upstream-follow-ups.md#diff-worker-dependency-update",
+        "web/package.json",
+        "docs/packaging.md"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#diff-worker-dependency-update",
+      "revisitWhen": "Every source sync; adopt when the worker fits World's file and total web budgets or the owner changes them.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "0c40d6f3b28803e799684601a77433b95608f2e8",
+      "title": "Search agents on all servers from Pane Search (#512)",
+      "status": "adapted",
+      "reason": "Pane Search lists the other ready servers' agents from World's aggregate observation, not a per-browser poll; a remote result opens its server qualified by connection and generation.",
+      "evidence": ["web/src/paneJump.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "39a868321a62e365ee6ce45b8b850708d6b897ac",
+      "title": "Release 0.8.11 (#513)",
+      "status": "adapted",
+      "reason": "Record release ancestry through this merge; World keeps its own version, changelog and release lifecycle, React 18 and its enforced asset budgets.",
+      "evidence": [
+        "UPSTREAM.md",
+        "package.json",
+        "web/package.json",
+        "docs/packaging.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "ad42db3ab40fe10f82b7d270b2bf8c397d8ddbbf",
+      "title": "Keep the server badge in the right column when a workspace has several tabs (#514)",
+      "status": "adopted",
+      "reason": "The server badge stays in the right column when a workspace has several tabs.",
+      "evidence": ["web/src/components/WorkspaceTree.servers.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "0760862dcd85e6c49bddd16a8d818a3e9e991eda",
+      "title": "Show numbered tab chips with agent status in workspace rows (#517)",
+      "status": "adapted",
+      "reason": "Numbered tab chips with agent status; a local chip focuses its tab through the view's operational store, and in World's navigator a chip selects its workspace without moving Herdr's focus.",
+      "evidence": [
+        "web/src/workspaceTabChips.test.ts",
+        "web/src/components/WorkspaceTree.servers.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "10546ef8bb211aba78009fc8f61020bba4ff4387",
+      "title": "Add a Recently opened sort to the agent list (#518)",
+      "status": "divergent",
+      "reason": "Upstream's Recently opened sort keeps a per-browser open history (agentRecency.v1). World keeps no activity history in the browser, its own agentRecency.ts is service-backed, and the service records no opened signal (firstmate-2 ruling, 2026-11-05). No code.",
+      "evidence": [
+        "docs/upstream-follow-ups.md#recently-opened-agent-sort",
+        "web/src/agentRecency.ts"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#recently-opened-agent-sort",
+      "revisitWhen": "Every source sync, or when the service records owner opens as part of the World model.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "47e227a5ab1a1b84076d5fb96e50482a5bcdf6d6",
+      "title": "Release 0.8.12 (#520)",
+      "status": "adapted",
+      "reason": "Record release ancestry through this merge; World keeps its own version, changelog and release lifecycle, React 18 and its enforced asset budgets.",
+      "evidence": [
+        "UPSTREAM.md",
+        "package.json",
+        "web/package.json",
+        "docs/packaging.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "8a2a4c7a9978d12b706683fa35c9d144a1de8804",
+      "title": "Support oh-my-pi agent sessions (#519)",
+      "status": "adopted",
+      "reason": "Local Oh My Pi transcripts and normalized harness identity through World's central registry (World #645); no SSH OMP discovery claim.",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/agent/session-resolver.test.ts",
+        "server/src/agent/agent-sessions.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "61915cb7abbf55725b4cfd0d5d18940df5813213",
+      "title": "Stop the first terminal attach from waiting on a protocol ping (#525)",
+      "status": "adopted",
+      "reason": "Reuse the resolved protocol on the first terminal attachment and clipboard relay (World #636); World keeps its immediate IME-release fixture.",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/bridge/terminal-bridge.test.ts",
+        "server/src/bridge/endpoint-terminal-session.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "b7d9cd03ff6991010a1ff75dba6e1b911c0c2fca",
+      "title": "Keep SSH sessions from hanging after they connect (#523)",
+      "status": "adapted",
+      "reason": "Keepalives and bounded remote-home probing keep World's structured SSH exit classification and recovery policy (World #636).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/bridge/ssh-command.test.ts",
+        "docs/reviews/roamgate-runner-audit.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "2b7ed7ab054ccac4b7bc06557a8be7afb719a3c6",
+      "title": "Focus the Space a plugin popup is opened for (#521)",
+      "status": "adopted",
+      "reason": "A plugin popup focuses Herdr on the Space it is opened for, even when browser-local navigation shows that Space while Herdr's focus is elsewhere.",
+      "evidence": ["web/src/store.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "e124a0408adbc37dada85ab9476c7f9c953611f5",
+      "title": "Create worktrees in repositories that have no origin (#524)",
+      "status": "adapted",
+      "reason": "Repositories without an origin branch from the checked-out commit; creation reads settings and runs git through the owning runtime's settings reader and runner, with no process-wide defaults.",
+      "evidence": [
+        "server/src/worktree/create.test.ts",
+        "server/src/workspace/default-branch.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "3b30ec75d1e9cce109b20916852ea8d92da04a82",
+      "title": "Batch untracked file counts without cancelling concurrent refreshes (#522)",
+      "status": "adopted",
+      "reason": "Batch untracked line counts in groups of 100 and omit counts above 500 files; concurrent refreshes stay independent (World #636).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/workspace/git-diff.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "56ec64ec11bed977c9f76bbd9e129d06ee8b17c7",
+      "title": "Copy to the clipboard from commands sent with the composer (#526)",
+      "status": "adapted",
+      "reason": "World's verb dispatcher notes the clipboard recipient for pane.send_input/text/keys in its before-send recheck, bound to the runtime, viewing socket and terminal; a failed pane lookup never blocks input and OSC 52 reads stay refused.",
+      "evidence": [
+        "server/src/connections/profile-process.test.ts",
+        "server/src/bridge/terminal-bridge.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "8db2ec6115530e55beedc277fef1c25c4d313968",
+      "title": "Give an attached image time to attach before sending (#527)",
+      "status": "adapted",
+      "reason": "An uploaded image path is sent to the agent on its own and Enter waits for the attachment, matching World's own upload directory.",
+      "evidence": ["web/src/terminalComposer.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "0e14a8dfee05f82b4ed37b78715d2d8786fa21a4",
+      "title": "Clip worktree and branch names at the start in the workspace list (#528)",
+      "status": "adopted",
+      "reason": "Worktree and branch names are clipped at the start in the workspace list.",
+      "evidence": [
+        "web/src/components/WorkspaceTree.css",
+        "web/src/components/WorkspaceTree.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "0eef636aa972da135f7fb15843539a136f813f59",
+      "title": "Reopen the connection a browser was last on (#529)",
+      "status": "adapted",
+      "reason": "A browser starts on the connection it was last on while the catalogue still has it, else the server default. It is only the initial selection, kept in World's storage namespace; it never retargets an operation and the phone still opens on Town.",
+      "evidence": ["web/src/store.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "b447344843da5e5d6102cf87e514c9a7efbfc1d1",
+      "title": "Release 0.8.13 (#541)",
+      "status": "adapted",
+      "reason": "Record release ancestry through this merge; World keeps its own version, changelog and release lifecycle, React 18 and its enforced asset budgets.",
+      "evidence": [
+        "UPSTREAM.md",
+        "package.json",
+        "web/package.json",
+        "docs/packaging.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "8bcb006329922a210e9a3eff7effd9d8d658ffef",
+      "title": "Add an opt-in setting for Option as Alt in terminals on macOS (#530)",
+      "status": "adopted",
+      "reason": "Opt-in macOS Option as Alt for terminals, passed to xterm through World's terminal renderer options and stored in World's namespace.",
+      "evidence": [
+        "web/src/terminalOptionKey.test.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "c3ac4755e56585abd5dcb28a0b26c7a091d5784e",
+      "title": "Keep password managers off the search fields (#536)",
+      "status": "adopted",
+      "reason": "Password managers stay off search fields; World's React 18 command input keeps forwardRef.",
+      "evidence": ["web/src/components/radixOverlay.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "014d1343a757ffd71948cfbd19cc39b87aac23d6",
+      "title": "Resume a scheduled Ranger task after a restart (#538)",
+      "status": "adapted",
+      "reason": "Task recovery compares normalized configuration values; World keeps its captured owner and saved-target checks (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/assistant/tasks.test.ts",
+        "docs/reviews/roamgate-ranger-repair.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "1f6136c62f8c1897d848ac1601c6233f23ddddaf",
+      "title": "Use Bun.connect for one-shot Herdr control calls (#535)",
+      "status": "adapted",
+      "reason": "Bun.connect for Unix one-shot Herdr calls with the node:net fallback, Windows support and World runtime-stop cancellation retained (World #636).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/bridge/herdr-client.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "15fac307b1b703d26ba21afcc368113cacd13e89",
+      "title": "Keep recently viewed terminal streams warm for instant pane switches (#532)",
+      "status": "adapted",
+      "reason": "Recently viewed endpoint streams stay warm in the per-runtime bridge, keyed by connection and generation: at most 20, each closed after 10 minutes unvisited, and closed with the runtime.",
+      "evidence": ["server/src/bridge/terminal-bridge.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "90135dbd2449c602ef39c36f60889e91b3445002",
+      "title": "Add a black background option to the dark theme (#534)",
+      "status": "adapted",
+      "reason": "A true black dark-theme background on first paint, stored with World's appearance settings in its namespace, as the herdr-black terminal theme; World's zoom measurement is kept.",
+      "evidence": [
+        "web/src/terminalThemes.test.ts",
+        "web/src/configuration.browser.tsx"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "d0618887dd6a4fa211f1fe7db2418ff4077f5d7a",
+      "title": "Send an image path alone so Claude Code attaches it (#539)",
+      "status": "adapted",
+      "reason": "An image path is sent alone so Claude Code attaches it, matching World's own upload directory.",
+      "evidence": ["web/src/terminalComposer.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "54e913d3fcaf0c2c854b2be67d142cab3adbacf8",
+      "title": "Keep keyboard shortcuts on the Roamgate server, not in each browser (#531)",
+      "status": "adapted",
+      "reason": "Keyboard shortcut preferences live in the service's settings through owner-only bridge.ui_settings world verbs (not upstream's index.ts hook), with bounded keys and values and no process-wide default store; a custom preset applies only on its own platform.",
+      "evidence": [
+        "server/src/config/ui-settings.test.ts",
+        "web/src/shortcutSync.test.ts",
+        "web/src/shortcutProtocol.test.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "9264b71c36a82af7bb20d6dd11d12192671a33f0",
+      "title": "Reload an open page when the server serves a new frontend (#533)",
+      "status": "adapted",
+      "reason": "World does not reload a page by itself when the service serves a new frontend: its manual StaleBuildToast (Reload / Later) stays the only build-change mechanism, and returning to the tab, pageshow, focus or coming online only re-check and offer.",
+      "evidence": ["web/src/buildFreshness.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "40afb7ef16aab2f01e17dbd55a3452fad8bbe92a",
+      "title": "Show PDFs on phones, drawn with PDF.js (#537)",
+      "status": "adapted",
+      "reason": "PDF.js draws PDFs only where browsers have no PDF viewer. PdfPages and its worker load lazily, check-web-assets keeps both out of the initial load and fails on eval or Function in shipped PDF.js, and only the web total budget moves from 13.25 to 15.25 MiB (firstmate-2 ruling, 2026-11-05).",
+      "evidence": [
+        "scripts/check-web-assets.test.js",
+        "web/src/components/FilePreviewPdf.test.ts",
+        "web/src/components/pdfPageRenderer.test.ts",
+        "server/src/http/static-files.test.ts",
+        "docs/packaging.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "c046fbc9f602c6d794dedde2685d3b1876da89ea",
+      "title": "Run Ranger on Claude Code (#540)",
+      "status": "adapted",
+      "reason": "Claude Code Ranger driver and common tools; each service-owned driver owns its loopback MCP listener and turn tokens, with existing permissions and generation-qualified operations (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/assistant/claude-driver.test.ts",
+        "server/src/assistant/claude-mcp.test.ts",
+        "docs/reviews/roamgate-ranger-repair.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "d78bec77fa0e19bcdd9e4d15a71e476cf0e8cee6",
+      "title": "Refuse a Herdr request over its 1 MiB line limit, clearly (#547)",
+      "status": "adopted",
+      "reason": "Refuse UTF-8 Herdr request lines over 1 MiB before connecting and drain partial writes (World #636).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/bridge/herdr-client.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "7153aff049fe94b9694b5228b4792d44af19c07d",
+      "title": "Let a Ranger task cover all workspaces, new ones too (#542)",
+      "status": "adapted",
+      "reason": "Dynamic task membership follows the current explicit workspace grants at each admission; captured owners and fixed-scope checks remain, and intent, proposals and omission notices survive restart (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/assistant/tasks.test.ts",
+        "server/src/assistant/task-storage.test.ts",
+        "docs/reviews/roamgate-ranger-repair.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "c438f928a14efc984dc317bc2c4842b12f8354a7",
+      "title": "Let Ranger show a workspace or session (#543)",
+      "status": "adapted",
+      "reason": "Show requests carry the originating request and runtime generation and use shared Inspector admission; other windows, stale targets and retired services cannot navigate (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/assistant/service.test.ts",
+        "web/src/assistant.test.ts",
+        "docs/reviews/roamgate-ranger-repair.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "fd86a13d0012e351753c1fc41b138edd65d02906",
+      "title": "Track which agents the user has seen, apart from Herdr's focus (#544)",
+      "status": "divergent",
+      "reason": "World's reviewed record and Desk marks are its attention model; a separate agent-seen store would add a second, conflicting notion of seen.",
+      "evidence": ["docs/upstream-follow-ups.md#agent-seen-tracking"],
+      "followUp": "docs/upstream-follow-ups.md#agent-seen-tracking",
+      "revisitWhen": "Every source sync, or when the owner changes World's attention model.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "5aa1cfeba4e6193aea35e9197d7db1c4b110d3d3",
+      "title": "Serve worktree git status without waiting on git (#545)",
+      "status": "adapted",
+      "reason": "Cached Git status with bounded first-read waiting, background refresh and generation-qualified pushes; service-owned settings and newer pushes over older catalogues are kept (World #636).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/workspace/status.test.ts",
+        "web/src/gitStatusPush.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "e5b399cef4ae467c8baa38ec143e418ddd7b2f83",
+      "title": "Forward ports over an SSH connection, in both directions (#546)",
+      "status": "deferred",
+      "reason": "Service-owned local and reverse forwarding is adapted in World #636 (login, explicit current connection and generation, isolated list/close/retirement). The browser forwarding controls (upstream's portForwarding.ts, Connection switcher and command-menu entries and terminal link offers) are not yet in World.",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/bridge/ssh-forward.test.ts",
+        "server/src/bridge/forward-rpc.test.ts",
+        "docs/upstream-follow-ups.md#browser-port-forward-controls"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#browser-port-forward-controls",
+      "revisitWhen": "The next web or mobile integration PR, otherwise every source sync.",
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "3ac987bc021073b7ff299e078ae106587e297c60",
+      "title": "Log latency samples for Herdr calls, ssh, refresh and echo (#548)",
+      "status": "adapted",
+      "reason": "Herdr, SSH and terminal-surface samples keep World's logger and service ownership (World #636); the browser's opt-in samples time a typed key to the next written frame and attach watchdog firings, never input. Upstream's browser refresh timing has no counterpart because World's topology refresh is the service's shared acquisition.",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/bridge/ssh-metrics.test.ts",
+        "web/src/latencyDebug.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "c9756b6ea76b23fd5beb2c453c47190aed06fb97",
+      "title": "Share one SSH connection per profile across host commands (#549)",
+      "status": "adapted",
+      "reason": "Private runtime command masters bound by explicit private path; another connection's master is never a fallback (World #636).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "server/src/bridge/ssh-master.test.ts",
+        "docs/reviews/roamgate-runner-audit.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "6dd1f830bae3785177ce3ae9ffa25499d8ca7fbe",
+      "title": "Let each repository choose where its new worktrees are created (#550)",
+      "status": "adapted",
+      "reason": "Each repository chooses its worktree location through connection-qualified settings keys and owner-only verbs; Ranger's preview binds the displayed location.",
+      "evidence": [
+        "server/src/bridge/settings-rpc.test.ts",
+        "server/src/assistant/actions.test.ts",
+        "server/src/worktree/create.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "1ab9cb174f3d3d4bbcddba3e34436ddeb36ba1c3",
+      "title": "Create and remove worktrees with configurable commands (#551)",
+      "status": "adapted",
+      "reason": "Create and remove commands run through the owning runtime's runner on its host while the request's generation is current; settings are owner-only verbs, and Ranger can run a configured command but never set one.",
+      "evidence": [
+        "server/src/worktree/command-template.test.ts",
+        "server/src/worktree/remove.test.ts",
+        "server/src/bridge/settings-rpc.test.ts",
+        "web/src/world/WorldNavigatorWorktree.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "1dc6582c61632673f85b9571607c5722795c01d3",
+      "title": "Serve what the user is doing before background badges and polls (#552)",
+      "status": "adapted",
+      "reason": "Interactive and background SSH lanes (World #636); browser PR badge lookups use the background lane, share identical in-flight lookups and reuse recent answers only within a runtime generation.",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/636",
+        "web/src/rpcLanes.test.ts",
+        "web/src/components/ModalDialogs.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "4f42fb467ab4f150e7454a55f6a116debb720b95",
+      "title": "Show the messages queued for Claude in its history (#553)",
+      "status": "adapted",
+      "reason": "Queued Claude turns appear in History with World's recovery and queue holds; interrupted Claude turns fail closed (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/agent/session-history.test.ts",
+        "web/src/components/AgentHistoryChat.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "a19d7c8fbb8a450c758d9f5a3a5c74ce82a4228e",
+      "title": "Find a Claude pane's transcript on SSH hosts and after a resume (#563)",
+      "status": "adapted",
+      "reason": "SSH Claude discovery uses the selected host's configured project root and unique UUID validation, with bounded continuation provenance; local discovery keeps its existing behavior (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/agent/claude-ssh.test.ts",
+        "server/src/agent/session-resolver.test.ts",
+        "docs/reviews/roamgate-ranger-repair.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "299c2ab5b0f6a3162eb84c3f8eef207786ccab90",
+      "title": "Load long remote agent transcripts by what was appended (#564)",
+      "status": "adapted",
+      "reason": "Reuse verified transcript bytes and fetch appends within World's 32 MiB text budget and bounded trajectory consumers; no upstream peak-memory parity claim (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/agent/session-file-access.test.ts",
+        "server/src/agent/session-projection-cache.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "2b16e991eeb2e90f55c948e249acaef1497d5254",
+      "title": "Show a Pi pane's session without Herdr's Pi integration (#565)",
+      "status": "adapted",
+      "reason": "Directory-inferred Pi history stays read-only with no session fingerprint or Send authority; replies still need a current native binding (World #645).",
+      "evidence": [
+        "https://github.com/IvoryHeart/herdr-world/pull/645",
+        "server/src/agent/session-file-access.test.ts",
+        "server/src/agent/conversation-send-race.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
     }
   ]
 }

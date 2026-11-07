@@ -1,4 +1,7 @@
+import { checkDeskRevealHook } from "./testing/deskRevealHookAcceptance";
+import { checkDeskOtherHosts } from "./testing/deskOtherHostsAcceptance";
 import { bridge } from "../api";
+import { needsYouLeafKey, needsYouState } from "./needsYou";
 import { sharedAsksStore, type WorldAsk } from "./worldAsks";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -884,11 +887,17 @@ async function run() {
     card("asker")?.textContent?.includes("Which design should I use?") === true,
     "Desk shows the owner's actual question",
   );
+  // Answer opens the Needs you tab at the asking agent's question.
+  const openedBeforeAnswer = opened.length;
+  const requestBefore = needsYouState().request.sequence;
   card("asker")?.querySelector<HTMLButtonElement>("button.is-primary")?.click();
   await settle(100);
   check(
-    opened[opened.length - 1] === "asker",
-    "one action opens the asking agent",
+    needsYouState().open &&
+      needsYouState().request.sequence === requestBefore + 1 &&
+      needsYouState().request.itemKey === needsYouLeafKey("asker") &&
+      opened.length === openedBeforeAnswer,
+    "Answer opens Needs you at the asking agent",
   );
   check(
     !metadataOpens.includes("asker"),
@@ -906,6 +915,8 @@ async function run() {
     !document.querySelector('[data-world-ask="q-desk"]'),
     "withdrawal clears Desk's question mark",
   );
+  await checkDeskOtherHosts(check);
+  await checkDeskRevealHook(check);
   flushSync(() => root.unmount());
   await runSharedDeskWatchChecks(check);
 }

@@ -13,6 +13,8 @@ import { ChatComposer, chatComposerDraftKey } from "./chat/ChatComposer";
 import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
 import { useConnectionClient } from "../useConnectionClient";
+import { useStoreSelector } from "../store/react";
+import { relayNames } from "./chat/chatSenders";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
 import { AgentHistoryChat } from "./AgentHistoryChat";
 import { AgentMessageDialog } from "./AgentMessageDialog";
@@ -24,7 +26,10 @@ import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
 import { useStepEvidence } from "./chat/useStepEvidence";
 import { useChatBlocks } from "./chat/useChatBlocks";
+import { useChatKeys } from "./chat/useChatKeys";
+import { isSlashCommand } from "../../../shared/conversationInput";
 import { ChatAfterBlocks, decorateChat } from "./chat/blocks/registry";
+import { chooseTrust } from "./chat/blocks/trust";
 import type { WorkItem } from "../../../shared/worldSources";
 import {
   DOUBLE_ESCAPE_MS,
@@ -36,10 +41,13 @@ import type {
   AnswerResult,
   Conversation,
   SendResult,
+  TrustChoice,
   UnconfirmedReason,
 } from "./chat/types";
 import "./chat/blocks/now.css";
 import { ChatStatusBadge } from "./chat/blocks/status-badge";
+// After every Chat style it re-skins.
+import "./AgentChat.town.css";
 
 export type {
   Conversation,
@@ -80,6 +88,18 @@ export function AgentChat({
     active && focusIntent === undefined,
   );
   const connectionClient = useConnectionClient();
+  // The other live agents in this Herdr session whose names are valid and
+  // unique there: a message typed here as "name: …" reads as relayed from it.
+  const relayFrom = useStoreSelector((state) =>
+    JSON.stringify(relayNames(state.panes, pane.pane_id)),
+  );
+  const transcript = useMemo(
+    () => ({
+      agent: recipientLabel ?? pane.agent_name ?? pane.agent ?? "Agent",
+      agents: new Set(JSON.parse(relayFrom) as string[]),
+    }),
+    [relayFrom, pane.agent, pane.agent_name, recipientLabel],
+  );
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.
   const [stale, setStale] = useState("");
@@ -105,7 +125,7 @@ export function AgentChat({
     const seq = ++seqRef.current;
     setLoading(true);
     connectionClient
-      .call("agent_conversation.latest", { pane_id: pane.pane_id })
+      .call("agent_conversation.latest", { pane_id: pane.pane_id, menus: true })
       .then((result) => {
         if (seq !== seqRef.current || !connectionClient.isCurrent()) return;
         const reply = result as Partial<Conversation> | null;
@@ -139,6 +159,22 @@ export function AgentChat({
   }, [connectionClient, pane.pane_id]);
   const loadRef = useRef(load);
   loadRef.current = load;
+  // Chat's interactions belong to this connection, runtime, pane and session.
+  const answerScope = JSON.stringify([
+    connectionClient.connectionId,
+    connectionClient.generation,
+    connectionClient.serverRuntimeGeneration,
+    pane.pane_id,
+    conversation?.session_fingerprint,
+  ]);
+  const keys = useChatKeys({
+    client: connectionClient,
+    paneId: pane.pane_id,
+    sessionFingerprint: conversation?.session_fingerprint ?? null,
+    scope: answerScope,
+    reload: load,
+  });
+  const { afterCommand } = keys;
   const history = useAgentHistoryWindow({
     pane,
     client: connectionClient,
@@ -202,10 +238,12 @@ export function AgentChat({
       }
       load();
       refreshHistory();
+      if (isSlashCommand(text)) afterCommand();
     },
     [
       connectionClient,
       conversation,
+      afterCommand,
       history.messages,
       load,
       pane.pane_id,
@@ -269,6 +307,14 @@ export function AgentChat({
   // only when the user picks it. The service checks the agent still shows
   // this same question just before the key goes.
   const prompt = conversation?.pending_prompt ?? null;
+  const latestDelivery =
+    conversation?.deliveries?.[conversation.deliveries.length - 1];
+  const tooSmall =
+    conversation?.status === "ok" &&
+    latestDelivery?.kind === "command" &&
+    latestDelivery.fingerprint === conversation.session_fingerprint
+      ? conversation.menu_unreadable
+      : undefined;
   const [answering, setAnswering] = useState(false);
   // The answer sent for a question, shown in its place until another
   // question appears.
@@ -281,13 +327,6 @@ export function AgentChat({
     acknowledged: boolean;
     unconfirmed_reason: UnconfirmedReason | null;
   } | null>(null);
-  const answerScope = JSON.stringify([
-    connectionClient.connectionId,
-    connectionClient.generation,
-    connectionClient.serverRuntimeGeneration,
-    pane.pane_id,
-    conversation?.session_fingerprint,
-  ]);
   const [askNotice, setAskNotice] = useState<{
     scope: string;
     text: string;
@@ -328,6 +367,25 @@ export function AgentChat({
         setAnswering(false);
         load();
       }
+    },
+    [answering, answerScope, connectionClient, load, pane.pane_id, prompt],
+  );
+  // Claude's folder-trust question, before any session: checked and
+  // answered by the service under its pre-session witness.
+  const trust = useCallback(
+    async (choice: TrustChoice) => {
+      if (!prompt?.trust || answering) return;
+      setAnswering(true);
+      setAskNotice(null);
+      const refused = await chooseTrust(
+        connectionClient,
+        pane.pane_id,
+        prompt,
+        choice,
+      );
+      if (refused) setAskNotice({ scope: answerScope, text: refused });
+      setAnswering(false);
+      load();
     },
     [answering, answerScope, connectionClient, load, pane.pane_id, prompt],
   );
@@ -441,7 +499,17 @@ export function AgentChat({
     );
   }
 
-  const unavailable = conversation?.unavailable;
+  // No session means there is no record to read. A named transcript that
+  // disappeared (file_missing) or a failed read still needs its error.
+  const noRecord =
+    conversation?.status === "unavailable" &&
+    !conversation.session_fingerprint &&
+    !conversation.session_binding &&
+    history.messages.length === 0 &&
+    ["no_session", "codex_unlinked", "no_messages_yet"].includes(
+      conversation.unavailable?.reason ?? "",
+    );
+  const unavailable = noRecord ? null : conversation?.unavailable;
   const deliveries = conversation?.deliveries ?? [];
   const pending = deliveries.filter(
     (delivery) =>
@@ -658,17 +726,28 @@ export function AgentChat({
         </div>
       ) : (
         <div className="agent-chat-list">
-          {history.messages.length === 0 ? (
-            <p className="agent-chat-empty">
-              {history.history
-                ? "No messages yet."
-                : history.error
-                  ? "Messages could not be read. Use Refresh to try again."
+          {/* A question card stands in for the empty conversation. */}
+          {history.messages.length === 0 &&
+          (history.error || !(showAsk && prompt)) ? (
+            <p
+              className={
+                history.error
+                  ? "agent-chat-error"
+                  : noRecord || history.history
+                    ? "agent-chat-empty"
+                    : "agent-chat-empty is-loading"
+              }
+            >
+              {history.error
+                ? "Messages could not be read. Use Refresh to try again."
+                : noRecord || history.history
+                  ? "No messages yet."
                   : "Loading conversation…"}
             </p>
           ) : null}
           <AgentHistoryChat
             items={chatItems}
+            transcript={transcript}
             listRef={listRef}
             contentRef={contentRef}
             followKey={JSON.stringify([
@@ -720,11 +799,19 @@ export function AgentChat({
                 clock={clock}
                 answered={answered}
                 prompt={showAsk ? prompt : null}
+                tooSmall={tooSmall}
                 agent={conversation?.agent ?? "The agent"}
                 answering={answering}
-                notice={askNotice?.scope === answerScope ? askNotice.text : ""}
+                notice={
+                  keys.notice ||
+                  (askNotice?.scope === answerScope ? askNotice.text : "")
+                }
                 onAnswer={(key, text) => void answer(key, text)}
+                pressing={keys.pressing}
+                onPress={(key) => keys.pressMenu(prompt!.fingerprint, key)}
+                onType={(text) => keys.pressMenu(prompt!.fingerprint, "", text)}
                 onOpenTerminal={onOpenTerminal}
+                onTrust={(choice) => void trust(choice)}
               />
             }
           />
@@ -734,6 +821,29 @@ export function AgentChat({
           />
         </div>
       )}
+      {noRecord ? (
+        <div className="agent-chat-starting agent-chat-guessed" role="status">
+          <span>{conversation?.unavailable?.detail}</span>
+          {onOpenTerminal ? (
+            <button type="button" onClick={onOpenTerminal}>
+              <SquareTerminal size={13} /> Open Terminal
+            </button>
+          ) : null}
+          {conversation?.unavailable?.command ? (
+            <span className="agent-chat-command">
+              <code>{conversation.unavailable.command}</code>
+              <button
+                type="button"
+                onClick={() =>
+                  void copyTextWithFeedback(conversation.unavailable!.command!)
+                }
+              >
+                <Copy size={13} /> Copy command
+              </button>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       {conversation?.status === "ok" && !canSend ? (
         <div className="agent-chat-guessed" role="status">
           <span>
@@ -764,11 +874,22 @@ export function AgentChat({
           disabledReason={
             misdelivered.length
               ? "Read and dismiss the session-switch notice before sending."
-              : undefined
+              : conversation?.pending_prompt?.menu
+                ? "A menu is open in the terminal; typing would go into it as keys. Close it with the key its card names, then send."
+                : undefined
           }
           onSubmit={send}
+          onKey={(key) =>
+            void keys.press(key).then((refused) => {
+              if (refused) setNotice(refused);
+            })
+          }
           onError={setNotice}
         />
+      ) : conversation === null ? (
+        // The composer's room while the first read is out, so the list does
+        // not shrink under the reader when the composer arrives.
+        <div className="agent-chat-composer is-reserved" aria-hidden="true" />
       ) : null}
     </div>
   );

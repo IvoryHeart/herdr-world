@@ -73,6 +73,13 @@ export interface Tab {
   agent_status: string;
 }
 
+export interface AgentSessionIdentity {
+  readonly source: string;
+  readonly agent: string;
+  readonly kind: string;
+  readonly value: string;
+}
+
 export interface Pane {
   pane_id: string;
   terminal_id: string;

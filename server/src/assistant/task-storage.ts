@@ -30,13 +30,13 @@ const schema = `
     schedule TEXT NOT NULL, config TEXT NOT NULL,
     targets TEXT NOT NULL, workspaces TEXT NOT NULL,
     notification_mode TEXT, notifications TEXT NOT NULL DEFAULT '[]',
-    mentions TEXT
+    mentions TEXT, all_workspaces INTEGER NOT NULL DEFAULT 0 CHECK (all_workspaces IN (0, 1))
   ) STRICT;
   CREATE TABLE runs (
     id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id),
     position INTEGER NOT NULL, status TEXT NOT NULL, scheduled_at TEXT NOT NULL,
     started_at TEXT, finished_at TEXT, error TEXT, manual INTEGER NOT NULL,
-    admission TEXT
+    admission TEXT, notice TEXT
   ) STRICT;
   CREATE INDEX runs_task ON runs(task_id, position);
   CREATE TABLE proposals (
@@ -68,6 +68,7 @@ type TaskRow = {
   notification_mode: string | null;
   notifications: string;
   mentions: string | null;
+  all_workspaces: number;
 };
 type RunRow = {
   id: string;
@@ -80,6 +81,7 @@ type RunRow = {
   error: string | null;
   manual: number;
   admission: string | null;
+  notice: string | null;
 };
 type ProposalRow = {
   id: string;
@@ -148,7 +150,7 @@ export function openTaskStorage(
     const version = db
       .query<{ user_version: number }, []>("PRAGMA user_version")
       .get()!.user_version;
-    if (existing && ![1, 2, 3].includes(version))
+    if (existing && ![1, 2, 3, 4].includes(version))
       throw new Error("Unsupported Ranger task database");
     if (
       db.query<{ journal_mode: string }, []>("PRAGMA journal_mode = WAL").get()
@@ -166,11 +168,11 @@ export function openTaskStorage(
         `INSERT INTO tasks (
           id, position, status, created_at, updated_at, next_run_at, due_at,
           title, prompt, scope, schedule, config, targets, workspaces,
-          notification_mode, notifications, mentions
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          notification_mode, notifications, mentions, all_workspaces
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const runInsert = db.query(
-        "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       );
       for (const [position, entry] of state.tasks.entries()) {
         const { task, input, config, targets, workspaces } = entry;
@@ -192,6 +194,7 @@ export function openTaskStorage(
           input.notification_mode ?? null,
           JSON.stringify(entry.notifications ?? []),
           input.mentions === undefined ? null : JSON.stringify(input.mentions),
+          Number(input.all_workspaces === true),
         );
         for (const [position, run] of entry.runs.entries()) {
           const admission: PreparedTask | null = [
@@ -217,6 +220,7 @@ export function openTaskStorage(
             run.error,
             Number(run.manual),
             admission ? JSON.stringify(admission) : null,
+            run.notice ?? null,
           );
         }
       }
@@ -267,6 +271,7 @@ export function openTaskStorage(
             "notification_mode",
             "notifications",
             "mentions",
+            "all_workspaces",
           ],
         ],
         [
@@ -281,6 +286,7 @@ export function openTaskStorage(
             "finished_at",
             "admission",
             "error",
+            "notice",
           ],
         ],
         [
@@ -306,6 +312,8 @@ export function openTaskStorage(
         .query<TaskRow, []>("SELECT * FROM tasks ORDER BY position")
         .all()
         .map((row) => {
+          if (row.all_workspaces !== 0 && row.all_workspaces !== 1)
+            throw new Error("Invalid saved Ranger task membership.");
           const notifications: unknown = JSON.parse(row.notifications);
           return {
             task: {
@@ -321,6 +329,7 @@ export function openTaskStorage(
               prompt: row.prompt,
               scope: JSON.parse(row.scope),
               schedule: JSON.parse(row.schedule),
+              ...(row.all_workspaces === 1 ? { all_workspaces: true } : {}),
               ...(row.notification_mode === null
                 ? {}
                 : { notification_mode: row.notification_mode }),
@@ -345,6 +354,7 @@ export function openTaskStorage(
                 started_at: run.started_at ?? undefined,
                 finished_at: run.finished_at ?? undefined,
                 error: run.error,
+                ...(run.notice === null ? {} : { notice: run.notice }),
                 manual: run.manual === 1,
               })),
           };
@@ -380,20 +390,24 @@ export function openTaskStorage(
     if (!existing)
       db.transaction(() => {
         db.exec(schema);
-        db.exec("PRAGMA user_version = 3");
+        db.exec("PRAGMA user_version = 4");
         load();
       }).immediate();
-    else if (version === 1 || version === 2)
+    else if (version < 4)
       db.transaction(() => {
         if (version === 1)
           db.exec(`
             ALTER TABLE tasks ADD COLUMN notification_mode TEXT;
             ALTER TABLE tasks ADD COLUMN notifications TEXT NOT NULL DEFAULT '[]';
           `);
-        db.exec("ALTER TABLE tasks ADD COLUMN mentions TEXT");
+        if (version < 3) db.exec("ALTER TABLE tasks ADD COLUMN mentions TEXT");
+        db.exec(`
+          ALTER TABLE tasks ADD COLUMN all_workspaces INTEGER NOT NULL DEFAULT 0 CHECK (all_workspaces IN (0, 1));
+          ALTER TABLE runs ADD COLUMN notice TEXT;
+        `);
         // Validate every table before committing the schema upgrade.
         load();
-        db.exec("PRAGMA user_version = 3");
+        db.exec("PRAGMA user_version = 4");
       }).immediate();
     // Fail closed during construction, including a missing or damaged table.
     else load();

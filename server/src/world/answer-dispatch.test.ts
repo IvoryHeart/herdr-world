@@ -11,7 +11,7 @@ import { openWorldLedger } from "../storage/world-storage";
 import { createAskRecipients } from "./ask-recipient";
 import { askSessionFingerprint } from "./world-cli-actor";
 import { createAnswerRecorder } from "./answer-record";
-import { createAnswerDispatcher } from "./answer-dispatch";
+import { answerPrompt, createAnswerDispatcher } from "./answer-dispatch";
 import {
   ANSWER_DELIVERY_VERB,
   answeringAgent,
@@ -118,6 +118,9 @@ async function fixture(
       message: "Fixture is not blocked",
       pending_prompt: null,
     }),
+    press: async () => {
+      throw new Error("unused");
+    },
     dismiss: () => false,
     read: async () => {
       const observed = view();
@@ -532,4 +535,20 @@ test("answer and its new unresolved intent survive retention in one mutation at 
   f.time(4000);
   await f.dispatcher.wake();
   expect(f.prompts).toHaveLength(1);
+});
+
+test("a delivered answer keeps the owner's attached file paths, one per line", () => {
+  const prompt = answerPrompt({
+    id: "q-files",
+    question: "Does the fix look right?",
+    answer: {
+      text: "The header overlaps\n\nAttached files:\n/tmp/example/upload-a/screen.png\n/tmp/example/upload-b/notes.txt",
+      at: 1,
+      by: "owner",
+    },
+  } as LedgerAsk);
+  expect(prompt.pointer).toBe(false);
+  expect(prompt.text).toBe(
+    "Answer to q-files:\nQuestion: Does the fix look right?\nAnswer from owner: The header overlaps\n\nAttached files:\n/tmp/example/upload-a/screen.png\n/tmp/example/upload-b/notes.txt",
+  );
 });
