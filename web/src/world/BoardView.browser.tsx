@@ -2677,6 +2677,14 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         !binCalls.includes("world.bin.resume"),
         "an open tray keeps the bus stopped",
       );
+      // Board has no bus: its bin says when it closes what it holds.
+      const binText = `${chip.getAttribute("aria-label")} ${
+        document.querySelector(".world-bin-tray")!.textContent
+      }`;
+      check(
+        !/\bbus\b/i.test(binText) && binText.includes("closes in"),
+        `Board's bin speaks of no bus (${binText})`,
+      );
       document
         .querySelector<HTMLButtonElement>('[aria-label="Close the bin"]')!
         .click();
@@ -2723,6 +2731,14 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       const row = host.querySelector(
         ".board-controls-space > .board-controls",
       )!;
+      // The dock grew as the chip took its count. ResizeObserver tells
+      // Board's controls only at a painted frame, which the test clock never
+      // draws: give it a real one before the controls are measured.
+      await new Promise<void>((resolve) =>
+        clock.real.requestAnimationFrame!(() =>
+          clock.real.requestAnimationFrame!(() => resolve()),
+        ),
+      );
       // Board's controls make room for the dock, then every one takes its
       // own presses (an 800 px page once put Work under the bin).
       await waitFor(

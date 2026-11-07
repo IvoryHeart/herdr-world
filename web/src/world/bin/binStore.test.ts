@@ -5,7 +5,9 @@ import type { WorldLeafObject } from "../worldObject";
 import {
   binAddRequest,
   binBusClock,
+  binBusLabel,
   binClockLabel,
+  binCloseLabel,
   WorldBinStore,
 } from "./binStore";
 
@@ -184,16 +186,30 @@ test("the bus clock runs from when the state was read", async () => {
   expect(binClockLabel(0)).toBe("0:00");
 });
 
-test("each entry remembers when this page first saw it", async () => {
-  const f = fixture();
-  f.replies.push(state({ entries: [entry("a")] }));
-  await f.store.refresh();
-  const first = f.store.firstSeen("a");
-  f.tick(20_000);
-  f.replies.push(state({ revision: 2, entries: [entry("a"), entry("b")] }));
-  await f.store.refresh();
-  expect(f.store.firstSeen("a")).toBe(first);
-  expect(f.store.firstSeen("b")).toBe(first + 20_000);
+test("only Town's bin speaks of a bus; elsewhere it says when it closes", () => {
+  // What it holds closes once the bus that takes it has left the map:
+  // departure plus the trip.
+  const bin = { ...state(), readAt: 0, verified: true };
+  expect(binBusLabel(bin, 0)).toBe("bus in 1:00");
+  expect(binCloseLabel(bin, 0)).toBe("closes in 1:20");
+  const trip = { ...bin.bus, next_ms: 170_000, elapsed_ms: 5_000 };
+  const riding = { ...bin, entries: [entry("a", true)], bus: trip };
+  expect(binBusLabel(riding, 0)).toBe("bus on its way");
+  expect(binCloseLabel(riding, 0)).toBe("closes in 0:15");
+  expect(binCloseLabel(riding, 4_000)).toBe("closes in 0:11");
+  // Put in after the bus set off, it waits for the next one.
+  const waiting = { ...riding, entries: [entry("b")] };
+  expect(binCloseLabel(waiting, 0)).toBe("closes in 3:10");
+  const stopped = { ...riding, bus: { ...trip, stopped: true } };
+  expect(binBusLabel(stopped, 0)).toBe("bus stopped");
+  expect(binCloseLabel(stopped, 0)).toBe("paused");
+  for (const label of [
+    binCloseLabel(bin, 0),
+    binCloseLabel(riding, 0),
+    binCloseLabel(stopped, 0),
+  ])
+    expect(label).not.toContain("bus");
+  expect(binCloseLabel({ ...bin, verified: false }, 0)).toBe("bin unavailable");
 });
 
 test("a pinned desk or a tab pinned in Spaces keeps its tab's last pane", () => {

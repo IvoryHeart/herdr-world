@@ -431,12 +431,21 @@ Opening a finished agent's terminal also clears its reception stop; neither acti
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
 
-To close an agent you no longer need, drag it onto the **bin** icon at the
+To close an agent you no longer need, drag it onto the **bin** at the
 bottom of Town or Board, or onto a Town bus stop; or open its window and choose
-**Put in bin** from **⋯** (this also works from Desk). Nothing closes yet: in
+**Put in bin** from **⋯** (this also works from Desk). The bin floats at the
+bottom of the screen and lights up while you drag, so on a phone a short drag
+is enough wherever you have scrolled; the town holds still while you rest on
+it. Nothing closes yet: in
 Town the agent walks out of the front door to the nearest bus stop, a London
-stop with a red roundel at a road crossing. A small board over the waiting
-agents, and the bin, show the time to the next bus. Every four minutes a red double-decker comes in, slows to each stop where
+stop with a red roundel at a road crossing, whichever you dropped it on (an
+agent you binned on Board walks out too the first time you open Town). Its
+seat fades into the carpet and crumbles, so the desk reads as going; when
+every agent at a desk is binned the whole desk fades. A
+small board over the waiting agents counts down to the bus reaching that stop
+and reads **due** a few seconds before it pulls in; Town's bin shows the time
+to the next bus. Elsewhere there is no bus: on Board the bin reads **Cleaning
+up** and how many, and its tray says when they close. Every four minutes a red double-decker comes in, slows to each stop where
 someone waits, stands there about ten seconds while they board (you can see
 them in its windows), then speeds up
 and drives off the map; only then does World close their agents. Changed your

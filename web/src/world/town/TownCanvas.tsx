@@ -70,7 +70,6 @@ import {
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
-import { worldBinStore } from "../bin/useWorldBin";
 import { aimAtBin } from "../bin/binDrop";
 import "./townBoard.css";
 import "./townTeams.css";
@@ -847,7 +846,6 @@ export function TownCanvas({
           lookOf={townBin.lookOf}
           framed={busFramed}
           renderer={rendererRef}
-          firstSeen={worldBinStore().firstSeen}
         />
         <TownHudContext.Provider value={hud}>
           <TownWorldLayer
