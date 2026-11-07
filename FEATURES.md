@@ -20,8 +20,8 @@ See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-b
 The service also exposes shared [harness usage data](./docs/usage.md): bounded
 token records from Claude Code, Codex, Pi and Gemini logs on qualified local or
 SSH hosts, with source health, host/workspace/tab/pane rollups and optional
-versioned price-table estimates. The `world.usage.get` read contract is ready
-for expenses projections in Town and Board.
+versioned price-table estimates. Town's expenses boards read it (below); the
+`world.usage.get` read contract is also ready for Board projections.
 
 ## World update notifications
 
@@ -123,6 +123,23 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     browser and device shows the same one. Zoomed in to desks, where the
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
+  - Town shows what the crew spends. The **City expenses** billboard stands
+    by the top street across from the town center: the whole World's tokens
+    and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a
+    **Today** / **7 days** toggle. Each building's reception board ends with
+    its **Expenses today**: the host's tokens and cost and its three
+    costliest rooms. Figures come from [harness usage](./docs/usage.md). The
+    boards never show a missing number as zero: without a price table they
+    show tokens and say "no price table" (or "some models unpriced"); a host
+    whose harness logs cannot be read says "no data"; a quiet host says
+    "none recorded"; and notes name usage tied to no pane or room
+    ("unattributed"), partial reads, stale numbers left out and hosts with no
+    data. The boards re-read usage about once a minute and when the page
+    regains focus; when re-reads fail, the last figures stay for at most five
+    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
+    center's corner and each reception's expenses to a sign in its title;
+    tap one to open it. Zoomed in to desks, the boards are put away with
+    reception.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -278,7 +295,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (tap on touch screens) for its card below it: the Town board's numbers
     for that room, without its agents list (Busy, Waiting, Done, Quiet,
     its agents, and its **Economy today**: estimated cost, tokens and models
-    from [harness usage](./docs/usage.md)), then Rename and Close with 40px
+    from [harness usage](./docs/usage.md); without a price table it says
+    "no price table" instead of a cost, and a host whose logs cannot be read
+    says "No usage data from this host"), then Rename and Close with 40px
     targets. A
     table, or its nameplate, opens the same card for that table on hover,
     focus or a tap; a click on the plate selects the table and a double click

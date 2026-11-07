@@ -18,6 +18,7 @@ import {
   type TownPlaceCardContent,
 } from "./TownRoomPlaque";
 import { TownDeskTitle } from "./TownDeskTitle";
+import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
@@ -239,8 +240,26 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     summary: () => townPlaceSummary(summary, model.projection, place),
     usage: { kind: place.kind, target },
   });
+  const folded = layout.formFactor === "narrow";
+  /** A host's room by its workspace, for its reception's expenses. */
+  const roomLabel =
+    (hostKey: string) => (workspaceId: string, generation: number) => {
+      for (const room of model.rooms.values())
+        if (
+          room.hostKey === hostKey &&
+          room.workspaceRef.nativeId === workspaceId &&
+          room.workspaceRef.generation === generation
+        )
+          return room.accessibleLabel ?? room.displayLabel;
+      return null;
+    };
   return (
     <>
+      <TownCityBillboard
+        center={layout.center}
+        street={layout.roads[0] ?? layout.center.street}
+        folded={folded}
+      />
       {layout.buildings.map((building) => {
         if (!visible.hosts.has(building.hostKey)) return null;
         const host = model.hosts.get(building.hostKey);
@@ -364,6 +383,14 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                   hostLabel={host?.displayLabel}
                   roomActions={roomActions}
                 />
+                {host && folded ? (
+                  <TownReceptionExpenses
+                    connectionId={host.connectionId}
+                    hostLabel={host.displayLabel}
+                    roomLabel={roomLabel(building.hostKey)}
+                    folded
+                  />
+                ) : null}
                 {host ? (
                   <TownReceptionSign
                     connectionId={host.connectionId}
@@ -436,6 +463,14 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                     : null
                 }
               />
+              {host && !folded ? (
+                <TownReceptionExpenses
+                  connectionId={host.connectionId}
+                  hostLabel={host.displayLabel}
+                  roomLabel={roomLabel(building.hostKey)}
+                  folded={false}
+                />
+              ) : null}
             </div>
             {building.rooms.map((placed) => {
               const room = model.rooms.get(placed.key);
