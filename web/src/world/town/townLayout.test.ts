@@ -696,35 +696,69 @@ function roadSides(layout: TownLayout, lot: Lot, facade: number) {
   return [above, below, left, right].filter(Boolean).length;
 }
 
-test("every building and the town hall have roads on at least three sides", () => {
+const HOST_SETS: Record<string, number[]>[] = [
+  { a: [3] },
+  { a: [3], b: [2] },
+  { a: [3], b: [2], c: [5] },
+  { a: [3], b: [2], c: [5], d: [1] },
+  { a: [3], b: [2], c: [5], d: [1], e: [4], f: [2] },
+  // Mixed widths: stacked lots narrower than the widest keep their road.
+  { a: [24], b: [24, 24] },
+  { a: [24, 24, 24], b: [3], c: [24, 24] },
+  // A first lot far shorter than its neighbour still meets the street above.
+  { a: [24, 4], b: [35] },
+];
+
+test("every building has roads on at least three sides", () => {
   for (const shape of Object.values(TOWN_SHAPES))
-    for (const hosts of [
-      { a: [3] },
-      { a: [3], b: [2] },
-      { a: [3], b: [2], c: [5] },
-      { a: [3], b: [2], c: [5], d: [1] },
-      { a: [3], b: [2], c: [5], d: [1], e: [4], f: [2] },
-      // Mixed widths: stacked lots narrower than the widest keep their road.
-      { a: [24], b: [24, 24] },
-      { a: [24, 24, 24], b: [3], c: [24, 24] },
-      // A first lot far shorter than its neighbour still meets the street above.
-      { a: [24, 4], b: [35] },
-    ] as Record<string, number[]>[]) {
+    for (const hosts of HOST_SETS) {
       const { layout } = layoutTown(town(hosts), shape);
       for (const building of layout.buildings)
         expect(roadSides(layout, building, 2)).toBeGreaterThanOrEqual(3);
-      expect(roadSides(layout, layout.townHall, 0)).toBeGreaterThanOrEqual(3);
-      // Streets and side roads are road ground, the lot is reserved ground.
+      // Streets and side roads are road ground.
       for (const road of layout.roads)
         expect(layout.ground[(road + 2) * layout.width + 1]).toBe(
           TownGround.road,
         );
-      const hall = layout.townHall;
-      expect(layout.ground[(hall.y + 1) * layout.width + hall.x + 1]).toBe(
-        TownGround.lot,
-      );
-      for (const building of layout.buildings)
-        expect(overlaps(building, { ...hall, h: hall.h })).toBe(false);
+    }
+});
+
+test("the town center stands at the top, centred over the buildings", () => {
+  for (const shape of Object.values(TOWN_SHAPES))
+    for (const hosts of [...HOST_SETS, {}]) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const { center, buildings } = layout;
+      const top = Math.min(...layout.roads);
+      // Above the first street and every building, inside the town.
+      expect(center.y + center.h).toBeLessThan(top);
+      expect(center.x).toBeGreaterThanOrEqual(3);
+      expect(center.x + center.w).toBeLessThanOrEqual(layout.width - 3);
+      for (const building of buildings) {
+        expect(overlaps(building, center)).toBe(false);
+        expect(building.y).toBeGreaterThan(top);
+      }
+      // On the buildings' middle column (the town's, without any).
+      const axis = buildings.length
+        ? (Math.min(...buildings.map((b) => b.x)) +
+            Math.max(...buildings.map((b) => b.x + b.w))) /
+          2
+        : layout.width / 2;
+      expect(Math.abs(center.x + center.w / 2 - axis)).toBeLessThanOrEqual(1);
+      // A phone's center fits its one-column building's view.
+      if (shape.roomColumns === 1)
+        for (const building of buildings)
+          expect(center.w).toBeLessThanOrEqual(building.w);
+      // Its forecourt is paved down to the street; no tree stands on it.
+      const middle = center.x + Math.floor(center.w / 2);
+      for (let y = center.y + center.h; y < top; y += 1)
+        expect(layout.ground[y * layout.width + middle]).toBe(TownGround.plaza);
+      expect(layout.ground[top * layout.width + middle]).toBe(TownGround.walk);
+      for (const tree of layout.trees)
+        expect(
+          tree.x >= center.x - 1 &&
+            tree.x <= center.x + center.w &&
+            tree.y <= top,
+        ).toBe(false);
     }
 });
 

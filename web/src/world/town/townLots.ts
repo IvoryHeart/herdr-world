@@ -5,6 +5,7 @@
  * building whose floor the move changes.
  */
 
+import { townCenterStreet } from "./townCenter";
 import type { TownShape } from "./townLayout";
 
 export const ROOM_TOP = 9;
@@ -19,8 +20,6 @@ const MIN_BUILDING_WIDTH = 38;
 const MIN_PHONE_BUILDING_WIDTH = 26;
 export const MARGIN = 3;
 export const ROAD_GAP = 5;
-/** The reserved town-hall lot's height; its width is a minimum building's. */
-const TOWN_HALL_HEIGHT = 18;
 /** Phones keep the reception board in the yard above each building. */
 export const TOWN_PHONE_BOARD_ROWS = 8;
 export const TOWN_FACADE = 2;
@@ -31,7 +30,7 @@ const FRONT_YARD = 12;
 /** A room column: its left and right edge and the row under its last room. */
 export type TownColumnSpan = { x0: number; x1: number; bottom: number };
 
-/** The narrowest building of a shape (the town hall's lot is one). */
+/** The narrowest building of a shape. */
 const minWidthOf = (shape: TownShape) =>
   shape.formFactor === "narrow" && shape.roomColumns === 1
     ? MIN_PHONE_BUILDING_WIDTH
@@ -68,8 +67,8 @@ export function townFloor(
 }
 
 /**
- * Where the buildings (floors, in host order) stand, then the reserved town
- * hall. Up to four lots share one street; larger towns wrap into a grid of
+ * Where the buildings (floors, in host order) stand, under the town center.
+ * Up to four lots share one street; larger towns wrap into a grid of
  * streets. Every row of lots has a street above and below it (neighbouring
  * rows share one), and a road right of every lot from street to street.
  */
@@ -78,7 +77,7 @@ export function townPlaceLots(
   shape: TownShape,
 ) {
   const narrow = shape.formFactor === "narrow";
-  const lots = [...floors, { w: minWidthOf(shape), h: TOWN_HALL_HEIGHT }];
+  const lots = floors;
   const perRow = narrow
     ? 1
     : lots.length <= 4
@@ -94,7 +93,7 @@ export function townPlaceLots(
   }[] = [];
   const verticalRoads: { x: number; y0: number; y1: number }[] = [];
   const widestLot = Math.max(...lots.map((lot) => lot.w));
-  let road = MARGIN + 2;
+  let road = townCenterStreet(narrow);
   const roads: number[] = [road];
   let width = MARGIN;
   for (let i = 0; i < lots.length; i += perRow) {
@@ -127,12 +126,5 @@ export function townPlaceLots(
     roads.push(roadY);
     road = roadY;
   }
-  const { x, y, w, h } = placed.pop()!;
-  return {
-    buildings: placed,
-    townHall: { x, y, w, h },
-    verticalRoads,
-    roads,
-    width,
-  };
+  return { buildings: placed, verticalRoads, roads, width };
 }

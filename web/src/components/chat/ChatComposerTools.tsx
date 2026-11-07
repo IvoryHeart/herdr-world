@@ -24,6 +24,9 @@ export function ChatComposerTools({
   onRunShortcut?: (shortcut: MobileTerminalShortcut) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // The popover renders outside the window, so it takes the Town skin of
+  // the window its button is in.
+  const [town, setTown] = useState(false);
   const keys = onRunShortcut
     ? shortcutRows.filter((row) => row.some(Boolean))
     : [];
@@ -32,6 +35,9 @@ export function ChatComposerTools({
       <PopoverTrigger asChild>
         <button
           ref={buttonRef}
+          onClick={(event) =>
+            setTown(!!event.currentTarget.closest(".is-town-skin"))
+          }
           type="button"
           className="terminal-composer-more"
           aria-label="More composer controls"
@@ -42,7 +48,9 @@ export function ChatComposerTools({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="chat-composer-tools-popover"
+        className={`chat-composer-tools-popover${
+          town ? " is-town-skin town-skin-portal theme-scope-dark" : ""
+        }`}
         aria-label="Composer controls"
         side="top"
         align="end"

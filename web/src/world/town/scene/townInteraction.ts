@@ -100,6 +100,8 @@ export type TownInteractionPorts = {
   tapCard?(deskKey: string | null): boolean;
   activateAgent(key: string): void;
   activateRoom(roomKey: string): void;
+  /** Open the town center's radial menu. */
+  openCenter(): void;
   move(command: TownMoveCommand): Promise<TownMoveResult>;
   /** The label that follows a carry: shown on lift, aimed as it moves. */
   ghost: {
@@ -569,6 +571,10 @@ export class TownInteraction {
       return;
     if (!hit) return;
     const { layout } = this.ports.world();
+    if (hit.kind === "center") {
+      this.ports.openCenter();
+      return;
+    }
     if (hit.kind === "building") {
       const building = layout.buildings.find((b) => b.hostKey === hit.key);
       if (building && stage.roofAlpha(building.hostKey) > 0.5)

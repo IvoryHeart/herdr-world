@@ -8,6 +8,12 @@
  */
 
 import {
+  placeTownCenter,
+  townCenterForecourt,
+  townCenterWidth,
+  type TownCenterLot,
+} from "./townCenter";
+import {
   LOBBY_HEIGHT,
   MARGIN,
   ROAD_GAP,
@@ -128,8 +134,6 @@ export const TownGround = {
   plaza: 3,
   building: 4,
   facade: 5,
-  /** The reserved town-hall lot. */
-  lot: 6,
 } as const;
 
 export type TownPoint = { x: number; y: number };
@@ -222,8 +226,8 @@ export type TownLayout = {
    * roads on at least three sides.
    */
   verticalRoads: { x: number; y0: number; y1: number }[];
-  /** The lot reserved for the town hall: the last lot on the grid. */
-  townHall: { x: number; y: number; w: number; h: number };
+  /** The town center, centred above the first street (townCenter.ts). */
+  center: TownCenterLot;
   plaza: TownPoint;
   board: TownPoint;
   benches: TownPoint[];
@@ -551,9 +555,9 @@ export function layoutTown(
     room.deskKeys.forEach((key, index) =>
       seatsOf.set(key, room.deskSeats?.[index] ?? 4),
     );
-  // The hosts' buildings stand on the streets, then the reserved town hall.
+  // The hosts' buildings stand on the streets, under the town center.
   const lots = townPlaceLots(drafts, shape);
-  const { verticalRoads, roads, townHall } = lots;
+  const { verticalRoads, roads } = lots;
   const placedBuildings = drafts.map((draft, index) => {
     const { x, y, h, roadY, topRoadY } = lots.buildings[index]!;
     draft.lounge.y += h - draft.h;
@@ -562,7 +566,9 @@ export function layoutTown(
     return { ...draft, x, y, roadY, topRoadY };
   });
   // The topmost street runs on past the last crossing for the bus stop.
-  const width = Math.max(lots.width + BUS_STOP_CLEARANCE + MARGIN, 40);
+  const centerW = townCenterWidth(shape.roomColumns === 1);
+  const width =
+    Math.max(lots.width + BUS_STOP_CLEARANCE, 37, centerW + MARGIN) + MARGIN;
   const lastRoad = roads[roads.length - 1]!;
   const height = lastRoad + ROAD_GAP + PARK_HEIGHT + MARGIN;
   const ground = new Uint8Array(width * height);
@@ -709,9 +715,12 @@ export function layoutTown(
     };
   });
 
-  for (let ty = townHall.y; ty < townHall.y + townHall.h; ty += 1)
-    for (let tx = townHall.x; tx < townHall.x + townHall.w; tx += 1)
-      set(tx, ty, TownGround.lot);
+  // The center stands on the buildings' axis, its forecourt paved down to
+  // the first street.
+  const center = placeTownCenter(buildings, width, centerW, MARGIN, roads[0]!);
+  const court = townCenterForecourt(center);
+  strip(court.x0, court.y0, court.x1, court.y1, TownGround.plaza);
+  bushes.push(...court.bushes);
 
   const plaza = { x: Math.floor(width / 2), y: lastRoad + ROAD_GAP + 6 };
   for (let ty = plaza.y - 5; ty <= plaza.y + 5; ty += 1)
@@ -735,10 +744,9 @@ export function layoutTown(
   const trees: TownTree[] = [];
   const treeAt = new Set<number>();
   const nearBuilding = (tx: number, ty: number) =>
-    (tx >= townHall.x - 1 &&
-      tx <= townHall.x + townHall.w &&
-      ty >= townHall.y - 2 &&
-      ty <= townHall.y + townHall.h) ||
+    (tx >= center.x - 2 &&
+      tx <= center.x + center.w + 1 &&
+      ty <= center.street) ||
     buildings.some(
       (b) =>
         tx >= b.x - 2 &&
@@ -794,14 +802,15 @@ export function layoutTown(
       buildings,
       roads,
       verticalRoads,
-      townHall,
+      center,
       plaza,
       board: { x: plaza.x + 4, y: plaza.y - 2 },
       benches: [
         { x: plaza.x - 6, y: plaza.y + 2 },
         { x: plaza.x + 3, y: plaza.y + 3 },
+        ...court.benches,
       ],
-      lamps,
+      lamps: [...lamps, ...court.lamps],
       bushes,
       trees,
       deskCells,

@@ -17,6 +17,7 @@ import {
   checkOverviewRoomHover,
   checkTownRoomPlates,
 } from "./townRoomPlates.browser";
+import { checkTownCenter } from "./townCenter.browser";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import {
@@ -1342,6 +1343,8 @@ async function run() {
     "town targets did not finish progressive admission",
   );
 
+  if (scale === "typical" && mode === "test")
+    await checkTownCenter(host, check, waitFor);
   if (scale === "plates" && mode === "test") {
     // A room dragged by its wall goes where it is dropped in its building:
     // World saves every room's spot for that host, Herdr's order follows on
@@ -1760,7 +1763,12 @@ async function run() {
   // Observing the same town again reconciles no agent and builds no
   // navigation; one agent's new status reconciles only its host's agents.
   {
-    const observe = async () => {
+    // Agents walking draw frames of their own, so a frame alone does not
+    // show the new observation arrived: a change waits for its own effect.
+    const observe = async (
+      arrived: () => boolean = () => true,
+      failure = "Town drew no frame after a new observation",
+    ) => {
       const frames = diagnostics.frames;
       setWorld(
         worldFor(
@@ -1773,10 +1781,7 @@ async function run() {
           })),
         ),
       );
-      await waitFor(
-        () => diagnostics.frames > frames,
-        "Town drew no frame after a new observation",
-      );
+      await waitFor(() => diagnostics.frames > frames && arrived(), failure);
     };
     const reconciled = diagnostics.actorsReconciled;
     const built = diagnostics.navigationsBuilt;
@@ -1791,7 +1796,11 @@ async function run() {
     const pane = base.agentPanes[0]!;
     const status = pane.agent_status;
     pane.agent_status = status === "working" ? "idle" : "working";
-    await observe();
+    const synced = () =>
+      Object.keys(diagnostics.hostSyncs).some(
+        (hostKey) => diagnostics.hostSyncs[hostKey] !== (syncs[hostKey] ?? 0),
+      );
+    await observe(synced, "one agent's new status reconciled no host");
     const hosts = Object.keys(diagnostics.hostSyncs).filter(
       (hostKey) => diagnostics.hostSyncs[hostKey] !== (syncs[hostKey] ?? 0),
     );
