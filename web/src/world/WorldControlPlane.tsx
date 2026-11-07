@@ -24,6 +24,7 @@ import {
 import { terminalColorKey } from "./terminalColor";
 import { setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
+import { BoardHub } from "./board/BoardHub";
 import { useTerminalColorChoices } from "./useTerminalColors";
 import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
@@ -371,7 +372,20 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         world={aggregateWorld}
         onOpenNode={(nodeId) => void openNodeById(nodeId)}
       />
-      <WorldBin always={view === "town" || view === "board"} />
+      <WorldBin
+        always={view === "town" || view === "board"}
+        // Board's hub: the town center's actions beside the bin.
+        dock={
+          view === "board" ? (
+            <BoardHub
+              world={presentedWorld}
+              selectedId={selectedId}
+              openChat={(id) => stableOpenInspectorView(id, "history")}
+              onNewWorkspace={() => setWorkspaceCreationOpen(true)}
+            />
+          ) : null
+        }
+      />
       <GroupsWindow
         world={aggregateWorld}
         onOpenTerminal={(id) => void openTerminalById(id)}

@@ -14,6 +14,8 @@ import { createRoot } from "react-dom/client";
 import BoardView, { __boardDraftsTesting } from "./BoardView";
 import { WorldBin } from "./bin/WorldBin";
 import { worldBinStore } from "./bin/useWorldBin";
+import { boardHubActions, BoardHubDock } from "./board/BoardHub";
+import { WORLD_AGENT_LAUNCH_EVENT } from "./agentProfiles";
 import {
   BoardDocumentStore,
   type BoardDocument,
@@ -804,6 +806,21 @@ async function boardAction(selector: string) {
   }
   return button!;
 }
+
+/** Board's hub, with the town center's actions for the fixture's World. */
+const hubDock = () => (
+  <BoardHubDock
+    actions={boardHubActions({
+      world,
+      selectedId: null,
+      holder: null,
+      name: "",
+      openChat: () => {},
+      onNewWorkspace: () => {},
+      toast: () => {},
+    })}
+  />
+);
 
 /** Board scenarios, each on a fresh board (see fresh()); run in order. */
 const scenarios: [name: string, run: () => Promise<void>][] = [
@@ -2606,9 +2623,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       const binHost = document.createElement("div");
       document.body.appendChild(binHost);
       const binRoot = createRoot(binHost);
-      binRoot.render(<WorldBin always />);
+      // As World shows it on Board: beside the hub.
+      binRoot.render(<WorldBin always dock={hubDock()} />);
       await waitFor(
-        () => Boolean(document.querySelector(".world-bin-chip")),
+        () =>
+          Boolean(document.querySelector(".world-bin-dock .world-bin-chip")),
         "Board shows the bin",
       );
       const chip = document.querySelector(".world-bin-chip")!;
@@ -2664,6 +2683,105 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       );
       binRoot.unmount();
       binHost.remove();
+      await rest();
+    },
+  ],
+  [
+    "Board's hub stands with the bin, clear of Board's controls",
+    async () => {
+      const dockHost = document.createElement("div");
+      document.body.appendChild(dockHost);
+      const dockRoot = createRoot(dockHost);
+      dockRoot.render(<WorldBin always dock={hubDock()} />);
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-dock .board-hub")),
+        "the hub stands in the bin's dock",
+      );
+      const dock = document.querySelector(".world-bin-dock")!;
+      const rect = (element: Element) => element.getBoundingClientRect();
+      const apart = (a: DOMRect, b: DOMRect) =>
+        a.right <= b.left ||
+        b.right <= a.left ||
+        a.bottom <= b.top ||
+        b.bottom <= a.top;
+      const hub = rect(dock.querySelector(".board-hub")!);
+      const chip = rect(dock.querySelector(".world-bin-chip")!);
+      check(
+        rect(dock).left >= 0 &&
+          rect(dock).right <= innerWidth &&
+          rect(dock).bottom <= innerHeight,
+        "the dock fits the viewport",
+      );
+      check(
+        hub.right <= chip.left &&
+          Math.abs(hub.top + hub.height / 2 - (chip.top + chip.height / 2)) <
+            1.5,
+        "the hub stands just left of the bin, centred on one row",
+      );
+      check(
+        apart(
+          rect(dock),
+          rect(host.querySelector(".board-controls-space > .board-controls")!),
+        ),
+        "the dock is clear of Board's controls",
+      );
+      const buttons = [
+        ...dock.querySelectorAll<HTMLButtonElement>(".board-hub-button"),
+      ];
+      check(
+        buttons.map((button) => button.dataset.action).join() ===
+          "launch,master,more" &&
+          buttons.every(
+            (button) =>
+              rect(button).height >= (innerWidth <= 720 ? 44 : 32) &&
+              button.contains(
+                document.elementFromPoint(
+                  rect(button).left + rect(button).width / 2,
+                  rect(button).top + rect(button).height / 2,
+                ),
+              ),
+          ),
+        "+, the Town master and ⋯ take presses at their touch size",
+      );
+      const launches: unknown[] = [];
+      const onLaunch = (event: Event) =>
+        launches.push((event as CustomEvent).detail);
+      window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+      buttons[0]!.click();
+      window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+      check(launches.length === 1, "+ opens the agent launcher");
+      buttons[2]!.click();
+      await waitFor(
+        () => Boolean(dock.querySelector('.board-hub-menu [role="menuitem"]')),
+        "⋯ opens the town center's menu",
+      );
+      const menu = rect(dock.querySelector(".board-hub-menu")!);
+      check(
+        menu.left >= 0 &&
+          menu.right <= innerWidth &&
+          menu.top >= 0 &&
+          menu.bottom <= rect(dock).top,
+        "the menu rises above the dock, inside the viewport",
+      );
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await waitFor(
+        () => !dock.querySelector(".board-hub-menu"),
+        "Escape closes the menu",
+      );
+      dock.querySelector<HTMLButtonElement>(".world-bin-chip")!.click();
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-tray")),
+        "the bin's tray still opens from its chip",
+      );
+      check(
+        rect(document.querySelector(".world-bin-tray")!).bottom <=
+          rect(dock).top,
+        "the tray clears the dock",
+      );
+      dockRoot.unmount();
+      dockHost.remove();
       await rest();
     },
   ],
