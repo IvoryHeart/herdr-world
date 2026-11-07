@@ -26,11 +26,12 @@ const GAP = 2;
 
 /**
  * Every building's + Add room slot: a ghost room where the next room would
- * go. It is laid out as the building's last room, the size of a new room
- * (one desk and its free spot, the first capacity step), so the room it
- * creates stands where it was, and the slot moves on.
+ * go. It is laid out as the building's last room, as wide as a new room, so
+ * the room it creates stands where it was, and the slot moves on. It is
+ * shorter than a room: a phone's home view must still reach the lounge
+ * under a one-room building (townSceneCamera's frameHome).
  */
-export const TOWN_ADD_ROOM_SLOT = { key: "\u0000add-room", w: 11, h: 6 };
+export const TOWN_ADD_ROOM_SLOT = { key: "\u0000add-room", w: 11, h: 4 };
 
 type Box = TownRoomSpot & { w: number; h: number };
 

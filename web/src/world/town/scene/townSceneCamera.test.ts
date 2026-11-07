@@ -112,7 +112,7 @@ test("a phone opens at home: the town center on top, the first building under it
     // A short first building fits whole under the whole center.
     [{ width: 390, height: 1200 }, office({ alpha: working(2) }), "flag"],
     // A taller one keeps its lounge, where idle agents rest, in view.
-    [{ width: 390, height: 900 }, office({ alpha: working(2) }), "lounge"],
+    [{ width: 390, height: 844 }, office({ alpha: working(2) }), "lounge"],
     // One taller than the screen leaves the center its plaque and doors.
     [PHONE, town, "plaque"],
   ] as const) {

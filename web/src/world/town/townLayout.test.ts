@@ -1043,7 +1043,11 @@ test("Move before and after swap a room with its reading-order neighbour", () =>
 });
 
 test("a carried room's spot stays inside its own building", () => {
-  const live = layoutTown(town({ a: [3, 3], b: [3] }), TOWN_SHAPES.wide).layout;
+  // Four rooms leave the first one room to move down as well as across.
+  const live = layoutTown(
+    town({ a: [3, 3, 3, 3], b: [3] }),
+    TOWN_SHAPES.wide,
+  ).layout;
   const building = live.buildings[0]!;
   const room = building.rooms[0]!;
   expect(townRoomSpotAt(live, room.key, -50, -50)).toEqual({ x: 2, y: 9 });
@@ -1105,14 +1109,12 @@ function withNewRoom(input: TownInput, hostKey: string, key: string) {
   };
 }
 
-test("a new room is the size of the Add room slot", () => {
+test("a new room is as wide as the Add room slot, and no shorter", () => {
   for (const shape of Object.values(TOWN_SHAPES)) {
     const { layout } = layoutTown(town({ a: [1] }), shape);
     const room = layout.buildings[0]!.rooms[0]!;
-    expect({ w: room.w, h: room.h }).toEqual({
-      w: TOWN_ADD_ROOM_SLOT.w,
-      h: TOWN_ADD_ROOM_SLOT.h,
-    });
+    expect(room.w).toBe(TOWN_ADD_ROOM_SLOT.w);
+    expect(room.h).toBeGreaterThanOrEqual(TOWN_ADD_ROOM_SLOT.h);
   }
 });
 
@@ -1130,7 +1132,6 @@ test("every building's Add room slot is where its next room opens", () => {
           x: before.addRoom.x - before.x,
           y: before.addRoom.y - before.y,
           w: before.addRoom.w,
-          h: before.addRoom.h,
         };
         const key = `${hostKey}/new-${added}`;
         input = withNewRoom(input, hostKey, key);
@@ -1143,7 +1144,6 @@ test("every building's Add room slot is where its next room opens", () => {
           x: room.x - after.x,
           y: room.y - after.y,
           w: room.w,
-          h: room.h,
         }).toEqual(slot);
         expect(overlaps(after.addRoom, room)).toBe(false);
       }
