@@ -264,6 +264,13 @@ export function TownCanvas({
   const awayKeys = townBin.away;
   const arrivals = useTownArrivals(model, layout, townBin.route);
   const arrivingKeys = arrivals.arriving;
+  // A new agent goes to its desk for its welcome, as a summoned one does.
+  const welcoming = arrivals.welcoming;
+  const deskKeys = useMemo(
+    () =>
+      welcoming.size ? new Set([...summonedKeys, ...welcoming]) : summonedKeys,
+    [summonedKeys, welcoming],
+  );
   // A desk just pinned keeps the cell it has; save it so it stays there.
   const deskPinned = model.deskPins;
   const fallbackSummary = useMemo(
@@ -307,7 +314,7 @@ export function TownCanvas({
     hover,
     tappedDesk,
     completionSeenKeys,
-    summonedKeys,
+    summonedKeys: deskKeys,
     askingKeys,
     awayKeys,
     arrivingKeys,
@@ -587,7 +594,7 @@ export function TownCanvas({
     selectedKey,
     hover,
     completionSeenKeys,
-    summonedKeys,
+    deskKeys,
     askingKeys,
     awayKeys,
     arrivingKeys,

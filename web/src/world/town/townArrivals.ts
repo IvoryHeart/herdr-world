@@ -2,16 +2,17 @@
  * A new agent's arrival in Town. When World confirms a start this page asked
  * for (agentStarts.ts), the agent steps out at the town center, or at the bus
  * stop nearest its room when it was launched anywhere else, walks the streets
- * and side roads to its building's front door, goes in to where its status
- * puts it (its desk, as townActors.ts walks it) and a short welcome plays over
- * it there. Nothing plays for agents Town already had, for a failed or
+ * and side roads to its building's front door, goes in and sits at its desk
+ * whatever its status (as a summoned agent does, townActors.ts) and a short
+ * welcome plays over it there; afterwards its status moves it as usual. Nothing plays for agents Town already had, for a failed or
  * uncertain start, or after a reload. Several starts at once arrive one after
  * another. With reduced motion there is no walk: the agent is at its desk
  * with a still highlight that fades.
  *
  * Pure: who arrives when, and the way they walk. TownArrivalLayer draws the
  * walk outdoors and the welcome; the actors keep the agent out of its
- * building until it reaches the front door (`arriving`).
+ * building until it reaches the front door (`arriving`), then at its desk
+ * until the welcome is over (`welcoming`).
  */
 
 import { AGENT_START_KEEP_MS, type AgentStart } from "../agentStarts";
@@ -29,9 +30,9 @@ export const TOWN_ARRIVAL_WALK_MS = 3000;
 /** The welcome over the seated agent. */
 export const TOWN_ARRIVAL_WELCOME_MS = 1600;
 /**
- * Once in, how long the welcome waits for the agent to sit before it plays
- * wherever the agent is (one that is idle goes to the bar). The walk
- * indoors is hurried to TOWN_ARRIVAL_INDOOR_S (townActors.ts).
+ * Once in, how long the welcome waits for the agent to sit at its desk before
+ * it plays wherever the agent is (a desk it cannot reach). The walk indoors
+ * is hurried to TOWN_ARRIVAL_INDOOR_S (townActors.ts).
  */
 export const TOWN_ARRIVAL_SIT_WAIT_MS = 3500;
 
@@ -136,6 +137,17 @@ export class TownArrivals {
   outside(now: number): string[] {
     return this.arrivals
       .filter((arrival) => arrival.end > arrival.begin && now < arrival.end)
+      .map((arrival) => arrival.agentKey)
+      .sort();
+  }
+
+  /**
+   * Agents whose arrival is not over at `now`: outside, walking in or being
+   * welcomed. Their goal is their desk, so each sits for its welcome.
+   */
+  welcoming(now: number): string[] {
+    return this.arrivals
+      .filter((arrival) => now < townArrivalDone(arrival))
       .map((arrival) => arrival.agentKey)
       .sort();
   }

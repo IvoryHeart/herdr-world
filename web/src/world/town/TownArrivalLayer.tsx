@@ -29,9 +29,10 @@ const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
- * The arrivals Town plays now (townArrivals.ts), and the agents they keep
- * outside their buildings (`arriving`, for the actors). The set keeps its
- * identity while its members are unchanged.
+ * The arrivals Town plays now (townArrivals.ts), the agents they keep outside
+ * their buildings (`arriving`) and the agents they keep at their desks
+ * (`welcoming`), for the actors. Each set keeps its identity while its
+ * members are unchanged.
  */
 export function useTownArrivals(
   model: TownModel,
@@ -61,12 +62,16 @@ export function useTownArrivals(
     const timer = setTimeout(() => setVersion((n) => n + 1), next - now + 20);
     return () => clearTimeout(timer);
   }, [planner, starts, model, layout, route, version]);
-  const members = planner.outside(performance.now()).join("\n");
-  const arriving: ReadonlySet<string> = useMemo(
-    () => new Set(members ? members.split("\n") : []),
-    [members],
-  );
-  return { arrivals: planner.arrivals, arriving };
+  const now = performance.now();
+  const arriving = useKeySet(planner.outside(now));
+  const welcoming = useKeySet(planner.welcoming(now));
+  return { arrivals: planner.arrivals, arriving, welcoming };
+}
+
+/** `keys` as a set that keeps its identity while its members are unchanged. */
+function useKeySet(keys: readonly string[]): ReadonlySet<string> {
+  const members = keys.join("\n");
+  return useMemo(() => new Set(members ? members.split("\n") : []), [members]);
 }
 
 /**
@@ -140,8 +145,8 @@ export const TownArrivalLayer = memo(function TownArrivalLayer({
         }
         const welcome = welcomes.current.get(arrival.id);
         if (!welcome || now < arrival.end) continue;
-        // Over the agent once it sits (or soon after it is in, wherever its
-        // status took it), following it.
+        // Over the agent once it sits at its desk (or soon after it is in,
+        // should it never sit), following it.
         const at = renderer.current?.actorPosition(arrival.agentKey) ?? null;
         if (
           !welcomed.current.has(arrival.id) &&

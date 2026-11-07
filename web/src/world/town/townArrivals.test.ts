@@ -88,6 +88,9 @@ test("agents already in Town play nothing: only a confirmed start arrives", () =
   expect(arrivals.outside(3499)).toEqual(["agent-t3"]);
   expect(arrivals.outside(3500)).toEqual([]);
   expect(arrivals.nextChange(1500)).toBe(3500);
+  // At its desk, whatever its status, until its welcome is over.
+  expect(arrivals.welcoming(1500)).toEqual(["agent-t3"]);
+  expect(arrivals.welcoming(3500)).toEqual(["agent-t3"]);
   // It plays once, and is over after its welcome.
   expect(plan(arrivals, [confirmed], modelOf("t1", "t2", "t3"), 2000)).toBe(
     false,
@@ -98,6 +101,7 @@ test("agents already in Town play nothing: only a confirmed start arrives", () =
     true,
   );
   expect(arrivals.arrivals).toEqual([]);
+  expect(arrivals.welcoming(done)).toEqual([]);
 });
 
 test("a start never confirmed (failed or uncertain) has no arrival", () => {
@@ -157,6 +161,8 @@ test("with reduced motion an arrival has no walk: the agent stays at its desk", 
     [TOWN_ARRIVAL_STAGGER_MS, TOWN_ARRIVAL_STAGGER_MS, true],
   ]);
   expect(arrivals.outside(0)).toEqual([]);
+  // Still kept at their desks for the highlight.
+  expect(arrivals.welcoming(0)).toEqual(["agent-a", "agent-b"]);
 });
 
 test("one launched elsewhere arrives from its bus stop; one with no way in has no walk", () => {
