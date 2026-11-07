@@ -1,45 +1,39 @@
-/* The town center: its name plaque on the frieze and its radial menu. */
+/* The town center: its name plaque on the frieze and its radial menu.
+   Colours come from the shared `--town-*` tokens (townAsks.css). The plaque
+   is a room plaque's wooden plate; the ring's medallions and hub are Town's
+   control buttons (the zoom group's), its labels Town's dark panels. */
 
 /* The plaque keeps a readable size and shrinks less than the building. */
 .town-world .town-center-sign {
   position: absolute;
   transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 2.4));
   transform-origin: 50% 50%;
-  padding: 3px 10px;
+  padding: 3px 8px;
   font:
-    700 13px "Silkscreen",
+    700 12px "Silkscreen",
     "Pixelify Sans",
     ui-monospace,
     monospace;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   white-space: nowrap;
-  color: #3a2408;
-  background: linear-gradient(#ffe39a, #e8c75a);
-  border: 2px solid #7a5520;
-  border-radius: 4px;
-  box-shadow:
-    0 2px 0 #7a5520,
-    0 4px 10px rgba(0, 0, 0, 0.35);
+  color: var(--town-plaque-text);
+  background: var(--town-plaque);
+  border: 2px solid var(--town-plaque-edge);
+  border-radius: 5px;
   cursor: pointer;
   pointer-events: auto;
-  transition:
-    filter 0.12s ease,
-    box-shadow 0.12s ease;
+  transition: filter 0.12s ease;
 }
 
 .town-world .town-center-sign:hover,
 .town-world .town-center-sign[aria-expanded="true"] {
-  filter: brightness(1.08);
-  box-shadow:
-    0 2px 0 #7a5520,
-    0 0 0 3px rgba(255, 209, 102, 0.45),
-    0 4px 12px rgba(0, 0, 0, 0.4);
+  filter: brightness(1.12);
 }
 
 .town-world .town-center-sign:focus-visible {
-  outline: 2px solid #fff7e0;
-  outline-offset: 3px;
+  outline: 2px solid var(--town-accent);
+  outline-offset: 2px;
 }
 
 .town-world .town-center-sign:disabled {
@@ -57,7 +51,7 @@
 .town-center-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(8, 12, 10, 0.18);
+  background: rgba(0, 0, 0, 0.18);
   animation: town-center-fade 0.16s ease-out;
 }
 
@@ -79,9 +73,9 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(14, 17, 24, 0.62) 0%,
-    rgba(14, 17, 24, 0.5) 55%,
-    rgba(14, 17, 24, 0) 72%
+    color-mix(in srgb, var(--town-panel) 66%, transparent) 0%,
+    color-mix(in srgb, var(--town-panel) 54%, transparent) 55%,
+    transparent 72%
   );
   pointer-events: none;
   animation: town-center-fade 0.18s ease-out;
@@ -91,7 +85,7 @@
   content: "";
   position: absolute;
   inset: 44px;
-  border: 2px dashed rgba(255, 209, 102, 0.4);
+  border: 2px dashed color-mix(in srgb, var(--town-accent) 40%, transparent);
   border-radius: 50%;
 }
 
@@ -102,7 +96,7 @@
   top: 0;
   padding: 0;
   font: inherit;
-  color: #fff7e0;
+  color: var(--town-text);
   background: none;
   border: 0;
   cursor: pointer;
@@ -118,43 +112,50 @@
   animation-delay: var(--delay);
 }
 
+/* Medallions and the hub: Town's control button, made round. */
+.town-center-medallion,
+.town-center-hub {
+  color: var(--town-text);
+  background: var(--town-btn);
+  border: 2px solid var(--town-edge);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.07),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 0.12s ease,
+    filter 0.15s ease;
+}
+
 .town-center-medallion {
   position: relative;
   display: grid;
   place-items: center;
   width: var(--ring-item);
   height: var(--ring-item);
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #2c3446, #11151d 70%);
-  border: 2px solid #ffd166;
-  box-shadow:
-    inset 0 0 0 2px rgba(0, 0, 0, 0.45),
-    0 4px 12px rgba(0, 0, 0, 0.45);
-  transition:
-    transform 0.12s ease,
-    border-color 0.12s ease,
-    background 0.12s ease;
 }
 
+/* The first action wears Town's accent on its edge and icon. */
 .town-center-action[data-primary] .town-center-medallion {
-  color: #2a1a04;
-  background: radial-gradient(circle at 35% 30%, #fff0b0, #e8c75a 70%);
-  border-color: #fff7e0;
-  box-shadow:
-    0 0 0 3px rgba(255, 209, 102, 0.35),
-    0 4px 14px rgba(0, 0, 0, 0.5);
+  color: var(--town-accent);
+  border-color: var(--town-accent);
 }
 
+/* A count, as on a room plaque. */
 .town-center-medallion b {
   position: absolute;
   top: -6px;
   right: -8px;
   min-width: 20px;
-  padding: 1px 5px;
-  font: 700 11px / 1.3 var(--town-ui-font, "Rubik", system-ui, sans-serif);
-  color: #2a1a04;
-  background: #ffb547;
-  border: 2px solid #3a2408;
+  padding: 1px 7px;
+  font:
+    700 11px / 1.3 "Silkscreen",
+    ui-monospace,
+    monospace;
+  color: var(--town-ink);
+  background: var(--town-wait);
+  border: 2px solid var(--town-edge);
   border-radius: 999px;
 }
 
@@ -167,8 +168,9 @@
   font-weight: 600;
   line-height: 1.4;
   white-space: nowrap;
-  color: #f1efe6;
-  background: rgba(14, 17, 24, 0.9);
+  color: var(--town-text);
+  background: var(--town-panel);
+  border: 2px solid var(--town-edge);
   border-radius: 999px;
 }
 
@@ -179,12 +181,12 @@
   font-weight: 400;
   line-height: 1.3;
   text-overflow: ellipsis;
-  color: #c9cfc4;
+  color: var(--town-muted);
 }
 
 .town-center-action:hover:not([aria-disabled="true"]) .town-center-medallion {
   transform: scale(1.08);
-  border-color: #fff7e0;
+  filter: brightness(1.12);
 }
 
 .town-center-action:focus-visible {
@@ -193,8 +195,8 @@
 
 .town-center-action:focus-visible .town-center-medallion,
 .town-center-hub:focus-visible {
-  outline: 2px solid #fff7e0;
-  outline-offset: 3px;
+  outline: 2px solid var(--town-accent);
+  outline-offset: 2px;
 }
 
 .town-center-action[aria-disabled="true"] {
@@ -202,9 +204,7 @@
 }
 
 .town-center-action[aria-disabled="true"] .town-center-medallion {
-  color: #a9b2a4;
-  background: #1a1f28;
-  border-color: #4b5568;
+  opacity: 0.45;
 }
 
 /* The hub closes the ring. */
@@ -214,15 +214,11 @@
   width: 48px;
   height: 48px;
   transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: rgba(14, 17, 24, 0.94);
-  border: 2px solid #4b5568;
-  transition: border-color 0.12s ease;
   animation: town-center-fade 0.16s ease-out;
 }
 
 .town-center-hub:hover {
-  border-color: #ffd166;
+  filter: brightness(1.12);
 }
 
 @keyframes town-center-open {

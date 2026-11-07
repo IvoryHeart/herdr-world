@@ -104,6 +104,8 @@ export function TownCenterMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const { radius, item } = townCenterRing(viewportWidth);
+  // The style guide's icon sizes: a menu's 16 px, phone navigation's 22 px.
+  const iconSize = item < 56 ? 16 : 22;
   const choose = (action: TownCenterAction) => {
     if (action.disabled) return;
     onClose();
@@ -184,7 +186,7 @@ export function TownCenterMenu({
               onClick={() => choose(action)}
             >
               <span className="town-center-medallion" aria-hidden="true">
-                <Icon size={item < 56 ? 22 : 24} />
+                <Icon size={iconSize} strokeWidth={2} />
                 {action.count ? <b>{action.count}</b> : null}
               </span>
               <span className="town-center-label" aria-hidden="true">
@@ -200,7 +202,7 @@ export function TownCenterMenu({
           aria-label="Close town center"
           onClick={onClose}
         >
-          <X size={20} aria-hidden="true" />
+          <X size={iconSize} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
     </div>
