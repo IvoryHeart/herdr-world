@@ -1,8 +1,10 @@
 /**
  * The Town renderer's standing and walking agents and their status bubbles:
  * each agent away from its seat as a retained sprite and shadow in its
- * building, and each bubble on the screen layer over its head. The renderer
- * steps these each frame through `update` and `updateBubbles`.
+ * building, and each bubble on the screen layer over its head. Agents in the
+ * reception overflow crowd grumble (an arm-waving, stamping loop, still under
+ * calm motion) and later nap lying on the lobby floor. The renderer steps
+ * these each frame through `update` and `updateBubbles`.
  */
 
 import { Graphics, Sprite, Texture, type Container } from "pixi.js";
@@ -23,6 +25,9 @@ import {
 } from "./townSprites";
 
 type ActorView = { sprite: Sprite; shadow: Graphics; look: TownLook };
+
+/** Grumbling frames a second. */
+const GRUMBLE_RATE = 2.5;
 
 /** What the agents' sprites read from the renderer that owns them. */
 export type TownActorViewsContext = {
@@ -91,14 +96,31 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
         actorViews.set(actor.key, view);
       }
       const moving = actor.mode === "walk";
-      const frame = moving ? Math.floor(actor.walked / 6) % 4 : 0;
-      const bob = moving && frame % 2 ? -1 : 0;
+      const mood = actors.mood(actor);
+      const animate = !ctx.state().calm && !camera.reducedMotion;
+      // Grumblers alternate a raised fist with a stamp, each on its own beat;
+      // a still grumbler keeps the fist up.
+      const phase = (townHash(actor.key) % 8) / 8;
+      const grumble =
+        mood === "grumble" && animate
+          ? Math.floor(ctx.clock() * GRUMBLE_RATE + phase) % 2
+          : 0;
+      const frame = moving
+        ? Math.floor(actor.walked / 6) % 4
+        : mood === "grumble"
+          ? grumble
+          : 0;
+      const bob = (moving && frame % 2) || grumble ? -1 : 0;
       view.look = lookOf(actor.key);
+      // A napping agent lies along the floor, head to the left or the right.
+      const lying = mood === "nap" ? (townHash(actor.key) % 2 ? 1 : -1) : 0;
+      view.sprite.rotation = (lying * Math.PI) / 2;
       view.sprite.position.set(
-        Math.round(actor.x),
-        Math.round(actor.y + 1 + bob),
+        Math.round(actor.x - lying * 10 * TOWN_AGENT_SCALE),
+        Math.round(actor.y + 1 + bob - (lying ? 6 : 0)),
       );
       view.sprite.zIndex = actor.y;
+      view.shadow.scale.x = TOWN_AGENT_SCALE * (lying ? 2.4 : 1);
       view.shadow.position.set(Math.round(actor.x), Math.round(actor.y));
       view.shadow.zIndex = actor.y - 0.5;
       view.sprite.alpha = view.shadow.alpha = standingAlpha;
@@ -106,12 +128,23 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
       view.sprite.texture = textureOf(
         townCharacter(
           view.look,
-          actor.dir,
+          lying ? "down" : actor.dir,
           frame,
-          "stand",
-          ctx.blink(actor.key, actor.dir !== "up" && ctx.visible(view.sprite)),
+          mood === "grumble" && frame === 0 ? "carry" : "stand",
+          lying
+            ? true
+            : ctx.blink(
+                actor.key,
+                actor.dir !== "up" && ctx.visible(view.sprite),
+              ),
         ),
       );
+      if (mood === "grumble") {
+        const onScreen = view.sprite.visible && ctx.visible(view.sprite);
+        if (animate && onScreen) ctx.ambient().every(GRUMBLE_RATE, phase);
+        // Draw the nap when it starts, under calm motion too.
+        ctx.ambient().changeAt(ctx.clock() + actors.dozeIn(actor));
+      }
     }
     for (const [key, view] of actorViews)
       if (!live.has(key)) {
@@ -144,6 +177,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           actor.mode,
           !state.calm && !camera.reducedMotion,
         );
+        const mood = actors.mood(actor);
         const kind = townBubbleKind(
           status,
           state.askingKeys?.has(agent.key) ?? false,
@@ -152,9 +186,14 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           actor.mode,
           chatting,
           Math.floor(clock * 3),
+          mood,
         );
         let headX = actor.x;
         let headY = actor.y - 20 * TOWN_AGENT_SCALE;
+        if (mood === "nap") {
+          headX += (townHash(actor.key) % 2 ? 1 : -1) * 8 * TOWN_AGENT_SCALE;
+          headY = actor.y - 12;
+        }
         if (actor.mode === "seat") {
           const seat = model.agentSeats.get(actor.key);
           const cell = seat && layoutCells.get(seat.deskKey);
@@ -196,19 +235,26 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
         }
         bubble.texture = textureOf(sprites.bubble[kind]);
         const bubbleScale =
-          (kind === "blocked" || kind === "ask" || kind === "done") && !near
+          (kind === "blocked" ||
+            kind === "ask" ||
+            kind === "done" ||
+            mood !== null) &&
+          !near
             ? 2
             : scale;
         bubble.scale.set(bubbleScale);
         const bounce =
-          kind === "blocked" && !camera.reducedMotion && !state.calm
+          (kind === "blocked" || kind === "curse") &&
+          !camera.reducedMotion &&
+          !state.calm
             ? Math.abs(Math.sin(clock * 4 + (townHash(actor.key) % 7))) * 3
             : 0;
         bubble.position.set(
           Math.round(point.x),
           Math.round(point.y - 2 - bounce),
         );
-        if (kind === "blocked" && ctx.visible(bubble)) ambient.continuous();
+        if ((kind === "blocked" || kind === "curse") && ctx.visible(bubble))
+          ambient.continuous();
       }
     for (const [key, bubble] of bubbles)
       if (!wanted.has(key)) {

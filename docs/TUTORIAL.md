@@ -192,7 +192,9 @@ hosts stay usable.
 3. Look at reception, at the top of each building, for blocked agents waiting
    for input, oldest first. Finished agents also wait there until you open
    their terminal or mark that completion reviewed, then join idle agents at
-   the bar in the building's bottom corner. These locations visualize
+   the bar in the building's bottom corner. When the queue is full, the rest
+   crowd the lobby and grumble, then nap on the floor after about 90 seconds;
+   the front of the crowd takes the next free spot. These locations visualize
    status; they do not move the underlying pane or change its host. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included; press **Summary** on it (on a phone, tap the

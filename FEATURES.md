@@ -79,6 +79,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
+  - When reception's queue is full, the rest crowd the lobby beside it in the
+    same order, grumbling with a `#@!` bubble; after about 90 seconds a
+    grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
+    the front of the crowd, and the others move up. Under calm motion the
+    crowd stands still, still grumbling or napping. An agent whose state is
+    unknown sits at its desk scratching its head under a purple `??` instead
+    of dozing.
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right. The last lot on the grid is
     reserved for a town hall: a fenced plot with a sign, not yet in use.
