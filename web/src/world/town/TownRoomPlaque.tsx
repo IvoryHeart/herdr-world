@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import type { OfficeRoom } from "../herdrOfficeProjection";
@@ -47,6 +47,45 @@ export function TownPlaceCardSummary({
       place={content.summary()}
       economy={townPlaceEconomy(usage, content.usage)}
     />
+  );
+}
+
+/**
+ * A room zoomed out to its overview card, where its name is too small to
+ * point at: a mouse anywhere over the room on the canvas (`open`), or over
+ * its card, shows the room's summary under the card, as its plaque does
+ * further in. The summary is built when it first shows.
+ */
+export function TownRoomOverviewSummary({
+  card,
+  open: shown,
+  children,
+}: {
+  card: TownPlaceCardContent;
+  /** The mouse is over the room on the canvas. */
+  open: boolean;
+  /** The room's overview card. */
+  children: ReactNode;
+}) {
+  const { opened, open } = usePlaceCard();
+  useEffect(() => {
+    if (shown) open();
+  });
+  return (
+    <div
+      className={`town-room-overview${shown ? " is-open" : ""}`}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") open();
+      }}
+    >
+      {children}
+      <div
+        className="town-place-card town-room-overview-card"
+        aria-hidden="true"
+      >
+        {opened || shown ? <TownPlaceCardSummary content={card} /> : null}
+      </div>
+    </div>
   );
 }
 

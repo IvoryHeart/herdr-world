@@ -4,7 +4,9 @@
   the Town board's numbers for that place, without its agents list: busy,
   waiting, done, quiet and its agents, then its economy today (estimated
   cost, tokens and models from harness usage). A room's card also holds
-  Rename and Close, so one hover shows them all. On a phone, tap the nameplate; the first
+  Rename and Close, so one hover shows them all. Zoomed out, where room names
+  are too small to point at, hovering anywhere over a room shows the same
+  room numbers under its card. On a phone, tap the nameplate; the first
   tap on a table opens its card, and a second tap opens the table.
 
 ### Changed

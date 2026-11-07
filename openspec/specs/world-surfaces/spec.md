@@ -1327,7 +1327,10 @@ focus or a touch, from the same summary read model and the usage of its
 exactly qualified Herdr tab. The card SHALL read usage only once opened. Hovering the table itself
 on the canvas SHALL open that card without covering the table; on a touch
 screen, a tap on a table whose card is closed SHALL open the card instead of
-the table, and a second tap SHALL open the table as a tap does. The dashed empty-seat **+** inside a room
+the table, and a second tap SHALL open the table as a tap does. At the
+overview level, where rooms show cards instead of plates, a mouse anywhere over
+a room or its card SHALL show the room's numbers, as its plate's card does,
+below its card without taking the pointer from the town. The dashed empty-seat **+** inside a room
 SHALL open the existing launcher with that qualified room selected; Terminal
 SHALL be its first choice for a plain tab, alongside profiles and agent kinds.
 The plate SHALL NOT contain a separate New agent text button. If the selected

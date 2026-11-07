@@ -216,3 +216,28 @@
     width: 40px;
   }
 }
+
+/* Zoomed out, a room's overview card stands in for its plaque: a mouse over
+   the room, or over the card, shows the room's summary just under the card.
+   The summary only shows; the pointer passes through it to the town. */
+.town-room-overview {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.town-room-overview-card {
+  z-index: 7;
+  left: 50%;
+  top: calc(50% + 30px * var(--iz));
+  border-radius: 8px;
+  transform: translateX(-50%) scale(var(--iz));
+  transform-origin: 50% 0;
+}
+
+.town-world[data-level="overview"]
+  .town-room-overview:is(.is-open, :has(.town-room-card:hover))
+  .town-room-overview-card {
+  opacity: 1;
+  visibility: visible;
+}

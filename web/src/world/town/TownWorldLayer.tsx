@@ -12,7 +12,11 @@ import { TownBuildingSign } from "./TownBuildingSign";
 import type { TownBuildingSigns } from "./townBuildingSigns";
 import type { TownRoomActions } from "./TownCanvas";
 import { ReceptionEntry, portrait } from "./TownReceptionEntry";
-import { TownRoomPlaque, type TownPlaceCardContent } from "./TownRoomPlaque";
+import {
+  TownRoomOverviewSummary,
+  TownRoomPlaque,
+  type TownPlaceCardContent,
+} from "./TownRoomPlaque";
 import { TownDeskTitle } from "./TownDeskTitle";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
@@ -102,6 +106,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   signs,
   summary,
   openDeskKey,
+  openRoomKey,
 }: {
   /** The HUD store: the ages clock. */
   hud: TownHud;
@@ -109,6 +114,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   summary: TownSummary;
   /** The table under the mouse, or tapped, on the canvas: its card is open. */
   openDeskKey: string | null;
+  /** The room under the mouse on the canvas: zoomed out, its card is open. */
+  openRoomKey: string | null;
   signs: TownBuildingSigns;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
@@ -383,45 +390,53 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                   }}
                 >
                   {visible.cards ? (
-                    <button
-                      type="button"
-                      className={`town-room-card${c.blocked ? " town-room-card-waiting" : ""}${selectedKey === room.key ? " town-selected" : ""}`}
-                      style={
-                        {
-                          "--room-w": `${placed.w * T}px`,
-                          "--carpet": roomCarpet(room.key),
-                          // Presses pass to the town: a pan, or a hold that
-                          // lifts the table beneath.
-                          touchAction: "none",
-                        } as React.CSSProperties
-                      }
-                      aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
-                      onPointerDown={(event) => {
-                        cardPressTaken.current =
-                          onRoomCardPress?.(event.nativeEvent, room.key) ??
-                          false;
-                      }}
-                      onClick={(event) => {
-                        const taken =
-                          cardPressTaken.current && event.detail > 0;
-                        cardPressTaken.current = false;
-                        if (!taken) onActivateRoom(room.key);
-                      }}
-                      tabIndex={-1}
+                    <TownRoomOverviewSummary
+                      card={placeCard(
+                        { kind: "room", key: room.key },
+                        room.workspaceRef,
+                      )}
+                      open={room.key === openRoomKey}
                     >
-                      <span className="town-room-card-name">{label}</span>
-                      {c.blocked ? (
-                        <span className="town-room-card-badge">
-                          !{c.blocked}
+                      <button
+                        type="button"
+                        className={`town-room-card${c.blocked ? " town-room-card-waiting" : ""}${selectedKey === room.key ? " town-selected" : ""}`}
+                        style={
+                          {
+                            "--room-w": `${placed.w * T}px`,
+                            "--carpet": roomCarpet(room.key),
+                            // Presses pass to the town: a pan, or a hold that
+                            // lifts the table beneath.
+                            touchAction: "none",
+                          } as React.CSSProperties
+                        }
+                        aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
+                        onPointerDown={(event) => {
+                          cardPressTaken.current =
+                            onRoomCardPress?.(event.nativeEvent, room.key) ??
+                            false;
+                        }}
+                        onClick={(event) => {
+                          const taken =
+                            cardPressTaken.current && event.detail > 0;
+                          cardPressTaken.current = false;
+                          if (!taken) onActivateRoom(room.key);
+                        }}
+                        tabIndex={-1}
+                      >
+                        <span className="town-room-card-name">{label}</span>
+                        {c.blocked ? (
+                          <span className="town-room-card-badge">
+                            !{c.blocked}
+                          </span>
+                        ) : null}
+                        <span className="town-room-card-meta">
+                          {c.desks} desks · {c.working} working
+                          {overflow ? ` · +${overflow} more` : ""}
                         </span>
-                      ) : null}
-                      <span className="town-room-card-meta">
-                        {c.desks} desks · {c.working} working
-                        {overflow ? ` · +${overflow} more` : ""}
-                      </span>
-                      <span className="town-room-card-bar" aria-hidden="true">
-                        {(["working", "blocked", "done", "idle"] as const).map(
-                          (status) =>
+                        <span className="town-room-card-bar" aria-hidden="true">
+                          {(
+                            ["working", "blocked", "done", "idle"] as const
+                          ).map((status) =>
                             c[status] ? (
                               <i
                                 key={status}
@@ -429,9 +444,10 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                 style={{ flexGrow: c[status] / total }}
                               />
                             ) : null,
-                        )}
-                      </span>
-                    </button>
+                          )}
+                        </span>
+                      </button>
+                    </TownRoomOverviewSummary>
                   ) : null}
                   {visible.tagRooms.has(room.key)
                     ? placed.cells.map((cell) => {

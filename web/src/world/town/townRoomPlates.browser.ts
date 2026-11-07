@@ -324,3 +324,76 @@ export async function checkTownRoomPlates(
     store.createQualifiedTab = originalCreate;
   }
 }
+
+/**
+ * Zoomed out to the overview, a room's name is too small to point at: a mouse
+ * anywhere over the room on the canvas, away from its card, shows the room's
+ * summary, and leaving the town hides it again.
+ */
+export async function checkOverviewRoomHover(
+  host: HTMLElement,
+  check: (condition: boolean, message: string) => void,
+  waitFor: (
+    condition: () => boolean,
+    message: string | (() => string),
+  ) => Promise<void>,
+) {
+  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+  // A point in a room that only the canvas covers: the room's own card sits
+  // at its centre, so try just inside each corner.
+  let found: { wrap: HTMLElement; clientX: number; clientY: number } | null =
+    null;
+  for (const wrap of host.querySelectorAll<HTMLElement>(
+    ".town-room-overview",
+  )) {
+    const box = wrap.getBoundingClientRect();
+    for (const [clientX, clientY] of [
+      [box.left + 4, box.top + 4],
+      [box.right - 4, box.top + 4],
+      [box.left + 4, box.bottom - 4],
+      [box.right - 4, box.bottom - 4],
+    ] as const)
+      if (canvas.contains(document.elementFromPoint(clientX, clientY))) {
+        found = { wrap, clientX, clientY };
+        break;
+      }
+    if (found) break;
+  }
+  check(found !== null, "no overview room shows the canvas beside its card");
+  if (!found) return;
+  const { wrap, clientX, clientY } = found;
+  const card = wrap.querySelector<HTMLElement>(".town-room-overview-card")!;
+  check(
+    getComputedStyle(card).visibility === "hidden",
+    "an overview room's summary must start hidden",
+  );
+  canvas.dispatchEvent(
+    new PointerEvent("pointermove", {
+      bubbles: true,
+      pointerId: 72,
+      pointerType: "mouse",
+      clientX,
+      clientY,
+    }),
+  );
+  await waitFor(
+    () =>
+      wrap.classList.contains("is-open") &&
+      getComputedStyle(card).visibility === "visible" &&
+      !!card.querySelector(".town-place-summary .town-board-counts"),
+    "hovering a zoomed-out room never showed its summary",
+  );
+  check(
+    canvas.contains(document.elementFromPoint(clientX, clientY)),
+    "a zoomed-out room's summary must let the pointer through to the town",
+  );
+  canvas.dispatchEvent(
+    new PointerEvent("pointerleave", { pointerId: 72, pointerType: "mouse" }),
+  );
+  await waitFor(
+    () =>
+      !wrap.classList.contains("is-open") &&
+      getComputedStyle(card).visibility === "hidden",
+    "a zoomed-out room's summary stayed open after the mouse left the town",
+  );
+}

@@ -836,6 +836,17 @@ export function TownCanvas({
               tappedDesk ??
               (hover !== null && model.desks.has(hover) ? hover : null)
             }
+            openRoomKey={
+              // Zoomed out, a mouse anywhere over a room (a table or an
+              // agent in it) opens the room's card.
+              hover === null
+                ? null
+                : model.rooms.has(hover)
+                  ? hover
+                  : (model.desks.get(hover)?.roomKey ??
+                    model.agents.get(hover)?.roomKey ??
+                    null)
+            }
             onActivateRoom={(key) => {
               onActivateRoom(key);
               zoomToRoomKey(key);

@@ -182,7 +182,8 @@ hosts stay usable.
    agents) and its economy today (estimated cost, tokens and models), then
    Rename and Close. Cost shows when a price table is set; see
    [harness usage](./usage.md). Hover a table or its nameplate for the
-   same card about that table. On a touch screen, tap the plate or nameplate;
+   same card about that table. Zoomed out to the room cards, hover anywhere
+   over a room for its numbers under its card. On a touch screen, tap the plate or nameplate;
    the first tap on a table opens its card, and a second tap (or a double tap)
    opens the table as before. The dashed **+** seat inside a room
    opens its launcher with that room selected. Choose **Terminal** for a plain
