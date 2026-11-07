@@ -787,21 +787,32 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   choices that cannot fit explain why.
 - Inspectors and arranged Spaces windows share snap, minimize, maximize/restore,
   close and all eight resize handles. Each window has one bar: its name, a
-  location line, the view selector and **⋯**, maximize and close. An agent is
+  location line, the view selector and **⋯**, **− Minimize**, maximize and close. An agent is
   named `<name>-<harness>` (for example `otter-claude`), shortened in the middle
   past 14 characters, and its state is a badge on its icon: a tick when done, a
   spinner while working, **!** when it needs you and a grey dot when idle. **⋯** holds
-  minimize, the snap choices and float. Tapping the location line under the name
+  a minimize shortcut, the snap choices and float. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
   Town the window takes the Town look (portrait, pixel name, chunky buttons,
   **‹ Back**), and so does its Chat: Town's colours, framed messages with
   yours in soft gold, raised keys, a soft gold **Send** and the agent's
-  recommended answer in the same gold. On a phone the window fills the screen like the
+  recommended answer in the same gold. On touch screens or without a pointing
+  device, narrow Town columns keep 40px window controls; the pane map hides to
+  leave room for the agent's name. On a phone the window fills the screen like the
   terminal: its bar shows the name and status, and **⋯** switches the view
   (Chat, Terminal, Changes, Files) or switches to another agent or terminal. Opening or focusing a window preserves other
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
-  Window close dismisses presentation; native tab closure remains separate.
+  **− Minimize** stays visible on phones. There, a minimized window waits as a
+  chip at the bottom left of Town or Board, above the bottom controls and also
+  in Zen: one tap on the chip restores it. While another window fills the phone
+  screen, the chips sit in a strip at the bottom of that window, below its
+  content, so a minimized window is still one tap away; its **⋯** and **Tabs**
+  in the expanded mobile controls also list windows.
+  **Close** (or **‹ Back**) dismisses
+  the window; open the agent or terminal again to reopen it. Minimizing or
+  closing a window leaves agents and terminal sessions running. Native tab
+  closure remains separate.
 - Menus, dropdowns, pickers and the workspace list opened from a terminal's
   title close top first: Escape and Back close only the topmost one; a press
   or tap outside all of them (on the terminal, say) closes them all, so one

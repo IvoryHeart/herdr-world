@@ -99,7 +99,7 @@
   background: var(--accent-soft);
   color: var(--text);
 }
-.world-window-controls > button:last-of-type:hover {
+.world-window-controls > .world-window-close:hover {
   background: var(--danger-soft);
   color: var(--danger-text);
 }
@@ -319,6 +319,52 @@
   background: transparent;
   color: var(--muted);
 }
+/* A phone's minimized windows: one chip each, above the bottom controls and
+   below the mobile menu backdrop (79). */
+.world-minimized-dock {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  z-index: 78;
+  display: flex;
+  gap: 6px;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+}
+/* While a phone window is open, the chips are a strip under its content. */
+.world-minimized-dock.is-in-window {
+  position: static;
+  order: 99;
+  flex: none;
+  z-index: auto;
+  max-width: none;
+  padding: 6px max(8px, env(safe-area-inset-left, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--shell-panel);
+}
+.world-minimized-dock.is-in-window > button {
+  box-shadow: none;
+}
+.world-minimized-dock > button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 11rem;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--shell-panel);
+  box-shadow: 0 3px 12px #0005;
+  color: var(--text);
+  font: inherit;
+}
+.world-minimized-dock > button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .world-window-switcher-menu {
   position: fixed;
   z-index: 6000;
@@ -377,6 +423,20 @@
   width: 32px;
   height: 32px;
   padding: 0;
+}
+.world-managed-window.is-compact
+  :is(.world-window-controls > button, .world-window-back) {
+  min-width: 44px;
+  min-height: 44px;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .world-window-switcher-trigger {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .world-window-switcher-menu > button {
+    min-height: 44px;
+  }
 }
 /* Town's palette for a Town window and for what it opens in a portal (a
    popover marked .town-skin-portal): the values Town's own surfaces use. */
@@ -459,6 +519,48 @@
 }
 .is-town-skin .world-window-controls {
   gap: 6px;
+}
+/* Fine pointers can use smaller controls in narrow desktop Columns. */
+@media (pointer: fine) {
+  @container workspace-inspector (max-width: 279px) {
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity {
+      column-gap: 4px;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      :is(.world-window-back, .world-window-controls > button) {
+      min-width: 30px;
+      min-height: 30px;
+      width: 30px;
+      height: 30px;
+    }
+  }
+}
+/* Touch tablets and devices without a pointer use desktop Columns too.
+   Give the name the pane map's space, keeping 40px Town window actions. */
+@media (pointer: coarse), (pointer: none) {
+  @container workspace-inspector (max-width: 279px) {
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity {
+      grid-template-columns: 32px minmax(0, 1fr);
+      column-gap: 4px;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > .inspector-pane-map-glyph {
+      display: none;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > .workspace-inspector-agent-avatar {
+      grid-column: 1;
+    }
+    .world-managed-window.is-town-skin:not(.is-compact)
+      .workspace-inspector-agent-identity
+      > :not(.inspector-pane-map-glyph, .workspace-inspector-agent-avatar) {
+      grid-column: 2;
+    }
+  }
 }
 .is-town-skin .workspace-inspector-tabs {
   padding: 3px;
