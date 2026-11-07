@@ -161,12 +161,7 @@ export function townCenterActions({
       toast,
     }),
     needsYouAction(summary.summary.counts.needsYou),
-    {
-      id: "summary",
-      label: "Summary",
-      icon: ClipboardList,
-      run: () => summary.open(),
-    },
+    summaryAction(() => summary.open()),
     profilesAction(),
     {
       id: "room",
@@ -264,6 +259,21 @@ export const needsYouAction = (count?: number): TownCenterAction => ({
   icon: Inbox,
   count,
   run: () => openNeedsYou(),
+});
+
+/**
+ * Town's summary: who needs you, finishes, hosts and their rooms, and spend.
+ * `detail` says where it opens, from a view other than Town.
+ */
+export const summaryAction = (
+  open: () => void,
+  detail?: string,
+): TownCenterAction => ({
+  id: "summary",
+  label: "Summary",
+  icon: ClipboardList,
+  detail,
+  run: open,
 });
 
 /** The agent profiles, in the profile editor. */

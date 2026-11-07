@@ -38,6 +38,7 @@ export type WorldControlPlaneProps = {
   onVisualActionExtensionReady(extension: CommandExtension): void;
   viewToolbarPortal: HTMLDivElement | null;
   onGoToSpaces(): void;
+  onGoToTown(): void;
   onPresentedWorldChange(world: WorldObject): void;
 };
 

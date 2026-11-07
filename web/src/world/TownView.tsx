@@ -16,6 +16,7 @@ import { worldLocalStorage } from "../browserStorage";
 import { useStoreSelector } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
+import { offerTownSummary } from "./town/townSummaryRequest";
 import { useTownOffice } from "./town/useTownOffice";
 import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
@@ -388,6 +389,9 @@ export default function TownView({
   // Needs you's Outbox row opens Town's Summary at the saved answers.
   const openOutbox = townSummary.openOutbox;
   useEffect(() => offerNeedsYouOutbox(openOutbox), [openOutbox]);
+  // Board's hub asks for the summary before switching here.
+  const openSummary = townSummary.open;
+  useEffect(() => offerTownSummary(openSummary), [openSummary]);
   const askingKeys = useMemo(() => {
     return askingKeysForWorld(townSummary.summary.asks, world);
   }, [townSummary.summary.asks, world]);

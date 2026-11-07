@@ -1,6 +1,7 @@
 import { Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLayer } from "../../layerStack";
+import { setBinDock } from "./binDock";
 import { store } from "../../store";
 import { tabPinsFor } from "../../tabPins";
 import type { BinView } from "../../../../shared/bin";
@@ -149,7 +150,7 @@ export function WorldBin({
   return (
     <>
       {dock && chipButton ? (
-        <div className="world-bin-dock">
+        <div ref={setBinDock} className="world-bin-dock">
           {dock}
           {chipButton}
         </div>

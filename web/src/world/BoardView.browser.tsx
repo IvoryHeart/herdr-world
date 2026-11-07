@@ -265,10 +265,12 @@ const binAdds: Record<string, unknown>[] = [];
 /** Every call to the (fake) bin, and whether its bus stands stopped. */
 const binCalls: string[] = [];
 let binStopped = false;
+/** Agents the (fake) bin holds. */
+let binEntries: Record<string, unknown>[] = [];
 const binState = () => ({
   epoch: "test",
   revision: binCalls.length,
-  entries: [],
+  entries: binEntries,
   closing: [],
   outcomes: [],
   bus: {
@@ -816,6 +818,7 @@ const hubDock = () => (
       holder: null,
       name: "",
       openChat: () => {},
+      onOpenSummary: () => {},
       onNewWorkspace: () => {},
       toast: () => {},
     })}
@@ -2689,6 +2692,20 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
   [
     "Board's hub stands with the bin, clear of Board's controls",
     async () => {
+      // An agent waits in the bin: the chip shows its count and the bus.
+      binEntries = [
+        {
+          id: "bin-1",
+          connection_id: "local",
+          connection_generation: 1,
+          workspace_id: "w1",
+          tab_id: "t1",
+          pane_id: "p1",
+          terminal_id: "term-1",
+          label: "tutorial",
+          view: "board",
+        },
+      ];
       const dockHost = document.createElement("div");
       document.body.appendChild(dockHost);
       const dockRoot = createRoot(dockHost);
@@ -2697,8 +2714,37 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         () => Boolean(document.querySelector(".world-bin-dock .board-hub")),
         "the hub stands in the bin's dock",
       );
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-chip b")),
+        "the bin shows the agent it holds",
+      );
       const dock = document.querySelector(".world-bin-dock")!;
       const rect = (element: Element) => element.getBoundingClientRect();
+      const row = host.querySelector(
+        ".board-controls-space > .board-controls",
+      )!;
+      // Board's controls make room for the dock, then every one takes its
+      // own presses (an 800 px page once put Work under the bin).
+      await waitFor(
+        () =>
+          rect(row).left >= rect(dock).right ||
+          rect(row).bottom <= rect(dock).top ||
+          rect(row).top >= rect(dock).bottom,
+        "Board's controls leave the dock room",
+      );
+      const pressed = [...row.querySelectorAll<HTMLButtonElement>("button")];
+      check(
+        pressed.some((button) => button.textContent?.trim() === "Work") &&
+          pressed.every((button) =>
+            button.contains(
+              document.elementFromPoint(
+                rect(button).left + rect(button).width / 2,
+                rect(button).top + rect(button).height / 2,
+              ),
+            ),
+          ),
+        "Work and each Board control take their own presses",
+      );
       const apart = (a: DOMRect, b: DOMRect) =>
         a.right <= b.left ||
         b.right <= a.left ||
@@ -2782,6 +2828,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       );
       dockRoot.unmount();
       dockHost.remove();
+      binEntries = [];
       await rest();
     },
   ],

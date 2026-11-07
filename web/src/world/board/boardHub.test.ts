@@ -62,6 +62,7 @@ function board(
     holder: options.holder ?? null,
     name: options.name ?? "firstmate",
     openChat: (id) => calls.push(["chat", id]),
+    onOpenSummary: () => calls.push(["summary"]),
     onNewWorkspace: () => calls.push(["workspace"]),
     toast: (kind, text) => calls.push(["toast", kind, text]),
   });
@@ -96,6 +97,7 @@ test("the hub offers the town center's actions, New agent first", () => {
     "launch",
     "master",
     "needs-you",
+    "summary",
     "profiles",
     "workspace",
   ]);
@@ -173,4 +175,12 @@ test("New workspace opens workspace creation, or says why it cannot", () => {
   const offline = board({ hostReady: false });
   expect(offline.action("workspace").disabled).toBe(true);
   expect(offline.action("workspace").detail).toBe("No host is ready");
+});
+
+test("Summary takes you to Town's summary", () => {
+  const { action, calls } = board();
+  expect(action("summary").label).toBe("Summary");
+  expect(action("summary").detail).toBe("in Town");
+  action("summary").run();
+  expect(calls).toEqual([["summary"]]);
 });

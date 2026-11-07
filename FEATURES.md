@@ -447,11 +447,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (preselecting the selected card's workspace when it can start one there,
     and the new agent's card appears on Board), the crown opens the **Town
     master**'s Chat (found as the town center finds it) and **⋯** lists
-    **New agent**, **Town master**, **Needs you**, **Profiles** and **New
+    **New agent**, **Town master**, **Needs you**, **Summary** (which takes
+    you to Town with the Town summary open), **Profiles** and **New
     workspace** (disabled with the reason when no host is ready) in a plain
     menu. Arrow keys, Home and End move through the menu; Escape, a press
-    outside or **Back** on a phone closes it. Town's **Summary** stays in
-    Town; **Work** is Board's counterpart. The bin itself works as before.
+    outside or **Back** on a phone closes it. Board's controls leave the hub
+    and bin room on their row, folding into Board's **⋯** menu as needed.
+    The bin itself works as before.
   - **Next** cycles waiting agents and shared questions placed on their panes,
     including shell questions, while skipping stale hosts and shells without
     questions. It stays reachable in the Board menu when the controls need more space.

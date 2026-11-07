@@ -23,6 +23,7 @@ import {
   launchAction,
   needsYouAction,
   profilesAction,
+  summaryAction,
   townMasterAction,
 } from "../town/useTownCenter";
 import type { WorldObject, WorldSpaceObject } from "../worldObject";
@@ -53,8 +54,8 @@ export function boardLaunchSpace(
 
 /**
  * The hub's actions, in the town center's order: New agent, Town master,
- * Needs you, Profiles and New workspace (Board's word for a room). Town's
- * Summary stays in Town; Board's Work lens is its counterpart.
+ * Needs you, Summary, Profiles and New workspace (Board's word for a room).
+ * Summary is Town's one summary: Board takes you to Town with it open.
  */
 export function boardHubActions({
   world,
@@ -62,6 +63,7 @@ export function boardHubActions({
   holder,
   name,
   openChat,
+  onOpenSummary,
   onNewWorkspace,
   toast,
 }: {
@@ -72,6 +74,8 @@ export function boardHubActions({
   /** Menu → Town master, trimmed. */
   name: string;
   openChat(nodeId: string): void;
+  /** Go to Town with its summary open. */
+  onOpenSummary(): void;
   onNewWorkspace(): void;
   toast(kind: "ok" | "error", text: string): void;
 }): TownCenterAction[] {
@@ -110,6 +114,7 @@ export function boardHubActions({
     ),
     townMasterAction({ world, roster, holder, name, openChat, toast }),
     needsYouAction(),
+    summaryAction(onOpenSummary, "in Town"),
     profilesAction(),
     {
       id: "workspace",
@@ -131,12 +136,15 @@ export function BoardHub({
   world,
   selectedId,
   openChat,
+  onOpenSummary,
   onNewWorkspace,
 }: {
   world: WorldObject;
   selectedId: string | null;
   /** Open an agent's Chat, by its node ID. */
   openChat(nodeId: string): void;
+  /** Go to Town with its summary open. */
+  onOpenSummary(): void;
   onNewWorkspace(): void;
 }) {
   const holder = useAgentProfiles().document?.town_master ?? null;
@@ -146,6 +154,7 @@ export function BoardHub({
     holder,
     name: readOfficePreferences(worldLocalStorage).townMaster.trim(),
     openChat,
+    onOpenSummary,
     onNewWorkspace,
     toast: (kind, text) =>
       store.notify({

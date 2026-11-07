@@ -692,8 +692,10 @@ on your phone and desktop.
    actions: **+** opens **New agent** (in the selected card's workspace, when
    it can start one there), the crown opens your **Town master**'s Chat, and
    **⋯** opens a menu with **New agent**, **Town master**, **Needs you**,
-   **Profiles** and **New workspace**. Escape, a tap outside or **Back** on a
-   phone closes the menu.
+   **Summary**, **Profiles** and **New workspace**. **Summary** takes you to
+   Town with its summary open. Escape, a tap outside or **Back** on a phone
+   closes the menu. Board's controls keep clear of the hub and bin, folding
+   into their **⋯** menu when the row is short of room.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
