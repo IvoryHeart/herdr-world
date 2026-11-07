@@ -132,7 +132,7 @@ export function useTownRoomActions({
     );
   };
   /**
-   * A building's + Add room slot: a new room on its own host, from the
+   * A building's + Add room doorway: a new room on its own host, from the
    * selected room when that room is in the building (as New room does).
    */
   const addRoomTarget = (hostKey: string, selectedRoomKey: string | null) => {

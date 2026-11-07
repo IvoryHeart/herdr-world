@@ -28,7 +28,7 @@ export type TownRoomActions = {
   createRoomReason(roomKey: string | null): string | null;
   onCreateRoom(roomKey: string | null): void;
   /**
-   * Whether a building's + Add room slot shows, can create, and why not. A
+   * Whether a building's + Add room doorway shows, can create, and why not. A
    * selected room of that building is the source, as for onCreateRoom.
    */
   addRoomState(
@@ -39,7 +39,7 @@ export type TownRoomActions = {
     enabled: boolean;
     reason: string | null;
   };
-  /** New room on this building's host, from its + Add room slot. */
+  /** New room on this building's host, from its + Add room doorway. */
   onAddRoom(hostKey: string, selectedRoomKey: string | null): void;
   canRenameRoom(roomKey: string): boolean;
   onRenameRoom(roomKey: string): void;
