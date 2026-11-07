@@ -241,7 +241,9 @@ hosts stay usable.
    (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens; **Town master** on
    the town center opens it at any time. That action finds the agent given the
-   role under **Menu → Sounds** first, then the name set here; with neither
+   role under **Menu → Sounds** first, then, when nobody holds the role, the
+   name set here. A role holder that is not in Town (for example, filtered
+   out) is reported as absent rather than replaced by a namesake; with neither
    set it opens **Sounds** so you can choose one. Hover an agent for a
    small preview card: its latest message as **Chat** shows it, never terminal
    text; when the conversation cannot be read, it says why. It highlights a

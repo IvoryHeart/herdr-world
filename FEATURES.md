@@ -85,7 +85,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens a ring of actions around its doors: **New agent** (World's launcher,
     preselecting the open room when it can start one there), **Town master**
     (the role holder from **Menu → Sounds**, else the agent named in **Menu →
-    Town master**, opened on Chat; with neither set it opens **Sounds**),
+    Town master** when nobody holds the role, opened on Chat; a holder not in
+    Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Profiles** and **New room**
     (disabled with the reason when no room can be created). Arrow keys, Home
     and End move around the ring; Escape, a press outside, the centre **✕** or

@@ -40,8 +40,10 @@ type RoomActions = Pick<
 
 /**
  * The Town master: the agent given the role (Settings → Sounds, Make Town
- * master), else the one matching Menu → Town master by Herdr name, then
- * label, as the docked chat finds it.
+ * master), else, only when nobody holds the role, the one matching Menu →
+ * Town master by Herdr name, then label, as the docked chat finds it. An
+ * assigned holder absent from Town is unavailable: the name never stands in
+ * for it, since a same-named agent may live on another connection.
  */
 export async function resolveTownMaster(
   world: Pick<WorldObject, "leaves">,
@@ -58,7 +60,7 @@ export async function resolveTownMaster(
     const agent = leaf
       ? roster.find(({ agent }) => agent.key === leaf.id)?.agent
       : undefined;
-    if (agent) return agent;
+    return agent;
   }
   return findTownMaster(roster, name);
 }
@@ -143,7 +145,12 @@ export function townCenterActions({
       name,
     ).catch(() => undefined);
     if (!master) {
-      toast("error", `No Town master in Town${name ? ` named ${name}` : ""}`);
+      toast(
+        "error",
+        holder
+          ? "The Town master isn't in Town now"
+          : `No Town master in Town${name ? ` named ${name}` : ""}`,
+      );
       return;
     }
     if (master.stale || !master.canOpenInSpaces) {

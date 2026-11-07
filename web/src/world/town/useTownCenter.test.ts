@@ -118,6 +118,18 @@ test("a Town master missing from Town, or unopenable, says so instead", async ()
   ]);
 });
 
+test("an assigned Town master absent from Town is unavailable, never a namesake", async () => {
+  // The holder lives on another connection; a "firstmate" is in view here.
+  const absent = center({
+    holder: { connection_id: "host-a", terminal_id: "t-9" },
+  });
+  absent.action("master").run();
+  await settle();
+  expect(absent.calls).toEqual([
+    ["toast", "error", "The Town master isn't in Town now"],
+  ]);
+});
+
 test("with no Town master set, the action offers to choose one", () => {
   expect(center({ name: "" }).action("master").detail).toBe("Choose one");
 });
