@@ -31,6 +31,11 @@ import { ProfileSprite } from "./ProfileSprite";
 import type { WorldObject } from "./worldObject";
 import { store } from "../store";
 import { WorldLoader } from "./WorldLoader";
+import {
+  launchConfirmedTerminal,
+  noteAgentStarted,
+  type AgentStartFrom,
+} from "./agentStarts";
 import "./agentProfiles.css";
 
 /**
@@ -46,7 +51,10 @@ export function AgentLauncherDialog({
   onClose,
 }: {
   world: WorldObject;
-  initial: Partial<LaunchTarget> & { profileId?: string };
+  initial: Partial<LaunchTarget> & {
+    profileId?: string;
+    from?: AgentStartFrom;
+  };
   /** Open this terminal (a new agent or a login) once World shows it. */
   onOpen(terminal: {
     connectionId: string;
@@ -206,17 +214,24 @@ export function AgentLauncherDialog({
         label,
         text,
       });
+      // World confirmed the start: Town plays the new agent's arrival, even
+      // if this launcher was dismissed meanwhile.
+      const terminalId = launchConfirmedTerminal(result);
+      if (terminalId)
+        noteAgentStarted({
+          connectionId: target.connectionId,
+          generation: target.generation,
+          terminalId,
+          from: initial.from ?? "elsewhere",
+        });
       if (!mounted.current) return;
       // A ready agent opens and the dialog closes; anything else stays
       // here with its reason and a way to open the tab.
-      if (
-        (result.status === "sent" || result.status === "started") &&
-        result.terminal_id
-      ) {
+      if (terminalId) {
         onOpen({
           connectionId: target.connectionId,
           runtimeGeneration: target.generation,
-          terminalId: result.terminal_id,
+          terminalId,
         });
         dismiss();
         return;

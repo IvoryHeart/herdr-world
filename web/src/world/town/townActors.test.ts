@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  TOWN_ARRIVAL_INDOOR_S,
   TOWN_OVERFLOW_DOZE,
   townActorWorld,
   TownActors,
@@ -749,4 +750,85 @@ test("an agent already in the bin when Town opens is out at once", () => {
   );
   expect(actors.actors.get("a")!.mode).toBe("out");
   expect(actors.busy).toBe(false);
+});
+
+test("an arriving agent waits outside its front door at once, then hurries in to its desk", () => {
+  const { actorWorld, layout } = world({ a: "working", b: "working" });
+  const actors = new TownActors();
+  const arrive = (keys: string[]) =>
+    actors.sync(
+      actorWorld,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Set(keys),
+    );
+  // New to Town and arriving: out of the door from its first frame.
+  arrive(["a"]);
+  const actor = actors.actors.get("a")!;
+  const building = layout.buildings[0]!;
+  expect(actor.mode).toBe("out");
+  expect(Math.floor(actor.x / TOWN_TILE)).toBe(building.entryX);
+  expect(actors.actors.get("b")!.mode).toBe("seat");
+  expect(actors.busy).toBe(false);
+  // Already seated when its arrival starts: out at once, never seen leaving.
+  arrive(["a", "b"]);
+  expect(actors.actors.get("b")!.mode).toBe("out");
+  expect(actors.busy).toBe(false);
+  // At the door it walks in, however far its desk, in a few seconds.
+  arrive([]);
+  expect(actors.busy).toBe(true);
+  let seconds = 0;
+  for (; seconds < 30 && actors.busy; seconds += 1 / 30) actors.step(1 / 30);
+  expect(actor.mode).toBe("seat");
+  expect(seconds).toBeLessThan(TOWN_ARRIVAL_INDOOR_S + 0.5);
+  expect(actor.pace).toBeUndefined();
+  // Its next walk is at walking pace again.
+  actors.sync(
+    actorWorld,
+    false,
+    undefined,
+    undefined,
+    undefined,
+    new Set(["a"]),
+  );
+  actors.step(1 / 30);
+  expect(actor.pace).toBeUndefined();
+});
+
+test("an idle agent arriving sits at its desk for its welcome, not in the lounge", () => {
+  const { actorWorld } = world({ a: "idle" });
+  // TownCanvas keeps a welcoming agent at its desk as a summoned one.
+  const welcoming = new Set(["a"]);
+  const sync = (actors: TownActors, instant: boolean, arriving: string[]) =>
+    actors.sync(
+      actorWorld,
+      instant,
+      welcoming,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Set(arriving),
+    );
+  // Reduced motion (instant): seated at its desk from the first frame.
+  const still = new TownActors();
+  sync(still, true, []);
+  expect(still.actors.get("a")!.mode).toBe("seat");
+  expect(still.actors.get("a")!.goal?.kind).toBe("seat");
+  // Walking in from the front door, it goes to its desk and sits.
+  const walking = new TownActors();
+  sync(walking, false, ["a"]);
+  sync(walking, false, []);
+  const actor = walking.actors.get("a")!;
+  for (let seconds = 0; seconds < 30 && walking.busy; seconds += 1 / 30)
+    walking.step(1 / 30);
+  expect(actor.goal?.kind).toBe("seat");
+  expect(actor.mode).toBe("seat");
+  // Once its welcome is over, its status takes it to the lounge.
+  walking.sync(actorWorld, false, new Set());
+  expect(actor.goal?.kind).toBe("lounge");
 });

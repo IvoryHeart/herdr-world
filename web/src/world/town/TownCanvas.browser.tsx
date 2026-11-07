@@ -70,6 +70,13 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
+// An exact case measures at the CSS viewport it names, not a wider one (#643).
+const exactViewport = params.get("viewport");
+if (exactViewport)
+  check(
+    `${window.innerWidth}x${window.innerHeight}` === exactViewport,
+    `the ${exactViewport} case ran in a ${window.innerWidth}x${window.innerHeight} CSS viewport`,
+  );
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 async function waitFor(
   condition: () => boolean,
@@ -2289,6 +2296,11 @@ async function run() {
         ),
         "partial expansion action targets overlap",
       );
+      const shownExpand = expand();
+      check(
+        !!shownExpand && shownExpand.scrollWidth <= shownExpand.clientWidth,
+        "the partial expansion Expand label overflows its tile",
+      );
       if (reset) tapTownControl(reset);
       await waitFor(
         () =>
@@ -3808,18 +3820,21 @@ async function run() {
       () => !diagnostics.flying,
       "Town did not finish showing the whole town",
     );
-    // Glides and fades advance per drawn frame, so a slow software renderer
-    // takes longer in wall time: wait for the scene, not a clock.
+    // Glides and fades advance per drawn frame, and a slow software renderer
+    // draws buildings a frame at a time after the ground: wait for the
+    // scene, not a clock. Only a drawn building can fade.
     const settled = async (what: string) => {
       const frames = diagnostics.frames;
       await waitFor(
         () =>
           diagnostics.frames > frames &&
           !diagnostics.transitioning &&
-          !diagnostics.flying,
+          !diagnostics.flying &&
+          diagnostics.buildingsDrawn === diagnostics.layout!.buildings,
         `Town did not settle after ${what}`,
       );
     };
+    await settled("showing the whole town");
     const gaps = diagnostics.topologyGaps;
     const transitions = diagnostics.transitions;
     const crossfades = diagnostics.crossfades;

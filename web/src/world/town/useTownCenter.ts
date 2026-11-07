@@ -148,7 +148,7 @@ export function townCenterActions({
       launchRoom
         ? {
             label: launchRoom.displayLabel,
-            run: () => rooms.onNewAgent(launchRoom.key),
+            run: () => rooms.onNewAgent(launchRoom.key, "center"),
           }
         : null,
     ),
@@ -189,7 +189,7 @@ export function launchAction(
     icon: UserPlus,
     detail: room ? `in ${room.label}` : undefined,
     primary: true,
-    run: () => (room ? room.run() : requestAgentLaunch({})),
+    run: () => (room ? room.run() : requestAgentLaunch({}, "center")),
   };
 }
 

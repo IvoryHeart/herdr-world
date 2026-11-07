@@ -102,13 +102,17 @@ export function boardHubActions({
       space
         ? {
             label: space.label,
+            // The town center's action: the agent arrives there in Town.
             run: () =>
-              requestAgentLaunch({
-                connectionId: space.connectionId,
-                generation: space.generation,
-                workspaceId: space.nativeId,
-                workspaceLabel: space.label,
-              }),
+              requestAgentLaunch(
+                {
+                  connectionId: space.connectionId,
+                  generation: space.generation,
+                  workspaceId: space.nativeId,
+                  workspaceLabel: space.label,
+                },
+                "center",
+              ),
           }
         : null,
     ),
