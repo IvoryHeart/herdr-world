@@ -33,6 +33,7 @@ import {
   type NeedsYouState,
 } from "./needsYou";
 import { itemName, NeedsYouMessage } from "./NeedsYouItem";
+import { askAttachmentUpload } from "./askAttachments";
 import { preloadWorkspaceInspector } from "./inspectorPreload";
 import "./needsYouTab.css";
 
@@ -351,6 +352,7 @@ export function NeedsYouList({
   onOpenTerminal,
   asksStore = sharedAsksStore(),
   deskStore,
+  attachmentUpload = askAttachmentUpload,
 }: {
   world: World;
   request: NeedsYouState["request"];
@@ -362,6 +364,8 @@ export function NeedsYouList({
   /** The shared stores unless a test provides its own. */
   asksStore?: WorldAsksStore;
   deskStore?: WorldDeskStore;
+  /** Where a question's answer stores its attached files. */
+  attachmentUpload?: typeof askAttachmentUpload;
 }) {
   const ticking = useNow(5_000);
   const now = shownNow ?? ticking;
@@ -446,6 +450,9 @@ export function NeedsYouList({
               ]);
             return problem;
           }}
+          onAttach={
+            item.kind === "asks" ? attachmentUpload(item.leaf) : undefined
+          }
           onDismiss={() =>
             item.kind === "asks"
               ? asksStore.dismiss(item.ask.id)

@@ -273,6 +273,71 @@ button.needs-you-icon:hover:not(:disabled) {
   color: var(--muted);
   opacity: 0.45;
 }
+/* The paperclip sits before Send inside the field; the text stops short of
+   both. Attached files follow as chips: a thumbnail, the name, its state
+   and ✕ (Retry too when its upload failed). */
+.needs-you-field.can-attach input {
+  padding-right: 64px;
+}
+.needs-you-field button.needs-you-attach {
+  right: 34px;
+  color: var(--muted);
+}
+.needs-you-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.needs-you-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 2px 2px 2px 4px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text-strong);
+  font-size: 12px;
+}
+.needs-you-file[data-status="failed"] {
+  border-color: var(--danger-text);
+}
+.needs-you-file img {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.needs-you-file > svg {
+  flex: none;
+  margin: 0 4px;
+  color: var(--muted);
+}
+.needs-you-file-name {
+  min-width: 0;
+  max-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.needs-you-file small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.needs-you-file[data-status="failed"] small {
+  color: var(--danger-text);
+}
 /* A blocked agent's own question (Chat's AskCard) reads as this card's
    message, its options as quick replies; the card's header names the agent. */
 .needs-you-item .agent-chat-ask {
@@ -486,6 +551,23 @@ button.needs-you-icon:hover:not(:disabled) {
   height: 44px;
   padding-right: 48px;
   font-size: 16px;
+}
+.needs-you-tab.is-sheet .needs-you-field.can-attach input {
+  padding-right: 88px;
+}
+.needs-you-tab.is-sheet .needs-you-field button.needs-you-attach {
+  right: 44px;
+}
+.needs-you-tab.is-sheet .needs-you-files {
+  margin-inline-end: 8px;
+}
+.needs-you-tab.is-sheet .needs-you-file {
+  min-height: 44px;
+  font-size: 13px;
+}
+.needs-you-tab.is-sheet .needs-you-file img {
+  width: 36px;
+  height: 36px;
 }
 
 /* Over Town the tab wears Town's skin: the agent window's token re-map

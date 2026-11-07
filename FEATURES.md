@@ -602,7 +602,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   and age, then icons), the message, and answer controls only when the agent
   asked. **?** questions show their options as quick replies (the first
   highlighted; **Other…** opens a typed answer) or one answer field with a send
-  icon, plus why an owner alert may not have arrived; **!** blocked agents show
+  icon, plus why an owner alert may not have arrived. The answer field's
+  paperclip attaches files or screenshots (also by paste or drop; on a phone it
+  picks photos or files). Each file uploads as a chip with a thumbnail that
+  **✕** removes before sending; the answer then ends with `Attached files:` and
+  one stored path per line, which the asker receives and `herdr-world ask get`
+  shows. Files are stored on the asker's host with the terminal upload limits
+  and retention, or on the World host when the asker is not placed in World.
+  **!** blocked agents show
   the agent's own question with its options as quick replies, answered and
   confirmed as Chat does (the same card, including Claude's recorded questions
   and its folder-trust choices), with **Open Terminal** when the answer could

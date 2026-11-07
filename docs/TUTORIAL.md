@@ -240,7 +240,12 @@ hosts stay usable.
    Tap it to open the **Needs you** tab on the left: each question, blocked
    agent and finished task is a compact notification from its agent. When the
    agent asked something, tap a quick reply (or **Other…** to type), or type in
-   the answer field and press Enter. Tap a long message (or **more**) to read
+   the answer field and press Enter. To send a screenshot or file with a typed
+   answer, tap the paperclip in the answer field (on a phone it offers your
+   photos and files), paste an image into the field, or drop files on it. Each
+   file shows as a chip with a thumbnail while it uploads; **✕** removes it
+   before you send. The answer carries each stored file's path, so the asking
+   agent can open it. Tap a long message (or **more**) to read
    all of it, links included; **less** shortens it again. Tabbing into a
    message reveals its links. The agent's name and the chat icon open the
    agent's Chat for the context behind it. **✕** dismisses a question, or marks

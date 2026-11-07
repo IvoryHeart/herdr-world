@@ -1,4 +1,4 @@
-import { MessageSquare, SendHorizontal, X } from "lucide-react";
+import { MessageSquare, Paperclip, SendHorizontal, X } from "lucide-react";
 import {
   type ReactNode,
   useEffect,
@@ -18,6 +18,16 @@ import { leafOwner, useConversationRead } from "./conversationRead";
 import { townAgo } from "./town/TownRail";
 import { askDeliveryMessage, askerName, type WorldAsk } from "./worldAsks";
 import type { WorldLeafObject } from "./worldObject";
+import { filesFromTerminalDrop, isNativeFileDrag } from "../terminalFileDrop";
+import {
+  ANSWER_MAX_LENGTH,
+  answerWithAttachments,
+  type AskAttachmentUpload,
+} from "./askAttachments";
+import {
+  NeedsYouAttachmentChips,
+  useAnswerAttachments,
+} from "./NeedsYouAttachments";
 import type { NeedsYouItem } from "./needsYou";
 
 /** An agent's name as Chat titles it: its Herdr name, else its label. */
@@ -52,6 +62,7 @@ export function NeedsYouMessage({
   onChat,
   onOpenTerminal,
   onAnswer,
+  onAttach,
   onDismiss,
   onReviewed,
 }: {
@@ -63,6 +74,8 @@ export function NeedsYouMessage({
   onChat(leafId: string): void;
   onOpenTerminal(leafId: string): void;
   onAnswer(text: string): Promise<string | null>;
+  /** Stores a file attached to a typed answer; none hides attaching. */
+  onAttach?: AskAttachmentUpload;
   onDismiss(): Promise<string | null>;
   onReviewed(stop: string): Promise<boolean>;
 }) {
@@ -143,6 +156,7 @@ export function NeedsYouMessage({
           who={who}
           head={head}
           onAnswer={onAnswer}
+          onAttach={onAttach}
           onDismiss={onDismiss}
         />
       ) : (
@@ -265,7 +279,9 @@ export function NeedsYouText({
 /**
  * An owner question: its options as quick replies (the first one primary,
  * then "Other…" for a typed answer), or one answer field when it offers
- * none. ✕ dismisses it without answering.
+ * none. Files attached to the field (the paperclip, a paste or a drop) are
+ * stored as they are attached and their paths sent with the answer. ✕
+ * dismisses it without answering.
  */
 function NeedsYouAsk({
   ask,
@@ -273,6 +289,7 @@ function NeedsYouAsk({
   who,
   head,
   onAnswer,
+  onAttach,
   onDismiss,
 }: {
   ask: WorldAsk;
@@ -280,6 +297,7 @@ function NeedsYouAsk({
   who: string;
   head: Head;
   onAnswer(text: string): Promise<string | null>;
+  onAttach?: AskAttachmentUpload;
   onDismiss(): Promise<string | null>;
 }) {
   const { question, options } = ask;
@@ -290,6 +308,8 @@ function NeedsYouAsk({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const field = useRef<HTMLInputElement | null>(null);
+  const picker = useRef<HTMLInputElement | null>(null);
+  const files = useAnswerAttachments(onAttach);
   // "Other…" swaps the replies for the field and moves focus into it.
   useEffect(() => {
     if (typing) field.current?.focus();
@@ -303,6 +323,24 @@ function NeedsYouAsk({
   };
   const send = (text: string) =>
     text.trim() ? act(() => onAnswer(text.trim())) : Promise.resolve();
+  // A typed answer waits for its files: none still uploading or failed.
+  const filesReady = !files.uploading && !files.failed;
+  const canSend = filesReady && Boolean(draft.trim() || files.paths.length);
+  const sendField = async () => {
+    if (!canSend || busy) return;
+    const text = answerWithAttachments(draft, files.paths);
+    if (text.length > ANSWER_MAX_LENGTH) {
+      setError(
+        `The answer and its file paths run past ${ANSWER_MAX_LENGTH} characters. Shorten it or remove a file.`,
+      );
+      return;
+    }
+    setBusy(true);
+    const problem = await onAnswer(text);
+    setBusy(false);
+    setError(problem);
+    if (!problem) files.clear();
+  };
   const notice = error ?? deliveryMessage;
   return (
     <>
@@ -355,11 +393,24 @@ function NeedsYouAsk({
         </div>
       ) : (
         <form
-          className="needs-you-field"
           aria-label={`Question from ${who}`}
+          className={`needs-you-field${onAttach ? " can-attach" : ""}`}
           onSubmit={(event) => {
             event.preventDefault();
-            void send(draft);
+            void sendField();
+          }}
+          onDragOver={(event) => {
+            if (!onAttach || !isNativeFileDrag(event.dataTransfer)) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(event) => {
+            if (!onAttach || !isNativeFileDrag(event.dataTransfer)) return;
+            event.preventDefault();
+            const dropped = filesFromTerminalDrop(event.dataTransfer);
+            if (dropped === "directory")
+              setError("Drop files only; folders are not supported.");
+            else if (dropped?.length) files.add(dropped);
           }}
         >
           <input
@@ -369,18 +420,68 @@ function NeedsYouAsk({
             aria-describedby={questionId}
             placeholder={`Answer ${name}…`}
             onChange={(event) => setDraft(event.target.value)}
+            onPaste={(event) => {
+              if (!onAttach) return;
+              const pasted = Array.from(event.clipboardData?.items ?? [])
+                .filter((entry) => entry.kind === "file")
+                .map((entry) => entry.getAsFile())
+                .filter((file): file is File => file !== null);
+              // No file on the clipboard: the text pastes as usual.
+              if (!pasted.length) return;
+              event.preventDefault();
+              files.add(pasted);
+            }}
           />
+          {onAttach ? (
+            <>
+              <button
+                type="button"
+                className="needs-you-icon needs-you-attach"
+                aria-label="Attach files or screenshots"
+                title="Attach files or screenshots"
+                disabled={busy}
+                onClick={() => picker.current?.click()}
+              >
+                <Paperclip size={16} aria-hidden="true" />
+              </button>
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                hidden
+                aria-hidden="true"
+                tabIndex={-1}
+                onChange={(event) => {
+                  files.add(Array.from(event.currentTarget.files ?? []));
+                  // The same file can be picked again after its removal.
+                  event.currentTarget.value = "";
+                }}
+              />
+            </>
+          ) : null}
           <button
             type="submit"
-            className="needs-you-icon"
+            className="needs-you-icon needs-you-send"
             aria-label="Send answer"
-            title="Send answer"
-            disabled={busy || !draft.trim()}
+            title={
+              files.uploading
+                ? "Send answer: waiting for files to upload"
+                : files.failed
+                  ? "Send answer: retry or remove the failed file"
+                  : "Send answer"
+            }
+            disabled={busy || !canSend}
           >
             <SendHorizontal size={16} aria-hidden="true" />
           </button>
         </form>
       )}
+      <NeedsYouAttachmentChips
+        items={files.items}
+        disabled={busy}
+        onRemove={files.remove}
+        onRetry={files.retry}
+      />
       {notice ? (
         <small className="needs-you-notice" role={error ? "alert" : "status"}>
           {notice}
