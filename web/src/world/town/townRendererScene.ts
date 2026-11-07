@@ -17,6 +17,7 @@ import {
   type TownCell,
   type TownLayout,
 } from "./townLayout";
+import { paintTownCenter } from "./townCenterPaint";
 import {
   paintTownFacade,
   paintTownInterior,
@@ -176,6 +177,14 @@ export function townOutdoor(
     .fill(0xb9b2a5);
   fountain.zIndex = fy + 12;
   outdoor.addChild(fountain);
+  // The town center: Town's landmark, standing above the first street.
+  const center = layout.center;
+  add(
+    paintTownCenter(center.w),
+    center.x * T,
+    center.y * T,
+    (center.y + center.h) * T,
+  );
   return outdoorItems;
 }
 

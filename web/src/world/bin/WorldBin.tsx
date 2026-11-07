@@ -1,6 +1,7 @@
 import { Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLayer } from "../../layerStack";
+import { setBinDock } from "./binDock";
 import { store } from "../../store";
 import { tabPinsFor } from "../../tabPins";
 import type { BinView } from "../../../../shared/bin";
@@ -78,14 +79,17 @@ function useSecondClock(running: boolean) {
  * Town's stops and bus) listing who waits with the time to the next bus,
  * with Put back and Close now. A stopped bus is let go from the tray, or
  * goes on as the tray closes. Only Town (`bus`) has a bus to speak of;
- * elsewhere the bin says when it closes what it holds.
+ * elsewhere the bin says when it closes what it holds. `dock` (Board's hub)
+ * stands beside the chip.
  */
 export function WorldBin({
   always = false,
   bus: town = false,
+  dock,
 }: {
   always?: boolean;
   bus?: boolean;
+  dock?: ReactNode;
 }) {
   const bin = useWorldBin();
   const [open, setOpen] = useState(false);
@@ -115,40 +119,49 @@ export function WorldBin({
     void run().then((failed) => setError(failed));
   const bus = town ? binBusLabel(bin, now) : binCloseLabel(bin, now);
   if (!held && !open && !always) return null;
+  const chipButton =
+    held || always ? (
+      <button
+        ref={chip}
+        type="button"
+        className="world-bin-chip"
+        // Drag an agent here to put it in the bin (Town and Board).
+        data-bin-drop=""
+        data-empty={held ? undefined : ""}
+        aria-expanded={open}
+        aria-label={
+          !held
+            ? "Bin, empty"
+            : town
+              ? `Bin, ${held} ${held === 1 ? "agent" : "agents"}, ${bus}`
+              : `Bin, cleaning up ${held} ${held === 1 ? "agent" : "agents"}, ${bus}`
+        }
+        title="Drag an agent here to put it in the bin"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Trash2 size={15} aria-hidden="true" />
+        {!held ? null : town ? (
+          <>
+            <b>{held}</b>
+            <span>{bus}</span>
+          </>
+        ) : (
+          <>
+            Cleaning up <b>{held}</b>
+          </>
+        )}
+      </button>
+    ) : null;
   return (
     <>
-      {held || always ? (
-        <button
-          ref={chip}
-          type="button"
-          className="world-bin-chip"
-          // Drag an agent here to put it in the bin (Town and Board).
-          data-bin-drop=""
-          data-empty={held ? undefined : ""}
-          aria-expanded={open}
-          aria-label={
-            !held
-              ? "Bin, empty"
-              : town
-                ? `Bin, ${held} ${held === 1 ? "agent" : "agents"}, ${bus}`
-                : `Bin, cleaning up ${held} ${held === 1 ? "agent" : "agents"}, ${bus}`
-          }
-          title="Drag an agent here to put it in the bin"
-          onClick={() => setOpen((value) => !value)}
-        >
-          <Trash2 size={15} aria-hidden="true" />
-          {!held ? null : town ? (
-            <>
-              <b>{held}</b>
-              <span>{bus}</span>
-            </>
-          ) : (
-            <>
-              Cleaning up <b>{held}</b>
-            </>
-          )}
-        </button>
-      ) : null}
+      {dock && chipButton ? (
+        <div ref={setBinDock} className="world-bin-dock">
+          {dock}
+          {chipButton}
+        </div>
+      ) : (
+        chipButton
+      )}
       {open ? (
         <section
           ref={tray}

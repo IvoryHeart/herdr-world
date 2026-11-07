@@ -24,6 +24,8 @@ import {
 import { terminalColorKey } from "./terminalColor";
 import { setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
+import { BoardHub } from "./board/BoardHub";
+import { requestTownSummary } from "./town/townSummaryRequest";
 import { useTerminalColorChoices } from "./useTerminalColors";
 import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
@@ -374,6 +376,22 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       <WorldBin
         always={view === "town" || view === "board"}
         bus={view === "town"}
+        // Board's hub: the town center's actions beside the bin.
+        dock={
+          view === "board" ? (
+            <BoardHub
+              world={presentedWorld}
+              selectedId={selectedId}
+              openChat={(id) => stableOpenInspectorView(id, "history")}
+              onNewWorkspace={() => setWorkspaceCreationOpen(true)}
+              onOpenSummary={() => {
+                // Town's summary, the one there is: Town opens with it.
+                requestTownSummary();
+                props.onGoToTown();
+              }}
+            />
+          ) : null
+        }
       />
       <GroupsWindow
         world={aggregateWorld}

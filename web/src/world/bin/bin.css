@@ -18,6 +18,21 @@
   box-shadow: var(--shadow-lg);
   cursor: pointer;
 }
+/* Board: its hub (board/BoardHub.tsx) and the chip, centred as one dock. */
+.world-bin-dock {
+  position: fixed;
+  z-index: 25;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+}
+.world-bin-dock > .world-bin-chip {
+  position: static;
+  transform: none;
+}
 .world-bin-chip span {
   color: var(--muted);
 }
@@ -142,12 +157,21 @@
   border-top: 1px solid var(--border);
 }
 
+/* The tray clears the taller dock. */
+.world-bin-dock ~ .world-bin-tray {
+  bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+}
+
 /* Phones: above the bottom navigation. */
 @media (max-width: 720px) {
-  .world-bin-chip {
+  .world-bin-chip,
+  .world-bin-dock {
     bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
   .world-bin-tray {
     bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+  }
+  .world-bin-dock ~ .world-bin-tray {
+    bottom: calc(132px + env(safe-area-inset-bottom, 0px));
   }
 }

@@ -165,6 +165,100 @@ class FixtureUploadRequest {
   }
 }
 
+/**
+ * Chat in a Town window on a phone (docs/design/style-guide.md): Town's
+ * palette through the shell tokens, Town's framed messages, no text under
+ * 11 px, 44 px targets, and a composer popover in the same skin.
+ */
+async function checkTownChat(container: HTMLElement) {
+  const chat = container.querySelector<HTMLElement>(".agent-chat")!;
+  // Resolve a colour as the window's Town palette gives it.
+  const colour = (value: string) => {
+    const probe = document.createElement("span");
+    probe.style.color = value;
+    chat.append(probe);
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    return resolved;
+  };
+  check(
+    colour("var(--input-bg)") === colour("var(--town-term)") &&
+      colour("var(--accent)") === "rgb(255, 209, 102)" &&
+      colour("var(--blue)") === colour("var(--town-work)"),
+    "Town's Chat must read Town's palette through the shell tokens",
+  );
+  const running = container.querySelector(".agent-chat-running");
+  check(
+    !!running && getComputedStyle(running).color === colour("var(--town-work)"),
+    "The running step must use Town's working colour",
+  );
+  const bubble = container.querySelector<HTMLElement>(
+    ".agent-history-chat-message.is-user .agent-history-chat-bubble",
+  );
+  check(
+    !!bubble &&
+      getComputedStyle(bubble).borderTopWidth === "2px" &&
+      getComputedStyle(bubble).backgroundColor === colour("var(--accent-soft)"),
+    "Your message must be framed in Town's 2 px edge on the soft gold",
+  );
+  const small = [...chat.querySelectorAll<HTMLElement>("*")]
+    .filter(
+      (element) =>
+        element.getBoundingClientRect().width > 1 &&
+        [...element.childNodes].some(
+          (node) =>
+            node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+        ) &&
+        parseFloat(getComputedStyle(element).fontSize) < 11,
+    )
+    .slice(0, 5)
+    .map(
+      (element) =>
+        `${element.tagName.toLowerCase()}.${element.className} ${getComputedStyle(element).fontSize}`,
+    );
+  check(
+    small.length === 0,
+    `Town's Chat must not draw text under 11 px: ${small.join(", ")}`,
+  );
+  // Each key in the Now bar answers a tap 4 px outside what it draws. The
+  // focused composer may have scrolled the fixture; hit tests need the bar.
+  for (let element: HTMLElement | null = chat; element; ) {
+    element.scrollTop = 0;
+    element = element.parentElement;
+  }
+  for (const button of chat.querySelectorAll<HTMLElement>(
+    ".agent-chat-toolbar button",
+  )) {
+    const rect = button.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const hits = [rect.top - 3, rect.bottom + 3].map((y) =>
+      button.contains(document.elementFromPoint(x, y)),
+    );
+    check(
+      rect.height >= 36 && hits.every(Boolean),
+      `The Now bar's ${button.textContent || button.getAttribute("aria-label")} must be a 44 px target (${rect.height} px, hits ${hits})`,
+    );
+  }
+  container
+    .querySelector<HTMLButtonElement>(".terminal-composer-more")!
+    .click();
+  await settle();
+  const popover = document.querySelector(".chat-composer-tools-popover");
+  check(
+    !!popover?.classList.contains("is-town-skin") &&
+      getComputedStyle(popover).backgroundColor === colour("var(--panel)"),
+    "The composer's controls must open in the Town skin of their window",
+  );
+  container
+    .querySelector<HTMLButtonElement>(".terminal-composer-more")!
+    .click();
+  await settle();
+  check(
+    !document.querySelector(".chat-composer-tools-popover"),
+    "The composer's controls must close again",
+  );
+}
+
 async function run() {
   if (location.search === "?limited-apis") {
     check(
@@ -1526,6 +1620,32 @@ async function run() {
       const jump = () =>
         container.querySelector<HTMLButtonElement>(".agent-history-chat-jump");
       check(jump() !== null, `Jump to latest should show at ${width}px`);
+      // Jump to latest stays in view while reading back, in Town's phone skin
+      // too, where it gains a larger hit area.
+      for (const town of width === 390 ? [false, true] : [false]) {
+        if (town) {
+          document.documentElement.dataset.layout = "mobile";
+          container.classList.add("is-town-skin");
+        }
+        list.scrollTop = list.scrollHeight / 2;
+        list.dispatchEvent(new Event("scroll"));
+        await settle();
+        const shown = jump()?.getBoundingClientRect();
+        const view = list.getBoundingClientRect();
+        check(
+          shown !== undefined &&
+            shown.top >= view.top &&
+            shown.bottom <= view.bottom + 1,
+          `Jump to latest must stay in the list while reading back at ${width}px${town ? " in Town" : ""} (${shown?.top}/${view.top}-${view.bottom})`,
+        );
+        if (town) {
+          delete document.documentElement.dataset.layout;
+          container.classList.remove("is-town-skin");
+        }
+      }
+      list.scrollTop = 0;
+      list.dispatchEvent(new Event("scroll"));
+      await settle();
       reply = conversation([
         ...long,
         message(`long-${width}-new`, "assistant", "A new message lands."),
@@ -1828,8 +1948,9 @@ async function run() {
 
     // On a phone, wide content (an unbroken path, a long command, a code
     // block, a table) wraps or scrolls inside its bubble: nothing in Chat,
-    // the composer included, reaches past the window's right edge.
-    {
+    // the composer included, reaches past the window's right edge. The same
+    // holds in a Town window, which also gives Chat Town's look.
+    for (const town of [false, true]) {
       const wide = [
         `Saved to /srv/example/${"deeply-nested-folder/".repeat(12)}report.md`,
         "```\n" +
@@ -1888,7 +2009,7 @@ async function run() {
         },
       };
       document.documentElement.dataset.layout = "mobile";
-      root.render(
+      const phoneChat = (
         <div
           className="workspace-inspector-body"
           style={{ width: 390, height: 660, display: "flex", flex: "none" }}
@@ -1901,7 +2022,19 @@ async function run() {
               onClose={() => {}}
             />
           </div>
-        </div>,
+        </div>
+      );
+      root.render(
+        town ? (
+          <div
+            className="world-managed-window is-town-skin theme-scope-dark"
+            style={{ position: "relative", flex: "none" }}
+          >
+            {phoneChat}
+          </div>
+        ) : (
+          phoneChat
+        ),
       );
       await settle();
       await settle();
@@ -1984,6 +2117,7 @@ async function run() {
         outside.length === 0 && list.scrollWidth <= list.clientWidth + 1,
         `At 390 px wide content leaves the window: ${outside.map((element) => `${element.className} ${Math.round(element.getBoundingClientRect().right)}`).join(", ")}; list ${list.scrollWidth}/${list.clientWidth}`,
       );
+      if (town) await checkTownChat(container);
       delete document.documentElement.dataset.layout;
     }
 

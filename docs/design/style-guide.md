@@ -242,6 +242,12 @@ use Pixelify Sans, bundled in
 roles so components can use shell tokens in both skins. This is future work,
 not an existing component guarantee.
 
+**Shipping in Chat:** Chat in a Town window follows this contract
+([`AgentChat.town.css`](../../web/src/components/AgentChat.town.css); see
+[Chat in Town](../CHAT.md#chat-in-town)). It re-maps the shell tokens Chat reads
+to the Town palette defined in `windows.css` and adds Town's raised keys, 2 px
+message edges and the soft gold primary, without changing Chat's structure.
+
 | Skin | Where | How |
 | --- | --- | --- |
 | **Shell** (default) | Board, Desk, Spaces, Chat, dialogs, settings | `tokens.css` as is; accent colours from the user's accent setting |

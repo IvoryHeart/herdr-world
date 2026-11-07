@@ -151,6 +151,8 @@ export type TownBusTimeline = {
     t0: number;
     t1: number;
     from: number;
+    /** Where the piece ends: the next stop, or the route's end. */
+    to: number;
     phases: readonly Phase[];
   }[];
   /** Each stop the bus waits at: its arrival, in seconds into the trip. */
@@ -215,14 +217,21 @@ export function townBusTimeline(
   const halts = new Map<string, number>();
   legs.forEach((phases, index) => {
     const from = marks[index]!;
-    pieces.push({ t0: t, t1: t + phasesTime(phases), from, phases });
+    const to = marks[index + 1]!;
+    pieces.push({ t0: t, t1: t + phasesTime(phases), from, to, phases });
     t += phasesTime(phases);
     const stop = stops[index];
     if (!stop) return;
     halts.set(stop.key, t);
     for (const other of route.stops)
       if (other.at === stop.at) halts.set(other.key, t);
-    pieces.push({ t0: t, t1: t + dwell, from: stop.at, phases: [] });
+    pieces.push({
+      t0: t,
+      t1: t + dwell,
+      from: stop.at,
+      to: stop.at,
+      phases: [],
+    });
     t += dwell;
   });
   return { start, pieces, halts, cruise, length: route.length };
@@ -270,12 +279,18 @@ export function townStopClock({
  * How far along the route the bus is `elapsedMs` into its trip, or null
  * while it has not yet come in.
  */
+/** A microsecond: closer than this to a piece's end is at its end. */
+const END_S = 1e-6;
+
 export function townBusAlong(timeline: TownBusTimeline, elapsedMs: number) {
   const t = elapsedMs / 1000;
   if (t < timeline.start) return null;
   for (const piece of timeline.pieces)
     if (t <= piece.t1)
-      return piece.from + phasesDistance(piece.phases, t - piece.t0);
+      // A piece's end is its mark exactly; summed phases may round short.
+      return t >= piece.t1 - END_S
+        ? piece.to
+        : piece.from + phasesDistance(piece.phases, t - piece.t0);
   return timeline.length;
 }
 
