@@ -387,10 +387,9 @@ export default function TownView({
     openTerminal: (id) => void onOpenTerminal(id).catch(() => undefined),
     showRoom: focusRoom,
   });
-  // Needs you's Outbox row opens Town's Summary at the saved answers.
+  // Needs you's Outbox row and Board's hub open Town's Summary from outside.
   const openOutbox = townSummary.openOutbox;
   useEffect(() => offerNeedsYouOutbox(openOutbox), [openOutbox]);
-  // Board's hub asks for the summary before switching here.
   const openSummary = townSummary.open;
   useEffect(() => offerTownSummary(openSummary), [openSummary]);
   const askingKeys = useMemo(() => {
