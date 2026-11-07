@@ -22,6 +22,10 @@ export type TownRendererDiagnostics = {
   sceneRenders: number;
   /** Single buildings baked again after their colours, pins or desks changed. */
   buildingBakes: number;
+  /** Ground chunks painted (the town and the generated land around it). */
+  groundPainted: number;
+  /** Painted ground chunks kept through a layout change: their plan was unchanged. */
+  groundReused: number;
   /** Buildings that glided, faded in or faded out after a topology change. */
   transitions: number;
   /**
@@ -114,6 +118,8 @@ export function diagnostics(): TownRendererDiagnostics {
     frames: 0,
     sceneRenders: 0,
     buildingBakes: 0,
+    groundPainted: 0,
+    groundReused: 0,
     transitions: 0,
     crossfades: 0,
     topologyGaps: 0,

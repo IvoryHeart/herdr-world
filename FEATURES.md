@@ -152,6 +152,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     of dozing.
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right.
+  - The land around the town is generated: woods with pines, meadows, hedged
+    flower gardens and orchards, ponds with reeds, winding footpaths, and each
+    street running on beyond the town as a country lane. It fills the whole
+    view at every zoom and pan: past the town's own land the woods, meadows,
+    gardens and ponds carry on as far as the window shows, with no plain border.
+    It is the same on every reload and in every browser, and
+    when the town grows only the land next to the change is regenerated. It
+    keeps clear of buildings, roads, the town center and its paved apron, bus
+    stops and the verge above the first street.
   - The **town center** stands at the top of the town, just across the first
     street from the buildings and centred over their first row: a domed hall
     with a clock, a columned portico, banners and wings, whose front steps
