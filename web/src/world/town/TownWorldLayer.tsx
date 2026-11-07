@@ -1,6 +1,6 @@
 import { AnswerDeliverySign } from "./AnswerDeliverySign";
 import { Fragment, memo, useMemo, useRef } from "react";
-import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Plus, Sparkles } from "lucide-react";
 import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import { TOWN_DESK_EXPANSION_STEP } from "../herdrOfficeProjection";
@@ -316,6 +316,18 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                   {(host?.displayLabel ?? "").toUpperCase()} RECEPTION
                 </span>
                 {queue.length ? <b>{queue.length}</b> : null}
+                {roomActions.onTidyRooms &&
+                roomActions.canTidyRooms?.(building.hostKey) ? (
+                  <button
+                    type="button"
+                    className="world-room-overlay-action town-tidy-rooms"
+                    aria-label={`Tidy rooms in ${host?.displayLabel ?? "this building"}`}
+                    title="Tidy rooms"
+                    onClick={() => roomActions.onTidyRooms?.(building.hostKey)}
+                  >
+                    <Sparkles size={14} aria-hidden="true" />
+                  </button>
+                ) : null}
               </div>
               {host?.stale ? (
                 <ConnectionRecoveryBanner

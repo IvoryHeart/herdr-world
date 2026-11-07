@@ -263,6 +263,73 @@ export function townRoomPlacement(
   };
 }
 
+/** Where a host's rooms stand now: spots from its building's corner. */
+export function townBuildingSpots(
+  layout: TownLayout,
+  hostKey: string,
+): Map<string, TownRoomSpot> {
+  const building = layout.buildings.find((b) => b.hostKey === hostKey);
+  return new Map(
+    building?.rooms.map((room) => [room.key, spotOf(room, building)]) ?? [],
+  );
+}
+
+/**
+ * Tidy rooms: a building's rooms as a building whose rooms were never moved
+ * stacks them. In Herdr's workspace order, each room joins the shortest of
+ * the shape's columns, the usual gap apart, so nothing overlaps and no
+ * column stands taller than it must. That order is also the result's reading
+ * order, so Herdr's order keeps it and tidying again changes nothing. Null
+ * when the host has no building.
+ */
+export function townRoomTidy(
+  layout: TownLayout,
+  hostKey: string,
+): TownRoomPlacement | null {
+  const building = layout.buildings.find((b) => b.hostKey === hostKey);
+  if (!building) return null;
+  const { positions } = townStackRooms(
+    building.rooms,
+    layout.shape.roomColumns,
+    () => undefined,
+    ROOM_TOP,
+  );
+  return townRoomPlacement(
+    layout,
+    hostKey,
+    new Map(
+      building.rooms.map((room, index) => [
+        room.key,
+        { x: positions[index]!.rx, y: positions[index]!.ry },
+      ]),
+    ),
+  );
+}
+
+/**
+ * Undo a tidy: the host's rooms back at the spots they had (`spots`, from
+ * townBuildingSpots), rooms closed since left out and rooms opened since
+ * kept where they stand, clear of the others.
+ */
+export function townRoomRestore(
+  layout: TownLayout,
+  hostKey: string,
+  spots: TownRoomSpots,
+): TownRoomPlacement | null {
+  const building = layout.buildings.find((b) => b.hostKey === hostKey);
+  if (!building) return null;
+  const present = new Set(building.rooms.map((room) => room.key));
+  return townRoomPlacement(
+    layout,
+    hostKey,
+    new Map(
+      townReadingOrder(spots)
+        .filter((key) => present.has(key))
+        .map((key) => [key, spots.get(key)!]),
+    ),
+  );
+}
+
 /**
  * The building's room a room changes places with when moved one place
  * earlier (-1) or later (1) in reading order, or null at either end.

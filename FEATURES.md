@@ -331,6 +331,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     in reading order (top to bottom, left to right), so Spaces lists the
     rooms as Town shows them. A building whose rooms were never moved still
     stacks them in Herdr's order.
+  - **Tidy rooms.** The sparkles button on a building's reception board
+    (next to its colour) puts every room of that building back in order in
+    one step: in Herdr's workspace order, each room joins the shortest of the
+    building's columns, two tiles apart, with no gaps or overlaps, exactly as
+    a building whose rooms were never moved stacks them. The rooms glide to
+    their new spots (or simply stand there under calm or reduced motion), and
+    World saves the result like a room move, so it stays after a reload and
+    Spaces keeps the same order. Tidying a tidy building changes nothing.
+    **Undo** in the note that follows (for five seconds) puts the rooms back
+    where they stood. Rooms still move freely afterwards.
   - **Bin and bus.** Dragging an agent (or a desk) onto the bin icon at the
     bottom of Town or Board, or onto a Town bus stop, or **Put in bin** in an
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;

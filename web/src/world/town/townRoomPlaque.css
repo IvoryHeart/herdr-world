@@ -248,3 +248,17 @@
   opacity: 1;
   visibility: visible;
 }
+
+/* A building's Tidy rooms, on its reception board beside its colour. */
+.town-tidy-rooms {
+  position: static;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  cursor: pointer;
+}
+
+.town-tidy-rooms:hover,
+.town-tidy-rooms:focus-visible {
+  color: #ffd166;
+}

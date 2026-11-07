@@ -10,7 +10,7 @@ import { WorldSearchResults } from "./WorldSearchResults";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { openTrace, rememberTrace, TRACE_TOGGLE_EVENT } from "./devtools/trace";
 import { TraceOverlay } from "./devtools/TraceOverlay";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { useStoreSelector } from "../store";
@@ -18,6 +18,7 @@ import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
 import { offerTownSummary } from "./town/townSummaryRequest";
 import { useTownOffice } from "./town/useTownOffice";
+import { useTownToasts } from "./town/TownToasts";
 import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
 import { putTownDropInBin } from "./town/townBinDrop";
@@ -429,9 +430,6 @@ export default function TownView({
     [office.paneRoster],
   );
 
-  type Toast = { id: number; kind: "ok" | "error"; text: string };
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastId = useRef(0);
   // The event trace exists only in development builds (devtools/flag.ts).
   const trace = useMemo(() => (DEVTOOLS ? openTrace("town") : NO_TRACE), []);
   const [tracing, setTracing] = useState(trace.enabled);
@@ -453,18 +451,7 @@ export default function TownView({
     window.addEventListener(TRACE_TOGGLE_EVENT, toggle);
     return () => window.removeEventListener(TRACE_TOGGLE_EVENT, toggle);
   }, [trace]);
-  const toast = useCallback(
-    (kind: Toast["kind"], text: string) => {
-      if (DEVTOOLS) trace.record("toast", { kind, text });
-      const id = ++toastId.current;
-      setToasts((current) => [...current.slice(-2), { id, kind, text }]);
-      window.setTimeout(
-        () => setToasts((current) => current.filter((item) => item.id !== id)),
-        kind === "error" ? 6_000 : 2_600,
-      );
-    },
-    [trace],
-  );
+  const { toast, view: toastsView } = useTownToasts(trace);
 
   // A finished agent announces itself once; the rail keeps it until inspected.
   const announced = useRef<Set<string> | null>(null);
@@ -888,14 +875,7 @@ export default function TownView({
             }}
           />
         ) : null}
-        <div className="town-toasts" role="status" aria-live="polite">
-          {toasts.map((item) => (
-            <div key={item.id} className={`town-toast town-toast-${item.kind}`}>
-              <i aria-hidden="true">{item.kind === "ok" ? "✓" : "!"}</i>
-              {item.text}
-            </div>
-          ))}
-        </div>
+        {toastsView}
         <div className="town-stage">
           <TownHerdrSetupOffer world={world} aggregate={aggregate} />
           <TownCanvas

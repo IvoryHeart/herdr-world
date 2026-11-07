@@ -309,7 +309,12 @@ export function TownCanvas({
     roomActions,
   };
 
-  const placedRoomActions = useTownRoomMoves(roomActions, model, layout);
+  const placedRoomActions = useTownRoomMoves(
+    roomActions,
+    model,
+    layout,
+    rendererRef,
+  );
 
   const anchorFrame = useRef<(() => void) | null>(null);
   const reportAnchors = () => {

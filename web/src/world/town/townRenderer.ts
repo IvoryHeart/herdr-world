@@ -118,6 +118,9 @@ export type TownRendererHandle = {
   endDrag(mode: "cancel" | "park"): void;
   /** Land on the target with a puff, spring home, or fade when uncertain. */
   finishMove(result: TownMoveResult): void;
+  /** Tidy rooms: glide a building's rooms once the town shows them moved. */
+  beginGlide(hostKey: string): void;
+  finishGlide(result: TownMoveResult): void;
   destroy(): void;
 };
 
@@ -902,6 +905,7 @@ export async function createTownRenderer(
     layoutCells: () => layoutCells,
     podOf,
     buildingOf: (hostKey) => buildingByHost.get(hostKey)?.container,
+    roofAlpha: (hostKey) => buildingByHost.get(hostKey)?.roofAlpha ?? 0,
     deskColor,
     lookOf,
     clock: () => clock,
@@ -914,6 +918,8 @@ export async function createTownRenderer(
     moveDrag,
     endDrag,
     finishMove,
+    beginGlide: dragEffects.beginGlide,
+    finishGlide: dragEffects.finishGlide,
     camera,
     get level() {
       return level;
