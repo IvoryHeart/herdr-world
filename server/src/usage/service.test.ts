@@ -276,6 +276,113 @@ test("a removed log keeps its last bounded observation stale rather than fresh z
   await s.service.close();
 });
 
+test("subscription limits are per host, age to stale, survive a failed read as stale and never read zero", async () => {
+  const s = setup(["alpha", "beta"]);
+  const windows = [
+    { window_minutes: 300, used_percent: 40, resets_at: at + 3_600_000 },
+    { window_minutes: 10080, used_percent: 92, resets_at: at + 86_400_000 },
+  ];
+  s.data({
+    ...value(),
+    limits: [{ harness: "codex", at: at - 60_000, windows }],
+  });
+  const first = await s.service.get();
+  expect(first.limits).toHaveLength(4);
+  expect(
+    first.limits.filter((l) => l.harness === "codex").map((l) => l.state),
+  ).toEqual(["available", "available"]);
+  expect(first.limits[0]).toEqual({
+    connection_id: "alpha",
+    connection_generation: 1,
+    harness: "codex",
+    state: "available",
+    source: "codex-session-log",
+    reason: null,
+    observed_at: at - 60_000,
+    windows,
+  });
+  expect(first.limits[1]).toMatchObject({
+    harness: "claude",
+    state: "unsupported",
+    windows: [],
+  });
+  expect(first.limits[1]!.reason).toBeTruthy();
+  // A failed read keeps the last numbers, labelled stale.
+  s.advance(31_000);
+  s.read(async () => {
+    throw new Error("PRIVATE_PROVIDER_ERROR");
+  });
+  const failed = await s.service.get();
+  expect(failed.limits[0]).toMatchObject({
+    state: "stale",
+    windows,
+  });
+  expect(JSON.stringify(failed)).not.toContain("PRIVATE_PROVIDER_ERROR");
+  // A successful read without observations is missing, not zero or full.
+  s.read(async () => structuredClone({ ...value(), limits: [] }));
+  s.advance(31_000);
+  const missing = await s.service.get();
+  expect(missing.limits[0]).toMatchObject({
+    state: "missing",
+    observed_at: null,
+    windows: [],
+  });
+  // Past its window's reset the observation is stale.
+  s.read(async () =>
+    structuredClone({
+      ...value(),
+      limits: [{ harness: "codex", at: at - 60_000, windows }],
+    }),
+  );
+  s.advance(3_600_000);
+  expect((await s.service.get()).limits[0]?.state).toBe("stale");
+  await s.service.close();
+});
+
+test("a partial read keeps the newer cached limits stale instead of older numbers", async () => {
+  const s = setup();
+  const limit = (offset: number, used: number) => ({
+    harness: "codex",
+    at: at + offset,
+    windows: [
+      { window_minutes: 300, used_percent: used, resets_at: at + 3_600_000 },
+    ],
+  });
+  const withCodex = (
+    state: "available" | "partial",
+    limits: ReturnType<typeof limit>[],
+  ) =>
+    structuredClone({
+      ...value(),
+      sources: value().sources.map((source) =>
+        source.harness === "codex" ? { ...source, state } : source,
+      ),
+      limits,
+    });
+  s.read(async () => withCodex("available", [limit(-60_000, 95)]));
+  const first = await s.service.get();
+  expect(first.limits[0]).toMatchObject({ state: "available" });
+  expect(first.limits[0]!.windows[0]!.used_percent).toBe(95);
+  // The newest rollout fails; another rollout still holds an older 5 % read.
+  s.advance(31_000);
+  s.read(async () => withCodex("partial", [limit(-600_000, 5)]));
+  const partial = await s.service.get();
+  expect(partial.limits[0]).toMatchObject({
+    state: "stale",
+    observed_at: at - 60_000,
+  });
+  expect(partial.limits[0]!.windows[0]!.used_percent).toBe(95);
+  // A partial read that does establish a newer observation replaces it.
+  s.advance(31_000);
+  s.read(async () => withCodex("partial", [limit(30_000, 50)]));
+  const newer = await s.service.get();
+  expect(newer.limits[0]).toMatchObject({
+    state: "available",
+    observed_at: at + 30_000,
+  });
+  await s.service.close();
+});
+
 test("retired collector results cannot attach to a replacement runtime", async () => {
   const s = setup(),
     pending = Promise.withResolvers<RuntimeUsage>();

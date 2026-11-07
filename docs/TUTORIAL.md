@@ -203,10 +203,13 @@ hosts stay usable.
    the bar in the building's bottom corner. These locations visualize
    status; they do not move the underlying pane or change its host. For the
    whole picture, the Town board counts every building's agents, quiet ones
-   included; press **Summary** on it (on a phone, tap the
+   included. Its **FUEL** gauges show how much of each Codex subscription
+   window is left (amber and **low** under 15 %); hover or tap one for its reset
+   time and how old the numbers are. Claude reads **not available**, since
+   Claude Code saves no record of how much of its limits is used. Press **Summary** on the board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
-   rooms with their counts, and spend. Answer a question from its offered
+   rooms with their counts and its subscription limits, and spend. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound

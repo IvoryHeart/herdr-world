@@ -55,6 +55,8 @@ export type TownSummaryCounts = {
 
 export type TownSummaryHost = {
   key: string;
+  /** The host's connection, which qualifies its usage and limits. */
+  connectionId: string;
   label: string;
   /** Offline or stale hosts show when they were last seen. */
   stale: boolean;
@@ -138,6 +140,7 @@ function summaryTopology(office: HerdrOfficeProjection) {
     for (const room of rooms) addCounts(counts, room.counts);
     return {
       key: host.key,
+      connectionId: host.connectionId,
       label: host.accessibleLabel ?? host.displayLabel,
       stale: host.stale,
       counts,

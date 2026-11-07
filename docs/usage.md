@@ -88,6 +88,8 @@ The response is typed by `shared/usage.ts`:
   `unsupported`, with check/success times and `refreshing`. Missing records
   (`records: 0`, null cost) do not establish measured zero usage. Partial and
   truncated responses are lower-coverage observations, not complete expenses.
+- `limits`: subscription limits per host and harness, independent of `window`;
+  see [Subscription limits](#subscription-limits).
 - `telemetry`: optional configured Prometheus/OTel rolling-24-hour comparison,
   explicitly excluded from the log totals. Its window differs from the UTC
   windows above. No OTel configuration is needed for harness-log collection.
@@ -105,6 +107,33 @@ where no log connector covers that scope at all. The current configured
 Prometheus provider has neither qualified session/event identity nor UTC-window
 evidence, so its totals remain comparison data. They cannot safely fill a pane
 or host balance. No reported monetary metric is used as the token estimate.
+
+## Subscription limits
+
+Each `limits` entry names a host (`connection_id`, `connection_generation`), a
+harness and a `state`, with `windows` of `window_minutes`, `used_percent` (0–100)
+and `resets_at` (milliseconds, or null), plus `observed_at` and `source`.
+
+| Harness | Source | What World reads |
+| --- | --- | --- |
+| Codex | Codex session log (`codex-session-log`) | The `rate_limits` object on rollout `token_count` events: the `primary` and `secondary` windows (`secondary` may be null). Only the account-wide limit (`limit_id` absent or `codex`) counts. The newest observation across that host's admitted rollouts wins. |
+| Claude Code | none | `unsupported`, with a fixed reason. Claude Code's transcripts record a limit only when a request is refused (`usage_limit_reached` with a reset time and window type); they never record how much is used, so there is no percent to show. |
+
+States: `available` is current. `stale` means the observation is more than three
+hours old, a window's reset time has passed, or the latest read failed and the
+last numbers were kept. `missing` means a successful read found no observation
+on that host. No state is a measured zero or a full tank. Pi and Gemini do not
+appear.
+
+Limits come from the same collector, cache and SSH program as token usage and
+share their bounds. Plan names, credit balances, limit names, account IDs and
+other `rate_limits` fields are dropped on the transcript host; malformed or
+future-dated windows are ignored. World never calls a provider API, reads
+credentials or types `/usage` into a pane.
+
+Town shows these as fuel gauges on the board sign and per host in the Summary;
+see FEATURES.md. A harness reported as `unsupported` (Claude today) appears on
+the sign as **not available** with its reason, never as an empty or full gauge.
 
 ## Optional local price table
 
