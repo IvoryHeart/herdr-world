@@ -14,6 +14,7 @@ import type { TownRoomActions } from "./TownCanvas";
 import { ReceptionEntry, portrait } from "./TownReceptionEntry";
 import { TownRoomPlaque, type TownPlaceCardContent } from "./TownRoomPlaque";
 import { TownDeskTitle } from "./TownDeskTitle";
+import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
   type TownPlace,
@@ -167,11 +168,16 @@ export const TownWorldLayer = memo(function TownWorldLayer({
       ? townCarpetOf(TERMINAL_COLOR_HEX[chosen])
       : townCarpetFor(roomKey);
   };
-  /** A room's or table's card: its part of the summary, made on first open. */
-  const placeCard = (place: TownPlace): TownPlaceCardContent => ({
+  /**
+   * A room's or table's card: its part of the summary, made on first open,
+   * and the usage of its Herdr workspace or tab.
+   */
+  const placeCard = (
+    place: TownPlace,
+    target: OfficeQualifiedTarget,
+  ): TownPlaceCardContent => ({
     summary: () => townPlaceSummary(summary, model.projection, place),
-    now,
-    onOpenAgent: onActivate,
+    usage: { kind: place.kind, target },
   });
   const newRoomBuilding =
     layout.buildings.find((b) => b.hostKey === selectedHost) ??
@@ -459,7 +465,10 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                             <TownDeskTitle
                               deskKey={desk.key}
                               label={desk.displayLabel}
-                              card={placeCard({ kind: "desk", key: desk.key })}
+                              card={placeCard(
+                                { kind: "desk", key: desk.key },
+                                desk.tabRef,
+                              )}
                               open={desk.key === openDeskKey}
                               onSelect={onSelect}
                               onActivate={onActivate}
@@ -534,7 +543,10 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       }
                     }
                     actions={roomActions}
-                    card={placeCard({ kind: "room", key: room.key })}
+                    card={placeCard(
+                      { kind: "room", key: room.key },
+                      room.workspaceRef,
+                    )}
                   />
                   {roomActions.showCreateSeat(room.key) && seatCell ? (
                     <>

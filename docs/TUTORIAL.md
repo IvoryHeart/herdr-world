@@ -177,9 +177,11 @@ hosts stay usable.
    hover the name for its full text. The colour, active/total agent count and
    blocked badge stay visible. Active means working or waiting on you; plain
    terminals are excluded from the total. Hover the count for the working/waiting
-   breakdown. Hover or focus a plate for the room's card below it: the room's
-   counts, who needs you there and recent finishes (with **Answer** and
-   **Open**), then Rename and Close. Hover a table or its nameplate for the
+   breakdown. Hover or focus a plate for the room's card below it: the Town
+   board's numbers for that room (working, need you, done, quiet and its
+   agents) and its economy today (estimated cost, tokens and models), then
+   Rename and Close. Cost shows when a price table is set; see
+   [harness usage](./usage.md). Hover a table or its nameplate for the
    same card about that table. On a touch screen, tap the plate or nameplate;
    the first tap on a table opens its card, and a second tap (or a double tap)
    opens the table as before. The dashed **+** seat inside a room

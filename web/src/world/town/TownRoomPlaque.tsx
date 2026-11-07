@@ -5,24 +5,32 @@ import type { OfficeRoom } from "../herdrOfficeProjection";
 import type { PlaceColorChoice, TownRoomActions } from "./TownCanvas";
 import type { TownRoomCounts } from "./townModel";
 import type { TownPlaceSummary } from "./townSummary";
-import { TownPlaceSummaryCard } from "./TownSummaryPanel";
+import { TownPlaceSummaryCard } from "./TownBoard";
+import {
+  townPlaceEconomy,
+  townUsageStore,
+  useTownUsage,
+  type TownUsagePlace,
+} from "./townPlaceUsage";
 import "./townRoomPlaque.css";
 
-/** A place card's summary: made when the card first opens, then kept live. */
+/** A place card's content: its summary is made when the card first opens. */
 export type TownPlaceCardContent = {
   summary(): TownPlaceSummary;
-  now: number;
-  onOpenAgent(agentKey: string): void;
+  /** The Herdr workspace or tab whose usage the card shows. */
+  usage: TownUsagePlace;
 };
 
 /**
  * The card a place's name opens on hover, focus or a tap: its part of the
- * Town summary. Nothing is built until the card first opens, so a dense town
- * pays only for the names someone points at.
+ * Town summary and its economy today. Nothing is built or read until the card
+ * opens, so a dense town pays only for the names someone points at; each
+ * opening refreshes the usage, at most once per the service's interval.
  */
 export function usePlaceCard() {
   const [opened, setOpened] = useState(false);
   const open = () => {
+    townUsageStore().request();
     if (!opened) setOpened(true);
   };
   return { opened, open };
@@ -33,11 +41,11 @@ export function TownPlaceCardSummary({
 }: {
   content: TownPlaceCardContent;
 }) {
+  const usage = useTownUsage();
   return (
     <TownPlaceSummaryCard
       place={content.summary()}
-      now={content.now}
-      onOpenAgent={content.onOpenAgent}
+      economy={townPlaceEconomy(usage, content.usage)}
     />
   );
 }

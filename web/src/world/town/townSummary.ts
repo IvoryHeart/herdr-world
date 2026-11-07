@@ -205,11 +205,13 @@ export function townSummary(
   };
 }
 
-/** One room's or table's summary: its counts and its rail items. */
+/**
+ * One room's or table's summary, counted as the Town board counts the town:
+ * needs you and finished are the summary's own rail items there, working,
+ * quiet and unknown its agents, and `agents` every agent there.
+ */
 export type TownPlaceSummary = {
-  counts: TownSummaryCounts;
-  needsYou: readonly TownSummaryItem[];
-  finished: readonly TownSummaryItem[];
+  counts: TownSummaryCounts & { agents: number };
 };
 
 export type TownPlace = { kind: "room" | "desk"; key: string };
@@ -224,9 +226,9 @@ const deskIndexes = new WeakMap<
 >();
 
 /**
- * A room's or table's part of the Town summary, for its hover card: the
- * room counts the summary lists, or one pass over the roster by table, and
- * the summary's own needs-you and finished items there.
+ * A room's or table's part of the Town summary, for its card: the room
+ * counts the summary lists, or one pass over the roster by table, with the
+ * summary's own needs-you and finished items there.
  */
 export function townPlaceSummary(
   summary: TownSummary,
@@ -263,10 +265,16 @@ export function townPlaceSummary(
     place.kind === "room"
       ? item.roomKey === place.key
       : item.agent.deskKey === place.key;
+  const agents = counts ?? emptyCounts();
   return {
-    counts: counts ?? emptyCounts(),
-    needsYou: summary.needsYou.filter(here),
-    finished: summary.finished.filter(here),
+    counts: {
+      needsYou: summary.needsYou.filter(here).length,
+      working: agents.working,
+      finished: summary.finished.filter(here).length,
+      quiet: agents.quiet,
+      unknown: agents.unknown,
+      agents: townSummaryAgents(agents),
+    },
   };
 }
 

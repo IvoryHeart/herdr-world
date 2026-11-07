@@ -5,7 +5,12 @@ import {
   formatOfficeUsage,
   type OfficeObservability,
 } from "../officeObservability";
-import type { TownSummary } from "./townSummary";
+import type {
+  TownPlaceSummary,
+  TownSummary,
+  TownSummaryCounts,
+} from "./townSummary";
+import type { TownPlaceEconomy } from "./townPlaceUsage";
 
 /**
  * The Town board counts the whole town from the Town summary (townSummary.ts):
@@ -78,47 +83,120 @@ export function TownBoard({
             </button>
           ) : null}
         </div>
-        <dl>
-          <div>
-            <dt>Working</dt>
-            <dd>{counts.working}</dd>
-          </div>
-          <div>
-            <dt>Need you</dt>
-            <dd>{counts.needsYou}</dd>
-          </div>
-          <div>
-            <dt>Done</dt>
-            <dd>{counts.finished}</dd>
-          </div>
-          <div>
-            <dt>Quiet</dt>
-            <dd>{counts.quiet}</dd>
-          </div>
-        </dl>
+        <TownBoardCounts counts={counts} />
         <p className="town-board-population">
           {population}
           {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
         </p>
-        <div className="town-board-economy">
-          <span>ECONOMY</span>
-          {available ? (
-            <>
-              <b>{formatOfficeCost(observability.totalCostUsd)}</b>
-              <small>
-                {formatOfficeUsage(observability.totalUsage)} tokens
-                {observability.models.length
-                  ? ` · ${formatOfficeModelNames(observability.models)}`
-                  : ""}
-              </small>
-            </>
-          ) : (
-            <small>
-              No cost data. Configure a metrics provider in settings.
-            </small>
-          )}
-        </div>
+        <TownBoardEconomy
+          {...(available
+            ? {
+                cost: formatOfficeCost(observability.totalCostUsd),
+                detail: `${formatOfficeUsage(observability.totalUsage)} tokens${
+                  observability.models.length
+                    ? ` · ${formatOfficeModelNames(observability.models)}`
+                    : ""
+                }`,
+              }
+            : {
+                detail:
+                  "No cost data. Configure a metrics provider in settings.",
+              })}
+        />
       </div>
     </>
+  );
+}
+
+/** The board's agent numbers: working, need you, done and quiet. */
+function TownBoardCounts({ counts }: { counts: TownSummaryCounts }) {
+  return (
+    <dl className="town-board-counts">
+      <div>
+        <dt>Working</dt>
+        <dd>{counts.working}</dd>
+      </div>
+      <div>
+        <dt>Need you</dt>
+        <dd>{counts.needsYou}</dd>
+      </div>
+      <div>
+        <dt>Done</dt>
+        <dd>{counts.finished}</dd>
+      </div>
+      <div>
+        <dt>Quiet</dt>
+        <dd>{counts.quiet}</dd>
+      </div>
+    </dl>
+  );
+}
+
+/** The board's economy numbers: a cost, then tokens and models, or why not. */
+function TownBoardEconomy({
+  label = "ECONOMY",
+  cost,
+  detail,
+}: {
+  label?: string;
+  cost?: string;
+  detail: string;
+}) {
+  return (
+    <div className="town-board-economy">
+      <span>{label}</span>
+      {cost === undefined ? null : <b>{cost}</b>}
+      <small>{detail}</small>
+    </div>
+  );
+}
+
+const PLACE_ECONOMY: Record<
+  Exclude<TownPlaceEconomy["status"], "ready">,
+  string
+> = {
+  loading: "Reading today's usage…",
+  unavailable: "Usage is unavailable right now.",
+  none: "No usage recorded here today.",
+};
+
+/**
+ * A room's or table's card: the Town board without its agents list, for
+ * that place. The agent numbers are its part of the Town summary; the
+ * economy numbers are today's harness usage there (townPlaceUsage.ts), since
+ * the board's metrics provider has no places in it.
+ */
+export function TownPlaceSummaryCard({
+  place,
+  economy,
+}: {
+  place: TownPlaceSummary;
+  economy: TownPlaceEconomy;
+}) {
+  const { counts } = place;
+  return (
+    <div className="town-place-summary">
+      <TownBoardCounts counts={counts} />
+      <p className="town-board-population">
+        {counts.agents} {counts.agents === 1 ? "agent" : "agents"}
+        {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
+      </p>
+      {economy.status === "ready" ? (
+        <TownBoardEconomy
+          label="ECONOMY TODAY"
+          cost={formatOfficeCost(economy.costUsd, "estimated")}
+          detail={`${formatOfficeUsage(economy.tokens)} tokens${
+            economy.models.length
+              ? ` · ${formatOfficeModelNames(economy.models.map((model) => ({ model })))}`
+              : ""
+          }${economy.partial ? " · partial" : ""}`}
+        />
+      ) : (
+        <TownBoardEconomy
+          label="ECONOMY TODAY"
+          detail={PLACE_ECONOMY[economy.status]}
+        />
+      )}
+    </div>
   );
 }

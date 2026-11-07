@@ -150,7 +150,7 @@ export async function checkTownRoomPlates(
     !!card &&
       card.contains(actions) &&
       getComputedStyle(card).visibility === "visible" &&
-      !!card.querySelector(".town-place-summary .town-summary-counts") &&
+      !!card.querySelector(".town-place-summary .town-board-counts") &&
       Math.abs(
         card.getBoundingClientRect().left - plate.getBoundingClientRect().left,
       ) < 3 &&
@@ -187,7 +187,7 @@ export async function checkTownRoomPlates(
     );
     check(
       getComputedStyle(deskCard).visibility === "visible" &&
-        !!deskCard.querySelector(".town-place-summary .town-summary-counts") &&
+        !!deskCard.querySelector(".town-place-summary .town-board-counts") &&
         deskCard.getBoundingClientRect().top >= tagBox.bottom - 3,
       "focusing a table's nameplate must show the table's summary under it",
     );
@@ -225,7 +225,7 @@ export async function checkTownRoomPlates(
     check(
       canvas.contains(
         document.elementFromPoint(centre.clientX, centre.clientY),
-      ) && !!deskCard.querySelector(".town-place-summary .town-summary-counts"),
+      ) && !!deskCard.querySelector(".town-place-summary .town-board-counts"),
       "a table's hover card must show its summary without covering the table",
     );
     canvas.dispatchEvent(

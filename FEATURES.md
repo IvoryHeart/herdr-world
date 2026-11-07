@@ -202,9 +202,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     a tooltip. Colour, active/total agent count and blocked badge remain visible.
     Active means working or waiting on you; the total excludes plain terminals.
     Hover the count for its working/waiting breakdown. Hover or focus a plate
-    (tap on touch screens) for its card below it: the room's part of the Town
-    summary (its counts, who needs you there and recent finishes, with
-    **Answer** and **Open**), then Rename and Close with 40px targets. A
+    (tap on touch screens) for its card below it: the Town board's numbers
+    for that room, without its agents list (working, need you, done, quiet,
+    its agents, and its **Economy today**: estimated cost, tokens and models
+    from [harness usage](./docs/usage.md)), then Rename and Close with 40px
+    targets. A
     table, or its nameplate, opens the same card for that table on hover,
     focus or a tap; a click on the plate selects the table and a double click
     opens it. On touch screens the first tap on a table opens its card, and a

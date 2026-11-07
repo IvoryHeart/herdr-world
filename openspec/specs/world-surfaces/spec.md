@@ -1317,11 +1317,14 @@ label. Its numerals SHALL be tabular, its total fraction muted, and its whole co
 muted when ACTIVE is zero; it SHALL stay fixed ahead of the blocked badge while
 only the room name truncates. One card SHALL
 appear below the plate on hover or keyboard focus, and on a touch of the plate:
-the room's part of the Town summary (its counts and its needs-you and finished
-items with their actions), then Rename and Close with targets at least 40 CSS
+the Town board's numbers for that room without its agents list (working,
+needs-you, finished and quiet counted as the board counts them, its agents,
+and its economy today from the harness usage of its exactly qualified Herdr
+workspace), then Rename and Close with targets at least 40 CSS
 pixels wide and tall. These controls SHALL NOT reserve name width while hidden.
 A table's nameplate SHALL open the same kind of card for that table on hover,
-focus or a touch, from the same summary read model. Hovering the table itself
+focus or a touch, from the same summary read model and the usage of its
+exactly qualified Herdr tab. The card SHALL read usage only once opened. Hovering the table itself
 on the canvas SHALL open that card without covering the table; on a touch
 screen, a tap on a table whose card is closed SHALL open the card instead of
 the table, and a second tap SHALL open the table as a tap does. The dashed empty-seat **+** inside a room
