@@ -32,6 +32,7 @@ const context = (
 const ready = (contexts?: UsageContext[]): TownUsageState => ({
   status: "ready",
   snapshot: { version: 1, contexts } as unknown as WorldUsageSnapshot,
+  receivedAt: 0,
 });
 const pane = { connectionId: "local", generation: 3, paneId: "pane-a" };
 
