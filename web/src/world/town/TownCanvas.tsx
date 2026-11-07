@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type { TownMoveResult } from "./townMoves";
 import { TOWN_GESTURES } from "./townGesture";
@@ -29,6 +30,7 @@ import type { OfficeObservability } from "../officeObservability";
 import { TownCamera, type TownLevel } from "./townCamera";
 import { townShapeFor, townShapeKey, type TownShape } from "./townLayout";
 import { TownScene } from "./scene/townScene";
+import { sharedTownJoinSeats, type TownJoinSeats } from "./townJoinSeats";
 import { TownSceneDiff } from "./scene/townSceneDiff";
 import { TownHud, townScreenAnchor, townWorldAnchor } from "./scene/townHud";
 import { TownHudContext, useTownHud } from "./useTownHud";
@@ -156,6 +158,7 @@ export function TownCanvas({
   terminalColors = NO_COLORS,
   relations = NO_RELATIONS,
   deskPins = NO_PINS,
+  joinSeats = sharedTownJoinSeats(),
   chrome = NO_CHROME,
   trace = NO_TRACE,
 }: {
@@ -207,6 +210,8 @@ export function TownCanvas({
   terminalColors?: TerminalColors;
   /** Saved desk pins (useDeskPins); a pinned desk keeps its cell. */
   deskPins?: DeskPins;
+  /** Desks seated by joining a team (townTeamActions.ts); others stay put. */
+  joinSeats?: TownJoinSeats;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
@@ -239,6 +244,12 @@ export function TownCanvas({
     () => new TownScene(townBrowserClock, () => wakeReflow((n) => n + 1)),
   );
   useEffect(() => () => scene.dispose(), [scene]);
+  // A join request derives the scene again, to seat the desk.
+  useSyncExternalStore(
+    joinSeats.subscribe,
+    joinSeats.getVersion,
+    joinSeats.getVersion,
+  );
   // Where the camera goes; the renderer steps its motion each frame.
   const [view] = useState(
     () =>
@@ -254,6 +265,7 @@ export function TownCanvas({
     sources,
     shape,
     foldRevision,
+    joinSeats,
   });
   useLayoutEffect(() => {
     captureHolding.current = semantics.holding;

@@ -353,8 +353,11 @@ hosts stay usable.
    table.
 9. To group tables, drag one onto another table and rest it there a moment:
    it snaps to that table and the plaque says **Group with …**; let go. The
-   two get one wall, and Town brings the table to that room and beside the
-   other in Herdr's tab order. An agent started by another agent is grouped
+   two get one wall: Town brings the table to that room and seats it in a
+   free place touching the other, on the side it came from where it can.
+   No other table moves, so the shape you build is the shape you get; the
+   tables keep those places until the room's tab order changes or the page
+   reloads. An agent started by another agent is grouped
    automatically, with a solid connector to its parent and the parent's
    colour. To take a table you grouped out of its group, drag it onto its own
    room's bare floor, away from the free spot (**Leave the team**); a spawn

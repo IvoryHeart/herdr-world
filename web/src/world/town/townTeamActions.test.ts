@@ -1,9 +1,10 @@
 import { beforeEach, expect, test } from "bun:test";
 import { townTeamActions } from "./townTeamActions";
 import { terminalColorKey } from "../terminalColor";
+import type { TownJoinRequest } from "./townJoinSeats";
 
 const grouped: unknown[][] = [];
-const reordered: string[] = [];
+const seated: TownJoinRequest[] = [];
 
 const desk = (key: string, roomKey: string) => ({
   key,
@@ -59,22 +60,20 @@ function setup(pinned: string[]) {
     roomForKey: (key) => ({ key, observedDeskCount: 2 }) as never,
     toast: (_kind, text) => toasts.push(text),
     confirm: () => {},
-    runDeskMove: async (deskKey, roomKey) => {
+    runDeskMove: async (deskKey, roomKey, _allowCloseRoom, then) => {
       moves.push(`${deskKey}->${roomKey}`);
+      await then?.("moved");
       return "returned";
     },
     closeMenu: () => {},
     openGroupMenu: () => {},
+    seatJoin: (request) => seated.push(request),
     io: {
       groupTerminals: async (...args: unknown[]) => {
         grouped.push(args);
         return null;
       },
       ungroupTerminals: async () => null,
-      requestDeskReorder: async (moved) => {
-        reordered.push(moved.key);
-        return { status: "moved" } as never;
-      },
     },
   });
   return { actions, toasts, moves };
@@ -82,7 +81,7 @@ function setup(pinned: string[]) {
 
 beforeEach(() => {
   grouped.length = 0;
-  reordered.length = 0;
+  seated.length = 0;
 });
 
 test("a pinned desk never leaves its room to join a team", async () => {
@@ -98,12 +97,29 @@ test("a pinned desk joins a team in its room and keeps its place", async () => {
   await actions.runGroupDesk("t1", "t2");
   expect(grouped.length).toBe(1);
   expect(moves).toEqual([]);
-  expect(reordered).toEqual([]);
+  expect(seated).toEqual([]);
 });
 
-test("an unpinned desk is seated beside its new teammate", async () => {
-  const { actions } = setup([]);
+test("an unpinned desk is seated beside its new teammate, tab order untouched", async () => {
+  const { actions, moves } = setup([]);
   await actions.runGroupDesk("t1", "t2");
   expect(grouped.length).toBe(1);
-  expect(reordered).toEqual(["t1"]);
+  expect(moves).toEqual([]);
+  expect(seated).toEqual([
+    { deskKey: "t1", targetKey: "t2", fromDeskKey: "t1", fromRoomKey: "r1" },
+  ]);
+});
+
+test("a desk from another room is seated under its new tab's key", async () => {
+  const { actions, moves } = setup([]);
+  await actions.runGroupDesk("t3", "t1");
+  expect(moves).toEqual(["t3->r1"]);
+  expect(seated).toEqual([
+    {
+      deskKey: JSON.stringify(["studio", "tab", "moved"]),
+      targetKey: "t1",
+      fromDeskKey: "t3",
+      fromRoomKey: "r2",
+    },
+  ]);
 });

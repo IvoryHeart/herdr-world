@@ -3,8 +3,9 @@
  *
  * Hosts become buildings, workspaces become rooms on carpets and tabs become
  * team tables in desk cells. Desk slots follow Herdr's tab order. The
- * placement memory keeps pinned desks and room columns in place while a scene
- * is live, and every room capacity step contains the previous one.
+ * placement memory keeps pinned desks, desks seated by a team join
+ * (townJoinSeats.ts) and room columns in place while a scene is live, and
+ * every room capacity step contains the previous one.
  */
 
 export const TOWN_TILE = 16;

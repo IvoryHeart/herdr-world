@@ -27,9 +27,11 @@ import {
   townPinCell,
   townShapeKey,
   type TownLayout,
+  type TownPinnedCells,
   type TownPlacementMemory,
   type TownShape,
 } from "../townLayout";
+import type { TownJoinSeats } from "../townJoinSeats";
 import {
   keepPlaceColors,
   NO_PLACE_COLORS,
@@ -52,6 +54,8 @@ import type { TownClock } from "./ports";
  */
 export const TOWN_REFLOW_IDLE_MS = 1200;
 
+const NO_CELLS: TownPinnedCells = new Map();
+
 export type TownSemanticInputs = {
   projection: HerdrOfficeProjection;
   /** Saved terminal colours (useTerminalColors); desks use their tab's. */
@@ -69,6 +73,8 @@ export type TownSemanticInputs = {
   shape: TownShape;
   /** Explicit Fold/Expand admission revision, committed with its projection. */
   foldRevision: number;
+  /** Desks seated by joining a team, and the cells that keeps (townJoinSeats.ts). */
+  joinSeats?: TownJoinSeats;
 };
 
 export type TownSemantics = {
@@ -218,6 +224,12 @@ export class TownScene {
 
   private readonly pinnedCells = memo(townPinnedCells);
 
+  // Pins win over cells a join holds.
+  private readonly fixedCells = memo(
+    (pins: TownPinnedCells, held: TownPinnedCells): TownPinnedCells =>
+      held.size ? new Map([...held, ...pins]) : pins,
+  );
+
   // Placement depends only on topology and pins, not on agent status.
   private readonly place = memo(
     (
@@ -259,10 +271,20 @@ export class TownScene {
       projection,
       inputs.deskPins,
     );
+    const shapeKey = townShapeKey(shape);
+    const joinCells =
+      inputs.joinSeats?.heldCells(
+        model.input,
+        this.shown && townShapeKey(this.shown.shape) === shapeKey
+          ? this.shown
+          : null,
+        shapeKey,
+        shape.deskColumns,
+      ) ?? NO_CELLS;
     const placed = this.place(
       model.input,
       shape,
-      this.pinnedCells(model.deskPins),
+      this.fixedCells(this.pinnedCells(model.deskPins), joinCells),
     );
     // While the user presses, scrolls or zooms, a reflow that would move rooms
     // or buildings waits until they pause (then the camera follows the room in
