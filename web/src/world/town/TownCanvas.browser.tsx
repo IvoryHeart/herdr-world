@@ -3799,6 +3799,7 @@ async function run() {
     const gaps = diagnostics.topologyGaps;
     const transitions = diagnostics.transitions;
     const crossfades = diagnostics.crossfades;
+    const reused = diagnostics.groundReused;
     const buildings = diagnostics.layout!.buildings;
     let followed = false;
     const watch = new MutationObserver(() => {
@@ -3852,6 +3853,12 @@ async function run() {
     check(
       followed,
       "no building's plaques glided with it when a host turned off and on",
+    );
+    // Ground chunks away from the change keep their painting (their plan,
+    // the land generated there included, is unchanged).
+    check(
+      diagnostics.groundReused > reused,
+      "no unchanged ground chunk was kept when a host turned off and on",
     );
     check(
       [...host.querySelectorAll<HTMLElement>(".town-building-layer")].every(
