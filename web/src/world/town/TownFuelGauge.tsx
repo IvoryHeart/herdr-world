@@ -1,5 +1,7 @@
+import { Fuel } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import {
+  townFuelAge,
   townReachedText,
   townResetTime,
   townSeenAge,
@@ -86,7 +88,8 @@ function TownFuelTip({
 
 /**
  * One harness's fuel on the Town board sign: a short bar per limit window
- * with the percent left. Hover, focus or a tap shows when each resets and
+ * with the percent left, and "seen <age> ago" under them once the reading is
+ * more than 15 minutes old. Hover, focus or a tap shows when each resets and
  * how old the observation is. A stale gauge shows no level at all.
  */
 export function TownFuelGaugeView({
@@ -96,9 +99,10 @@ export function TownFuelGaugeView({
   gauge: TownFuelGauge;
   now: number;
 }) {
+  const age = townFuelAge(gauge, now);
   return (
     <TownFuelTip
-      label={`${gauge.name} limits: ${gauge.windows.map((w) => windowText(gauge, w)).join("; ")}`}
+      label={`${gauge.name} limits: ${gauge.windows.map((w) => windowText(gauge, w)).join("; ")}${age ? `; ${age}` : ""}`}
       stale={gauge.stale}
       details={townFuelDetails(gauge, now)}
     >
@@ -130,6 +134,7 @@ export function TownFuelGaugeView({
           )}
         </span>
       ))}
+      {age ? <span className="town-fuel-age">{age}</span> : null}
     </TownFuelTip>
   );
 }
@@ -184,4 +189,37 @@ export function townFuelLowest(gauges: readonly TownFuelGauge[]) {
     if (!gauge.stale && (!lowest || gauge.lowest.left < lowest.window.left))
       lowest = { gauge, window: gauge.lowest };
   return lowest;
+}
+
+type TownFuelLowest = NonNullable<ReturnType<typeof townFuelLowest>>;
+
+/** The lowest fuel in words for the phone chip's label: "Codex week 8 % left, low; seen 1 h ago". */
+export function townFuelLowestText(
+  { gauge, window: w }: TownFuelLowest,
+  now: number,
+) {
+  const age = townFuelAge(gauge, now);
+  return `${gauge.name} ${
+    w.reached
+      ? townReachedText(w)
+      : `${w.label} ${w.left} % left${w.low ? ", low" : ""}`
+  }${age ? `; ${age}` : ""}`;
+}
+
+/** The phone chip's lowest fuel: percent left or "reached", and its age once over 15 minutes. */
+export function TownFuelChip({
+  lowest,
+  now,
+}: {
+  lowest: TownFuelLowest;
+  now: number;
+}) {
+  const age = townFuelAge(lowest.gauge, now);
+  return (
+    <span data-status="fuel" data-low={lowest.window.low}>
+      <Fuel size={12} aria-hidden="true" />
+      {lowest.window.reached ? "reached" : `${lowest.window.left}%`}
+      {age ? <span className="town-fuel-age">{age}</span> : null}
+    </span>
+  );
 }

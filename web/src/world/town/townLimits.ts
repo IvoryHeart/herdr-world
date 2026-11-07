@@ -209,6 +209,20 @@ export function townSeenAge(at: number, now: number) {
   return hours < 24 ? `${hours} h ago` : `${Math.floor(hours / 24)} d ago`;
 }
 
+/** A current reading older than this shows its age on the gauge itself. */
+export const TOWN_FUEL_AGE_SHOWN_MS = 15 * 60_000;
+
+/**
+ * "seen 1 h ago" for a current reading more than 15 minutes old, so an old
+ * level never passes for a fresh one; null for a fresh reading, and for a
+ * stale one, which already reads "stale" with no level.
+ */
+export function townFuelAge(gauge: TownFuelGauge, now: number) {
+  return gauge.stale || now - gauge.observedAt <= TOWN_FUEL_AGE_SHOWN_MS
+    ? null
+    : `seen ${townSeenAge(gauge.observedAt, now)}`;
+}
+
 /**
  * Re-read usage while the board is shown, as often as the service refreshes
  * a host (every 30 s), so a reading taken at an agent's answer reaches the

@@ -8,12 +8,7 @@
  * every room capacity step contains the previous one.
  */
 
-import {
-  placeTownCenter,
-  townCenterForecourt,
-  townCenterWidth,
-  type TownCenterLot,
-} from "./townCenter";
+import { townCenterForecourt, type TownCenterLot } from "./townCenter";
 import {
   LOBBY_HEIGHT,
   MARGIN,
@@ -235,7 +230,10 @@ export type TownLayout = {
    * roads on at least three sides.
    */
   verticalRoads: { x: number; y0: number; y1: number }[];
-  /** The town center, centred above the first street (townCenter.ts). */
+  /**
+   * The town center: among the first row of buildings, or above the first
+   * street when buildings stack (townLots.ts).
+   */
   center: TownCenterLot;
   plaza: TownPoint;
   board: TownPoint;
@@ -578,9 +576,9 @@ export function layoutTown(
     room.deskKeys.forEach((key, index) =>
       seatsOf.set(key, room.deskSeats?.[index] ?? 4),
     );
-  // The hosts' buildings stand on the streets, under the town center.
+  // The hosts' buildings and the town center stand on the streets.
   const lots = townPlaceLots(drafts, shape);
-  const { verticalRoads, roads } = lots;
+  const { verticalRoads, roads, center } = lots;
   const placedBuildings = drafts.map((draft, index) => {
     const { x, y, h, roadY, topRoadY } = lots.buildings[index]!;
     draft.lounge.y += h - draft.h;
@@ -589,9 +587,12 @@ export function layoutTown(
     return { ...draft, x, y, roadY, topRoadY };
   });
   // The topmost street runs on past the last crossing for the bus stop.
-  const centerW = townCenterWidth(shape.roomColumns === 1);
   const width =
-    Math.max(lots.width + BUS_STOP_CLEARANCE, 37, centerW + MARGIN) + MARGIN;
+    Math.max(
+      lots.width + BUS_STOP_CLEARANCE,
+      37,
+      center.x + center.w + MARGIN,
+    ) + MARGIN;
   const lastRoad = roads[roads.length - 1]!;
   const height = lastRoad + ROAD_GAP + PARK_HEIGHT + MARGIN;
   const ground = new Uint8Array(width * height);
@@ -744,9 +745,7 @@ export function layoutTown(
     };
   });
 
-  // The center stands on the buildings' axis, its forecourt paved down to
-  // the first street.
-  const center = placeTownCenter(buildings, width, centerW, MARGIN, roads[0]!);
+  // The center's forecourt is paved from its steps down to its street.
   const court = townCenterForecourt(center);
   strip(court.x0, court.y0, court.x1, court.y1, TownGround.plaza);
   bushes.push(...court.bushes);
@@ -775,6 +774,7 @@ export function layoutTown(
   const nearBuilding = (tx: number, ty: number) =>
     (tx >= center.x - 2 &&
       tx <= center.x + center.w + 1 &&
+      ty >= center.y - 2 &&
       ty <= center.street) ||
     buildings.some(
       (b) =>

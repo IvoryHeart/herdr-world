@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import { Fuel } from "lucide-react";
 import {
   formatOfficeCost,
   formatOfficeModelNames,
@@ -16,10 +15,14 @@ import {
   townFuelGauges,
   townFuelNotes,
   townLimits,
-  townReachedText,
   useTownLimits,
 } from "./townLimits";
-import { TownFuel, townFuelLowest } from "./TownFuelGauge";
+import {
+  TownFuel,
+  TownFuelChip,
+  townFuelLowest,
+  townFuelLowestText,
+} from "./TownFuelGauge";
 
 /**
  * The Town board counts the whole town from the Town summary (townSummary.ts):
@@ -56,13 +59,7 @@ export function TownBoard({
   const notes = townFuelNotes(limits, gauges);
   const lowest = townFuelLowest(gauges);
   const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}${
-    lowest
-      ? `; ${lowest.gauge.name} ${
-          lowest.window.reached
-            ? townReachedText(lowest.window)
-            : `${lowest.window.label} ${lowest.window.left} % left${lowest.window.low ? ", low" : ""}`
-        }`
-      : ""
+    lowest ? `; ${townFuelLowestText(lowest, now)}` : ""
   }`;
   return (
     <>
@@ -89,12 +86,7 @@ export function TownBoard({
         <span data-status="working">{counts.working}</span>
         <span data-status="blocked">!{counts.needsYou}</span>
         <span data-status="done">✓{counts.finished}</span>
-        {lowest ? (
-          <span data-status="fuel" data-low={lowest.window.low}>
-            <Fuel size={12} aria-hidden="true" />
-            {lowest.window.reached ? "reached" : `${lowest.window.left}%`}
-          </span>
-        ) : null}
+        {lowest ? <TownFuelChip lowest={lowest} now={now} /> : null}
       </button>
       {sinceYouLeft?.chip}
       <div

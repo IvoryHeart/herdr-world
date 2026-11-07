@@ -883,6 +883,7 @@ export function TownCanvas({
           bin={townBin.bin}
           route={townBin.route}
           riders={townBin.riders}
+          returning={townBin.returning}
           lookOf={townBin.lookOf}
           framed={busFramed}
           renderer={rendererRef}
