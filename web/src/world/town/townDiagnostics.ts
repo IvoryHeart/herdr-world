@@ -40,6 +40,11 @@ export type TownRendererDiagnostics = {
   walking: number;
   /** Agents opened by the user whose goal is their own desk. */
   summoned: string[];
+  /**
+   * Agents the reception filter keeps at their desks, seated there
+   * (townReceptionFilter.ts).
+   */
+  held: string[];
   desks: number;
   /** Animated node counts, kept compatible with existing browser evidence. */
   animation: {
@@ -96,6 +101,7 @@ export function diagnostics(): TownRendererDiagnostics {
     actors: 0,
     walking: 0,
     summoned: [],
+    held: [],
     desks: 0,
     animation: { characters: 0, monitors: 0, statuses: 0 },
     layout: null,

@@ -339,11 +339,33 @@ export async function checkOverviewRoomHover(
   ) => Promise<void>,
 ) {
   const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+  const hover = (clientX: number, clientY: number) =>
+    canvas.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        pointerId: 72,
+        pointerType: "mouse",
+        clientX,
+        clientY,
+      }),
+    );
+  const summaryShown = (wrap: HTMLElement) => {
+    const card = wrap.querySelector<HTMLElement>(".town-room-overview-card")!;
+    return (
+      wrap.classList.contains("is-open") &&
+      getComputedStyle(card).visibility === "visible" &&
+      !!card.querySelector(".town-place-summary .town-board-counts")
+    );
+  };
   // A point in a room that only the canvas covers: the room's own card sits
-  // at its centre, so try just inside each corner.
+  // at its centre, so try just inside each corner. An agent from another room
+  // can stand over a corner (a visitor queueing in the lobby), and hovering
+  // it rightly opens its own room's summary instead, so move on to the next
+  // corner when another room opens.
   let found: { wrap: HTMLElement; clientX: number; clientY: number } | null =
     null;
-  for (const wrap of host.querySelectorAll<HTMLElement>(
+  let covered = false;
+  search: for (const wrap of host.querySelectorAll<HTMLElement>(
     ".town-room-overview",
   )) {
     const box = wrap.getBoundingClientRect();
@@ -352,37 +374,51 @@ export async function checkOverviewRoomHover(
       [box.right - 4, box.top + 4],
       [box.left + 4, box.bottom - 4],
       [box.right - 4, box.bottom - 4],
-    ] as const)
-      if (canvas.contains(document.elementFromPoint(clientX, clientY))) {
-        found = { wrap, clientX, clientY };
-        break;
+    ] as const) {
+      if (!canvas.contains(document.elementFromPoint(clientX, clientY)))
+        continue;
+      if (!covered) {
+        covered = true;
+        check(
+          getComputedStyle(
+            wrap.querySelector<HTMLElement>(".town-room-overview-card")!,
+          ).visibility === "hidden",
+          "an overview room's summary must start hidden",
+        );
       }
-    if (found) break;
+      hover(clientX, clientY);
+      await waitFor(
+        () =>
+          summaryShown(wrap) ||
+          [...host.querySelectorAll<HTMLElement>(".town-room-overview")].some(
+            (other) => other !== wrap && summaryShown(other),
+          ),
+        "hovering a zoomed-out room never showed its summary",
+      );
+      if (summaryShown(wrap)) {
+        found = { wrap, clientX, clientY };
+        break search;
+      }
+      canvas.dispatchEvent(
+        new PointerEvent("pointerleave", {
+          pointerId: 72,
+          pointerType: "mouse",
+        }),
+      );
+      await waitFor(
+        () => !host.querySelector(".town-room-overview.is-open"),
+        "another room's summary stayed open after the mouse left the town",
+      );
+    }
   }
-  check(found !== null, "no overview room shows the canvas beside its card");
+  check(covered, "no overview room shows the canvas beside its card");
+  check(
+    found !== null || !covered,
+    "every zoomed-out room corner opened another room's summary",
+  );
   if (!found) return;
   const { wrap, clientX, clientY } = found;
   const card = wrap.querySelector<HTMLElement>(".town-room-overview-card")!;
-  check(
-    getComputedStyle(card).visibility === "hidden",
-    "an overview room's summary must start hidden",
-  );
-  canvas.dispatchEvent(
-    new PointerEvent("pointermove", {
-      bubbles: true,
-      pointerId: 72,
-      pointerType: "mouse",
-      clientX,
-      clientY,
-    }),
-  );
-  await waitFor(
-    () =>
-      wrap.classList.contains("is-open") &&
-      getComputedStyle(card).visibility === "visible" &&
-      !!card.querySelector(".town-place-summary .town-board-counts"),
-    "hovering a zoomed-out room never showed its summary",
-  );
   check(
     canvas.contains(document.elementFromPoint(clientX, clientY)),
     "a zoomed-out room's summary must let the pointer through to the town",
