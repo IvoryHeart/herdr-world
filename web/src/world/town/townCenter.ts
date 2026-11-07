@@ -1,13 +1,13 @@
 /**
- * The town center: Town's landmark at the top of the map, centred above the
- * first street, where the owner launches agents and reaches the Town master
- * (its radial menu, TownCenterMenu.tsx). Pure geometry, shared by the layout,
- * the painter, the hit test and the camera.
+ * The town center: Town's landmark beside the buildings, where the owner
+ * launches agents and reaches the Town master (its radial menu,
+ * TownCenterMenu.tsx). Pure geometry, shared by the layout, the painter, the
+ * hit test and the camera; townLots.ts places it.
  */
 
 /**
  * Its rectangle in tiles: the whole drawn building, flag to front steps;
- * `street` is the first street's top row, below its square.
+ * `street` is the top row of the street its square runs down to.
  */
 export type TownCenterLot = {
   x: number;
@@ -17,7 +17,7 @@ export type TownCenterLot = {
   street: number;
 };
 
-/** The center's top row: two tiles of verge above it. */
+/** The center's top row above stacked buildings: two tiles of verge. */
 export const TOWN_CENTER_TOP = 2;
 /** The building's height in tiles, its flag included. */
 export const TOWN_CENTER_HEIGHT = 15;
@@ -27,42 +27,13 @@ export const townCenterWidth = (narrowPhone: boolean) =>
   narrowPhone ? 24 : 34;
 
 /**
- * The first street's top row, under the center and its square. Phones keep
- * rows for each reception board below the street; elsewhere boards stand
- * across the street and keep their screen size as the town zooms out, so
- * the square is deep enough for them to stand clear of the center.
+ * The first street's top row when the center stands above it (stacked
+ * buildings), under the center and its short square.
  */
-export const townCenterStreet = (narrow: boolean) =>
-  TOWN_CENTER_TOP + TOWN_CENTER_HEIGHT + (narrow ? 3 : 15);
+export const TOWN_CENTER_STREET = TOWN_CENTER_TOP + TOWN_CENTER_HEIGHT + 3;
 
 /**
- * Place the center on the buildings' middle column (the town's, without
- * any), kept inside a town `width` tiles wide with `margin` tiles to spare.
- */
-export function placeTownCenter(
-  buildings: readonly { x: number; w: number }[],
-  width: number,
-  centerWidth: number,
-  margin: number,
-  street: number,
-): TownCenterLot {
-  const axis = buildings.length
-    ? (Math.min(...buildings.map((b) => b.x)) +
-        Math.max(...buildings.map((b) => b.x + b.w))) /
-      2
-    : width / 2;
-  const x = Math.round(axis - centerWidth / 2);
-  return {
-    x: Math.max(margin, Math.min(width - margin - centerWidth, x)),
-    y: TOWN_CENTER_TOP,
-    w: centerWidth,
-    h: TOWN_CENTER_HEIGHT,
-    street,
-  };
-}
-
-/**
- * The paved approach from the front steps down to the first street, a little
+ * The paved approach from the front steps down to its street, a little
  * wider than the steps, hedged along its sides. A deep square also gets
  * lamps along the promenade and two benches facing each other.
  * Tiles, x1 and y1 exclusive.

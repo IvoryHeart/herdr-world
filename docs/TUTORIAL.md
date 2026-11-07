@@ -169,8 +169,8 @@ hosts stay usable.
    bars. The choice is shared, so leaving Zen in one view leaves it in all.
    Each host is a building, each workspace a room, each tab a table and each pane a
    seat. Plain terminal panes show a prompt rather than an agent character.
-   The **town center**, the domed hall at the top of the map, is Town's
-   landmark. Tap it (or its **Town center** plaque, or Tab to the plaque and
+   The **town center**, the domed hall on the first street beside the
+   buildings (above the first building on a phone), is Town's landmark. Tap it (or its **Town center** plaque, or Tab to the plaque and
    press Enter) for a ring of actions around its doors: **New agent** opens the
    launcher (in the room you have open, when it can start one there), **Town
    master** opens your coordinating agent's Chat, **Needs you** opens that tab,
