@@ -28,9 +28,10 @@ const visibleCompactWindow = () =>
   });
 
 /**
- * A phone shows one window at a time. With every window minimized, the view
- * shows a dock where one tap restores a window; an open window reaches the
- * other minimized ones through ⋯.
+ * A phone shows one window at a time. A minimized window always has a chip
+ * that restores it in one tap: at the bottom of the view with every window
+ * minimized, or in a strip at the bottom of the open window, below its
+ * content.
  */
 async function phoneDockRestore(
   id: string,
@@ -43,15 +44,49 @@ async function phoneDockRestore(
     document.querySelector<HTMLButtonElement>(
       `.world-minimized-dock [data-restore-window-id="${CSS.escape(windowId)}"]`,
     );
-  const others: string[] = [];
-  const names = new Map([[id, name]]);
-  for (let open = visibleCompactWindow(); open; open = visibleCompactWindow()) {
+  const checkChip = (windowId: string) => {
+    const button = dockButton(windowId);
+    if (!button) throw new Error("Minimized dock lacks a window");
+    const bounds = button.getBoundingClientRect();
     check(
-      !document.querySelector(".world-minimized-dock"),
-      "Minimized dock covers an open phone window",
+      bounds.width >= 44 && bounds.height >= 44,
+      "Minimized dock chip lacks a 44px touch target",
     );
+    check(tappable(button), "Minimized dock chip cannot receive a tap");
+  };
+  // An open window carries the strip under its content, never over it.
+  const checkDockInside = (open: HTMLElement) => {
+    const dock = document.querySelector<HTMLElement>(".world-minimized-dock");
+    if (!dock) return;
+    check(open.contains(dock), "Minimized dock covers an open phone window");
+    const strip = dock.getBoundingClientRect();
+    const frame = open.getBoundingClientRect();
+    check(
+      strip.bottom <= frame.bottom + 1 && strip.top >= frame.top,
+      "Minimized strip overflows the open phone window",
+    );
+    // The window's content (its composer included) ends above the strip.
+    for (const child of open.children) {
+      if (child === dock || !child.getClientRects().length) continue;
+      check(
+        child.getBoundingClientRect().bottom <= strip.top + 1,
+        "Minimized strip covers the open window's content",
+      );
+    }
+  };
+  const others: string[] = [];
+  const minimized = [id];
+  for (let open = visibleCompactWindow(); open; open = visibleCompactWindow()) {
+    // While another window stays open, every minimized one is one tap away.
+    await until(
+      () => open.contains(dockButton(id)),
+      "open phone window lists the minimized window",
+    );
+    await nextFrames();
+    checkDockInside(open);
+    for (const windowId of minimized) checkChip(windowId);
     others.push(open.dataset.windowId!);
-    names.set(open.dataset.windowId!, open.getAttribute("aria-label")!);
+    minimized.push(open.dataset.windowId!);
     open
       .querySelector<HTMLButtonElement>(
         '.world-window-controls [aria-label^="Minimize "]',
@@ -64,16 +99,7 @@ async function phoneDockRestore(
   }
   await until(() => dockButton(id), "minimized dock lists the window");
   await nextFrames();
-  for (const windowId of [id, ...others]) {
-    const button = dockButton(windowId);
-    if (!button) throw new Error("Minimized dock lacks a window");
-    const bounds = button.getBoundingClientRect();
-    check(
-      bounds.width >= 44 && bounds.height >= 44,
-      "Minimized dock chip lacks a 44px touch target",
-    );
-    check(tappable(button), "Minimized dock chip cannot receive a tap");
-  }
+  for (const windowId of minimized) checkChip(windowId);
   // The mobile menu backdrop (z-index 79) must cover the dock.
   const chip = dockButton(id)!.getBoundingClientRect();
   const backdrop = document.createElement("button");
@@ -91,48 +117,31 @@ async function phoneDockRestore(
   } finally {
     backdrop.remove();
   }
-  const reopen = async (windowId: string) => {
-    const open = visibleCompactWindow();
-    if (!open) {
-      dockButton(windowId)!.click();
-    } else {
-      const name = names.get(windowId)!.replace(/ Inspector$/, "");
-      open
-        .querySelector<HTMLButtonElement>('[aria-label^="More actions for "]')!
-        .click();
-      await until(
-        () => document.querySelector(".world-window-snap-menu"),
-        "phone window menu",
-      );
-      const target = [
-        ...document.querySelectorAll<HTMLButtonElement>(
-          '.world-window-snap-menu [role^="menuitem"]',
-        ),
-      ].find((item) => item.textContent?.trim().startsWith(name));
-      if (!target)
-        throw new Error("Phone window menu lacks a minimized window");
-      target.click();
-    }
-    await until(
-      () =>
-        currentWindow(windowId)?.classList.contains("is-active") &&
-        currentWindow(windowId)!.getBoundingClientRect().width > 0,
-      "phone window restored",
-    );
-    check(
-      !document.querySelector(".world-minimized-dock"),
-      "Minimized dock stays over an open phone window",
-    );
-  };
   const currentWindow = (windowId: string) =>
     windowId === id
       ? currentFrame()
       : document.querySelector<HTMLElement>(
           `.world-managed-window[data-window-id="${CSS.escape(windowId)}"]`,
         );
-  // One tap on the dock restores a window; the rest come back through ⋯,
+  // One tap on a chip restores each window, also while another one is open,
   // ending with the original window in front.
-  for (const windowId of [...others.reverse(), id]) await reopen(windowId);
+  for (const windowId of [...others.reverse(), id]) {
+    await nextFrames();
+    checkChip(windowId);
+    dockButton(windowId)!.click();
+    await until(
+      () =>
+        currentWindow(windowId)?.classList.contains("is-active") &&
+        currentWindow(windowId)!.getBoundingClientRect().width > 0,
+      `phone window ${name} restored in one tap`,
+    );
+    await nextFrames();
+    checkDockInside(currentWindow(windowId)!);
+  }
+  check(
+    !document.querySelector(".world-minimized-dock"),
+    "Minimized dock stays with nothing minimized",
+  );
 }
 
 /** Exercises production Inspector controls while the underlying sessions keep running. */

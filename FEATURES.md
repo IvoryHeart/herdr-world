@@ -794,8 +794,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   **− Minimize** stays visible on phones. There, a minimized window waits as a
   chip at the bottom left of Town or Board, above the bottom controls and also
   in Zen: one tap on the chip restores it. While another window fills the phone
-  screen, its **⋯** switches to a minimized agent or terminal, and **Tabs** in
-  the expanded mobile controls also lists windows.
+  screen, the chips sit in a strip at the bottom of that window, below its
+  content, so a minimized window is still one tap away; its **⋯** and **Tabs**
+  in the expanded mobile controls also list windows.
   **Close** (or **‹ Back**) dismisses
   the window; open the agent or terminal again to reopen it. Minimizing or
   closing a window leaves agents and terminal sessions running. Native tab

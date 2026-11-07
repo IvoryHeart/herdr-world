@@ -331,6 +331,20 @@
   max-width: calc(100vw - 24px);
   overflow-x: auto;
 }
+/* While a phone window is open, the chips are a strip under its content. */
+.world-minimized-dock.is-in-window {
+  position: static;
+  order: 99;
+  flex: none;
+  z-index: auto;
+  max-width: none;
+  padding: 6px max(8px, env(safe-area-inset-left, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--shell-panel);
+}
+.world-minimized-dock.is-in-window > button {
+  box-shadow: none;
+}
 .world-minimized-dock > button {
   display: inline-flex;
   flex: none;

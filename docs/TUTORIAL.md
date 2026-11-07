@@ -1036,9 +1036,9 @@ On touch tablets or without a pointing device, narrow Town columns keep 40px
 window controls and hide the pane map to leave room for the agent's name.
 On a phone, a minimized window waits as a chip at the bottom left of Town or
 Board, above the bottom controls and also in Zen: tap the chip once to bring the
-window back. While another window fills the screen, its **⋯** switches to the
-minimized agent or terminal; **Tabs** in the expanded mobile controls also lists
-windows.
+window back. While another window fills the screen, the chips sit in a strip at
+the bottom of that window, below its content, so restoring still takes one tap;
+**Tabs** in the expanded mobile controls also lists windows.
 On desktop, **Arrange windows** can tile or cascade open Inspectors.
 On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
