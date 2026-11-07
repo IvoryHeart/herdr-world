@@ -47,7 +47,8 @@ test("Town partitions retain exactly the 22 original width, mode and flight case
     [1440, 900, "extended", 0],
     [1080, 1920, "extended", 0],
     [1080, 1920, "extended", 300],
-    [390, 844, "incremental", 0],
+    // Measured at an exact 390px CSS viewport (#643).
+    [390, 844, "incremental", 0, "exact"],
     [1440, 900, "plates", 0],
     [390, 844, "plates", 0],
     [390, 844, "fold", 0],

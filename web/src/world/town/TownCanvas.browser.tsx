@@ -70,6 +70,13 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
+// An exact case measures at the CSS viewport it names, not a wider one (#643).
+const exactViewport = params.get("viewport");
+if (exactViewport)
+  check(
+    `${window.innerWidth}x${window.innerHeight}` === exactViewport,
+    `the ${exactViewport} case ran in a ${window.innerWidth}x${window.innerHeight} CSS viewport`,
+  );
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 async function waitFor(
   condition: () => boolean,
@@ -2288,6 +2295,11 @@ async function run() {
           (box, index) => index === 0 || box.left >= boxes[index - 1]!.right,
         ),
         "partial expansion action targets overlap",
+      );
+      const shownExpand = expand();
+      check(
+        !!shownExpand && shownExpand.scrollWidth <= shownExpand.clientWidth,
+        "the partial expansion Expand label overflows its tile",
       );
       if (reset) tapTownControl(reset);
       await waitFor(
