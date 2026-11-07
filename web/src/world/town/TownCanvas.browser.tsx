@@ -3820,18 +3820,21 @@ async function run() {
       () => !diagnostics.flying,
       "Town did not finish showing the whole town",
     );
-    // Glides and fades advance per drawn frame, so a slow software renderer
-    // takes longer in wall time: wait for the scene, not a clock.
+    // Glides and fades advance per drawn frame, and a slow software renderer
+    // draws buildings a frame at a time after the ground: wait for the
+    // scene, not a clock. Only a drawn building can fade.
     const settled = async (what: string) => {
       const frames = diagnostics.frames;
       await waitFor(
         () =>
           diagnostics.frames > frames &&
           !diagnostics.transitioning &&
-          !diagnostics.flying,
+          !diagnostics.flying &&
+          diagnostics.buildingsDrawn === diagnostics.layout!.buildings,
         `Town did not settle after ${what}`,
       );
     };
+    await settled("showing the whole town");
     const gaps = diagnostics.topologyGaps;
     const transitions = diagnostics.transitions;
     const crossfades = diagnostics.crossfades;
