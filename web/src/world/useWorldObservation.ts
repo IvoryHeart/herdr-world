@@ -16,11 +16,22 @@ import {
 import { useMediaQuery } from "./DeskView";
 import { hasValidSelectedConnection } from "./worldInspectorSelection";
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
+import {
+  townScaleConnections,
+  townScaleSceneRequested,
+} from "./town/townScaleScene";
 
 type Input = Pick<WorldControlPlaneProps, "onPresentedWorldChange">;
 
 export function useWorldObservation({ onPresentedWorldChange }: Input) {
   const runtime = useWorldRuntime();
+  // `?scene=town-scale` swaps every host for the synthetic scale scene, read
+  // once per page load, so Town can be judged at the owner's maximum scale.
+  const [scene] = useState(() =>
+    townScaleSceneRequested(window.location.search)
+      ? townScaleConnections()
+      : null,
+  );
   const appearance = useAppearanceDocument();
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
   const watchlist = useWorldWatchlist(watchlistStore);
@@ -42,10 +53,13 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
     shallowEqual,
   );
   const operationalSnapshot = useStoreSelector((snapshot) => snapshot);
-  const hostsFilter = useHostsFilter(
+  const storedHostsFilter = useHostsFilter(
     connectionSelection.connections.map((connection) => connection.id),
     connectionSelection.catalogueReady,
   );
+  const hostsFilter = scene
+    ? { ...storedHostsFilter, ids: null }
+    : storedHostsFilter;
   const hasSelectedConnection = hasValidSelectedConnection(
     connectionSelection.activeConnectionId,
     connectionSelection.connections,
@@ -59,13 +73,20 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
   const aggregateWorld = useMemo(
     () =>
       worldWithAppearance(
-        buildWorldObject(
-          runtime.connections,
-          connectionSelection.activeConnectionId,
-        ),
+        scene
+          ? buildWorldObject(scene, scene[0]!.connectionId)
+          : buildWorldObject(
+              runtime.connections,
+              connectionSelection.activeConnectionId,
+            ),
         appearance,
       ),
-    [connectionSelection.activeConnectionId, runtime.connections, appearance],
+    [
+      connectionSelection.activeConnectionId,
+      runtime.connections,
+      appearance,
+      scene,
+    ],
   );
   const world = useMemo(
     () => worldObjectForHosts(aggregateWorld, hostsFilter.ids),

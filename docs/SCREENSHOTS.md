@@ -159,6 +159,14 @@ CI places it inside the same `town-golden` artifact as the complete 100-capture
 report. Reports identify the checked-out source commit and GitHub run ID, so
 review evidence can be tied to the exact candidate without refreshing goldens.
 
+## Town at full scale
+
+`TOWN_SCALE=1 bun run test scripts/town-scale.browser.test.ts` captures the
+production Town canvas with the synthetic full-scale scene at each zoom step
+on a laptop and a phone, and measures frame time while panning. It starts no
+World or Herdr and compares no pixels. A running World shows the same scene at
+`?scene=town-scale`. See [Town at scale](design/town-at-scale.md).
+
 ## Prepare a reproducible scene
 
 1. Use the World release or branch being documented and a compatible Herdr runtime (current captures use 0.9.3 / protocol 22).

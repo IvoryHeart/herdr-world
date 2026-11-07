@@ -12,6 +12,7 @@ import { TownBuildingSign } from "./TownBuildingSign";
 import type { TownBuildingSigns } from "./townBuildingSigns";
 import type { TownRoomActions } from "./TownCanvas";
 import { ReceptionEntry, portrait } from "./TownReceptionEntry";
+import { townRoomCardMeta } from "./townNameplates";
 import {
   TownRoomOverviewSummary,
   TownRoomPlaque,
@@ -416,6 +417,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       <ReceptionEntry
                         key={agent.key}
                         agent={agent}
+                        room={model.rooms.get(agent.roomKey)?.displayLabel}
+                        desk={
+                          agent.deskKey
+                            ? model.desks.get(agent.deskKey)?.displayLabel
+                            : undefined
+                        }
                         asking={askingKeys.has(agent.key)}
                         since={blockedSince.get(agent.key) ?? now}
                         now={now}
@@ -636,8 +643,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                           </span>
                         ) : null}
                         <span className="town-room-card-meta">
-                          {c.desks} desks · {c.working} working
-                          {overflow ? ` · +${overflow} more` : ""}
+                          {townRoomCardMeta(c, overflow)}
                         </span>
                         <span className="town-room-card-bar" aria-hidden="true">
                           {(
