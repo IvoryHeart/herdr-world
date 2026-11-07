@@ -225,8 +225,8 @@ export type TownLayout = {
    */
   verticalRoads: { x: number; y0: number; y1: number }[];
   /**
-   * The town center: among the first row of buildings, or above the first
-   * street when buildings stack (townLots.ts).
+   * The town center: at the top, across the first street from the
+   * buildings, centred over the first row (townLots.ts).
    */
   center: TownCenterLot;
   plaza: TownPoint;
@@ -556,7 +556,7 @@ export function layoutTown(
     room.deskKeys.forEach((key, index) =>
       seatsOf.set(key, room.deskSeats?.[index] ?? 4),
     );
-  // The hosts' buildings and the town center stand on the streets.
+  // The hosts' buildings stand on the streets, the town center above them.
   const lots = townPlaceLots(drafts, shape);
   const { verticalRoads, roads, center } = lots;
   const placedBuildings = drafts.map((draft, index) => {
@@ -719,7 +719,7 @@ export function layoutTown(
     };
   });
 
-  // The center's forecourt is paved from its steps down to its street.
+  // The center's forecourt is paved from its steps down to the street.
   const court = townCenterForecourt(center);
   strip(court.x0, court.y0, court.x1, court.y1, TownGround.plaza);
   bushes.push(...court.bushes);
@@ -811,9 +811,8 @@ export function layoutTown(
       benches: [
         { x: plaza.x - 6, y: plaza.y + 2 },
         { x: plaza.x + 3, y: plaza.y + 3 },
-        ...court.benches,
       ],
-      lamps: [...lamps, ...court.lamps],
+      lamps,
       bushes,
       trees,
       deskCells,
