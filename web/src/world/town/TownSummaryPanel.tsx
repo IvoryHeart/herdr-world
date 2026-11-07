@@ -425,6 +425,11 @@ export function useTownSummary({
     setFocusKey((key) => key + 1);
     setDeliveryFocus((key) => key + 1);
   }, []);
+  const open = useCallback(() => {
+    townUsageStore().request();
+    setOpen(true);
+    setFocusKey((key) => key + 1);
+  }, []);
   return {
     summary,
     deliveries,
@@ -433,11 +438,7 @@ export function useTownSummary({
     openOutbox,
     askActions,
     openTerminal,
-    open: () => {
-      townUsageStore().request();
-      setOpen(true);
-      setFocusKey((key) => key + 1);
-    },
+    open,
     window: isOpen ? (
       <WorldPanel
         name="town-summary"

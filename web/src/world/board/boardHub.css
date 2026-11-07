@@ -1,0 +1,145 @@
+/*
+ * Board's hub (BoardHub.tsx): compact buttons in the bin's dock (bin.css),
+ * and its menu rising above them. Shell tokens: it floats over Board.
+ */
+.board-hub {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+}
+.board-hub-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.board-hub-button:hover {
+  background: var(--panel-2);
+}
+/* New agent: the soft primary, the hub's one recommended action. */
+.board-hub-button[data-primary] {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+}
+.board-hub-button[data-primary]:hover {
+  background: var(--accent-hover);
+}
+.board-hub-button[aria-expanded="true"] {
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+.board-hub-button:focus-visible,
+.board-hub-menu button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.board-hub-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  display: grid;
+  gap: 2px;
+  min-width: 220px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  animation: board-hub-rise 160ms ease-out;
+}
+.board-hub-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.board-hub-menu button:hover {
+  background: var(--panel-2);
+}
+.board-hub-menu button > svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.board-hub-menu button > span {
+  flex: 1 0 auto;
+}
+.board-hub-menu small {
+  overflow: hidden;
+  max-width: 140px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-hub-menu button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+.board-hub-menu button[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+@keyframes board-hub-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-hub-menu {
+    animation: none;
+  }
+  .board-hub-button {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .board-hub-button:focus-visible,
+  .board-hub-menu button:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
+
+/* Phones: 44 px targets, as Board's controls and the bin's dock switch. */
+@media (max-width: 720px) {
+  .board-hub-button {
+    width: 44px;
+    height: 44px;
+  }
+  .board-hub-menu button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+}
