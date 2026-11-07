@@ -12,6 +12,7 @@ import {
   townBusRoute,
   townBusTimeline,
   townNearestStop,
+  townQueueMoreLeft,
   townQueueShape,
   townQueueSpot,
   townRiderFirstOuting,
@@ -419,6 +420,25 @@ test("everyone waiting at a stop stands in its queue, in two rows, then a count"
     if (riders[0]!.stop.row === TOWN_QUEUE_ROW)
       expect(riders.every((rider) => !rider.counted)).toBe(true);
   }
+});
+
+test("a stop's +N board counts only those not yet aboard and comes down when the bus takes them", () => {
+  const { entries, place } = crowd(30, shapes[0]!);
+  const riders = place(entries);
+  const stop = riders[0]!.stop;
+  const { more } = townQueueShape(stop, riders.length);
+  expect(more).toBeGreaterThan(0);
+  expect(townQueueMoreLeft(riders, new Set()).get(stop.key)).toBe(more);
+  // The bus takes the whole queue: the board has no one left to count.
+  const all = new Set(riders.map((rider) => rider.entry.id));
+  expect(townQueueMoreLeft(riders, all).has(stop.key)).toBe(false);
+  // Those who joined after the bus set off still wait, and the board
+  // counts just them.
+  const late = riders.filter((rider) => rider.counted).slice(-3);
+  const aboard = new Set(
+    riders.filter((rider) => !late.includes(rider)).map((r) => r.entry.id),
+  );
+  expect(townQueueMoreLeft(riders, aboard).get(stop.key)).toBe(late.length);
 });
 
 test("a queue keeps to its pavement, clear of the road, other stops and the map's edge", () => {

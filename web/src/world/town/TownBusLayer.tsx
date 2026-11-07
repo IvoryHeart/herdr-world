@@ -11,6 +11,7 @@ import {
   townBusRoute,
   townBusTimeline,
   townQueueLeft,
+  townQueueMoreLeft,
   townQueueShape,
   townRiderFirstOuting,
   townRiderOuting,
@@ -190,6 +191,7 @@ export const TownBusLayer = memo(function TownBusLayer({
   const passengerRefs = useRef(new Map<string, HTMLCanvasElement>());
   const walks = useRef(new Map<string, TownRiderOuting>());
   const homeRefs = useRef(new Map<string, HTMLElement>());
+  const moreRefs = useRef(new Map<string, HTMLElement>());
   // Where each rider's place in its queue was, where it was last drawn, and
   // its step up the queue when its place moves.
   const places = useRef(new Map<string, TownPoint>());
@@ -275,6 +277,7 @@ export const TownBusLayer = memo(function TownBusLayer({
         }
       }
       const handle = renderer.current;
+      const aboard = new Set<string>();
       for (const rider of riders) {
         const id = rider.entry.id;
         const node = riderRefs.current.get(id);
@@ -326,6 +329,7 @@ export const TownBusLayer = memo(function TownBusLayer({
           (halt === undefined
             ? along >= rider.stop.at
             : elapsed / 1000 >= halt + BOARD_S);
+        if (boarded) aboard.add(id);
         if (node.hasAttribute("data-boarded") !== boarded)
           node.toggleAttribute("data-boarded", boarded);
         const passenger = passengerRefs.current.get(id);
@@ -334,6 +338,15 @@ export const TownBusLayer = memo(function TownBusLayer({
           if (passenger.hasAttribute("data-boarded") !== boarded)
             passenger.toggleAttribute("data-boarded", boarded);
         }
+      }
+      // A "+N" board counts only those not yet aboard, and comes down with
+      // the last of them, so the stop empties as the bus takes its queue.
+      const left = townQueueMoreLeft(riders, aboard);
+      for (const [key, board] of moreRefs.current) {
+        const more = left.get(key) ?? 0;
+        if (board.dataset.more !== String(more))
+          board.dataset.more = String(more);
+        if (board.hidden !== (more === 0)) board.hidden = more === 0;
       }
       for (const walk of returning) {
         const node = homeRefs.current.get(walk.rider.entry.id);
@@ -436,13 +449,18 @@ export const TownBusLayer = memo(function TownBusLayer({
           more && last ? (
             <span
               key={`${stop.key}-more`}
+              ref={(node) => {
+                if (node) moreRefs.current.set(stop.key, node);
+                else moreRefs.current.delete(stop.key);
+              }}
               className="town-bus-more"
-              data-more={stop.key}
+              data-more-stop={stop.key}
+              // The count shows from data-more, which each frame lowers as
+              // the bus takes those it counts.
+              data-more={more}
               aria-hidden="true"
               style={{ left: last.at.x, top: last.at.y }}
-            >
-              +{more}
-            </span>
+            />
           ) : null,
           clock ? (
             <span

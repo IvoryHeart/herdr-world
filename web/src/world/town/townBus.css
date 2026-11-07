@@ -112,6 +112,12 @@
   box-shadow: 0 2px 0 -1px rgb(0 0 0 / 0.35);
   pointer-events: none;
 }
+.town-bus-more::before {
+  content: "+" attr(data-more);
+}
+.town-bus-more[hidden] {
+  display: none;
+}
 /* Its handle, down to the pavement. */
 .town-bus-more::after {
   content: "";

@@ -139,6 +139,22 @@ export function townQueueSpot(stop: TownBusStop, slot: number): TownPoint {
   };
 }
 
+/**
+ * What each stop's "+N" board still counts: those counted in it that are
+ * not yet on the bus. Once the bus takes them all, a stop is left out and
+ * its board comes down with the queue it stood for.
+ */
+export function townQueueMoreLeft(
+  riders: readonly Pick<TownBinRider, "entry" | "stop" | "counted">[],
+  boarded: ReadonlySet<string>,
+): Map<string, number> {
+  const left = new Map<string, number>();
+  for (const rider of riders)
+    if (rider.counted && !boarded.has(rider.entry.id))
+      left.set(rider.stop.key, (left.get(rider.stop.key) ?? 0) + 1);
+  return left;
+}
+
 /** The leftmost point a stop's queue of `shown` riders reaches. */
 export function townQueueLeft(stop: TownBusStop, shown: number) {
   return shown > stop.row
