@@ -5,7 +5,13 @@
  * building whose floor the move changes.
  */
 
-import { townCenterStreet } from "./townCenter";
+import {
+  TOWN_CENTER_HEIGHT,
+  TOWN_CENTER_STREET,
+  TOWN_CENTER_TOP,
+  townCenterWidth,
+  type TownCenterLot,
+} from "./townCenter";
 import type { TownShape } from "./townLayout";
 
 export const ROOM_TOP = 9;
@@ -67,22 +73,27 @@ export function townFloor(
 }
 
 /**
- * Where the buildings (floors, in host order) stand, under the town center.
- * Up to four lots share one street; larger towns wrap into a grid of
+ * Where the buildings (floors, in host order) and the town center stand.
+ * Up to four buildings share one street; larger towns wrap into a grid of
  * streets. Every row of lots has a street above and below it (neighbouring
  * rows share one), and a road right of every lot from street to street.
+ *
+ * The center stands at the top of the town, just across the first street
+ * from the buildings and centred over the first row, facing down onto the
+ * street: its short forecourt meets the pavement, so it is one short move
+ * from every building. A phone opens on it and the first building together.
  */
 export function townPlaceLots(
   floors: readonly { w: number; h: number }[],
   shape: TownShape,
 ) {
   const narrow = shape.formFactor === "narrow";
-  const lots = floors;
+  const centerW = townCenterWidth(shape.roomColumns === 1);
   const perRow = narrow
     ? 1
-    : lots.length <= 4
-      ? lots.length
-      : Math.ceil(Math.sqrt(lots.length * 1.6));
+    : floors.length <= 4
+      ? floors.length
+      : Math.ceil(Math.sqrt(floors.length * 1.6));
   const placed: {
     x: number;
     y: number;
@@ -92,12 +103,14 @@ export function townPlaceLots(
     topRoadY: number;
   }[] = [];
   const verticalRoads: { x: number; y0: number; y1: number }[] = [];
-  const widestLot = Math.max(...lots.map((lot) => lot.w));
-  let road = townCenterStreet(narrow);
+  const widestLot = Math.max(0, ...floors.map((lot) => lot.w));
+  let road = TOWN_CENTER_STREET;
   const roads: number[] = [road];
   let width = MARGIN;
-  for (let i = 0; i < lots.length; i += perRow) {
-    const row = lots.slice(i, i + perRow);
+  /** The right edge of the first row's last building. */
+  let firstRowRight = MARGIN + widestLot;
+  for (let i = 0; i < floors.length; i += perRow) {
+    const row = floors.slice(i, i + perRow);
     const tallest = Math.max(...row.map((lot) => lot.h));
     const top = road + ROAD_GAP + YARD + (narrow ? TOWN_PHONE_BOARD_ROWS : 0);
     const roadY = top + tallest + TOWN_FACADE + YARD;
@@ -122,9 +135,20 @@ export function townPlaceLots(
       verticalRoads.push({ x, y0: road + ROAD_GAP, y1: roadY });
       x += ROAD_GAP;
     }
+    if (i === 0 && row.length > 1) firstRowRight = x - ROAD_GAP;
     width = Math.max(width, x);
     roads.push(roadY);
     road = roadY;
   }
-  return { buildings: placed, verticalRoads, roads, width };
+  // Centred over the first row (a stacked town's shared axis), facing it
+  // across the first street.
+  const axis = MARGIN + Math.max(firstRowRight - MARGIN, centerW) / 2;
+  const center: TownCenterLot = {
+    x: Math.max(MARGIN, Math.round(axis - centerW / 2)),
+    y: TOWN_CENTER_TOP,
+    w: centerW,
+    h: TOWN_CENTER_HEIGHT,
+    street: roads[0]!,
+  };
+  return { buildings: placed, verticalRoads, roads, width, center };
 }

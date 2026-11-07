@@ -20,8 +20,8 @@ See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-b
 The service also exposes shared [harness usage data](./docs/usage.md): bounded
 token records from Claude Code, Codex, Pi and Gemini logs on qualified local or
 SSH hosts, with source health, host/workspace/tab/pane rollups and optional
-versioned price-table estimates. The `world.usage.get` read contract is ready
-for expenses projections in Town and Board.
+versioned price-table estimates. Town's expenses boards read it (below); the
+`world.usage.get` read contract is also ready for Board projections.
 
 ## World update notifications
 
@@ -70,14 +70,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is configured. Under **FUEL**, a gauge per harness with subscription-limit
     data (Codex from its session logs, Claude from its status line) shows a short bar per window
     (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
-    says **low**. Hover, focus or tap a gauge for each reset time, how long ago
-    the numbers were seen, and their source. Old numbers read **stale** with no
-    level; with several hosts the board shows the one with the least left.
+    says **low**. A reading more than 15 minutes old shows its age under the
+    bars in muted text, such as "seen 1 h ago". Hover, focus or tap a gauge for
+    each reset time, how long ago the numbers were seen, and their source. Old
+    numbers (over 3 h, or past a reset) read **stale** with no level; with several hosts the board shows the one with the least left.
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
     World, and the agent's status line looks as before. When Claude refused
     work at its limit, the gauge reads **reached, resets …** instead of a level.
-    On a phone the compact chip adds the lowest percent left (or **reached**). Its **Summary** button, or on a phone the compact chip under
+    On a phone the compact chip adds the lowest percent left (or **reached**), with the same age when that reading is over 15 minutes old. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
@@ -122,6 +123,23 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     browser and device shows the same one. Zoomed in to desks, where the
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
+  - Town shows what the crew spends. The **City expenses** billboard stands
+    by the top street across from the town center: the whole World's tokens
+    and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a
+    **Today** / **7 days** toggle. Each building's reception board ends with
+    its **Expenses today**: the host's tokens and cost and its three
+    costliest rooms. Figures come from [harness usage](./docs/usage.md). The
+    boards never show a missing number as zero: without a price table they
+    show tokens and say "no price table" (or "some models unpriced"); a host
+    whose harness logs cannot be read says "no data"; a quiet host says
+    "none recorded"; and notes name usage tied to no pane or room
+    ("unattributed"), partial reads, stale numbers left out and hosts with no
+    data. The boards re-read usage about once a minute and when the page
+    regains focus; when re-reads fail, the last figures stay for at most five
+    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
+    center's corner and each reception's expenses to a sign in its title;
+    tap one to open it. Zoomed in to desks, the boards are put away with
+    reception.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -131,10 +149,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     of dozing.
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right.
-  - The **town center** stands at the top of the map, centred over the
-    buildings above the first street: a domed hall with a clock, a columned
-    portico, banners, wings and a paved forecourt. Phones open Town with it at
-    the top and the first building under it; on a short screen the view keeps
+  - The **town center** stands at the top of the town, just across the first
+    street from the buildings and centred over their first row: a domed hall
+    with a clock, a columned portico, banners and wings, whose front steps
+    open straight onto the street's pavement. Buildings stand side by side
+    below it with only the normal streets between them. Phones open Town with
+    it at the top and the first building under it; on a short screen the view keeps
     the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,
     preselecting the open room when it can start one there), **Town master**
@@ -262,7 +282,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation. Room actions support
-    workspace/tab creation and room management on the captured host. Room
+    workspace/tab creation and room management on the captured host. Every
+    building ends with a dashed **+ Add room** slot where its next room would
+    stand (just **+** at the room-card zoom). It opens New room on that
+    building's host, the new room takes the slot's place and the slot moves
+    on, also after rooms move or are tidied. For keyboards and screen
+    readers it is a button named "Add room to <host>". Room
     plates fit their room width; only the name truncates, with its full text in
     a tooltip. Colour, active/total agent count and blocked badge remain visible.
     Active means working or waiting on you; the total excludes plain terminals.
@@ -270,7 +295,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (tap on touch screens) for its card below it: the Town board's numbers
     for that room, without its agents list (Busy, Waiting, Done, Quiet,
     its agents, and its **Economy today**: estimated cost, tokens and models
-    from [harness usage](./docs/usage.md)), then Rename and Close with 40px
+    from [harness usage](./docs/usage.md); without a price table it says
+    "no price table" instead of a cost, and a host whose logs cannot be read
+    says "No usage data from this host"), then Rename and Close with 40px
     targets. A
     table, or its nameplate, opens the same card for that table on hover,
     focus or a tap; a click on the plate selects the table and a double click
@@ -375,6 +402,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (one binned on Board walks out the first time Town shows it); its seat
     fades into the carpet and crumbles, the whole desk when all its agents
     are binned;
+    those waiting at a stop queue along its pavement in joining order, in
+    two rows when long, with a **+N** board at the end for any more; one put
+    back walks home from the queue and those behind step up;
     there is a stop at every road crossing, and a countdown board over those
     waiting counts down to the bus reaching that stop (**due** a few seconds
     before it pulls in). The bin floats at the bottom of the screen and
@@ -434,7 +464,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pressed choice stays marked busy and a **Starting …** line says what World is
   doing; after 10 seconds of real waiting it reads **Taking longer than
   usual** (there is no progress bar or countdown, and the icon stays still
-  with reduced motion). Progress and outcomes stay in view above the choices. A confirmed start closes the launcher; an uncertain
+  with reduced motion). Progress and outcomes stay in view above the choices.
+  When World confirms the start, Town plays the new agent's **arrival**: it
+  steps out at the town center (when started from the town center's **New
+  agent**) or at the bus stop nearest its room (started anywhere else), walks
+  the streets to its building's front door, goes in to its desk and sits
+  down, and a sparkle and its name fade over it. The walk outdoors takes at
+  most 3 seconds and the walk in at most 2.5; several starts at once arrive
+  0.7 seconds apart. Agents already in Town, a reload, a failed or uncertain
+  start and returning to Town never play it. With reduced motion the agent is
+  at its desk at once with a still highlight that fades. A confirmed start closes the launcher; an uncertain
   attempt keeps its explanation and disables start choices. Open its existing
   tab or close the launcher before another attempt. A definite failure lets
   you retry, log in or edit profiles.

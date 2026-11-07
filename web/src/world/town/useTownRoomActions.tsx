@@ -131,12 +131,52 @@ export function useTownRoomActions({
         : null,
     );
   };
-  const showCreateRoom = (roomKey: string | null) =>
-    roomCreationState(roomKey).visible;
+  /**
+   * A building's + Add room slot: a new room on its own host, from the
+   * selected room when that room is in the building (as New room does).
+   */
+  const addRoomTarget = (hostKey: string, selectedRoomKey: string | null) => {
+    const host = world.hosts.find((candidate) => candidate.id === hostKey);
+    const selected = roomForKey(selectedRoomKey);
+    const source =
+      host &&
+      selected?.workspaceRef.connectionId === host.connectionId &&
+      selected.workspaceRef.generation === host.generation
+        ? selected
+        : null;
+    return { host, source };
+  };
+  const addRoomState = (hostKey: string, selectedRoomKey: string | null) => {
+    const { host, source } = addRoomTarget(hostKey, selectedRoomKey);
+    if (source) return roomCreationState(source.key);
+    const admitted = Boolean(host?.actionable && !host.stale);
+    return officeCreationActionState(
+      admitted,
+      admitted
+        ? endpointCreationReason(
+            connectionSnapshot(creationSnapshot, host!.connectionId),
+            "workspace.create",
+          )
+        : null,
+    );
+  };
   const canCreateRoom = (roomKey: string | null) =>
     roomCreationState(roomKey).enabled;
   const createRoomReason = (roomKey: string | null) =>
     roomCreationState(roomKey).reason;
+  const onCreateRoom = (roomKey: string | null) =>
+    setRoomDialog({
+      mode: "create",
+      roomKey,
+      ...(roomForKey(roomKey)
+        ? {
+            owner: {
+              connectionId: roomForKey(roomKey)!.workspaceRef.connectionId,
+              runtimeGeneration: roomForKey(roomKey)!.workspaceRef.generation,
+            },
+          }
+        : {}),
+    });
   const canManageRoom = (roomKey: string, action: "rename" | "close") => {
     const room = roomForKey(roomKey);
     if (!room) return false;
@@ -195,33 +235,40 @@ export function useTownRoomActions({
     showCreateSeat,
     canCreateSeat,
     createSeatReason,
-    onNewAgent: (roomKey) => {
+    onNewAgent: (roomKey, from) => {
       const room = roomForKey(roomKey);
       if (!room || !canCreateSeat(roomKey)) return;
       beforeLaunch();
-      requestAgentLaunch({
-        connectionId: room.workspaceRef.connectionId,
-        generation: room.observedGeneration,
-        workspaceId: room.workspaceRef.nativeId,
-        workspaceLabel: room.displayLabel,
-      });
+      requestAgentLaunch(
+        {
+          connectionId: room.workspaceRef.connectionId,
+          generation: room.observedGeneration,
+          workspaceId: room.workspaceRef.nativeId,
+          workspaceLabel: room.displayLabel,
+        },
+        from,
+      );
     },
-    showCreateRoom,
     canCreateRoom,
     createRoomReason,
-    onCreateRoom: (roomKey) =>
+    onCreateRoom,
+    addRoomState,
+    onAddRoom: (hostKey, selectedRoomKey) => {
+      const { host, source } = addRoomTarget(hostKey, selectedRoomKey);
+      if (!host || !addRoomState(hostKey, selectedRoomKey).enabled) return;
+      if (source) {
+        onCreateRoom(source.key);
+        return;
+      }
       setRoomDialog({
         mode: "create",
-        roomKey,
-        ...(roomForKey(roomKey)
-          ? {
-              owner: {
-                connectionId: roomForKey(roomKey)!.workspaceRef.connectionId,
-                runtimeGeneration: roomForKey(roomKey)!.workspaceRef.generation,
-              },
-            }
-          : {}),
-      }),
+        roomKey: null,
+        owner: {
+          connectionId: host.connectionId,
+          runtimeGeneration: host.generation,
+        },
+      });
+    },
     canRenameRoom: (roomKey) => canManageRoom(roomKey, "rename"),
     onRenameRoom: (roomKey) => {
       const room = roomForKey(roomKey);

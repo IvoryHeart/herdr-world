@@ -30,11 +30,17 @@ export type TownZoomLimits = {
   max: number;
 };
 
-/** Tiles from the town's left edge past the last host's side road. */
+/**
+ * Tiles from the town's left edge past the side road of the last host's
+ * building or the town center, whichever stands further right.
+ */
 export function townHostsWidth(layout: TownLayout) {
   if (!layout.buildings.length) return layout.width;
-  const right = Math.max(...layout.buildings.map((b) => b.x + b.w));
-  // The side road right of the last building, and a tile of verge.
+  const right = Math.max(
+    layout.center.x + layout.center.w,
+    ...layout.buildings.map((b) => b.x + b.w),
+  );
+  // The side road right of the last lot, and a tile of verge.
   return Math.min(layout.width, right + 6);
 }
 
@@ -60,8 +66,8 @@ export function townZoomLimits(
     ) * 0.98;
   const narrow = layout.formFactor === "narrow";
   const widest = Math.max(1, ...layout.buildings.map((b) => b.w));
-  // Wide screens open on the hosts' buildings; lots beyond them (the
-  // town center is centred over them) stay just off-screen; ALL shows them.
+  // Wide screens open on the hosts' buildings and the town center above
+  // them; the verge beyond stays just off-screen; ALL shows it.
   const hosts = townHostsWidth(layout);
   const home = narrow
     ? (usableWidth - 12) / ((widest + 2) * TOWN_TILE)

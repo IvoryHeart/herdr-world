@@ -70,6 +70,13 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
+// An exact case measures at the CSS viewport it names, not a wider one (#643).
+const exactViewport = params.get("viewport");
+if (exactViewport)
+  check(
+    `${window.innerWidth}x${window.innerHeight}` === exactViewport,
+    `the ${exactViewport} case ran in a ${window.innerWidth}x${window.innerHeight} CSS viewport`,
+  );
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 async function waitFor(
   condition: () => boolean,
@@ -2289,6 +2296,11 @@ async function run() {
         ),
         "partial expansion action targets overlap",
       );
+      const shownExpand = expand();
+      check(
+        !!shownExpand && shownExpand.scrollWidth <= shownExpand.clientWidth,
+        "the partial expansion Expand label overflows its tile",
+      );
       if (reset) tapTownControl(reset);
       await waitFor(
         () =>
@@ -2380,7 +2392,7 @@ async function run() {
   // Room actions hidden at the overview must not take a tap.
   const hiddenActions = [
     ...host.querySelectorAll<HTMLElement>(
-      '[aria-label^="Rename room"], [aria-label^="Close room"], [aria-label="New room"], [aria-label^="New agent or terminal in"]',
+      '[aria-label^="Rename room"], [aria-label^="Close room"], [aria-label^="New agent or terminal in"]',
     ),
   ];
   const tappable = hiddenActions.filter((action) => {
@@ -2400,6 +2412,30 @@ async function run() {
     host.querySelectorAll('[aria-label^="New agent or terminal in"]').length >
       0,
     "rooms with free spots need a new seat action",
+  );
+  // Every live building ends with one + Add room slot, which takes a tap from
+  // the overview in; the floating New room button is gone.
+  const liveBuildings = [
+    ...host.querySelectorAll(".town-building-layer:not([data-stale])"),
+  ];
+  check(
+    liveBuildings.length > 0 &&
+      liveBuildings.every(
+        (building) =>
+          building.querySelectorAll(
+            '.town-add-room[aria-label^="Add room to "]',
+          ).length === 1,
+      ),
+    "every live building needs one Add room slot",
+  );
+  check(
+    getComputedStyle(host.querySelector(".town-add-room")!).visibility ===
+      "visible",
+    "the Add room slot shows at the overview",
+  );
+  check(
+    !host.querySelector('[aria-label="New room"]'),
+    "Town still shows the floating New room button",
   );
 
   // Needs you counts every agent that needs you and every open question.
@@ -3784,18 +3820,21 @@ async function run() {
       () => !diagnostics.flying,
       "Town did not finish showing the whole town",
     );
-    // Glides and fades advance per drawn frame, so a slow software renderer
-    // takes longer in wall time: wait for the scene, not a clock.
+    // Glides and fades advance per drawn frame, and a slow software renderer
+    // draws buildings a frame at a time after the ground: wait for the
+    // scene, not a clock. Only a drawn building can fade.
     const settled = async (what: string) => {
       const frames = diagnostics.frames;
       await waitFor(
         () =>
           diagnostics.frames > frames &&
           !diagnostics.transitioning &&
-          !diagnostics.flying,
+          !diagnostics.flying &&
+          diagnostics.buildingsDrawn === diagnostics.layout!.buildings,
         `Town did not settle after ${what}`,
       );
     };
+    await settled("showing the whole town");
     const gaps = diagnostics.topologyGaps;
     const transitions = diagnostics.transitions;
     const crossfades = diagnostics.crossfades;

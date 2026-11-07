@@ -3,6 +3,8 @@ import type { BinEntry } from "../../../../shared/bin";
 import { binClockLabel } from "../bin/binStore";
 import {
   TOWN_BUS_DWELL_MS,
+  TOWN_QUEUE_ROW,
+  TOWN_QUEUE_ROWS,
   townBinRiders,
   townBusAlong,
   townBusAt,
@@ -10,11 +12,18 @@ import {
   townBusRoute,
   townBusTimeline,
   townNearestStop,
+  townQueueMoreLeft,
+  townQueueShape,
+  townQueueSpot,
   townRiderFirstOuting,
   townRiderOuting,
+  townRiderReturns,
   townRiderWalk,
+  townRiderWalkBack,
+  townRiderWalkMs,
   townStopClock,
 } from "./townBus";
+import { TownGround, type TownShape } from "./townLayout";
 import { TOWN_WALK_SPEED } from "./townActors";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
 import type { TownModel } from "./townModel";
@@ -333,4 +342,229 @@ test("a stop's clock reads due only just before the bus pulls in there", () => {
       nextHalt: halt,
     }),
   ).toBe("stopped");
+});
+
+/** A Town of one host with `count` agents in one room, and their bin entries. */
+function crowd(count: number, shape: TownShape = TOWN_SHAPES.wide) {
+  const { layout } = layoutTown(town({ a: [count] }), shape);
+  const agents = Array.from({ length: count }, (_, i) => ({
+    key: `x${i}`,
+    hostKey: "a",
+    roomKey: "a/r0",
+    currentPaneRef: {
+      connectionId: "a",
+      generation: 1,
+      kind: "pane",
+      nativeId: `p${i}`,
+      worldId: `p${i}`,
+    },
+  }));
+  const model = {
+    agents: new Map(agents.map((agent) => [agent.key, agent])),
+  } as unknown as TownModel;
+  const entries = agents.map(
+    (_, i): BinEntry => ({
+      id: `e${i}`,
+      connection_id: "a",
+      connection_generation: 1,
+      workspace_id: "w",
+      tab_id: "t",
+      pane_id: `p${i}`,
+      terminal_id: `term-p${i}`,
+      label: `p${i}`,
+      view: "town",
+      riding: false,
+      preserve_tab: false,
+    }),
+  );
+  const route = townBusRoute(layout);
+  const place = (list: readonly BinEntry[]) =>
+    townBinRiders(list, [], model, layout, route).riders;
+  return { layout, route, entries, place };
+}
+
+test("everyone waiting at a stop stands in its queue, in two rows, then a count", () => {
+  for (const shape of shapes) {
+    const { layout, entries, place } = crowd(30, shape);
+    for (const count of [1, 4, 14, 30]) {
+      const riders = place(entries.slice(0, count));
+      expect(riders).toHaveLength(count);
+      const stop = riders[0]!.stop;
+      expect(riders.every((rider) => rider.stop.key === stop.key)).toBe(true);
+      const { shown, more } = townQueueShape(stop, count);
+      const standing = riders.filter((rider) => !rider.counted);
+      // Every one stands while the two rows hold them; past them, all but
+      // the queue's last place stand and that place counts the rest.
+      expect(standing).toHaveLength(shown);
+      expect(shown + more).toBe(count);
+      if (count <= stop.row * TOWN_QUEUE_ROWS) expect(more).toBe(0);
+      else expect(shown).toBe(stop.row * TOWN_QUEUE_ROWS - 1);
+      // Each stands in its own place, in joining order, on the pavement.
+      const spots = new Set(standing.map((r) => `${r.at.x},${r.at.y}`));
+      expect(spots.size).toBe(shown);
+      standing.forEach((rider, slot) => {
+        expect(rider.slot).toBe(slot);
+        expect(rider.at).toEqual(townQueueSpot(stop, slot));
+        const tile =
+          layout.ground[
+            Math.floor(rider.at.y / T) * layout.width +
+              Math.floor(rider.at.x / T)
+          ];
+        expect(tile).toBe(TownGround.walk);
+      });
+      for (const rider of riders.filter((r) => r.counted))
+        expect(rider.at).toEqual(townQueueSpot(stop, shown));
+    }
+    // The owner's fourteen all stand in the queue on a roomy street.
+    const riders = place(entries.slice(0, 14));
+    if (riders[0]!.stop.row === TOWN_QUEUE_ROW)
+      expect(riders.every((rider) => !rider.counted)).toBe(true);
+  }
+});
+
+test("a stop's +N board counts only those not yet aboard and comes down when the bus takes them", () => {
+  const { entries, place } = crowd(30, shapes[0]!);
+  const riders = place(entries);
+  const stop = riders[0]!.stop;
+  const { more } = townQueueShape(stop, riders.length);
+  expect(more).toBeGreaterThan(0);
+  expect(townQueueMoreLeft(riders, new Set()).get(stop.key)).toBe(more);
+  // The bus takes the whole queue: the board has no one left to count.
+  const all = new Set(riders.map((rider) => rider.entry.id));
+  expect(townQueueMoreLeft(riders, all).has(stop.key)).toBe(false);
+  // Those who joined after the bus set off still wait, and the board
+  // counts just them.
+  const late = riders.filter((rider) => rider.counted).slice(-3);
+  const aboard = new Set(
+    riders.filter((rider) => !late.includes(rider)).map((r) => r.entry.id),
+  );
+  expect(townQueueMoreLeft(riders, aboard).get(stop.key)).toBe(late.length);
+});
+
+test("a queue keeps to its pavement, clear of the road, other stops and the map's edge", () => {
+  for (const shape of shapes)
+    for (const hosts of towns) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const route = townBusRoute(layout);
+      for (const stop of route.stops) {
+        const places = stop.row * TOWN_QUEUE_ROWS;
+        for (let slot = 0; slot < places; slot += 1) {
+          const at = townQueueSpot(stop, slot);
+          // Its feet are on the stop's pavement row, never in the lanes.
+          expect(Math.floor(at.y / T)).toBe(Math.floor(stop.wait.y / T));
+          expect(at.x).toBeLessThanOrEqual(stop.wait.x);
+          expect(at.x - 10).toBeGreaterThanOrEqual(0);
+          for (const other of route.stops)
+            if (other.wait.y === stop.wait.y && other.wait.x < stop.wait.x)
+              // Clear of the sign of the stop along the street.
+              expect(at.x - 10).toBeGreaterThanOrEqual(other.wait.x + 28);
+        }
+      }
+    }
+});
+
+test("one put back leaves the queue and those behind step up", () => {
+  const { entries, place } = crowd(6);
+  const before = place(entries);
+  const after = place(entries.filter((entry) => entry.id !== "e2"));
+  expect(after.map((rider) => rider.entry.id)).toEqual([
+    "e0",
+    "e1",
+    "e3",
+    "e4",
+    "e5",
+  ]);
+  const at = (list: typeof before, id: string) =>
+    list.find((rider) => rider.entry.id === id)!.at;
+  expect(at(after, "e0")).toEqual(at(before, "e0"));
+  expect(at(after, "e3")).toEqual(at(before, "e2"));
+  expect(at(after, "e5")).toEqual(at(before, "e4"));
+  // A new one joins the end.
+  const joined = place([...entries.filter((e) => e.id !== "e2"), entries[2]!]);
+  expect(joined[joined.length - 1]!.entry.id).toBe("e2");
+  expect(joined[joined.length - 1]!.at).toEqual(at(before, "e5"));
+});
+
+test("one put back walks home from its place; one the bus took does not", () => {
+  const { entries, place } = crowd(3);
+  const before = place(entries);
+  const outside = () => true;
+  const kept = entries.filter((entry) => entry.id !== "e1");
+  const after = place(kept);
+  const returns = townRiderReturns(
+    [],
+    before,
+    after,
+    { entries: kept, closing: [] },
+    outside,
+    1000,
+  );
+  expect(returns.map((walk) => walk.rider.agentKey)).toEqual(["x1"]);
+  const walk = returns[0]!;
+  const { door, at } = walk.rider;
+  expect(walk.end - walk.start).toBeCloseTo(townRiderWalkMs(door, at));
+  // From its place along the pavement, then down to its front door.
+  expect(townRiderWalkBack(door, at, 0)).toMatchObject({
+    x: at.x,
+    y: at.y,
+    walking: true,
+  });
+  const along = Math.abs(at.x - door.x) / TOWN_WALK_SPEED;
+  expect(townRiderWalkBack(door, at, along / 2)).toMatchObject({
+    y: at.y,
+    dir: door.x < at.x ? "left" : "right",
+  });
+  expect(
+    townRiderWalkBack(door, at, (walk.end - walk.start + 1) / 1000),
+  ).toEqual({
+    x: door.x,
+    y: door.y,
+    dir: "up",
+    frame: 0,
+    walking: false,
+  });
+  // Home, it is done; binned again, it stops walking home.
+  expect(
+    townRiderReturns(
+      returns,
+      after,
+      after,
+      { entries: kept, closing: [] },
+      outside,
+      walk.end,
+    ),
+  ).toEqual([]);
+  const again = place(entries);
+  expect(
+    townRiderReturns(
+      returns,
+      after,
+      again,
+      { entries, closing: [] },
+      outside,
+      1500,
+    ),
+  ).toEqual([]);
+  // The bus took them: they close, and none walks home.
+  expect(
+    townRiderReturns(
+      [],
+      before,
+      [],
+      { entries: [], closing: entries },
+      outside,
+      1000,
+    ),
+  ).toEqual([]);
+  // One never seen outside has no walk home.
+  expect(
+    townRiderReturns(
+      [],
+      before,
+      after,
+      { entries: kept, closing: [] },
+      () => false,
+      1000,
+    ),
+  ).toEqual([]);
 });

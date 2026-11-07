@@ -251,6 +251,50 @@
   cursor: not-allowed;
 }
 
+/* A partly expanded room's Add, Expand and Fold, right end fixed. */
+.town-room-actions {
+  position: absolute;
+  display: flex;
+  gap: 4px;
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.town-world .town-room-actions > .town-new-seat {
+  position: relative;
+  flex: none;
+  width: 40px;
+}
+
+.town-world .town-room-actions > .town-fold-tile {
+  width: 64px;
+}
+
+/* A tile too narrow for its label overflows rather than dropping the icon. */
+.town-room-actions > .town-fold-tile > svg {
+  flex: none;
+}
+
+/* On a phone the room view sits below zoom 1, so room action tiles grow in
+   world pixels to stay 40px touch targets on screen (#643). 41px: layout
+   rounds the scaled size down a fraction of a pixel. */
+@media (max-width: 640px) {
+  .town-world .town-new-seat {
+    height: max(48px, calc(41px * var(--iz)));
+  }
+
+  .town-world .town-room-actions > .town-new-seat {
+    width: max(40px, calc(41px * var(--iz)));
+  }
+
+  /* 64px from zoom 1 up; below, it narrows toward 44px on screen so the row
+     still fits the room's two action cells at a phone's room zoom. */
+  .town-world .town-room-actions > .town-fold-tile {
+    width: max(calc(44px * var(--iz)), calc(64px * min(1, var(--z))));
+    padding-inline: 4px;
+  }
+}
+
 .town-creation-reason {
   position: absolute;
   max-width: 220px;
@@ -380,54 +424,6 @@
 .town-reception-empty {
   font-size: 11px;
   color: #7f8a7c;
-}
-
-.town-new-room-wrap {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  /* Hidden overlays take no taps, including their buttons. */
-  visibility: hidden;
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  transform: scale(var(--iz));
-  transform-origin: 0 0;
-}
-
-/* A pixel sign over an empty plot: "+ New room" on one line, like the room
-   plaques, instead of Office's small box. */
-.town-new-room-wrap .town-new-room {
-  position: static;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: auto;
-  height: auto;
-  padding: 7px 12px 7px 9px;
-  white-space: nowrap;
-  color: #f1efe6;
-  background: rgba(14, 17, 24, 0.9);
-  border: 2px dashed #6f8f5a;
-  border-radius: 8px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-  font:
-    700 13px / 1 "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-}
-
-.town-new-room-wrap .town-new-room svg {
-  flex: none;
-  color: #e3aa3a;
-}
-
-.town-new-room-wrap .town-new-room:hover:not(:disabled),
-.town-new-room-wrap .town-new-room:focus-visible {
-  border-color: #e3aa3a;
-  background: rgba(30, 26, 14, 0.95);
 }
 
 /* Name tags: the desk's (tab's) name under its table from the room level, and
@@ -686,13 +682,6 @@
   .town-room-plaque {
     transition: none;
   }
-}
-
-.town-world[data-level="room"] .town-new-room-wrap,
-.town-world[data-level="desk"] .town-new-room-wrap {
-  opacity: 1;
-  pointer-events: auto;
-  visibility: visible;
 }
 
 .town-visually-hidden {

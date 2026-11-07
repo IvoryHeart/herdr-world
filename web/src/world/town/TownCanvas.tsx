@@ -75,6 +75,7 @@ import {
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
+import { TownArrivalLayer, useTownArrivals } from "./TownArrivalLayer";
 import { aimAtBin } from "../bin/binDrop";
 import {
   townReceptionTakesAll,
@@ -261,6 +262,15 @@ export function TownCanvas({
     semantics;
   const townBin = useTownBin(model, layout);
   const awayKeys = townBin.away;
+  const arrivals = useTownArrivals(model, layout, townBin.route);
+  const arrivingKeys = arrivals.arriving;
+  // A new agent goes to its desk for its welcome, as a summoned one does.
+  const welcoming = arrivals.welcoming;
+  const deskKeys = useMemo(
+    () =>
+      welcoming.size ? new Set([...summonedKeys, ...welcoming]) : summonedKeys,
+    [summonedKeys, welcoming],
+  );
   // A desk just pinned keeps the cell it has; save it so it stays there.
   const deskPinned = model.deskPins;
   const fallbackSummary = useMemo(
@@ -294,31 +304,7 @@ export function TownCanvas({
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
-  const latest = useRef({
-    chrome,
-    model,
-    layout,
-    teams,
-    selectedKey,
-    hover,
-    tappedDesk,
-    calm,
-    completionSeenKeys,
-    summonedKeys,
-    askingKeys,
-    awayKeys,
-    receptionHeldKeys,
-    quests,
-    conversationTargets,
-    onSelect,
-    onActivateAgent,
-    onActivateRoom,
-    onHover,
-    onAnchorChange,
-    onSelectedAnchorChange,
-    roomActions,
-  });
-  latest.current = {
+  const current = {
     chrome,
     calm,
     model,
@@ -328,9 +314,10 @@ export function TownCanvas({
     hover,
     tappedDesk,
     completionSeenKeys,
-    summonedKeys,
+    summonedKeys: deskKeys,
     askingKeys,
     awayKeys,
+    arrivingKeys,
     receptionHeldKeys,
     quests,
     conversationTargets,
@@ -342,6 +329,8 @@ export function TownCanvas({
     onSelectedAnchorChange,
     roomActions,
   };
+  const latest = useRef(current);
+  latest.current = current;
 
   const placedRoomActions = useTownRoomMoves(
     roomActions,
@@ -490,6 +479,7 @@ export function TownCanvas({
     summonedKeys: latest.current.summonedKeys,
     askingKeys: latest.current.askingKeys,
     awayKeys: latest.current.awayKeys,
+    arrivingKeys: latest.current.arrivingKeys,
     heldKeys: latest.current.receptionHeldKeys,
     openHostKey: null,
     calm: latest.current.calm,
@@ -604,9 +594,10 @@ export function TownCanvas({
     selectedKey,
     hover,
     completionSeenKeys,
-    summonedKeys,
+    deskKeys,
     askingKeys,
     awayKeys,
+    arrivingKeys,
     receptionHeldKeys,
     calm,
   ]);
@@ -883,8 +874,17 @@ export function TownCanvas({
           bin={townBin.bin}
           route={townBin.route}
           riders={townBin.riders}
+          returning={townBin.returning}
           lookOf={townBin.lookOf}
           framed={busFramed}
+          renderer={rendererRef}
+        />
+        <TownArrivalLayer
+          arrivals={arrivals.arrivals}
+          model={model}
+          layout={layout}
+          route={townBin.route}
+          lookOf={townBin.lookOf}
           renderer={rendererRef}
         />
         <TownHudContext.Provider value={hud}>

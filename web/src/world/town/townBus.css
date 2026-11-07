@@ -89,14 +89,45 @@
 .town-bus-stop[data-waiting] .town-bus-roundel::after {
   background: #fff;
 }
-.town-bus-stop em {
+
+/*
+ * The queue's last place when more wait than its two rows hold: a little
+ * board in the stop's colours, held at head height, counting the rest.
+ */
+.town-bus-more {
   position: absolute;
-  left: 0;
-  bottom: 6px;
-  font-style: normal;
-  font-size: 8px;
-  color: var(--town-text, #fff);
-  text-shadow: 0 0 2px #000;
+  z-index: 2;
+  padding: 2px 3px;
+  translate: -50% calc(-100% - 8px);
+  scale: max(1, var(--iz));
+  transform-origin: 50% calc(100% + 8px);
+  color: #fff;
+  font:
+    700 9px / 1 ui-monospace,
+    monospace;
+  white-space: nowrap;
+  background: #d4252b;
+  border: 1px solid #3b3b3b;
+  border-radius: 2px;
+  box-shadow: 0 2px 0 -1px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+.town-bus-more::before {
+  content: "+" attr(data-more);
+}
+.town-bus-more[hidden] {
+  display: none;
+}
+/* Its handle, down to the pavement. */
+.town-bus-more::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
+  background: #3b3b3b;
 }
 
 /*

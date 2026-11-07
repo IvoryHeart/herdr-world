@@ -12,6 +12,7 @@ import {
   WORLD_AGENT_LAUNCH_EVENT,
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
+import type { AgentStartFrom } from "./agentStarts";
 import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
 import { useStableCallback } from "./useStableCallback";
@@ -102,7 +103,8 @@ function AgentDialogs({
   onOpenNode(nodeId: string): void;
 }) {
   const [launch, setLaunch] = useState<
-    (Partial<LaunchTarget> & { profileId?: string }) | null
+    | (Partial<LaunchTarget> & { profileId?: string; from?: AgentStartFrom })
+    | null
   >(null);
   const [editing, setEditing] = useState<{ profileId?: string } | null>(null);
   const [sounds, setSounds] = useState(false);

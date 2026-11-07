@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { UsageLimit, WorldUsageSnapshot } from "../../../../shared/usage";
 import {
+  townFuelAge,
   townFuelGauges,
   townFuelNotes,
   townLimits,
@@ -10,7 +11,13 @@ import {
   townSeenAge,
   townWindowLabel,
 } from "./townLimits";
-import { TownFuel, townFuelDetails, townFuelLowest } from "./TownFuelGauge";
+import {
+  TownFuel,
+  TownFuelChip,
+  townFuelDetails,
+  townFuelLowest,
+  townFuelLowestText,
+} from "./TownFuelGauge";
 import { HostLimits } from "./TownSummaryPanel";
 import type { TownUsageState } from "./townPlaceUsage";
 
@@ -74,6 +81,7 @@ const missing = (connection: string): UsageLimit => ({
 });
 const ready = (limits: UsageLimit[]): TownUsageState => ({
   status: "ready",
+  receivedAt: 0,
   snapshot: {
     version: 1,
     rollups: [],
@@ -170,6 +178,63 @@ test("a harness without readable limits shows as not available, never as a level
   expect(alone).not.toContain("%");
   // A missing Codex observation is not "not available"; it has no entry.
   expect(townFuelNotes([missing("alpha")], [])).toEqual([]);
+});
+
+test("a reading over 15 minutes old shows its age on the gauge, the chip and the summary", () => {
+  // Fresh, and exactly 15 minutes: no age outside the details.
+  for (const observed of [now - 3 * 60_000, now - 15 * 60_000]) {
+    const gauges = townFuelGauges(
+      [codex("alpha", [40, 92], "available", observed)],
+      now,
+    );
+    expect(townFuelAge(gauges[0]!, now)).toBeNull();
+    const html = renderToStaticMarkup(createElement(TownFuel, { gauges, now }));
+    expect(html).not.toContain("town-fuel-age");
+    const chip = renderToStaticMarkup(
+      createElement(TownFuelChip, { lowest: townFuelLowest(gauges)!, now }),
+    );
+    expect(chip).not.toContain("ago");
+  }
+  // 86 minutes old: "seen 1 h ago" on the gauge, the chip and the summary.
+  const observed = now - 86 * 60_000;
+  const gauges = townFuelGauges(
+    [{ ...claudeTap("alpha", [20, 90]), observed_at: observed }],
+    now,
+  );
+  expect(townFuelAge(gauges[0]!, now)).toBe("seen 1 h ago");
+  const html = renderToStaticMarkup(createElement(TownFuel, { gauges, now }));
+  expect(html).toContain('<span class="town-fuel-age">seen 1 h ago</span>');
+  expect(html).toContain(
+    "Claude limits: 5 h 80 % left; week 10 % left, low; seen 1 h ago",
+  );
+  const lowest = townFuelLowest(gauges)!;
+  const chip = renderToStaticMarkup(
+    createElement(TownFuelChip, { lowest, now }),
+  );
+  expect(chip).toContain("10%");
+  expect(chip).toContain("seen 1 h ago");
+  expect(townFuelLowestText(lowest, now)).toBe(
+    "Claude week 10 % left, low; seen 1 h ago",
+  );
+  const summary = renderToStaticMarkup(
+    createElement(HostLimits, {
+      connectionId: "alpha",
+      now,
+      usage: ready([
+        { ...claudeTap("alpha", [20, 90]), observed_at: observed },
+      ]),
+    }),
+  );
+  expect(summary).toContain("seen 1 h ago");
+  // Past 3 h it reads stale as before, with no age label on the gauge.
+  const stale = townFuelGauges(
+    [codex("alpha", [40, 92], "available", now - 4 * 3_600_000)],
+    now,
+  );
+  expect(townFuelAge(stale[0]!, now)).toBeNull();
+  expect(
+    renderToStaticMarkup(createElement(TownFuel, { gauges: stale, now })),
+  ).not.toContain("town-fuel-age");
 });
 
 test("stale or aged gauges say stale and never show a level", () => {

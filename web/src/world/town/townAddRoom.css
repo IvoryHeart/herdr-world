@@ -1,0 +1,72 @@
+/* Every building's + Add room slot: a dashed ghost room where its next room
+   would stand, in the desk "+" slots' language. World-sized, so it never
+   spills past its own floor at any zoom. */
+.town-world .town-add-room {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0;
+  color: rgba(241, 239, 230, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  border: 3px dashed rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  font:
+    700 22px / 1 "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  /* Hidden overlays take no taps, including their buttons. */
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s;
+}
+
+.town-add-room svg {
+  flex: none;
+  color: #e3aa3a;
+}
+
+.town-add-room:hover:not(:disabled),
+.town-add-room:focus-visible {
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.18);
+  border-color: #ffd166;
+}
+
+.town-add-room:disabled {
+  cursor: not-allowed;
+  color: rgba(241, 239, 230, 0.45);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.town-add-room:disabled svg {
+  color: inherit;
+}
+
+/* From the overview in, under the roofs' level; just "+" at the overview. */
+.town-world:is(
+    [data-level="overview"],
+    [data-level="room"],
+    [data-level="desk"]
+  )
+  .town-add-room {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.town-world[data-level="overview"] .town-add-room span {
+  display: none;
+}
+
+.town-world[data-level="overview"] .town-add-room svg {
+  width: 44px;
+  height: 44px;
+}

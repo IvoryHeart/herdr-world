@@ -19,12 +19,28 @@ export type TownRoomActions = {
   showCreateSeat(roomKey: string): boolean;
   canCreateSeat(roomKey: string): boolean;
   createSeatReason(roomKey: string): string | null;
-  /** Open this room's launcher: Terminal, a profile or an agent kind. */
-  onNewAgent(roomKey: string): void;
-  showCreateRoom(roomKey: string | null): boolean;
+  /**
+   * Open this room's launcher: Terminal, a profile or an agent kind. `from`
+   * the town center, a started agent arrives there (townArrivals.ts).
+   */
+  onNewAgent(roomKey: string, from?: "center"): void;
   canCreateRoom(roomKey: string | null): boolean;
   createRoomReason(roomKey: string | null): string | null;
   onCreateRoom(roomKey: string | null): void;
+  /**
+   * Whether a building's + Add room slot shows, can create, and why not. A
+   * selected room of that building is the source, as for onCreateRoom.
+   */
+  addRoomState(
+    hostKey: string,
+    selectedRoomKey: string | null,
+  ): {
+    visible: boolean;
+    enabled: boolean;
+    reason: string | null;
+  };
+  /** New room on this building's host, from its + Add room slot. */
+  onAddRoom(hostKey: string, selectedRoomKey: string | null): void;
   canRenameRoom(roomKey: string): boolean;
   onRenameRoom(roomKey: string): void;
   canCloseRoom(roomKey: string): boolean;
