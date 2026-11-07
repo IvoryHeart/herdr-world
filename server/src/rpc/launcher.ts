@@ -4,9 +4,10 @@ import { stampLaunchParent } from "../herdr/spawn-stamp";
 import { tabCardKey } from "../../../shared/terminalColor";
 import { openHarnessLogin } from "../agent/harness-readiness";
 import { launchAgent } from "../agent/launch";
-import { profileLaunch } from "../agent/profile-launch";
+import { profileLaunch, withClaudeLimitsTap } from "../agent/profile-launch";
 import type { ConnectionRpcContext } from "./context";
 import { probeLauncher } from "./launcher-probe";
+import { claudeTapRuntime } from "../usage/claude-tap";
 
 /** The launcher on one connection: harness readiness, login, catalog and start (launcher.*). */
 export function handleLauncherRpc(
@@ -109,15 +110,27 @@ async function dispatchLauncherRpc(
         throw new Error("That profile no longer exists.");
       const call = (rpc: string, rpcParams: Record<string, unknown>) =>
         herdr.call(rpc, rpcParams, 70_000);
+      const launch = profileLaunch(profile ?? null, {
+        kind: String(p.kind ?? ""),
+        label: String(p.label ?? "")
+          .trim()
+          .slice(0, 64),
+        text: String(p.text ?? "").slice(0, 16_000),
+      });
+      const host = sshHost();
+      const tapRuntime =
+        launch.kind === "claude"
+          ? await claudeTapRuntime({
+              host,
+              windows: host
+                ? connection.remotePlatform === "windows"
+                : process.platform === "win32",
+              run: connection.runProcessWithCodeTimeout,
+            })
+          : null;
       let result = await launchAgent(call, {
         workspace_id: String(p.workspace_id ?? ""),
-        ...profileLaunch(profile ?? null, {
-          kind: String(p.kind ?? ""),
-          label: String(p.label ?? "")
-            .trim()
-            .slice(0, 64),
-          text: String(p.text ?? "").slice(0, 16_000),
-        }),
+        ...withClaudeLimitsTap(launch, tapRuntime),
         isCurrent: requestIsCurrent,
       });
       if (

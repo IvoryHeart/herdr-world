@@ -27,7 +27,12 @@ and verb-policy models continue to supply operation authority.
   credits, limit names and other limit IDs never leave the host. A failed read
   keeps the last observation as stale; an observation past a window's reset or
   three hours old is stale; no observation is missing, never zero or full.
-  Harnesses without an on-disk limits record report unsupported with a fixed reason.
+  Claude's observation is the newer of World's status line tap reading
+  (numbers only, a small regular file below the host user's home) and a
+  transcript refusal (`usage_limit_reached` with a reset time), which reads
+  "limit reached" without a percent and is stale once its reset passes. The tap
+  is added per launch with `--settings`, never written to Claude settings
+  files, and passes the user's own status line output through unchanged.
 - Closing the service drains its collectors and fences further publication and
   resources before storage closes; reads never allocate durable identity records.
 
@@ -57,7 +62,14 @@ new platform conformance is claimed.
 - `limits.test.ts`: Codex limit parsing (null secondary, missing and malformed
   windows, foreign limit IDs, future timestamps), newest-per-host collection
   locally and through the SSH program, remote reply validation and staleness;
+  Claude refusals (cancelled by a later answer, malformed and future-dated
+  records, no account fields) and the tap reading versus refusal precedence,
+  including rejected and symlinked readings, locally and over SSH;
   `service.test.ts` covers per-host limit states and failed-read retention.
+- `claude-tap.test.ts`: the tap records only numbers, finds the user's status
+  line by Claude Code's precedence without recursing, and as a real program
+  passes the same input to it and its output and exit code through unchanged;
+  Claude launches alone get the per-launch settings.
 - `server/src/rpc/usage.test.ts`: real verb admission, window validation, socket
   revocation and absence of default-runtime routing.
 - `server/src/bridge/herdr-client.test.ts`: cancellation destroys the owned

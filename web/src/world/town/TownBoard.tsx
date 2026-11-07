@@ -16,6 +16,7 @@ import {
   townFuelGauges,
   townFuelNotes,
   townLimits,
+  townReachedText,
   useTownLimits,
 } from "./townLimits";
 import { TownFuel, townFuelLowest } from "./TownFuelGauge";
@@ -56,7 +57,11 @@ export function TownBoard({
   const lowest = townFuelLowest(gauges);
   const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}${
     lowest
-      ? `; ${lowest.gauge.name} ${lowest.window.label} ${lowest.window.left} % left${lowest.window.low ? ", low" : ""}`
+      ? `; ${lowest.gauge.name} ${
+          lowest.window.reached
+            ? townReachedText(lowest.window)
+            : `${lowest.window.label} ${lowest.window.left} % left${lowest.window.low ? ", low" : ""}`
+        }`
       : ""
   }`;
   return (
@@ -87,7 +92,7 @@ export function TownBoard({
         {lowest ? (
           <span data-status="fuel" data-low={lowest.window.low}>
             <Fuel size={12} aria-hidden="true" />
-            {lowest.window.left}%
+            {lowest.window.reached ? "reached" : `${lowest.window.left}%`}
           </span>
         ) : null}
       </button>

@@ -11,11 +11,14 @@ export type NumericUsageRow = {
 /** A harness's own subscription-limit report: numbers and times only. */
 export type LimitObservation = {
   at: number;
+  source: "codex-session-log" | "claude-status-line" | "claude-transcript";
   windows: {
     window_minutes: number;
     used_percent: number;
     resets_at: number | null;
   }[];
+  /** A refusal: the limit is used up until `resets_at`; `windows` is empty. */
+  reached?: { window_minutes: number | null; resets_at: number };
 };
 export type SessionUsage = {
   session: string;
@@ -100,7 +103,37 @@ export function createUsageProjection(
       });
     }
     if (windows.length && (!limits || at >= limits.at))
-      limits = { at, windows };
+      limits = { at, source: "codex-session-log", windows };
+  };
+  // Claude Code records its limits only when it refuses a request. The newest
+  // assistant record decides: a later answer means the refusal no longer holds.
+  let answeredAt = -Infinity;
+  const claudeRefusal = (r: RecordValue, m: RecordValue) => {
+    const at = time(r.timestamp);
+    if (!Number.isFinite(at) || at > now + 300_000) return;
+    if (r.apiError !== "usage_limit_reached") {
+      if (!r.isApiErrorMessage && m.model !== "<synthetic>")
+        answeredAt = Math.max(answeredAt, at);
+      return;
+    }
+    const info = object(object(r.apiErrorParams).rate_limit_info),
+      resets = info.resetsAt;
+    if (!Number.isSafeInteger(resets) || resets <= 0 || resets > 1e11) return;
+    const type =
+      typeof info.rateLimitType === "string" ? info.rateLimitType : "";
+    const minutes =
+      type === "five_hour"
+        ? 300
+        : /^seven_day(?:_[a-z]+)?$/.test(type)
+          ? 10080
+          : null;
+    if (!limits || at >= limits.at)
+      limits = {
+        at,
+        source: "claude-transcript",
+        windows: [],
+        reached: { window_minutes: minutes, resets_at: resets * 1000 },
+      };
   };
   const remember = (id: any, at: number, name: any, tokens: UsageTokens) => {
     if (
@@ -194,6 +227,7 @@ export function createUsageProjection(
       }
       if (harness === "claude") {
         if (identifier(r.sessionId)) session = hash(r.sessionId);
+        if (r.type === "assistant") claudeRefusal(r, m);
         if (r.type !== "assistant" || !m.usage) return;
         const u = object(m.usage);
         remember(m.id, time(r.timestamp), m.model, {
@@ -306,7 +340,13 @@ export function createUsageProjection(
         row.first_at = Math.min(row.first_at, e.at);
         row.last_at = Math.max(row.last_at, e.at);
       }
-      return { session, partial, rows: [...rows.values()], limits };
+      const current: LimitObservation | null = limits;
+      return {
+        session,
+        partial,
+        rows: [...rows.values()],
+        limits: current?.reached && answeredAt > current.at ? null : current,
+      };
     },
   };
 }
