@@ -66,7 +66,7 @@ export function townZoomLimits(
     ) * 0.98;
   const narrow = layout.formFactor === "narrow";
   const widest = Math.max(1, ...layout.buildings.map((b) => b.w));
-  // Wide screens open on the hosts' buildings and the town center among
+  // Wide screens open on the hosts' buildings and the town center above
   // them; the verge beyond stays just off-screen; ALL shows it.
   const hosts = townHostsWidth(layout);
   const home = narrow

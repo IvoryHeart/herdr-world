@@ -724,7 +724,7 @@ test("every building has roads on at least three sides", () => {
     }
 });
 
-test("the town center stands on the first street, next to the buildings", () => {
+test("the town center stands at the top, just across the first street", () => {
   for (const shape of Object.values(TOWN_SHAPES))
     for (const hosts of [...HOST_SETS, {}]) {
       const { layout } = layoutTown(town(hosts), shape);
@@ -732,64 +732,41 @@ test("the town center stands on the first street, next to the buildings", () => 
       const first = Math.min(...layout.roads);
       expect(center.x).toBeGreaterThanOrEqual(3);
       expect(center.x + center.w).toBeLessThanOrEqual(layout.width - 3);
+      // Above the first street, its front steps right on the pavement with
+      // no courtyard between: no building, road or plaza column beside it.
+      expect(center.street).toBe(first);
+      expect(center.y + center.h).toBe(first);
       for (const building of buildings)
-        expect(overlaps(building, center)).toBe(false);
-      if (shape.formFactor === "wide") {
-        // Among the first row's buildings, under the first street with no
-        // empty band above it: its dome level with the tallest reception.
-        const row = buildings.filter((b) => b.y < layout.roads[1]!);
-        expect(first).toBeLessThanOrEqual(7);
-        expect(center.y).toBe(first + ROAD_BAND + 2);
-        if (row.length) expect(center.y).toBe(Math.min(...row.map((b) => b.y)));
-        // As many buildings left of it as right of it, or one more: one side
-        // road from its neighbours, wherever the busy rooms are.
-        const left = row.filter((b) => b.x < center.x);
-        expect(left.length).toBe(Math.ceil(row.length / 2));
-        if (left.length)
-          expect(center.x - Math.max(...left.map((b) => b.x + b.w))).toBe(
-            ROAD_BAND,
-          );
-        if (left.length < row.length)
-          expect(
-            Math.min(...row.filter((b) => b.x > center.x).map((b) => b.x)) -
-              (center.x + center.w),
-          ).toBe(ROAD_BAND);
-        // A side road runs right of it from street to street.
-        expect(
-          layout.verticalRoads.some(
-            (v) =>
-              v.x === center.x + center.w &&
-              v.y0 === first + ROAD_BAND &&
-              v.y1 === layout.roads[1],
-          ),
-        ).toBe(true);
-        expect(center.street).toBe(layout.roads[1]!);
-      } else {
-        // Stacked: above the first street, on the buildings' axis, the
-        // first building straight across the street.
-        expect(center.street).toBe(first);
-        expect(first - (center.y + center.h)).toBeLessThanOrEqual(3);
-        if (buildings.length) {
-          const axis =
-            (Math.min(...buildings.map((b) => b.x)) +
-              Math.max(...buildings.map((b) => b.x + b.w))) /
-            2;
-          expect(Math.abs(center.x + center.w / 2 - axis)).toBeLessThanOrEqual(
-            1,
-          );
-        }
+        expect(building.y).toBeGreaterThan(first + ROAD_BAND);
+      for (const road of layout.verticalRoads)
+        expect(road.y0).toBeGreaterThan(first);
+      // Centred over the first row of buildings (the town's, without any).
+      const row = buildings.filter((b) => b.y < layout.roads[1]!);
+      if (row.length) {
+        const axis =
+          (Math.min(...row.map((b) => b.x)) +
+            Math.max(...row.map((b) => b.x + b.w))) /
+          2;
+        expect(Math.abs(center.x + center.w / 2 - axis)).toBeLessThanOrEqual(1);
       }
       // A phone's center fits its one-column building's view.
       if (shape.roomColumns === 1)
         for (const building of buildings)
           expect(center.w).toBeLessThanOrEqual(building.w);
-      // Its forecourt is paved down to its street; no tree stands on it.
+      // Its steps stand on a paved apron at the pavement; no tree on it.
       const middle = center.x + Math.floor(center.w / 2);
-      for (let y = center.y + center.h; y < center.street; y += 1)
+      for (let y = center.y + center.h - 2; y < center.street; y += 1)
         expect(layout.ground[y * layout.width + middle]).toBe(TownGround.plaza);
       expect(layout.ground[center.street * layout.width + middle]).toBe(
         TownGround.walk,
       );
+      // The pavement's lamps leave its steps and wings clear.
+      for (const lamp of layout.lamps)
+        expect(
+          lamp.y === center.street &&
+            lamp.x >= center.x - 1 &&
+            lamp.x <= center.x + center.w,
+        ).toBe(false);
       for (const tree of layout.trees)
         expect(
           tree.x >= center.x - 1 &&
@@ -800,7 +777,7 @@ test("the town center stands on the first street, next to the buildings", () => 
     }
 });
 
-test("the town center stays beside the buildings as hosts come and go", () => {
+test("wide buildings stand side by side, one street apart, under the center", () => {
   const shape = TOWN_SHAPES.wide;
   let previous: TownLayout | null = null;
   for (const count of [1, 2, 3, 4, 6, 9]) {
@@ -809,17 +786,18 @@ test("the town center stays beside the buildings as hosts come and go", () => {
     );
     const { layout } = layoutTown(town(hosts), shape);
     const { center } = layout;
-    // A neighbour in its row, one side road away.
-    const gaps = layout.buildings.map((b) =>
-      b.y < layout.roads[1]!
-        ? Math.min(
-            Math.abs(center.x - (b.x + b.w)),
-            Math.abs(b.x - (center.x + center.w)),
-          )
-        : Infinity,
+    // Neighbours in a row are separated only by their side road.
+    const row = layout.buildings
+      .filter((b) => b.y < layout.roads[1]!)
+      .sort((a, b) => a.x - b.x);
+    for (let i = 1; i < row.length; i += 1)
+      expect(row[i]!.x - (row[i - 1]!.x + row[i - 1]!.w)).toBe(ROAD_BAND);
+    // The center faces the first row across one street and its yard.
+    expect(center.street).toBe(layout.roads[0]!);
+    expect(Math.min(...row.map((b) => b.y))).toBe(
+      layout.roads[0]! + ROAD_BAND + 2,
     );
-    expect(Math.min(...gaps)).toBe(ROAD_BAND);
-    // Its street stays the first one whatever the town's size.
+    // It stays put at the top whatever the town's size.
     if (previous) expect(center.y).toBe(previous.center.y);
     previous = layout;
   }

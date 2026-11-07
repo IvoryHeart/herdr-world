@@ -103,7 +103,7 @@ test("a wide town opens at home: every building, centred", () => {
   );
   expect(centre.x).toBeCloseTo(camera.focusPoint().x);
   expect(centre.y).toBeCloseTo(camera.focusPoint().y);
-  // The town center stands among the buildings, its plaque on screen.
+  // The town center stands above the buildings, its plaque on screen.
   const plaque = townCenterEmblem(layout.center, T);
   const sign = camera.toScreen(plaque.x, plaque.y);
   expect(sign.x).toBeGreaterThan(viewport.inset.left);

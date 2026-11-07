@@ -115,11 +115,15 @@ test("a new agent starts in the selected card's workspace, else the launcher ask
       generation: 4,
       workspaceId: "w-docs",
       workspaceLabel: "docs",
+      // As from the town center: the agent arrives there in Town.
+      from: "center",
     },
   ]);
   const none = board();
   expect(none.action("launch").detail).toBeUndefined();
-  expect(launches(() => none.action("launch").run())).toEqual([{}]);
+  expect(launches(() => none.action("launch").run())).toEqual([
+    { from: "center" },
+  ]);
 });
 
 test("only a workspace that can launch now is the launch target", () => {

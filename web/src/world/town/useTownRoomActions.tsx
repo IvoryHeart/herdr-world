@@ -235,16 +235,19 @@ export function useTownRoomActions({
     showCreateSeat,
     canCreateSeat,
     createSeatReason,
-    onNewAgent: (roomKey) => {
+    onNewAgent: (roomKey, from) => {
       const room = roomForKey(roomKey);
       if (!room || !canCreateSeat(roomKey)) return;
       beforeLaunch();
-      requestAgentLaunch({
-        connectionId: room.workspaceRef.connectionId,
-        generation: room.observedGeneration,
-        workspaceId: room.workspaceRef.nativeId,
-        workspaceLabel: room.displayLabel,
-      });
+      requestAgentLaunch(
+        {
+          connectionId: room.workspaceRef.connectionId,
+          generation: room.observedGeneration,
+          workspaceId: room.workspaceRef.nativeId,
+          workspaceLabel: room.displayLabel,
+        },
+        from,
+      );
     },
     canCreateRoom,
     createRoomReason,
