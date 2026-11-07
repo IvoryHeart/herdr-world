@@ -1,6 +1,7 @@
 /**
  * Which hosts' agents to reconcile after a change. An agent's goal and path
- * read its own status, seat, pin and summoned/asking/away/held marks, the
+ * read its own status, seat, pin, out-of-fuel and summoned/asking/away/held
+ * marks, the
  * other agents of its host (the reception queue and lounge are per host) and
  * its building (seats, queue, lounge and navigation). A host whose key below
  * is unchanged would be left exactly as it is by a full reconciliation, so it
@@ -36,6 +37,7 @@ export function townActorKeys(
         asking.has(agent.key) ? "asking" : "",
         away.has(agent.key) ? "away" : "",
         held.has(agent.key) ? "held" : "",
+        agent.usageStop ? "fuel" : "",
       ].join("|"),
     );
     agents.set(agent.hostKey, list);

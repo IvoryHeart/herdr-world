@@ -313,6 +313,7 @@ const COUNT_LABELS: [keyof TownSummaryCounts, string][] = [
   ["working", "working"],
   ["finished", "done"],
   ["quiet", "quiet"],
+  ["outOfFuel", "out of fuel"],
   ["unknown", "unknown"],
 ];
 

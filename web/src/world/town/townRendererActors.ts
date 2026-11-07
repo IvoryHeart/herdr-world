@@ -190,6 +190,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           chatting,
           Math.floor(clock * 3),
           mood,
+          Boolean(agent.usageStop),
         );
         let headX = actor.x;
         let headY = actor.y - 20 * TOWN_AGENT_SCALE;
@@ -241,6 +242,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           (kind === "blocked" ||
             kind === "ask" ||
             kind === "done" ||
+            kind === "fuel" ||
             mood !== null) &&
           !near
             ? 2

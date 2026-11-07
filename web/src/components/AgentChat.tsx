@@ -46,6 +46,8 @@ import type {
 } from "./chat/types";
 import "./chat/blocks/now.css";
 import { ChatStatusBadge } from "./chat/blocks/status-badge";
+import { useCurrentUsageStop } from "../world/town/townOutOfFuel";
+import { usageStopText } from "../../../shared/usageStop";
 // After every Chat style it re-skins.
 import "./AgentChat.town.css";
 
@@ -414,6 +416,13 @@ export function AgentChat({
   // waiting for approval, or one cut off by an interrupt or crash, is not.
   const running =
     liveStatus === "working" ? (conversation?.running_tool ?? null) : null;
+  // Out of fuel: stopped on its usage limit, in Town's words, until the
+  // limit resets or the agent works again.
+  const usageStop = useCurrentUsageStop(conversation?.usage_stop);
+  const fuel =
+    usageStop && liveStatus !== "working"
+      ? usageStopText(usageStop, Date.now())
+      : null;
   const ticking = liveStatus === "working";
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -546,12 +555,16 @@ export function AgentChat({
       <div className="agent-chat-toolbar agent-chat-now">
         {/* Only the status and task are announced; the clocks are not. */}
         <span className="agent-chat-now-live" aria-live="polite">
-          <ChatStatusBadge status={liveStatus} />
+          {fuel ? (
+            <ChatStatusBadge status="fuel" label="Out of fuel" />
+          ) : (
+            <ChatStatusBadge status={liveStatus} />
+          )}
           <span
             className="agent-chat-now-title"
-            title={conversation?.terminal_title ?? ""}
+            title={fuel ?? conversation?.terminal_title ?? ""}
           >
-            {titleTask(conversation?.terminal_title)}
+            {fuel ?? titleTask(conversation?.terminal_title)}
           </span>
         </span>
         {stopNote ? (

@@ -128,6 +128,8 @@ export type TownRoomCounts = {
   done: number;
   idle: number;
   unknown: number;
+  /** Stopped on a usage limit (townOutOfFuel.ts), counted apart from idle. */
+  outOfFuel: number;
 };
 
 export type TownAgentStatus = OfficeAgent["semanticStatus"];
@@ -242,6 +244,7 @@ export function townModelFromProjection(
       done: 0,
       idle: 0,
       unknown: 0,
+      outOfFuel: 0,
     });
   const admit = (agent: OfficeAgent) => {
     const counts = roomCounts.get(agent.roomKey);
@@ -251,7 +254,8 @@ export function townModelFromProjection(
       : agent;
     agents.set(agent.key, shown);
     counts.agents += 1;
-    counts[shown.semanticStatus] += 1;
+    if (shown.usageStop) counts.outOfFuel += 1;
+    else counts[shown.semanticStatus] += 1;
   };
   for (const entry of projection.roster) admit(entry.agent);
   for (const room of projection.rooms)
@@ -304,6 +308,7 @@ export function townRoomCounts(
       done: 0,
       idle: 0,
       unknown: 0,
+      outOfFuel: 0,
     }
   );
 }

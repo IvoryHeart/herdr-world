@@ -121,6 +121,7 @@ test("the Town board counts every agent in every building, quiet ones too", asyn
     finished: 0,
     quiet: 3,
     unknown: 0,
+    outOfFuel: 0,
     agents: 5,
     buildings: 2,
   });
@@ -153,6 +154,7 @@ test("a room's and a table's summaries are their parts of the Town summary", asy
     finished: 0,
     quiet: 0,
     unknown: 0,
+    outOfFuel: 0,
     agents: 2,
   });
   expect(
@@ -172,6 +174,7 @@ test("a room's and a table's summaries are their parts of the Town summary", asy
     finished: 0,
     quiet: 0,
     unknown: 0,
+    outOfFuel: 0,
     agents: 1,
   });
   const working = office.roster.find(
@@ -191,6 +194,7 @@ test("a room's and a table's summaries are their parts of the Town summary", asy
     finished: 0,
     quiet: 0,
     unknown: 0,
+    outOfFuel: 0,
     agents: 0,
   });
 });

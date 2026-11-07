@@ -11,6 +11,7 @@ import {
 } from "./menu-send-guard";
 import { withMenuSize } from "./menu-size";
 import { isSlashCommand } from "../../../shared/conversationInput";
+import { usageStopCurrent } from "../../../shared/usageStop";
 import { basename } from "node:path";
 import { createCodexSessionWatch } from "./codex-session-watch";
 import {
@@ -193,6 +194,7 @@ export function createHerdrConversationSource(args: {
       field_claims: claims.project(claimsCapture),
       terminal_title: stringValue(info?.terminal_title).trim() || null,
       running_tool: null,
+      usage_stop: null,
       session_binding: null,
       session_fingerprint: null,
       session_label: null,
@@ -326,6 +328,9 @@ export function createHerdrConversationSource(args: {
         latest: latestAssistantMessage(messages),
         quest: projection.quest,
         running_tool: tool,
+        usage_stop: usageStopCurrent(projection.usage_stop, Date.now())
+          ? projection.usage_stop
+          : null,
         field_claims: claims.transcript(claimsCapture, {
           session: resolved.session,
           status: tool
@@ -688,6 +693,7 @@ export function createHerdrConversationSource(args: {
                 session_label: null,
                 terminal_title: null,
                 running_tool: null,
+                usage_stop: null,
                 updated_at: null,
                 messages: [],
                 latest: null,
@@ -767,9 +773,15 @@ export function createHerdrConversationSource(args: {
             session_fingerprint: base.session_fingerprint,
           };
           try {
+            const desk = resolved.file
+              ? await args.cache.desk(resolved)
+              : { quest: null, usage_stop: null };
             return {
               ...found,
-              quest: resolved.file ? await args.cache.quest(resolved) : null,
+              quest: desk.quest,
+              usage_stop: usageStopCurrent(desk.usage_stop, Date.now())
+                ? desk.usage_stop
+                : null,
             };
           } catch {
             // The session is known: say which, so a browser keeps the last

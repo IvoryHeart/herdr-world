@@ -202,8 +202,10 @@ hosts stay usable.
    their terminal or mark that completion reviewed, then join idle agents at
    the bar in the building's bottom corner. When the queue is full, the rest
    crowd the lobby and grumble, then nap on the floor after about 90 seconds;
-   the front of the crowd takes the next free spot. These locations visualize
-   status; they do not move the underlying pane or change its host. To keep
+   the front of the crowd takes the next free spot. An agent out of fuel (its
+   harness hit a usage limit) stays slumped at its desk under an empty fuel
+   can and a clock; hover its table for when the limit resets. These
+   locations visualize status; they do not move the underlying pane or change its host. To keep
    reception for what matters now, press its sign (the **!** **?** **✓**
    marks) and untick a mark, for example **✓** Done: those agents stay at
    their desks with their mark, and reception shows `✓ N at desks · find`.
@@ -526,6 +528,8 @@ text. It works for any agent you open from Town, Board or Desk.
 2. Check what the agent is doing now. The Now bar shows its status circle
    (hover for the word: blue working, yellow needs you, green done, grey
    idle), the task from its terminal title and how long it has been at it.
+   An agent stopped on its usage limit shows a red dot and, for example,
+   `Usage limit reached · resets 15:00 (Codex)`, as its Town table does.
    The tool call running now sits at the end of the conversation with its
    own timer. **Stop**, or Esc pressed twice, interrupts Claude Code, Codex
    or Pi; Chat never stops an agent by itself.

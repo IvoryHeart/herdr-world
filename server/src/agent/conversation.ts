@@ -1,3 +1,4 @@
+import type { AgentUsageStop } from "../../../shared/usageStop";
 import type { ConversationDelivery } from "./conversation-delivery";
 import type { PendingPrompt } from "./pending-prompt";
 import type { ConversationIdentity } from "./conversation-watch";
@@ -66,6 +67,11 @@ export type Conversation = {
    * transcript with no result yet. Null when none is open.
    */
   running_tool: RunningTool | null;
+  /**
+   * The agent stopped on a subscription or usage limit, read from its own
+   * transcript, while that stop still holds; null otherwise.
+   */
+  usage_stop?: AgentUsageStop | null;
   updated_at: string | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;

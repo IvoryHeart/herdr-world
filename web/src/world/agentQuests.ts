@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { bridge, type ConnectionClient } from "../api";
 import type { AgentQuest, Quest } from "../../../server/src/agent/quest";
+import type { AgentUsageStop } from "../../../shared/usageStop";
 import { deskClient } from "./handoffs";
 import type { WorldLeafObject } from "./worldObject";
 
@@ -23,6 +24,15 @@ export const QUEST_MIN_GAP_MS = 5_000;
 export const QUEST_PANE_LIMIT = 200;
 
 const EMPTY: ReadonlyMap<string, Quest> = new Map();
+const NO_STOPS: ReadonlyMap<string, AgentUsageStop> = new Map();
+
+/** What a desk read gives each agent: its quest and its usage-limit stop. */
+export type AgentDeskReads = {
+  quests: ReadonlyMap<string, Quest>;
+  /** Agents stopped on a usage limit, by leaf ID (see shared/usageStop.ts). */
+  stops: ReadonlyMap<string, AgentUsageStop>;
+};
+const EMPTY_READS: AgentDeskReads = { quests: EMPTY, stops: NO_STOPS };
 
 export const QUEST_SOURCE_LABELS: Record<Quest["source"], string> = {
   todo: "Checklist",
@@ -67,9 +77,10 @@ const leafClient = (leaf: WorldLeafObject): ConnectionClient | null =>
     leaf,
   );
 
-/** A shown quest and the session it was read from. */
+/** A shown quest or usage-limit stop and the session it was read from. */
 type ShownQuest = {
-  quest: Quest;
+  quest: Quest | null;
+  stop: AgentUsageStop | null;
   /** The service's fingerprint of the session, when it binds one. */
   session: string | null;
   /** The World's fingerprint of the pane's session when it was read. */
@@ -94,7 +105,20 @@ export class AgentQuestReads {
   ) {}
 
   quests(): ReadonlyMap<string, Quest> {
-    return new Map([...this.shown].map(([id, shown]) => [id, shown.quest]));
+    return new Map(
+      [...this.shown].flatMap(([id, shown]) =>
+        shown.quest ? [[id, shown.quest] as const] : [],
+      ),
+    );
+  }
+
+  /** Agents whose session ends with a usage-limit stop, by leaf ID. */
+  stops(): ReadonlyMap<string, AgentUsageStop> {
+    return new Map(
+      [...this.shown].flatMap(([id, shown]) =>
+        shown.stop ? [[id, shown.stop] as const] : [],
+      ),
+    );
   }
 
   /**
@@ -163,9 +187,13 @@ export class AgentQuestReads {
             const entry = byPane.get(leaf.pane.pane_id);
             if (!entry) keep(leaf);
             else if (entry.read_failed) keep(leaf, entry.session_fingerprint);
-            else if (entry.quest && entry.session_binding !== "guessed")
+            else if (
+              (entry.quest || entry.usage_stop) &&
+              entry.session_binding !== "guessed"
+            )
               next.set(leaf.id, {
                 quest: entry.quest,
+                stop: entry.usage_stop ?? null,
                 session: entry.session_fingerprint ?? null,
                 leafSession: leaf.agentSessionFingerprint,
               });
@@ -176,9 +204,11 @@ export class AgentQuestReads {
       }),
     );
     if (sequence !== this.started) return null;
-    const changed =
-      JSON.stringify([...prior].map(([id, shown]) => [id, shown.quest])) !==
-      JSON.stringify([...next].map(([id, shown]) => [id, shown.quest]));
+    const shownOf = (shown: ReadonlyMap<string, ShownQuest>) =>
+      JSON.stringify(
+        [...shown].map(([id, { quest, stop }]) => [id, quest, stop]),
+      );
+    const changed = shownOf(prior) !== shownOf(next);
     this.shown = next;
     return { changed, working };
   }
@@ -197,7 +227,19 @@ export function useAgentQuests(
   leaves: readonly WorldLeafObject[],
   active = true,
 ): ReadonlyMap<string, Quest> {
-  const [quests, setQuests] = useState(EMPTY);
+  return useAgentDeskReads(leaves, active).quests;
+}
+
+/**
+ * Quests and usage-limit stops by leaf ID, from the same reads as
+ * useAgentQuests: an agent that stops on its limit changes status, which
+ * reads again.
+ */
+export function useAgentDeskReads(
+  leaves: readonly WorldLeafObject[],
+  active = true,
+): AgentDeskReads {
+  const [shown, setReads] = useState(EMPTY_READS);
   const reads = useRef<AgentQuestReads | null>(null);
   reads.current ??= new AgentQuestReads();
   const latest = useRef(leaves);
@@ -229,7 +271,8 @@ export function useAgentQuests(
       if (document.visibilityState !== "hidden") {
         const result = await quests.read(latest.current);
         working = result?.working ?? false;
-        if (result?.changed && mounted.current) setQuests(quests.quests());
+        if (result?.changed && mounted.current)
+          setReads({ quests: quests.quests(), stops: quests.stops() });
       }
       reading = false;
       if (!cancelled && working)
@@ -252,5 +295,5 @@ export function useAgentQuests(
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [leaves, active]);
-  return active ? quests : EMPTY;
+  return active ? shown : EMPTY_READS;
 }

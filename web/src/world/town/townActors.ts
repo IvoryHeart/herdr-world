@@ -14,7 +14,8 @@
  * changes. An agent whose mark its reception does not take (held, see
  * townReceptionFilter.ts) stays seated at its desk with its mark. An agent at a pinned desk never goes to the lounge: it leaves its
  * desk only to wait at reception (blocked, or finished and not yet seen), and
- * walks straight back once seen. Movement never delays operational state,
+ * walks straight back once seen. An agent out of fuel (stopped on its usage
+ * limit, townOutOfFuel.ts) stays slumped at its desk. Movement never delays operational state,
  * and every actor keeps its agent key, so its exact pane target is unchanged
  * wherever it stands. An agent in the bin (away) walks out of its building's
  * front door and is drawn outside by the bus layer until it is put back.
@@ -567,6 +568,8 @@ export class TownActors {
       else if (crowd !== undefined) goal = { kind: "crowd", slot: crowd };
       else if (
         agent.semanticStatus === "idle" &&
+        // Out of fuel: it slumps at its desk until its limit resets.
+        !agent.usageStop &&
         !this.summoned.has(actor.key) &&
         !this.asking.has(actor.key) &&
         !model.deskPins.has(seat.deskKey)

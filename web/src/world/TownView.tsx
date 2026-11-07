@@ -1,7 +1,8 @@
 import { AnswerOutboxContext } from "./town/answerOutbox";
 import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
-import { questMark, useAgentQuests } from "./agentQuests";
+import { questMark, useAgentDeskReads } from "./agentQuests";
+import { useCurrentUsageStops, withTownOutOfFuel } from "./town/townOutOfFuel";
 import { useCreationProgress } from "../creationRequests";
 import { isMobileLayout } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
@@ -241,14 +242,20 @@ export default function TownView({
       )),
     [observedOffice, townFinished.finished, reviewedLeaf],
   );
+  // Each agent's quest and usage-limit stop, read from its own session.
+  const deskReads = useAgentDeskReads(world.leaves);
+  const usageStops = useCurrentUsageStops(deskReads.stops);
   const office = useMemo(
     () =>
-      withTownFinished(
-        observedOffice,
-        townFinished.finished,
-        completionSeenKeys,
+      withTownOutOfFuel(
+        withTownFinished(
+          observedOffice,
+          townFinished.finished,
+          completionSeenKeys,
+        ),
+        usageStops,
       ),
-    [observedOffice, townFinished.finished, completionSeenKeys],
+    [observedOffice, townFinished.finished, completionSeenKeys, usageStops],
   );
   const selectedKey = officePresentationKey(office, selectedId);
   const unseenCompletions = useMemo(
@@ -356,7 +363,7 @@ export default function TownView({
   }, [agentByKey]);
   const summonedKeys = useMemo(() => new Set(summoned.keys()), [summoned]);
   // Each agent's quest, marked over its desk by agent key.
-  const agentQuests = useAgentQuests(world.leaves);
+  const agentQuests = deskReads.quests;
   // A Town agent's key is its leaf ID, so the marks come straight from the
   // quests (a dense town's roster is large).
   const questMarks = useMemo(

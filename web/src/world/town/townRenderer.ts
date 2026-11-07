@@ -396,7 +396,8 @@ export async function createTownRenderer(
                 lookOf(info.agent.key),
                 top ? "down" : "up",
                 typing,
-                scratching ? "scratch" : "sit",
+                // Out of fuel: slumped at the desk until the limit resets.
+                info.agent.usageStop ? "slump" : scratching ? "scratch" : "sit",
                 // Idle agents doze with their eyes closed.
                 top &&
                   (resting(info.agent) ||

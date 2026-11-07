@@ -130,6 +130,20 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     crowd stands still, still grumbling or napping. An agent whose state is
     unknown sits at its desk scratching its head under a purple `??` instead
     of dozing.
+  - An agent that stopped because its harness hit a subscription or usage
+    limit is **out of fuel**: it stays slumped at its own desk, head sunk and
+    arms hanging, under an empty red fuel can and a small clock. It never
+    walks to reception, the bar or the call rail, since there is nothing to
+    answer. World reads the stop from the harness's own records, never the
+    terminal: Codex's rate-limit snapshot (`rate_limit_reached_type`) or its
+    usage-limit error in the session log, and Claude Code's usage-limit
+    refusal in its transcript. Its table's card says, for example,
+    `Usage limit reached · resets 15:00 (Codex)`, or `Usage limit reached
+    (Claude)` when the record has no reset time. Room plaques
+    (`1 of 4 agents active: 1 working, 0 waiting on you, 3 out of fuel`), the
+    Town board and the Summary's hosts and rooms count out-of-fuel agents on
+    their own; they are not active. The state clears by itself once the
+    reset time passes or the agent works again.
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right.
   - The **town center** stands on the first street among the buildings, in
@@ -196,6 +210,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     conversation; expand it for objectives.
     Chat's Now status uses a small circle with a status tooltip and screen-reader
     text: blue working ring, yellow needs-you mark, green done tick, grey idle dot.
+    An agent out of fuel has a red dot, and the Now bar reads the same words
+    as Town's table card, such as `Usage limit reached · resets 15:00 (Codex)`,
+    until the limit resets or the agent works again.
   - Chat reuses Terminal's full **Compose** editor, attachments and harness
     command palette, with a separate conversation draft. Enter adds a line;
     Ctrl+Enter, Cmd+Enter or the paper-plane button sends. Type `/` or use
