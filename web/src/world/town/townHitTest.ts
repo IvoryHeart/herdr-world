@@ -2,6 +2,7 @@ import type { TownLevel } from "./townCamera";
 import {
   TOWN_AGENT_SCALE as S,
   TOWN_FACADE,
+  TOWN_LOBBY_HEIGHT,
   TOWN_TILE as T,
   townDeskSlots,
   townSeat,
@@ -17,6 +18,8 @@ export type TownHit =
   | { kind: "desk"; key: string }
   | { kind: "cell"; roomKey: string; cellIndex: number }
   | { kind: "room"; key: string }
+  /** The reception lobby at desk level, where its board is hidden. */
+  | { kind: "reception"; key: string }
   | { kind: "building"; key: string };
 
 export type TownHitContext = {
@@ -106,6 +109,12 @@ export function townHitTest(
       }
       return { kind: "desk", key: cell.deskKey };
     }
+  if (
+    detailed &&
+    y >= building.lobbyY * T &&
+    y < (building.lobbyY + TOWN_LOBBY_HEIGHT) * T
+  )
+    return { kind: "reception", key: building.hostKey };
   for (const room of building.rooms) {
     if (
       x < room.x * T ||
@@ -133,6 +142,6 @@ export function townHitTest(
 export function townHitKey(hit: TownHit | null) {
   if (!hit) return null;
   if (hit.kind === "cell") return hit.roomKey;
-  if (hit.kind === "building") return null;
+  if (hit.kind === "building" || hit.kind === "reception") return null;
   return hit.key;
 }

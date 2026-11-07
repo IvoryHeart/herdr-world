@@ -306,6 +306,11 @@ export function TownCanvas({
   const [hover, setHover] = useState<string | null>(null);
   /** A table whose card a touch tap opened; touch has no hover to open it. */
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
+  /**
+   * The building whose reception board a tap on its lobby brought back at
+   * desk level, where boards are hidden; any other tap or zoom level drops it.
+   */
+  const [openReception, setOpenReception] = useState<string | null>(null);
   const latest = useRef({
     chrome,
     model,
@@ -442,6 +447,7 @@ export function TownCanvas({
       if (levelRef.current !== level) {
         levelRef.current = level;
         layer.dataset.level = level;
+        setOpenReception(null);
       }
       const renderer = rendererRef.current;
       if (renderer) {
@@ -663,6 +669,7 @@ export function TownCanvas({
       },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
+      openReception: setOpenReception,
       move: (command) => {
         const actions = latest.current.roomActions;
         switch (command.kind) {
@@ -893,6 +900,7 @@ export function TownCanvas({
               tappedDesk ??
               (hover !== null && model.desks.has(hover) ? hover : null)
             }
+            openReceptionKey={openReception}
             openRoomKey={
               // Zoomed out, a mouse anywhere over a room (a table or an
               // agent in it) opens the room's card.

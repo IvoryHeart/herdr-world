@@ -229,8 +229,17 @@ export class TownCamera {
     this.clampPosition();
   }
 
-  /** Ease to frame world point (wx, wy) at zoom z, dipping out for long trips. */
-  flyTo(wx: number, wy: number, z: number, duration = 0.75) {
+  /**
+   * Ease to frame world point (wx, wy) at zoom z, dipping out for long trips
+   * unless `level` keeps the zoom (and so the level) all the way.
+   */
+  flyTo(
+    wx: number,
+    wy: number,
+    z: number,
+    duration = 0.75,
+    { level = false }: { level?: boolean } = {},
+  ) {
     const targetZ = this.clampZoom(z);
     const centre = this.centreFor(wx, wy, targetZ);
     if (this.reducedMotion || duration <= 0) {
@@ -242,7 +251,7 @@ export class TownCamera {
       Math.hypot(centre.x - this.x, centre.y - this.y) *
       Math.min(this.z, targetZ);
     const dip =
-      !this.calm && distance > this.viewport.width * 0.9
+      !this.calm && !level && distance > this.viewport.width * 0.9
         ? Math.min(0.6, Math.log(distance / this.viewport.width + 1) * 0.5)
         : 0;
     this.velocity = { x: 0, y: 0 };

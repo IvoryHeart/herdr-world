@@ -91,7 +91,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     card's **Next ›** steps through the rest. The filter moves bodies, not
     facts: marks, the Town board, room plaques, Board, Desk and Needs you
     count and list every agent as before. World saves the filter, so every
-    browser and device shows the same one.
+    browser and device shows the same one. Zoomed in to desks, where the
+    reception boards are put away, tap a building's reception lobby to bring
+    its board and sign back; any other tap or zoom level puts it away again.
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right. The last lot on the grid is
     reserved for a town hall: a fenced plot with a sign, not yet in use.

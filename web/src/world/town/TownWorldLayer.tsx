@@ -111,6 +111,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   signs,
   summary,
   openDeskKey,
+  openReceptionKey,
   openRoomKey,
 }: {
   /** The HUD store: the ages clock. */
@@ -119,6 +120,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   summary: TownSummary;
   /** The table under the mouse, or tapped, on the canvas: its card is open. */
   openDeskKey: string | null;
+  /** The building whose hidden (desk level) reception board a tap brought back. */
+  openReceptionKey: string | null;
   /** The room under the mouse on the canvas: zoomed out, its card is open. */
   openRoomKey: string | null;
   signs: TownBuildingSigns;
@@ -295,6 +298,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
             <div
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
               data-stale={host?.stale || undefined}
+              data-open={building.hostKey === openReceptionKey || undefined}
               style={{
                 // The board stands in the yard above the front door.
                 left: (building.entryX + 0.5) * T,

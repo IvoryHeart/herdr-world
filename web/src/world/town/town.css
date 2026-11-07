@@ -302,6 +302,13 @@
   visibility: hidden;
 }
 
+/* A tap on the lobby brings its board back, with the reception filter. */
+.town-world[data-level="desk"] .town-reception[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
 .town-reception-title {
   display: flex;
   justify-content: space-between;

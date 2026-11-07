@@ -7,4 +7,5 @@
   `✓ 4 at desks · find`: **find** opens the first of them and **Next ›**
   steps through the rest. **Reset to default** brings everyone back. Counts,
   Board, Desk and Needs you are unchanged, and World keeps the filter for
-  every browser and device.
+  every browser and device. Zoomed in to desks, tap a reception lobby to
+  bring its board and sign back.

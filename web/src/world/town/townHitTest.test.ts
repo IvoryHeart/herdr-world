@@ -45,12 +45,12 @@ function scene() {
       cell.deskKey ? [[cell.deskKey, cell] as const] : [],
     ),
   );
-  const hit = (x: number, y: number) =>
+  const hit = (x: number, y: number, level: "desk" | "room" = "desk") =>
     townHitTest(
       {
         layout,
         model,
-        level: "desk",
+        level,
         roofAlpha: () => 0,
         standing: () => [],
         zoom: 2,
@@ -58,7 +58,7 @@ function scene() {
       x,
       y,
     );
-  return { cells, hit, panes };
+  return { cells, hit, panes, building: layout.buildings[0]! };
 }
 
 test("a tap on a drawn seat selects that seat's agent", () => {
@@ -73,4 +73,21 @@ test("a tap on a drawn seat selects that seat's agent", () => {
         key: `${deskKey}/agent-${seat}`,
       });
     }
+});
+
+test("at desk level the reception lobby is its own target; above it, the building", () => {
+  const { building, hit } = scene();
+  const T = 16;
+  const x = (building.entryX + 0.5) * T;
+  for (const row of [0, 3, 6])
+    expect(hit(x, (building.lobbyY + row) * T + 8)).toEqual({
+      kind: "reception",
+      key: building.hostKey,
+    });
+  expect(hit(x, (building.lobbyY + 3) * T, "room")).toEqual({
+    kind: "building",
+    key: building.hostKey,
+  });
+  // The rooms start below the lobby.
+  expect(hit(x, (building.lobbyY + 7) * T + 8)?.kind).not.toBe("reception");
 });

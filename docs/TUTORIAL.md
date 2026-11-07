@@ -201,7 +201,9 @@ hosts stay usable.
    the rest; **Reset to default** brings everyone back. A change applies to
    that building alone; tick **Apply to all buildings** to give every building
    the same marks. Counts, Board and Needs you are
-   unchanged, and World keeps the filter for every browser. For the
+   unchanged, and World keeps the filter for every browser. Zoomed in to
+   desks the boards are put away: tap the reception lobby to bring its board
+   and sign back. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included; press **Summary** on it (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who

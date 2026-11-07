@@ -7,7 +7,8 @@ import { connectTownReceptionFilter } from "./townReceptionSetting";
  * plaques and Needs you count are unchanged (accessible targets follow the
  * bodies on screen, so they are not counted as facts), find picks the kept agents out
  * and Next walks them, and Reset to default for all buildings brings
- * everyone back.
+ * everyone back. Zoomed in to desks, where boards hide, a tap on a lobby
+ * brings its board and filter back.
  */
 export async function checkTownReceptionFilter(
   host: HTMLElement,
@@ -165,4 +166,117 @@ export async function checkTownReceptionFilter(
   check(saved[saved.length - 1] === undefined, "the reset was not saved");
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
   check(facts() === before, "resetting the filter changed facts");
+  await filterAtDeskLevel(host, renderer, sign, filter, waitFor);
+}
+
+/** Zoomed in to desks the board hides; a tap on its lobby brings it back. */
+async function filterAtDeskLevel(
+  host: HTMLElement,
+  renderer: NonNullable<typeof window.__HERDR_TOWN_RENDERER__>,
+  sign: () => HTMLButtonElement,
+  filter: () => HTMLElement | null,
+  waitFor: (
+    condition: () => boolean,
+    message: string | (() => string),
+  ) => Promise<void>,
+) {
+  await waitFor(() => filter() === null, "Escape did not close the filter");
+  for (let into = 0; into < 8 && renderer.level !== "desk"; into += 1) {
+    const frames = renderer.frames;
+    host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+    await waitFor(
+      () => renderer.frames > frames && !renderer.flying,
+      "zooming in to desks never settled",
+    );
+  }
+  // One building's board, found by name: off-screen buildings drop theirs.
+  const name = `${sign().getAttribute("aria-label")!.split(" reception takes")[0]} reception takes`;
+  const own = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".town-reception-sign")].find(
+      (button) => button.getAttribute("aria-label")?.startsWith(name),
+    );
+  const board = () => own()?.closest<HTMLElement>(".town-reception") ?? null;
+  const shown = () => {
+    const element = board();
+    return element ? getComputedStyle(element).visibility === "visible" : false;
+  };
+  await waitFor(
+    () => renderer.level === "desk" && board() !== null && !shown(),
+    `the reception board is still up at ${renderer.level} level`,
+  );
+  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+  // The lobby floor starts two tiles under the back wall, 18 px below the
+  // board's foot: its bottom row, clear of the queue, where the camera has
+  // it now.
+  const lobby = () => {
+    const foot = board()?.getBoundingClientRect();
+    return foot
+      ? {
+          x: foot.left + foot.width / 2,
+          y: foot.bottom + (18 + 8.5 * 16) * renderer.zoom,
+        }
+      : null;
+  };
+  // Pan with the arrow keys, as a person would, until the lobby is in view
+  // just under the top, where its board would be cut off.
+  const aim = () => {
+    const at = lobby();
+    if (!at) return "ArrowUp";
+    if (at.x < window.innerWidth * 0.25) return "ArrowLeft";
+    if (at.x > window.innerWidth * 0.75) return "ArrowRight";
+    if (at.y < 60) return "ArrowUp";
+    if (at.y > 320) return "ArrowDown";
+    return null;
+  };
+  for (let pan = 0, key = aim(); pan < 80 && key; pan += 1, key = aim()) {
+    const frames = renderer.frames;
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await waitFor(
+      () => renderer.frames > frames && !renderer.flying,
+      "panning to the lobby never settled",
+    );
+  }
+  const at = lobby();
+  await waitFor(
+    () => at !== null && aim() === null,
+    () =>
+      `panning never brought the lobby into view: ${JSON.stringify(lobby())}`,
+  );
+  for (const type of ["pointerdown", "pointerup"])
+    canvas.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerId: 41,
+        isPrimary: true,
+        pointerType: "mouse",
+        button: 0,
+        buttons: type === "pointerdown" ? 1 : 0,
+        clientX: at!.x,
+        clientY: at!.y,
+      }),
+    );
+  await waitFor(
+    () => {
+      const box = board()?.getBoundingClientRect();
+      return (
+        board()?.dataset.open === "true" &&
+        shown() &&
+        !renderer.flying &&
+        renderer.level === "desk" &&
+        !!box &&
+        box.top >= 0 &&
+        box.bottom <= window.innerHeight
+      );
+    },
+    () => {
+      const box = board()?.getBoundingClientRect();
+      return `a tap on the lobby at desk level did not bring its board into view: open ${board()?.dataset.open}, shown ${shown()}, level ${renderer.level}, flying ${renderer.flying}, board ${Math.round(box?.top ?? NaN)}–${Math.round(box?.bottom ?? NaN)} of ${window.innerHeight}, tapped ${JSON.stringify(at)} at zoom ${renderer.zoom.toFixed(2)}`;
+    },
+  );
+  own()!.click();
+  await waitFor(
+    () => filter() !== null,
+    "the board brought back at desk level opened no filter",
+  );
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 }

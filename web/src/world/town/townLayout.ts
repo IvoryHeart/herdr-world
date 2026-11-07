@@ -89,6 +89,8 @@ const LOBBY_TOP = 2;
 const ROOM_TOP = 9;
 /** The bar's height with the wall row under it, and the lobby's height. */
 const LOBBY_HEIGHT = 7;
+/** The reception lobby's rows from `lobbyY`, above the rooms. */
+export const TOWN_LOBBY_HEIGHT = LOBBY_HEIGHT;
 /** The bar's sofa corner: its first twelve tiles keep the old lounge's spots. */
 const SOFA_CORNER = 12;
 /** The bar's widest: the sofa corner, then a short counter with three stools. */
