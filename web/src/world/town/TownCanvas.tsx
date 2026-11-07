@@ -43,6 +43,7 @@ import {
   type TownCenterAction,
 } from "./TownCenterMenu";
 import { TownScene } from "./scene/townScene";
+import { holdTownReflowOnInput } from "./townSceneInput";
 import { sharedTownJoinSeats, type TownJoinSeats } from "./townJoinSeats";
 import { TownSceneDiff } from "./scene/townSceneDiff";
 import { TownHud, townScreenAnchor, townWorldAnchor } from "./scene/townHud";
@@ -591,20 +592,7 @@ export function TownCanvas({
   // Presses, scrolls and zooms on the town hold back a reflow (see above).
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
-    const touch = () => scene.touch();
-    const down = () => scene.pointerDown();
-    const up = () => scene.pointerUp();
-    host.addEventListener("pointerdown", down, true);
-    window.addEventListener("pointerup", up, true);
-    window.addEventListener("pointercancel", up, true);
-    host.addEventListener("wheel", touch, { capture: true, passive: true });
-    return () => {
-      host.removeEventListener("pointerdown", down, true);
-      window.removeEventListener("pointerup", up, true);
-      window.removeEventListener("pointercancel", up, true);
-      host.removeEventListener("wheel", touch, true);
-    };
+    return host ? holdTownReflowOnInput(scene, host) : undefined;
   }, [scene]);
 
   useEffect(() => {
