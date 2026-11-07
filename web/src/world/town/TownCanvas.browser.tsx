@@ -3753,6 +3753,18 @@ async function run() {
       () => !diagnostics.flying,
       "Town did not finish showing the whole town",
     );
+    // Glides and fades advance per drawn frame, so a slow software renderer
+    // takes longer in wall time: wait for the scene, not a clock.
+    const settled = async (what: string) => {
+      const frames = diagnostics.frames;
+      await waitFor(
+        () =>
+          diagnostics.frames > frames &&
+          !diagnostics.transitioning &&
+          !diagnostics.flying,
+        `Town did not settle after ${what}`,
+      );
+    };
     const gaps = diagnostics.topologyGaps;
     const transitions = diagnostics.transitions;
     const crossfades = diagnostics.crossfades;
@@ -3784,13 +3796,13 @@ async function run() {
       () => diagnostics.layout!.buildings === buildings - 1,
       "turning a host off did not remove its building",
     );
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await settled("turning a host off");
     setWorld(worldFor(base.connections));
     await waitFor(
       () => diagnostics.layout!.buildings === buildings,
       "turning a host back on did not bring its building back",
     );
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await settled("turning a host back on");
     watch.disconnect();
     check(
       diagnostics.topologyGaps === gaps,

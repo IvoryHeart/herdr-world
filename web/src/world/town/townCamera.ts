@@ -298,6 +298,11 @@ export class TownCamera {
     return this.flight !== null;
   }
 
+  /** Whether a glide with the town's buildings is still under way. */
+  get gliding() {
+    return this.glide !== null;
+  }
+
   /** Where the camera is going: a flight's target, else where it is. */
   get destination() {
     const flight = this.flight;

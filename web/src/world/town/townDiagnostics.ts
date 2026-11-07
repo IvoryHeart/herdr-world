@@ -50,6 +50,11 @@ export type TownRendererDiagnostics = {
   zoom: number;
   /** True until the current camera flight reaches its target. */
   flying: boolean;
+  /**
+   * True while buildings glide or fade after a topology change, or the
+   * camera glides with them (townTransition.ts).
+   */
+  transitioning: boolean;
   actors: number;
   walking: number;
   /** Agents opened by the user whose goal is their own desk. */
@@ -116,6 +121,7 @@ export function diagnostics(): TownRendererDiagnostics {
     level: null,
     zoom: 1,
     flying: false,
+    transitioning: false,
     actors: 0,
     walking: 0,
     summoned: [],

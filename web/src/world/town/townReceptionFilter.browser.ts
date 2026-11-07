@@ -128,9 +128,13 @@ export async function checkTownReceptionFilter(
   const peeked = () =>
     host.ownerDocument.querySelector<HTMLElement>(".town-peek")?.dataset
       .agentKey ?? "";
+  // Kept means seated at its desk by the filter: the renderer's own list,
+  // not the agents' targets sampled once (some may not be drawn yet).
+  const keptNow = (key: string) => renderer.held.includes(key);
   await waitFor(
-    () => kept.includes(peeked()),
-    "find did not show an agent kept at its desk",
+    () => keptNow(peeked()),
+    () =>
+      `find did not show an agent kept at its desk: showed ${peeked() || "nothing"}, ${renderer.held.length} kept`,
   );
   const first = peeked();
   const next = [
@@ -141,7 +145,7 @@ export async function checkTownReceptionFilter(
   if (next) {
     next.click();
     await waitFor(
-      () => peeked() !== first && kept.includes(peeked()),
+      () => peeked() !== first && keptNow(peeked()),
       "Next did not walk to another agent kept at its desk",
     );
   }
