@@ -15,8 +15,9 @@ import {
  * Subscription "fuel" for the Town board sign and summary: how much of each
  * harness's limit windows is left, from the service's harness usage read
  * (`world.usage.get` `limits`, docs/usage.md). Only harnesses with an
- * observation get a gauge; stale numbers say so, and nothing reads 0 % or
- * 100 % without an observation behind it.
+ * observation get a gauge; a harness that keeps no readable limits reads
+ * "not available"; stale numbers say so, and nothing reads 0 % or 100 %
+ * without an observation behind it.
  */
 
 /** Below this share left a window is low and wears the warning colour. */
@@ -127,6 +128,37 @@ export function townFuelGauges(
       best.set(gauge.harness, gauge);
   }
   return [...best.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A harness that keeps no readable limits: the sign names it rather than leaving it out. */
+export type TownFuelNote = {
+  harness: UsageLimit["harness"];
+  name: string;
+  reason: string;
+};
+
+/**
+ * Harnesses whose limits are unsupported and that have no gauge from any
+ * host. They show as "not available" with the service's one-line reason,
+ * never as an empty or full gauge.
+ */
+export function townFuelNotes(
+  limits: readonly UsageLimit[],
+  gauges: readonly TownFuelGauge[],
+): TownFuelNote[] {
+  const notes = new Map<string, TownFuelNote>();
+  for (const limit of limits)
+    if (
+      limit.state === "unsupported" &&
+      !gauges.some((g) => g.harness === limit.harness) &&
+      !notes.has(limit.harness)
+    )
+      notes.set(limit.harness, {
+        harness: limit.harness,
+        name: townHarnessName(limit.harness),
+        reason: limit.reason ?? "no source",
+      });
+  return [...notes.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 const resetFormat = new Intl.DateTimeFormat(undefined, {

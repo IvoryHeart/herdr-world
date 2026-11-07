@@ -205,7 +205,8 @@ hosts stay usable.
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex subscription
    window is left (amber and **low** under 15 %); hover or tap one for its reset
-   time and how old the numbers are. Press **Summary** on the board (on a phone, tap the
+   time and how old the numbers are. Claude reads **not available**, since
+   Claude Code saves no record of how much of its limits is used. Press **Summary** on the board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts and its subscription limits, and spend. Answer a question from its offered

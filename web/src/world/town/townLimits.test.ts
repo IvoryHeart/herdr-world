@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { UsageLimit, WorldUsageSnapshot } from "../../../../shared/usage";
 import {
   townFuelGauges,
+  townFuelNotes,
   townLimits,
   townSeenAge,
   townWindowLabel,
@@ -118,6 +119,37 @@ test("a gauge reads percent left, warns when low and explains itself", () => {
   expect(
     renderToStaticMarkup(createElement(TownFuel, { gauges: [], now })),
   ).toBe("");
+});
+
+test("a harness without readable limits shows as not available, never as a level", () => {
+  const limits = [codex("alpha", [40, 92]), claude("alpha"), claude("beta")];
+  const gauges = townFuelGauges(limits, now);
+  const notes = townFuelNotes(limits, gauges);
+  expect(notes).toEqual([
+    { harness: "claude", name: "Claude", reason: "Synthetic reason" },
+  ]);
+  const html = renderToStaticMarkup(
+    createElement(TownFuel, { gauges, notes, now }),
+  );
+  expect(html).toContain("Codex");
+  expect(html).toContain("Claude");
+  expect(html).toContain("not available");
+  expect(html).toContain("Limits not available: Synthetic reason");
+  expect(html).toContain("Claude limits not available: Synthetic reason");
+  // Claude alone still gets the row, with no bar and no percent.
+  const alone = renderToStaticMarkup(
+    createElement(TownFuel, {
+      gauges: [],
+      notes: townFuelNotes([claude("alpha")], []),
+      now,
+    }),
+  );
+  expect(alone).toContain("FUEL");
+  expect(alone).toContain("Claude");
+  expect(alone).not.toContain("town-fuel-bar");
+  expect(alone).not.toContain("%");
+  // A missing Codex observation is not "not available"; it has no entry.
+  expect(townFuelNotes([missing("alpha")], [])).toEqual([]);
 });
 
 test("stale or aged gauges say stale and never show a level", () => {

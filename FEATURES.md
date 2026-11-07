@@ -72,7 +72,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
     says **low**. Hover, focus or tap a gauge for each reset time, how long ago
     the numbers were seen, and their source. Old numbers read **stale** with no
-    level; with several hosts the board shows the one with the least left. On a
+    level; with several hosts the board shows the one with the least left.
+    Claude reads **not available**; hover, focus or tap it for the reason. On a
     phone the compact chip adds the lowest percent left. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,

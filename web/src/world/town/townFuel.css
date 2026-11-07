@@ -99,6 +99,13 @@
   color: #c9b79a;
 }
 
+/* A harness that keeps no readable limits: words, no bar. */
+.town-fuel-unavailable {
+  grid-column: 1 / -1;
+  color: #c9b79a;
+  font-style: italic;
+}
+
 .town-fuel-details {
   position: absolute;
   z-index: 2;

@@ -1,8 +1,9 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import {
   townResetTime,
   townSeenAge,
   type TownFuelGauge,
+  type TownFuelNote,
   type TownFuelWindow,
 } from "./townLimits";
 import "./townFuel.css";
@@ -32,6 +33,51 @@ const windowText = (gauge: TownFuelGauge, w: TownFuelWindow) =>
     : `${w.label} ${w.left} % left${w.low ? ", low" : ""}`;
 
 /**
+ * One entry on the fuel row: a button whose hover, focus or tap shows its
+ * details below it, and Escape closes.
+ */
+function TownFuelTip({
+  label,
+  stale,
+  unavailable,
+  details,
+  children,
+}: {
+  label: string;
+  stale?: boolean;
+  unavailable?: boolean;
+  details: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const detailsId = useId();
+  return (
+    <div className="town-fuel-gauge" data-open={open}>
+      <button
+        type="button"
+        data-stale={stale ? true : undefined}
+        data-unavailable={unavailable ? true : undefined}
+        aria-expanded={open}
+        aria-describedby={detailsId}
+        aria-label={label}
+        onClick={() => setOpen((value) => !value)}
+        onKeyDown={(event) => {
+          if (open && event.key === "Escape") {
+            event.stopPropagation();
+            setOpen(false);
+          }
+        }}
+      >
+        {children}
+      </button>
+      <span id={detailsId} role="tooltip" className="town-fuel-details">
+        {details}
+      </span>
+    </div>
+  );
+}
+
+/**
  * One harness's fuel on the Town board sign: a short bar per limit window
  * with the percent left. Hover, focus or a tap shows when each resets and
  * how old the observation is. A stale gauge shows no level at all.
@@ -43,63 +89,71 @@ export function TownFuelGaugeView({
   gauge: TownFuelGauge;
   now: number;
 }) {
-  const [open, setOpen] = useState(false);
-  const detailsId = useId();
   return (
-    <div className="town-fuel-gauge" data-open={open}>
-      <button
-        type="button"
-        data-stale={gauge.stale}
-        aria-expanded={open}
-        aria-describedby={detailsId}
-        aria-label={`${gauge.name} limits: ${gauge.windows.map((w) => windowText(gauge, w)).join("; ")}`}
-        onClick={() => setOpen((value) => !value)}
-        onKeyDown={(event) => {
-          if (open && event.key === "Escape") {
-            event.stopPropagation();
-            setOpen(false);
-          }
-        }}
-      >
-        <span className="town-fuel-name">{gauge.name}</span>
-        {gauge.windows.map((w) => (
-          <span
-            key={w.label}
-            className="town-fuel-window"
-            data-low={!gauge.stale && w.low}
-          >
-            <span className="town-fuel-label">{w.label}</span>
-            <span className="town-fuel-bar" aria-hidden="true">
-              {gauge.stale ? null : <span style={{ width: `${w.left}%` }} />}
-            </span>
-            <span className="town-fuel-value">
-              {gauge.stale ? "stale" : `${w.left}%`}
-              {!gauge.stale && w.low ? " low" : ""}
-            </span>
+    <TownFuelTip
+      label={`${gauge.name} limits: ${gauge.windows.map((w) => windowText(gauge, w)).join("; ")}`}
+      stale={gauge.stale}
+      details={townFuelDetails(gauge, now)}
+    >
+      <span className="town-fuel-name">{gauge.name}</span>
+      {gauge.windows.map((w) => (
+        <span
+          key={w.label}
+          className="town-fuel-window"
+          data-low={!gauge.stale && w.low}
+        >
+          <span className="town-fuel-label">{w.label}</span>
+          <span className="town-fuel-bar" aria-hidden="true">
+            {gauge.stale ? null : <span style={{ width: `${w.left}%` }} />}
           </span>
-        ))}
-      </button>
-      <span id={detailsId} role="tooltip" className="town-fuel-details">
-        {townFuelDetails(gauge, now)}
-      </span>
-    </div>
+          <span className="town-fuel-value">
+            {gauge.stale ? "stale" : `${w.left}%`}
+            {!gauge.stale && w.low ? " low" : ""}
+          </span>
+        </span>
+      ))}
+    </TownFuelTip>
   );
 }
 
-/** The board's fuel row: one gauge per harness that has limit numbers. */
+/** A harness with no readable limits: named, "not available", and why. */
+export function TownFuelNoteView({ note }: { note: TownFuelNote }) {
+  return (
+    <TownFuelTip
+      label={`${note.name} limits not available: ${note.reason}`}
+      unavailable
+      details={`Limits not available: ${note.reason}`}
+    >
+      <span className="town-fuel-name">{note.name}</span>
+      <span className="town-fuel-window">
+        <span className="town-fuel-unavailable">not available</span>
+      </span>
+    </TownFuelTip>
+  );
+}
+
+/**
+ * The board's fuel row: one gauge per harness that has limit numbers, and
+ * a "not available" entry per harness that keeps none.
+ */
 export function TownFuel({
   gauges,
+  notes = [],
   now,
 }: {
   gauges: readonly TownFuelGauge[];
+  notes?: readonly TownFuelNote[];
   now: number;
 }) {
-  if (!gauges.length) return null;
+  if (!gauges.length && !notes.length) return null;
   return (
     <div className="town-fuel" role="group" aria-label="Subscription limits">
       <span className="town-fuel-title">FUEL</span>
       {gauges.map((gauge) => (
         <TownFuelGaugeView key={gauge.harness} gauge={gauge} now={now} />
+      ))}
+      {notes.map((note) => (
+        <TownFuelNoteView key={note.harness} note={note} />
       ))}
     </div>
   );

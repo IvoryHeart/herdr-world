@@ -12,7 +12,12 @@ import type {
   TownSummaryCounts,
 } from "./townSummary";
 import type { TownPlaceEconomy } from "./townPlaceUsage";
-import { townFuelGauges, townLimits, useTownLimits } from "./townLimits";
+import {
+  townFuelGauges,
+  townFuelNotes,
+  townLimits,
+  useTownLimits,
+} from "./townLimits";
 import { TownFuel, townFuelLowest } from "./TownFuelGauge";
 
 /**
@@ -42,7 +47,9 @@ export function TownBoard({
   // Subscription fuel: each harness's limit windows, from harness usage.
   const usage = useTownLimits();
   const now = Date.now();
-  const gauges = townFuelGauges(townLimits(usage), now);
+  const limits = townLimits(usage);
+  const gauges = townFuelGauges(limits, now);
+  const notes = townFuelNotes(limits, gauges);
   const lowest = townFuelLowest(gauges);
   const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}${
     lowest
@@ -121,7 +128,7 @@ export function TownBoard({
                   "No cost data. Configure a metrics provider in settings.",
               })}
         />
-        <TownFuel gauges={gauges} now={now} />
+        <TownFuel gauges={gauges} notes={notes} now={now} />
       </div>
     </>
   );
