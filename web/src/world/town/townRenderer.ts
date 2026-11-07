@@ -111,6 +111,9 @@ export type TownRendererHandle = {
   destroy(): void;
 };
 
+/** How often a frame that only fills in the ground renders (see `forced`). */
+const TOWN_FILL_RENDER_MS = 100;
+
 const BLOCK_COLORS: Record<string, number> = {
   working: 0x6fc3ff,
   blocked: 0xffb547,
@@ -253,6 +256,16 @@ export async function createTownRenderer(
   /** A topology change waits for a whole frame (townTransition.ts). */
   let topologyPending = false;
   let transitioning = false;
+  /**
+   * Each render redraws the whole window, land included. While the ground
+   * only fills in behind an otherwise still scene, one render per painted
+   * chunk multiplied that cost on a zoomed-out town, so those frames paint
+   * on and render at most every TOWN_FILL_RENDER_MS. Anything else wanting
+   * a frame (`forced`) renders it, as does the frame that finds nothing left
+   * to paint.
+   */
+  let lastRender = -Infinity;
+  let forced = true;
 
   const themeFor = (hostKey: string): TownHostTheme =>
     townHostTheme(
@@ -527,6 +540,7 @@ export async function createTownRenderer(
   const frameReasons = new Set<string>();
   let lastTraced = "";
   const request = (reason: string) => {
+    forced = true;
     if (reason !== "capture") onInvalidate?.(reason);
     if (DEVTOOLS && onTrace) frameReasons.add(reason);
     frames?.request("state");
@@ -562,9 +576,8 @@ export async function createTownRenderer(
       Math.round(camera.viewport.width / 2 - camera.x * camera.z),
       Math.round(camera.viewport.height / 2 - camera.y * camera.z),
     );
-    const materializing = topology.materialize(
-      topologyPending || transitioning,
-    );
+    const urgent = topologyPending || transitioning;
+    const materializing = topology.materialize(urgent);
     if (dimDirty) {
       dimDirty = false;
       updateDim();
@@ -598,7 +611,24 @@ export async function createTownRenderer(
     );
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);
-    app.renderer.render(app.stage);
+    const animated = !camera.reducedMotion && !state.calm;
+    const onlyFilling =
+      materializing &&
+      !urgent &&
+      !forced &&
+      !cameraMoved &&
+      !roofsMoving &&
+      !actorsMoved &&
+      !camera.flying &&
+      !transitioning &&
+      !dragging &&
+      // Animation due now renders, unless typing has paused it.
+      !(animated && frames?.motionAllowed && ambient.next === clock);
+    forced = false;
+    if (!onlyFilling || now - lastRender >= TOWN_FILL_RENDER_MS) {
+      app.renderer.render(app.stage);
+      lastRender = now;
+    }
     onDrawn?.(materializing);
     stats.level = level;
     stats.zoom = camera.z;
@@ -625,7 +655,6 @@ export async function createTownRenderer(
       materializing ||
       transitioning ||
       dragging;
-    const animated = !camera.reducedMotion && !state.calm;
     const next = moving
       ? "state"
       : animated && ambient.next === clock
@@ -639,6 +668,7 @@ export async function createTownRenderer(
       ambientTimer = setTimeout(
         () => {
           ambientTimer = null;
+          forced = true;
           frames?.request(wakeAt === motionAt ? "motion" : "state");
         },
         Math.max(1, (wakeAt - clock) * 1000 - 16),
