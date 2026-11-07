@@ -135,7 +135,9 @@ a coalesced refresh when its observed data changes. A current result may be reus
 advance the observation revision and dirty the cache without rejecting a read
 in flight. The first update for a pane, any other event and every subscription
 ACK retain hard invalidation; other events and ACKs also clear the per-pane
-comparison history. A real change during the same read still rejects it even
+comparison history. Payload comparison ignores object key order at every depth
+(including Herdr's metadata maps), while preserving values and array order.
+A real change during the same read still rejects it even
 when activity also arrives. The browser
 uses one World WebSocket with a transport epoch independent of runtime generations.
 The hello advertises `world_observation_v1` and a random `service_incarnation`

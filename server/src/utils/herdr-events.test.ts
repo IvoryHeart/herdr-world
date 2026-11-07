@@ -77,6 +77,39 @@ test("removing a semantic field is a change, regardless of payload key order", (
   expect(classifier.classify(reordered)).toBeUndefined();
 });
 
+test("repaint classification ignores nested object key order but retains values and array order", () => {
+  const classifier = createPaneActivityClassifier();
+  const metadata = {
+    state_labels: { status: "working", task: "Tests" },
+    tokens: { task: "Tests", role: "builder" },
+    future_field: [{ context: { first: 1, second: 2 } }, "tail"],
+  };
+  expect(classifier.classify(update(metadata))).toBeUndefined();
+  const reordered = {
+    state_labels: { task: "Tests", status: "working" },
+    tokens: { role: "builder", task: "Tests" },
+    future_field: [{ context: { second: 2, first: 1 } }, "tail"],
+    revision: 2,
+    terminal_title: "Working ⠴",
+  };
+  expect(classifier.classify(update(reordered))).toBe("activity");
+  expect(
+    classifier.classify(
+      update({ ...reordered, tokens: { role: "reviewer", task: "Tests" } }),
+    ),
+  ).toBeUndefined();
+  expect(classifier.classify(update(reordered))).toBeUndefined();
+  expect(classifier.classify(update(reordered))).toBe("activity");
+  expect(
+    classifier.classify(
+      update({
+        ...reordered,
+        future_field: [...reordered.future_field].reverse(),
+      }),
+    ),
+  ).toBeUndefined();
+});
+
 test("other events forget all panes, even if their payload contains a pane", () => {
   const classifier = createPaneActivityClassifier();
   classifier.classify(update());

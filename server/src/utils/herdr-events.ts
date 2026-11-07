@@ -26,6 +26,17 @@ const PANE_REPAINT_FIELDS = new Set([
   "scroll",
 ]);
 
+function canonicalPaneValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalPaneValue);
+  if (!value || typeof value !== "object") return value;
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.keys(record)
+      .sort()
+      .map((key) => [key, canonicalPaneValue(record[key])]),
+  );
+}
+
 /** Compare consecutive payloads per pane, forgetting them across event gaps. */
 export function createPaneActivityClassifier() {
   const previousByPane = new Map<string, string>();
@@ -51,7 +62,8 @@ export function createPaneActivityClassifier() {
         Object.keys(payload)
           .filter((key) => !PANE_REPAINT_FIELDS.has(key))
           .sort()
-          .map((key) => [key, payload[key]]),
+          // Herdr's nested metadata maps have no stable serialization order.
+          .map((key) => [key, canonicalPaneValue(payload[key])]),
       );
       const previous = previousByPane.get(paneId);
       previousByPane.set(paneId, signature);

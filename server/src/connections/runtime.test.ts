@@ -65,6 +65,10 @@ test("runtime forwards pane activity and resets its baseline at the subscription
           pane_id: "pane-1",
           revision,
           terminal_title: `Working ${revision}`,
+          tokens:
+            revision % 2
+              ? { task: "Tests", role: "builder" }
+              : { role: "builder", task: "Tests" },
         },
       },
     });

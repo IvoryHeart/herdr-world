@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ConnectionStatus } from "../connections/types";
+import { createPaneActivityClassifier } from "../utils/herdr-events";
 import { WorldSnapshotService } from "./snapshot";
 
 function fixture() {
@@ -104,6 +105,54 @@ test("activity dirties an already fresh cache and advances its revision", async 
     snapshot: { panes: [{ terminal_title: "Working ⠴" }] },
   });
 });
+
+test.each([false, true])(
+  "interleaved pane repaints with reordered metadata stay actionable unless a value changes: %s",
+  async (semanticChange) => {
+    const { service, release, calls } = fixture();
+    const classifier = createPaneActivityClassifier();
+    const emit = (pane: number, revision: number, changed = false) => {
+      const entries = [
+        ["role", "builder"],
+        ["task", changed ? "Review" : "Tests"],
+        ["status", "working"],
+      ];
+      const event = {
+        event: "pane_updated",
+        data: {
+          pane: {
+            pane_id: `pane-${pane}`,
+            revision,
+            terminal_title: revision % 2 ? "⠋ Tests" : "⠴ Tests",
+            tokens: Object.fromEntries(
+              revision % 2 ? entries : entries.reverse(),
+            ),
+          },
+        },
+      };
+      service.invalidate("local", classifier.classify(event));
+    };
+    emit(1, 1);
+    emit(2, 1);
+    const pending = service.snapshot();
+    for (let revision = 2; revision <= 20; revision++) {
+      emit(1, revision, semanticChange);
+      emit(2, revision);
+    }
+    release();
+    const result = await pending;
+    expect(result.connections[0]).toMatchObject(
+      semanticChange
+        ? {
+            actionable: false,
+            snapshot_error: "observation changed during snapshot",
+          }
+        : { stale: false, actionable: true },
+    );
+    await service.snapshot();
+    expect(calls()).toBe(8);
+  },
+);
 
 test.each([true, false])(
   "a real change still voids the read (activity first: %s)",
