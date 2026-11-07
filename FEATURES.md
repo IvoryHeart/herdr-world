@@ -67,11 +67,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     items), **Done** (finished) and **Quiet** agents. A line under the counts
     gives every agent in the town and its buildings (and any of unknown
     status). It shows spend when a metrics provider
-    is configured. Its **Summary** button, or on a phone the compact chip under
+    is configured. Under **FUEL**, a gauge per harness with subscription-limit
+    data (today Codex, from its session logs) shows a short bar per window
+    (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
+    says **low**. Hover, focus or tap a gauge for each reset time, how long ago
+    the numbers were seen, and their source. Old numbers read **stale** with no
+    level; with several hosts the board shows the one with the least left. On a
+    phone the compact chip adds the lowest percent left. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
-    with its counts (tap a room to go there), and spend per model ("No cost
+    with its counts (tap a room to go there) and its subscription limits
+    (each window's percent used, reset time, source and age; stale or missing
+    labelled; Claude shows why its limits are not available), and spend per model ("No cost
     data" without a provider). Press **Summary** again to restore its minimized
     window or bring it to the front.
   - Each building has its reception at the top, under the front door, and a

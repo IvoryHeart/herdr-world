@@ -1,8 +1,11 @@
-import type {
-  UsageEntity,
-  UsageSource,
-  UsageState,
-  WorldUsageSnapshot,
+import {
+  CLAUDE_LIMITS_REASON,
+  usageLimitExpired,
+  type UsageEntity,
+  type UsageLimit,
+  type UsageSource,
+  type UsageState,
+  type WorldUsageSnapshot,
 } from "../../../shared/usage";
 import type { ConnectionStatus } from "../connections/types";
 import type { WorldSnapshotResult } from "../world/snapshot";
@@ -42,6 +45,8 @@ type Cached = {
   topology: string;
   value: RuntimeUsage;
   stale: Set<string>;
+  /** Limits kept from an earlier read after this one failed. */
+  limitsStale: boolean;
 };
 type Options = {
   incarnation: string;
@@ -200,6 +205,18 @@ export class WorldUsageService {
       }
       // Retention and admission limits bound the service cache as well as replies.
       value.rows = value.rows.slice(0, 1024);
+      // A failed read keeps the last limits it had, as stale numbers.
+      let limitsStale = false;
+      if (
+        !value.limits?.length &&
+        old?.value.limits?.length &&
+        value.sources.some(
+          (s) => s.harness === "codex" && s.state === "unavailable",
+        )
+      ) {
+        value.limits = old.value.limits;
+        limitsStale = true;
+      }
       if (
         this.#closed ||
         (!failed && owner.signal.aborted) ||
@@ -213,6 +230,7 @@ export class WorldUsageService {
         topology: topologyKey(agents),
         value,
         stale,
+        limitsStale,
       });
     })();
     this.#pending.set(id, {
@@ -298,7 +316,8 @@ export class WorldUsageService {
     const table = parseUsagePrices(await this.options.prices());
     const telemetry = await this.options.telemetry();
     const entities: UsageEntity[] = [],
-      sources: UsageSource[] = [];
+      sources: UsageSource[] = [],
+      limits: UsageLimit[] = [];
     let truncated = statuses.length > 16;
     for (const status of selected) {
       const cached = this.#cache.get(status.id);
@@ -330,6 +349,46 @@ export class WorldUsageService {
           last_success_at: null,
           refreshing: false,
         });
+      const generation = cached?.generation ?? status.generation;
+      const codex = value.limits?.find((l) => l.harness === "codex");
+      limits.push(
+        codex
+          ? {
+              connection_id: status.id,
+              connection_generation: generation,
+              harness: "codex",
+              state:
+                !fresh ||
+                cached.limitsStale ||
+                usageLimitExpired(codex.at, codex.windows, now)
+                  ? "stale"
+                  : "available",
+              source: "codex-session-log",
+              reason: null,
+              observed_at: codex.at,
+              windows: codex.windows.map((w) => ({ ...w })),
+            }
+          : {
+              connection_id: status.id,
+              connection_generation: generation,
+              harness: "codex",
+              state: "missing",
+              source: null,
+              reason: null,
+              observed_at: null,
+              windows: [],
+            },
+        {
+          connection_id: status.id,
+          connection_generation: generation,
+          harness: "claude",
+          state: "unsupported",
+          source: null,
+          reason: CLAUDE_LIMITS_REASON,
+          observed_at: null,
+          windows: [],
+        },
+      );
       const bindings =
         fresh &&
         cached?.topology ===
@@ -395,6 +454,7 @@ export class WorldUsageService {
       total: usageTotal(entities),
       unattributed: usageTotal(entities.filter((e) => !e.pane_id)),
       rollups: usageRollups(entities),
+      limits,
       telemetry: {
         role: "comparison",
         included_in_totals: false,

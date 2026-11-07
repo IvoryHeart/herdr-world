@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Fuel } from "lucide-react";
 import {
   formatOfficeCost,
   formatOfficeModelNames,
@@ -11,6 +12,8 @@ import type {
   TownSummaryCounts,
 } from "./townSummary";
 import type { TownPlaceEconomy } from "./townPlaceUsage";
+import { townFuelGauges, townLimits, useTownLimits } from "./townLimits";
+import { TownFuel, townFuelLowest } from "./TownFuelGauge";
 
 /**
  * The Town board counts the whole town from the Town summary (townSummary.ts):
@@ -36,7 +39,16 @@ export function TownBoard({
     }
   };
   const population = `${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} in ${counts.buildings} ${counts.buildings === 1 ? "building" : "buildings"}`;
-  const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}`;
+  // Subscription fuel: each harness's limit windows, from harness usage.
+  const usage = useTownLimits();
+  const now = Date.now();
+  const gauges = townFuelGauges(townLimits(usage), now);
+  const lowest = townFuelLowest(gauges);
+  const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}${
+    lowest
+      ? `; ${lowest.gauge.name} ${lowest.window.label} ${lowest.window.left} % left${lowest.window.low ? ", low" : ""}`
+      : ""
+  }`;
   return (
     <>
       <button
@@ -62,6 +74,12 @@ export function TownBoard({
         <span data-status="working">{counts.working}</span>
         <span data-status="blocked">!{counts.needsYou}</span>
         <span data-status="done">✓{counts.finished}</span>
+        {lowest ? (
+          <span data-status="fuel" data-low={lowest.window.low}>
+            <Fuel size={12} aria-hidden="true" />
+            {lowest.window.left}%
+          </span>
+        ) : null}
       </button>
       <div
         id="town-board"
@@ -103,6 +121,7 @@ export function TownBoard({
                   "No cost data. Configure a metrics provider in settings.",
               })}
         />
+        <TownFuel gauges={gauges} now={now} />
       </div>
     </>
   );
