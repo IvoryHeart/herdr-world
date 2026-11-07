@@ -3,7 +3,7 @@ import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentQuests } from "./agentQuests";
 import { useCreationProgress } from "../creationRequests";
-import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
+import { isMobileLayout } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useTownFinished, withTownFinished } from "./town/townFinished";
 import { WorldSearchResults } from "./WorldSearchResults";
@@ -140,7 +140,6 @@ export default function TownView({
     anchors: Record<string, WorldCanvasAnchor> | null,
   ): void;
 }) {
-  const layoutPreferences = useLayoutPreferences();
   const {
     office: observedOffice,
     deskPins,
@@ -687,14 +686,8 @@ export default function TownView({
       onOpenInspectorView(agent.nodeId, "history", focus);
     else void onSelect(agent.nodeId);
   };
-  const centerActions = useTownCenter(world, office, preferences, {
-    selectedRoomKey,
-    rooms: townRoomActions,
-    summary: townSummary,
-    mobile: layoutPreferences.mobile,
-    openChat,
-    toast,
-  });
+  const center = { selectedRoomKey, townRoomActions, townSummary, openChat };
+  const townCenter = useTownCenter(world, office, preferences, center, toast);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   /**
    * The agent a table stands for: one that needs you (waiting, then
@@ -952,7 +945,7 @@ export default function TownView({
             roomFocus={roomFocus}
             calm={preferences.townCalm}
             chrome={TOWN_CHROME}
-            centerActions={centerActions}
+            centerActions={townCenter}
             roomActions={{
               onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),

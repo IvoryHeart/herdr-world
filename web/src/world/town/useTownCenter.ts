@@ -13,6 +13,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { openSounds } from "../../chimes/chimeHost";
+import { useLayoutPreferences } from "../../layoutPreferences";
 import {
   openProfileEditor,
   requestAgentLaunch,
@@ -76,21 +77,19 @@ export function useTownCenter(
   { townMaster }: { townMaster: string },
   {
     selectedRoomKey,
-    rooms,
-    summary,
-    mobile,
+    townRoomActions: rooms,
+    townSummary: summary,
     openChat,
-    toast,
   }: {
     /** The room in view: a new agent starts there when it can. */
     selectedRoomKey: string | null;
-    rooms: RoomActions;
-    summary: { summary: { counts: { needsYou: number } }; open(): void };
-    mobile: boolean;
+    townRoomActions: RoomActions;
+    townSummary: { summary: { counts: { needsYou: number } }; open(): void };
     openChat(agentKey: string, focus?: boolean): void;
-    toast(kind: "ok" | "error", text: string): void;
   },
+  toast: (kind: "ok" | "error", text: string) => void,
 ): TownCenterAction[] {
+  const { mobile } = useLayoutPreferences();
   useTownMaster(office.roster, townMaster, mobile, (key) =>
     openChat(key, false),
   );

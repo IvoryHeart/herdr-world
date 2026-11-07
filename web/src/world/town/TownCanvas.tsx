@@ -27,16 +27,9 @@ import type {
 } from "../worldConnectorGeometry";
 import type { OfficeObservability } from "../officeObservability";
 import { TownCamera, type TownLevel } from "./townCamera";
+import { townShapeFor, townShapeKey, type TownShape } from "./townLayout";
+import { useTownCenterRing } from "./useTownCenterRing";
 import {
-  TOWN_TILE,
-  townShapeFor,
-  townShapeKey,
-  type TownShape,
-} from "./townLayout";
-import { townCenterEmblem } from "./townCenter";
-import {
-  placeTownCenterMenu,
-  townCenterMenuPoint,
   TownCenterMenu,
   TownCenterSign,
   type TownCenterAction,
@@ -301,58 +294,12 @@ export function TownCanvas({
       void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
   }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
-  const [centerOpen, setCenterOpen] = useState(false);
-  const centerMenu = useRef<HTMLElement | null>(null);
-  /** The ring follows the center's doors on screen as the camera moves. */
-  const placeCenterMenu = (menu = centerMenu.current) => {
-    const renderer = rendererRef.current;
-    const host = hostRef.current;
-    if (!menu || !renderer || !host) return;
-    centerMenu.current = menu;
-    const at = townCenterEmblem(latest.current.layout.center, TOWN_TILE);
-    const point = renderer.camera.toScreen(at.x, at.y);
-    placeTownCenterMenu(menu, point, host.clientWidth, host.clientHeight);
-  };
-  /** Keyboard focus on the plaque pans an off-screen center into view. */
-  const focusCenter = () => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-    const { camera } = renderer;
-    const at = townCenterEmblem(latest.current.layout.center, TOWN_TILE);
-    const point = camera.toScreen(at.x, at.y);
-    const { width, height } = camera.viewport;
-    const margin = 120;
-    if (
-      point.x > margin &&
-      point.y > margin &&
-      point.x < width - margin &&
-      point.y < height - margin
-    )
-      return;
-    camera.flyTo(at.x, at.y, camera.z, 0.4);
-    renderer.invalidate("focus");
-  };
-  /**
-   * Open the ring. A center near the view's edge (the top of the town, under
-   * the toolbar) first pans just far enough for the ring to sit on its doors.
-   */
-  const openCenter = useRef<() => void>(() => undefined);
-  openCenter.current = () => {
-    if (!centerActions?.length) return;
-    setCenterOpen(true);
-    const renderer = rendererRef.current;
-    const host = hostRef.current;
-    if (!renderer || !host) return;
-    const { camera } = renderer;
-    const at = townCenterEmblem(latest.current.layout.center, TOWN_TILE);
-    const point = camera.toScreen(at.x, at.y);
-    const fit = townCenterMenuPoint(point, host.clientWidth, host.clientHeight);
-    const dx = (fit.x - point.x) / camera.z;
-    const dy = (fit.y - point.y) / camera.z;
-    if (Math.abs(dx) + Math.abs(dy) < 1) return;
-    camera.flyTo(camera.x - dx, camera.y - dy, camera.z, 0.3);
-    renderer.invalidate("focus");
-  };
+  const ring = useTownCenterRing(
+    rendererRef,
+    hostRef,
+    () => latest.current.layout.center,
+    !!centerActions?.length,
+  );
   /** A table whose card a touch tap opened; touch has no hover to open it. */
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   const latest = useRef({
@@ -499,7 +446,7 @@ export function TownCanvas({
       }
     }
     hud.framed();
-    placeCenterMenu();
+    ring.place();
     // Inspected agents walk under a still camera, so their lines follow every
     // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
     if (posed || latest.current.conversationTargets.length > 0)
@@ -709,7 +656,7 @@ export function TownCanvas({
       },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
-      openCenter: () => openCenter.current(),
+      openCenter: ring.openRing,
       move: (command) => {
         const actions = latest.current.roomActions;
         switch (command.kind) {
@@ -845,7 +792,7 @@ export function TownCanvas({
       host.removeEventListener("pointerleave", leave);
       host.removeEventListener("wheel", wheel);
     };
-  }, [view, scene, hud]);
+  }, [view, scene, hud, ring.openRing]);
 
   const keyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!rendererRef.current || event.target !== event.currentTarget) return;
@@ -906,11 +853,9 @@ export function TownCanvas({
       >
         <TownCenterSign
           center={layout.center}
-          open={centerOpen}
-          onOpen={
-            centerActions?.length ? () => openCenter.current() : undefined
-          }
-          onFocus={focusCenter}
+          open={ring.open}
+          onOpen={centerActions?.length ? ring.openRing : undefined}
+          onFocus={ring.focus}
         />
         <TownTeamsLayer teams={teams} />
         <TownBusLayer
@@ -1011,15 +956,12 @@ export function TownCanvas({
           </button>
         ) : null}
       </div>
-      {centerOpen && centerActions?.length ? (
+      {ring.open && centerActions?.length ? (
         <TownCenterMenu
           actions={centerActions}
           viewportWidth={hostRef.current?.clientWidth ?? 0}
-          place={placeCenterMenu}
-          onClose={() => {
-            centerMenu.current = null;
-            setCenterOpen(false);
-          }}
+          place={ring.place}
+          onClose={ring.close}
         />
       ) : null}
     </div>
