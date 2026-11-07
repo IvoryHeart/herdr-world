@@ -100,6 +100,11 @@ export type TownInteractionPorts = {
   tapCard?(deskKey: string | null): boolean;
   activateAgent(key: string): void;
   activateRoom(roomKey: string): void;
+  /**
+   * Each tap: the building whose reception lobby it landed on at desk level,
+   * where the reception board is hidden, or null when it landed elsewhere.
+   */
+  openReception?(hostKey: string | null): void;
   /** Open the town center's radial menu. */
   openCenter(): void;
   move(command: TownMoveCommand): Promise<TownMoveResult>;
@@ -285,7 +290,9 @@ export class TownInteraction {
     if (pointer.pointerType !== "mouse" || this.gesture.pointers.size) return;
     const hit = this.hitAt(pointer.at.x, pointer.at.y);
     const key =
-      hit?.kind === "building" ? `building:${hit.key}` : townHitKey(hit);
+      hit?.kind === "building" || hit?.kind === "reception"
+        ? `building:${hit.key}`
+        : townHitKey(hit);
     if (key !== this.ports.hovered()) this.ports.setHovered(key);
     this.ports.cursor(
       hit?.kind === "room" &&
@@ -567,7 +574,9 @@ export class TownInteraction {
   private tap(target: TownGestureTarget) {
     const stage = this.ports.stage();
     const hit = target.hit;
-    if (!stage || target.nameOnly) return;
+    if (!stage) return;
+    this.ports.openReception?.(hit?.kind === "reception" ? hit.key : null);
+    if (target.nameOnly) return;
     if (
       this.pressedWith === "touch" &&
       this.ports.tapCard?.(hit?.kind === "desk" ? hit.key : null)
@@ -577,6 +586,10 @@ export class TownInteraction {
     const { layout } = this.ports.world();
     if (hit.kind === "center") {
       this.ports.openCenter();
+      return;
+    }
+    if (hit.kind === "reception") {
+      this.ports.view.revealReception(layout, hit.key);
       return;
     }
     if (hit.kind === "building") {

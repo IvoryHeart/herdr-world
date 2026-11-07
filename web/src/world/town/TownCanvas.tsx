@@ -72,6 +72,10 @@ import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
 import { aimAtBin } from "../bin/binDrop";
+import {
+  townReceptionTakesAll,
+  type TownReceptionTakes,
+} from "./townReceptionFilter";
 import "./townBoard.css";
 import "./townTeams.css";
 
@@ -96,6 +100,9 @@ export function TownCanvas({
   completionSeenKeys,
   summonedKeys = NO_KEYS,
   askingKeys = NO_KEYS,
+  receptionHeldKeys = NO_KEYS,
+  receptionTakes = townReceptionTakesAll,
+  onFindHeld,
   onActivateAsk,
   quests = NO_QUESTS,
   conversationTargets,
@@ -157,6 +164,15 @@ export function TownCanvas({
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys?: ReadonlySet<string>;
   askingKeys?: ReadonlySet<string>;
+  /** Agents their reception's filter keeps at their desks. */
+  receptionHeldKeys?: ReadonlySet<string>;
+  /** The marks each building's reception takes, by host key. */
+  receptionTakes?: TownReceptionTakes;
+  /** Reception's find: the agents its filter keeps at their desks. */
+  onFindHeld?: (
+    keys: readonly string[],
+    anchor: { x: number; y: number },
+  ) => void;
   onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
@@ -262,6 +278,8 @@ export function TownCanvas({
   );
   /** A table whose card a touch tap opened; touch has no hover to open it. */
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
+  /** The board a lobby tap brought back at desk level (townInteraction). */
+  const [openReception, setOpenReception] = useState<string | null>(null);
   const latest = useRef({
     chrome,
     model,
@@ -275,6 +293,7 @@ export function TownCanvas({
     summonedKeys,
     askingKeys,
     awayKeys,
+    receptionHeldKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -298,6 +317,7 @@ export function TownCanvas({
     summonedKeys,
     askingKeys,
     awayKeys,
+    receptionHeldKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -402,6 +422,7 @@ export function TownCanvas({
       if (levelRef.current !== level) {
         levelRef.current = level;
         layer.dataset.level = level;
+        setOpenReception(null);
       }
       const renderer = rendererRef.current;
       if (renderer) {
@@ -448,6 +469,7 @@ export function TownCanvas({
     summonedKeys: latest.current.summonedKeys,
     askingKeys: latest.current.askingKeys,
     awayKeys: latest.current.awayKeys,
+    heldKeys: latest.current.receptionHeldKeys,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -573,6 +595,7 @@ export function TownCanvas({
     summonedKeys,
     askingKeys,
     awayKeys,
+    receptionHeldKeys,
     calm,
   ]);
 
@@ -622,6 +645,7 @@ export function TownCanvas({
       },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
+      openReception: setOpenReception,
       openCenter: ring.openRing,
       move: (command) => {
         const actions = latest.current.roomActions;
@@ -856,6 +880,9 @@ export function TownCanvas({
             hud={hud}
             foldedActivity={foldedActivity}
             askingKeys={askingKeys}
+            receptionHeldKeys={receptionHeldKeys}
+            receptionTakes={receptionTakes}
+            onFindHeld={onFindHeld}
             onActivateAsk={onActivateAsk}
             model={model}
             layout={layout}
@@ -874,6 +901,7 @@ export function TownCanvas({
               tappedDesk ??
               (hover !== null && model.desks.has(hover) ? hover : null)
             }
+            openReceptionKey={openReception}
             openRoomKey={
               // Zoomed out, a mouse anywhere over a room (a table or an
               // agent in it) opens the room's card.

@@ -11,7 +11,8 @@
  * front of the crowd, and the crowd moves up; a napper gets up first. When the bar is full, the rest stay at their
  * desks. An agent the user opened
  * (summoned) walks back to its desk whatever its status, until that status
- * changes. An agent at a pinned desk never goes to the lounge: it leaves its
+ * changes. An agent whose mark its reception does not take (held, see
+ * townReceptionFilter.ts) stays seated at its desk with its mark. An agent at a pinned desk never goes to the lounge: it leaves its
  * desk only to wait at reception (blocked, or finished and not yet seen), and
  * walks straight back once seen. Movement never delays operational state,
  * and every actor keeps its agent key, so its exact pane target is unchanged
@@ -362,6 +363,7 @@ export class TownActors {
   private summoned: ReadonlySet<string> = new Set();
   private asking: ReadonlySet<string> = new Set();
   private away: ReadonlySet<string> = new Set();
+  private held: ReadonlySet<string> = new Set();
 
   get time() {
     return this.clock;
@@ -373,7 +375,8 @@ export class TownActors {
   /**
    * Reconcile actors with a new model or layout. `instant` skips walking;
    * `summoned` agents go to their desks rather than reception or the lounge;
-   * `away` agents (in the bin) leave by the front door.
+   * `away` agents (in the bin) leave by the front door; `held` agents, whose
+   * mark their reception does not take, stay at their desks.
    * With `hosts`, only those hosts' agents are reconciled: the caller vouches
    * that nothing any other host's actors read has changed
    * (scene/townSceneActors.ts), so a full sync would leave them as they are.
@@ -385,12 +388,14 @@ export class TownActors {
     asking: ReadonlySet<string> = this.asking,
     hosts?: ReadonlySet<string>,
     away: ReadonlySet<string> = this.away,
+    held: ReadonlySet<string> = this.held,
   ) {
     const previousWorld = this.world;
     this.world = world;
     this.summoned = summoned;
     this.asking = asking;
     this.away = away;
+    this.held = held;
     const { model } = world;
     const seen = new Set<string>();
     const fresh = new Set<string>();
@@ -510,6 +515,7 @@ export class TownActors {
       const agent = model.agents.get(actor.key)!;
       if (
         this.away.has(actor.key) ||
+        this.held.has(actor.key) ||
         (agent.semanticStatus !== "blocked" &&
           agent.semanticStatus !== "done" &&
           !this.asking.has(actor.key)) ||
