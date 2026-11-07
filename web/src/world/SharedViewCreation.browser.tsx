@@ -980,7 +980,7 @@ async function run() {
     "Inactive host dispatch fell back to alpha",
   );
   const roomButton = document.querySelector<HTMLButtonElement>(
-    ".world-new-room-canvas-action",
+    '.town-add-room[aria-label="Add room to beta"]',
   )!;
   await until(() => !roomButton.disabled, "room-specific workspace control");
   roomButton.click();
@@ -989,7 +989,7 @@ async function run() {
       document.querySelector<HTMLSelectElement>(
         '[aria-label="Destination host"]',
       )?.value === "beta",
-    "New room retains selected host",
+    "Add room keeps its building's host",
   );
   await submitWorkspace();
   await createdInspector(3);
@@ -1000,7 +1000,7 @@ async function run() {
     roomCreate.host === "beta" &&
       (roomCreate.params.browser_source as { workspace_id: string })
         .workspace_id === "a",
-    "New room used another host or source workspace",
+    "Add room used another host or source workspace",
   );
   for (const name of ["town", "desk", "board"]) {
     view(name);

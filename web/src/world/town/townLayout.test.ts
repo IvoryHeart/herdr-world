@@ -16,6 +16,7 @@ import {
   type TownLayout,
 } from "./townLayout";
 import {
+  TOWN_ADD_ROOM_SLOT,
   townRoomNeighbor,
   townRoomPlacement,
   townRoomsMoved,
@@ -833,15 +834,14 @@ test("the bar sits beneath the last room column in every shape and size", () => 
     ]) {
       const { layout } = layoutTown(town({ a: rooms }), shape);
       const building = layout.buildings[0]!;
-      const { lounge, rooms: placed } = building;
+      const { lounge } = building;
+      // The Add room slot is the building's last room, so it counts too.
+      const placed = [...building.rooms, building.addRoom];
       const wall = building.x + building.w - 2;
       expect(lounge.w).toBeGreaterThanOrEqual(12);
       expect(lounge.w).toBeLessThanOrEqual(20);
       expect(lounge.spots.length).toBeGreaterThanOrEqual(12);
       expect(lounge.spots.length).toBeLessThanOrEqual(15);
-      // With no rooms, the bar keeps the bottom-right corner.
-      if (!placed.length) expect(lounge.x + lounge.w).toBe(wall);
-      if (!placed.length) continue;
       const lastX = Math.max(...placed.map((room) => room.x));
       const column = placed.filter((room) => room.x === lastX);
       const columnRight = Math.max(...column.map((room) => room.x + room.w));
@@ -885,17 +885,21 @@ function ordered(input: TownInput, order: readonly string[]): TownInput {
   };
 }
 
-/** Every room of every building stands clear of the others, inside its walls. */
+/**
+ * Every room of every building, and its + Add room slot, stands clear of the
+ * others, inside its walls.
+ */
 function expectClear(layout: TownLayout) {
   for (const building of layout.buildings) {
-    for (const room of building.rooms) {
+    const rooms = [...building.rooms, building.addRoom];
+    for (const room of rooms) {
       expect(room.x).toBeGreaterThanOrEqual(building.x + 2);
       expect(room.y).toBeGreaterThanOrEqual(building.y + 9);
       expect(room.x + room.w).toBeLessThanOrEqual(building.x + building.w - 2);
       expect(room.y + room.h).toBeLessThanOrEqual(building.y + building.h - 2);
       // The bar stays clear of every room.
       expect(overlaps(room, building.lounge)).toBe(false);
-      for (const other of building.rooms)
+      for (const other of rooms)
         if (other !== room)
           expect(
             overlaps(
@@ -1049,8 +1053,8 @@ test("a carried room's spot stays inside its own building", () => {
   });
   // Spots are whole tiles from the building's corner.
   expect(
-    townRoomSpotAt(live, room.key, building.x + 10.4, building.y + 12.6),
-  ).toEqual({ x: 10, y: 13 });
+    townRoomSpotAt(live, room.key, building.x + 10.4, building.y + 9.6),
+  ).toEqual({ x: 10, y: 10 });
   // A room is placed only in its own host's building.
   expect(
     townRoomPlacement(live, "b", new Map([[room.key, { x: 2, y: 9 }]])),
@@ -1090,4 +1094,59 @@ test("a move, not a reflow: saved spots or the workspace order changed", () => {
     spots,
   );
   expect(townRoomsMoved(placed.layout, again.layout)).toBe(false);
+});
+
+/** The input with one more room on `hostKey`: a new workspace, one tab. */
+function withNewRoom(input: TownInput, hostKey: string, key: string) {
+  const order = input.rooms.filter((room) => room.hostKey === hostKey).length;
+  return {
+    ...input,
+    rooms: [...input.rooms, { key, hostKey, order, deskKeys: [`${key}/t`] }],
+  };
+}
+
+test("a new room is the size of the Add room slot", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const { layout } = layoutTown(town({ a: [1] }), shape);
+    const room = layout.buildings[0]!.rooms[0]!;
+    expect({ w: room.w, h: room.h }).toEqual({
+      w: TOWN_ADD_ROOM_SLOT.w,
+      h: TOWN_ADD_ROOM_SLOT.h,
+    });
+  }
+});
+
+test("every building's Add room slot is where its next room opens", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    let input = town({ a: [3, 15, 1], b: [], c: [24, 2, 2, 2, 7] });
+    let live = layoutTown(input, shape);
+    for (let added = 0; added < 4; added += 1)
+      for (const hostKey of ["a", "b", "c"]) {
+        expectClear(live.layout);
+        const before = live.layout.buildings.find(
+          (b) => b.hostKey === hostKey,
+        )!;
+        const slot = {
+          x: before.addRoom.x - before.x,
+          y: before.addRoom.y - before.y,
+          w: before.addRoom.w,
+          h: before.addRoom.h,
+        };
+        const key = `${hostKey}/new-${added}`;
+        input = withNewRoom(input, hostKey, key);
+        live = layoutTown(input, shape, live.memory);
+        const after = live.layout.buildings.find((b) => b.hostKey === hostKey)!;
+        const room = after.rooms.find((r) => r.key === key)!;
+        // The new room stands where the slot was, in its building (which
+        // may itself move on the street), and the slot moves on.
+        expect({
+          x: room.x - after.x,
+          y: room.y - after.y,
+          w: room.w,
+          h: room.h,
+        }).toEqual(slot);
+        expect(overlaps(after.addRoom, room)).toBe(false);
+      }
+    expectClear(live.layout);
+  }
 });

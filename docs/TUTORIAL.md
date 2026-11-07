@@ -434,8 +434,11 @@ hosts stay usable.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room
-keeps no gap. **New room** creates a workspace; room actions also create tabs
-and manage the room. Check the destination host before creation. Stale buildings
+keeps no gap. Each building ends with a dashed **+ Add room** slot where its
+next room would stand: click or tap it to create a workspace on that
+building's host, and the new room appears in its place while the slot moves
+on. The town center's **New room** does the same. Room actions also create
+tabs and manage the room. Check the destination host before creation. Stale buildings
 remain visible but cannot accept operations. Use search and the Hosts filter to
 narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.

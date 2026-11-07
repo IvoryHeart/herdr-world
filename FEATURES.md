@@ -262,7 +262,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation. Room actions support
-    workspace/tab creation and room management on the captured host. Room
+    workspace/tab creation and room management on the captured host. Every
+    building ends with a dashed **+ Add room** slot where its next room would
+    stand (just **+** at the room-card zoom). It opens New room on that
+    building's host, the new room takes the slot's place and the slot moves
+    on, also after rooms move or are tidied. For keyboards and screen
+    readers it is a button named "Add room to <host>". Room
     plates fit their room width; only the name truncates, with its full text in
     a tooltip. Colour, active/total agent count and blocked badge remain visible.
     Active means working or waiting on you; the total excludes plain terminals.
