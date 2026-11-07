@@ -122,8 +122,11 @@ export function useTownBin(model: TownModel, layout: TownLayout) {
   return { bin, route, riders: placed.riders, returning, away, lookOf };
 }
 
-/** Paint an agent's character frame onto a rider's or passenger's canvas. */
-function paint(
+/**
+ * Paint an agent's character frame onto a rider's, passenger's or arriving
+ * agent's canvas (TownArrivalLayer).
+ */
+export function paintTownRider(
   canvas: HTMLCanvasElement,
   look: TownLook,
   dir: TownDirection,
@@ -320,7 +323,7 @@ export const TownBusLayer = memo(function TownBusLayer({
         const bob = pose.walking && pose.frame % 2 ? -1 : 0;
         node.style.translate = `${pose.x - rider.at.x}px ${pose.y - rider.at.y + bob}px`;
         const look = lookOf(rider.agentKey);
-        paint(canvas, look, pose.dir, pose.frame);
+        paintTownRider(canvas, look, pose.dir, pose.frame);
         const halt = timeline.halts.get(rider.stop.key);
         const boarded =
           rider.entry.riding &&
@@ -334,7 +337,7 @@ export const TownBusLayer = memo(function TownBusLayer({
           node.toggleAttribute("data-boarded", boarded);
         const passenger = passengerRefs.current.get(id);
         if (passenger) {
-          paint(passenger, look, "right", 0);
+          paintTownRider(passenger, look, "right", 0);
           if (passenger.hasAttribute("data-boarded") !== boarded)
             passenger.toggleAttribute("data-boarded", boarded);
         }
@@ -363,7 +366,7 @@ export const TownBusLayer = memo(function TownBusLayer({
           node.toggleAttribute("data-out", pose.walking);
         const bob = pose.walking && pose.frame % 2 ? -1 : 0;
         node.style.translate = `${pose.x - rider.at.x}px ${pose.y - rider.at.y + bob}px`;
-        paint(canvas, lookOf(rider.agentKey), pose.dir, pose.frame);
+        paintTownRider(canvas, lookOf(rider.agentKey), pose.dir, pose.frame);
       }
       if (busy) frame = requestAnimationFrame(tick);
     };

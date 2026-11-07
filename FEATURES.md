@@ -446,7 +446,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pressed choice stays marked busy and a **Starting …** line says what World is
   doing; after 10 seconds of real waiting it reads **Taking longer than
   usual** (there is no progress bar or countdown, and the icon stays still
-  with reduced motion). Progress and outcomes stay in view above the choices. A confirmed start closes the launcher; an uncertain
+  with reduced motion). Progress and outcomes stay in view above the choices.
+  When World confirms the start, Town plays the new agent's **arrival**: it
+  steps out at the town center (when started from the town center's **New
+  agent**) or at the bus stop nearest its room (started anywhere else), walks
+  the streets to its building's front door, goes in to its desk and sits
+  down, and a sparkle and its name fade over it. The walk outdoors takes at
+  most 3 seconds and the walk in at most 2.5; several starts at once arrive
+  0.7 seconds apart. Agents already in Town, a reload, a failed or uncertain
+  start and returning to Town never play it. With reduced motion the agent is
+  at its desk at once with a still highlight that fades. A confirmed start closes the launcher; an uncertain
   attempt keeps its explanation and disables start choices. Open its existing
   tab or close the launcher before another attempt. A definite failure lets
   you retry, log in or edit profiles.
