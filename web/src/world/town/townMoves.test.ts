@@ -5,7 +5,8 @@ import type { OfficeDesk, OfficeRoom } from "../herdrOfficeProjection";
 import {
   deskReorderIndex,
   requestDeskReorder,
-  requestRoomMove,
+  requestRoomOrder,
+  townRoomOrderMoves,
   townMoveNotice,
   townMoveResult,
 } from "./townMoves";
@@ -141,7 +142,40 @@ const room = (workspace: string, connectionId = "local", generation = 3) =>
     workspaceRef: { connectionId, generation, nativeId: workspace },
   }) as unknown as OfficeRoom;
 
-test("a room takes another room's place through Herdr's workspace order", async () => {
+test("Herdr's workspace order follows the rooms' reading order", () => {
+  // Apply the moves as Herdr does: insert before the entry at insert_index,
+  // counted before removal.
+  const apply = (
+    order: string[],
+    moves: { workspace_id: string; insert_index: number }[],
+  ) => {
+    for (const { workspace_id, insert_index } of moves) {
+      const before = order[insert_index];
+      order.splice(order.indexOf(workspace_id), 1);
+      const at = before === undefined ? order.length : order.indexOf(before);
+      order.splice(at, 0, workspace_id);
+    }
+    return order;
+  };
+  const order = ["w1", "w2", "w3", "w4", "w5"];
+  // Rooms w2, w3 and w5 are this building's; w1 and w4 keep their places.
+  const moves = townRoomOrderMoves(order, ["w5", "w2", "w3"])!;
+  expect(apply([...order], moves)).toEqual(["w1", "w5", "w2", "w4", "w3"]);
+  expect(townRoomOrderMoves(order, ["w2", "w3", "w5"])).toEqual([]);
+  expect(townRoomOrderMoves(order, ["w2", "w9"])).toBeUndefined();
+  for (const rooms of [
+    ["w5", "w4", "w3", "w2", "w1"],
+    ["w3", "w1", "w2"],
+    ["w4", "w1"],
+  ])
+    expect(
+      apply([...order], townRoomOrderMoves(order, rooms)!).filter((id) =>
+        rooms.includes(id),
+      ),
+    ).toEqual(rooms);
+});
+
+test("a building's rooms are put in order through workspace.move", async () => {
   const calls: [string, unknown][] = [];
   const connection = bridge.connection;
   bridge.connection = ((connectionId: string, generation: number) => ({
@@ -166,23 +200,15 @@ test("a room takes another room's place through Herdr's workspace order", async 
     },
   })) as unknown as typeof bridge.connection;
   try {
-    // w4 into w2's place: before w2 (Herdr inserts before index 1).
-    expect(await requestRoomMove(room("w4"), room("w2"))).toEqual({
-      status: "moved",
-    });
-    expect(calls[calls.length - 1]).toEqual([
-      "workspace.move",
-      { workspace_id: "w4", insert_index: 1 },
-    ]);
-    // w1 into w3's place: after w3 (index 3, counted before removal).
-    await requestRoomMove(room("w1"), room("w3"));
-    expect(calls[calls.length - 1]).toEqual([
-      "workspace.move",
-      { workspace_id: "w1", insert_index: 3 },
+    expect(
+      await requestRoomOrder([room("w4"), room("w1"), room("w2"), room("w3")]),
+    ).toEqual({ status: "moved" });
+    expect(calls.slice(1)).toEqual([
+      ["workspace.move", { workspace_id: "w4", insert_index: 0 }],
     ]);
     // A room Herdr no longer lists is refused, with nothing moved.
     calls.length = 0;
-    expect(await requestRoomMove(room("w9"), room("w2"))).toMatchObject({
+    expect(await requestRoomOrder([room("w9"), room("w2")])).toMatchObject({
       status: "refused",
       reason: "changed",
     });
@@ -190,7 +216,7 @@ test("a room takes another room's place through Herdr's workspace order", async 
     // Another host's building: refused before asking any host.
     calls.length = 0;
     expect(
-      await requestRoomMove(room("w1"), room("w2", "remote")),
+      await requestRoomOrder([room("w1"), room("w2", "remote")]),
     ).toMatchObject({ status: "refused", reason: "other_host" });
     expect(calls).toEqual([]);
   } finally {

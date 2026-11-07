@@ -185,50 +185,72 @@ export type TownRoomMoveOutcome =
   | { status: "refused"; reason: string; message: string };
 
 /**
- * Move a room (a Herdr workspace) into `onto`'s place in its building: the
- * room order is Herdr's workspace order, so Spaces, Town and every reload
- * show the same. Town reads the order from Herdr, then moves the workspace
- * with workspace.move on the room's exact connection and runtime generation;
- * the rooms move when Herdr's new order arrives (its workspace.moved event).
+ * The workspace.move calls that put a building's workspaces (`rooms`, in
+ * reading order) in that order within Herdr's (`order`), leaving other
+ * workspaces where they are. Herdr inserts before the workspace at
+ * `insert_index`, counted before removal, as tab.move does. Undefined when a
+ * room is not in Herdr's order.
  */
-export async function requestRoomMove(
-  room: OfficeRoom,
-  onto: OfficeRoom,
+export function townRoomOrderMoves(
+  order: readonly string[],
+  rooms: readonly string[],
+): { workspace_id: string; insert_index: number }[] | undefined {
+  if (rooms.some((id) => !order.includes(id))) return undefined;
+  const target = [...order];
+  order
+    .map((id, index) => (rooms.includes(id) ? index : -1))
+    .filter((index) => index >= 0)
+    .forEach((slot, n) => (target[slot] = rooms[n]!));
+  const current = [...order];
+  const moves: { workspace_id: string; insert_index: number }[] = [];
+  target.forEach((id, index) => {
+    if (current[index] === id) return;
+    // Every workspace before `index` is already in place, so this one is
+    // after it: inserting before the one at `index` puts it there.
+    current.splice(current.indexOf(id), 1);
+    current.splice(index, 0, id);
+    moves.push({ workspace_id: id, insert_index: index });
+  });
+  return moves;
+}
+
+/**
+ * Put a building's rooms (Herdr workspaces, in reading order) in that order
+ * in Herdr, so Spaces lists them as Town shows them. Town reads the order
+ * from Herdr, then moves workspaces with workspace.move on the rooms' exact
+ * connection and runtime generation.
+ */
+export async function requestRoomOrder(
+  rooms: readonly OfficeRoom[],
 ): Promise<TownRoomMoveOutcome> {
-  if (!sameOwner(room.workspaceRef, onto.workspaceRef))
+  const first = rooms[0];
+  if (!first) return { status: "moved" };
+  if (rooms.some((room) => !sameOwner(room.workspaceRef, first.workspaceRef)))
     return {
       status: "refused",
       reason: "other_host",
       message: "Rooms stay in their own host's building.",
     };
   const client = bridge.connection(
-    room.workspaceRef.connectionId,
-    room.workspaceRef.generation,
+    first.workspaceRef.connectionId,
+    first.workspaceRef.generation,
   );
   const listed = (await client.call("workspace.list", {})) as
     | { workspaces?: Workspace[] }
     | undefined;
-  const order = [...(listed?.workspaces ?? [])]
-    .sort((a, b) => a.number - b.number)
-    .map((workspace) => workspace.workspace_id);
-  // workspace.move inserts before the entry at insert_index, as tab.move does.
-  const insertIndex = deskReorderIndex(
-    order,
-    room.workspaceRef.nativeId,
-    onto.workspaceRef.nativeId,
+  const moves = townRoomOrderMoves(
+    [...(listed?.workspaces ?? [])]
+      .sort((a, b) => a.number - b.number)
+      .map((workspace) => workspace.workspace_id),
+    rooms.map((room) => room.workspaceRef.nativeId),
   );
-  if (insertIndex === undefined)
+  if (!moves)
     return {
       status: "refused",
       reason: "changed",
       message: "The building changed. Try again.",
     };
-  if (insertIndex === null) return { status: "moved" };
-  // A failed call may still have moved it: the caller says so.
-  await client.call("workspace.move", {
-    workspace_id: room.workspaceRef.nativeId,
-    insert_index: insertIndex,
-  });
+  for (const move of moves) await client.call("workspace.move", move);
   return { status: "moved" };
 }
 

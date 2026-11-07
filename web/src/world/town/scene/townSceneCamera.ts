@@ -23,7 +23,7 @@ import {
   townShapeKey,
   type TownLayout,
 } from "../townLayout";
-import { townRoomsReordered } from "../townRoomOrder";
+import { townRoomsMoved } from "../townRoomPlace";
 import type { TownTarget } from "../townTargets";
 
 /** A saved camera; `home` marks the home view, framed again when restored. */
@@ -195,7 +195,7 @@ export class TownSceneCamera {
       townGeometryKey(previous) !== townGeometryKey(layout) &&
       // A moved room lands where the user dropped it, in view: the camera
       // stays rather than follow a room that made way.
-      !townRoomsReordered(previous, layout)
+      !townRoomsMoved(previous, layout)
     ) {
       const focus = camera.focusPoint();
       const at = camera.toWorld(focus.x, focus.y);

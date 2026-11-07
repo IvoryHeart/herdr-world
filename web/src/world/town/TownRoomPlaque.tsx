@@ -1,5 +1,11 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Pencil, Trash2 } from "lucide-react";
+import {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
+import { ArrowLeft, ArrowRight, Move, Pencil, Trash2 } from "lucide-react";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import type { OfficeRoom } from "../herdrOfficeProjection";
 import type { PlaceColorChoice, TownRoomActions } from "./TownCanvas";
@@ -91,9 +97,9 @@ export function TownRoomOverviewSummary({
 
 /**
  * Constant-size text within the room's projected width. Hover, focus or a tap
- * opens one card below it: the room's summary, then Move before and after,
- * Rename and Close. Dragging the name (a touch hold on a phone) carries the
- * room to another place in its building.
+ * opens one card below it: the room's summary, then Move before, the Move
+ * handle, Move after, Rename and Close. Dragging the handle, or the name (a
+ * touch hold on a phone), carries the room anywhere in its building.
  */
 export function TownRoomPlaque({
   room,
@@ -113,13 +119,27 @@ export function TownRoomPlaque({
   actions: TownRoomActions;
   /** The room's summary for its card; without it the card holds the actions. */
   card?: TownPlaceCardContent;
-  /** A press on the name, passed to the town: a drag there carries the room. */
-  onNamePress?(event: PointerEvent): boolean;
+  /**
+   * A press on the name or the Move handle, passed to the town: a drag there
+   * carries the room.
+   */
+  onNamePress?(
+    event: PointerEvent,
+    press: "plaque-name" | "plaque-move",
+  ): boolean;
 }) {
   const { opened, open } = usePlaceCard();
-  const before = actions.roomMoveNeighbor?.(room.key, -1) ?? null;
-  const after = actions.roomMoveNeighbor?.(room.key, 1) ?? null;
-  const movable = Boolean(actions.onMoveRoom && (before || after));
+  const movable = Boolean(
+    actions.onMoveRoom && actions.canMoveRoom?.(room.key),
+  );
+  const before = movable ? actions.roomMoveNeighbor?.(room.key, -1) : null;
+  const after = movable ? actions.roomMoveNeighbor?.(room.key, 1) : null;
+  const carry =
+    (press: "plaque-name" | "plaque-move") =>
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.pointerType === "mouse" ? event.button === 0 : event.isPrimary)
+        onNamePress?.(event.nativeEvent, press);
+    };
   const active = counts.working + counts.blocked;
   const activityLabel = `${active} of ${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} active: ${counts.working} working, ${counts.blocked} waiting on you`;
   return (
@@ -148,16 +168,7 @@ export function TownRoomPlaque({
           className={`town-room-plaque-name${movable ? " is-movable" : ""}`}
           title={label}
           onPointerDown={
-            movable && onNamePress
-              ? (event) => {
-                  if (
-                    event.pointerType === "mouse"
-                      ? event.button === 0
-                      : event.isPrimary
-                  )
-                    onNamePress(event.nativeEvent);
-                }
-              : undefined
+            movable && onNamePress ? carry("plaque-name") : undefined
           }
         >
           {label}
@@ -181,7 +192,7 @@ export function TownRoomPlaque({
           role="group"
           aria-label={`Room actions for ${label}`}
         >
-          {actions.onMoveRoom && before ? (
+          {before ? (
             <button
               className="world-room-overlay-action town-plaque-action"
               type="button"
@@ -192,7 +203,18 @@ export function TownRoomPlaque({
               <ArrowLeft size={14} aria-hidden="true" />
             </button>
           ) : null}
-          {actions.onMoveRoom && after ? (
+          {movable && onNamePress ? (
+            <button
+              className="world-room-overlay-action town-plaque-action town-plaque-move"
+              type="button"
+              aria-label={`Move room ${label}: drag it anywhere in its building`}
+              title={`Drag to move ${label}`}
+              onPointerDown={carry("plaque-move")}
+            >
+              <Move size={14} aria-hidden="true" />
+            </button>
+          ) : null}
+          {after ? (
             <button
               className="world-room-overlay-action town-plaque-action"
               type="button"

@@ -699,6 +699,13 @@ worldBridge.call = async (method, params) => {
       color: Extract<BoardOp, { op: "card.color" }>["color"];
     }[]) {
       boardPatches.push(op);
+      if (op.op === "room.place") {
+        const place = op as unknown as Extract<BoardOp, { op: "room.place" }>;
+        const pins = (boardDocument.layout.room_pins ??= {});
+        for (const key of Object.keys(pins))
+          if (key.startsWith(`${place.connection_id}:`)) delete pins[key];
+        Object.assign(pins, place.spots);
+      }
       if (op.op === "card.color") {
         const colors = (boardDocument.layout.colors ??= {});
         if (op.color) colors[op.key] = op.color;
@@ -1336,8 +1343,9 @@ async function run() {
   );
 
   if (scale === "plates" && mode === "test") {
-    // A room dragged by its wall onto another room of its building takes that
-    // room's place with Herdr's workspace.move on that host, and lands.
+    // A room dragged by its wall goes where it is dropped in its building:
+    // World saves every room's spot for that host, Herdr's order follows on
+    // that host only, and the room lands.
     {
       const visibleRooms = [
         ...host.querySelectorAll<HTMLElement>(
@@ -1378,6 +1386,7 @@ async function run() {
         const wall = from.getBoundingClientRect();
         const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
         const before = moves.length;
+        const patchesBefore = boardPatches.length;
         const drags = () => window.__HERDR_TOWN_RENDERER__!.drags;
         const drawn = { ...drags() };
         // Its left wall, under the name strip.
@@ -1411,27 +1420,69 @@ async function run() {
         }
         check(
           ghost()?.dataset.valid === "true" &&
-            ghost()!.textContent!.includes("’s place"),
-          `a room over another room of its building was not a drop target: ${JSON.stringify(ghost()?.textContent)}`,
+            ghost()!.textContent!.endsWith(" here"),
+          `a room carried over its building was not a drop target: ${JSON.stringify(ghost()?.textContent)}`,
         );
         roomPress("pointerup", ...floor);
-        await waitFor(
-          () => moves.length === before + 1,
-          "dropping a room on another did not move it",
-        );
         const [connectionId, , workspaceId] = owner(from);
+        await waitFor(
+          () =>
+            boardPatches
+              .slice(patchesBefore)
+              .some((op) => op.op === "room.place"),
+          "dropping a room did not save where the rooms stand",
+        );
+        const placed = boardPatches
+          .slice(patchesBefore)
+          .find((op) => op.op === "room.place") as unknown as Extract<
+          BoardOp,
+          { op: "room.place" }
+        >;
         check(
-          moves[before]!.method === "workspace.move" &&
-            moves[before]!.params.connectionId === connectionId &&
-            moves[before]!.params.workspace_id === workspaceId &&
-            typeof moves[before]!.params.insert_index === "number",
-          `a room drop sent ${JSON.stringify(moves[before])}`,
+          placed.connection_id === connectionId &&
+            Boolean(placed.spots[`${connectionId}:${workspaceId}`]),
+          `a room drop saved ${JSON.stringify(placed)}`,
+        );
+        // Herdr's order follows on the room's own host, never another.
+        check(
+          moves
+            .slice(before)
+            .every(
+              (move) =>
+                move.method === "workspace.move" &&
+                move.params.connectionId === connectionId &&
+                typeof move.params.insert_index === "number",
+            ),
+          `a room drop sent ${JSON.stringify(moves.slice(before))}`,
         );
         await waitFor(
           () => drags().landings > drawn.landings,
           "a moved room did not land",
         );
         await waitFor(() => ghost() === null, "a moved room's label stayed up");
+        // Another device clears the saved spots: the rooms stack again in
+        // Herdr's order, as the rest of this case expects them.
+        const home = { left: wall.left, top: wall.top };
+        boardDocument = {
+          ...boardDocument,
+          revision: boardDocument.revision + 1,
+          layout: { ...boardDocument.layout, room_pins: {} },
+        };
+        for (const listener of boardListeners)
+          listener({
+            type: "world_board_changed",
+            revision: boardDocument.revision,
+          });
+        await waitFor(() => {
+          const box = from.isConnected
+            ? from.getBoundingClientRect()
+            : undefined;
+          return (
+            box !== undefined &&
+            Math.abs(box.left - home.left) < 2 &&
+            Math.abs(box.top - home.top) < 2
+          );
+        }, "rooms did not stack again once their saved spots were cleared");
       } else if (!phone)
         check(
           false,

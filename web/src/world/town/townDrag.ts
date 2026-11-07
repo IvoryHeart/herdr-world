@@ -1,6 +1,12 @@
 import type { TownLevel } from "./townCamera";
 import type { TownHit } from "./townHitTest";
 import type { TownModel } from "./townModel";
+import { TOWN_TILE, type TownLayout } from "./townLayout";
+import {
+  townRoomPlacement,
+  townRoomSpotAt,
+  type TownRoomPlacement,
+} from "./townRoomPlace";
 
 /** A desk, agent or room being dragged, and where it would land. */
 export type TownDrag = {
@@ -31,9 +37,9 @@ export type TownDropTarget = {
 };
 
 /**
- * A room picked up by its name or edge: it moves to another place in its own
- * building (Herdr's workspace order). A stale room, one Spaces cannot open,
- * or one alone in its building stays where it is.
+ * A room picked up by its name, its edge or its Move handle: it moves
+ * anywhere in its own building. A stale room, one Spaces cannot open, or one
+ * alone in its building stays where it is.
  */
 export function townRoomDrag(
   roomKey: string,
@@ -123,8 +129,8 @@ export function townMagnetDesk(
  * Where a drag would land under the pointer, or why it can't. A desk dropped
  * at once on another desk reorders (same room) or moves (another room); held
  * still on it for TOWN_MAGNET_MS (`magnet`), it snaps to that desk and groups
- * with it, so moving, reordering and grouping stay separate gestures. A room
- * dropped on another room of its building takes that room's place.
+ * with it, so moving, reordering and grouping stay separate gestures. A
+ * carried room is aimed by townRoomDropTarget.
  */
 export function townDropTarget(
   drag: TownDrag,
@@ -137,7 +143,8 @@ export function townDropTarget(
   /** Desks in a manual group: only these can leave one. */
   groupedDesks: ReadonlySet<string> = new Set(),
 ): TownDropTarget {
-  if (drag.kind === "room") return townRoomDropTarget(drag, hit, model);
+  // A carried room is aimed by where it is, not what it is over.
+  if (drag.kind === "room") return { key: null, label: drag.label };
   if (drag.kind === "desk") {
     const mate = magnet ? model.desks.get(magnet) : undefined;
     if (mate && magnet === townMagnetDesk(drag, hit, model)) {
@@ -238,41 +245,46 @@ export function townDropTarget(
   return { key: desk.key, label: `${drag.label} to ${desk.displayLabel}` };
 }
 
-/** The room a hit lies in: its floor, edge, a desk, a seat or a seated agent. */
-function roomUnder(hit: TownHit | null, model: TownModel) {
-  const key =
-    hit?.kind === "room"
-      ? hit.key
-      : hit?.kind === "cell"
-        ? hit.roomKey
-        : hit?.kind === "desk"
-          ? model.desks.get(hit.key)?.roomKey
-          : hit?.kind === "pane"
-            ? model.desks.get(hit.deskKey)?.roomKey
-            : hit?.kind === "agent" && !hit.standing
-              ? model.agents.get(hit.key)?.roomKey
-              : undefined;
-  return key ? model.rooms.get(key) : undefined;
-}
-
 /**
- * A carried room lands on another room of its building, taking its place;
- * dropped on itself or anywhere else it goes back.
+ * Where a carried room would land with its top-left at world point (x, y)
+ * and the pointer at (px, py): anywhere in its own building, whole tiles,
+ * kept inside the walls, with the other rooms moving out of its way
+ * (townRoomPlacement). Over another host's building, or back on its own
+ * spot, it goes back.
  */
-function townRoomDropTarget(
+export function townRoomDropTarget(
   drag: TownDrag,
-  hit: TownHit | null,
+  layout: TownLayout,
   model: TownModel,
-): TownDropTarget {
+  x: number,
+  y: number,
+  px: number,
+  py: number,
+): { target: TownDropTarget; placement: TownRoomPlacement | null } {
   const name = model.rooms.get(drag.key)?.displayLabel ?? "room";
-  const room = roomUnder(hit, model);
-  if (!room || room.key === drag.from)
-    return { key: null, label: `Move ${name}: drop on another room` };
-  if (room.hostKey !== drag.hostKey)
-    return { key: null, label: "Rooms stay in their own host’s building" };
+  const over = layout.buildings.find(
+    (b) =>
+      px >= b.x * TOWN_TILE &&
+      px < (b.x + b.w) * TOWN_TILE &&
+      py >= b.y * TOWN_TILE &&
+      py < (b.y + b.h) * TOWN_TILE,
+  );
+  if (over && over.hostKey !== drag.hostKey)
+    return {
+      target: { key: null, label: "Rooms stay in their own host’s building" },
+      placement: null,
+    };
+  const spot = townRoomSpotAt(layout, drag.key, x / TOWN_TILE, y / TOWN_TILE);
+  const placement = spot
+    ? townRoomPlacement(layout, drag.hostKey, new Map([[drag.key, spot]]))
+    : null;
+  if (!placement?.changed)
+    return {
+      target: { key: null, label: `Move ${name}: drag it to a new spot` },
+      placement: null,
+    };
   return {
-    key: room.key,
-    label: `Put ${name} in ${room.displayLabel}’s place`,
-    action: "move",
+    target: { key: drag.key, label: `Move ${name} here`, action: "move" },
+    placement,
   };
 }

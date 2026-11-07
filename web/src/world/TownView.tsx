@@ -144,6 +144,7 @@ export default function TownView({
   const {
     office: observedOffice,
     deskPins,
+    roomPins,
     toggleRoomFold,
     foldRevision,
     roomFocus,
@@ -906,6 +907,7 @@ export default function TownView({
             relations={relations}
             terminalColors={terminalColors}
             deskPins={deskPins}
+            roomPins={roomPins}
             foldRevision={foldRevision}
             selectedKey={peek?.key ?? selectedKey}
             completionSeenKeys={completionSeenKeys}
@@ -954,12 +956,10 @@ export default function TownView({
             roomActions={{
               onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
-              onGroupDesk: (deskKey, targetKey) =>
-                teams.runGroupDesk(deskKey, targetKey),
+              onGroupDesk: teams.runGroupDesk,
               onUngroupDesk: (deskKey) => teams.runUngroupDesk(deskKey),
               onReorderDesk: runDeskReorder,
-              onDropAgent: (agentKey, deskKey) =>
-                runAgentMove(agentKey, deskKey),
+              onDropAgent: runAgentMove,
               ...roomMoves,
               onBinDrop: (kind, key) =>
                 putTownDropInBin(office, world, kind, key),

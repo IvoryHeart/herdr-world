@@ -20,13 +20,15 @@ import { officeRoomActionCapabilities } from "../officeRoomActions";
 import type { WorldObject } from "../worldObject";
 import type { DeskPins } from "../useDeskPins";
 import { TownChooser } from "./TownChooser";
-import { townDeskColorTarget } from "./townModel";
+import { townDeskColorTarget, townRoomColorKey } from "./townModel";
+import { saveRoomSpots } from "./townRoomPins";
+import type { TownRoomPlacement } from "./townRoomPlace";
 import { townMoveMenu, type TownMoveFlow } from "./townMoveMenu";
 import {
   requestAgentMove,
   requestDeskMove,
   requestDeskReorder,
-  requestRoomMove,
+  requestRoomOrder,
   townMoveNotice,
   townMoveResult,
   type TownMoveOutcome,
@@ -233,49 +235,68 @@ export function townMoveActions({
       setMovingKey(null);
     }
   };
-  /**
-   * The room before (-1) or after (1) this one in its building's order
-   * (Herdr's workspace order), when the room can move.
-   */
-  const roomMoveNeighbor = (roomKey: string, step: -1 | 1) => {
+  /** Whether a room's host can change its rooms now, as renaming needs. */
+  const canMoveRoom = (roomKey: string) => {
     const room = roomForKey(roomKey);
-    // Moving a room is a room change, as renaming is.
-    if (!room || !officeRoomActionCapabilities(world, room).rename) return null;
-    const building = office.rooms
-      .filter(
-        (other) =>
-          other.workspaceRef.connectionId === room.workspaceRef.connectionId &&
-          other.workspaceRef.generation === room.workspaceRef.generation,
-      )
-      .sort((a, b) => a.order - b.order);
-    return building[building.indexOf(room) + step] ?? null;
+    return Boolean(room && officeRoomActionCapabilities(world, room).rename);
   };
-  /** Put a room in another room's place in its building. */
-  const runRoomMove = async (
+  /**
+   * Save where a building's rooms stand (World keeps the spots, so a reload
+   * and every device show them), then put Herdr's workspace order in their
+   * reading order, so Spaces matches.
+   */
+  const runRoomPlace = async (
     roomKey: string,
-    ontoKey: string,
+    placement: TownRoomPlacement,
   ): Promise<TownMoveResult> => {
     const room = roomForKey(roomKey);
-    const onto = roomForKey(ontoKey);
-    if (!room || !onto || movingKey) return "returned";
-    if (!officeRoomActionCapabilities(world, room).rename) {
+    if (!room || movingKey) return "returned";
+    if (!canMoveRoom(roomKey)) {
       toast(
         "error",
         `${room.displayLabel} not moved: this host cannot change rooms now.`,
       );
       return "returned";
     }
+    const rooms = placement.order.map(roomForKey);
+    if (rooms.some((other) => !other)) {
+      toast("error", `${room.displayLabel} not moved: the building changed.`);
+      return "returned";
+    }
+    const spots = Object.fromEntries(
+      [...placement.spots].map(([key, spot]) => [
+        townRoomColorKey(roomForKey(key)!),
+        spot,
+      ]),
+    );
     setMovingKey(room.key);
     try {
-      const outcome = await requestRoomMove(room, onto);
+      const conflict = await saveRoomSpots(
+        room.workspaceRef.connectionId,
+        spots,
+      );
+      if (conflict) {
+        toast("error", `${room.displayLabel} not moved: ${conflict}`);
+        return "returned";
+      }
+      const outcome = await requestRoomOrder(rooms as OfficeRoom[]).catch(
+        (cause: unknown) => ({
+          status: "refused" as const,
+          reason: "failed",
+          message: String(cause),
+        }),
+      );
       if (DEVTOOLS)
         trace.record("move", {
           label: room.displayLabel,
           status: outcome.status,
         });
-      if (outcome.status === "moved") return "moved";
-      toast("error", `${room.displayLabel} not moved: ${outcome.message}`);
-      return "returned";
+      if (outcome.status !== "moved")
+        toast(
+          "error",
+          `${room.displayLabel} moved, but Spaces may show the old order: ${outcome.message}`,
+        );
+      return "moved";
     } catch (cause) {
       toast(
         "error",
@@ -328,17 +349,7 @@ export function townMoveActions({
     runDeskReorder,
     runAgentMove,
     /** Town's room move actions (TownRoomActions). */
-    roomMoves: {
-      onDropRoom: runRoomMove,
-      roomMoveNeighbor: (roomKey: string, step: -1 | 1) => {
-        const onto = roomMoveNeighbor(roomKey, step);
-        return onto ? { label: onto.displayLabel } : null;
-      },
-      onMoveRoom: (roomKey: string, step: -1 | 1) => {
-        const onto = roomMoveNeighbor(roomKey, step);
-        if (onto) void runRoomMove(roomKey, onto.key);
-      },
-    },
+    roomMoves: { onPlaceRooms: runRoomPlace, canMoveRoom },
     teams,
     dialogs,
   };

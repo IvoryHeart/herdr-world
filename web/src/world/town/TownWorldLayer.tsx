@@ -44,9 +44,14 @@ import type { TownVisible } from "./townVisibleHosts";
 /** Team walls and connectors, under the world layer's cards. */
 /**
  * Where a room's DOM press landed: its overview card, the name on that card,
- * or the name on its plaque. A press on a name can carry the room.
+ * the name on its plaque or its plaque's Move handle. A press on a name or
+ * the handle can carry the room.
  */
-export type TownRoomPress = "card" | "card-name" | "plaque-name";
+export type TownRoomPress =
+  | "card"
+  | "card-name"
+  | "plaque-name"
+  | "plaque-move";
 
 export const TownTeamsLayer = memo(function TownTeamsLayer({
   teams,
@@ -581,8 +586,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       { kind: "room", key: room.key },
                       room.workspaceRef,
                     )}
-                    onNamePress={(event) =>
-                      onRoomCardPress?.(event, room.key, "plaque-name") ?? false
+                    onNamePress={(event, press) =>
+                      onRoomCardPress?.(event, room.key, press) ?? false
                     }
                   />
                   {roomActions.showCreateSeat(room.key) && seatCell ? (

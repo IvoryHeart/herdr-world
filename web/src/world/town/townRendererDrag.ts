@@ -31,7 +31,7 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
-import { townRoomMovePreview } from "./townRoomOrder";
+import type { TownRoomPlacement } from "./townRoomPlace";
 import type { TownMoveResult } from "./townMoves";
 import { textureOf, type PodView } from "./townRendererScene";
 import {
@@ -247,6 +247,7 @@ export function createTownDragEffects(ctx: TownDragContext) {
     y: number,
     targetKey: string | null,
     snap = false,
+    placement: TownRoomPlacement | null = null,
   ) => {
     const layout = ctx.layout();
     const layoutCells = ctx.layoutCells();
@@ -259,11 +260,9 @@ export function createTownDragEffects(ctx: TownDragContext) {
     drag.slot?.destroy();
     drag.slot = null;
     if (room) {
-      // Where the room would land, and where the rooms making way would go:
-      // the building stacked afresh in its new order (townRoomMovePreview).
-      const preview = targetKey
-        ? townRoomMovePreview(layout, drag.key, targetKey)
-        : null;
+      // Where the room would land, and where the rooms making way would go
+      // (townRoomPlacement), as the town will stand once it is saved.
+      const preview = targetKey ? placement?.rooms : null;
       const landing = preview?.get(drag.key);
       if (preview && landing) {
         // The ghost rests 8 px above a target's centre (townDragMotion).

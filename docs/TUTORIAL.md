@@ -369,16 +369,19 @@ hosts stay usable.
    than taking breaks at the bar; they still go to reception when they need
    you or finish, and come straight back once seen. Choose **Unpin desk in
    Town** to let it follow the tab order again.
-11. To arrange a building, drag a room by its name plaque or its wall (the
-   pointer shows a grab hand) onto another room of the same building. Green
-   outlines show where it will stand and where the other rooms will go; let
-   go and it takes that room's place with all its tables and agents. Let go
-   over its own spot, outside the rooms or after pressing Escape and it goes
-   back. On a phone, touch and hold the room's name or wall, then drag.
-   Without a drag, hover or focus the plaque and use the **←** (**Move
-   before …**) and **→** (**Move after …**) arrows in its card. A room never
-   moves to another host's building. Town moves the workspace in Herdr, so
-   Spaces shows the same order and the arrangement stays after a reload.
+11. To arrange a building, hover or focus a room's name plaque and drag the
+   **Move** handle in its card, or drag the room by its name or its wall (the
+   pointer shows a grab hand). The room moves freely within its building,
+   with all its tables and agents: a green outline shows where it will stand
+   and pale outlines show where rooms in its way will go (they move down),
+   and the building grows or shrinks to fit. Let go on its own spot or press
+   Escape and it goes back. On a phone, drag the Move handle, or touch and
+   hold the room's name or wall, then drag. From the keyboard, use the **←**
+   (**Move before …**) and **→** (**Move after …**) arrows in the card to
+   swap the room with its neighbour. A room never moves to another host's
+   building. World saves the arrangement, so it stays after a reload and
+   every device shows it, and Herdr's workspace order follows it (top to
+   bottom, left to right), so Spaces lists the rooms in the same order.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room

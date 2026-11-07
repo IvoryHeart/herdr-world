@@ -18,7 +18,14 @@ import {
   townPlaceLots,
   YARD,
 } from "./townLots";
-import { townRanksOutOfOrder, townStackRooms } from "./townRoomOrder";
+import {
+  NO_ROOM_SPOTS,
+  townArrangeRooms,
+  townRanksOutOfOrder,
+  townRoomSpans,
+  townStackRooms,
+  type TownRoomSpots,
+} from "./townRoomPlace";
 
 export { TOWN_FACADE, TOWN_PHONE_BOARD_ROWS } from "./townLots";
 
@@ -161,6 +168,8 @@ export type TownBuilding = {
   y: number;
   w: number;
   h: number;
+  /** The floor's own height, before its lot grew it toward its street. */
+  floorH: number;
   /** The reception counter's axis. */
   doorX: number;
   /** The bar's street door in the facade, onto the street below. */
@@ -223,6 +232,8 @@ export type TownLayout = {
   trees: TownTree[];
   /** Desk key to room key and cell index. */
   deskCells: ReadonlyMap<string, { roomKey: string; cellIndex: number }>;
+  /** The saved room spots the town was laid out with (townRoomPlace.ts). */
+  roomSpots?: TownRoomSpots;
 };
 
 export type TownInputRoom = {
@@ -378,6 +389,7 @@ function draftBuilding(
   nextMemory: TownPlacementMemory,
   shape: TownShape,
   pins: TownPinnedCells | undefined,
+  spots: TownRoomSpots,
 ): DraftBuilding {
   const placed = rooms.map((room) => {
     const previous = memory.get(room.key);
@@ -408,34 +420,47 @@ function draftBuilding(
       ry: 0,
     };
   });
-  // Rooms stack in columns, in workspace order. Each room keeps the column it
-  // was given while the scene is live (a new one joins the shortest), so a
-  // room that grows moves only the rooms below it in its own column. A
-  // building whose rooms were reordered (a room moved in Town, Spaces or
+  // Once the user has moved a room of this building, every room keeps the
+  // spot World saved for it (townRoomPlace.ts), clear of the others.
+  // Otherwise rooms stack in columns, in workspace order. Each room keeps the
+  // column it was given while the scene is live (a new one joins the
+  // shortest), so a room that grows moves only the rooms below it in its own
+  // column. A building whose rooms were reordered (a room moved in Spaces or
   // Herdr) is stacked afresh, as a reload would show it.
-  const reordered = townRanksOutOfOrder(
-    placed.map((room) => memory.get(room.key)?.rank),
-  );
-  const {
-    columns,
-    positions,
-    spans,
-    width: x,
-  } = townStackRooms(
-    placed,
-    shape.roomColumns,
-    (room) => (reordered ? undefined : memory.get(room.key)?.column),
-    ROOM_TOP,
-  );
-  columns.forEach((column, index) => {
-    const roomMemory = nextMemory.get(placed[index]!.key)!;
-    roomMemory.column = column;
-    roomMemory.rank = index;
-  });
-  placed.forEach((room, index) => {
-    room.rx = positions[index]!.rx;
-    room.ry = positions[index]!.ry;
-  });
+  const arranged = placed.some((room) => spots.has(room.key))
+    ? townArrangeRooms(placed, spots)
+    : null;
+  let spans: ReturnType<typeof townStackRooms>["spans"];
+  let x: number;
+  if (arranged) {
+    ({ spans, width: x } = townRoomSpans(placed, arranged));
+    placed.forEach((room, index) => {
+      const spot = arranged.get(room.key)!;
+      room.rx = spot.x;
+      room.ry = spot.y;
+      nextMemory.get(room.key)!.rank = index;
+    });
+  } else {
+    const reordered = townRanksOutOfOrder(
+      placed.map((room) => memory.get(room.key)?.rank),
+    );
+    const stacked = townStackRooms(
+      placed,
+      shape.roomColumns,
+      (room) => (reordered ? undefined : memory.get(room.key)?.column),
+      ROOM_TOP,
+    );
+    ({ spans, width: x } = stacked);
+    stacked.columns.forEach((column, index) => {
+      const roomMemory = nextMemory.get(placed[index]!.key)!;
+      roomMemory.column = column;
+      roomMemory.rank = index;
+    });
+    placed.forEach((room, index) => {
+      room.rx = stacked.positions[index]!.rx;
+      room.ry = stacked.positions[index]!.ry;
+    });
+  }
   const { w, h, barX, barWidth } = townFloor(spans, x, shape);
   const barY = h - LOBBY_HEIGHT;
   const doorX = Math.floor(w / 2);
@@ -444,6 +469,7 @@ function draftBuilding(
     hostKey,
     w,
     h,
+    floorH: h,
     doorX,
     barDoorX: barX + Math.floor(barWidth / 2),
     entryX: doorX + 4,
@@ -498,6 +524,8 @@ export function layoutTown(
   shapeOrFormFactor: TownShape | TownFormFactor,
   memory: TownPlacementMemory = new Map(),
   pins?: TownPinnedCells,
+  /** Where the user put rooms (townRoomPlace.ts); others stack. */
+  roomSpots: TownRoomSpots = NO_ROOM_SPOTS,
 ): { layout: TownLayout; memory: TownPlacementMemory } {
   const shape = shapeOf(shapeOrFormFactor);
   const formFactor = shape.formFactor;
@@ -515,6 +543,7 @@ export function layoutTown(
       nextMemory,
       shape,
       pins,
+      roomSpots,
     ),
   );
   const seatsOf = new Map<string, number>();
@@ -655,6 +684,7 @@ export function layoutTown(
       y: by,
       w: draft.w,
       h: draft.h,
+      floorH: draft.floorH,
       doorX,
       barDoorX,
       entryX,
@@ -775,6 +805,7 @@ export function layoutTown(
       bushes,
       trees,
       deskCells,
+      ...(roomSpots.size ? { roomSpots } : {}),
     },
     memory: nextMemory,
   };

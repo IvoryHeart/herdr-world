@@ -16,6 +16,9 @@ import {
   useState,
 } from "react";
 import type { TownMoveResult } from "./townMoves";
+import type { RoomPins } from "./townModel";
+import type { TownRoomPlacement } from "./townRoomPlace";
+import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
@@ -115,18 +118,24 @@ export type TownRoomActions = {
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
   /**
-   * A room dragged onto another room of its building: it takes that room's
-   * place in Herdr's workspace order. Resolves how the move ended; without
-   * it a dropped room goes back.
+   * A room moved in its building (dropped, or a Move before/after): save
+   * where every room of the building stands and put Herdr's workspace order
+   * in reading order. Resolves how the move ended; without it a dropped room
+   * goes back.
    */
-  onDropRoom?(roomKey: string, ontoRoomKey: string): Promise<TownMoveResult>;
+  onPlaceRooms?(
+    roomKey: string,
+    placement: TownRoomPlacement,
+  ): Promise<TownMoveResult>;
+  /** Whether the room's host can change its rooms now. */
+  canMoveRoom?(roomKey: string): boolean;
   /**
-   * The room a menu move puts this one before (-1) or after (1): its
-   * neighbour in the building's order. Null at either end, or when the room
-   * cannot move.
+   * Filled in by TownCanvas from the town it shows: the room a Move before
+   * (-1) or after (1) changes places with, its neighbour in reading order.
+   * Null at either end, or when the room cannot move.
    */
   roomMoveNeighbor?(roomKey: string, step: -1 | 1): { label: string } | null;
-  /** Swap a room with its neighbour before (-1) or after (1) it. */
+  /** Change places with that neighbour (TownCanvas fills this in). */
   onMoveRoom?(roomKey: string, step: -1 | 1): void;
   /** Reveal the next group of desks, or fold the room back to 24. */
   onToggleFold?(roomKey: string, nextLimit?: number): void;
@@ -144,6 +153,7 @@ const savedCameras = new Map<string, { x: number; y: number; z: number }>();
 const NO_COLORS: TerminalColors = {};
 const NO_RELATIONS = { relations: [], places: new Map() };
 const NO_PINS: DeskPins = {};
+const NO_ROOM_PINS: RoomPins = {};
 const NO_KEYS: ReadonlySet<string> = new Set();
 const NO_QUESTS: ReadonlyMap<string, TownQuestMark> = new Map();
 
@@ -174,6 +184,7 @@ export function TownCanvas({
   terminalColors = NO_COLORS,
   relations = NO_RELATIONS,
   deskPins = NO_PINS,
+  roomPins = NO_ROOM_PINS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
 }: {
@@ -225,6 +236,8 @@ export function TownCanvas({
   terminalColors?: TerminalColors;
   /** Saved desk pins (useDeskPins); a pinned desk keeps its cell. */
   deskPins?: DeskPins;
+  /** Where the user put rooms (useRoomPins); other rooms stack. */
+  roomPins?: RoomPins;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
@@ -268,6 +281,7 @@ export function TownCanvas({
     projection,
     terminalColors,
     deskPins,
+    roomPins,
     relations,
     sources,
     shape,
@@ -351,6 +365,8 @@ export function TownCanvas({
     onSelectedAnchorChange,
     roomActions,
   };
+
+  const placedRoomActions = useTownRoomMoves(roomActions, model, layout);
 
   const anchorFrame = useRef<(() => void) | null>(null);
   const reportAnchors = () => {
@@ -677,7 +693,7 @@ export function TownCanvas({
             return actions.onDropDesk(command.deskKey, command.roomKey);
           case "room":
             return (
-              actions.onDropRoom?.(command.roomKey, command.ontoRoomKey) ??
+              actions.onPlaceRooms?.(command.roomKey, command.placement) ??
               Promise.resolve("returned")
             );
         }
@@ -783,8 +799,9 @@ export function TownCanvas({
         at: local(event),
         primary: event.isPrimary,
         pointerType: event.pointerType,
-        ...(press === "plaque-name" ? {} : { card: roomKey }),
+        ...(press === "card" || press === "card-name" ? { card: roomKey } : {}),
         ...(press === "card" ? {} : { roomName: roomKey }),
+        ...(press === "plaque-move" ? { handle: true } : {}),
       });
       return true;
     };
@@ -897,7 +914,7 @@ export function TownCanvas({
             onHoverEntry={hoverEntry}
             selectedKey={selectedKey}
             blockedSince={blockedSince}
-            roomActions={roomActions}
+            roomActions={placedRoomActions}
             selectedRoomKey={selectedRoomKey}
             onSelect={onSelect}
             onActivate={onActivateAgent}

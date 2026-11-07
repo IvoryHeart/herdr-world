@@ -1,3 +1,4 @@
+import type { TownRoomPlacement } from "./townRoomPlace";
 import {
   TownAmbient,
   townSpriteVisible,
@@ -108,6 +109,8 @@ export type TownRendererHandle = {
     y: number,
     targetKey: string | null,
     snap?: boolean,
+    /** A carried room: where every room would stand if it landed here. */
+    room?: TownRoomPlacement | null,
   ): void;
   /** Spring back to its spot, or wait at the target while Herdr moves it. */
   endDrag(mode: "cancel" | "park"): void;

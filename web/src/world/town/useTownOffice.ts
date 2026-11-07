@@ -6,6 +6,7 @@ import {
   TOWN_PRESENTATION_BOUNDS,
 } from "../herdrOfficeProjection";
 import { useDeskPins } from "../useDeskPins";
+import { useRoomPins } from "./townRoomPins";
 import { DEVTOOLS } from "../devtools/flag";
 import { countWorldWork } from "../devtools/renderer";
 import type { WorldObject } from "../worldObject";
@@ -18,6 +19,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     [],
   );
   const deskPins = useDeskPins();
+  const roomPins = useRoomPins();
   // Preserve the pin-key identity across cell changes; pins do not promote tabs.
   const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
   const pinnedTabs = useMemo(
@@ -111,6 +113,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
   return {
     office: observedOffice,
     deskPins,
+    roomPins,
     toggleRoomFold,
     foldRevision,
     roomFocus,

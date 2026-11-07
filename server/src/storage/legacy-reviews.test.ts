@@ -44,7 +44,9 @@ test("schema-9 upgrade archives completion receipts and preserves Desk/watch row
   }
   const db = new Database(f.paths.database, { readonly: true });
   try {
-    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 10 });
+    expect(db.query("PRAGMA user_version").get()).toEqual({
+      user_version: worldMigrations.length,
+    });
     expect(
       db
         .query(

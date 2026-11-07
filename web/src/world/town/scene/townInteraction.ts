@@ -22,8 +22,11 @@ import {
   townDropTarget,
   townMagnetDesk,
   townRoomDrag,
+  townRoomDropTarget,
   type TownDrag,
 } from "../townDrag";
+import { TOWN_TILE } from "../townLayout";
+import type { TownRoomPlacement } from "../townRoomPlace";
 import {
   TOWN_GESTURES,
   TOWN_HOLD_MS,
@@ -52,6 +55,8 @@ export type TownStage = {
     y: number,
     targetKey: string | null,
     snap?: boolean,
+    /** A carried room: where every room would stand if it landed here. */
+    room?: TownRoomPlacement | null,
   ): void;
   endDrag(mode: "cancel" | "park"): void;
   finishMove(result: TownMoveResult): void;
@@ -65,8 +70,8 @@ export type TownMoveCommand =
   | { kind: "ungroup"; deskKey: string }
   /** Into `ontoDeskKey`'s slot, or last in its room when null. */
   | { kind: "reorder"; deskKey: string; ontoDeskKey: string | null }
-  /** A room into `ontoRoomKey`'s place in its building. */
-  | { kind: "room"; roomKey: string; ontoRoomKey: string };
+  /** A room to a new spot in its building; the others make way. */
+  | { kind: "room"; roomKey: string; placement: TownRoomPlacement };
 
 export type TownInteractionPorts = {
   clock: TownClock;
@@ -130,6 +135,15 @@ export class TownInteraction {
   /** The desk or agent being carried, and where it would land. */
   private carrying: TownDrag | null = null;
   private carryAt: Point | null = null;
+  /**
+   * A carried room: its top-left from the pointer (world pixels), and where
+   * every room would stand if it landed now.
+   */
+  private room: {
+    dx: number;
+    dy: number;
+    at: TownRoomPlacement | null;
+  } | null = null;
   /** A desk the carried desk rests on: after a moment it snaps (groups). */
   private magnet: { key: string; cancel: () => void; on: boolean } | null =
     null;
@@ -203,6 +217,8 @@ export class TownInteraction {
      * plaque's own (it opens its card); on a card's name it zooms the room.
      */
     roomName?: string;
+    /** The press is on the room's Move handle: touch lifts it at once. */
+    handle?: boolean;
   }) {
     const stage = this.ports.stage();
     if (!stage) return;
@@ -236,7 +252,14 @@ export class TownInteraction {
     // that comes after the finger moved or lifted.
     this.cancelHold?.();
     this.cancelHold = null;
-    if (waitsForHold(TOWN_GESTURES, target, pointer.pointerType)) {
+    if (
+      pointer.handle &&
+      target.drag &&
+      waitsForHold(TOWN_GESTURES, target, pointer.pointerType)
+    )
+      // The Move handle is for carrying: no hold, no pan.
+      this.feed({ type: "hold", id: pointer.id, time: this.ports.clock.now() });
+    else if (waitsForHold(TOWN_GESTURES, target, pointer.pointerType)) {
       const id = pointer.id;
       this.cancelHold = this.ports.clock.after(TOWN_HOLD_MS, () => {
         this.cancelHold = null;
@@ -445,6 +468,20 @@ export class TownInteraction {
     const stage = this.ports.stage();
     if (stage) {
       const world = stage.camera.toWorld(at.x, at.y);
+      const placed =
+        drag.kind === "room"
+          ? this.ports
+              .world()
+              .layout.buildings.flatMap((b) => b.rooms)
+              .find((room) => room.key === drag.key)
+          : undefined;
+      this.room = placed
+        ? {
+            dx: placed.x * TOWN_TILE - world.x,
+            dy: placed.y * TOWN_TILE - world.y,
+            at: null,
+          }
+        : null;
       stage.beginDrag(drag.kind, drag.key, world.x, world.y);
     }
   }
@@ -461,12 +498,34 @@ export class TownInteraction {
     return drag;
   }
 
+  /** Aim a carried room: wherever it is in its own building. */
+  private aimRoom(drag: TownDrag, at: Point) {
+    const stage = this.ports.stage();
+    if (!stage || !this.room) return;
+    const world = stage.camera.toWorld(at.x, at.y);
+    const { layout, model } = this.ports.world();
+    const { target, placement } = townRoomDropTarget(
+      drag,
+      layout,
+      model,
+      world.x + this.room.dx,
+      world.y + this.room.dy,
+      world.x,
+      world.y,
+    );
+    drag.target = target;
+    this.room.at = placement;
+    this.ports.ghost.aim(target.label, target.key !== null, "move", at);
+    stage.moveDrag(world.x, world.y, target.key, false, placement);
+  }
+
   /** Show where the carried desk or agent would land, and snap to it. */
   private aim(hit: TownHit | null, at: Point) {
     const stage = this.ports.stage();
     if (!this.carrying || !stage) return;
     // Rooms stay in their building: only desks and agents go in the bin.
-    if (this.carrying.kind !== "room" && this.ports.binAt?.(at)) {
+    if (this.carrying.kind === "room") return this.aimRoom(this.carrying, at);
+    if (this.ports.binAt?.(at)) {
       this.carrying.target = {
         key: "bin",
         label: "Put in the bin",
@@ -530,8 +589,9 @@ export class TownInteraction {
     const action = drag.target?.action;
     if (drag.kind === "agent")
       return { kind: "agent", agentKey: drag.key, deskKey: targetKey };
+    // A room has a target only with the placement it was aimed with.
     if (drag.kind === "room")
-      return { kind: "room", roomKey: drag.key, ontoRoomKey: targetKey };
+      return { kind: "room", roomKey: drag.key, placement: this.room!.at! };
     if (action === "group")
       return { kind: "group", deskKey: drag.key, targetDeskKey: targetKey };
     if (action === "ungroup") return { kind: "ungroup", deskKey: drag.key };
