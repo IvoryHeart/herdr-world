@@ -175,17 +175,6 @@ const plazaTile = (odd: number) =>
     }
   });
 
-const lotTile = (variant: number) =>
-  preparedCanvas(`lot:${variant}`, T, T, (g) => {
-    const random = townRandom(variant * 15485863 + 3);
-    g.fillStyle = "#a88a62";
-    g.fillRect(0, 0, T, T);
-    for (let i = 0; i < 6; i += 1) {
-      g.fillStyle = random() < 0.5 ? "#977a54" : "#b89a70";
-      g.fillRect((random() * T) | 0, (random() * T) | 0, 2, 1);
-    }
-  });
-
 const tileHash = (tx: number, ty: number) =>
   (Math.imul(tx + 1, 73856093) ^ Math.imul(ty + 1, 19349663)) >>> 0;
 
@@ -223,9 +212,7 @@ export function paintTownGround(
             ? roadTile(hash % 4)
             : type === TownGround.plaza
               ? plazaTile(ty % 2)
-              : type === TownGround.lot
-                ? lotTile(hash % 4)
-                : walkTile();
+              : walkTile();
       g.drawImage(tile, x, y);
       if (
         ty > 0 &&
@@ -278,7 +265,6 @@ export function paintTownGround(
     g.fillStyle = "rgba(60,40,30,.55)";
     g.fillRect(b.barDoorX * T + 1, (b.y + b.h + TOWN_FACADE) * T, 14, 4);
   }
-  paintTownHallLot(g, layout.townHall, inRegion);
   g.fillStyle = "rgba(10,30,10,.22)";
   for (const tree of layout.trees) {
     const x = tree.x * T + 11;
@@ -497,55 +483,6 @@ export function paintTownInterior(
   g.fillRect(5, 5, 1, Hp - 5);
   g.fillRect(Wp - 6, 5, 1, Hp - 5);
   return canvas;
-}
-
-/**
- * The town hall's reserved lot: a fenced plot with a signpost. What the town
- * hall holds is not decided yet, so the lot has no door and takes no taps.
- */
-function paintTownHallLot(
-  g: CanvasRenderingContext2D,
-  lot: TownLayout["townHall"],
-  inRegion: (x0: number, y0: number, x1: number, y1: number) => boolean,
-) {
-  const x = lot.x * T;
-  const y = lot.y * T;
-  const w = lot.w * T;
-  const h = lot.h * T;
-  if (!w || !inRegion(x - 4, y - 24, x + w + 4, y + h + 4)) return;
-  g.fillStyle = "#e9dcc0";
-  for (let px = x; px < x + w; px += 6) {
-    g.fillRect(px, y + 2, 4, 1);
-    g.fillRect(px, y + h - 4, 4, 1);
-  }
-  for (let py = y; py < y + h; py += 6) {
-    g.fillRect(x + 1, py, 1, 4);
-    g.fillRect(x + w - 2, py, 1, 4);
-  }
-  g.fillStyle = "#8a6a48";
-  for (let px = x; px <= x + w - 3; px += 24) {
-    g.fillRect(px, y, 3, 6);
-    g.fillRect(px, y + h - 6, 3, 6);
-  }
-  for (let py = y; py <= y + h - 6; py += 24) {
-    g.fillRect(x, py, 3, 6);
-    g.fillRect(x + w - 3, py, 3, 6);
-  }
-  const sx = x + Math.floor(w / 2) - 40;
-  const sy = y + Math.floor(h / 2) - 14;
-  g.fillStyle = "rgba(0,0,0,.2)";
-  g.fillRect(sx + 4, sy + 30, 76, 4);
-  g.fillStyle = "#5a3d28";
-  g.fillRect(sx + 38, sy + 18, 4, 16);
-  g.fillStyle = "#7a5536";
-  g.fillRect(sx, sy, 80, 20);
-  g.fillStyle = "#e7d3a8";
-  g.fillRect(sx + 2, sy + 2, 76, 16);
-  g.fillStyle = "#3a2b22";
-  g.font = "bold 10px monospace";
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.fillText("TOWN HALL", sx + 40, sy + 10);
 }
 
 /** Lobby rows: from the lobby's top row to the first room. */

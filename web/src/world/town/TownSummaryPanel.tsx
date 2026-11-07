@@ -340,6 +340,10 @@ export function useTownSummary({
     }),
     [world],
   );
+  const open = useCallback(() => {
+    setOpen(true);
+    setFocusKey((key) => key + 1);
+  }, []);
   return {
     sinceYouLeft,
     summary,
@@ -349,10 +353,7 @@ export function useTownSummary({
     openOutbox,
     askActions,
     openTerminal,
-    open: () => {
-      setOpen(true);
-      setFocusKey((key) => key + 1);
-    },
+    open,
     window: isOpen ? (
       <WorldPanel
         name="town-summary"

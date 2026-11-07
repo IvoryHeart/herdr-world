@@ -138,6 +138,7 @@ function setup(
       : undefined,
     activateAgent: (key) => log.push(["activate", key]),
     activateRoom: (key) => log.push(["room", key]),
+    openCenter: () => log.push(["center"]),
     move: (command) => {
       moves.push(command);
       return result;
@@ -234,6 +235,37 @@ test("a tap on a room's floor opens the room and zooms to it above desk level", 
   t.time.advance(1000);
   t.lift(t.press(floor), floor);
   expect(t.reasons).not.toContain("room");
+});
+
+test("a tap on the town center opens its menu; a touch hold there pans", () => {
+  const t = setup();
+  const center = t.layout.center;
+  // Look at the center's doors, then tap them.
+  t.camera.jumpTo((center.x + center.w / 2) * T, (center.y + 10) * T, 1);
+  t.draw();
+  const doors = t.screen({
+    x: (center.x + center.w / 2) * T,
+    y: (center.y + center.h - 3) * T,
+  });
+  t.lift(t.press(doors), doors);
+  expect(t.log).toContainEqual(["center"]);
+  expect(t.log.some(([kind]) => kind === "select")).toBe(false);
+  // Hovering it shows a pointer, not an agent's card.
+  t.log.length = 0;
+  t.moveTo(-1, doors);
+  expect(t.log).toContainEqual(["cursor", true]);
+  expect(t.log).toContainEqual(["hover", null]);
+  // Nothing lifts from it: a touch held there and moved pans the town.
+  t.log.length = 0;
+  t.time.advance(1000);
+  const pointer = t.press(doors, "touch");
+  t.time.advance(TOWN_HOLD_MS * 2);
+  t.moveTo(pointer, offset(doors, 40), "touch");
+  t.lift(pointer, offset(doors, 40));
+  expect(t.log.some(([kind]) => kind === "begin" || kind === "center")).toBe(
+    false,
+  );
+  expect(t.reasons).toContain("pan");
 });
 
 test("a tap on a roofed building zooms to it", () => {

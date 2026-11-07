@@ -35,6 +35,7 @@ const props = {
   onVisualActionExtensionReady: noop,
   viewToolbarPortal: null,
   onGoToSpaces: noop,
+  onGoToTown: noop,
   onPresentedWorldChange: noop,
 };
 

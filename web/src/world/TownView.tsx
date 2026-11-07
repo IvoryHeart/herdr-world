@@ -3,7 +3,7 @@ import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentQuests } from "./agentQuests";
 import { useCreationProgress } from "../creationRequests";
-import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
+import { isMobileLayout } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useTownFinished, withTownFinished } from "./town/townFinished";
 import { WorldSearchResults } from "./WorldSearchResults";
@@ -16,6 +16,7 @@ import { worldLocalStorage } from "../browserStorage";
 import { useStoreSelector } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
+import { offerTownSummary } from "./town/townSummaryRequest";
 import { useTownOffice } from "./town/useTownOffice";
 import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
@@ -74,7 +75,7 @@ import {
   type OfficePreferences,
 } from "./officePreferences";
 import { worldNodeOpenView } from "./worldInspectorSelection";
-import { useTownMaster } from "./town/useTownMaster";
+import { useTownCenter } from "./town/useTownCenter";
 import { TownHerdrSetupOffer, TownNoHosts } from "./WorldStatus";
 import {
   TownRoomDialogs,
@@ -140,7 +141,6 @@ export default function TownView({
     anchors: Record<string, WorldCanvasAnchor> | null,
   ): void;
 }) {
-  const layoutPreferences = useLayoutPreferences();
   const {
     office: observedOffice,
     deskPins,
@@ -389,6 +389,9 @@ export default function TownView({
   // Needs you's Outbox row opens Town's Summary at the saved answers.
   const openOutbox = townSummary.openOutbox;
   useEffect(() => offerNeedsYouOutbox(openOutbox), [openOutbox]);
+  // Board's hub asks for the summary before switching here.
+  const openSummary = townSummary.open;
+  useEffect(() => offerTownSummary(openSummary), [openSummary]);
   const askingKeys = useMemo(() => {
     return askingKeysForWorld(townSummary.summary.asks, world);
   }, [townSummary.summary.asks, world]);
@@ -687,12 +690,8 @@ export default function TownView({
       onOpenInspectorView(agent.nodeId, "history", focus);
     else void onSelect(agent.nodeId);
   };
-  useTownMaster(
-    office.roster,
-    preferences.townMaster,
-    layoutPreferences.mobile,
-    (key) => openChat(key, false),
-  );
+  const center = { selectedRoomKey, townRoomActions, townSummary, openChat };
+  const townCenter = useTownCenter(world, office, preferences, center, toast);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   /**
    * The agent a table stands for: one that needs you (waiting, then
@@ -951,6 +950,7 @@ export default function TownView({
             roomFocus={roomFocus}
             calm={preferences.townCalm}
             chrome={TOWN_CHROME}
+            centerActions={townCenter}
             roomActions={{
               onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
