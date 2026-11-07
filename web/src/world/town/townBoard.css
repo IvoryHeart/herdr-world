@@ -42,6 +42,7 @@
 
 .town-board-counts dt {
   font-size: 10px;
+  white-space: nowrap;
   color: #c9b79a;
 }
 

@@ -108,16 +108,16 @@ export function TownBoard({
   );
 }
 
-/** The board's agent numbers: working, need you, done and quiet. */
+/** The board's agent numbers, one short word per column: busy, waiting, done and quiet. */
 function TownBoardCounts({ counts }: { counts: TownSummaryCounts }) {
   return (
     <dl className="town-board-counts">
       <div>
-        <dt>Working</dt>
+        <dt>Busy</dt>
         <dd>{counts.working}</dd>
       </div>
       <div>
-        <dt>Need you</dt>
+        <dt>Waiting</dt>
         <dd>{counts.needsYou}</dd>
       </div>
       <div>

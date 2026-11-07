@@ -132,8 +132,8 @@ test("the Town board counts every agent in every building, quiet ones too", asyn
   );
   // The lab's quiet agents count on the board, not only the studio's.
   expect(html).toContain("<dt>Quiet</dt><dd>3</dd>");
-  expect(html).toContain("<dt>Working</dt><dd>1</dd>");
-  expect(html).toContain("<dt>Need you</dt><dd>1</dd>");
+  expect(html).toContain("<dt>Busy</dt><dd>1</dd>");
+  expect(html).toContain("<dt>Waiting</dt><dd>1</dd>");
   expect(html).toContain("5 agents in 2 buildings");
   expect(html).toContain(
     'aria-label="Town board: 1 working, 1 need you, 0 done, 3 quiet; 5 agents in 2 buildings"',
@@ -351,8 +351,8 @@ test("a place card is the Town board's numbers without its agents list", async (
       },
     }),
   );
-  expect(html).toContain("<dt>Working</dt><dd>1</dd>");
-  expect(html).toContain("<dt>Need you</dt><dd>1</dd>");
+  expect(html).toContain("<dt>Busy</dt><dd>1</dd>");
+  expect(html).toContain("<dt>Waiting</dt><dd>1</dd>");
   expect(html).toContain("<dt>Done</dt><dd>0</dd>");
   expect(html).toContain("<dt>Quiet</dt><dd>0</dd>");
   expect(html).toContain("2 agents");
