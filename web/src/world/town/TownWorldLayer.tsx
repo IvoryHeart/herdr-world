@@ -26,6 +26,7 @@ import {
 } from "./townSummary";
 import { TownFoldIndicators } from "./TownFoldIndicators";
 import { TownTargets } from "./TownAccessibleTargets";
+import { TownTidyRooms } from "./TownTidyRooms";
 import type { TownDeskBadge } from "./townBadges";
 import {
   townFoldedActivityLabel,
@@ -292,6 +293,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               ) : (
                 <span>{`${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}</span>
               )}
+              <TownTidyRooms
+                hostKey={building.hostKey}
+                hostLabel={host?.displayLabel}
+                roomActions={roomActions}
+                named
+              />
               <div className="town-reception-tags">
                 {queue.length ? (
                   <em aria-label={`${queue.length} need you`}>
@@ -335,6 +342,11 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                   {(host?.displayLabel ?? "").toUpperCase()} RECEPTION
                 </span>
                 {queue.length ? <b>{queue.length}</b> : null}
+                <TownTidyRooms
+                  hostKey={building.hostKey}
+                  hostLabel={host?.displayLabel}
+                  roomActions={roomActions}
+                />
                 {host ? (
                   <TownReceptionSign
                     connectionId={host.connectionId}

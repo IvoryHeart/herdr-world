@@ -20,6 +20,7 @@ import { officeRoomActionCapabilities } from "../officeRoomActions";
 import type { WorldObject } from "../worldObject";
 import type { DeskPins } from "../useDeskPins";
 import { TownChooser } from "./TownChooser";
+import type { TownToast } from "./TownToasts";
 import { townDeskColorTarget, townRoomColorKey } from "./townModel";
 import { saveRoomSpots } from "./townRoomPins";
 import type { TownRoomPlacement } from "./townRoomPlace";
@@ -75,7 +76,7 @@ export function townMoveActions({
   terminalColors: Readonly<Record<string, TerminalColor>>;
   agentByKey: { get(key: string): { agent: OfficeAgent } | undefined };
   roomForKey(roomKey: string | null): OfficeRoom | null;
-  toast(kind: "ok" | "error", text: string): void;
+  toast: TownToast;
   trace: ViewTrace;
 }) {
   const deskForKey = (key: string) =>
@@ -248,19 +249,18 @@ export function townMoveActions({
   const runRoomPlace = async (
     roomKey: string,
     placement: TownRoomPlacement,
+    what?: string,
   ): Promise<TownMoveResult> => {
     const room = roomForKey(roomKey);
     if (!room || movingKey) return "returned";
+    const label = what ?? room.displayLabel;
     if (!canMoveRoom(roomKey)) {
-      toast(
-        "error",
-        `${room.displayLabel} not moved: this host cannot change rooms now.`,
-      );
+      toast("error", `${label} not moved: this host cannot change rooms now.`);
       return "returned";
     }
     const rooms = placement.order.map(roomForKey);
     if (rooms.some((other) => !other)) {
-      toast("error", `${room.displayLabel} not moved: the building changed.`);
+      toast("error", `${label} not moved: the building changed.`);
       return "returned";
     }
     const spots = Object.fromEntries(
@@ -276,7 +276,7 @@ export function townMoveActions({
         spots,
       );
       if (conflict) {
-        toast("error", `${room.displayLabel} not moved: ${conflict}`);
+        toast("error", `${label} not moved: ${conflict}`);
         return "returned";
       }
       const outcome = await requestRoomOrder(rooms as OfficeRoom[]).catch(
@@ -286,22 +286,15 @@ export function townMoveActions({
           message: String(cause),
         }),
       );
-      if (DEVTOOLS)
-        trace.record("move", {
-          label: room.displayLabel,
-          status: outcome.status,
-        });
+      if (DEVTOOLS) trace.record("move", { label, status: outcome.status });
       if (outcome.status !== "moved")
         toast(
           "error",
-          `${room.displayLabel} moved, but Spaces may show the old order: ${outcome.message}`,
+          `${label} moved, but Spaces may show the old order: ${outcome.message}`,
         );
       return "moved";
     } catch (cause) {
-      toast(
-        "error",
-        `${room.displayLabel} may not have moved: ${String(cause)}`,
-      );
+      toast("error", `${label} may not have moved: ${String(cause)}`);
       return "uncertain";
     } finally {
       setMovingKey(null);
@@ -349,7 +342,24 @@ export function townMoveActions({
     runDeskReorder,
     runAgentMove,
     /** Town's room move actions (TownRoomActions). */
-    roomMoves: { onPlaceRooms: runRoomPlace, canMoveRoom },
+    roomMoves: {
+      onPlaceRooms: runRoomPlace,
+      canMoveRoom,
+      onRoomsTidied: (
+        hostLabel: string,
+        undo: (() => Promise<TownMoveResult>) | null,
+      ) => {
+        if (!undo) toast("ok", `${hostLabel}'s rooms are already tidy`);
+        else
+          toast("ok", `Tidied ${hostLabel}'s rooms`, {
+            label: "Undo",
+            run: () =>
+              void undo().then((result) => {
+                if (result === "moved") toast("ok", "Restored");
+              }),
+          });
+      },
+    },
     teams,
     dialogs,
   };

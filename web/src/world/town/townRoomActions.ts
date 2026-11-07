@@ -56,12 +56,22 @@ export type TownRoomActions = {
    * A room moved in its building (dropped, or a Move before/after): save
    * where every room of the building stands and put Herdr's workspace order
    * in reading order. Resolves how the move ended; without it a dropped room
-   * goes back.
+   * goes back. `label` names what moved in its notes (Tidy rooms: the
+   * building's rooms), else the room.
    */
   onPlaceRooms?(
     roomKey: string,
     placement: TownRoomPlacement,
+    label?: string,
   ): Promise<TownMoveResult>;
+  /**
+   * A building's rooms were tidied (TownView says so, offering Undo, which
+   * resolves how it ended), or were already tidy (`undo` null).
+   */
+  onRoomsTidied?(
+    hostLabel: string,
+    undo: (() => Promise<TownMoveResult>) | null,
+  ): void;
   /** Whether the room's host can change its rooms now. */
   canMoveRoom?(roomKey: string): boolean;
   /**
@@ -72,6 +82,14 @@ export type TownRoomActions = {
   roomMoveNeighbor?(roomKey: string, step: -1 | 1): { label: string } | null;
   /** Change places with that neighbour (TownCanvas fills this in). */
   onMoveRoom?(roomKey: string, step: -1 | 1): void;
+  /** Whether a building has rooms to tidy (TownCanvas fills this in). */
+  canTidyRooms?(hostKey: string): boolean;
+  /**
+   * Tidy rooms, from the building's reception board: its rooms glide into
+   * the default arrangement (townRoomTidy), saved like a room move
+   * (TownCanvas fills this in).
+   */
+  onTidyRooms?(hostKey: string): void;
   /** Reveal the next group of desks, or fold the room back to 24. */
   onToggleFold?(roomKey: string, nextLimit?: number): void;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */

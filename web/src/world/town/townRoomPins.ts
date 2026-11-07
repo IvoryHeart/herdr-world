@@ -14,7 +14,15 @@ import type { TownRoomActions } from "./TownCanvas";
 import { townRoomDrag } from "./townDrag";
 import type { TownLayout } from "./townLayout";
 import type { RoomPins, TownModel } from "./townModel";
-import { townRoomNeighbor, townRoomSwap } from "./townRoomPlace";
+import type { TownRendererHandle } from "./townRenderer";
+import {
+  townBuildingSpots,
+  townRoomNeighbor,
+  townRoomRestore,
+  townRoomSwap,
+  townRoomTidy,
+  type TownRoomPlacement,
+} from "./townRoomPlace";
 
 const NONE: RoomPins = Object.freeze({});
 
@@ -57,37 +65,105 @@ export function saveRoomSpots(
   ]);
 }
 
+/** What Tidy rooms' Undo reads later: the actions and town shown by then. */
+export type TownRoomMovesLatest = {
+  readonly current: { roomActions: TownRoomActions; layout: TownLayout };
+};
+
 /**
  * The room actions the plaques use, with room moves filled in from the town
  * shown: a room can move when its host can change rooms and it has another
  * room in its building, and Move before or after swaps it with its
- * neighbour in reading order.
+ * neighbour in reading order. Tidy rooms (any building whose host can change
+ * its rooms, even with one room) lays a building's rooms out afresh
+ * and glides them there (`renderer`); its Undo puts them back.
  */
 export function useTownRoomMoves(
   roomActions: TownRoomActions,
   model: TownModel,
   layout: TownLayout,
+  renderer?: { readonly current: TownRendererHandle | null },
 ): TownRoomActions {
-  return useMemo(() => {
-    const { onPlaceRooms, canMoveRoom } = roomActions;
-    if (!onPlaceRooms) return roomActions;
-    const movable = (roomKey: string) =>
-      (canMoveRoom?.(roomKey) ?? true) && townRoomDrag(roomKey, model) !== null;
-    return {
-      ...roomActions,
-      canMoveRoom: movable,
-      roomMoveNeighbor: (roomKey, step) => {
-        const other = movable(roomKey)
-          ? townRoomNeighbor(layout, roomKey, step)
-          : null;
-        return other
-          ? { label: model.rooms.get(other.key)?.displayLabel ?? "room" }
-          : null;
-      },
-      onMoveRoom: (roomKey, step) => {
-        const placement = townRoomSwap(layout, roomKey, step);
-        if (placement?.changed) void onPlaceRooms(roomKey, placement);
-      },
-    };
-  }, [roomActions, model, layout]);
+  // Undo comes later: it places the rooms in the town shown by then.
+  const latest = useRef({ roomActions, layout });
+  latest.current = { roomActions, layout };
+  return useMemo(
+    () => townRoomMoves(roomActions, model, layout, latest, renderer),
+    [roomActions, model, layout, renderer],
+  );
+}
+
+/** useTownRoomMoves' actions for one town shown. */
+export function townRoomMoves(
+  roomActions: TownRoomActions,
+  model: TownModel,
+  layout: TownLayout,
+  latest: TownRoomMovesLatest,
+  renderer?: { readonly current: TownRendererHandle | null },
+): TownRoomActions {
+  const { onPlaceRooms, canMoveRoom } = roomActions;
+  if (!onPlaceRooms) return roomActions;
+  const movable = (roomKey: string) =>
+    (canMoveRoom?.(roomKey) ?? true) && townRoomDrag(roomKey, model) !== null;
+  // Tidy rooms needs only a room its host can change: unlike a drag, a lone
+  // room left far from its spot still has a building to compact.
+  const tidyRoom = (hostKey: string) =>
+    layout.buildings
+      .find((b) => b.hostKey === hostKey)
+      ?.rooms.find((placed) => {
+        const room = model.rooms.get(placed.key);
+        return (
+          room?.canOpenInSpaces &&
+          !room.stale &&
+          (canMoveRoom?.(placed.key) ?? true)
+        );
+      })?.key;
+  /** Save a building's rooms where they glide to. */
+  const glide = async (
+    hostKey: string,
+    placement: TownRoomPlacement,
+    label: string,
+  ) => {
+    const place = latest.current.roomActions.onPlaceRooms ?? onPlaceRooms;
+    renderer?.current?.beginGlide(hostKey);
+    const result = await place(placement.order[0]!, placement, label);
+    renderer?.current?.finishGlide(result);
+    return result;
+  };
+  return {
+    ...roomActions,
+    canMoveRoom: movable,
+    roomMoveNeighbor: (roomKey, step) => {
+      const other = movable(roomKey)
+        ? townRoomNeighbor(layout, roomKey, step)
+        : null;
+      return other
+        ? { label: model.rooms.get(other.key)?.displayLabel ?? "room" }
+        : null;
+    },
+    onMoveRoom: (roomKey, step) => {
+      const placement = townRoomSwap(layout, roomKey, step);
+      if (placement?.changed) void onPlaceRooms(roomKey, placement);
+    },
+    canTidyRooms: (hostKey) => tidyRoom(hostKey) !== undefined,
+    onTidyRooms: (hostKey) => {
+      const placement = tidyRoom(hostKey)
+        ? townRoomTidy(layout, hostKey)
+        : null;
+      if (!placement) return;
+      const host = model.hosts.get(hostKey)?.displayLabel ?? "This building";
+      const tidied = latest.current.roomActions.onRoomsTidied;
+      if (!placement.changed) return tidied?.(host, null);
+      const before = townBuildingSpots(layout, hostKey);
+      void glide(hostKey, placement, `${host}'s rooms`).then((result) => {
+        if (result !== "moved") return;
+        tidied?.(host, async () => {
+          const undo = townRoomRestore(latest.current.layout, hostKey, before);
+          return undo?.changed
+            ? glide(hostKey, undo, `${host}'s rooms`)
+            : "returned";
+        });
+      });
+    },
+  };
 }
