@@ -914,6 +914,14 @@ async function groupTwoDesks(
     `group.join changed the picked desks (${JSON.stringify({ picked, grouped, start, end })})`,
   );
   await waitFor(() => walled() > walls, "the grouped desks have no team wall");
+  // A join that grows the room reflows once input pauses; later steps (and
+  // the check below) start from that settled layout, as a capture would.
+  await window.__HERDR_WORLD_CAPTURE__!.wait({
+    view: "town",
+    width: innerWidth,
+    height: innerHeight,
+    timeoutMs: 20_000,
+  });
   // Joining moves no other desk, and leaves Herdr's tab order alone.
   check(
     !moves.some((move) => move.method === "tab.move"),
