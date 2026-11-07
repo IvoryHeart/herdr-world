@@ -81,7 +81,8 @@ function useSecondClock(running: boolean) {
  * The bin in every view: a chip while it holds agents (always in Town and on
  * Board, where agents are dragged onto it), and its tray (from the chip, or
  * Town's stops and bus) listing who waits with the time to the next bus,
- * with Put back and Close now. A stopped bus is let go from the tray.
+ * with Put back and Close now. A stopped bus is let go from the tray, or
+ * goes on as the tray closes.
  */
 export function WorldBin({ always = false }: { always?: boolean }) {
   const bin = useWorldBin();
@@ -100,8 +101,13 @@ export function WorldBin({ always = false }: { always?: boolean }) {
     window.addEventListener(WORLD_BIN_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(WORLD_BIN_OPEN_EVENT, onOpen);
   }, []);
+  // A bus stopped from Town opens the tray; closing the tray lets it go on.
+  const wasOpen = useRef(open);
   useEffect(() => {
     if (!open) setError(null);
+    if (wasOpen.current && !open && worldBinStore().get().bus.stopped)
+      void worldBinStore().goBus();
+    wasOpen.current = open;
   }, [open]);
   const act = (run: () => Promise<string | null>) =>
     void run().then((failed) => setError(failed));

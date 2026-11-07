@@ -13,6 +13,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import BoardView, { __boardDraftsTesting } from "./BoardView";
 import { WorldBin } from "./bin/WorldBin";
+import { worldBinStore } from "./bin/useWorldBin";
 import {
   BoardDocumentStore,
   type BoardDocument,
@@ -259,9 +260,12 @@ const emptyDocument = (): BoardDocument => ({
 const askLedger = { revision: 0, asks: [] as WorldAsk[] };
 /** Agents put in the (fake) service's bin. */
 const binAdds: Record<string, unknown>[] = [];
+/** Every call to the (fake) bin, and whether its bus stands stopped. */
+const binCalls: string[] = [];
+let binStopped = false;
 const binState = () => ({
   epoch: "test",
-  revision: binAdds.length,
+  revision: binCalls.length,
   entries: [],
   closing: [],
   outcomes: [],
@@ -269,16 +273,19 @@ const binState = () => ({
     interval_ms: 240_000,
     trip_ms: 120_000,
     next_ms: 60_000,
-    elapsed_ms: null,
-    stopped: false,
-    trip: null,
+    elapsed_ms: binStopped ? 30_000 : null,
+    stopped: binStopped,
+    trip: binStopped ? 1 : null,
   },
 });
 const originalAskCall = bridge.call.bind(bridge);
 bridge.call = (async (method: string, params?: Record<string, unknown>) => {
   if (method === "world.asks.get") return structuredClone(askLedger);
   if (method.startsWith("world.bin.")) {
+    binCalls.push(method);
     if (method === "world.bin.add") binAdds.push(params ?? {});
+    if (method === "world.bin.pause") binStopped = true;
+    if (method === "world.bin.resume") binStopped = false;
     return binState();
   }
   return originalAskCall(method, params);
@@ -2633,6 +2640,28 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "the agent on that card goes in, from Board",
       );
       check(!chip.hasAttribute("data-bin-over"), "the mark clears on drop");
+      // A bus stopped from Town opens the tray; closing it lets the bus go on.
+      await worldBinStore().stopBus();
+      await waitFor(
+        () => worldBinStore().get().bus.stopped,
+        "the bus is stopped",
+      );
+      (chip as HTMLButtonElement).click();
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-tray")),
+        "the tray opens",
+      );
+      check(
+        !binCalls.includes("world.bin.resume"),
+        "an open tray keeps the bus stopped",
+      );
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Close the bin"]')!
+        .click();
+      await waitFor(
+        () => binCalls.includes("world.bin.resume"),
+        "closing the tray lets the stopped bus go on",
+      );
       binRoot.unmount();
       binHost.remove();
       await rest();

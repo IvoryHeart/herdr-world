@@ -12,11 +12,13 @@ import {
   type TownPoint,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
+import { TOWN_WALK_SPEED } from "./townActors";
+import type { TownDirection } from "./townSprites";
 
 /** A street is five tiles: pavement, three lanes, pavement. */
 const STREET = 5;
 /** Riders queue along the pavement this far apart, in world pixels. */
-const QUEUE_GAP = 11;
+export const TOWN_QUEUE_GAP = 18;
 /** Riders shown standing at one stop; the rest are a count. */
 export const TOWN_STOP_QUEUE = 4;
 
@@ -273,7 +275,7 @@ export type TownBinRider = {
   stop: TownBusStop;
   /** Its place in the stop's queue. */
   slot: number;
-  /** Where it stands, and the front door it walked out of. */
+  /** Where it stands, and the front door it walks out of. */
   at: TownPoint;
   door: TownPoint;
 };
@@ -327,10 +329,11 @@ export function townBinRiders(
       stop,
       slot,
       at: {
-        x: stop.wait.x - Math.min(slot, TOWN_STOP_QUEUE - 1) * QUEUE_GAP,
+        x: stop.wait.x - Math.min(slot, TOWN_STOP_QUEUE - 1) * TOWN_QUEUE_GAP,
         y: stop.wait.y,
       },
-      door: { x: (building.entryX + 0.5) * T, y: building.y * T },
+      // Where its actor stood as it went out: the front door's tile.
+      door: { x: (building.entryX + 0.5) * T, y: (building.y + 1) * T + 13 },
     });
   }
   return { away, riders };
@@ -367,4 +370,44 @@ export function townNearestStop(
     }
   }
   return best;
+}
+
+/**
+ * A binned agent `seconds` after it went out of its front door (`from`):
+ * up to the pavement, then along it to its place at the stop (`to`), at
+ * the agents' indoor walking speed and with their walking frames (a step
+ * every 6 px, as townRendererActors draws them). There it stands facing out.
+ */
+export function townRiderWalk(
+  from: TownPoint,
+  to: TownPoint,
+  seconds: number,
+): {
+  x: number;
+  y: number;
+  dir: TownDirection;
+  frame: number;
+  walking: boolean;
+} {
+  const up = Math.abs(to.y - from.y);
+  const along = Math.abs(to.x - from.x);
+  const walked = Math.max(0, seconds) * TOWN_WALK_SPEED;
+  if (!(walked < up + along))
+    return { x: to.x, y: to.y, dir: "down", frame: 0, walking: false };
+  const frame = Math.floor(walked / 6) % 4;
+  if (walked < up)
+    return {
+      x: from.x,
+      y: from.y + Math.sign(to.y - from.y) * walked,
+      dir: to.y < from.y ? "up" : "down",
+      frame,
+      walking: true,
+    };
+  return {
+    x: from.x + Math.sign(to.x - from.x) * (walked - up),
+    y: to.y,
+    dir: to.x < from.x ? "left" : "right",
+    frame,
+    walking: true,
+  };
 }

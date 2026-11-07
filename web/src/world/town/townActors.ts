@@ -62,7 +62,8 @@ export type TownGoal =
   | { kind: "lounge"; spot: TownSpot }
   | { kind: "door" };
 
-const WALK_SPEED = 76;
+/** How fast agents walk, in world pixels a second (also outdoors, townBus). */
+export const TOWN_WALK_SPEED = 76;
 const SEAT_TWEEN = 0.26;
 
 const tileCenter = (tx: number, ty: number): [number, number] => [
@@ -644,7 +645,7 @@ export class TownActors {
       if (this.world?.model.agents.get(actor.key)?.stale) continue;
       if (actor.mode === "walk") {
         moved = true;
-        let remaining = WALK_SPEED * dt;
+        let remaining = TOWN_WALK_SPEED * dt;
         while (remaining > 0 && actor.path.length) {
           const [px, py] = actor.path[0]!;
           const dx = px - actor.x;

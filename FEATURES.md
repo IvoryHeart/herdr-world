@@ -260,14 +260,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     bottom of Town or Board, or onto a Town bus stop, or **Put in bin** in an
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;
     nothing closes yet. In Town it walks out of its building's front door to
-    the London bus stop (red roundel) nearest its room; there is a stop at
-    every road crossing. A red double-decker comes every four minutes on a
+    the London bus stop (red roundel) nearest its room, the same character
+    walking as it does indoors; there is a stop at every road crossing, and a
+    countdown board over those waiting shows the time to the next bus. A red
+    double-decker comes every four minutes on a
     fixed schedule when someone is waiting: it comes in, slows to each stop
     with riders, waits about ten seconds, speeds up and drives off the map,
-    and only then do its riders' agents close. Agents put in the bin while
+    and only then do its riders' agents close; its riders show in its
+    windows. Agents put in the bin while
     the bus is out wait for the next one. Tapping the bus stops it where it
-    is (nothing closes while it stands); **Let the bus go** in the tray sends
-    it on. The bin (always shown in Town and on Board, in other views while
+    is and opens the tray (nothing closes while it stands); **Let the bus
+    go**, or closing the tray, sends it on. The bin (always shown in Town and on Board, in other views while
     it holds agents; on a phone, also a stop or the bus in Town) opens the
     tray: who waits, the time to the next bus, **Put back** (until the bus
     has left the screen, even after boarding; it walks back to its desk) and

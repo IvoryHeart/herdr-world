@@ -9,7 +9,9 @@ import {
   townBusRoute,
   townBusTimeline,
   townNearestStop,
+  townRiderWalk,
 } from "./townBus";
+import { TOWN_WALK_SPEED } from "./townActors";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
 import type { TownModel } from "./townModel";
 
@@ -161,7 +163,7 @@ test("bin entries become Town riders by connection, generation and pane", () => 
   const building = layout.buildings.find((b) => b.hostKey === "a")!;
   expect(first!.door).toEqual({
     x: (building.entryX + 0.5) * T,
-    y: building.y * T,
+    y: (building.y + 1) * T + 13,
   });
 });
 
@@ -230,4 +232,27 @@ test("many stops with riders share half the trip, so the bus still drives it", (
   expect(townBusAlong(timeline, 120_000)).toBe(route.length);
   const dwell = timeline.pieces.find((piece) => !piece.phases.length)!;
   expect(dwell.t1 - dwell.t0).toBeLessThanOrEqual(60 / all.size + 1e-9);
+});
+
+test("a binned agent walks out to its stop as it walks indoors, then stands there", () => {
+  const door = { x: 100, y: 200 };
+  const stop = { x: 40, y: 152 };
+  const at = (distance: number) =>
+    townRiderWalk(door, stop, distance / TOWN_WALK_SPEED);
+  // Up to the pavement first, stepping through the indoor walking frames.
+  expect(at(0)).toMatchObject({ x: 100, y: 200, dir: "up", walking: true });
+  expect(at(24)).toMatchObject({ x: 100, y: 176, dir: "up", frame: 0 });
+  expect(at(30).frame).toBe(1);
+  // Then along it, to the left.
+  expect(at(68)).toMatchObject({ x: 80, y: 152, dir: "left", walking: true });
+  // There, it stands facing out, and keeps standing.
+  for (const distance of [108, 500])
+    expect(at(distance)).toEqual({
+      x: 40,
+      y: 152,
+      dir: "down",
+      frame: 0,
+      walking: false,
+    });
+  expect(townRiderWalk(door, stop, Infinity).walking).toBe(false);
 });

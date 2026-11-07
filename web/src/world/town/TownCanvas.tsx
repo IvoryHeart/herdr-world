@@ -56,7 +56,7 @@ import {
 } from "./townFoldedActivity";
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
-import { markOut, TownBusLayer, useTownBin } from "./TownBusLayer";
+import { TownBusLayer, useTownBin } from "./TownBusLayer";
 import { worldBinStore } from "../bin/useWorldBin";
 import { aimAtBin } from "../bin/binDrop";
 import "./townBoard.css";
@@ -213,7 +213,7 @@ export function TownCanvas({
   const worldRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<TownRendererHandle | null>(null);
   const pennants = useRef(new Set<HTMLElement>());
-  const riderNodes = useRef(new Set<HTMLElement>());
+  const busFramed = useRef<(() => void) | null>(null);
   const [failure, setFailure] = useState(false);
   const [ready, setReady] = useState(false);
   const capture = useDrawReadiness("town", shellRef, () =>
@@ -407,7 +407,7 @@ export function TownCanvas({
         signs.update((hostKey) => renderer.roofAlpha(hostKey));
         if (level !== "overview")
           for (const pennant of pennants.current) markAway(pennant, renderer);
-        for (const rider of riderNodes.current) markOut(rider, renderer);
+        busFramed.current?.();
       }
     }
     hud.framed();
@@ -806,7 +806,8 @@ export function TownCanvas({
           bin={townBin.bin}
           route={townBin.route}
           riders={townBin.riders}
-          riderNodes={riderNodes.current}
+          lookOf={townBin.lookOf}
+          framed={busFramed}
           renderer={rendererRef}
           firstSeen={worldBinStore().firstSeen}
         />
