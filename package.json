@@ -112,5 +112,8 @@
     "undici": "8.12.3",
     "@earendil-works/pi-codemode": "1.1.0"
   },
-  "packageManager": "bun@1.4.4"
+  "packageManager": "bun@1.4.4",
+  "patchedDependencies": {
+    "react-dom@19.3.1": "patches/react-dom@19.3.1.patch"
+  }
 }

@@ -179,10 +179,7 @@ test.each(["claude", "grok-build", "agy"])(
           return;
         }
         elements.push(child);
-        const ref =
-          (child as typeof child & { ref?: React.MutableRefObject<unknown> })
-            .ref ??
-          (child.props.ref as React.MutableRefObject<unknown> | undefined);
+        const ref = child.props.ref as React.RefObject<unknown> | undefined;
         if (ref && typeof ref === "object") {
           const key = String(
             child.props.className ??

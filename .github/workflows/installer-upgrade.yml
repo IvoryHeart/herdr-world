@@ -83,6 +83,9 @@ jobs:
           key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
       - name: Verify native SQLite and standalone compiled worker crash recovery
+        env:
+          HERDR_TEST_PARALLEL: "1"
+          HERDR_TEST_MAX_CONCURRENCY: "1"
         run: >-
           bun run test
           ./server/src/storage/world-storage.test.ts

@@ -435,11 +435,16 @@ test("installer upgrades run native released artifacts on every supported platfo
     ).text(),
   ) as any;
   const job = workflow.jobs.upgrade;
-  const nativeStorage = job.steps.find(
+  const nativeStorageStep = job.steps.find(
     (step: any) =>
       step.name ===
       "Verify native SQLite and standalone compiled worker crash recovery",
-  )?.run;
+  );
+  expect(nativeStorageStep.env).toMatchObject({
+    HERDR_TEST_PARALLEL: "1",
+    HERDR_TEST_MAX_CONCURRENCY: "1",
+  });
+  const nativeStorage = nativeStorageStep.run;
   const crashSuites = [
     ...new Bun.Glob("*-crash.test.ts").scanSync({
       cwd: fileURLToPath(new URL("../server/src/storage/", import.meta.url)),

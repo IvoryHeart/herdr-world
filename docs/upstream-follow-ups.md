@@ -58,16 +58,20 @@ rationale here; retain this standing entry while the divergence applies.
 
 ## React 18 compatibility
 
-Status: intentional divergence proposed for owner review. Source: Roamgate
-e030b2e2 (#453), post-v0.8.6 main.
+Status: addressed by the React 19 migration (#679), pending candidate review.
+Source: Roamgate e030b2e2 (#453), post-v0.8.6 main.
 Owner: repository owner and independent delivery reviewer.
 
-World retains React 18 under its current adoption policy. The upstream React 19.3.1
-patch cannot be applied as an 18.x update. Revisit every source sync, relevant React
-security advisory, or owner-approved major migration. Acceptance requires an
-explicit policy decision and passing React DOM/browser evidence for focus, native
-blur, IME, qualified editor drafts and independent runtime ownership. Keep this
-entry until a compatible migration or security backport is reviewed and delivered.
+World now follows Roamgate's `^19.3.1` range for React and React DOM, with 19.x
+types. The original development-build stall was the changed-prop diagnostic walk
+bypassing its own width counter when descending into changed objects. A small,
+version-scoped Bun patch corrects that counter in both development entry points;
+production code and diagnostic availability are unchanged. See the
+[18/19 measurements, reproduction and patch removal conditions](react-19.md).
+The historical assessments below record the earlier React 18 decision; they do
+not require future source integrations to downgrade React. Focus, native blur,
+IME, qualified drafts and independent runtime ownership still require browser
+and consumer evidence on dependency updates.
 
 ## Mobile navigation and History input
 
