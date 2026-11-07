@@ -248,6 +248,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     shows a blue pennant (green when done, amber when blocked) beside it in
     a room or at a desk, with a progress bar when the quest has steps; the
     pennant leaves with the agent. Hover or tap the pennant for **Quest**, its title and progress.
+  - Each agent's context fill reads like a needs bar: how much of its model's
+    context window its current session uses (Claude, Codex, Pi and Gemini,
+    from their own logs). The peek shows a slim bar and the percent beside the
+    agent's status, and the agent's window shows the bar under its icon; hover
+    either for the reading, such as "Context 72% · 144k of 200k tokens ·
+    claude-opus-4-6". At 85% or more the bar turns red and the agent shows a
+    sweat drop at its desk: it is about to compact or lose the thread. An
+    agent without a reading, or on a model World does not know, shows no bar
+    rather than zero. See [harness usage data](docs/usage.md#context-fill).
   - **Open terminal** in the card's header opens the live pane; **Open chat**
     opens the agent's window, whose Files and Changes views hold the rest.
     **Next** opens the next waiting agent's window,

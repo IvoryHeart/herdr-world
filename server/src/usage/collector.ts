@@ -1,5 +1,6 @@
 import type * as Fs from "node:fs/promises";
 import type {
+  ContextObservation,
   createUsageProjection,
   LimitObservation,
   NumericUsageRow,
@@ -17,6 +18,12 @@ export type HostUsage = {
   truncated: boolean;
   /** The newest subscription-limit observation per harness on this host. */
   limits?: (LimitObservation & { harness: string })[];
+  /** Each session's latest context size, newest first. */
+  contexts?: (ContextObservation & {
+    harness: string;
+    session_key: string;
+    file_keys: string[];
+  })[];
   /** Private, hashed title-prefix resolutions; never exposed by World usage. */
   title_matches?: { prefix_key: string; session_key: string }[];
 };
@@ -714,6 +721,7 @@ export async function collectHarnessUsage(
     sources: [],
     truncated,
     limits: [],
+    contexts: [],
     title_matches: [],
   };
   // Keep one observation per harness: the newest, whatever its source.
@@ -783,6 +791,13 @@ export async function collectHarnessUsage(
     const projected = session.reader.finish();
     if (projected.partial) fail(session.harness);
     if (projected.limits) newestLimit(session.harness, projected.limits);
+    if (projected.context)
+      result.contexts!.push({
+        ...projected.context,
+        harness: session.harness,
+        session_key: sessionKey,
+        file_keys: [...session.files],
+      });
     for (const row of projected.rows) {
       if (result.rows.length >= 1024) {
         result.truncated = true;
@@ -798,6 +813,7 @@ export async function collectHarnessUsage(
       });
     }
   }
+  result.contexts = result.contexts!.sort((a, b) => b.at - a.at).slice(0, 256);
   for (const [harness, state] of states)
     if (
       state === "available" &&

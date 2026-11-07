@@ -848,3 +848,51 @@ test("an unreadable status line reading keeps the last Claude numbers stale thro
     await fs.rm(home, { recursive: true, force: true });
   }
 });
+
+test("a pane's context bar needs a fresh, unique current-session match", async () => {
+  const context = (at: number, used: number, model = "claude-opus-4-6") => ({
+    harness: "claude",
+    session_key: row().session_key,
+    file_keys: [],
+    at,
+    model,
+    used_tokens: used,
+    window_tokens: null,
+  });
+  const s = setup(),
+    data = value();
+  // An older file of the same session never replaces the newest prompt.
+  data.contexts = [context(at - 100, 144_000), context(at - 500, 9)];
+  s.data(data);
+  expect((await s.service.get()).contexts).toEqual([
+    {
+      connection_id: "alpha",
+      connection_generation: 1,
+      workspace_id: "w1",
+      tab_id: "t1",
+      pane_id: "p1",
+      harness: "claude",
+      model: "claude-opus-4-6",
+      used_tokens: 144_000,
+      window_tokens: 200_000,
+      observed_at: at - 100,
+    },
+  ]);
+  // An unknown model keeps its numbers but has no window, so no bar.
+  s.data({ ...data, contexts: [context(at - 100, 10, "unknown")] });
+  s.advance(31_000);
+  expect((await s.service.get()).contexts?.[0]?.window_tokens).toBeNull();
+  // Duplicate claims and failed hosts attribute nothing.
+  s.data({
+    ...data,
+    bindings: [
+      ...data.bindings,
+      { ...data.bindings[0]!, pane_id: "p2", tab_id: "t2" },
+    ],
+  });
+  s.advance(31_000);
+  expect((await s.service.get()).contexts).toEqual([]);
+  s.offline();
+  expect((await s.service.get()).contexts).toEqual([]);
+  await s.service.close();
+});

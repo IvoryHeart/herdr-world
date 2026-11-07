@@ -90,6 +90,8 @@ The response is typed by `shared/usage.ts`:
   truncated responses are lower-coverage observations, not complete expenses.
 - `limits`: subscription limits per host and harness, independent of `window`;
   see [Subscription limits](#subscription-limits).
+- `contexts`: how full each attributed agent pane's context is, independent of
+  `window`; see [Context fill](#context-fill).
 - `telemetry`: optional configured Prometheus/OTel rolling-24-hour comparison,
   explicitly excluded from the log totals. Its window differs from the UTC
   windows above. No OTel configuration is needed for harness-log collection.
@@ -142,6 +144,38 @@ Town shows these as fuel gauges on the board sign and per host in the Summary;
 see FEATURES.md. The board re-reads them every 30 seconds while it is shown,
 so a new reading reaches the sign within about a minute. A harness reported as `unsupported` appears on the sign as
 **not available** with its reason, never as an empty or full gauge.
+
+## Context fill
+
+Each `contexts` entry names one agent pane (`connection_id`,
+`connection_generation`, `workspace_id`, `tab_id`, `pane_id`), its `harness` and
+exact `model`, `used_tokens`, `window_tokens` and `observed_at`. Only a fresh
+read with a unique current-session match produces an entry, under the same
+attribution rules as pane usage; when a session has several files, the newest
+observation wins. A failed or stale host has none.
+
+`used_tokens` is the prompt of the session's newest response, what it carries
+into its next turn:
+
+| Harness | Prompt size |
+| --- | --- |
+| Claude Code | The newest main-thread assistant record's `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. Subagent (sidechain), API-error and synthetic records are skipped. |
+| Codex | `last_token_usage.input_tokens` of the newest `token_count` event (cached input is part of it), with Codex's own `model_context_window`. |
+| Pi | The newest assistant message's `input + cacheRead + cacheWrite`. |
+| Gemini CLI | The newest Gemini message's `input + tool` tokens (cached input is part of `input`). |
+
+`window_tokens` is the window the harness reported (Codex), else a small table
+by model name: Claude models of the 4 family up to Opus 4.6 and Sonnet 4.6, and
+Claude 3, have 200,000; Opus 4.7 and later, Sonnet 5 and later and Fable have
+1,000,000; Gemini 2.5 and 3 have 1,048,576. Claude transcripts do not record the
+opt-in one-million variant, so a 200,000 model whose prompt is already past
+200,000 reads against 1,000,000; below that a session on the variant reads high.
+Any other model has `window_tokens: null`, and Town shows no bar for it. A
+reading never says zero or full on missing evidence.
+
+Town reads `contexts` every 30 seconds while it or an agent window is shown:
+the peek and the window bar show the fill, and an agent at 85% or more looks
+tired at its desk; see FEATURES.md.
 
 ## Optional local price table
 
