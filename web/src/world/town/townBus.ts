@@ -20,8 +20,19 @@ import type { TownDirection } from "./townSprites";
 const STREET = 5;
 /** Riders queue along the pavement this far apart, in world pixels. */
 export const TOWN_QUEUE_GAP = 18;
-/** Riders shown standing at one stop; the rest are a count. */
-export const TOWN_STOP_QUEUE = 4;
+/** The most riders standing in one row of a stop's queue. */
+export const TOWN_QUEUE_ROW = 10;
+/**
+ * A long queue turns back once, in front of itself: two rows at most. Past
+ * them the queue's last place is a count of everyone else.
+ */
+export const TOWN_QUEUE_ROWS = 2;
+/** The front row stands this much nearer the viewer, still on the pavement. */
+const QUEUE_ROW_DY = 7;
+/** Pavement right of a stop's waiting point taken by its pole and flag. */
+const SIGN_RIGHT = 28;
+/** Half a standing agent's width, so none overhangs what it must not cover. */
+const HALF_AGENT = 10;
 
 export type TownBusStop = {
   key: string;
@@ -29,6 +40,12 @@ export type TownBusStop = {
   wait: TownPoint;
   /** How far along the route the bus passes it, in world pixels. */
   at: number;
+  /**
+   * Riders in each row of its queue: as many as its pavement holds before
+   * the next stop's sign along the street or the map's edge, at most
+   * TOWN_QUEUE_ROW.
+   */
+  row: number;
 };
 
 /** One pass along a street, edge to edge, at the lanes' height. */
@@ -74,10 +91,59 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
           key,
           wait,
           at: index * span + Math.abs(wait.x - leg.from),
+          row: 1,
         });
       }
   });
+  for (const stop of stops) {
+    // A queue runs left along the pavement from the stop, its front row
+    // half a step further out, and ends short of the sign to its left.
+    const bound = Math.max(
+      0,
+      ...stops
+        .filter((o) => o.wait.y === stop.wait.y && o.wait.x < stop.wait.x)
+        .map((o) => o.wait.x + SIGN_RIGHT),
+    );
+    const room = stop.wait.x - bound - HALF_AGENT - TOWN_QUEUE_GAP / 2;
+    stop.row = Math.max(
+      1,
+      Math.min(TOWN_QUEUE_ROW, Math.floor(room / TOWN_QUEUE_GAP) + 1),
+    );
+  }
   return { legs, length: legs.length * span, stops, width: layout.width * T };
+}
+
+/**
+ * How a stop's queue of `count` riders shows: `shown` stand in it, and past
+ * its two rows the last place reads "+`more`" for the rest. `front` stand
+ * in its first row, the one the clock is over.
+ */
+export function townQueueShape(stop: TownBusStop, count: number) {
+  const places = stop.row * TOWN_QUEUE_ROWS;
+  const shown = count > places ? places - 1 : count;
+  return { shown, more: count - shown, front: Math.min(shown, stop.row) };
+}
+
+/**
+ * Place `slot` in a stop's queue. The first row runs left along the pavement
+ * from the stop; a longer queue turns and comes back in front of it, half a
+ * step out so the heads behind still show, ending beside the stop again.
+ */
+export function townQueueSpot(stop: TownBusStop, slot: number): TownPoint {
+  const k = slot % stop.row;
+  if (slot < stop.row)
+    return { x: stop.wait.x - k * TOWN_QUEUE_GAP, y: stop.wait.y };
+  return {
+    x: stop.wait.x - (stop.row - 1 - k) * TOWN_QUEUE_GAP - TOWN_QUEUE_GAP / 2,
+    y: stop.wait.y + QUEUE_ROW_DY,
+  };
+}
+
+/** The leftmost point a stop's queue of `shown` riders reaches. */
+export function townQueueLeft(stop: TownBusStop, shown: number) {
+  return shown > stop.row
+    ? townQueueSpot(stop, stop.row).x
+    : townQueueSpot(stop, Math.max(0, shown - 1)).x;
 }
 
 /** About how long the bus waits at each stop where someone boards. */
@@ -327,8 +393,13 @@ export type TownBinRider = {
   entry: BinEntry;
   agentKey: string;
   stop: TownBusStop;
-  /** Its place in the stop's queue. */
+  /** Its place in the stop's queue: joining, it takes the end. */
   slot: number;
+  /**
+   * Counted in its stop's "+N" rather than standing: it walks to the
+   * queue's last place (the count's) and waits there unseen.
+   */
+  counted: boolean;
   /** Where it stands, and the front door it walks out of. */
   at: TownPoint;
   door: TownPoint;
@@ -363,7 +434,7 @@ export function townBinRiders(
     const key = agentOf(entry);
     if (key) away.add(key);
   }
-  const riders: TownBinRider[] = [];
+  const placed: Omit<TownBinRider, "counted" | "at">[] = [];
   const queues = new Map<string, number>();
   for (const entry of entries) {
     const agentKey = agentOf(entry);
@@ -377,19 +448,26 @@ export function townBinRiders(
     if (!building || !stop) continue;
     const slot = queues.get(stop.key) ?? 0;
     queues.set(stop.key, slot + 1);
-    riders.push({
+    placed.push({
       entry,
       agentKey,
       stop,
       slot,
-      at: {
-        x: stop.wait.x - Math.min(slot, TOWN_STOP_QUEUE - 1) * TOWN_QUEUE_GAP,
-        y: stop.wait.y,
-      },
       // Where its actor stood as it went out: the front door's tile.
       door: { x: (building.entryX + 0.5) * T, y: (building.y + 1) * T + 13 },
     });
   }
+  // Everyone waiting stands in the queue, up to its two rows; past them the
+  // rest wait in its last place, which shows their count.
+  const riders = placed.map((rider): TownBinRider => {
+    const { shown } = townQueueShape(rider.stop, queues.get(rider.stop.key)!);
+    const counted = rider.slot >= shown;
+    return {
+      ...rider,
+      counted,
+      at: townQueueSpot(rider.stop, counted ? shown : rider.slot),
+    };
+  });
   return { away, riders };
 }
 
@@ -505,4 +583,95 @@ export function townRiderWalk(
     frame,
     walking: true,
   };
+}
+
+/** How long a rider's walk between `from` and `to` takes, in ms. */
+export function townRiderWalkMs(from: TownPoint, to: TownPoint) {
+  return (
+    ((Math.abs(to.x - from.x) + Math.abs(to.y - from.y)) / TOWN_WALK_SPEED) *
+    1000
+  );
+}
+
+/**
+ * A rider put back, `seconds` after it left its place in the queue (`at`):
+ * its walk out backwards, along the pavement and down to its front door
+ * (`door`), where its actor takes over and goes back in.
+ */
+export function townRiderWalkBack(
+  door: TownPoint,
+  at: TownPoint,
+  seconds: number,
+): {
+  x: number;
+  y: number;
+  dir: TownDirection;
+  frame: number;
+  walking: boolean;
+} {
+  const along = Math.abs(at.x - door.x);
+  const down = Math.abs(at.y - door.y);
+  const walked = Math.max(0, seconds) * TOWN_WALK_SPEED;
+  if (!(walked < along + down))
+    return { x: door.x, y: door.y, dir: "up", frame: 0, walking: false };
+  const frame = Math.floor(walked / 6) % 4;
+  if (walked < along)
+    return {
+      x: at.x + Math.sign(door.x - at.x) * walked,
+      y: at.y,
+      dir: door.x < at.x ? "left" : "right",
+      frame,
+      walking: true,
+    };
+  return {
+    x: door.x,
+    y: at.y + Math.sign(door.y - at.y) * (walked - along),
+    dir: door.y < at.y ? "up" : "down",
+    frame,
+    walking: true,
+  };
+}
+
+/** A put-back rider on its walk home, from `start` until `end` (ms). */
+export type TownRiderReturn = {
+  rider: TownBinRider;
+  start: number;
+  end: number;
+};
+
+/**
+ * The riders walking back to their front doors at `now`, after the bin's
+ * riders went from `before` to `riders`. One that stood outside
+ * (`outside`) and left the bin without closing (`bin.closing`: the bus took
+ * it) walks home from its place in the queue; one binned again, or home,
+ * stops. Its agent stays out of its room until then (useTownBin).
+ */
+export function townRiderReturns(
+  returns: readonly TownRiderReturn[],
+  before: readonly TownBinRider[],
+  riders: readonly TownBinRider[],
+  bin: { entries: readonly BinEntry[]; closing: readonly BinEntry[] },
+  outside: (id: string) => boolean,
+  now: number,
+): TownRiderReturn[] {
+  const binned = new Set(
+    [...bin.entries, ...bin.closing].map((entry) => entry.id),
+  );
+  const waiting = new Set(riders.map((rider) => rider.agentKey));
+  const next = returns.filter(
+    (walk) => walk.end > now && !waiting.has(walk.rider.agentKey),
+  );
+  for (const rider of before)
+    if (
+      !binned.has(rider.entry.id) &&
+      !waiting.has(rider.agentKey) &&
+      outside(rider.entry.id) &&
+      !next.some((walk) => walk.rider.agentKey === rider.agentKey)
+    )
+      next.push({
+        rider,
+        start: now,
+        end: now + townRiderWalkMs(rider.door, rider.at),
+      });
+  return next;
 }
