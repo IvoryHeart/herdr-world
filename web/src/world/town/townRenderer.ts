@@ -596,6 +596,7 @@ export async function createTownRenderer(
     stats.camera = { x: camera.x, y: camera.y, ...camera.bounds };
     stats.flying = camera.flying;
     stats.transitioning = transitioning || camera.gliding;
+    stats.buildingsDrawn = topology.buildings.length;
     stats.actors = actors.actors.size;
     stats.walking = [...actors.actors.values()].filter(
       (a) => a.mode === "walk",
