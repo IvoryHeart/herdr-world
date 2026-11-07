@@ -400,6 +400,31 @@ that root; stat metadata cannot redirect the read to a different transcript.
   focused question card; no global answer keys or extra key bar are added.
 - **Details** opens the earlier History view: Timeline, tool output, transcript
   preview and export.
+- Wide content never widens Chat past its window. A long path or link wraps;
+  a code block or table scrolls sideways inside its message, so the composer
+  and **Send** stay in view on a 390 px phone.
+
+### Chat in Town
+
+In a Town window, Chat takes Town's look as the
+[style guide](design/style-guide.md#skins) describes. The skin changes colours
+and framing, not what Chat shows or does:
+
+- Town's colours replace the app theme's, in light and dark alike: the
+  agent's messages sit on Town's terminal dark inside a 2 px edge, yours on soft
+  gold, and the window's gold marks focus.
+- Status uses Town's state colours: blue while working, including the step
+  running now; amber when the agent waits on you; green when done.
+- Buttons are Town's raised keys. The one recommended action is soft gold,
+  never a solid fill: **Send**, and the agent's recommended answer in a
+  question card.
+- The composer's **⋯** controls open in the same skin.
+- Tables are compact, with headers on one line. Each column keeps a
+  readable minimum width, and the table scrolls rather than squeezing it.
+- No text is smaller than 11 px.
+- On a phone every Chat control answers a 44 px tap: the Now bar's keys draw
+  at 36 px with a 4 px margin, and each message's **Copy** and **Speak** at
+  32 px with 6 px.
 
 ## Files and Changes worktree
 
