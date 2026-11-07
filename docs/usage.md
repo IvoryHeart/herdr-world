@@ -112,28 +112,34 @@ or host balance. No reported monetary metric is used as the token estimate.
 
 Each `limits` entry names a host (`connection_id`, `connection_generation`), a
 harness and a `state`, with `windows` of `window_minutes`, `used_percent` (0–100)
-and `resets_at` (milliseconds, or null), plus `observed_at` and `source`.
+and `resets_at` (milliseconds, or null), plus `observed_at` and `source`. When
+the newest observation is a refusal, `windows` is empty and `reached` holds the
+refused window's `window_minutes` (or null when unnamed) and its `resets_at`;
+otherwise `reached` is null.
 
 | Harness | Source | What World reads |
 | --- | --- | --- |
 | Codex | Codex session log (`codex-session-log`) | The `rate_limits` object on rollout `token_count` events: the `primary` and `secondary` windows (`secondary` may be null). Only the account-wide limit (`limit_id` absent or `codex`) counts. The newest observation across that host's admitted rollouts wins. |
-| Claude Code | none | `unsupported`, with a fixed reason. Claude Code's transcripts record a limit only when a request is refused (`usage_limit_reached` with a reset time and window type); they never record how much is used, so there is no percent to show. |
+| Claude Code | World status line tap (`claude-status-line`) | Claude Code passes `rate_limits` (`five_hour` and `seven_day`, each `used_percentage` and `resets_at`) only to its status line, and saves no limit levels to disk. When World starts a Claude agent from its launcher on a macOS or Linux host, it adds `--settings` with a status line command for that launch only: the tap. The tap writes the two windows' numbers and the time to `~/.cache/herdr-world/claude-status-line.json` on that host, then runs your own status line command, if any, with the same input and prints its output unchanged. It finds yours by Claude Code's precedence below the flag: the project's `.claude/settings.local.json`, then `.claude/settings.json`, then `settings.json` in `CLAUDE_CONFIG_DIR` (default `~/.claude`). It never writes those files. It runs under Bun, or Node when Bun is absent. Agents started outside World's launcher (or by Ranger) have no tap. |
+| Claude Code | Claude transcript (`claude-transcript`) | A refusal: an assistant record with `apiError: "usage_limit_reached"`, read from `apiErrorParams.rate_limit_info` (`resetsAt`, and `rateLimitType` as the window). A later answer in the same session cancels it. It reads "limit reached, resets …", never a percent. |
 
 States: `available` is current. `stale` means the observation is more than three
 hours old, a window's reset time has passed, or the latest read failed and the
 last numbers were kept. `missing` means a successful read found no observation
-on that host. No state is a measured zero or a full tank. Pi and Gemini do not
-appear.
+on that host. No state is a measured zero or a full tank. For Claude, the newer of the
+latest tap reading and the latest refusal wins; a refusal is stale once its
+reset passes. Pi and Gemini do not appear.
 
 Limits come from the same collector, cache and SSH program as token usage and
-share their bounds. Plan names, credit balances, limit names, account IDs and
+share their bounds. The collector reads the tap's file only if it is a small
+regular file (never a symlink) and validates every number again. Plan names, credit balances, limit names, account IDs and
 other `rate_limits` fields are dropped on the transcript host; malformed or
 future-dated windows are ignored. World never calls a provider API, reads
 credentials or types `/usage` into a pane.
 
 Town shows these as fuel gauges on the board sign and per host in the Summary;
-see FEATURES.md. A harness reported as `unsupported` (Claude today) appears on
-the sign as **not available** with its reason, never as an empty or full gauge.
+see FEATURES.md. A harness reported as `unsupported` appears on the sign as
+**not available** with its reason, never as an empty or full gauge.
 
 ## Optional local price table
 

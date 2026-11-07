@@ -1,4 +1,5 @@
 import type { HostUsage } from "./collector";
+import type { LimitObservation } from "./projection";
 
 /** Never let a remote projection smuggle text, paths, invalid counts or unbounded rows. */
 export function validateHostUsage(raw: any): HostUsage {
@@ -104,20 +105,36 @@ export function validateHostUsage(raw: any): HostUsage {
   )
     throw new Error("Invalid usage limits");
   const limitHarnesses = new Set<string>();
+  const sourcesFor: Record<string, string[]> = {
+    codex: ["codex-session-log"],
+    claude: ["claude-status-line", "claude-transcript"],
+  };
   const limits = (raw.limits ?? []).map((limit: any) => {
+    const reached = limit?.reached;
     if (
-      limit?.harness !== "codex" ||
+      !Object.hasOwn(sourcesFor, limit?.harness) ||
+      !sourcesFor[limit.harness]!.includes(limit.source) ||
       limitHarnesses.has(limit.harness) ||
       !count(limit.at) ||
       !Array.isArray(limit.windows) ||
-      limit.windows.length < 1 ||
-      limit.windows.length > 2
+      limit.windows.length > 2 ||
+      (reached === undefined
+        ? limit.windows.length < 1
+        : limit.source !== "claude-transcript" ||
+          limit.windows.length !== 0 ||
+          !reached ||
+          typeof reached !== "object" ||
+          !count(reached.resets_at) ||
+          (reached.window_minutes !== null &&
+            reached.window_minutes !== 300 &&
+            reached.window_minutes !== 10080))
     )
       throw new Error("Invalid usage limit");
     limitHarnesses.add(limit.harness);
     return {
       harness: limit.harness as string,
       at: limit.at as number,
+      source: limit.source as LimitObservation["source"],
       windows: limit.windows.map((w: any) => {
         if (
           !Number.isSafeInteger(w?.window_minutes) ||
@@ -136,6 +153,14 @@ export function validateHostUsage(raw: any): HostUsage {
           resets_at: w.resets_at as number | null,
         };
       }),
+      ...(reached === undefined
+        ? {}
+        : {
+            reached: {
+              window_minutes: reached.window_minutes as number | null,
+              resets_at: reached.resets_at as number,
+            },
+          }),
     };
   });
   return { rows, sources, truncated: raw.truncated, limits, title_matches };

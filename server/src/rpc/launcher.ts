@@ -4,7 +4,7 @@ import { stampLaunchParent } from "../herdr/spawn-stamp";
 import { tabCardKey } from "../../../shared/terminalColor";
 import { openHarnessLogin } from "../agent/harness-readiness";
 import { launchAgent } from "../agent/launch";
-import { profileLaunch } from "../agent/profile-launch";
+import { profileLaunch, withClaudeLimitsTap } from "../agent/profile-launch";
 import type { ConnectionRpcContext } from "./context";
 import { probeLauncher } from "./launcher-probe";
 
@@ -111,13 +111,18 @@ async function dispatchLauncherRpc(
         herdr.call(rpc, rpcParams, 70_000);
       let result = await launchAgent(call, {
         workspace_id: String(p.workspace_id ?? ""),
-        ...profileLaunch(profile ?? null, {
-          kind: String(p.kind ?? ""),
-          label: String(p.label ?? "")
-            .trim()
-            .slice(0, 64),
-          text: String(p.text ?? "").slice(0, 16_000),
-        }),
+        ...withClaudeLimitsTap(
+          profileLaunch(profile ?? null, {
+            kind: String(p.kind ?? ""),
+            label: String(p.label ?? "")
+              .trim()
+              .slice(0, 64),
+            text: String(p.text ?? "").slice(0, 16_000),
+          }),
+          sshHost()
+            ? connection.remotePlatform === "windows"
+            : process.platform === "win32",
+        ),
         isCurrent: requestIsCurrent,
       });
       if (

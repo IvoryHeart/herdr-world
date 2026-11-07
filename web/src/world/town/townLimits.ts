@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import {
   usageLimitExpired,
   type UsageLimit,
+  type UsageLimitReached,
   type UsageLimitWindow,
 } from "../../../../shared/usage";
 import {
@@ -17,7 +18,8 @@ import {
  * (`world.usage.get` `limits`, docs/usage.md). Only harnesses with an
  * observation get a gauge; a harness that keeps no readable limits reads
  * "not available"; stale numbers say so, and nothing reads 0 % or 100 %
- * without an observation behind it.
+ * without an observation behind it. A refusal ("limit reached") shows as
+ * that, with its reset time, never as a level.
  */
 
 /** Below this share left a window is low and wears the warning colour. */
@@ -31,6 +33,8 @@ export type TownFuelWindow = {
   used: number;
   low: boolean;
   resetsAt: number | null;
+  /** The harness refused work: this limit is used up until `resetsAt`. */
+  reached: boolean;
 };
 
 export type TownFuelGauge = {
@@ -51,6 +55,8 @@ const HARNESS_NAMES: Record<UsageLimit["harness"], string> = {
 };
 const SOURCE_NAMES: Record<NonNullable<UsageLimit["source"]>, string> = {
   "codex-session-log": "Codex session log",
+  "claude-status-line": "Claude status line",
+  "claude-transcript": "Claude transcript",
 };
 
 export const townHarnessName = (harness: UsageLimit["harness"]) =>
@@ -76,8 +82,28 @@ export function townFuelWindow(window: UsageLimitWindow): TownFuelWindow {
     used,
     low: left < TOWN_FUEL_LOW_PERCENT,
     resetsAt: window.resets_at,
+    reached: false,
   };
 }
+
+/** A refusal as a window that is used up; it never renders as a percent. */
+export function townFuelReached(reached: UsageLimitReached): TownFuelWindow {
+  return {
+    label:
+      reached.window_minutes === null
+        ? "limit"
+        : townWindowLabel(reached.window_minutes),
+    left: 0,
+    used: 100,
+    low: true,
+    resetsAt: reached.resets_at,
+    reached: true,
+  };
+}
+
+/** "5 h limit reached", or "limit reached" when the window is unnamed. */
+export const townReachedText = (w: TownFuelWindow) =>
+  w.label === "limit" ? "limit reached" : `${w.label} limit reached`;
 
 /** One limit as a gauge, or null when it has no numbers to show. */
 export function townFuelGauge(
@@ -87,10 +113,12 @@ export function townFuelGauge(
   if (
     (limit.state !== "available" && limit.state !== "stale") ||
     limit.observed_at === null ||
-    !limit.windows.length
+    (!limit.windows.length && !limit.reached)
   )
     return null;
-  const windows = limit.windows.map(townFuelWindow);
+  const windows = limit.reached
+    ? [townFuelReached(limit.reached)]
+    : limit.windows.map(townFuelWindow);
   return {
     harness: limit.harness,
     name: townHarnessName(limit.harness),
@@ -98,7 +126,7 @@ export function townFuelGauge(
     // The service judged it at read time; time passing can only age it.
     stale:
       limit.state === "stale" ||
-      usageLimitExpired(limit.observed_at, limit.windows, now),
+      usageLimitExpired(limit.observed_at, limit.windows, now, limit.reached),
     observedAt: limit.observed_at,
     source: townLimitSourceName(limit.source),
     windows,

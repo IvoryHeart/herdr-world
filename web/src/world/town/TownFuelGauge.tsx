@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from "react";
 import {
+  townReachedText,
   townResetTime,
   townSeenAge,
   type TownFuelGauge,
@@ -8,18 +9,22 @@ import {
 } from "./townLimits";
 import "./townFuel.css";
 
+/** A window's level in words: "5 h 60 % left", or "5 h limit reached". */
+const levelText = (w: TownFuelWindow) =>
+  w.reached ? townReachedText(w) : `${w.label} ${w.left} % left`;
+
 /** "5 h resets Tue 14:00 · week resets Sat 09:00 · seen 3 min ago · Codex session log" */
 export function townFuelDetails(gauge: TownFuelGauge, now: number) {
   const resets = gauge.windows.map((w) =>
     w.resetsAt === null
       ? `${w.label} reset unknown`
-      : `${gauge.windows.length > 1 ? `${w.label} ` : ""}resets ${townResetTime(w.resetsAt)}`,
+      : w.reached && !gauge.stale
+        ? `${townReachedText(w)}, resets ${townResetTime(w.resetsAt)}`
+        : `${gauge.windows.length > 1 ? `${w.label} ` : ""}resets ${townResetTime(w.resetsAt)}`,
   );
   return [
     ...(gauge.stale
-      ? [
-          `stale: last ${gauge.windows.map((w) => `${w.label} ${w.left} % left`).join(", ")}`,
-        ]
+      ? [`stale: last ${gauge.windows.map(levelText).join(", ")}`]
       : []),
     ...resets,
     `seen ${townSeenAge(gauge.observedAt, now)}`,
@@ -30,7 +35,9 @@ export function townFuelDetails(gauge: TownFuelGauge, now: number) {
 const windowText = (gauge: TownFuelGauge, w: TownFuelWindow) =>
   gauge.stale
     ? `${w.label} stale`
-    : `${w.label} ${w.left} % left${w.low ? ", low" : ""}`;
+    : w.reached
+      ? `${townReachedText(w)}${w.resetsAt === null ? "" : `, resets ${townResetTime(w.resetsAt)}`}`
+      : `${w.label} ${w.left} % left${w.low ? ", low" : ""}`;
 
 /**
  * One entry on the fuel row: a button whose hover, focus or tap shows its
@@ -103,13 +110,24 @@ export function TownFuelGaugeView({
           data-low={!gauge.stale && w.low}
         >
           <span className="town-fuel-label">{w.label}</span>
-          <span className="town-fuel-bar" aria-hidden="true">
-            {gauge.stale ? null : <span style={{ width: `${w.left}%` }} />}
-          </span>
-          <span className="town-fuel-value">
-            {gauge.stale ? "stale" : `${w.left}%`}
-            {!gauge.stale && w.low ? " low" : ""}
-          </span>
+          {!gauge.stale && w.reached ? (
+            <span className="town-fuel-reached">
+              reached
+              {w.resetsAt === null
+                ? ""
+                : `, resets ${townResetTime(w.resetsAt)}`}
+            </span>
+          ) : (
+            <>
+              <span className="town-fuel-bar" aria-hidden="true">
+                {gauge.stale ? null : <span style={{ width: `${w.left}%` }} />}
+              </span>
+              <span className="town-fuel-value">
+                {gauge.stale ? "stale" : `${w.left}%`}
+                {!gauge.stale && w.low ? " low" : ""}
+              </span>
+            </>
+          )}
         </span>
       ))}
     </TownFuelTip>

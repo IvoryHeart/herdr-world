@@ -284,7 +284,14 @@ test("subscription limits are per host, age to stale, survive a failed read as s
   ];
   s.data({
     ...value(),
-    limits: [{ harness: "codex", at: at - 60_000, windows }],
+    limits: [
+      {
+        harness: "codex",
+        at: at - 60_000,
+        source: "codex-session-log",
+        windows,
+      },
+    ],
   });
   const first = await s.service.get();
   expect(first.limits).toHaveLength(4);
@@ -300,13 +307,16 @@ test("subscription limits are per host, age to stale, survive a failed read as s
     reason: null,
     observed_at: at - 60_000,
     windows,
+    reached: null,
   });
+  // Claude has no observation on this host yet: missing, not zero or full.
   expect(first.limits[1]).toMatchObject({
     harness: "claude",
-    state: "unsupported",
+    state: "missing",
+    source: null,
     windows: [],
+    reached: null,
   });
-  expect(first.limits[1]!.reason).toBeTruthy();
   // A failed read keeps the last numbers, labelled stale.
   s.advance(31_000);
   s.read(async () => {
@@ -331,7 +341,14 @@ test("subscription limits are per host, age to stale, survive a failed read as s
   s.read(async () =>
     structuredClone({
       ...value(),
-      limits: [{ harness: "codex", at: at - 60_000, windows }],
+      limits: [
+        {
+          harness: "codex",
+          at: at - 60_000,
+          source: "codex-session-log",
+          windows,
+        },
+      ],
     }),
   );
   s.advance(3_600_000);
@@ -343,6 +360,7 @@ test("a partial read keeps the newer cached limits stale instead of older number
   const s = setup();
   const limit = (offset: number, used: number) => ({
     harness: "codex",
+    source: "codex-session-log" as const,
     at: at + offset,
     windows: [
       { window_minutes: 300, used_percent: used, resets_at: at + 3_600_000 },
@@ -379,6 +397,66 @@ test("a partial read keeps the newer cached limits stale instead of older number
   expect(newer.limits[0]).toMatchObject({
     state: "available",
     observed_at: at + 30_000,
+  });
+  await s.service.close();
+});
+
+test("Claude limits come from the status line tap or a refusal, and a refusal ages out at its reset", async () => {
+  const s = setup();
+  const windows = [
+    { window_minutes: 300, used_percent: 87, resets_at: at + 3_600_000 },
+  ];
+  s.read(async () =>
+    structuredClone({
+      ...value(),
+      limits: [
+        {
+          harness: "claude",
+          at: at - 60_000,
+          source: "claude-status-line",
+          windows,
+        },
+      ],
+    }),
+  );
+  expect((await s.service.get()).limits[1]).toEqual({
+    connection_id: "alpha",
+    connection_generation: 1,
+    harness: "claude",
+    state: "available",
+    source: "claude-status-line",
+    reason: null,
+    observed_at: at - 60_000,
+    windows,
+    reached: null,
+  });
+  const reached = { window_minutes: 300, resets_at: at + 600_000 };
+  s.advance(31_000);
+  s.read(async () =>
+    structuredClone({
+      ...value(),
+      limits: [
+        {
+          harness: "claude",
+          at: at,
+          source: "claude-transcript",
+          windows: [],
+          reached,
+        },
+      ],
+    }),
+  );
+  expect((await s.service.get()).limits[1]).toMatchObject({
+    state: "available",
+    source: "claude-transcript",
+    windows: [],
+    reached,
+  });
+  // Once its reset passes, the refusal no longer says anything current.
+  s.advance(600_000);
+  expect((await s.service.get()).limits[1]).toMatchObject({
+    state: "stale",
+    reached,
   });
   await s.service.close();
 });

@@ -6,6 +6,7 @@ import { BoardStore } from "../world/board-store";
 import { handleLauncherRpc } from "./launcher";
 import type { ConnectionRpcContext } from "./context";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
+import { claudeTapArgs } from "../usage/claude-tap";
 import { appearanceColors, appearanceFor } from "../../../shared/appearance";
 const roots: string[] = [];
 afterEach(() => {
@@ -35,6 +36,7 @@ for (const mode of ["ready", "retired", "refused-settings"])
       brief: "",
     };
     let name = "",
+      args: unknown,
       current = true;
     let result: unknown;
     const errors: unknown[] = [];
@@ -47,6 +49,7 @@ for (const mode of ["ready", "retired", "refused-settings"])
         };
       if (method === "agent.start") {
         name = String(params.name);
+        args = params.args;
         return {};
       }
       if (method === "pane.get")
@@ -82,7 +85,7 @@ for (const mode of ["ready", "retired", "refused-settings"])
         isCurrent: () => current,
       },
       requestIsCurrent: () => current,
-      connection: { herdr: { call } },
+      connection: { herdr: { call }, sshHost: () => undefined },
       sendReply: (reply: Record<string, unknown>) => {
         result = reply.result;
         return true;
@@ -105,6 +108,10 @@ for (const mode of ["ready", "retired", "refused-settings"])
       },
     } as unknown as ConnectionRpcContext);
     expect(errors).toEqual([]);
+    // A Claude launch adds the per-launch status line tap after the profile's own arguments.
+    expect(profile.harness).toBe("claude");
+    expect((args as string[]).slice(-2)).toEqual(claudeTapArgs());
+    expect(args as string[]).toContain("--agent");
     expect(result).toMatchObject({
       status: mode === "refused-settings" ? "failed" : "started",
       terminal_id: "new-terminal",
