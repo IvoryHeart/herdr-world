@@ -77,8 +77,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
   - Every building has roads on at least three sides: a street above and below
-    each row and a side road to its right. The last lot on the grid is
-    reserved for a town hall: a fenced plot with a sign, not yet in use.
+    each row and a side road to its right.
+  - The **town center** stands at the top of the map, centred over the
+    buildings above the first street: a domed hall with a clock, a columned
+    portico, banners, wings and a paved forecourt. Phones open Town with it at
+    the top. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
+    opens a ring of actions around its doors: **New agent** (World's launcher,
+    preselecting the open room when it can start one there), **Town master**
+    (the role holder from **Menu → Sounds**, else the agent named in **Menu →
+    Town master**, opened on Chat; with neither set it opens **Sounds**),
+    **Needs you** with its count, **Summary**, **Profiles** and **New room**
+    (disabled with the reason when no room can be created). Arrow keys, Home
+    and End move around the ring; Escape, a press outside, the centre **✕** or
+    **Back** on a phone closes it.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
@@ -159,7 +170,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     that, and below 360px only the active view, with the others under ⋯.
   - The Town master's chat (**Menu → Town master**, `firstmate` by default,
     matched against the agent's Herdr name, then its label) opens docked on
-    Chat once per visit on wide screens, without moving the pane's focus.
+    Chat once per visit on wide screens, without moving the pane's focus;
+    the town center's **Town master** opens it on demand.
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when

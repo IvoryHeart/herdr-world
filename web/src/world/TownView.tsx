@@ -73,7 +73,7 @@ import {
   type OfficePreferences,
 } from "./officePreferences";
 import { worldNodeOpenView } from "./worldInspectorSelection";
-import { useTownMaster } from "./town/useTownMaster";
+import { useTownCenter } from "./town/useTownCenter";
 import { TownHerdrSetupOffer, TownNoHosts } from "./WorldStatus";
 import {
   TownRoomDialogs,
@@ -686,12 +686,14 @@ export default function TownView({
       onOpenInspectorView(agent.nodeId, "history", focus);
     else void onSelect(agent.nodeId);
   };
-  useTownMaster(
-    office.roster,
-    preferences.townMaster,
-    layoutPreferences.mobile,
-    (key) => openChat(key, false),
-  );
+  const centerActions = useTownCenter(world, office, preferences, {
+    selectedRoomKey,
+    rooms: townRoomActions,
+    summary: townSummary,
+    mobile: layoutPreferences.mobile,
+    openChat,
+    toast,
+  });
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   /**
    * The agent a table stands for: one that needs you (waiting, then
@@ -949,6 +951,7 @@ export default function TownView({
             roomFocus={roomFocus}
             calm={preferences.townCalm}
             chrome={TOWN_CHROME}
+            centerActions={centerActions}
             roomActions={{
               onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),

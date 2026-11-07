@@ -105,16 +105,23 @@ test("a wide town opens at home: every building, centred", () => {
   expect(reasons).toEqual(["home"]);
 });
 
-test("a phone opens at home: the first reception board under the top inset", () => {
+test("a phone opens at home: the town center on top, the first reception in view", () => {
   const { view, layout, viewport, camera } = setup(PHONE);
   expect(layout.formFactor).toBe("narrow");
   view.attach(camera, layout, viewport);
   const first = layout.buildings[0]!;
   expect(camera.z).toBe(camera.limits!.home);
-  // The reception board stands in the yard above the building.
+  // The center's flag sits just under the top inset, centred on the axis.
+  expect(camera.toScreen(0, layout.center.y * T - 40).y).toBeCloseTo(
+    viewport.inset.top,
+  );
   expect(
-    camera.toScreen(0, (first.y - TOWN_PHONE_BOARD_ROWS) * T - 24).y,
-  ).toBeCloseTo(viewport.inset.top);
+    camera.toScreen((layout.center.x + layout.center.w / 2) * T, 0).x,
+  ).toBeCloseTo(camera.toScreen((first.x + first.w / 2) * T, 0).x);
+  // The reception board stands in the yard above the building, on screen.
+  const board = camera.toScreen(0, (first.y - TOWN_PHONE_BOARD_ROWS) * T).y;
+  expect(board).toBeGreaterThan(viewport.inset.top);
+  expect(board).toBeLessThan(viewport.height - viewport.inset.bottom);
   expect(view.atHome()).toBe(true);
 });
 

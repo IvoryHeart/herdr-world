@@ -14,6 +14,7 @@ import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
 import { sharedAsksStore, type WorldAsk } from "../worldAsks";
 import type { AnswerNotice } from "../worldAnswerDeliveries";
 import { checkTownRoomPlates } from "./townRoomPlates.browser";
+import { checkTownCenter } from "./townCenter.browser";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import {
@@ -1322,6 +1323,8 @@ async function run() {
     "town targets did not finish progressive admission",
   );
 
+  if (scale === "typical" && mode === "test")
+    await checkTownCenter(host, check, waitFor);
   if (scale === "plates" && mode === "test") {
     await checkTownRoomPlates(host, check, waitFor, {
       connectionId: base.connections[0]!.connectionId,

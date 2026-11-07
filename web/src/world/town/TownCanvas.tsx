@@ -26,7 +26,20 @@ import type {
 } from "../worldConnectorGeometry";
 import type { OfficeObservability } from "../officeObservability";
 import { TownCamera, type TownLevel } from "./townCamera";
-import { townShapeFor, townShapeKey, type TownShape } from "./townLayout";
+import {
+  TOWN_TILE,
+  townShapeFor,
+  townShapeKey,
+  type TownShape,
+} from "./townLayout";
+import { townCenterEmblem } from "./townCenter";
+import {
+  placeTownCenterMenu,
+  townCenterMenuPoint,
+  TownCenterMenu,
+  TownCenterSign,
+  type TownCenterAction,
+} from "./TownCenterMenu";
 import { TownScene } from "./scene/townScene";
 import { TownSceneDiff } from "./scene/townSceneDiff";
 import { TownHud, townScreenAnchor, townWorldAnchor } from "./scene/townHud";
@@ -151,7 +164,10 @@ export function TownCanvas({
   deskPins = NO_PINS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
+  centerActions,
 }: {
+  /** The town center's radial menu; without it the center only shows. */
+  centerActions?: readonly TownCenterAction[];
   /** Which terminals know each other (world/relations.ts). */
   relations?: {
     relations: readonly Relation[];
@@ -261,6 +277,58 @@ export function TownCanvas({
       void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
   }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
+  const [centerOpen, setCenterOpen] = useState(false);
+  const centerMenu = useRef<HTMLElement | null>(null);
+  /** The ring follows the center's doors on screen as the camera moves. */
+  const placeCenterMenu = (menu = centerMenu.current) => {
+    const renderer = rendererRef.current;
+    const host = hostRef.current;
+    if (!menu || !renderer || !host) return;
+    centerMenu.current = menu;
+    const at = townCenterEmblem(latest.current.layout.center, TOWN_TILE);
+    const point = renderer.camera.toScreen(at.x, at.y);
+    placeTownCenterMenu(menu, point, host.clientWidth, host.clientHeight);
+  };
+  /** Keyboard focus on the plaque pans an off-screen center into view. */
+  const focusCenter = () => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    const { camera } = renderer;
+    const at = townCenterEmblem(latest.current.layout.center, TOWN_TILE);
+    const point = camera.toScreen(at.x, at.y);
+    const { width, height } = camera.viewport;
+    const margin = 120;
+    if (
+      point.x > margin &&
+      point.y > margin &&
+      point.x < width - margin &&
+      point.y < height - margin
+    )
+      return;
+    camera.flyTo(at.x, at.y, camera.z, 0.4);
+    renderer.invalidate("focus");
+  };
+  /**
+   * Open the ring. A center near the view's edge (the top of the town, under
+   * the toolbar) first pans just far enough for the ring to sit on its doors.
+   */
+  const openCenter = useRef<() => void>(() => undefined);
+  openCenter.current = () => {
+    if (!centerActions?.length) return;
+    setCenterOpen(true);
+    const renderer = rendererRef.current;
+    const host = hostRef.current;
+    if (!renderer || !host) return;
+    const { camera } = renderer;
+    const at = townCenterEmblem(latest.current.layout.center, TOWN_TILE);
+    const point = camera.toScreen(at.x, at.y);
+    const fit = townCenterMenuPoint(point, host.clientWidth, host.clientHeight);
+    const dx = (fit.x - point.x) / camera.z;
+    const dy = (fit.y - point.y) / camera.z;
+    if (Math.abs(dx) + Math.abs(dy) < 1) return;
+    camera.flyTo(camera.x - dx, camera.y - dy, camera.z, 0.3);
+    renderer.invalidate("focus");
+  };
   const latest = useRef({
     chrome,
     model,
@@ -400,6 +468,7 @@ export function TownCanvas({
       }
     }
     hud.framed();
+    placeCenterMenu();
     // Inspected agents walk under a still camera, so their lines follow every
     // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
     if (posed || latest.current.conversationTargets.length > 0)
@@ -594,6 +663,7 @@ export function TownCanvas({
       select: (key) => latest.current.onSelect(key),
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
+      openCenter: () => openCenter.current(),
       move: (command) => {
         const actions = latest.current.roomActions;
         switch (command.kind) {
@@ -779,6 +849,14 @@ export function TownCanvas({
         data-level="overview"
         aria-hidden={!ready}
       >
+        <TownCenterSign
+          center={layout.center}
+          open={centerOpen}
+          onOpen={
+            centerActions?.length ? () => openCenter.current() : undefined
+          }
+          onFocus={focusCenter}
+        />
         <TownTeamsLayer teams={teams} />
         <TownHudContext.Provider value={hud}>
           <TownWorldLayer
@@ -853,6 +931,17 @@ export function TownCanvas({
           </button>
         ) : null}
       </div>
+      {centerOpen && centerActions?.length ? (
+        <TownCenterMenu
+          actions={centerActions}
+          viewportWidth={hostRef.current?.clientWidth ?? 0}
+          place={placeCenterMenu}
+          onClose={() => {
+            centerMenu.current = null;
+            setCenterOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
