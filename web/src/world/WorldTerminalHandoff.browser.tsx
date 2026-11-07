@@ -911,9 +911,7 @@ async function run() {
     const seat = document.querySelector<HTMLButtonElement>(
       ".world-new-seat-canvas-action",
     );
-    const room = document.querySelector<HTMLButtonElement>(
-      ".world-new-room-canvas-action",
-    );
+    const room = document.querySelector<HTMLButtonElement>(".town-add-room");
     const tab = document.querySelector<HTMLButtonElement>(".tabbar-add");
     return (
       seat?.disabled === true &&
@@ -930,8 +928,8 @@ async function run() {
     () =>
       document.querySelector<HTMLButtonElement>(".world-new-seat-canvas-action")
         ?.disabled === false &&
-      document.querySelector<HTMLButtonElement>(".world-new-room-canvas-action")
-        ?.disabled === false &&
+      document.querySelector<HTMLButtonElement>(".town-add-room")?.disabled ===
+        false &&
       document.querySelector<HTMLButtonElement>(".tabbar-add")?.disabled ===
         false,
     "browser-local Town room, seat and tab-strip actions",

@@ -25,7 +25,13 @@ export const hostFilterCases: {
     { width, operation: "spaces-navigator", view: "spaces" },
     { width, operation: "spaces-notifications", view: "spaces" },
     { width, operation: "bare-navigator", view: "town" },
-    { width, operation: "town-idle", view: "town" },
+    // Idle agents rest in the lounge, the fixture's only motion. A phone's
+    // home view reaches it only when the screen fits the town center and the
+    // whole first building (townSceneCamera's frameHome), so the phone case
+    // runs on a tall phone rather than at that framing's edge.
+    width === 390
+      ? { width, height: 1200, operation: "town-idle", view: "town" }
+      : { width, operation: "town-idle", view: "town" },
     { width, operation: "town-idle-draws", view: "town" },
   ]),
   ...[1440, 390].flatMap((width) =>
