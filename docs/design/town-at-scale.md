@@ -164,27 +164,42 @@ Town's job at this scale is the spatial overview, and items 2–4 limit it.
 
 ## Frame time while panning
 
-The harness presses an arrow key once per frame for 180 frames (right, then
-left), then records the intervals between animation frames and the CPU time of
-each Pixi render call. The scene has 312 desks and 291 actors.
+The harness pans horizontally with the arrow keys, one press per animation
+frame for 240 frames. Each press moves the camera 60 screen pixels. The path
+turns back before a press would reach the camera's bounds, so no press is
+clamped and the camera moves throughout. The harness records the intervals
+between animation frames, the CPU time of each Pixi render call, and the frames
+that draw a new camera position. It then records 120 frames with no input
+separately. The scene has 312 desks and 291 actors.
 
-| Renderer | Viewport · zoom | Frame P50 | Frame P95 | Frames > 33 ms | Pixi render P95 |
-| --- | --- | --- | --- | --- | --- |
-| GPU (AMD RX 6700 XT, ANGLE Vulkan) | laptop · overview | 16.7 ms | 16.8 ms | 0 / 240 | 2.0 ms |
-| GPU | laptop · desk | 16.7 ms | 16.8 ms | 0 / 240 | 2.1 ms |
-| GPU | phone · overview | 16.7 ms | 16.7 ms | 0 / 240 | 0.7 ms |
-| GPU | phone · desk | 16.7 ms | 16.7 ms | 0 / 240 | 1.0 ms |
-| SwiftShader (software) | laptop · overview | 16.7 ms | 16.7–16.8 ms | 0 / 240 | 1.7–4.1 ms |
-| SwiftShader | laptop · desk | 16.7–33.4 ms | 33.4–66.7 ms | 20–119 / 240 | 1.7–3.5 ms |
-| SwiftShader | phone · overview | 16.7 ms | 16.8 ms | 0 / 240 | 0.7–1.1 ms |
-| SwiftShader | phone · desk | 16.7 ms | 16.7–16.8 ms | 0–1 / 240 | 1.4 ms |
+| Renderer | Viewport · zoom | Frames that move | Frame P50 | Frame P95 | Frames > 33 ms | Pixi render P95 |
+| --- | --- | --- | --- | --- | --- | --- |
+| GPU (AMD RX 6700 XT, ANGLE Vulkan) | laptop · overview | 114 / 240 | 16.7 ms | 16.7 ms | 0 / 240 | 4.9 ms |
+| GPU | laptop · desk | 122 / 240 | 16.7 ms | 16.8 ms | 0 / 240 | 3.5 ms |
+| GPU | phone · overview | 119 / 240 | 16.7 ms | 16.8 ms | 0 / 240 | 1.8 ms |
+| GPU | phone · desk | 111 / 240 | 16.7 ms | 16.7 ms | 1 / 240 | 2.3 ms |
+| SwiftShader (software) | laptop · overview | 114 / 240 | 16.7 ms | 16.7–16.8 ms | 1–4 / 240 | 3.0–5.9 ms |
+| SwiftShader | laptop · desk | 170–173 / 240 | 16.7–33.3 ms | 33.4–50.1 ms | 23–85 / 240 | 1.6–2.1 ms |
+| SwiftShader | phone · overview | 110–117 / 240 | 16.7 ms | 16.8 ms | 0 / 240 | 0.9–1.1 ms |
+| SwiftShader | phone · desk | 108–116 / 240 | 16.7 ms | 16.7–16.8 ms | 0–1 / 240 | 1.1–1.2 ms |
 
-Town renders on every other frame (about 120 renders in 240 frames) and stays
-at 60 Hz on a GPU at full scale. With software rendering, only desk zoom on the
-laptop drops frames. That view draws the most characters, labels and bubbles at
-once. The SwiftShader rows give the range over four runs. They differ because
-other work was running on the machine at the same time. The GPU rows come from
-one run, made before the town center moved to the top. Integrated laptop GPUs and phones were not measured.
+Town draws at most every other animation frame by design: World's frame
+scheduler leaves 16 ms for ordinary tasks before it asks for the next canvas
+frame (`worldFrameScheduler.ts`). About 120 moving frames in 240 is therefore
+the most a pan can show at 60 Hz, and every drawn pan frame above shows the
+camera in a new place. When frames take longer than 33 ms, the wait fits inside
+one frame, so Town draws on more of them. That is why the slow software laptop
+desk rows show about 170.
+
+Panning stays at 60 Hz on a GPU at full scale. With software rendering, desk
+zoom on the laptop drops the most frames. That view draws the most characters,
+labels and bubbles at once. Its Pixi render calls stay short, so the cost is in
+rasterizing, not in building the scene. Idle, every view holds 60 Hz on both
+renderers (frame P95 at most 16.8 ms, no frame over 33 ms) with a Pixi render
+P95 of at most 2.8 ms. The SwiftShader rows give the range over three runs.
+They differ because other work was running on the machine at the same time.
+The GPU rows come from one run. Integrated laptop GPUs and phones were not
+measured.
 
 ## Ranked fixes
 
@@ -214,8 +229,8 @@ Ranked by legibility gained per line changed:
 8. **Phone chips:** a two-letter room tag under each portrait, so the phone can
    say where without a tap.
 9. **Proposal (rendering architecture): cull off-screen actors, labels and
-   bubbles at desk zoom.** This is the only view that drops frames with software
-   rendering. Measure on an integrated GPU first.
+   bubbles at desk zoom.** This is the view that drops the most frames with
+   software rendering. Measure on an integrated GPU first.
 10. **Proposal (layout):** let the laptop home view use the empty lower third,
     for example by fitting the height when the buildings fit the width with room
     to spare. This does not change the owner's layout rules (reception at the

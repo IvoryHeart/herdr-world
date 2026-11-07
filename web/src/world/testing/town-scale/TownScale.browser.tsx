@@ -127,15 +127,22 @@ const scale = {
     click(step === "all" ? "Show the whole town" : "Zoom in");
     return settle();
   },
-  /** Starts recording frame intervals and Pixi render cost. */
+  /**
+   * Starts recording frame intervals, Pixi render cost and camera motion:
+   * `moved` counts frames whose drawn camera differs from the previous frame.
+   */
   record() {
     renderCost.length = 0;
     const intervals: number[] = [];
     let last = performance.now();
+    let pose = stats().camera.x;
+    let moved = 0;
     let running = true;
     const tick = (now: number) => {
       intervals.push(now - last);
       last = now;
+      if (stats().camera.x !== pose) moved++;
+      pose = stats().camera.x;
       if (running) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -145,6 +152,7 @@ const scale = {
         const costs = [...renderCost];
         return {
           frames: intervals.length,
+          moved,
           intervalP50: percentile(intervals, 0.5),
           intervalP95: percentile(intervals, 0.95),
           intervalMax: Math.max(0, ...intervals),
@@ -157,22 +165,42 @@ const scale = {
     };
   },
 };
+
+/** World pixels one arrow press pans (townSceneCamera's 60 screen pixels). */
+const keyStep = () => 60 / stats().zoom;
+
 /**
- * Pans with the arrow keys, one press per frame (right, then back left), and
- * returns the frame timing; `frames` 0 measures the idle scene instead.
+ * Pans with the arrow keys, one press per frame, back and forth between the
+ * camera's horizontal bounds: it reverses before a press would reach an edge,
+ * so every press moves the camera a full step. Returns the frame timing.
  */
-async function pan(frames: number, idle = 0) {
+async function pan(frames: number) {
   const host = document.querySelector<HTMLElement>(
     '[aria-label^="Office town."]',
   );
   if (!host) throw new Error("No town host");
+  const { x: start, width } = stats().camera;
+  const step = keyStep();
+  if (width < 2 * step)
+    throw new Error(`Town is ${width}px wide; one key step is ${step}px`);
+  let x = start;
+  let direction = 1;
   const recording = scale.record();
   for (let i = 0; i < frames; i++) {
-    const key = i < frames / 2 ? "ArrowRight" : "ArrowLeft";
+    if (x + direction * step > width || x + direction * step < 0)
+      direction = -direction;
+    x += direction * step;
+    const key = direction > 0 ? "ArrowRight" : "ArrowLeft";
     host.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
     await frame();
   }
-  for (let i = 0; i < idle; i++) await frame();
   return recording.stop();
 }
-Object.assign(window, { townScale: { ...scale, pan } });
+
+/** Records `frames` frames of the scene with no input. */
+async function idle(frames: number) {
+  const recording = scale.record();
+  for (let i = 0; i < frames; i++) await frame();
+  return recording.stop();
+}
+Object.assign(window, { townScale: { ...scale, pan, idle } });

@@ -28,8 +28,10 @@ const page = join(
   "web/src/world/testing/town-scale/TownScale.browser.tsx",
 );
 
-/** Pan frames per measurement: about three seconds at 60 Hz. */
-const PAN_FRAMES = 180;
+/** Pan frames per measurement: four seconds at 60 Hz, every one moving. */
+const PAN_FRAMES = 240;
+/** Idle frames, measured separately after each pan. */
+const IDLE_FRAMES = 120;
 
 export async function runTownScale(options: {
   chrome: string;
@@ -142,10 +144,10 @@ export async function runTownScale(options: {
           "window.scaleLoaded.then(() => window.townScale.ready)",
         );
         await shoot("0-home", ready);
-        const panHome = await evaluate(
-          `window.townScale.pan(${PAN_FRAMES}, 60)`,
+        const panHome = await evaluate(`window.townScale.pan(${PAN_FRAMES})`);
+        const idleHome = await evaluate(
+          `window.townScale.idle(${IDLE_FRAMES})`,
         );
-        const idleHome = await evaluate("window.townScale.pan(0, 120)");
         receipts.push({
           viewport: viewport.name,
           measure: "home",
@@ -160,13 +162,15 @@ export async function runTownScale(options: {
           level = state.level;
           await shoot(`${step}-${level}`, state);
         }
-        const panDesk = await evaluate(
-          `window.townScale.pan(${PAN_FRAMES}, 60)`,
+        const panDesk = await evaluate(`window.townScale.pan(${PAN_FRAMES})`);
+        const idleDesk = await evaluate(
+          `window.townScale.idle(${IDLE_FRAMES})`,
         );
         receipts.push({
           viewport: viewport.name,
           measure: "desk",
           pan: panDesk,
+          idle: idleDesk,
         });
       } finally {
         await cdp.command("Target.closeTarget", { targetId });
