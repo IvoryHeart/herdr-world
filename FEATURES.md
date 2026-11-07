@@ -80,7 +80,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     important first: new questions and newly blocked agents ("2 new for
     you"), who asked ("1 new question from builder"), finished work still to
     review ("5 finished"), and, with the GitHub source configured, pull
-    requests merged meanwhile. Each line opens **Needs you** at its first item,
+    requests merged meanwhile. Each line opens **Needs you** at its first item
+    (the merged line, which names no item there, opens **Needs you** itself),
     where everything that arrived while you were away has a small "new" dot
     until you click or type in it. The recap only counts what still waits, so
     answering and reviewing shrink it; **✕** clears its lines on this browser

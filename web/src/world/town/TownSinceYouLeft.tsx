@@ -36,7 +36,7 @@ export function TownSinceYouLeft({
   const lines = sinceYouLeft({
     window: away,
     items: needsYouItems(world, asks, (leaf) => work.toReview(leaf, now)),
-    finishedAt: work.finishedAt,
+    stoppedAt: work.stoppedAt,
     name: itemName,
     sources: sources.items,
   });
@@ -85,14 +85,12 @@ export function TownSinceYouLeft({
 }
 
 function RecapLine({ line }: { line: SinceYouLeftLine }) {
-  // Merged pull requests have no place in Needs you: a fact, not an opener.
-  if (!line.itemKey) return <span>{line.text}</span>;
-  const itemKey = line.itemKey;
+  // A merged line names no item, so it opens Needs you itself.
   return (
     <button
       type="button"
       title="Open in Needs you"
-      onClick={() => openNeedsYou(itemKey)}
+      onClick={() => openNeedsYou(line.itemKey)}
     >
       {line.text} <span aria-hidden="true">›</span>
     </button>

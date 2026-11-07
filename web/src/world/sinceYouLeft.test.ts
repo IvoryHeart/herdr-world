@@ -52,26 +52,38 @@ const items: NeedsYouItem[] = [
   asked("q1", 150 * MIN, "builder"),
   blocked("stuck-old", 60 * MIN),
   blocked("stuck-new", 200 * MIN),
+  // Last activity predates leaving, but the service saw it block while away.
+  blocked("stuck-seen", 70 * MIN),
   done("old-finish", 50 * MIN),
   // Herdr's last activity is old, but the service saw the stop while away.
   done("stop-seen", 40 * MIN),
   done("finish-1", 120 * MIN),
   done("after-return", 300 * MIN),
 ];
-const finishedAt = (item: WorldLeafObject) =>
-  item.id === "stop-seen" ? 260 * MIN : (item.lastActivityAt ?? null);
+const stops: Record<string, number> = {
+  "stop-seen": 260 * MIN,
+  "stuck-seen": 210 * MIN,
+};
+const stoppedAt = (item: WorldLeafObject) =>
+  stops[item.id] ?? item.lastActivityAt ?? null;
 
 test("only what arrived while away counts, from facts World keeps", () => {
   expect(
-    arrivedWhileAway(window, items, finishedAt).map((item) => item.key),
-  ).toEqual(["ask:q1", "leaf:stuck-new", "leaf:stop-seen", "leaf:finish-1"]);
+    arrivedWhileAway(window, items, stoppedAt).map((item) => item.key),
+  ).toEqual([
+    "ask:q1",
+    "leaf:stuck-new",
+    "leaf:stuck-seen",
+    "leaf:stop-seen",
+    "leaf:finish-1",
+  ]);
 });
 
 test("the recap is at most four lines, most important first", () => {
   const lines = sinceYouLeft({
     window,
     items,
-    finishedAt,
+    stoppedAt,
     name,
     sources: [
       merged("1", 110 * MIN),
@@ -82,14 +94,14 @@ test("the recap is at most four lines, most important first", () => {
     ],
   });
   expect(lines.map((line) => [line.text, line.itemKey])).toEqual([
-    // A new question and a newly blocked agent, opening at the first.
-    ["2 new for you", "ask:q1"],
+    // A new question and two newly blocked agents, opening at the first.
+    ["3 new for you", "ask:q1"],
     ["1 new question from builder", "ask:q1"],
     ["2 finished", "leaf:stop-seen"],
-    // Merged pull requests have no Needs you item to open.
+    // Merged pull requests have no Needs you item: the line opens Needs you.
     ["2 PRs merged", undefined],
   ]);
-  expect(sinceYouLeftShort(lines)).toBe("2 for you, 2 finished, 2 merged");
+  expect(sinceYouLeftShort(lines)).toBe("3 for you, 2 finished, 2 merged");
 });
 
 test("questions alone take one line, and nothing new means no recap", () => {
@@ -100,7 +112,7 @@ test("questions alone take one line, and nothing new means no recap", () => {
       asked("q2", 160 * MIN, "tester"),
       done("finish", 170 * MIN),
     ],
-    finishedAt,
+    stoppedAt,
     name,
   });
   expect(lines.map((line) => line.text)).toEqual([
@@ -110,7 +122,7 @@ test("questions alone take one line, and nothing new means no recap", () => {
   expect(sinceYouLeftShort(lines)).toBe("2 for you, 1 finished");
   // Without a GitHub source there is no merged line.
   expect(
-    sinceYouLeft({ window, items: items.slice(0, 1), finishedAt, name }),
+    sinceYouLeft({ window, items: items.slice(0, 1), stoppedAt, name }),
   ).toEqual([]);
 });
 

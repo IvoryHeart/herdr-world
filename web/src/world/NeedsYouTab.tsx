@@ -374,7 +374,7 @@ export function NeedsYouList({
   const presence = useOwnerPresence();
   const fresh = new Set(
     presence.away
-      ? arrivedWhileAway(presence.away, all, work.finishedAt)
+      ? arrivedWhileAway(presence.away, all, work.stoppedAt)
           .map((item) => item.key)
           .filter((key) => !presence.away!.opened.includes(key))
       : [],

@@ -22,18 +22,25 @@ export type SinceYouLeftLine = {
   text: string;
   /** The phone chip's part of its one line. */
   short: string;
-  /** The Needs you item the line opens at; a merged line names none. */
+  /**
+   * The Needs you item the line opens at. Merged pull requests have no item,
+   * so their line opens Needs you without one.
+   */
   itemKey?: string;
 };
 
-/** When an item arrived: asked, blocked (last activity) or finished. */
+/**
+ * When the agent stopped, blocked or finished: the reviewed record's stop
+ * time, else Herdr's last activity.
+ */
+export type StoppedAt = (leaf: WorldLeafObject) => number | null;
+
+/** When an item arrived: asked, or the agent's stop (blocked or finished). */
 export function arrivedAt(
   item: NeedsYouItem,
-  finishedAt: (leaf: WorldLeafObject) => number | null,
+  stoppedAt: StoppedAt,
 ): number | null {
-  if (item.kind === "asks") return item.ask.at;
-  if (item.kind === "needs") return item.leaf.lastActivityAt ?? null;
-  return finishedAt(item.leaf);
+  return item.kind === "asks" ? item.ask.at : stoppedAt(item.leaf);
 }
 
 const within = (window: AwayWindow, at: number | null | undefined) =>
@@ -43,9 +50,9 @@ const within = (window: AwayWindow, at: number | null | undefined) =>
 export function arrivedWhileAway(
   window: AwayWindow,
   items: readonly NeedsYouItem[],
-  finishedAt: (leaf: WorldLeafObject) => number | null,
+  stoppedAt: StoppedAt,
 ): NeedsYouItem[] {
-  return items.filter((item) => within(window, arrivedAt(item, finishedAt)));
+  return items.filter((item) => within(window, arrivedAt(item, stoppedAt)));
 }
 
 const plural = (count: number, one: string, many = `${one}s`) =>
@@ -60,19 +67,19 @@ const plural = (count: number, one: string, many = `${one}s`) =>
 export function sinceYouLeft({
   window,
   items,
-  finishedAt,
+  stoppedAt,
   name,
   sources = [],
 }: {
   window: AwayWindow;
   items: readonly NeedsYouItem[];
-  finishedAt: (leaf: WorldLeafObject) => number | null;
+  stoppedAt: StoppedAt;
   /** An item's agent name, as Needs you shows it. */
   name: (item: NeedsYouItem) => string;
   /** The GitHub source's items, when it is configured. */
   sources?: readonly WorkItem[];
 }): SinceYouLeftLine[] {
-  const arrived = arrivedWhileAway(window, items, finishedAt);
+  const arrived = arrivedWhileAway(window, items, stoppedAt);
   const forYou = arrived.filter((item) => item.kind !== "done");
   const questions = forYou.filter((item) => item.kind === "asks");
   const finished = arrived.filter((item) => item.kind === "done");
