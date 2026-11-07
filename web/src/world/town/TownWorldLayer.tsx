@@ -41,10 +41,8 @@ import type { TownReceptionTakes } from "./townReceptionFilter";
 import { TownReceptionHeldTag, TownReceptionSign } from "./TownReceptionSign";
 import type { TownRendererHandle } from "./townRenderer";
 import type { TownTarget } from "./townTargets";
-import { townWallPath, type TownTeams } from "./townTeams";
+import type { TownTeams } from "./townTeams";
 import type { TownVisible } from "./townVisibleHosts";
-
-const WALL_RADIUS = 10;
 
 /** Team walls and connectors, under the world layer's cards. */
 /**
@@ -66,33 +64,21 @@ export const TownTeamsLayer = memo(function TownTeamsLayer({
   if (!teams.walls.length && !teams.links.length) return null;
   return (
     <svg className="town-teams" aria-hidden="true" data-testid="town-teams">
-      {teams.walls.map((wall) => {
-        const shared = {
-          className: "town-team-wall",
-          "data-team": wall.team,
-          "data-current": String(wall.current),
-          "data-desks": wall.desks,
-          style: { stroke: TERMINAL_COLOR_HEX[wall.color] },
-        };
-        return wall.outline ? (
-          <path
-            key={wall.key}
-            {...shared}
-            data-shape="outline"
-            d={townWallPath(wall.outline, WALL_RADIUS)}
-          />
-        ) : (
-          <rect
-            key={wall.key}
-            {...shared}
-            x={wall.x}
-            y={wall.y}
-            width={wall.w}
-            height={wall.h}
-            rx={WALL_RADIUS}
-          />
-        );
-      })}
+      {teams.walls.map((wall) => (
+        <rect
+          key={wall.key}
+          className="town-team-wall"
+          data-team={wall.team}
+          data-current={String(wall.current)}
+          data-desks={wall.desks}
+          x={wall.x}
+          y={wall.y}
+          width={wall.w}
+          height={wall.h}
+          rx={10}
+          style={{ stroke: TERMINAL_COLOR_HEX[wall.color] }}
+        />
+      ))}
       {teams.links.map((link) => (
         <line
           key={link.key}

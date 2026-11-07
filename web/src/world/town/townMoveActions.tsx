@@ -36,7 +36,6 @@ import {
   type TownMoveResult,
 } from "./townMoves";
 import { townTeamActions } from "./townTeamActions";
-import { sharedTownJoinSeats, type TownJoinSeats } from "./townJoinSeats";
 
 /** The confirmation asked before a move closes its room. */
 export type TownMoveConfirm = { message: string; run(): void };
@@ -61,7 +60,6 @@ export function townMoveActions({
   roomForKey,
   toast,
   trace,
-  joinSeats = sharedTownJoinSeats(),
 }: {
   /** A desk or agent move being chosen: what to move, then where. */
   moveFlow: TownMoveFlow | null;
@@ -80,8 +78,6 @@ export function townMoveActions({
   roomForKey(roomKey: string | null): OfficeRoom | null;
   toast: TownToast;
   trace: ViewTrace;
-  /** Where Town seats a desk that joins a team. */
-  joinSeats?: TownJoinSeats;
 }) {
   const deskForKey = (key: string) =>
     office.deskRoster.find(({ desk }) => desk.key === key)?.desk ?? null;
@@ -120,7 +116,6 @@ export function townMoveActions({
       runDeskMove(deskKey, roomKey, allowCloseRoom, then),
     closeMenu: () => setMoveFlow(null),
     openGroupMenu: (deskKey) => setMoveFlow({ step: "group", deskKey }),
-    seatJoin: (request) => joinSeats.request(request),
   });
   const runDeskMove = async (
     deskKey: string,

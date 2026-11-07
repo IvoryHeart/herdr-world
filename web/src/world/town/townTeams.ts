@@ -1,36 +1,23 @@
 import { terminalKey, type Relation } from "../../../../shared/relations";
 import type { TerminalPlace } from "../relations";
 import type { TerminalColor } from "../terminalColor";
-import {
-  TOWN_TILE as T,
-  type TownCell,
-  type TownLayout,
-  type TownPoint,
-} from "./townLayout";
+import { TOWN_TILE as T, type TownCell, type TownLayout } from "./townLayout";
 import type { TownModel } from "./townModel";
 
 /**
  * Teams in Town: desks whose terminals know each other (shared/relations.ts).
- * A team's desks that touch in a room (a neighbouring cell in one of the four
- * directions) share one wall: their bounding box, or, when another team's desk
- * sits inside that box, the outline of their footprints drawn around it. A
- * connector joins related desks in separate walls. A spawn draws solid, a
- * manual group dotted, and stale evidence faded.
+ * Desks of one team that sit together in a room get one wall around them;
+ * otherwise each gets its own, and a connector joins related desks. A spawn
+ * draws solid, a manual group dotted, and stale evidence faded.
  */
 
 export type TownTeamWall = {
   key: string;
   team: string;
-  /** The wall's bounding box. */
   x: number;
   y: number;
   w: number;
   h: number;
-  /**
-   * A rectilinear outline instead of the box, as closed loops of corners
-   * (clockwise; a ring of desks has a second loop around its hole).
-   */
-  outline?: TownPoint[][];
   color: TerminalColor;
   current: boolean;
   /** How many desks it holds. */
@@ -75,138 +62,6 @@ function footprint(cell: TownCell) {
     y1: (cell.y + 4.7) * T,
   };
 }
-
-/** Desk cells split into groups that touch in one of the four directions. */
-function touching(deskCells: readonly TownCell[]): TownCell[][] {
-  const at = new Map(
-    deskCells.map((cell) => [`${cell.col},${cell.row}`, cell]),
-  );
-  const seen = new Set<TownCell>();
-  const groups: TownCell[][] = [];
-  for (const first of deskCells) {
-    if (seen.has(first)) continue;
-    seen.add(first);
-    const group = [first];
-    for (let index = 0; index < group.length; index += 1) {
-      const { col, row } = group[index]!;
-      for (const [dc, dr] of STEPS) {
-        const next = at.get(`${col + dc},${row + dr}`);
-        if (next && !seen.has(next)) {
-          seen.add(next);
-          group.push(next);
-        }
-      }
-    }
-    groups.push(group);
-  }
-  return groups;
-}
-
-const STEPS = [
-  [1, 0],
-  [0, 1],
-  [-1, 0],
-  [0, -1],
-] as const;
-
-/**
- * The outline of touching desk cells' footprints, traced on the cell grid and
- * placed at each side's footprint edge, so it hugs the desks and spans the
- * aisle between neighbours. Loops run clockwise on screen (inside on the
- * right); where two cells meet only at a corner the trace turns right, keeping
- * them as separate loops.
- */
-function outlineOf(group: readonly TownCell[]): TownPoint[][] {
-  const at = new Set(group.map((cell) => `${cell.col},${cell.row}`));
-  const has = (col: number, row: number) => at.has(`${col},${row}`);
-  // Boundary edges on the grid; `at` is the side's screen coordinate.
-  type Edge = {
-    from: string;
-    to: string;
-    vertical: boolean;
-    dx: number;
-    dy: number;
-    at: number;
-  };
-  const edges = new Map<string, Edge[]>();
-  const add = (from: [number, number], to: [number, number], at: number) => {
-    const edge: Edge = {
-      from: from.join(","),
-      to: to.join(","),
-      vertical: from[0] === to[0],
-      dx: to[0] - from[0],
-      dy: to[1] - from[1],
-      at,
-    };
-    edges.set(edge.from, [...(edges.get(edge.from) ?? []), edge]);
-  };
-  for (const cell of group) {
-    const { col: c, row: r } = cell;
-    const box = footprint(cell);
-    if (!has(c, r - 1)) add([c, r], [c + 1, r], box.y0);
-    if (!has(c + 1, r)) add([c + 1, r], [c + 1, r + 1], box.x1);
-    if (!has(c, r + 1)) add([c + 1, r + 1], [c, r + 1], box.y1);
-    if (!has(c - 1, r)) add([c, r + 1], [c, r], box.x0);
-  }
-  const loops: TownPoint[][] = [];
-  const used = new Set<Edge>();
-  for (const list of [...edges.values()])
-    for (const start of list) {
-      if (used.has(start)) continue;
-      const path: Edge[] = [];
-      let edge = start;
-      while (!used.has(edge)) {
-        used.add(edge);
-        path.push(edge);
-        const next = edges.get(edge.to)!.filter((e) => !used.has(e));
-        // Turn right (dx,dy -> -dy,dx on screen) before going on or left.
-        const right = next.find((e) => e.dx === -edge.dy && e.dy === edge.dx);
-        edge = right ?? next[0] ?? start;
-      }
-      // A corner wherever the trace turns: its vertical side's x, horizontal
-      // side's y.
-      const corners: TownPoint[] = [];
-      for (let index = 0; index < path.length; index += 1) {
-        const a = path[index]!;
-        const b = path[(index + 1) % path.length]!;
-        if (a.vertical === b.vertical) continue;
-        corners.push(a.vertical ? { x: a.at, y: b.at } : { x: b.at, y: a.at });
-      }
-      loops.push(corners);
-    }
-  return loops;
-}
-
-/**
- * An SVG path through an outline's corners, each rounded by up to `radius`
- * (as the box's corners are).
- */
-export function townWallPath(outline: readonly TownPoint[][], radius: number) {
-  return outline
-    .map((corners) => {
-      const n = corners.length;
-      const point = (p: TownPoint) => `${round(p.x)} ${round(p.y)}`;
-      const toward = (from: TownPoint, to: TownPoint, length: number) => {
-        const d = Math.hypot(to.x - from.x, to.y - from.y);
-        const t = d ? Math.min(length, d / 2) / d : 0;
-        return {
-          x: from.x + (to.x - from.x) * t,
-          y: from.y + (to.y - from.y) * t,
-        };
-      };
-      const parts = corners.map((corner, index) => {
-        const before = corners[(index + n - 1) % n]!;
-        const after = corners[(index + 1) % n]!;
-        const enter = toward(corner, before, radius);
-        const leave = toward(corner, after, radius);
-        return `${index ? "L" : "M"}${point(enter)}Q${point(corner)} ${point(leave)}`;
-      });
-      return `${parts.join("")}Z`;
-    })
-    .join("");
-}
-
-const round = (value: number) => Math.round(value * 100) / 100;
 
 export function townTeams(
   model: TownModel,
@@ -258,7 +113,7 @@ export function townTeams(
   const deskTeams = new Map<string, string>();
   for (const key of parent.keys()) deskTeams.set(key, find(key));
 
-  // Per team and room, each group of touching desks gets one wall.
+  // Per team and room: one wall when no other desk sits inside its bounds.
   const byRoom = new Map<string, string[]>();
   for (const [deskKey, team] of deskTeams) {
     const desk = model.desks.get(deskKey);
@@ -276,45 +131,48 @@ export function townTeams(
   const walled = new Map<string, string>();
   for (const [key, deskKeys] of byRoom) {
     const team = deskTeams.get(deskKeys[0]!)!;
-    const roomKey = model.desks.get(deskKeys[0]!)?.roomKey;
     const color =
       model.deskColors.get(team) ??
       model.deskColors.get(deskKeys[0]!) ??
       "blue";
-    for (const group of touching(deskKeys.map((k) => cells.get(k)!))) {
-      const parts = group.map(footprint);
-      const box = {
-        x0: Math.min(...parts.map((b) => b.x0)),
-        y0: Math.min(...parts.map((b) => b.y0)),
-        x1: Math.max(...parts.map((b) => b.x1)),
-        y1: Math.max(...parts.map((b) => b.y1)),
-      };
-      const intruder = [...cells].some(([deskKey, cell]) => {
-        if (deskKeys.includes(deskKey)) return false;
-        if (model.desks.get(deskKey)?.roomKey !== roomKey) return false;
-        const other = footprint(cell);
-        return (
-          other.x0 < box.x1 &&
-          other.x1 > box.x0 &&
-          other.y0 < box.y1 &&
-          other.y1 > box.y0
-        );
-      });
-      const keys = group.map((cell) => cell.deskKey!);
-      const wallKey = `${key}\u0000${keys[0]}`;
+    const boxes = deskKeys.map((deskKey) => footprint(cells.get(deskKey)!));
+    const box = {
+      x0: Math.min(...boxes.map((b) => b.x0)),
+      y0: Math.min(...boxes.map((b) => b.y0)),
+      x1: Math.max(...boxes.map((b) => b.x1)),
+      y1: Math.max(...boxes.map((b) => b.y1)),
+    };
+    const intruder = [...cells].some(([deskKey, cell]) => {
+      if (deskKeys.includes(deskKey)) return false;
+      const other = footprint(cell);
+      return (
+        other.x0 < box.x1 &&
+        other.x1 > box.x0 &&
+        other.y0 < box.y1 &&
+        other.y1 > box.y0 &&
+        model.desks.get(deskKey)?.roomKey ===
+          model.desks.get(deskKeys[0]!)?.roomKey
+      );
+    });
+    const groups =
+      intruder || deskKeys.length < 2 ? deskKeys.map((k) => [k]) : [deskKeys];
+    for (const group of groups) {
+      const parts = group.map((deskKey) => footprint(cells.get(deskKey)!));
+      const x0 = Math.min(...parts.map((b) => b.x0));
+      const y0 = Math.min(...parts.map((b) => b.y0));
+      const wallKey = `${key}\u0000${group[0]}`;
       walls.push({
         key: wallKey,
         team,
-        x: box.x0,
-        y: box.y0,
-        w: box.x1 - box.x0,
-        h: box.y1 - box.y0,
-        ...(intruder ? { outline: outlineOf(group) } : {}),
+        x: x0,
+        y: y0,
+        w: Math.max(...parts.map((b) => b.x1)) - x0,
+        h: Math.max(...parts.map((b) => b.y1)) - y0,
         color,
-        current: keys.some((deskKey) => currentDesks.has(deskKey)),
-        desks: keys.length,
+        current: group.some((deskKey) => currentDesks.has(deskKey)),
+        desks: group.length,
       });
-      for (const deskKey of keys) walled.set(deskKey, wallKey);
+      for (const deskKey of group) walled.set(deskKey, wallKey);
     }
   }
 

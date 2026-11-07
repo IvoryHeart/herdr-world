@@ -307,17 +307,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - **Teams.** Tables whose agents know each other are drawn inside one wall
     with a connector: a spawned agent is joined to the agent that started it,
     and a manual group with dotted lines; stale links are faded while a host
-    is offline, and dropped once its agents have closed. A team's tables that
-    touch share one wall, which bends around another team's table rather than
-    splitting; separate clusters of one team get a wall each, joined by a
-    connector.
+    is offline, and dropped once its agents have closed.
     Drag a table onto another table and hold it there a moment: it snaps to
     that table (**Group with …**), and dropping groups them. Town moves it to
-    that room if needed and seats it in a free place touching the other
-    table, on the side it came from where it can; no other table moves, and
-    Herdr's tab order stays as it was. The tables keep those places until the
-    room's tab order changes or the page reloads. A quick drop keeps meaning
-    a move or a reorder, so the gestures stay separate.
+    that room if needed and seats its tab beside the other's in Herdr. A quick
+    drop keeps meaning a move or a reorder, so the gestures stay separate.
     Drop a table you grouped on its own room's bare floor (not the free spot)
     to leave its group; a spawn link stays, since Herdr's stamp records it.
     **M** on a focused table offers the same as **Group with…** and **Leave

@@ -71,7 +71,7 @@ export function* constructRoom(
   for (const [index, tab] of space.tabs.entries()) {
     const leaves = leavesByTab.get(tab.tab_id) ?? NO_LEAVES;
     desks.push({
-      key: officeDeskKey(space.connectionId, tab.tab_id),
+      key: JSON.stringify([space.connectionId, "tab", tab.tab_id]),
       hostKey: host.key,
       roomKey,
       tabRef: target(space, "tab", tab.tab_id),
@@ -204,9 +204,4 @@ export function compareDeskCandidates(left: OfficeAgent, right: OfficeAgent) {
 
 function roomStatusOrder(status: WorldAgentStatus) {
   return status === "working" ? 0 : status === "unknown" ? 1 : 2;
-}
-
-/** A desk's key: its tab on its connection, whatever room it is in. */
-export function officeDeskKey(connectionId: string, tabId: string) {
-  return JSON.stringify([connectionId, "tab", tabId]);
 }
