@@ -193,7 +193,14 @@ hosts stay usable.
    for input, oldest first. Finished agents also wait there until you open
    their terminal or mark that completion reviewed, then join idle agents at
    the bar in the building's bottom corner. These locations visualize
-   status; they do not move the underlying pane or change its host. For the
+   status; they do not move the underlying pane or change its host. To keep
+   reception for what matters now, press its sign (the **!** **?** **✓**
+   marks) and untick a mark, for example **✓** Done: those agents stay at
+   their desks with their mark, and reception shows `✓ N at desks · find`.
+   Press **find** to open the first of them and **Next ›** to step through
+   the rest; **Reset to default** brings everyone back. Tick **Only this
+   building** to filter one building alone. Counts, Board and Needs you are
+   unchanged, and World keeps the filter for every browser. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included; press **Summary** on it (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who

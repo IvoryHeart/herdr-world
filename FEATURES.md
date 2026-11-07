@@ -79,6 +79,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
+  - Each reception's sign shows the marks it takes: **!** Needs you, **?** Asks
+    you and **✓** Done, with the ones it leaves out greyed. Press the sign to
+    choose them, set them for **Only this building** instead of every building,
+    or **Reset to default** (all three). An agent whose mark its reception
+    leaves out stays seated at its own desk with that mark overhead; it never
+    walks to reception, the bar or anywhere else. Reception then shows a tag
+    such as `✓ 4 at desks · find`: **find** opens the first of them and the
+    card's **Next ›** steps through the rest. The filter moves bodies, not
+    facts: marks, the Town board, room plaques, Board, Desk and Needs you
+    count and list every agent as before. World saves the filter, so every
+    browser and device shows the same one.
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right. The last lot on the grid is
     reserved for a town hall: a fenced plot with a sign, not yet in use.

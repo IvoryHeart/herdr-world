@@ -846,11 +846,15 @@ export async function createTownRenderer(
       state.askingKeys ?? new Set(),
       hosts,
       state.awayKeys ?? new Set(),
+      state.heldKeys ?? new Set(),
     );
     stats.actorsReconciled += actors.reconciled;
     for (const hostKey of hosts ?? actorWorld.buildings.keys())
       stats.hostSyncs[hostKey] = (stats.hostSyncs[hostKey] ?? 0) + 1;
     stats.summoned = [...state.summonedKeys].filter(
+      (key) => actors.actors.get(key)?.goal?.kind === "seat",
+    );
+    stats.held = [...(state.heldKeys ?? [])].filter(
       (key) => actors.actors.get(key)?.goal?.kind === "seat",
     );
   };

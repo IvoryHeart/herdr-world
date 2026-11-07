@@ -35,7 +35,9 @@ import { TOWN_TILE as T, townDeskSlots, type TownLayout } from "./townLayout";
 import { townAttention, townRoomCounts, type TownModel } from "./townModel";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { TownQuestPennant, type TownQuestMark } from "./townQuestPennant";
-import { townReceptionVisitors } from "./townReception";
+import { townReceptionBoard } from "./townReception";
+import type { TownReceptionTakes } from "./townReceptionFilter";
+import { TownReceptionHeldTag, TownReceptionSign } from "./TownReceptionSign";
 import type { TownRendererHandle } from "./townRenderer";
 import type { TownTarget } from "./townTargets";
 import type { TownTeams } from "./townTeams";
@@ -85,6 +87,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   model,
   foldedActivity,
   askingKeys,
+  receptionHeldKeys,
+  receptionTakes,
+  onFindHeld,
   onActivateAsk,
   layout,
   selectedKey,
@@ -119,6 +124,15 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   signs: TownBuildingSigns;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
+  /** Agents the reception filter keeps at their desks (townReceptionFilter). */
+  receptionHeldKeys: ReadonlySet<string>;
+  /** The marks each building's reception takes. */
+  receptionTakes: TownReceptionTakes;
+  /** Find the agents a reception's filter keeps at their desks. */
+  onFindHeld?: (
+    keys: readonly string[],
+    anchor: { x: number; y: number },
+  ) => void;
   onActivateAsk?: (nodeId: string) => void;
   foldedActivity: ReadonlyMap<string, TownFoldedActivity>;
   layout: TownLayout;
@@ -209,18 +223,19 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         const terminalQuestions =
           terminalAsksByHost.get(building.hostKey) ?? [];
         const questionCount = questions.length + terminalQuestions.length;
-        // Questions and finished agents wait after urgent blocked agents.
-        const agentVisitors = attention.filter(
-          (agent) =>
-            agent.hostKey === building.hostKey &&
-            (agent.semanticStatus === "blocked" ||
-              agent.semanticStatus === "done" ||
-              askingKeys.has(agent.key)),
-        );
-        const visitors = townReceptionVisitors(
-          agentVisitors,
+        // The filter moves bodies, not facts: the counts above stay whole,
+        // and only the agents this reception takes wait in it.
+        const {
+          visitors,
+          kept: held,
+          keptCounts: heldCounts,
+        } = townReceptionBoard(
+          building.hostKey,
+          attention,
           terminalQuestions,
           askingKeys,
+          receptionHeldKeys,
+          receptionTakes(building.hostKey),
         );
         const shown = visitors.slice(0, 6);
         const counts = building.rooms.reduce(
@@ -300,6 +315,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                   {(host?.displayLabel ?? "").toUpperCase()} RECEPTION
                 </span>
                 {queue.length ? <b>{queue.length}</b> : null}
+                {host ? (
+                  <TownReceptionSign
+                    connectionId={host.connectionId}
+                    hostLabel={host.displayLabel}
+                  />
+                ) : null}
               </div>
               {host?.stale ? (
                 <ConnectionRecoveryBanner
@@ -354,6 +375,18 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               ) : (
                 <div className="town-reception-empty">Nobody waiting</div>
               )}
+              <TownReceptionHeldTag
+                counts={heldCounts}
+                onFind={
+                  held.length && onFindHeld
+                    ? (anchor) =>
+                        onFindHeld(
+                          held.map((agent) => agent.key),
+                          anchor,
+                        )
+                    : null
+                }
+              />
             </div>
             {building.rooms.map((placed) => {
               const room = model.rooms.get(placed.key);

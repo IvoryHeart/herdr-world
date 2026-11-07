@@ -61,6 +61,10 @@ import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
 import { worldBinStore } from "../bin/useWorldBin";
 import { aimAtBin } from "../bin/binDrop";
+import {
+  townReceptionTakesAll,
+  type TownReceptionTakes,
+} from "./townReceptionFilter";
 import "./townBoard.css";
 import "./townTeams.css";
 
@@ -137,6 +141,9 @@ export function TownCanvas({
   completionSeenKeys,
   summonedKeys = NO_KEYS,
   askingKeys = NO_KEYS,
+  receptionHeldKeys = NO_KEYS,
+  receptionTakes = townReceptionTakesAll,
+  onFindHeld,
   onActivateAsk,
   quests = NO_QUESTS,
   conversationTargets,
@@ -191,6 +198,18 @@ export function TownCanvas({
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys?: ReadonlySet<string>;
   askingKeys?: ReadonlySet<string>;
+  /**
+   * Agents whose mark their reception does not take: they stay seated at
+   * their desks (townReceptionFilter.ts).
+   */
+  receptionHeldKeys?: ReadonlySet<string>;
+  /** The marks each building's reception takes, by host key. */
+  receptionTakes?: TownReceptionTakes;
+  /** Reception's find: the agents its filter keeps at their desks. */
+  onFindHeld?: (
+    keys: readonly string[],
+    anchor: { x: number; y: number },
+  ) => void;
   onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
@@ -300,6 +319,7 @@ export function TownCanvas({
     summonedKeys,
     askingKeys,
     awayKeys,
+    receptionHeldKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -323,6 +343,7 @@ export function TownCanvas({
     summonedKeys,
     askingKeys,
     awayKeys,
+    receptionHeldKeys,
     quests,
     conversationTargets,
     onSelect,
@@ -466,6 +487,7 @@ export function TownCanvas({
     summonedKeys: latest.current.summonedKeys,
     askingKeys: latest.current.askingKeys,
     awayKeys: latest.current.awayKeys,
+    heldKeys: latest.current.receptionHeldKeys,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -591,6 +613,7 @@ export function TownCanvas({
     summonedKeys,
     askingKeys,
     awayKeys,
+    receptionHeldKeys,
     calm,
   ]);
 
@@ -849,6 +872,9 @@ export function TownCanvas({
             hud={hud}
             foldedActivity={foldedActivity}
             askingKeys={askingKeys}
+            receptionHeldKeys={receptionHeldKeys}
+            receptionTakes={receptionTakes}
+            onFindHeld={onFindHeld}
             onActivateAsk={onActivateAsk}
             model={model}
             layout={layout}

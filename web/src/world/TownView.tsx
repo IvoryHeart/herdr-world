@@ -83,6 +83,8 @@ import {
 } from "./town/useTownRoomActions";
 import { townMoveActions, type TownMoveConfirm } from "./town/townMoveActions";
 import type { TownMoveFlow } from "./town/townMoveMenu";
+import { useTownReception } from "./town/useTownReception";
+import { townDeskAgentKey } from "./town/townOpen";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
@@ -501,6 +503,12 @@ export default function TownView({
     peekTimer.current = window.setTimeout(() => setPeek(next), delay);
   };
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  // Reception's filter keeps some agents at their desks; find shows them (#501).
+  const reception = useTownReception(office, askingKeys, (key, anchor) => {
+    window.clearTimeout(peekTimer.current);
+    holdPeek.current = true;
+    setPeek({ key, anchor });
+  });
   const hoverAgent = (
     key: string | null,
     anchor?: { x: number; y: number },
@@ -694,30 +702,7 @@ export default function TownView({
     (key) => openChat(key, false),
   );
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
-  /**
-   * The agent a table stands for: one that needs you (waiting, then
-   * finished) even while it is away at reception, else the one seated there.
-   */
-  const deskAgentKey = (deskKey: string) => {
-    const rank = (agent: OfficeAgent) =>
-      agent.semanticStatus === "blocked"
-        ? 0
-        : agent.semanticStatus === "done"
-          ? 1
-          : 2;
-    const occupant = office.deskRoster.find(({ desk }) => desk.key === deskKey)
-      ?.desk.occupantAgentKey;
-    let best: OfficeAgent | null = null;
-    for (const { agent } of office.roster)
-      if (
-        agent.deskKey === deskKey &&
-        (!best ||
-          rank(agent) < rank(best) ||
-          (rank(agent) === rank(best) && agent.key === occupant))
-      )
-        best = agent;
-    return best?.key ?? occupant ?? null;
-  };
+  const deskAgentKey = (deskKey: string) => townDeskAgentKey(office, deskKey);
   /**
    * Tapping an agent, or its desk even while the agent is away at reception
    * or in the lounge, opens the agent (openAgent). A desk without an agent
@@ -873,12 +858,14 @@ export default function TownView({
               openOfficeTerminal(peekAgent.key);
             }}
             onNext={
-              nextCall(peekAgent.key)
+              reception.step(peekAgent.key, peek!.anchor) ??
+              (nextCall(peekAgent.key)
                 ? () => openAgent(nextCall(peekAgent.key)!.agent.key)
-                : null
+                : null)
             }
             onClose={() => {
               holdPeek.current = false;
+              reception.clear();
               setPeek(null);
             }}
             onHold={(hold) => {
@@ -910,6 +897,9 @@ export default function TownView({
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
             askingKeys={askingKeys}
+            receptionHeldKeys={reception.held}
+            receptionTakes={reception.takes}
+            onFindHeld={reception.find}
             // A letter at reception: its question in Needs you.
             onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}
