@@ -4,6 +4,7 @@ import {
   TOWN_DEFAULT_RENDERED_DESKS,
   TOWN_ROOM_TIERS,
   townDeskSlots,
+  townGeometryKey,
   townPinCell,
   townSeat,
   townRoomTiers,
@@ -14,6 +15,7 @@ import {
   type TownInput,
   type TownLayout,
 } from "./townLayout";
+import { townRoomMovePreview, townRoomsReordered } from "./townRoomOrder";
 
 /** Tiles per desk cell, as townLayout draws them. */
 const CELL_TILES = 5;
@@ -819,4 +821,79 @@ test("rooms keep their place inside the building", () => {
   expect(Math.min(...building.rooms.map((room) => room.y))).toBe(
     building.y + 9,
   );
+});
+
+/** Room `key` takes room `onto`'s place in the input's room order. */
+function moveRoom(input: TownInput, key: string, onto: string): TownInput {
+  const order = [...input.rooms]
+    .sort((a, b) => a.order - b.order)
+    .map((room) => room.key);
+  const from = order.indexOf(key);
+  const slot = order.indexOf(onto);
+  order.splice(from, 1);
+  order.splice(slot, 0, key);
+  return {
+    ...input,
+    rooms: input.rooms.map((room) => ({
+      ...room,
+      order: order.indexOf(room.key),
+    })),
+  };
+}
+
+const roomsAt = (layout: TownLayout) =>
+  new Map(
+    layout.buildings
+      .flatMap((building) => building.rooms)
+      .map((room) => [
+        room.key,
+        { x: room.x, y: room.y, w: room.w, h: room.h },
+      ]),
+  );
+
+test("a moved room lands where the preview showed, as a reload lays it out", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    // Columns kept from before the first room grew differ from a fresh stack.
+    const first = layoutTown(town({ a: [3, 3, 3, 3, 3, 3] }), shape);
+    const grown = town({ a: [60, 3, 3, 3, 3, 3] });
+    const live = layoutTown(grown, shape, first.memory);
+    const moved = moveRoom(grown, "a/room-5", "a/room-1");
+    const after = layoutTown(moved, shape, live.memory);
+    const reload = layoutTown(moved, shape);
+    expect(townGeometryKey(after.layout)).toBe(townGeometryKey(reload.layout));
+    expect(townRoomsReordered(live.layout, after.layout)).toBe(true);
+    // The drag preview drew every room where it now stands.
+    const preview = townRoomMovePreview(live.layout, "a/room-5", "a/room-1")!;
+    expect(preview).toEqual(roomsAt(after.layout));
+    // The room really moved.
+    expect(roomsAt(live.layout).get("a/room-5")).not.toEqual(
+      roomsAt(after.layout).get("a/room-5"),
+    );
+  }
+});
+
+test("a room moved into the first room's place stands where that room stood", () => {
+  const input = town({ a: [3, 3, 3, 3, 3, 3] });
+  const before = layoutTown(input, TOWN_SHAPES.wide);
+  const after = layoutTown(
+    moveRoom(input, "a/room-4", "a/room-0"),
+    TOWN_SHAPES.wide,
+    before.memory,
+  );
+  const was = roomsAt(before.layout).get("a/room-0")!;
+  const now = roomsAt(after.layout).get("a/room-4")!;
+  expect({ x: now.x, y: now.y }).toEqual({ x: was.x, y: was.y });
+});
+
+test("rooms that only grow, arrive or leave are not a reorder", () => {
+  const before = layoutTown(town({ a: [3, 3, 3], b: [2] }), TOWN_SHAPES.wide);
+  const grown = layoutTown(
+    town({ a: [30, 3, 3, 3], b: [2] }),
+    TOWN_SHAPES.wide,
+    before.memory,
+  );
+  expect(townRoomsReordered(before.layout, grown.layout)).toBe(false);
+  expect(townRoomMovePreview(before.layout, "a/room-0", "a/room-0")).toBeNull();
+  // Rooms of different buildings never trade places.
+  expect(townRoomMovePreview(before.layout, "a/room-0", "b/room-0")).toBeNull();
 });

@@ -7,6 +7,8 @@
  * is live, and every room capacity step contains the previous one.
  */
 
+import { townRanksOutOfOrder, townStackRooms } from "./townRoomOrder";
+
 export const TOWN_TILE = 16;
 
 /**
@@ -253,6 +255,8 @@ type RoomMemory = {
   cells: Map<string, { col: number; row: number }>;
   /** The building column the room keeps while the scene is live. */
   column?: number;
+  /** The room's place in its building's room (workspace) order. */
+  rank?: number;
 };
 
 /**
@@ -413,37 +417,32 @@ function draftBuilding(
   });
   // Rooms stack in columns, in workspace order. Each room keeps the column it
   // was given while the scene is live (a new one joins the shortest), so a
-  // room that grows moves only the rooms below it in its own column.
-  const columnCount = Math.max(1, Math.min(shape.roomColumns, placed.length));
-  const columns: (typeof placed)[] = Array.from(
-    { length: columnCount },
-    () => [],
+  // room that grows moves only the rooms below it in its own column. A
+  // building whose rooms were reordered (a room moved in Town, Spaces or
+  // Herdr) is stacked afresh, as a reload would show it.
+  const reordered = townRanksOutOfOrder(
+    placed.map((room) => memory.get(room.key)?.rank),
   );
-  const heights = new Array<number>(columnCount).fill(0);
-  for (const room of placed) {
-    const kept = memory.get(room.key)?.column;
-    const column =
-      kept !== undefined && kept < columnCount
-        ? kept
-        : heights.indexOf(Math.min(...heights));
-    columns[column]!.push(room);
-    heights[column]! += room.h + 2;
-    nextMemory.get(room.key)!.column = column;
-  }
-  let x = 2;
-  const spans: { x0: number; x1: number; bottom: number }[] = [];
-  for (const column of columns) {
-    let y = ROOM_TOP;
-    let widest = 0;
-    for (const room of column) {
-      room.rx = x;
-      room.ry = y;
-      y += room.h + 2;
-      widest = Math.max(widest, room.w);
-    }
-    spans.push({ x0: x, x1: x + widest, bottom: y });
-    if (column.length) x += widest + 2;
-  }
+  const {
+    columns,
+    positions,
+    spans,
+    width: x,
+  } = townStackRooms(
+    placed,
+    shape.roomColumns,
+    (room) => (reordered ? undefined : memory.get(room.key)?.column),
+    ROOM_TOP,
+  );
+  columns.forEach((column, index) => {
+    const roomMemory = nextMemory.get(placed[index]!.key)!;
+    roomMemory.column = column;
+    roomMemory.rank = index;
+  });
+  placed.forEach((room, index) => {
+    room.rx = positions[index]!.rx;
+    room.ry = positions[index]!.ry;
+  });
   const w = Math.max(
     x,
     shape.formFactor === "narrow" && shape.roomColumns === 1

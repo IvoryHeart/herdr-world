@@ -392,6 +392,7 @@ const sent: { paneId: string; text: string; keys: string[] }[] = [];
 const moves: { method: string; params: Record<string, unknown> }[] = [];
 /** Each host's tabs in Herdr's order, for tab.list. */
 let herdrTabs: (connectionId: string) => unknown[] = () => [];
+let herdrWorkspaces: (connectionId: string) => unknown[] = () => [];
 let statusOf: (paneId: string) => string = () => "working";
 const SCREENS = {
   blocked: [
@@ -529,6 +530,12 @@ let latestText =
             },
           };
     if (method === "tab.list") return { tabs: herdrTabs(connectionId) };
+    if (method === "workspace.list")
+      return { workspaces: herdrWorkspaces(connectionId) };
+    if (method === "workspace.move") {
+      moves.push({ method, params: { ...params, connectionId } });
+      return { type: "ok" };
+    }
     if (method === "tab.move") {
       moves.push({ method, params: { ...params, connectionId } });
       return { type: "tab_list", tabs: [] };
@@ -995,6 +1002,9 @@ async function run() {
   herdrTabs = (connectionId) =>
     base.connections.find((c) => c.connectionId === connectionId)?.snapshot
       ?.tabs ?? [];
+  herdrWorkspaces = (connectionId) =>
+    base.connections.find((c) => c.connectionId === connectionId)?.snapshot
+      ?.workspaces ?? [];
   const blocked = base.agentPanes.filter((pane, index) =>
     scale === "plates" ? pane.agent_status === "blocked" : index % 23 === 4,
   );
@@ -1326,6 +1336,109 @@ async function run() {
   );
 
   if (scale === "plates" && mode === "test") {
+    // A room dragged by its wall onto another room of its building takes that
+    // room's place with Herdr's workspace.move on that host, and lands.
+    {
+      const visibleRooms = [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="room"]',
+        ),
+      ].filter((target) => {
+        const box = target.getBoundingClientRect();
+        return (
+          box.width > 40 &&
+          box.left > 0 &&
+          box.top > 0 &&
+          box.right < window.innerWidth &&
+          box.top + box.height * 4 < window.innerHeight
+        );
+      });
+      const owner = (target: HTMLElement) =>
+        JSON.parse(target.dataset.targetKey!) as [string, unknown, string];
+      const pair = visibleRooms.flatMap((from) => {
+        const onto = visibleRooms.find(
+          (other) => other !== from && owner(other)[0] === owner(from)[0],
+        );
+        return onto ? [[from, onto] as const] : [];
+      })[0];
+      if (pair) {
+        const [from, onto] = pair;
+        const roomPress = (type: string, x: number, y: number) =>
+          host.querySelector("canvas")!.parentElement!.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              pointerId: 41,
+              pointerType: "mouse",
+              button: 0,
+              buttons: type === "pointerup" ? 0 : 1,
+              clientX: x,
+              clientY: y,
+            }),
+          );
+        const wall = from.getBoundingClientRect();
+        const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
+        const before = moves.length;
+        const drags = () => window.__HERDR_TOWN_RENDERER__!.drags;
+        const drawn = { ...drags() };
+        // Its left wall, under the name strip.
+        const below = wall.top + wall.height * 3;
+        // Escape puts a lifted room back without moving it.
+        roomPress("pointerdown", wall.left + 3, below);
+        roomPress("pointermove", wall.left + 30, below + 10);
+        await waitFor(() => ghost() !== null, "a room's wall did not lift it");
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+        await waitFor(() => ghost() === null, "Escape left the room carried");
+        roomPress("pointerup", wall.left + 30, below + 10);
+        await settle();
+        check(moves.length === before, "a room put back by Escape moved");
+        roomPress("pointerdown", wall.left + 3, below);
+        roomPress("pointermove", wall.left + 30, below + 10);
+        await waitFor(
+          () => ghost()?.textContent?.startsWith("Move ") ?? false,
+          "dragging a room's wall did not lift the room",
+        );
+        const box = onto.getBoundingClientRect();
+        const floor = [
+          box.left + box.width / 2,
+          box.top + box.height * 3,
+        ] as const;
+        roomPress("pointermove", ...floor);
+        for (let frame = 0; frame < 10; frame += 1) {
+          await settle();
+          if (ghost()?.dataset.valid === "true") break;
+        }
+        check(
+          ghost()?.dataset.valid === "true" &&
+            ghost()!.textContent!.includes("’s place"),
+          `a room over another room of its building was not a drop target: ${JSON.stringify(ghost()?.textContent)}`,
+        );
+        roomPress("pointerup", ...floor);
+        await waitFor(
+          () => moves.length === before + 1,
+          "dropping a room on another did not move it",
+        );
+        const [connectionId, , workspaceId] = owner(from);
+        check(
+          moves[before]!.method === "workspace.move" &&
+            moves[before]!.params.connectionId === connectionId &&
+            moves[before]!.params.workspace_id === workspaceId &&
+            typeof moves[before]!.params.insert_index === "number",
+          `a room drop sent ${JSON.stringify(moves[before])}`,
+        );
+        await waitFor(
+          () => drags().landings > drawn.landings,
+          "a moved room did not land",
+        );
+        await waitFor(() => ghost() === null, "a moved room's label stayed up");
+      } else if (!phone)
+        check(
+          false,
+          `no two visible rooms share a building (${visibleRooms.length} visible)`,
+        );
+    }
+
     await checkTownRoomPlates(host, check, waitFor, {
       connectionId: base.connections[0]!.connectionId,
       generation: base.connections[0]!.generation,

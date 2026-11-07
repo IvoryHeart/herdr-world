@@ -525,6 +525,7 @@ export default function TownView({
     runDeskMove,
     runDeskReorder,
     runAgentMove,
+    roomMoves,
     teams,
     dialogs: moveDialogs,
   } = townMoveActions({
@@ -956,10 +957,10 @@ export default function TownView({
               onGroupDesk: (deskKey, targetKey) =>
                 teams.runGroupDesk(deskKey, targetKey),
               onUngroupDesk: (deskKey) => teams.runUngroupDesk(deskKey),
-              onReorderDesk: (deskKey, ontoKey) =>
-                runDeskReorder(deskKey, ontoKey),
+              onReorderDesk: runDeskReorder,
               onDropAgent: (agentKey, deskKey) =>
                 runAgentMove(agentKey, deskKey),
+              ...roomMoves,
               onBinDrop: (kind, key) =>
                 putTownDropInBin(office, world, kind, key),
               onMoveDesk: (deskKey) => {

@@ -369,6 +369,16 @@ hosts stay usable.
    than taking breaks at the bar; they still go to reception when they need
    you or finish, and come straight back once seen. Choose **Unpin desk in
    Town** to let it follow the tab order again.
+11. To arrange a building, drag a room by its name plaque or its wall (the
+   pointer shows a grab hand) onto another room of the same building. Green
+   outlines show where it will stand and where the other rooms will go; let
+   go and it takes that room's place with all its tables and agents. Let go
+   over its own spot, outside the rooms or after pressing Escape and it goes
+   back. On a phone, touch and hold the room's name or wall, then drag.
+   Without a drag, hover or focus the plaque and use the **←** (**Move
+   before …**) and **→** (**Move after …**) arrows in its card. A room never
+   moves to another host's building. Town moves the workspace in Herdr, so
+   Spaces shows the same order and the arrangement stays after a reload.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room

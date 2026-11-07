@@ -30,6 +30,7 @@ import {
   type TownPlacementMemory,
   type TownShape,
 } from "../townLayout";
+import { townRoomsReordered } from "../townRoomOrder";
 import {
   keepPlaceColors,
   NO_PLACE_COLORS,
@@ -267,12 +268,15 @@ export class TownScene {
     // While the user presses, scrolls or zooms, a reflow that would move rooms
     // or buildings waits until they pause (then the camera follows the room in
     // view). Explicit Fold/Expand applies immediately; its admission and
-    // revision arrive together. A held layout must still name only valid desks.
-    const explicit =
-      this.appliedFoldRevision !== null &&
-      foldRevision !== this.appliedFoldRevision;
-    this.appliedFoldRevision = foldRevision;
+    // revision arrive together. So does a room moved to another place in its
+    // building: the user put it there. A held layout must still name only
+    // valid desks.
     const held = this.shown;
+    const explicit =
+      (this.appliedFoldRevision !== null &&
+        foldRevision !== this.appliedFoldRevision) ||
+      (held !== null && held !== placed && townRoomsReordered(held, placed));
+    this.appliedFoldRevision = foldRevision;
     const holding =
       !explicit &&
       held !== null &&

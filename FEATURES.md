@@ -269,6 +269,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     terminal colours, so every device sees it; Herdr is unchanged, and
     Spaces' tab pins (close protection in this browser) are separate. A pin
     follows its tab when the tab moves to another room and goes when it closes.
+  - **Move rooms.** Drag a room by its name plaque (or its name on the
+    zoomed-out room card) or by its wall onto another room of the same
+    building: it takes that room's place with all its tables and agents, and
+    green outlines show where it lands and where the other rooms go. Letting
+    go anywhere else, or pressing Escape, returns it. On a phone, touch and
+    hold the name or wall, then drag. The room's card (hover or focus its
+    plaque) also has **Move before …** and **Move after …** arrows. Rooms stay
+    in their own host's building. The order is Herdr's workspace order: Town
+    asks Herdr to move the workspace, so Spaces shows the same order, a reload
+    keeps it, and moving a workspace in Spaces or Herdr moves its room.
   - **Bin and bus.** Dragging an agent (or a desk) onto the bin icon at the
     bottom of Town or Board, or onto a Town bus stop, or **Put in bin** in an
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;

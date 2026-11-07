@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import { bridge } from "../../api";
 import { moveTabInList } from "../../tabReorder";
-import type { OfficeDesk } from "../herdrOfficeProjection";
+import type { OfficeDesk, OfficeRoom } from "../herdrOfficeProjection";
 import {
   deskReorderIndex,
   requestDeskReorder,
+  requestRoomMove,
   townMoveNotice,
   townMoveResult,
 } from "./townMoves";
@@ -128,6 +129,70 @@ test("an old Herdr host is refused in plain words, before any tab.move", async (
         "This host's Herdr cannot reorder tabs. Herdr 0.7.2 or later can.",
     });
     expect(calls).toEqual(["tab.list"]);
+  } finally {
+    bridge.connection = connection;
+  }
+});
+
+const room = (workspace: string, connectionId = "local", generation = 3) =>
+  ({
+    key: `room:${workspace}`,
+    displayLabel: workspace,
+    workspaceRef: { connectionId, generation, nativeId: workspace },
+  }) as unknown as OfficeRoom;
+
+test("a room takes another room's place through Herdr's workspace order", async () => {
+  const calls: [string, unknown][] = [];
+  const connection = bridge.connection;
+  bridge.connection = ((connectionId: string, generation: number) => ({
+    connectionId,
+    generation,
+    serverRuntimeGeneration: generation,
+    isCurrent: () => true,
+    acceptsServerGeneration: () => true,
+    call: async (method: string, params: unknown) => {
+      calls.push([method, params]);
+      if (method === "workspace.list")
+        // Listed out of order: Herdr's order is the workspace number.
+        return {
+          workspaces: [
+            { workspace_id: "w3", number: 3 },
+            { workspace_id: "w1", number: 1 },
+            { workspace_id: "w4", number: 4 },
+            { workspace_id: "w2", number: 2 },
+          ],
+        };
+      return { type: "ok" };
+    },
+  })) as unknown as typeof bridge.connection;
+  try {
+    // w4 into w2's place: before w2 (Herdr inserts before index 1).
+    expect(await requestRoomMove(room("w4"), room("w2"))).toEqual({
+      status: "moved",
+    });
+    expect(calls[calls.length - 1]).toEqual([
+      "workspace.move",
+      { workspace_id: "w4", insert_index: 1 },
+    ]);
+    // w1 into w3's place: after w3 (index 3, counted before removal).
+    await requestRoomMove(room("w1"), room("w3"));
+    expect(calls[calls.length - 1]).toEqual([
+      "workspace.move",
+      { workspace_id: "w1", insert_index: 3 },
+    ]);
+    // A room Herdr no longer lists is refused, with nothing moved.
+    calls.length = 0;
+    expect(await requestRoomMove(room("w9"), room("w2"))).toMatchObject({
+      status: "refused",
+      reason: "changed",
+    });
+    expect(calls.map(([method]) => method)).toEqual(["workspace.list"]);
+    // Another host's building: refused before asking any host.
+    calls.length = 0;
+    expect(
+      await requestRoomMove(room("w1"), room("w2", "remote")),
+    ).toMatchObject({ status: "refused", reason: "other_host" });
+    expect(calls).toEqual([]);
   } finally {
     bridge.connection = connection;
   }

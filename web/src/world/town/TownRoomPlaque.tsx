@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import type { OfficeRoom } from "../herdrOfficeProjection";
 import type { PlaceColorChoice, TownRoomActions } from "./TownCanvas";
@@ -91,7 +91,9 @@ export function TownRoomOverviewSummary({
 
 /**
  * Constant-size text within the room's projected width. Hover, focus or a tap
- * opens one card below it: the room's summary, then Rename and Close.
+ * opens one card below it: the room's summary, then Move before and after,
+ * Rename and Close. Dragging the name (a touch hold on a phone) carries the
+ * room to another place in its building.
  */
 export function TownRoomPlaque({
   room,
@@ -101,6 +103,7 @@ export function TownRoomPlaque({
   color,
   actions,
   card,
+  onNamePress,
 }: {
   room: OfficeRoom;
   label: string;
@@ -110,8 +113,13 @@ export function TownRoomPlaque({
   actions: TownRoomActions;
   /** The room's summary for its card; without it the card holds the actions. */
   card?: TownPlaceCardContent;
+  /** A press on the name, passed to the town: a drag there carries the room. */
+  onNamePress?(event: PointerEvent): boolean;
 }) {
   const { opened, open } = usePlaceCard();
+  const before = actions.roomMoveNeighbor?.(room.key, -1) ?? null;
+  const after = actions.roomMoveNeighbor?.(room.key, 1) ?? null;
+  const movable = Boolean(actions.onMoveRoom && (before || after));
   const active = counts.working + counts.blocked;
   const activityLabel = `${active} of ${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} active: ${counts.working} working, ${counts.blocked} waiting on you`;
   return (
@@ -136,7 +144,22 @@ export function TownRoomPlaque({
             {...color}
           />
         ) : null}
-        <span className="town-room-plaque-name" title={label}>
+        <span
+          className={`town-room-plaque-name${movable ? " is-movable" : ""}`}
+          title={label}
+          onPointerDown={
+            movable && onNamePress
+              ? (event) => {
+                  if (
+                    event.pointerType === "mouse"
+                      ? event.button === 0
+                      : event.isPrimary
+                  )
+                    onNamePress(event.nativeEvent);
+                }
+              : undefined
+          }
+        >
           {label}
         </span>
         <span
@@ -158,6 +181,28 @@ export function TownRoomPlaque({
           role="group"
           aria-label={`Room actions for ${label}`}
         >
+          {actions.onMoveRoom && before ? (
+            <button
+              className="world-room-overlay-action town-plaque-action"
+              type="button"
+              aria-label={`Move room ${label} before ${before.label}`}
+              title={`Move before ${before.label}`}
+              onClick={() => actions.onMoveRoom?.(room.key, -1)}
+            >
+              <ArrowLeft size={14} aria-hidden="true" />
+            </button>
+          ) : null}
+          {actions.onMoveRoom && after ? (
+            <button
+              className="world-room-overlay-action town-plaque-action"
+              type="button"
+              aria-label={`Move room ${label} after ${after.label}`}
+              title={`Move after ${after.label}`}
+              onClick={() => actions.onMoveRoom?.(room.key, 1)}
+            >
+              <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          ) : null}
           <button
             className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"
             type="button"

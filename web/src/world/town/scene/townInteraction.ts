@@ -2,10 +2,10 @@
  * Town's pointer and wheel interaction, headless. Pointer input runs through
  * World's shared gesture machine; this module hit-tests against the camera as
  * last drawn and carries out what the machine decides: pans, flings, pinches,
- * taps, double taps, and carrying a desk or agent with its magnet, edge pan
- * and drop. The DOM adapter only normalizes events; the renderer, the drag
- * ghost and World's callbacks are ports, so every rule runs on a test clock
- * and test frames.
+ * taps, double taps, and carrying a desk, agent or room with its magnet,
+ * edge pan and drop. The DOM adapter only normalizes events; the renderer,
+ * the drag ghost and World's callbacks are ports, so every rule runs on a
+ * test clock and test frames.
  */
 
 import {
@@ -21,6 +21,7 @@ import {
   townDragFor,
   townDropTarget,
   townMagnetDesk,
+  townRoomDrag,
   type TownDrag,
 } from "../townDrag";
 import {
@@ -45,7 +46,7 @@ export type TownStage = {
   invalidate(reason: string): void;
   roofAlpha(hostKey: string): number;
   actorPosition(key: string): { x: number; y: number; seated: boolean } | null;
-  beginDrag(kind: "desk" | "agent", key: string, x: number, y: number): void;
+  beginDrag(kind: TownDrag["kind"], key: string, x: number, y: number): void;
   moveDrag(
     x: number,
     y: number,
@@ -63,7 +64,9 @@ export type TownMoveCommand =
   | { kind: "group"; deskKey: string; targetDeskKey: string }
   | { kind: "ungroup"; deskKey: string }
   /** Into `ontoDeskKey`'s slot, or last in its room when null. */
-  | { kind: "reorder"; deskKey: string; ontoDeskKey: string | null };
+  | { kind: "reorder"; deskKey: string; ontoDeskKey: string | null }
+  /** A room into `ontoRoomKey`'s place in its building. */
+  | { kind: "room"; roomKey: string; ontoRoomKey: string };
 
 export type TownInteractionPorts = {
   clock: TownClock;
@@ -78,8 +81,11 @@ export type TownInteractionPorts = {
   setHovered(key: string | null): void;
   /** World's hover card for the key under a mouse, at its client point. */
   hover(hover: { key: string; clientX: number; clientY: number } | null): void;
-  /** Whether a mouse over the canvas shows a pointer. */
-  cursor(pointer: boolean): void;
+  /**
+   * What a mouse over the canvas shows: a pointer over what it can open, a
+   * grab hand over a room's edge, which lifts the room.
+   */
+  cursor(kind: "pointer" | "grab" | null): void;
   select(key: string): void;
   /**
    * A touch tap, with the table it landed on (null elsewhere). Touch has no
@@ -191,19 +197,32 @@ export class TownInteraction {
      * hold over one of its desks lifts the desk beneath the card.
      */
     card?: string;
+    /**
+     * The room whose name was pressed (its plaque, or its card's name): a
+     * drag or touch hold carries the room. A tap on a plaque's name is the
+     * plaque's own (it opens its card); on a card's name it zooms the room.
+     */
+    roomName?: string;
   }) {
     const stage = this.ports.stage();
     if (!stage) return;
     this.pressedWith = pointer.pointerType;
     const hit = this.hitAt(pointer.at.x, pointer.at.y);
-    const drag = townDragFor(hit, this.ports.world().model, stage.level);
-    const target: TownGestureTarget = pointer.card
+    const { model } = this.ports.world();
+    const drag = townDragFor(hit, model, stage.level);
+    const target: TownGestureTarget = pointer.roomName
       ? {
-          hit: { kind: "room", key: pointer.card },
-          drag:
-            drag?.kind === "desk" && drag.from === pointer.card ? drag : null,
+          hit: { kind: "room", key: pointer.roomName },
+          drag: townRoomDrag(pointer.roomName, model),
+          ...(pointer.card ? {} : { nameOnly: true as const }),
         }
-      : { hit, drag };
+      : pointer.card
+        ? {
+            hit: { kind: "room", key: pointer.card },
+            drag:
+              drag?.kind === "desk" && drag.from === pointer.card ? drag : null,
+          }
+        : { hit, drag };
     this.feed({
       type: "down",
       id: pointer.id,
@@ -243,7 +262,15 @@ export class TownInteraction {
     const key =
       hit?.kind === "building" ? `building:${hit.key}` : townHitKey(hit);
     if (key !== this.ports.hovered()) this.ports.setHovered(key);
-    this.ports.cursor(Boolean(hit && hit.kind !== "building"));
+    this.ports.cursor(
+      hit?.kind === "room" &&
+        hit.edge &&
+        townRoomDrag(hit.key, this.ports.world().model)
+        ? "grab"
+        : hit && hit.kind !== "building"
+          ? "pointer"
+          : null,
+    );
     const hoverKey = townHitKey(hit);
     this.ports.hover(
       hoverKey
@@ -296,6 +323,17 @@ export class TownInteraction {
     if (!this.carryAt) return;
     this.clearMagnet();
     this.carryTo(this.carryAt);
+  }
+
+  /**
+   * Escape: what is being carried goes back where it was, and the press that
+   * carries it does nothing more. True when something was carried.
+   */
+  cancelCarry() {
+    const mode = this.gesture.mode;
+    if (mode.name !== "card" || !this.carrying) return false;
+    this.feed({ type: "cancel", id: mode.id });
+    return true;
   }
 
   dispose() {
@@ -427,7 +465,8 @@ export class TownInteraction {
   private aim(hit: TownHit | null, at: Point) {
     const stage = this.ports.stage();
     if (!this.carrying || !stage) return;
-    if (this.ports.binAt?.(at)) {
+    // Rooms stay in their building: only desks and agents go in the bin.
+    if (this.carrying.kind !== "room" && this.ports.binAt?.(at)) {
       this.carrying.target = {
         key: "bin",
         label: "Put in the bin",
@@ -463,7 +502,7 @@ export class TownInteraction {
   private tap(target: TownGestureTarget) {
     const stage = this.ports.stage();
     const hit = target.hit;
-    if (!stage) return;
+    if (!stage || target.nameOnly) return;
     if (
       this.pressedWith === "touch" &&
       this.ports.tapCard?.(hit?.kind === "desk" ? hit.key : null)
@@ -491,6 +530,8 @@ export class TownInteraction {
     const action = drag.target?.action;
     if (drag.kind === "agent")
       return { kind: "agent", agentKey: drag.key, deskKey: targetKey };
+    if (drag.kind === "room")
+      return { kind: "room", roomKey: drag.key, ontoRoomKey: targetKey };
     if (action === "group")
       return { kind: "group", deskKey: drag.key, targetDeskKey: targetKey };
     if (action === "ungroup") return { kind: "ungroup", deskKey: drag.key };
@@ -577,6 +618,7 @@ export class TownInteraction {
         this.tap(effect.target);
         return;
       case "doubleTap": {
+        if (effect.target.nameOnly) return;
         const hit = effect.target.hit;
         const key = townHitKey(hit);
         if (

@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { townDragFor, townDropTarget, townMagnetDesk } from "./townDrag";
+import {
+  townDragFor,
+  townDropTarget,
+  townMagnetDesk,
+  townRoomDrag,
+} from "./townDrag";
 import type { TownModel } from "./townModel";
 
 /** Two hosts: host a has rooms r1 (desks d1, d2) and r2 (d3); host b has r3 (d4). */
@@ -21,6 +26,8 @@ function model(pinned: string[] = []) {
       displayLabel: key.toUpperCase(),
       desks: desks.map((deskKey) => ({ key: deskKey })),
       omittedDeskCount,
+      canOpenInSpaces: true,
+      stale: false,
     },
   ];
   return {
@@ -223,5 +230,53 @@ test("a pinned desk is not picked up, and no desk takes its place", () => {
   expect(townDropTarget(drag, { kind: "desk", key: "d2" }, m)).toMatchObject({
     key: null,
     label: "d2 is pinned: unpin it to take its place",
+  });
+});
+
+test("a room lifts by its edge, never its floor, and not from the roofs", () => {
+  const m = model();
+  expect(
+    townDragFor({ kind: "room", key: "r1", edge: true }, m, "room"),
+  ).toMatchObject({ kind: "room", key: "r1", hostKey: "a", from: "r1" });
+  expect(
+    townDragFor({ kind: "room", key: "r1", edge: true }, m, "overview"),
+  ).toMatchObject({ kind: "room", key: "r1" });
+  expect(townDragFor({ kind: "room", key: "r1" }, m, "room")).toBeNull();
+  expect(
+    townDragFor({ kind: "room", key: "r1", edge: true }, m, "town"),
+  ).toBeNull();
+  // Alone in its building, it has nowhere to go.
+  expect(
+    townDragFor({ kind: "room", key: "r3", edge: true }, m, "room"),
+  ).toBeNull();
+  // A stale room stays where it is.
+  const stale = model();
+  (stale.rooms.get("r1") as { stale: boolean }).stale = true;
+  expect(townRoomDrag("r1", stale)).toBeNull();
+});
+
+test("a room takes the place of another room of its building, never another host's", () => {
+  const m = model();
+  const drag = townRoomDrag("r1", m)!;
+  expect(townDropTarget(drag, { kind: "room", key: "r2" }, m)).toMatchObject({
+    key: "r2",
+    label: "Put R1 in R2’s place",
+    action: "move",
+  });
+  // Anywhere in the other room: a desk, a seated agent's seat.
+  expect(townDropTarget(drag, { kind: "desk", key: "d3" }, m).key).toBe("r2");
+  expect(
+    townDropTarget(drag, { kind: "cell", roomKey: "r2", cellIndex: 1 }, m).key,
+  ).toBe("r2");
+  // Back on itself, or outside every room: it goes back.
+  expect(townDropTarget(drag, { kind: "room", key: "r1" }, m).key).toBeNull();
+  expect(townDropTarget(drag, { kind: "desk", key: "d2" }, m).key).toBeNull();
+  expect(
+    townDropTarget(drag, { kind: "building", key: "a" }, m).key,
+  ).toBeNull();
+  expect(townDropTarget(drag, null, m).key).toBeNull();
+  expect(townDropTarget(drag, { kind: "room", key: "r3" }, m)).toMatchObject({
+    key: null,
+    label: "Rooms stay in their own host’s building",
   });
 });

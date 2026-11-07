@@ -8,7 +8,7 @@ import { bridge } from "../../api";
 import { operationalStore } from "../../store";
 import { deskReorderIndex } from "../../../../shared/tabOrder";
 export { deskReorderIndex };
-import type { Tab } from "../../types";
+import type { Tab, Workspace } from "../../types";
 import type {
   OfficeDesk,
   OfficePaneDevice,
@@ -178,6 +178,58 @@ export async function requestDeskReorder(
     reason: "tab_move",
     message: operations.get().error ?? "Herdr did not reorder the tab.",
   };
+}
+
+export type TownRoomMoveOutcome =
+  | { status: "moved" }
+  | { status: "refused"; reason: string; message: string };
+
+/**
+ * Move a room (a Herdr workspace) into `onto`'s place in its building: the
+ * room order is Herdr's workspace order, so Spaces, Town and every reload
+ * show the same. Town reads the order from Herdr, then moves the workspace
+ * with workspace.move on the room's exact connection and runtime generation;
+ * the rooms move when Herdr's new order arrives (its workspace.moved event).
+ */
+export async function requestRoomMove(
+  room: OfficeRoom,
+  onto: OfficeRoom,
+): Promise<TownRoomMoveOutcome> {
+  if (!sameOwner(room.workspaceRef, onto.workspaceRef))
+    return {
+      status: "refused",
+      reason: "other_host",
+      message: "Rooms stay in their own host's building.",
+    };
+  const client = bridge.connection(
+    room.workspaceRef.connectionId,
+    room.workspaceRef.generation,
+  );
+  const listed = (await client.call("workspace.list", {})) as
+    | { workspaces?: Workspace[] }
+    | undefined;
+  const order = [...(listed?.workspaces ?? [])]
+    .sort((a, b) => a.number - b.number)
+    .map((workspace) => workspace.workspace_id);
+  // workspace.move inserts before the entry at insert_index, as tab.move does.
+  const insertIndex = deskReorderIndex(
+    order,
+    room.workspaceRef.nativeId,
+    onto.workspaceRef.nativeId,
+  );
+  if (insertIndex === undefined)
+    return {
+      status: "refused",
+      reason: "changed",
+      message: "The building changed. Try again.",
+    };
+  if (insertIndex === null) return { status: "moved" };
+  // A failed call may still have moved it: the caller says so.
+  await client.call("workspace.move", {
+    workspace_id: room.workspaceRef.nativeId,
+    insert_index: insertIndex,
+  });
+  return { status: "moved" };
 }
 
 /**
