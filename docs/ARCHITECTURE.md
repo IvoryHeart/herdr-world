@@ -129,7 +129,16 @@ within four observation slots, releases an unused priority reservation, and retu
 topology or no children. Per-host work is shared across overlapping requests; a late
 result enters the cache only for its original current runtime generation and triggers
 a coalesced refresh when its observed data changes. A current result may be reused for
-15 seconds unless that host receives an explicit topology invalidation. The browser
+15 seconds unless that host receives an explicit invalidation. Consecutive
+`pane_updated` payloads for the same pane that differ only in `revision`,
+`terminal_title`, `terminal_title_stripped` or `scroll` count as activity: they
+advance the observation revision and dirty the cache without rejecting a read
+in flight. The first update for a pane, any other event and every subscription
+ACK retain hard invalidation; other events and ACKs also clear the per-pane
+comparison history. Payload comparison ignores object key order at every depth
+(including Herdr's metadata maps), while preserving values and array order.
+A real change during the same read still rejects it even
+when activity also arrives. The browser
 uses one World WebSocket with a transport epoch independent of runtime generations.
 The hello advertises `world_observation_v1` and a random `service_incarnation`
 shared with snapshot replies. A caller may send `base: { service_incarnation,
