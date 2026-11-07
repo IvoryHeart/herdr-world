@@ -268,7 +268,26 @@ function usage(): WorldUsageSnapshot {
     retention_days: 7,
     truncated: false,
     entities,
-    sources: [],
+    sources: [
+      {
+        connection_id: "studio",
+        connection_generation: 1,
+        harness: "claude",
+        state: "available",
+        checked_at: 0,
+        last_success_at: 0,
+        refreshing: false,
+      },
+      {
+        connection_id: "lab",
+        connection_generation: 1,
+        harness: "claude",
+        state: "available",
+        checked_at: 0,
+        last_success_at: 0,
+        refreshing: false,
+      },
+    ],
     limits: [],
     total: total(entities),
     unattributed: total([]),
@@ -295,13 +314,18 @@ test("a room's and a table's economy is today's usage of its workspace or tab", 
   const desk = office.deskRoster.find(
     ({ desk }) => desk.tabRef.nativeId === "alpha:t0",
   )!.desk;
-  const ready: TownUsageState = { status: "ready", snapshot: usage() };
+  const ready: TownUsageState = {
+    status: "ready",
+    snapshot: usage(),
+    receivedAt: 0,
+  };
 
   expect(
     townPlaceEconomy(ready, { kind: "room", target: alpha.workspaceRef }),
   ).toEqual({
     status: "ready",
     costUsd: 2.75,
+    price: "priced",
     tokens: 11_500,
     models: ["claude-opus-4-1", "claude-sonnet-4-5", "claude-haiku-4-5"],
     partial: false,
@@ -311,11 +335,13 @@ test("a room's and a table's economy is today's usage of its workspace or tab", 
   ).toEqual({
     status: "ready",
     costUsd: 2.5,
+    price: "priced",
     tokens: 10_000,
     models: ["claude-opus-4-1", "claude-sonnet-4-5"],
     partial: false,
   });
-  // The lab's room used nothing today; another generation is another runtime.
+  // The lab's room used nothing today; another generation is another
+  // runtime, which the read has no data for.
   expect(
     townPlaceEconomy(ready, { kind: "room", target: beta.workspaceRef }),
   ).toEqual({ status: "none" });
@@ -324,13 +350,59 @@ test("a room's and a table's economy is today's usage of its workspace or tab", 
       kind: "room",
       target: { ...alpha.workspaceRef, generation: 2 },
     }),
-  ).toEqual({ status: "none" });
+  ).toEqual({ status: "no-data" });
   expect(
     townPlaceEconomy(
       { status: "failed" },
       { kind: "room", target: alpha.workspaceRef },
     ),
   ).toEqual({ status: "unavailable" });
+  // A host whose harness could not be read has no data, which is not zero.
+  const missing = usage();
+  missing.sources = missing.sources.map((source) =>
+    source.connection_id === "lab" ? { ...source, state: "missing" } : source,
+  );
+  expect(
+    townPlaceEconomy(
+      { status: "ready", snapshot: missing, receivedAt: 0 },
+      { kind: "room", target: beta.workspaceRef },
+    ),
+  ).toEqual({ status: "no-data" });
+});
+
+test("a room card says why its cost is missing rather than showing $0", async () => {
+  const { office, summary } = await twoBuildings();
+  const alpha = office.roomRoster.find((r) => r.displayLabel === "alpha")!;
+  const snapshot = usage();
+  // No price table: every entity is unpriced, so every total cost is null.
+  snapshot.entities = snapshot.entities.map((entity) => ({
+    ...entity,
+    estimated_cost_usd: null,
+    price_table_version: null,
+  }));
+  snapshot.rollups = snapshot.rollups.map((rollup) => ({
+    ...rollup,
+    estimated_cost_usd: null,
+    unpriced_records: rollup.records,
+  }));
+  const economy = townPlaceEconomy(
+    { status: "ready", snapshot, receivedAt: 0 },
+    { kind: "room", target: alpha.workspaceRef },
+  );
+  expect(economy).toMatchObject({ costUsd: null, price: "no-table" });
+  const html = renderToStaticMarkup(
+    createElement(TownPlaceSummaryCard, {
+      place: townPlaceSummary(summary, office, {
+        kind: "room",
+        key: alpha.key,
+      }),
+      economy,
+    }),
+  );
+  expect(html).toContain("11.5k tokens");
+  expect(html).toContain("no price table");
+  expect(html).not.toContain("$");
+  expect(html).not.toContain("—");
 });
 
 test("a place card is the Town board's numbers without its agents list", async () => {
@@ -346,6 +418,7 @@ test("a place card is the Town board's numbers without its agents list", async (
       economy: {
         status: "ready",
         costUsd: 2.75,
+        price: "priced",
         tokens: 11_500,
         models: ["claude-opus-4-1", "claude-sonnet-4-5"],
         partial: false,
@@ -392,7 +465,7 @@ test("place cards read today's usage once per refresh interval", async () => {
   const snapshot = usage();
   resolve(snapshot);
   await Promise.resolve();
-  expect(store.get()).toEqual({ status: "ready", snapshot });
+  expect(store.get()).toEqual({ status: "ready", snapshot, receivedAt: 0 });
   now = 29_999;
   store.request();
   expect(calls).toHaveLength(1);
@@ -402,7 +475,7 @@ test("place cards read today's usage once per refresh interval", async () => {
   // A failed refresh keeps the numbers the cards already show.
   resolve(null);
   await Promise.resolve();
-  expect(store.get()).toEqual({ status: "ready", snapshot });
+  expect(store.get()).toEqual({ status: "ready", snapshot, receivedAt: 0 });
 });
 
 test("room and table cards build their summaries only once opened", () => {

@@ -169,8 +169,8 @@ hosts stay usable.
    bars. The choice is shared, so leaving Zen in one view leaves it in all.
    Each host is a building, each workspace a room, each tab a table and each pane a
    seat. Plain terminal panes show a prompt rather than an agent character.
-   The **town center**, the domed hall on the first street beside the
-   buildings (above the first building on a phone), is Town's landmark. Tap it (or its **Town center** plaque, or Tab to the plaque and
+   The **town center**, the domed hall at the top of the town just across the
+   first street from the buildings, is Town's landmark. Tap it (or its **Town center** plaque, or Tab to the plaque and
    press Enter) for a ring of actions around its doors: **New agent** opens the
    launcher (in the room you have open, when it can start one there), **Town
    master** opens your coordinating agent's Chat, **Needs you** opens that tab,
@@ -188,8 +188,8 @@ hosts stay usable.
    breakdown. Hover or focus a plate for the room's card below it: the Town
    board's numbers for that room (working, need you, done, quiet and its
    agents) and its economy today (estimated cost, tokens and models), then
-   Rename and Close. Cost shows when a price table is set; see
-   [harness usage](./usage.md). Hover a table or its nameplate for the
+   Rename and Close. Cost shows when a price table is set; otherwise the card
+   says "no price table". See [harness usage](./usage.md). Hover a table or its nameplate for the
    same card about that table. Zoomed out to the room cards, hover anywhere
    over a room for its numbers under its card. On a touch screen, tap the plate or nameplate;
    the first tap on a table opens its card, and a second tap (or a double tap)
@@ -213,7 +213,13 @@ hosts stay usable.
    the same marks. Counts, Board and Needs you are
    unchanged, and World keeps the filter for every browser. Zoomed in to
    desks the boards are put away: tap the reception lobby to bring its board
-   and sign back. For the
+   and sign back. Each reception board ends with the building's **Expenses
+   today**: that host's tokens and estimated cost and its three costliest
+   rooms; the **City expenses** billboard by the top street, beside the town
+   center, shows the whole World, with **Today** and **7 days** buttons.
+   Without a price table they show tokens and "no price table"; a host whose
+   logs cannot be read says "no data", never 0. On a phone, tap the coin
+   signs to open them. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex and Claude
    subscription window is left (amber and **low** under 15 %). A reading more
@@ -687,7 +693,12 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    If the new window opens on Terminal before Chat can read the agent, a line
    under its header says Chat is not available yet; Chat opens by
    itself when it can, or choose **Stay on Terminal**.
-   The launcher closes when the start is confirmed. After an uncertain
+   The launcher closes when the start is confirmed, and Town shows the new
+   agent arriving: it steps out at the town center (when you used the town
+   center's **New agent**) or at the bus stop nearest its room, walks to its
+   building, goes in and sits at its desk with a short sparkle and its name.
+   Reloading never replays an arrival, and a failed start has none. With
+   reduced motion it is at its desk at once, highlighted briefly. After an uncertain
    start, its start choices stay disabled: open the existing tab, or
    close the launcher before deliberately starting another agent. A definite
    failure lets you retry, log in or edit profiles. Closing it

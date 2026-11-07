@@ -19,8 +19,11 @@ export type TownRoomActions = {
   showCreateSeat(roomKey: string): boolean;
   canCreateSeat(roomKey: string): boolean;
   createSeatReason(roomKey: string): string | null;
-  /** Open this room's launcher: Terminal, a profile or an agent kind. */
-  onNewAgent(roomKey: string): void;
+  /**
+   * Open this room's launcher: Terminal, a profile or an agent kind. `from`
+   * the town center, a started agent arrives there (townArrivals.ts).
+   */
+  onNewAgent(roomKey: string, from?: "center"): void;
   canCreateRoom(roomKey: string | null): boolean;
   createRoomReason(roomKey: string | null): string | null;
   onCreateRoom(roomKey: string | null): void;

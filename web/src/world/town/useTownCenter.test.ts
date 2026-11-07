@@ -41,7 +41,7 @@ function center(
     selectedRoomKey: options.selectedRoomKey ?? null,
     rooms: {
       canCreateSeat: () => options.seat ?? true,
-      onNewAgent: (key) => calls.push(["launch", key]),
+      onNewAgent: (key, from) => calls.push(["launch", key, from]),
       canCreateRoom: () => !options.roomReason,
       createRoomReason: () => options.roomReason ?? null,
       onCreateRoom: (key) => calls.push(["room", key]),
@@ -78,7 +78,7 @@ test("a new agent starts in the open room when it can take one", () => {
   const open = center({ selectedRoomKey: "room-a" });
   expect(open.action("launch").detail).toBe("in api");
   open.action("launch").run();
-  expect(open.calls).toEqual([["launch", "room-a"]]);
+  expect(open.calls).toEqual([["launch", "room-a", "center"]]);
   // A room that cannot take a seat leaves the choice to the launcher.
   expect(
     center({ selectedRoomKey: "room-a", seat: false }).action("launch").detail,

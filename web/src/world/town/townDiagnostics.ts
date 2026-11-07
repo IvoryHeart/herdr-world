@@ -55,6 +55,8 @@ export type TownRendererDiagnostics = {
    * camera glides with them (townTransition.ts).
    */
   transitioning: boolean;
+  /** Building views drawn now; a slow device draws them over several frames. */
+  buildingsDrawn: number;
   actors: number;
   walking: number;
   /** Agents opened by the user whose goal is their own desk. */
@@ -122,6 +124,7 @@ export function diagnostics(): TownRendererDiagnostics {
     zoom: 1,
     flying: false,
     transitioning: false,
+    buildingsDrawn: 0,
     actors: 0,
     walking: 0,
     summoned: [],

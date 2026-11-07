@@ -595,6 +595,7 @@ export async function createTownRenderer(
     stats.zoom = camera.z;
     stats.flying = camera.flying;
     stats.transitioning = transitioning || camera.gliding;
+    stats.buildingsDrawn = topology.buildings.length;
     stats.actors = actors.actors.size;
     stats.walking = [...actors.actors.values()].filter(
       (a) => a.mode === "walk",
@@ -682,6 +683,7 @@ export async function createTownRenderer(
       hosts,
       state.awayKeys ?? new Set(),
       state.heldKeys ?? new Set(),
+      state.arrivingKeys ?? new Set(),
     );
     stats.actorsReconciled += actors.reconciled;
     for (const hostKey of hosts ?? actorWorld.buildings.keys())

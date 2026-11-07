@@ -192,6 +192,26 @@ test("summoning or asking an agent dirties only its host", () => {
     ).toEqual(new Set([agent.hostKey]));
 });
 
+test("an arriving agent dirties only its host", () => {
+  const scene = new TownScene(manualClock().clock, () => {});
+  const semantics = derive(scene, towns(["working"], ["working"], ["working"]));
+  const agent = [...semantics.model.agents.values()][0]!;
+  const none = new Set<string>();
+  const keys = (arriving: ReadonlySet<string>) =>
+    townActorKeys(
+      semantics.model,
+      semantics.layout,
+      none,
+      none,
+      none,
+      none,
+      arriving,
+    );
+  expect(townActorDirty(keys(none), keys(new Set([agent.key])))).toEqual(
+    new Set([agent.hostKey]),
+  );
+});
+
 test("a host that appears or goes away is dirty", () => {
   const before = new Map([["a", "1"]]);
   const after = new Map([["b", "1"]]);

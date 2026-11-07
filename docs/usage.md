@@ -2,9 +2,10 @@
 
 World collects token usage on demand from supported harness session files by
 default. The service owns the numeric records; Town and Board can both read
-`world.usage.get`. This data API is the foundation for the expenses boards in
-issue #213. Existing Town Summary spend controls still use their configured
-metrics provider.
+`world.usage.get`. Town's expenses boards read it: the city billboard (today
+or 7 days), the expenses on each reception board and the Economy line on room and
+table cards; see [Town expenses boards](#town-expenses-boards). Existing Town
+Summary spend controls still use their configured metrics provider.
 
 ## Sources and inventory
 
@@ -176,6 +177,36 @@ reading never says zero or full on missing evidence.
 Town reads `contexts` every 30 seconds while it or an agent window is shown:
 the peek and the window bar show the fill, and an agent at 85% or more looks
 tired at its desk; see FEATURES.md.
+
+## Town expenses boards
+
+Town reads `world.usage.get` for its boards (`web/src/world/town/townExpenses.ts`):
+
+- The city billboard shows `total` for the chosen window, plus `unattributed`
+  (usage tied to no pane). A building's reception board shows that host's `host` rollup
+  and its three costliest `workspace` rollups (by cost when all are priced,
+  otherwise by tokens), plus the host's entities with no workspace as
+  unattributed. Each figure is one rollup level; levels are never added.
+- A reception's expenses use the connection's newest runtime generation in the read
+  and never another connection's numbers.
+- Stale entities stay out of the figures; the board says "stale data left
+  out". A partial source or a truncated read says "partial".
+- A null cost stays null: "no price table" when no counted row has a table
+  version, otherwise "some models unpriced".
+- A host with no available or partial source reads "no data", and the city
+  board counts such hosts. A readable host with no records reads "none
+  recorded". Neither is shown as zero.
+- A failed re-read keeps the last read for at most five minutes, and never
+  past the service's UTC midnight (its `observed_at` day plus the time since
+  the read arrived), since both windows turn there. After that the boards
+  and room cards read "out of date" and show no figures until a read
+  succeeds.
+- Boards re-read about once a minute while Town shows them and when the page
+  regains focus or becomes visible; the shared store sends at most one read
+  per window every 30 seconds.
+
+Tests use the synthetic fixture in `web/src/world/testing/usageFixture.ts`,
+which shapes reads like the service with example hosts, models and rates.
 
 ## Optional local price table
 
