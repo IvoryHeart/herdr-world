@@ -580,6 +580,7 @@ export default function WorldFoundationApp() {
                 onVisualActionExtensionReady={setVisualActionExtension}
                 viewToolbarPortal={viewToolbarPortal}
                 onGoToSpaces={() => setView("spaces")}
+                onGoToTown={() => setView("town")}
                 onPresentedWorldChange={setPresentedStatusWorld}
               />
             </WorldPanelsContext.Provider>

@@ -15,6 +15,7 @@ import {
   type RefObject,
 } from "react";
 import { useLayer } from "../../layerStack";
+import { binDock, dockReserve, onBinDock } from "../bin/binDock";
 import {
   boardControlsLayout,
   type BoardControl,
@@ -44,6 +45,8 @@ const INITIAL_WIDTHS = {
   tidy: 36,
   menu: 36,
 };
+/** The clear space between Board's dock and its controls. */
+const DOCK_GAP = 12;
 const icon = (control: BoardControl) => {
   const Icon = {
     work: GitPullRequest,
@@ -127,8 +130,17 @@ export function BoardControls(props: {
           ];
         }),
       ) as Record<BoardControl, number>;
+      // Board's dock (the hub and bin, centred over the page) keeps its
+      // place: the row only fills the width right of it.
+      const dock = binDock();
       const next = boardControlsLayout({
-        available: space.current.clientWidth,
+        available:
+          space.current.clientWidth -
+          dockReserve(
+            space.current.getBoundingClientRect(),
+            dock?.getBoundingClientRect() ?? null,
+            DOCK_GAP,
+          ),
         widths,
         count: props.count,
         phone:
@@ -158,7 +170,19 @@ export function BoardControls(props: {
     const observer = new ResizeObserver(measure);
     observer.observe(space.current!);
     for (const node of measurements.current.values()) observer.observe(node);
-    return () => observer.disconnect();
+    // The dock grows with the bin's count and bus, and comes and goes.
+    let dock = binDock();
+    if (dock) observer.observe(dock);
+    const stop = onBinDock(() => {
+      if (dock) observer.unobserve(dock);
+      dock = binDock();
+      if (dock) observer.observe(dock);
+      measure();
+    });
+    return () => {
+      stop();
+      observer.disconnect();
+    };
   }, [props.count]);
   const label = (control: BoardControl) =>
     ({

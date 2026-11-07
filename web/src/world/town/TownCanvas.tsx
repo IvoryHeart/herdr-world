@@ -28,6 +28,12 @@ import type {
 import type { OfficeObservability } from "../officeObservability";
 import { TownCamera, type TownLevel } from "./townCamera";
 import { townShapeFor, townShapeKey, type TownShape } from "./townLayout";
+import { useTownCenterRing } from "./useTownCenterRing";
+import {
+  TownCenterMenu,
+  TownCenterSign,
+  type TownCenterAction,
+} from "./TownCenterMenu";
 import { TownScene } from "./scene/townScene";
 import { TownSceneDiff } from "./scene/townSceneDiff";
 import { TownHud, townScreenAnchor, townWorldAnchor } from "./scene/townHud";
@@ -158,7 +164,10 @@ export function TownCanvas({
   deskPins = NO_PINS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
+  centerActions,
 }: {
+  /** The town center's radial menu; without it the center only shows. */
+  centerActions?: readonly TownCenterAction[];
   /** Which terminals know each other (world/relations.ts). */
   relations?: {
     relations: readonly Relation[];
@@ -285,6 +294,12 @@ export function TownCanvas({
       void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
   }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
+  const ring = useTownCenterRing(
+    rendererRef,
+    hostRef,
+    () => latest.current.layout.center,
+    !!centerActions?.length,
+  );
   /** A table whose card a touch tap opened; touch has no hover to open it. */
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   const latest = useRef({
@@ -431,6 +446,7 @@ export function TownCanvas({
       }
     }
     hud.framed();
+    ring.place();
     // Inspected agents walk under a still camera, so their lines follow every
     // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
     if (posed || latest.current.conversationTargets.length > 0)
@@ -640,6 +656,7 @@ export function TownCanvas({
       },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
+      openCenter: ring.openRing,
       move: (command) => {
         const actions = latest.current.roomActions;
         switch (command.kind) {
@@ -775,7 +792,7 @@ export function TownCanvas({
       host.removeEventListener("pointerleave", leave);
       host.removeEventListener("wheel", wheel);
     };
-  }, [view, scene, hud]);
+  }, [view, scene, hud, ring.openRing]);
 
   const keyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!rendererRef.current || event.target !== event.currentTarget) return;
@@ -834,6 +851,12 @@ export function TownCanvas({
         data-level="overview"
         aria-hidden={!ready}
       >
+        <TownCenterSign
+          center={layout.center}
+          open={ring.open}
+          onOpen={centerActions?.length ? ring.openRing : undefined}
+          onFocus={ring.focus}
+        />
         <TownTeamsLayer teams={teams} />
         <TownBusLayer
           bin={townBin.bin}
@@ -933,6 +956,14 @@ export function TownCanvas({
           </button>
         ) : null}
       </div>
+      {ring.open && centerActions?.length ? (
+        <TownCenterMenu
+          actions={centerActions}
+          viewportWidth={hostRef.current?.clientWidth ?? 0}
+          place={ring.place}
+          onClose={ring.close}
+        />
+      ) : null}
     </div>
   );
 }
