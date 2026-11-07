@@ -379,6 +379,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (one binned on Board walks out the first time Town shows it); its seat
     fades into the carpet and crumbles, the whole desk when all its agents
     are binned;
+    those waiting at a stop queue along its pavement in joining order, in
+    two rows when long, with a **+N** board at the end for any more; one put
+    back walks home from the queue and those behind step up;
     there is a stop at every road crossing, and a countdown board over those
     waiting counts down to the bus reaching that stop (**due** a few seconds
     before it pulls in). The bin floats at the bottom of the screen and

@@ -476,7 +476,11 @@ is enough wherever you have scrolled; the town holds still while you rest on
 it. Nothing closes yet: in
 Town the agent walks out of the front door to the nearest bus stop, a London
 stop with a red roundel at a road crossing, whichever you dropped it on (an
-agent you binned on Board walks out too the first time you open Town). Its
+agent you binned on Board walks out too the first time you open Town).
+Everyone waiting at a stop lines up along the pavement, newest at the end; a
+long queue turns back in a second row, and past that a small red **+N** board
+at its end counts the rest. An agent you put back steps out of the queue and
+walks home to its front door, and those behind step up. Its
 seat fades into the carpet and crumbles, so the desk reads as going; when
 every agent at a desk is binned the whole desk fades. A
 small board over the waiting agents counts down to the bus reaching that stop
