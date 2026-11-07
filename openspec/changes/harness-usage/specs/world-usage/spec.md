@@ -104,6 +104,14 @@ The usage read SHALL report, per qualified host, the newest subscription-limit o
 - **WHEN** a Codex rollout on a host records token counts with primary and secondary rate-limit windows
 - **THEN** that host's limits list both windows from its newest such record, attributed to the Codex session log
 
+#### Scenario: Claude reports limit windows through World's status line tap
+- **WHEN** World starts a Claude agent and Claude Code passes rate limits to that agent's status line
+- **THEN** a per-launch status line command records the five-hour and weekly windows on that host and runs the user's own status line command with its output unchanged, without writing the user's Claude settings files, and that host's limits list both windows attributed to the Claude status line
+
+#### Scenario: Claude refuses work at its limit
+- **WHEN** the newest Claude limit record on a host is a usage-limit refusal whose reset is in the future
+- **THEN** that host's Claude limit reports the limit reached until that reset, attributed to the Claude transcript, with no percent, and becomes stale once the reset passes
+
 #### Scenario: Limits age or disappear
 - **WHEN** the newest observation passes a window's reset, grows old, cannot be refreshed, or its logs are removed
 - **THEN** it is reported stale, or missing once a successful read finds none, and Town shows stale or no gauge rather than a level

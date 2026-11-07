@@ -37,6 +37,7 @@ import {
   townFuelGauge,
   townHarnessName,
   townLimits,
+  townReachedText,
   townResetTime,
   townSeenAge,
 } from "./townLimits";
@@ -256,8 +257,10 @@ function HostLimit({ limit, now }: { limit: UsageLimit; now: number }) {
       </span>
       {gauge.windows.map((w) => (
         <small key={w.label} data-low={!gauge.stale && w.low}>
-          {w.label}: {w.used} % used
-          {!gauge.stale && w.low ? " (low)" : ""} ·{" "}
+          {w.reached
+            ? townReachedText(w)
+            : `${w.label}: ${w.used} % used${!gauge.stale && w.low ? " (low)" : ""}`}{" "}
+          ·{" "}
           {w.resetsAt === null
             ? "reset unknown"
             : `resets ${townResetTime(w.resetsAt)}`}

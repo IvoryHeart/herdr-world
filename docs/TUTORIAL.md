@@ -215,10 +215,12 @@ hosts stay usable.
    desks the boards are put away: tap the reception lobby to bring its board
    and sign back. For the
    whole picture, the Town board counts every building's agents, quiet ones
-   included. Its **FUEL** gauges show how much of each Codex subscription
-   window is left (amber and **low** under 15 %); hover or tap one for its reset
-   time and how old the numbers are. Claude reads **not available**, since
-   Claude Code saves no record of how much of its limits is used. Press **Summary** on the board (on a phone, tap the
+   included. Its **FUEL** gauges show how much of each Codex and Claude
+   subscription window is left (amber and **low** under 15 %); hover or tap one
+   for its reset time, how old the numbers are and where they came from. The
+   Claude gauge appears within about a minute of the first answer from a
+   Claude agent you started from World, and reads **reached, resets …** while Claude is refusing work at
+   its limit. Press **Summary** on the board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts and its subscription limits, and spend. When you come back after 30 minutes

@@ -716,6 +716,65 @@ export async function collectHarnessUsage(
     limits: [],
     title_matches: [],
   };
+  // Keep one observation per harness: the newest, whatever its source.
+  const newestLimit = (harness: string, value: LimitObservation) => {
+    const index = result.limits!.findIndex((l) => l.harness === harness);
+    if (index < 0) result.limits!.push({ harness, ...value });
+    else if (value.at > result.limits![index]!.at)
+      result.limits![index] = { harness, ...value };
+  };
+  // The World status line tap's newest Claude reading (claude-tap.ts): a
+  // small regular file of numbers, validated again here. Any file but a
+  // valid one marks Claude partial, so an earlier reading is kept as stale.
+  try {
+    const path = join(home, ".cache", "herdr-world", "claude-status-line.json");
+    const info = await fs.lstat(path);
+    let valid = false;
+    if (info.isFile() && info.size <= 4096) {
+      const raw = JSON.parse(await fs.readFile(path, "utf8"));
+      const at = raw?.at,
+        windows = raw?.windows;
+      if (
+        raw?.version === 1 &&
+        Number.isSafeInteger(at) &&
+        at > 0 &&
+        at <= options.now + 300_000 &&
+        Array.isArray(windows) &&
+        windows.length >= 1 &&
+        windows.length <= 2 &&
+        windows.every(
+          (w: any, i: number) =>
+            (w?.window_minutes === 300 || w?.window_minutes === 10080) &&
+            windows.findIndex(
+              (o: any) => o?.window_minutes === w.window_minutes,
+            ) === i &&
+            typeof w.used_percent === "number" &&
+            Number.isFinite(w.used_percent) &&
+            w.used_percent >= 0 &&
+            w.used_percent <= 100 &&
+            (w.resets_at === null ||
+              (Number.isSafeInteger(w.resets_at) &&
+                w.resets_at > 0 &&
+                w.resets_at < 1e14)),
+        )
+      ) {
+        valid = true;
+        newestLimit("claude", {
+          at,
+          source: "claude-status-line",
+          windows: windows.map((w: any) => ({
+            window_minutes: w.window_minutes,
+            used_percent: w.used_percent,
+            resets_at: w.resets_at,
+          })),
+        });
+      }
+    }
+    if (!valid) fail("claude");
+  } catch (error) {
+    // No reading yet is not a failure; transcripts may still have a refusal.
+    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") fail("claude");
+  }
   for (const [sessionKey, session] of cache.sessions) {
     if (!session.files.size) {
       dropSession(sessionKey);
@@ -723,13 +782,7 @@ export async function collectHarnessUsage(
     }
     const projected = session.reader.finish();
     if (projected.partial) fail(session.harness);
-    if (projected.limits) {
-      const prior = result.limits!.find((l) => l.harness === session.harness);
-      if (!prior)
-        result.limits!.push({ harness: session.harness, ...projected.limits });
-      else if (projected.limits.at > prior.at)
-        Object.assign(prior, projected.limits);
-    }
+    if (projected.limits) newestLimit(session.harness, projected.limits);
     for (const row of projected.rows) {
       if (result.rows.length >= 1024) {
         result.truncated = true;

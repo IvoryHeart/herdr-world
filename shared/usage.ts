@@ -89,6 +89,21 @@ export type UsageLimitWindow = {
   resets_at: number | null;
 };
 /**
+ * A refusal: the harness was turned away because a limit is used up, until
+ * `resets_at`. It says nothing about any other window's level.
+ */
+export type UsageLimitReached = {
+  /** The refused window's length, or null when the harness did not name it. */
+  window_minutes: number | null;
+  /** Milliseconds since the epoch. */
+  resets_at: number;
+};
+/** Where an observation came from on its host. */
+export type UsageLimitSource =
+  | "codex-session-log"
+  | "claude-status-line"
+  | "claude-transcript";
+/**
  * The newest subscription-limit observation for one harness on one host.
  * Only numbers, window lengths and times: never account IDs, plan names,
  * credits, credentials or provider errors.
@@ -103,24 +118,30 @@ export type UsageLimit = {
    * no readable record of its limits, see `reason`.
    */
   state: "available" | "stale" | "missing" | "unsupported";
-  source: "codex-session-log" | null;
+  source: UsageLimitSource | null;
   reason: string | null;
   observed_at: number | null;
+  /** Window levels; empty when the observation is a refusal. */
   windows: UsageLimitWindow[];
+  /** Set when the newest observation is a refusal rather than a level. */
+  reached: UsageLimitReached | null;
 };
 /** An observation older than this is stale even before its window resets. */
 export const USAGE_LIMIT_STALE_MS = 3 * 60 * 60 * 1000;
-export const CLAUDE_LIMITS_REASON =
-  "Claude Code does not save how much of its limits is used";
 
-/** True once an observation is too old to trust, or any window has reset since. */
+/**
+ * True once an observation is too old to trust, or any window (or the
+ * refusal) has reset since.
+ */
 export function usageLimitExpired(
   observedAt: number,
   windows: readonly UsageLimitWindow[],
   now: number,
+  reached: UsageLimitReached | null = null,
 ) {
   return (
     now - observedAt > USAGE_LIMIT_STALE_MS ||
-    windows.some((w) => w.resets_at !== null && w.resets_at <= now)
+    windows.some((w) => w.resets_at !== null && w.resets_at <= now) ||
+    (reached !== null && reached.resets_at <= now)
   );
 }

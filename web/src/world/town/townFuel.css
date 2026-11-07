@@ -91,6 +91,14 @@
   font-weight: 600;
 }
 
+/* A refusal: the limit is used up; words and a reset time, no bar. */
+.town-fuel-reached {
+  grid-column: 2 / -1;
+  color: var(--town-wait, #ffb547);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .town-fuel-gauge > button[data-stale="true"] .town-fuel-bar {
   border-style: dashed;
 }
