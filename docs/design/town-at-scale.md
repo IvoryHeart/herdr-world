@@ -69,15 +69,17 @@ Town is open.
 
 The zoom buttons step through the whole town (ALL), home, the nearest building,
 its room and a desk. On the laptop, the scene opens at the overview level
-(z 0.32), where every room is a status card. A building step stays at that level
+(z 0.38), where every room is a status card. A building step stays at that level
 (z 0.59). The next step goes straight to the desk level (z 2.47), because a room
 of 11–15 desks only fits at a zoom past the desk threshold. Wheel and pinch zoom
 still pass through the room level on the way.
 
 ### Town (laptop, before and after this change)
 
-Before: room names were cut to four letters (`HARB…`, `LANT…`, `QUAR…`), and
-every reception chip read `claude`, `codex` or `pi`.
+Before: each room card's second line was cut before its activity
+(`15 desks · 7 wo…`). In a narrower view, the name was cut too. Before the town
+center moved to the top, the home zoom was z 0.32, and 11 of the 24 names read
+`HARB…`, `LANT…` or `QUAR…`. Every reception chip read `claude`, `codex` or `pi`.
 
 ![Laptop town before](images/town-scale/before-laptop-town.png)
 
@@ -97,7 +99,7 @@ Unreadable or overlapping:
 1. **The Town board covers the first building's reception header**
    (`ATLAS RECEPTION`) and the top of its first chips.
 2. **The bus-stop sign covers the reception's overflow count:** `+12` reads as
-   `2`, and `+19` as `9`.
+   `+1`, and `+19` as `+1`.
 3. **The lobby crowd's bubbles pile up.** When a reception's queue is full,
    the rest crowd the lobby with a `#@!` grumble bubble each. At this scale,
    about a dozen of them overlap above the front door into an unreadable block.
@@ -152,7 +154,7 @@ user study.
 | How many need me? | 0 clicks, about 1 s (Town board: Waiting 34) | same |
 | Which host? | 0 clicks, about 2 s (the reception counts 9, 12 and 13) | same |
 | Which room, for a chip in the strip (18 of 34)? | 1 hover or tap per agent (the chip said only `claude`), about 2 s each | **0 clicks**: the chip names the room, about 0.3 s each |
-| Which rooms have waiting agents? | 0 clicks, but 11 of 24 names were truncated; about 7 s to scan 24 cards | 0 clicks, about 7 s, every name readable |
+| Which rooms have waiting agents, and how busy are they? | 0 clicks, about 7 s to scan 24 cards; the busy count was cut on every card, and names were cut when the cards were narrow | 0 clicks, about 7 s; the name and the busy count are readable |
 | Which desk, for all 34? | 20 rooms have a badge: tap each card, scan about 13 desks for `?`/`!` bubbles, zoom out; about 40 clicks and 100 s | same: this is the largest remaining cost |
 
 The fixes answer "which room" for the 18 waiting agents shown at reception
@@ -172,16 +174,17 @@ each Pixi render call. The scene has 312 desks and 291 actors.
 | GPU | laptop · desk | 16.7 ms | 16.8 ms | 0 / 240 | 2.1 ms |
 | GPU | phone · overview | 16.7 ms | 16.7 ms | 0 / 240 | 0.7 ms |
 | GPU | phone · desk | 16.7 ms | 16.7 ms | 0 / 240 | 1.0 ms |
-| SwiftShader (software) | laptop · overview | 16.7 ms | 16.7–16.8 ms | 0 / 240 | 1.7–1.8 ms |
-| SwiftShader | laptop · desk | 16.7–33.3 ms | 33.4–66.6 ms | 20–58 / 240 | 1.7–3.4 ms |
+| SwiftShader (software) | laptop · overview | 16.7 ms | 16.7–16.8 ms | 0 / 240 | 1.7–4.1 ms |
+| SwiftShader | laptop · desk | 16.7–33.4 ms | 33.4–66.7 ms | 20–119 / 240 | 1.7–3.5 ms |
 | SwiftShader | phone · overview | 16.7 ms | 16.8 ms | 0 / 240 | 0.7–1.1 ms |
 | SwiftShader | phone · desk | 16.7 ms | 16.7–16.8 ms | 0–1 / 240 | 1.4 ms |
 
 Town renders on every other frame (about 120 renders in 240 frames) and stays
 at 60 Hz on a GPU at full scale. With software rendering, only desk zoom on the
 laptop drops frames. That view draws the most characters, labels and bubbles at
-once. The two SwiftShader runs differed because other work was running on the
-machine at the same time. Integrated laptop GPUs and phones were not measured.
+once. The SwiftShader rows give the range over four runs. They differ because
+other work was running on the machine at the same time. The GPU rows come from
+one run, made before the town center moved to the top. Integrated laptop GPUs and phones were not measured.
 
 ## Ranked fixes
 
