@@ -65,82 +65,105 @@ function rim(
   if (!(same & 2)) g.fillRect(T - 2, 4, 1, 1);
 }
 
+/** How many drawings each tile kind has; a tile's hash picks one. */
+const TILE_VARIANTS: Record<number, number> = {
+  [TownLand.forest]: 6,
+  [TownLand.trail]: 4,
+  [TownLand.lane]: 4,
+  [TownLand.water]: 4,
+  [TownLand.bed]: 3,
+  [TownLand.gravel]: 3,
+  [TownLand.lawn]: 2,
+};
+/** Kinds whose drawing has edges where they meet another kind. */
+const EDGED = new Set<number>([TownLand.trail, TownLand.lane, TownLand.water]);
+
 /**
  * A landscape tile of `kind` other than meadow (townPaint.ts draws meadow as
  * the town's grass); `variant` comes from the tile's hash, `same` from its
- * neighbours.
+ * neighbours. The drawing depends only on the cache key (kind, variant bucket
+ * and, for edged kinds, `same`), so the same layout and seed paint the same
+ * pixels whichever tile reaches the cache first.
  */
 export function townLandTile(
   kind: number,
   variant: number,
   same: TownLandEdges,
 ): TownCanvas {
+  const count = TILE_VARIANTS[kind] ?? TILE_VARIANTS[TownLand.lawn]!;
+  const bucket = ((variant % count) + count) % count;
+  const edges = EDGED.has(kind) ? same : 0;
+  return tile(`land:${kind}:${bucket}:${edges}`, (g) =>
+    paintTownLandTile(g, kind, bucket, edges),
+  );
+}
+
+/** Draw one landscape tile from its normalized `bucket` and `same` edges. */
+export function paintTownLandTile(
+  g: CanvasRenderingContext2D,
+  kind: number,
+  bucket: number,
+  same: TownLandEdges,
+) {
   switch (kind) {
     case TownLand.forest:
-      return tile(`forest:${variant % 6}`, (g) => {
-        g.fillStyle = "#4f8a3e";
-        g.fillRect(0, 0, T, T);
-        speckle(g, variant * 31 + 5, 9, ["#457c35", "#5a9748", "#6b7a3a"]);
-        if (variant % 3 === 0) {
-          g.fillStyle = "#7a6a3a";
-          g.fillRect(4 + variant, 9, 2, 1);
-        }
-      });
+      g.fillStyle = "#4f8a3e";
+      g.fillRect(0, 0, T, T);
+      speckle(g, bucket * 31 + 5, 9, ["#457c35", "#5a9748", "#6b7a3a"]);
+      if (bucket % 3 === 0) {
+        g.fillStyle = "#7a6a3a";
+        g.fillRect(4 + bucket, 9, 2, 1);
+      }
+      return;
     case TownLand.trail:
     case TownLand.lane: {
       const lane = kind === TownLand.lane;
-      return tile(`${lane ? "lane" : "trail"}:${variant % 4}:${same}`, (g) => {
-        g.fillStyle = lane ? "#a98d5f" : "#bfa271";
-        g.fillRect(0, 0, T, T);
-        speckle(
-          g,
-          variant * 17 + (lane ? 3 : 9),
-          lane ? 10 : 6,
-          lane ? ["#957a50", "#b89c6c"] : ["#a88c5e", "#cdb385"],
-        );
-        rim(g, same, lane ? "#8a7149" : "#9b8458", "#5c9a48");
-      });
+      g.fillStyle = lane ? "#a98d5f" : "#bfa271";
+      g.fillRect(0, 0, T, T);
+      speckle(
+        g,
+        bucket * 17 + (lane ? 3 : 9),
+        lane ? 10 : 6,
+        lane ? ["#957a50", "#b89c6c"] : ["#a88c5e", "#cdb385"],
+      );
+      rim(g, same, lane ? "#8a7149" : "#9b8458", "#5c9a48");
+      return;
     }
     case TownLand.water:
-      return tile(`water:${variant % 4}:${same}`, (g) => {
-        g.fillStyle = "#4f9fd3";
-        g.fillRect(0, 0, T, T);
-        speckle(g, variant * 13 + 1, 4, ["#6fb9e6", "#8fd0f2"]);
-        if (variant % 4 === 1) {
-          g.fillStyle = "#5aa857";
-          g.fillRect(6, 7, 3, 2);
-          g.fillRect(7, 6, 1, 1);
-        }
-        // The bank: a shadowed edge on top, a pale rim elsewhere.
-        g.fillStyle = "#3f7fb0";
-        if (!(same & 1)) g.fillRect(0, 0, T, 2);
-        g.fillStyle = "#b9b28e";
-        if (!(same & 2)) g.fillRect(T - 1, 0, 1, T);
-        if (!(same & 4)) g.fillRect(0, T - 1, T, 1);
-        if (!(same & 8)) g.fillRect(0, 0, 1, T);
-      });
+      g.fillStyle = "#4f9fd3";
+      g.fillRect(0, 0, T, T);
+      speckle(g, bucket * 13 + 1, 4, ["#6fb9e6", "#8fd0f2"]);
+      if (bucket === 1) {
+        g.fillStyle = "#5aa857";
+        g.fillRect(6, 7, 3, 2);
+        g.fillRect(7, 6, 1, 1);
+      }
+      // The bank: a shadowed edge on top, a pale rim elsewhere.
+      g.fillStyle = "#3f7fb0";
+      if (!(same & 1)) g.fillRect(0, 0, T, 2);
+      g.fillStyle = "#b9b28e";
+      if (!(same & 2)) g.fillRect(T - 1, 0, 1, T);
+      if (!(same & 4)) g.fillRect(0, T - 1, T, 1);
+      if (!(same & 8)) g.fillRect(0, 0, 1, T);
+      return;
     case TownLand.bed:
-      return tile(`bed:${variant % 3}`, (g) => {
-        g.fillStyle = "#7a5638";
-        g.fillRect(0, 0, T, T);
-        g.fillStyle = "#664730";
-        g.fillRect(0, 4, T, 1);
-        g.fillRect(0, 10, T, 1);
-        speckle(g, variant * 7 + 2, 4, ["#8a6444"]);
-      });
+      g.fillStyle = "#7a5638";
+      g.fillRect(0, 0, T, T);
+      g.fillStyle = "#664730";
+      g.fillRect(0, 4, T, 1);
+      g.fillRect(0, 10, T, 1);
+      speckle(g, bucket * 7 + 2, 4, ["#8a6444"]);
+      return;
     case TownLand.gravel:
-      return tile(`gravel:${variant % 3}`, (g) => {
-        g.fillStyle = "#d2c4a2";
-        g.fillRect(0, 0, T, T);
-        speckle(g, variant * 11 + 4, 10, ["#bfb08c", "#e0d5b8"]);
-      });
+      g.fillStyle = "#d2c4a2";
+      g.fillRect(0, 0, T, T);
+      speckle(g, bucket * 11 + 4, 10, ["#bfb08c", "#e0d5b8"]);
+      return;
     default:
       // Lawn: mown stripes, alternating by column.
-      return tile(`lawn:${variant % 2}`, (g) => {
-        g.fillStyle = variant % 2 ? "#64a24f" : "#6cab57";
-        g.fillRect(0, 0, T, T);
-        speckle(g, variant + 21, 3, ["#5c9a48"]);
-      });
+      g.fillStyle = bucket ? "#64a24f" : "#6cab57";
+      g.fillRect(0, 0, T, T);
+      speckle(g, bucket + 21, 3, ["#5c9a48"]);
   }
 }
 
