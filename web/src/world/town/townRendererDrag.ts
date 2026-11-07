@@ -499,5 +499,10 @@ export function createTownDragEffects(ctx: TownDragContext) {
       clearDrag();
       glide.clear();
     },
+    /**
+     * A desk, agent or room is carried or landing, or rooms are being
+     * tidied: the scene changes in place.
+     */
+    active: () => drag !== null || glide.active(),
   };
 }

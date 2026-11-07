@@ -7,6 +7,7 @@ import {
   type TownRoomPress,
 } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
+import { TownBuildingLayers } from "./townBuildingLayers";
 import {
   useCallback,
   useEffect,
@@ -376,6 +377,7 @@ export function TownCanvas({
   };
 
   const levelRef = useRef<TownLevel>("overview");
+  const [layers] = useState(() => new TownBuildingLayers());
   const [signs] = useState(
     () =>
       new TownBuildingSigns(() =>
@@ -432,6 +434,7 @@ export function TownCanvas({
       const renderer = rendererRef.current;
       if (renderer) {
         signs.update((hostKey) => renderer.roofAlpha(hostKey));
+        layers.update((hostKey) => renderer.buildingMotion(hostKey));
         if (level !== "overview")
           for (const pennant of pennants.current) markAway(pennant, renderer);
         busFramed.current?.();
@@ -562,13 +565,17 @@ export function TownCanvas({
     };
   }, [view, diff, capture]);
 
-  useEffect(() => {
+  // Before the browser paints the new layout's DOM: the renderer keeps
+  // drawing the old frame until its next one, so each building's layer
+  // starts where its building is still drawn (townBuildingLayers.ts).
+  useLayoutEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
     renderer.apply(diff.next(model, layout, sceneState()));
     view.follow(layout, viewport());
+    layers.update((hostKey) => renderer.buildingMotion(hostKey));
     scheduleAnchors();
-  }, [view, diff, model, layout]);
+  }, [view, diff, layers, model, layout]);
   // Presses, scrolls and zooms on the town hold back a reflow (see above).
   useEffect(() => {
     const host = hostRef.current;
@@ -893,6 +900,7 @@ export function TownCanvas({
             layout={layout}
             visible={visible}
             signs={signs}
+            layers={layers}
             onHoverEntry={hoverEntry}
             selectedKey={selectedKey}
             blockedSince={blockedSince}

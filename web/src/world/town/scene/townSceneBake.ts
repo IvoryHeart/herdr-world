@@ -2,9 +2,12 @@
  * What the renderer bakes, and what to bake again after a change. Each
  * building's interior (tables in their desks' colours, carpets in their rooms'
  * colours), façade and roof (its host's theme and colour, and whether the
- * host is stale) and its desks' pins are baked into textures and pods. A change re-bakes only the buildings whose own bake
- * inputs changed; a change to the town's size or any building's rectangle
- * rebuilds the whole scene, ground and outdoor items included.
+ * host is stale) and its desks' pins are baked into textures and pods. A
+ * change re-bakes only the buildings whose own bake inputs changed (a
+ * building's key holds its own rectangle and its rooms' and desks' places, so
+ * a building that moves bakes again, even one without rooms); a change to the
+ * town's size or any building's rectangle also paints the ground and outdoor
+ * items again.
  */
 
 import type { TownLayout } from "../townLayout";
@@ -36,7 +39,11 @@ export function townBakeKeys(
       );
       return `${r.key}@${r.x},${r.y},${r.w},${r.h}=${carpet}:${cells.join(",")}`;
     });
-    buildings.set(b.hostKey, `${host}/${rooms.join("|")}`);
+    // Its own rectangle too: a building without rooms still moves.
+    buildings.set(
+      b.hostKey,
+      `${host}@${b.x},${b.y},${b.w},${b.h}/${rooms.join("|")}`,
+    );
   }
   return {
     scene: `${layout.width}x${layout.height}:${layout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}`).join(";")}`,
@@ -44,19 +51,31 @@ export function townBakeKeys(
   };
 }
 
-/** What to bake again: the whole scene, or the buildings whose inputs changed. */
-export type TownBakeDirty = { scene: boolean; buildings: ReadonlySet<string> };
+/**
+ * What to bake again: the ground and outdoor items (`scene`), the buildings
+ * whose inputs changed or that are new, and the buildings that are gone.
+ */
+export type TownBakeDirty = {
+  scene: boolean;
+  buildings: ReadonlySet<string>;
+  removed: ReadonlySet<string>;
+};
 
 export function townBakeDirty(
   previous: TownBakeKeys | null,
   next: TownBakeKeys,
 ): TownBakeDirty {
-  if (!previous || previous.scene !== next.scene)
-    return { scene: true, buildings: new Set() };
   const buildings = new Set<string>();
   for (const [hostKey, key] of next.buildings)
-    if (previous.buildings.get(hostKey) !== key) buildings.add(hostKey);
-  return { scene: false, buildings };
+    if (previous?.buildings.get(hostKey) !== key) buildings.add(hostKey);
+  const removed = new Set<string>();
+  for (const hostKey of previous?.buildings.keys() ?? [])
+    if (!next.buildings.has(hostKey)) removed.add(hostKey);
+  return {
+    scene: !previous || previous.scene !== next.scene,
+    buildings,
+    removed,
+  };
 }
 
 /**
