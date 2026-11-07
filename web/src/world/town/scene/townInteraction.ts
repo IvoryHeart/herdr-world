@@ -81,6 +81,12 @@ export type TownInteractionPorts = {
   /** Whether a mouse over the canvas shows a pointer. */
   cursor(pointer: boolean): void;
   select(key: string): void;
+  /**
+   * A touch tap, with the table it landed on (null elsewhere). Touch has no
+   * hover, so a tap on a table opens its summary card first; true when the
+   * tap did that and nothing else should happen.
+   */
+  tapCard?(deskKey: string | null): boolean;
   activateAgent(key: string): void;
   activateRoom(roomKey: string): void;
   move(command: TownMoveCommand): Promise<TownMoveResult>;
@@ -116,6 +122,8 @@ export class TownInteraction {
     null;
   private cancelEdge: (() => void) | null = null;
   private pinch: null | { distance: number; z: number; world: Point } = null;
+  /** The kind of pointer last pressed: a touch tap has no hover before it. */
+  private pressedWith = "mouse";
 
   constructor(private readonly ports: TownInteractionPorts) {}
 
@@ -179,6 +187,7 @@ export class TownInteraction {
   }) {
     const stage = this.ports.stage();
     if (!stage) return;
+    this.pressedWith = pointer.pointerType;
     const hit = this.hitAt(pointer.at.x, pointer.at.y);
     const drag = townDragFor(hit, this.ports.world().model, stage.level);
     const target: TownGestureTarget = pointer.card
@@ -435,7 +444,13 @@ export class TownInteraction {
   private tap(target: TownGestureTarget) {
     const stage = this.ports.stage();
     const hit = target.hit;
-    if (!stage || !hit) return;
+    if (!stage) return;
+    if (
+      this.pressedWith === "touch" &&
+      this.ports.tapCard?.(hit?.kind === "desk" ? hit.key : null)
+    )
+      return;
+    if (!hit) return;
     const { layout } = this.ports.world();
     if (hit.kind === "building") {
       const building = layout.buildings.find((b) => b.hostKey === hit.key);

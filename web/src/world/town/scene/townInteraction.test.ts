@@ -50,7 +50,13 @@ function testFrames() {
 }
 
 function setup(
-  options: { level?: TownLevel; zoom?: number; teams?: TownTeams } = {},
+  options: {
+    level?: TownLevel;
+    zoom?: number;
+    teams?: TownTeams;
+    /** Tables have cards (TownCanvas: drawn with their nameplates). */
+    cards?: boolean;
+  } = {},
 ) {
   const projection = office({
     alpha: working(3),
@@ -84,6 +90,7 @@ function setup(
   let level: TownLevel = options.level ?? "room";
   let ready = true;
   let hovered: string | null = null;
+  let carded: string | null = null;
   let result: Promise<TownMoveResult> = Promise.resolve("moved");
   /** Agents standing (walking, queued, lounging) where the renderer has them. */
   const standing = new Map<string, Point>();
@@ -118,6 +125,14 @@ function setup(
     hover: (hover) => log.push(["hover", hover?.key ?? null]),
     cursor: (pointer) => log.push(["cursor", pointer]),
     select: (key) => log.push(["select", key]),
+    tapCard: options.cards
+      ? (deskKey) => {
+          log.push(["card", deskKey]);
+          const opens = deskKey !== null && deskKey !== carded;
+          carded = opens ? deskKey : null;
+          return opens;
+        }
+      : undefined,
     activateAgent: (key) => log.push(["activate", key]),
     activateRoom: (key) => log.push(["room", key]),
     move: (command) => {
@@ -407,6 +422,32 @@ test("a double tap opens a desk's agent, or zooms in elsewhere", () => {
   t.lift(t.press(outside), outside);
   t.camera.update(1);
   expect(t.camera.z).toBeGreaterThan(z * 1.5);
+});
+
+test("a touch tap on a table opens its card first; a second tap opens the table", () => {
+  const t = setup({ cards: true });
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  t.lift(t.press(at, "touch"), at);
+  expect(t.log).toContainEqual(["card", cell.deskKey]);
+  expect(t.log.some(([kind]) => kind === "select")).toBe(false);
+  t.time.advance(1000);
+  t.lift(t.press(at, "touch"), at);
+  expect(t.log).toContainEqual(["select", cell.deskKey]);
+  // A touch tap elsewhere closes an open card.
+  t.time.advance(1000);
+  t.lift(t.press(at, "touch"), at);
+  t.log.length = 0;
+  t.time.advance(1000);
+  const outside = { x: 2, y: 2 };
+  t.lift(t.press(outside, "touch"), outside);
+  expect(t.log).toContainEqual(["card", null]);
+  // A mouse has hover: its click opens the table at once.
+  t.log.length = 0;
+  t.time.advance(1000);
+  t.lift(t.press(at), at);
+  expect(t.log).toContainEqual(["select", cell.deskKey]);
+  expect(t.log.some(([kind]) => kind === "card")).toBe(false);
 });
 
 test("a hovering mouse names what is under it, and leaving clears it", () => {

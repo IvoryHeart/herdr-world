@@ -177,8 +177,15 @@ hosts stay usable.
    hover the name for its full text. The colour, active/total agent count and
    blocked badge stay visible. Active means working or waiting on you; plain
    terminals are excluded from the total. Hover the count for the working/waiting
-   breakdown. Hover or focus a plate to reveal Rename and Close below it;
-   on a touch screen, tap the plate first. The dashed **+** seat inside a room
+   breakdown. Hover or focus a plate for the room's card below it: the Town
+   board's numbers for that room (working, need you, done, quiet and its
+   agents) and its economy today (estimated cost, tokens and models), then
+   Rename and Close. Cost shows when a price table is set; see
+   [harness usage](./usage.md). Hover a table or its nameplate for the
+   same card about that table. Zoomed out to the room cards, hover anywhere
+   over a room for its numbers under its card. On a touch screen, tap the plate or nameplate;
+   the first tap on a table opens its card, and a second tap (or a double tap)
+   opens the table as before. The dashed **+** seat inside a room
    opens its launcher with that room selected. Choose **Terminal** for a plain
    tab, a profile, or an agent kind. If the requested room is no longer
    available, choose a current room in the launcher before creating anything.
@@ -187,7 +194,8 @@ hosts stay usable.
    their terminal or mark that completion reviewed, then join idle agents at
    the bar in the building's bottom corner. These locations visualize
    status; they do not move the underlying pane or change its host. For the
-   whole picture, press **Summary** on the Town board (on a phone, tap the
+   whole picture, the Town board counts every building's agents, quiet ones
+   included; press **Summary** on it (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts, and spend. Answer a question from its offered

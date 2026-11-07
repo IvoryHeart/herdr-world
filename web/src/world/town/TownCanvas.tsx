@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -34,7 +35,8 @@ import { TownHudContext, useTownHud } from "./useTownHud";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownInteraction } from "./scene/townInteraction";
 import { townBrowserClock, townBrowserFrames } from "./townBrowserClock";
-import type { TownSummary } from "./townSummary";
+import { townSummary, type TownSummary } from "./townSummary";
+import { townCalls } from "./TownRail";
 import {
   createTownRenderer,
   nextTownTask,
@@ -142,7 +144,7 @@ export function TownCanvas({
   roomActions,
   selectedRoomKey,
   observability,
-  summaryCounts,
+  summary: givenSummary,
   onOpenSummary,
   roomFocus = null,
   calm = false,
@@ -159,10 +161,12 @@ export function TownCanvas({
   };
   observability: OfficeObservability;
   /**
-   * The Town summary's shared counts (townSummary.ts): the board sign shows
-   * the same needs-you and finished counts as the call rail and reception.
+   * The Town summary (townSummary.ts): the board counts the whole town from
+   * it, with the same needs-you and finished items as the call rail, and the
+   * room and table cards show their part of it. Without one, Town summarises
+   * the projection itself.
    */
-  summaryCounts?: TownSummary["counts"];
+  summary?: TownSummary;
   /** Open the Town summary window from the board sign or the phone chip. */
   onOpenSummary?: () => void;
   /** A room to move the camera to (a new `seq` asks again), as from the summary. */
@@ -252,6 +256,18 @@ export function TownCanvas({
     semantics;
   // A desk just pinned keeps the cell it has; save it so it stays there.
   const deskPinned = model.deskPins;
+  const fallbackSummary = useMemo(
+    () =>
+      givenSummary
+        ? null
+        : townSummary(
+            projection,
+            townCalls(projection.roster, new Map(), [], () => undefined),
+            observability,
+          ),
+    [givenSummary, projection, observability],
+  );
+  const summary = givenSummary ?? fallbackSummary!;
   useEffect(() => {
     for (const { pinKey, cell } of scene.pinPlacements(
       deskPinned,
@@ -261,6 +277,8 @@ export function TownCanvas({
       void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
   }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
+  /** A table whose card a touch tap opened; touch has no hover to open it. */
+  const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   const latest = useRef({
     chrome,
     model,
@@ -268,6 +286,7 @@ export function TownCanvas({
     teams,
     selectedKey,
     hover,
+    tappedDesk,
     calm,
     completionSeenKeys,
     summonedKeys,
@@ -290,6 +309,7 @@ export function TownCanvas({
     teams,
     selectedKey,
     hover,
+    tappedDesk,
     completionSeenKeys,
     summonedKeys,
     askingKeys,
@@ -592,6 +612,19 @@ export function TownCanvas({
         host.style.cursor = pointer ? "pointer" : "";
       },
       select: (key) => latest.current.onSelect(key),
+      tapCard: (deskKey) => {
+        const { tappedDesk: open, model: m } = latest.current;
+        const roomKey = deskKey ? m.desks.get(deskKey)?.roomKey : undefined;
+        // Only a table drawn with its nameplate has a card; a second tap
+        // on the same table does what a tap always did.
+        const opens =
+          deskKey !== null &&
+          deskKey !== open &&
+          !!roomKey &&
+          hud.visible.tagRooms.has(roomKey);
+        setTappedDesk(opens ? deskKey : null);
+        return opens;
+      },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
       move: (command) => {
@@ -720,7 +753,7 @@ export function TownCanvas({
       host.removeEventListener("pointerleave", leave);
       host.removeEventListener("wheel", wheel);
     };
-  }, [view, scene]);
+  }, [view, scene, hud]);
 
   const keyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!rendererRef.current || event.target !== event.currentTarget) return;
@@ -797,6 +830,23 @@ export function TownCanvas({
             selectedRoomKey={selectedRoomKey}
             onSelect={onSelect}
             onActivate={onActivateAgent}
+            summary={summary}
+            openDeskKey={
+              // A mouse over a table, or a touch tap on one, opens its card.
+              tappedDesk ??
+              (hover !== null && model.desks.has(hover) ? hover : null)
+            }
+            openRoomKey={
+              // Zoomed out, a mouse anywhere over a room (a table or an
+              // agent in it) opens the room's card.
+              hover === null
+                ? null
+                : model.rooms.has(hover)
+                  ? hover
+                  : (model.desks.get(hover)?.roomKey ??
+                    model.agents.get(hover)?.roomKey ??
+                    null)
+            }
             onActivateRoom={(key) => {
               onActivateRoom(key);
               zoomToRoomKey(key);
@@ -814,9 +864,8 @@ export function TownCanvas({
         </TownHudContext.Provider>
       </div>
       <TownBoard
-        model={model}
+        counts={summary.counts}
         observability={observability}
-        summaryCounts={summaryCounts}
         onOpenSummary={onOpenSummary}
       />
       <div className="town-zoom" role="group" aria-label="Camera">

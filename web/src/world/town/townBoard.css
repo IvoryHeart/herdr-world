@@ -6,7 +6,7 @@
   transform: none;
   display: grid;
   gap: 6px;
-  width: 210px;
+  width: 236px;
   padding: 8px 10px 10px;
   color: #f1efe6;
   background: rgba(30, 22, 14, 0.94);
@@ -27,27 +27,35 @@
   color: #e7c48a;
 }
 
-.town-board dl {
+.town-board-counts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   margin: 0;
 }
 
-.town-board dl div {
+.town-board-counts div {
   padding: 4px 6px;
   background: rgba(0, 0, 0, 0.25);
   border-radius: 6px;
 }
 
-.town-board dt {
+.town-board-counts dt {
   font-size: 10px;
+  white-space: nowrap;
   color: #c9b79a;
 }
 
-.town-board dd {
+.town-board-counts dd {
   margin: 0;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.town-board-population {
+  margin: 0;
+  font-size: 11px;
+  color: #c9b79a;
   font-variant-numeric: tabular-nums;
 }
 

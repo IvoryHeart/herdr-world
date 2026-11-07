@@ -1,12 +1,98 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import type { OfficeRoom } from "../herdrOfficeProjection";
 import type { PlaceColorChoice, TownRoomActions } from "./TownCanvas";
 import type { TownRoomCounts } from "./townModel";
+import type { TownPlaceSummary } from "./townSummary";
+import { TownPlaceSummaryCard } from "./TownBoard";
+import {
+  townPlaceEconomy,
+  townUsageStore,
+  useTownUsage,
+  type TownUsagePlace,
+} from "./townPlaceUsage";
 import "./townRoomPlaque.css";
 
-/** Constant-size text within the room's projected width, with optional actions below. */
+/** A place card's content: its summary is made when the card first opens. */
+export type TownPlaceCardContent = {
+  summary(): TownPlaceSummary;
+  /** The Herdr workspace or tab whose usage the card shows. */
+  usage: TownUsagePlace;
+};
+
+/**
+ * The card a place's name opens on hover, focus or a tap: its part of the
+ * Town summary and its economy today. Nothing is built or read until the card
+ * opens, so a dense town pays only for the names someone points at; each
+ * opening refreshes the usage, at most once per the service's interval.
+ */
+export function usePlaceCard() {
+  const [opened, setOpened] = useState(false);
+  const open = () => {
+    townUsageStore().request();
+    if (!opened) setOpened(true);
+  };
+  return { opened, open };
+}
+
+export function TownPlaceCardSummary({
+  content,
+}: {
+  content: TownPlaceCardContent;
+}) {
+  const usage = useTownUsage();
+  return (
+    <TownPlaceSummaryCard
+      place={content.summary()}
+      economy={townPlaceEconomy(usage, content.usage)}
+    />
+  );
+}
+
+/**
+ * A room zoomed out to its overview card, where its name is too small to
+ * point at: a mouse anywhere over the room on the canvas (`open`), or over
+ * its card, shows the room's summary under the card, as its plaque does
+ * further in. The summary is built when it first shows.
+ */
+export function TownRoomOverviewSummary({
+  card,
+  open: shown,
+  children,
+}: {
+  card: TownPlaceCardContent;
+  /** The mouse is over the room on the canvas. */
+  open: boolean;
+  /** The room's overview card. */
+  children: ReactNode;
+}) {
+  const { opened, open } = usePlaceCard();
+  useEffect(() => {
+    if (shown) open();
+  });
+  return (
+    <div
+      className={`town-room-overview${shown ? " is-open" : ""}`}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") open();
+      }}
+    >
+      {children}
+      <div
+        className="town-place-card town-room-overview-card"
+        aria-hidden="true"
+      >
+        {opened || shown ? <TownPlaceCardSummary content={card} /> : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Constant-size text within the room's projected width. Hover, focus or a tap
+ * opens one card below it: the room's summary, then Rename and Close.
+ */
 export function TownRoomPlaque({
   room,
   label,
@@ -14,6 +100,7 @@ export function TownRoomPlaque({
   counts,
   color,
   actions,
+  card,
 }: {
   room: OfficeRoom;
   label: string;
@@ -21,7 +108,10 @@ export function TownRoomPlaque({
   counts: Pick<TownRoomCounts, "agents" | "working" | "blocked">;
   color: PlaceColorChoice | null;
   actions: TownRoomActions;
+  /** The room's summary for its card; without it the card holds the actions. */
+  card?: TownPlaceCardContent;
 }) {
+  const { opened, open } = usePlaceCard();
   const active = counts.working + counts.blocked;
   const activityLabel = `${active} of ${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} active: ${counts.working} working, ${counts.blocked} waiting on you`;
   return (
@@ -31,6 +121,8 @@ export function TownRoomPlaque({
       role="group"
       aria-label={`${label}: ${activityLabel}`}
       tabIndex={0}
+      onPointerEnter={open}
+      onFocus={open}
       onPointerDown={(event) => {
         if (event.pointerType === "touch")
           event.currentTarget.focus({ preventScroll: true });
@@ -59,31 +151,34 @@ export function TownRoomPlaque({
           <span className="town-room-plaque-badge">!{counts.blocked}</span>
         ) : null}
       </div>
-      <div
-        className="town-room-plaque-actions"
-        role="group"
-        aria-label={`Room actions for ${label}`}
-      >
-        <button
-          className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"
-          type="button"
-          aria-label={`Rename room ${label}`}
-          title={`Rename ${label}`}
-          disabled={!actions.canRenameRoom(room.key)}
-          onClick={() => actions.onRenameRoom(room.key)}
+      <div className="town-place-card town-room-plaque-card">
+        {card && opened ? <TownPlaceCardSummary content={card} /> : null}
+        <div
+          className="town-room-plaque-actions"
+          role="group"
+          aria-label={`Room actions for ${label}`}
         >
-          <Pencil size={14} aria-hidden="true" />
-        </button>
-        <button
-          className="world-room-overlay-action world-room-overlay-action-danger town-plaque-action"
-          type="button"
-          aria-label={`Close room ${label}`}
-          title={`Close ${label}`}
-          disabled={!actions.canCloseRoom(room.key)}
-          onClick={() => actions.onCloseRoom(room.key)}
-        >
-          <Trash2 size={14} aria-hidden="true" />
-        </button>
+          <button
+            className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"
+            type="button"
+            aria-label={`Rename room ${label}`}
+            title={`Rename ${label}`}
+            disabled={!actions.canRenameRoom(room.key)}
+            onClick={() => actions.onRenameRoom(room.key)}
+          >
+            <Pencil size={14} aria-hidden="true" />
+          </button>
+          <button
+            className="world-room-overlay-action world-room-overlay-action-danger town-plaque-action"
+            type="button"
+            aria-label={`Close room ${label}`}
+            title={`Close ${label}`}
+            disabled={!actions.canCloseRoom(room.key)}
+            onClick={() => actions.onCloseRoom(room.key)}
+          >
+            <Trash2 size={14} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );
