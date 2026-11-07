@@ -140,15 +140,17 @@ export function binBusLabel(bin: WorldBin, now: number) {
 
 /**
  * Every other view's words for the bin's clock: there is no bus there, only
- * when what it holds closes. Those that came after the bus set off wait for
- * the next one.
+ * when what it holds closes, which is when the bus that takes it has left the
+ * map (its departure plus its trip). Those that came after the bus set off
+ * wait for the next one.
  */
 export function binCloseLabel(bin: WorldBin, now: number) {
   if (!bin.verified) return "bin unavailable";
   const { elapsed, next } = binBusClock(bin, now);
   const leaving = elapsed !== null && bin.entries.some((entry) => entry.riding);
   if (leaving && bin.bus.stopped) return "paused";
-  return leaving ? "closing soon" : `closes in ${binClockLabel(next)}`;
+  const closes = leaving ? bin.bus.trip_ms - elapsed : next + bin.bus.trip_ms;
+  return `closes in ${binClockLabel(closes)}`;
 }
 
 export type BinAddRequest = BinTarget & {

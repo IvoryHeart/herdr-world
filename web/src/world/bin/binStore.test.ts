@@ -187,16 +187,19 @@ test("the bus clock runs from when the state was read", async () => {
 });
 
 test("only Town's bin speaks of a bus; elsewhere it says when it closes", () => {
+  // What it holds closes once the bus that takes it has left the map:
+  // departure plus the trip.
   const bin = { ...state(), readAt: 0, verified: true };
   expect(binBusLabel(bin, 0)).toBe("bus in 1:00");
-  expect(binCloseLabel(bin, 0)).toBe("closes in 1:00");
+  expect(binCloseLabel(bin, 0)).toBe("closes in 1:20");
   const trip = { ...bin.bus, next_ms: 170_000, elapsed_ms: 5_000 };
   const riding = { ...bin, entries: [entry("a", true)], bus: trip };
   expect(binBusLabel(riding, 0)).toBe("bus on its way");
-  expect(binCloseLabel(riding, 0)).toBe("closing soon");
+  expect(binCloseLabel(riding, 0)).toBe("closes in 0:15");
+  expect(binCloseLabel(riding, 4_000)).toBe("closes in 0:11");
   // Put in after the bus set off, it waits for the next one.
   const waiting = { ...riding, entries: [entry("b")] };
-  expect(binCloseLabel(waiting, 0)).toBe("closes in 2:50");
+  expect(binCloseLabel(waiting, 0)).toBe("closes in 3:10");
   const stopped = { ...riding, bus: { ...trip, stopped: true } };
   expect(binBusLabel(stopped, 0)).toBe("bus stopped");
   expect(binCloseLabel(stopped, 0)).toBe("paused");
