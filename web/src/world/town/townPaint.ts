@@ -5,7 +5,13 @@
  */
 
 import {
-  TOWN_FACADE,
+  TOWN_GROUND_LAND,
+  type TownGroundPlan,
+  townGroundPlan,
+} from "./townGroundPlan";
+import { TOWN_LAND_PERIOD, TownLand } from "./townLandscape";
+import { paintTownLandObjects, townLandTile } from "./townLandscapePaint";
+import {
   TOWN_TILE as T,
   TownGround,
   townDeskSlots,
@@ -78,19 +84,6 @@ export function townHostTheme(
 /** A room's carpet from its chosen colour; none keeps the room's default. */
 export const townChosenCarpet = (chosen: TerminalColor | undefined) =>
   chosen ? townCarpetOf(TERMINAL_COLOR_HEX[chosen]) : undefined;
-
-function ellipse(
-  g: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  rx: number,
-  ry: number,
-) {
-  for (let y = -ry; y <= ry; y += 1) {
-    const w = Math.round(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))));
-    g.fillRect(Math.round(cx - w), Math.round(cy + y), w * 2, 1);
-  }
-}
 
 export type TownRegion = { x: number; y: number; w: number; h: number };
 
@@ -177,10 +170,13 @@ const plazaTile = (odd: number) =>
 
 const tileHash = (tx: number, ty: number) =>
   (Math.imul(tx + 1, 73856093) ^ Math.imul(ty + 1, 19349663)) >>> 0;
+const wrapTile = (t: number) =>
+  ((t % TOWN_LAND_PERIOD) + TOWN_LAND_PERIOD) % TOWN_LAND_PERIOD;
 
 /**
- * Paint one rectangular region (in pixels) of the ground. Each tile seeds its
- * own randomness, so regions paint identically in any order or size.
+ * Paint one rectangular region (in pixels) of the ground, on the town or
+ * beyond it. Each tile seeds its own randomness and the landscape is a pure
+ * function of position, so regions paint identically in any order or size.
  */
 export function paintTownGround(
   layout: TownLayout,
@@ -191,86 +187,53 @@ export function paintTownGround(
     h: layout.height * T,
   },
 ) {
-  const { width, height, ground } = layout;
+  return paintTownGroundPlan(townGroundPlan(layout, region));
+}
+
+/** Paint a ground plan (townGroundPlan.ts); it reads nothing else. */
+export function paintTownGroundPlan(plan: TownGroundPlan) {
+  const { region, tx0, ty0, cols, rows, tiles } = plan;
   const [canvas, g] = townCanvas(Math.max(1, region.w), Math.max(1, region.h));
   g.translate(-region.x, -region.y);
-  const at = (tx: number, ty: number) => ground[ty * width + tx];
-  const tx0 = Math.max(0, Math.floor(region.x / T));
-  const ty0 = Math.max(0, Math.floor(region.y / T));
-  const tx1 = Math.min(width, Math.ceil((region.x + region.w) / T));
-  const ty1 = Math.min(height, Math.ceil((region.y + region.h) / T));
-  for (let ty = ty0; ty < ty1; ty += 1)
-    for (let tx = tx0; tx < tx1; tx += 1) {
+  const at = (tx: number, ty: number) => tiles[(ty - ty0) * cols + tx - tx0]!;
+  for (let ty = ty0 + 1; ty < ty0 + rows - 1; ty += 1)
+    for (let tx = tx0 + 1; tx < tx0 + cols - 1; tx += 1) {
       const type = at(tx, ty);
       const x = tx * T;
       const y = ty * T;
-      const hash = tileHash(tx, ty);
-      const tile =
-        type === TownGround.grass || type === TownGround.building
-          ? grassTile(hash % GRASS_VARIANTS)
-          : type === TownGround.road
+      let hash = tileHash(tx, ty);
+      let tile: TownCanvas;
+      if (type >= TOWN_GROUND_LAND) {
+        // The land's looks repeat with its period, like the land itself.
+        hash = tileHash(wrapTile(tx), wrapTile(ty));
+        const kind = type - TOWN_GROUND_LAND;
+        const same =
+          (at(tx, ty - 1) === type ? 1 : 0) |
+          (at(tx + 1, ty) === type ? 2 : 0) |
+          (at(tx, ty + 1) === type ? 4 : 0) |
+          (at(tx - 1, ty) === type ? 8 : 0);
+        tile =
+          kind === TownLand.meadow
+            ? grassTile(hash % GRASS_VARIANTS)
+            : townLandTile(kind, kind === TownLand.lawn ? tx : hash, same);
+      } else
+        tile =
+          type === TownGround.road
             ? roadTile(hash % 4)
             : type === TownGround.plaza
               ? plazaTile(ty % 2)
               : walkTile();
       g.drawImage(tile, x, y);
-      if (
-        ty > 0 &&
-        type !== TownGround.grass &&
-        type !== TownGround.building &&
-        at(tx, ty - 1) === TownGround.grass
-      ) {
+      if (type < TOWN_GROUND_LAND && at(tx, ty - 1) >= TOWN_GROUND_LAND) {
         g.fillStyle = "rgba(30,50,20,.35)";
         g.fillRect(x, y, T, 2);
       }
     }
-  const inRegion = (x0: number, y0: number, x1: number, y1: number) =>
-    x1 >= region.x &&
-    x0 <= region.x + region.w &&
-    y1 >= region.y &&
-    y0 <= region.y + region.h;
-  for (const roadY of layout.roads) {
-    if (!inRegion(0, roadY * T, width * T, (roadY + 5) * T)) continue;
-    const cy = (roadY + 2) * T + 7;
-    g.fillStyle = "#e8c75a";
-    for (
-      let x = Math.floor(region.x / 16) * 16;
-      x < region.x + region.w;
-      x += 16
-    )
-      g.fillRect(x + 3, cy, 9, 2);
-    g.fillStyle = "#3f424a";
-    g.fillRect(region.x, (roadY + 1) * T, region.w, 1);
-    g.fillRect(region.x, (roadY + 4) * T - 1, region.w, 1);
+  for (const mark of plan.marks) {
+    g.fillStyle = mark.fill;
+    g.fillRect(mark.x, mark.y, mark.w, mark.h);
   }
-  g.fillStyle = "#e8c75a";
-  for (const road of layout.verticalRoads) {
-    if (!inRegion(road.x * T, road.y0 * T, (road.x + 5) * T, road.y1 * T))
-      continue;
-    for (let ty = Math.max(road.y0, ty0); ty < Math.min(road.y1, ty1); ty += 1)
-      g.fillRect((road.x + 2) * T + 7, ty * T + 3, 2, 9);
-  }
-  for (const b of layout.buildings) {
-    if (
-      !inRegion(
-        b.x * T,
-        b.y * T - 4,
-        (b.x + b.w) * T + 10,
-        (b.y + b.h + TOWN_FACADE) * T + 8,
-      )
-    )
-      continue;
-    g.fillStyle = "rgba(0,0,0,.2)";
-    g.fillRect(b.x * T + 10, b.y * T - 4, b.w * T, (b.h + TOWN_FACADE) * T + 8);
-    g.fillStyle = "rgba(60,40,30,.55)";
-    g.fillRect(b.barDoorX * T + 1, (b.y + b.h + TOWN_FACADE) * T, 14, 4);
-  }
-  g.fillStyle = "rgba(10,30,10,.22)";
-  for (const tree of layout.trees) {
-    const x = tree.x * T + 11;
-    const y = tree.y * T + 15;
-    if (inRegion(x - 13, y - 5, x + 13, y + 5)) ellipse(g, x, y, 13, 5);
-  }
+  paintTownLandObjects(g, plan.objects);
   return canvas;
 }
 

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { townLandscape } from "./townLandscape";
 import {
   layoutTown,
   TOWN_DEFAULT_RENDERED_DESKS,
@@ -417,7 +418,6 @@ test("layout is deterministic for the same input", () => {
   const input = town({ a: [3, 9], b: [1, 1, 1, 1] });
   const one = layoutTown(input, "wide").layout;
   const two = layoutTown(input, "wide").layout;
-  expect(one.trees).toEqual(two.trees);
   expect(Buffer.from(one.ground)).toEqual(Buffer.from(two.ground));
 });
 
@@ -767,13 +767,10 @@ test("the town center stands at the top, just across the first street", () => {
             lamp.x >= center.x - 1 &&
             lamp.x <= center.x + center.w,
         ).toBe(false);
-      for (const tree of layout.trees)
-        expect(
-          tree.x >= center.x - 1 &&
-            tree.x <= center.x + center.w &&
-            tree.y >= center.y - 1 &&
-            tree.y <= center.street,
-        ).toBe(false);
+      const land = townLandscape(layout);
+      for (let y = center.y - 1; y <= center.street; y += 1)
+        for (let x = center.x - 1; x <= center.x + center.w; x += 1)
+          expect(land.objectAt(x, y)).toBeNull();
     }
 });
 
