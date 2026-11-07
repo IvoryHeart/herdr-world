@@ -67,11 +67,20 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     items), **Done** (finished) and **Quiet** agents. A line under the counts
     gives every agent in the town and its buildings (and any of unknown
     status). It shows spend when a metrics provider
-    is configured. Its **Summary** button, or on a phone the compact chip under
+    is configured. Under **FUEL**, a gauge per harness with subscription-limit
+    data (today Codex, from its session logs) shows a short bar per window
+    (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
+    says **low**. Hover, focus or tap a gauge for each reset time, how long ago
+    the numbers were seen, and their source. Old numbers read **stale** with no
+    level; with several hosts the board shows the one with the least left.
+    Claude reads **not available**; hover, focus or tap it for the reason. On a
+    phone the compact chip adds the lowest percent left. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
-    with its counts (tap a room to go there), and spend per model ("No cost
+    with its counts (tap a room to go there) and its subscription limits
+    (each window's percent used, reset time, source and age; stale or missing
+    labelled; Claude shows why its limits are not available), and spend per model ("No cost
     data" without a provider). Press **Summary** again to restore its minimized
     window or bring it to the front.
   - Each building has its reception at the top, under the front door, and a
@@ -79,9 +88,29 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
+  - When reception's queue is full, the rest crowd the lobby beside it in the
+    same order, grumbling with a `#@!` bubble; after about 90 seconds a
+    grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
+    the front of the crowd, and the others move up. Under calm motion the
+    crowd stands still, still grumbling or napping. An agent whose state is
+    unknown sits at its desk scratching its head under a purple `??` instead
+    of dozing.
   - Every building has roads on at least three sides: a street above and below
-    each row and a side road to its right. The last lot on the grid is
-    reserved for a town hall: a fenced plot with a sign, not yet in use.
+    each row and a side road to its right.
+  - The **town center** stands at the top of the map, centred over the
+    buildings above the first street: a domed hall with a clock, a columned
+    portico, banners, wings and a paved forecourt. Phones open Town with it at
+    the top and the first building under it; on a short screen the view keeps
+    the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
+    opens a ring of actions around its doors: **New agent** (World's launcher,
+    preselecting the open room when it can start one there), **Town master**
+    (the role holder from **Menu → Sounds**, else the agent named in **Menu →
+    Town master** when nobody holds the role, opened on Chat; a holder not in
+    Town says so; with neither set it opens **Sounds**),
+    **Needs you** with its count, **Summary**, **Profiles** and **New room**
+    (disabled with the reason when no room can be created). Arrow keys, Home
+    and End move around the ring; Escape, a press outside, the centre **✕** or
+    **Back** on a phone closes it.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
@@ -162,7 +191,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     that, and below 360px only the active view, with the others under ⋯.
   - The Town master's chat (**Menu → Town master**, `firstmate` by default,
     matched against the agent's Herdr name, then its label) opens docked on
-    Chat once per visit on wide screens, without moving the pane's focus.
+    Chat once per visit on wide screens, without moving the pane's focus;
+    the town center's **Town master** opens it on demand.
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when
@@ -275,13 +305,36 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     terminal colours, so every device sees it; Herdr is unchanged, and
     Spaces' tab pins (close protection in this browser) are separate. A pin
     follows its tab when the tab moves to another room and goes when it closes.
+  - **Move rooms.** Drag a room anywhere in its building by the **Move**
+    handle in its plaque's card (next to Rename and Close), by its name
+    plaque (or its name on the zoomed-out room card) or by its wall. It moves
+    with all its tables and agents and stays where you drop it, in whole
+    tiles inside the building's walls; rooms in its way move down, and the
+    building grows or shrinks to fit. A green outline shows where it will
+    stand and pale outlines where the others go. Letting go on its own spot,
+    or pressing Escape, returns it. On a phone, drag the Move handle, or touch
+    and hold the name or wall, then drag. The card's **Move before …** and
+    **Move after …** arrows swap the room with its neighbour, for the
+    keyboard. Rooms stay in their own host's building. World saves where the
+    rooms stand with the Board layout (like pinned desks), so a reload and
+    every device show the same arrangement, and puts Herdr's workspace order
+    in reading order (top to bottom, left to right), so Spaces lists the
+    rooms as Town shows them. A building whose rooms were never moved still
+    stacks them in Herdr's order.
   - **Bin and bus.** Dragging an agent (or a desk) onto the bin icon at the
     bottom of Town or Board, or onto a Town bus stop, or **Put in bin** in an
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;
     nothing closes yet. In Town it walks out of its building's front door to
     the London bus stop (red roundel) nearest its room, the same character
-    walking as it does indoors; there is a stop at every road crossing, and a
-    countdown board over those waiting shows the time to the next bus. A red
+    walking as it does indoors, whether it was dropped on the bin or a stop
+    (one binned on Board walks out the first time Town shows it); its seat
+    fades into the carpet and crumbles, the whole desk when all its agents
+    are binned;
+    there is a stop at every road crossing, and a countdown board over those
+    waiting counts down to the bus reaching that stop (**due** a few seconds
+    before it pulls in). The bin floats at the bottom of the screen and
+    lights up during a drag, so a phone needs only a short drag, and the town
+    does not scroll while the drag rests on it. A red
     double-decker comes every four minutes on a
     fixed schedule when someone is waiting: it comes in, slows to each stop
     with riders, waits about ten seconds, speeds up and drives off the map,
@@ -296,7 +349,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Close now**. A pinned desk's or pinned tab's last agent cannot go
     in the bin, and its close never takes a pinned tab's last pane. Closes are qualified by host
     and runtime: a host that restarts keeps its agents, and restarting World
-    drops the bin without closing anything.
+    drops the bin without closing anything. Only Town speaks of the bus:
+    elsewhere the bin reads **Cleaning up** and how many, and its tray says
+    when they close.
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
     reception and Board's host label. When the local connection is failing and
@@ -321,7 +376,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   until its target and safe handoff are verified; no remote update runs.
 - **New agent and agent profiles.** **New agent** starts an agent in a new
   tab of a room you choose, from a profile (one tap) or from any agent kind the
-  host's Herdr supports. It is in the Actions menu of Town and Board, on each
+  host's Herdr supports. It is in the Actions menu of Town and Board, on Board's hub (**+**
+  beside the bin), on each
   Town room's dashed **+** seat (zoom into the room first), beside **+** in
   Spaces' tab bar,
   and in Board's New tab dialog. The room seat preselects its room; the
@@ -433,6 +489,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Board's hub** stands beside the bin at the bottom centre and offers the
+    town center's actions as compact buttons: **+** opens World's launcher
+    (preselecting the selected card's workspace when it can start one there,
+    and the new agent's card appears on Board), the crown opens the **Town
+    master**'s Chat (found as the town center finds it) and **⋯** lists
+    **New agent**, **Town master**, **Needs you**, **Summary** (which takes
+    you to Town with the Town summary open), **Profiles** and **New
+    workspace** (disabled with the reason when no host is ready) in a plain
+    menu. Arrow keys, Home and End move through the menu; Escape, a press
+    outside or **Back** on a phone closes it. Board's controls leave the hub
+    and bin room on their row, folding into Board's **⋯** menu as needed.
+    The bin itself works as before.
   - **Next** cycles waiting agents and shared questions placed on their panes,
     including shell questions, while skipping stale hosts and shells without
     questions. It stays reachable in the Board menu when the controls need more space.

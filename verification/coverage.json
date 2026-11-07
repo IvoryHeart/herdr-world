@@ -457,6 +457,9 @@
       "properties": "Four-slot bound; deadline yields full catalogue; late result requires current lease; requests coalesce; based replies require equal incarnation, owner, generation and projected token",
       "existingTests": [
         "server/src/world/snapshot.test.ts",
+        "server/src/world/snapshot-activity.test.ts",
+        "server/src/utils/herdr-events.test.ts",
+        "server/src/connections/runtime.test.ts",
         "server/src/world/observation-v1.test.ts",
         "server/src/world/snapshot-observation.test.ts",
         "server/src/service/observation-v1.test.ts",
@@ -1980,6 +1983,7 @@
         "server/src/usage/collector.test.ts",
         "server/src/usage/host.test.ts",
         "server/src/usage/service.test.ts",
+        "server/src/usage/limits.test.ts",
         "server/src/rpc/usage.test.ts",
         "server/src/usage/process.test.ts",
         "server/src/usage/reader.test.ts",

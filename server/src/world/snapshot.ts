@@ -125,6 +125,7 @@ type HostWork<Runtime> = {
   lease: RuntimeLease<Runtime>;
   priorities: readonly WorldSnapshotPriority[];
   invalidationVersion: number;
+  activityVersion: number;
   selected: boolean;
   state: "queued" | "running";
   late: boolean;
@@ -326,6 +327,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     Map<string, WorldSnapshot>
   >();
   private readonly invalidationVersions = new Map<string, number>();
+  private readonly activityVersions = new Map<string, number>();
   private readonly workByConnection = new Map<string, HostWork<Runtime>>();
   private readonly queue: HostWork<Runtime>[] = [];
   private readonly lateInvalidations = new Map<string, number>();
@@ -356,13 +358,13 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     this.observation = new WorldObservation(incarnation);
   }
 
-  invalidate(connectionId?: string): number {
+  /** Activity refreshes the cache without rejecting a read; late results only notify. */
+  invalidate(connectionId?: string, kind?: "activity" | "late"): number {
     this.revision += 1;
-    if (connectionId) {
-      this.invalidationVersions.set(
-        connectionId,
-        (this.invalidationVersions.get(connectionId) ?? 0) + 1,
-      );
+    if (connectionId && kind !== "late") {
+      const versions =
+        kind === "activity" ? this.activityVersions : this.invalidationVersions;
+      versions.set(connectionId, (versions.get(connectionId) ?? 0) + 1);
       const cached = this.cache.get(connectionId);
       if (cached) cached.dirty = true;
     }
@@ -401,6 +403,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       if (!managedIds.has(invalidatedId)) {
         this.invalidationVersions.delete(invalidatedId);
       }
+    }
+    for (const activeId of this.activityVersions.keys()) {
+      if (!managedIds.has(activeId)) this.activityVersions.delete(activeId);
     }
     const rotate = (group: typeof statuses, cursor: number) => {
       const offset = group.length ? cursor % group.length : 0;
@@ -561,6 +566,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       lease,
       priorities,
       invalidationVersion: this.invalidationVersions.get(status.id) ?? 0,
+      activityVersion: this.activityVersions.get(status.id) ?? 0,
       selected,
       state: "queued",
       late: false,
@@ -647,7 +653,10 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           priorityKey: priorityKey(work.status.id, work.priorities),
           watchRevision: this.watchlist().revision,
           freshUntil: this.now() + SNAPSHOT_FRESH_MS,
-          dirty: this.wasInvalidatedSinceStart(work),
+          dirty:
+            this.wasInvalidatedSinceStart(work) ||
+            (this.activityVersions.get(work.status.id) ?? 0) !==
+              work.activityVersion,
         });
         if (!this.wasInvalidatedSinceStart(work)) {
           observation.complete(this.onCompleteObservation, work.lease, raw[2]);

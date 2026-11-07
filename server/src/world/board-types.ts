@@ -68,6 +68,11 @@ export type BoardLayoutDocument = {
    * its cell (null until Town first places it), and its agents stay at it.
    */
   desk_pins: Record<string, DeskPin>;
+  /**
+   * Where the user put Town rooms in their building, by the workspace's card
+   * key: tiles from the building's corner. A room without one is stacked.
+   */
+  room_pins: Record<string, RoomSpot>;
   /** Terminal key (shared/interest.ts) to the viewer's muted or focused. */
   interest: Record<string, StoredInterest>;
   /** Viewer intent by immutable stored Group ID, separate from membership. */
@@ -76,6 +81,8 @@ export type BoardLayoutDocument = {
 /** A desk's cell in its Town room: column and row, from the top left. */
 export type DeskCell = { col: number; row: number };
 export type DeskPin = { cell: DeskCell | null };
+/** A room's top-left in its Town building: tiles from the building's corner. */
+export type RoomSpot = { x: number; y: number };
 export type BoardDocument = {
   appearance?: AppearanceRecords;
   version: 1;
@@ -140,6 +147,15 @@ export type BoardOp =
   | { op: "desk.unpin"; key: string }
   /** Record where Town put a pinned desk; only a desk still pinned, unplaced. */
   | { op: "desk.place"; key: string; cell: DeskCell }
+  /**
+   * Where a host's Town rooms stand: replaces every room spot saved for that
+   * connection (keys are its workspaces' card keys).
+   */
+  | {
+      op: "room.place";
+      connection_id: string;
+      spots: Record<string, RoomSpot>;
+    }
   /** Mute or focus an agent's terminal, or return it to watching with null. */
   | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | { op: "group.interest"; id: string; interest: GroupInterest | null }

@@ -28,6 +28,16 @@ with that World service rather than connecting to independently deployed bridges
 - **THEN** World keeps at most one browser refresh in flight, admits its current-generation result,
   and then services one coalesced follow-up refresh
 
+#### Scenario: Terminal repaint activity during aggregate observation
+- **WHEN** consecutive updates for the same pane differ only in `revision`,
+  `terminal_title`, `terminal_title_stripped` or `scroll`
+- **THEN** World advances the observation revision and marks the host cache dirty
+  without rejecting an in-flight snapshot solely for that activity
+- **AND** a pane's first update, any other event and every subscription ACK retain
+  fail-closed invalidation; other events and ACKs clear the per-pane comparison history
+- **AND** a real change during the same read still rejects that read, regardless
+  of the order of activity and real changes
+
 #### Scenario: User disconnects a connection
 - **WHEN** a user disconnects or removes a managed profile
 - **THEN** World stops only its runtime and transport without stopping that Herdr server, session,

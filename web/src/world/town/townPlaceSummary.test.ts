@@ -269,6 +269,7 @@ function usage(): WorldUsageSnapshot {
     truncated: false,
     entities,
     sources: [],
+    limits: [],
     total: total(entities),
     unattributed: total([]),
     rollups: [

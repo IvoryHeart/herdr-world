@@ -16,14 +16,15 @@ import {
 } from "../townCamera";
 import {
   TOWN_FACADE,
-  TOWN_PHONE_BOARD_ROWS,
   TOWN_TILE as T,
   townGeometryKey,
   townReflowShift,
   townShapeKey,
   type TownLayout,
 } from "../townLayout";
+import { townRoomsMoved } from "../townRoomPlace";
 import type { TownTarget } from "../townTargets";
+import { townCenterEmblem } from "../townCenter";
 
 /** A saved camera; `home` marks the home view, framed again when restored. */
 export type TownPose = { x: number; y: number; z: number; home?: boolean };
@@ -101,13 +102,24 @@ export class TownSceneCamera {
     if (layout.formFactor === "narrow") {
       const first = layout.buildings[0];
       // The stacked buildings share one axis; side roads run to its right.
+      // The view opens on the town center at the top, the first building
+      // under it, down to its lounge where idle agents rest. A screen too
+      // short for both keeps the whole building and slides the center up,
+      // never past its plaque and doors.
       const x = first ? (first.x + first.w / 2) * T : (layout.width * T) / 2;
       const focus = camera.focusPoint();
-      const y = first
-        ? (first.y - TOWN_PHONE_BOARD_ROWS) * T -
-          24 +
-          (focus.y - viewport.inset.top) / limits.home
-        : (layout.height * T) / 2;
+      const flag = layout.center.y * T - 40;
+      const plaque = townCenterEmblem(layout.center, T).y - 28;
+      const shown =
+        (viewport.height - viewport.inset.top - viewport.inset.bottom) /
+        limits.home;
+      const top = first
+        ? Math.min(
+            plaque,
+            Math.max(flag, (first.y + first.h + TOWN_FACADE) * T - shown),
+          )
+        : flag;
+      const y = top + (focus.y - viewport.inset.top) / limits.home;
       if (animate) camera.flyTo(x, y, limits.home);
       else camera.jumpTo(x, y, limits.home);
     } else {
@@ -191,7 +203,10 @@ export class TownSceneCamera {
       previous &&
       previous !== layout &&
       !camera.flying &&
-      townGeometryKey(previous) !== townGeometryKey(layout)
+      townGeometryKey(previous) !== townGeometryKey(layout) &&
+      // A moved room lands where the user dropped it, in view: the camera
+      // stays rather than follow a room that made way.
+      !townRoomsMoved(previous, layout)
     ) {
       const focus = camera.focusPoint();
       const at = camera.toWorld(focus.x, focus.y);

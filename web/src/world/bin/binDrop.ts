@@ -24,8 +24,13 @@ export function markBinDrop(target: Element | null) {
   marked = target;
 }
 
-/** Whether a drag at client point (x, y) is over the bin; marks it so. */
+/**
+ * Whether a drag at client point (x, y) is over the bin; marks it so. While
+ * a drag aims (null: it ended), the page carries `data-bin-carry`, so the
+ * bin shows itself as a place to drop.
+ */
 export function aimAtBin(at: { x: number; y: number } | null) {
+  document.documentElement.toggleAttribute("data-bin-carry", at !== null);
   const target = at ? binDropAt(at.x, at.y) : null;
   markBinDrop(target);
   return target !== null;

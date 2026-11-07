@@ -17,17 +17,20 @@ const maps = [
   "desk_pins",
   "interest",
   "group_interest",
+  "room_pins",
 ] as const;
-export const boardTables = [
+/** The families the first Board schema created; later ones add their own. */
+const firstBoardTables = [
   "notes",
   "strings",
   "appearance",
-  ...maps,
+  ...maps.filter((family) => family !== "room_pins"),
   "folded",
   "spawns",
   "groups",
   "group_changes",
 ] as const;
+export const boardTables = [...firstBoardTables, "room_pins"] as const;
 type Family = (typeof boardTables)[number];
 type Row = {
   key: string;
@@ -37,17 +40,16 @@ type Row = {
   record_id: string | null;
   binding_id: string | null;
 };
-export const worldBoardMigration = `
-CREATE TABLE board_meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1),revision INTEGER NOT NULL CHECK(revision>=0),appearance INTEGER NOT NULL,group_interest INTEGER NOT NULL,group_changes INTEGER NOT NULL);
-${boardTables
-  .map(
-    (family) => `CREATE TABLE board_${family}(
+const boardTable = (family: Family) => `CREATE TABLE board_${family}(
  key TEXT PRIMARY KEY NOT NULL,position INTEGER NOT NULL CHECK(position>=0),row_revision INTEGER NOT NULL CHECK(row_revision>=0),
  body TEXT NOT NULL CHECK(json_valid(body)),record_id TEXT REFERENCES world_ids(id),binding_id TEXT REFERENCES world_bindings(id) ON DELETE SET NULL
-);`,
-  )
-  .join("\n")}
+);`;
+export const worldBoardMigration = `
+CREATE TABLE board_meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1),revision INTEGER NOT NULL CHECK(revision>=0),appearance INTEGER NOT NULL,group_interest INTEGER NOT NULL,group_changes INTEGER NOT NULL);
+${firstBoardTables.map(boardTable).join("\n")}
 `;
+/** Town room spots (board-types.ts `room_pins`), added after the first schema. */
+export const worldRoomPinsMigration = boardTable("room_pins");
 export function readBoard(db: Database): BoardDocument | null {
   const meta = db.query("SELECT * FROM board_meta WHERE singleton=1").get() as {
     revision: number;

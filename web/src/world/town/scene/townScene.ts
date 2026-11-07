@@ -32,6 +32,7 @@ import {
   type TownShape,
 } from "../townLayout";
 import type { TownJoinSeats } from "../townJoinSeats";
+import { NO_ROOM_SPOTS, townRoomsMoved } from "../townRoomPlace";
 import {
   keepPlaceColors,
   NO_PLACE_COLORS,
@@ -39,6 +40,8 @@ import {
   townDeskPins,
   townModelFromProjection,
   townPinnedCells,
+  townRoomSpots,
+  type RoomPins,
   townPlaceColors,
   type TownDeskPin,
   type TownModel,
@@ -62,6 +65,8 @@ export type TownSemanticInputs = {
   terminalColors: TerminalColors;
   /** Saved desk pins (useDeskPins); a pinned desk keeps its cell. */
   deskPins: DeskPins;
+  /** Where the user put rooms (useRoomPins); other rooms stack. */
+  roomPins?: RoomPins;
   /** Which terminals know each other (world/relations.ts). */
   relations: {
     relations: readonly Relation[];
@@ -114,6 +119,8 @@ function memo<A extends readonly unknown[], R>(compute: (...args: A) => R) {
   };
 }
 
+const NO_ROOM_PINS: RoomPins = Object.freeze({});
+
 export class TownScene {
   private readonly clock: TownClock;
   private readonly wake: () => void;
@@ -127,6 +134,7 @@ export class TownScene {
   private deskColors: ReadonlyMap<string, TerminalColor> = new Map();
   private placeColors: TownPlaceColors = NO_PLACE_COLORS;
   private pins: ReadonlyMap<string, TownDeskPin> = new Map();
+  private roomSpots = NO_ROOM_SPOTS;
   private readonly blocked = new Map<string, number>();
   private readonly placing = new Set<string>();
 
@@ -230,17 +238,24 @@ export class TownScene {
       held.size ? new Map([...held, ...pins]) : pins,
   );
 
+  // The same saved room spots keep the same map: only a move places again.
+  private readonly spotsOf = memo(
+    (projection: HerdrOfficeProjection, pins: RoomPins) =>
+      (this.roomSpots = townRoomSpots(projection, pins, this.roomSpots)),
+  );
+
   // Placement depends only on topology and pins, not on agent status.
   private readonly place = memo(
     (
       input: TownModel["input"],
       shape: TownShape,
       cells: ReturnType<typeof townPinnedCells>,
+      spots: ReturnType<typeof townRoomSpots>,
     ) => {
       const key = townShapeKey(shape);
       const previous =
         this.memory?.shape === key ? this.memory.memory : new Map();
-      const result = layoutTown(input, shape, previous, cells);
+      const result = layoutTown(input, shape, previous, cells, spots);
       this.memory = { shape: key, memory: result.memory };
       return result.layout;
     },
@@ -285,16 +300,20 @@ export class TownScene {
       model.input,
       shape,
       this.fixedCells(this.pinnedCells(model.deskPins), joinCells),
+      this.spotsOf(projection, inputs.roomPins ?? NO_ROOM_PINS),
     );
     // While the user presses, scrolls or zooms, a reflow that would move rooms
     // or buildings waits until they pause (then the camera follows the room in
     // view). Explicit Fold/Expand applies immediately; its admission and
-    // revision arrive together. A held layout must still name only valid desks.
-    const explicit =
-      this.appliedFoldRevision !== null &&
-      foldRevision !== this.appliedFoldRevision;
-    this.appliedFoldRevision = foldRevision;
+    // revision arrive together. So does a room moved in its building (its
+    // saved spot, or the workspace order): the user put it there. A held
+    // layout must still name only valid desks.
     const held = this.shown;
+    const explicit =
+      (this.appliedFoldRevision !== null &&
+        foldRevision !== this.appliedFoldRevision) ||
+      (held !== null && held !== placed && townRoomsMoved(held, placed));
+    this.appliedFoldRevision = foldRevision;
     const holding =
       !explicit &&
       held !== null &&

@@ -14,6 +14,8 @@ import { createRoot } from "react-dom/client";
 import BoardView, { __boardDraftsTesting } from "./BoardView";
 import { WorldBin } from "./bin/WorldBin";
 import { worldBinStore } from "./bin/useWorldBin";
+import { boardHubActions, BoardHubDock } from "./board/BoardHub";
+import { WORLD_AGENT_LAUNCH_EVENT } from "./agentProfiles";
 import {
   BoardDocumentStore,
   type BoardDocument,
@@ -263,10 +265,12 @@ const binAdds: Record<string, unknown>[] = [];
 /** Every call to the (fake) bin, and whether its bus stands stopped. */
 const binCalls: string[] = [];
 let binStopped = false;
+/** Agents the (fake) bin holds. */
+let binEntries: Record<string, unknown>[] = [];
 const binState = () => ({
   epoch: "test",
   revision: binCalls.length,
-  entries: [],
+  entries: binEntries,
   closing: [],
   outcomes: [],
   bus: {
@@ -804,6 +808,22 @@ async function boardAction(selector: string) {
   }
   return button!;
 }
+
+/** Board's hub, with the town center's actions for the fixture's World. */
+const hubDock = () => (
+  <BoardHubDock
+    actions={boardHubActions({
+      world,
+      selectedId: null,
+      holder: null,
+      name: "",
+      openChat: () => {},
+      onOpenSummary: () => {},
+      onNewWorkspace: () => {},
+      toast: () => {},
+    })}
+  />
+);
 
 /** Board scenarios, each on a fresh board (see fresh()); run in order. */
 const scenarios: [name: string, run: () => Promise<void>][] = [
@@ -2606,9 +2626,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       const binHost = document.createElement("div");
       document.body.appendChild(binHost);
       const binRoot = createRoot(binHost);
-      binRoot.render(<WorldBin always />);
+      // As World shows it on Board: beside the hub.
+      binRoot.render(<WorldBin always dock={hubDock()} />);
       await waitFor(
-        () => Boolean(document.querySelector(".world-bin-chip")),
+        () =>
+          Boolean(document.querySelector(".world-bin-dock .world-bin-chip")),
         "Board shows the bin",
       );
       const chip = document.querySelector(".world-bin-chip")!;
@@ -2655,6 +2677,14 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         !binCalls.includes("world.bin.resume"),
         "an open tray keeps the bus stopped",
       );
+      // Board has no bus: its bin says when it closes what it holds.
+      const binText = `${chip.getAttribute("aria-label")} ${
+        document.querySelector(".world-bin-tray")!.textContent
+      }`;
+      check(
+        !/\bbus\b/i.test(binText) && binText.includes("closes in"),
+        `Board's bin speaks of no bus (${binText})`,
+      );
       document
         .querySelector<HTMLButtonElement>('[aria-label="Close the bin"]')!
         .click();
@@ -2664,6 +2694,157 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       );
       binRoot.unmount();
       binHost.remove();
+      await rest();
+    },
+  ],
+  [
+    "Board's hub stands with the bin, clear of Board's controls",
+    async () => {
+      // An agent waits in the bin: the chip shows its count and the bus.
+      binEntries = [
+        {
+          id: "bin-1",
+          connection_id: "local",
+          connection_generation: 1,
+          workspace_id: "w1",
+          tab_id: "t1",
+          pane_id: "p1",
+          terminal_id: "term-1",
+          label: "tutorial",
+          view: "board",
+        },
+      ];
+      const dockHost = document.createElement("div");
+      document.body.appendChild(dockHost);
+      const dockRoot = createRoot(dockHost);
+      dockRoot.render(<WorldBin always dock={hubDock()} />);
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-dock .board-hub")),
+        "the hub stands in the bin's dock",
+      );
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-chip b")),
+        "the bin shows the agent it holds",
+      );
+      const dock = document.querySelector(".world-bin-dock")!;
+      const rect = (element: Element) => element.getBoundingClientRect();
+      const row = host.querySelector(
+        ".board-controls-space > .board-controls",
+      )!;
+      // The dock grew as the chip took its count. ResizeObserver tells
+      // Board's controls only at a painted frame, which the test clock never
+      // draws: give it a real one before the controls are measured.
+      await new Promise<void>((resolve) =>
+        clock.real.requestAnimationFrame!(() =>
+          clock.real.requestAnimationFrame!(() => resolve()),
+        ),
+      );
+      // Board's controls make room for the dock, then every one takes its
+      // own presses (an 800 px page once put Work under the bin).
+      await waitFor(
+        () =>
+          rect(row).left >= rect(dock).right ||
+          rect(row).bottom <= rect(dock).top ||
+          rect(row).top >= rect(dock).bottom,
+        "Board's controls leave the dock room",
+      );
+      const pressed = [...row.querySelectorAll<HTMLButtonElement>("button")];
+      check(
+        pressed.some((button) => button.textContent?.trim() === "Work") &&
+          pressed.every((button) =>
+            button.contains(
+              document.elementFromPoint(
+                rect(button).left + rect(button).width / 2,
+                rect(button).top + rect(button).height / 2,
+              ),
+            ),
+          ),
+        "Work and each Board control take their own presses",
+      );
+      const apart = (a: DOMRect, b: DOMRect) =>
+        a.right <= b.left ||
+        b.right <= a.left ||
+        a.bottom <= b.top ||
+        b.bottom <= a.top;
+      const hub = rect(dock.querySelector(".board-hub")!);
+      const chip = rect(dock.querySelector(".world-bin-chip")!);
+      check(
+        rect(dock).left >= 0 &&
+          rect(dock).right <= innerWidth &&
+          rect(dock).bottom <= innerHeight,
+        "the dock fits the viewport",
+      );
+      check(
+        hub.right <= chip.left &&
+          Math.abs(hub.top + hub.height / 2 - (chip.top + chip.height / 2)) <
+            1.5,
+        "the hub stands just left of the bin, centred on one row",
+      );
+      check(
+        apart(
+          rect(dock),
+          rect(host.querySelector(".board-controls-space > .board-controls")!),
+        ),
+        "the dock is clear of Board's controls",
+      );
+      const buttons = [
+        ...dock.querySelectorAll<HTMLButtonElement>(".board-hub-button"),
+      ];
+      check(
+        buttons.map((button) => button.dataset.action).join() ===
+          "launch,master,more" &&
+          buttons.every(
+            (button) =>
+              rect(button).height >= (innerWidth <= 720 ? 44 : 32) &&
+              button.contains(
+                document.elementFromPoint(
+                  rect(button).left + rect(button).width / 2,
+                  rect(button).top + rect(button).height / 2,
+                ),
+              ),
+          ),
+        "+, the Town master and ⋯ take presses at their touch size",
+      );
+      const launches: unknown[] = [];
+      const onLaunch = (event: Event) =>
+        launches.push((event as CustomEvent).detail);
+      window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+      buttons[0]!.click();
+      window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+      check(launches.length === 1, "+ opens the agent launcher");
+      buttons[2]!.click();
+      await waitFor(
+        () => Boolean(dock.querySelector('.board-hub-menu [role="menuitem"]')),
+        "⋯ opens the town center's menu",
+      );
+      const menu = rect(dock.querySelector(".board-hub-menu")!);
+      check(
+        menu.left >= 0 &&
+          menu.right <= innerWidth &&
+          menu.top >= 0 &&
+          menu.bottom <= rect(dock).top,
+        "the menu rises above the dock, inside the viewport",
+      );
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await waitFor(
+        () => !dock.querySelector(".board-hub-menu"),
+        "Escape closes the menu",
+      );
+      dock.querySelector<HTMLButtonElement>(".world-bin-chip")!.click();
+      await waitFor(
+        () => Boolean(document.querySelector(".world-bin-tray")),
+        "the bin's tray still opens from its chip",
+      );
+      check(
+        rect(document.querySelector(".world-bin-tray")!).bottom <=
+          rect(dock).top,
+        "the tray clears the dock",
+      );
+      dockRoot.unmount();
+      dockHost.remove();
+      binEntries = [];
       await rest();
     },
   ],

@@ -11,6 +11,7 @@ import {
 } from "../townLayout";
 import { townModelFromProjection } from "../townModel";
 import type { TownMoveResult } from "../townMoves";
+import { townRoomSpotAt, type TownRoomPlacement } from "../townRoomPlace";
 import { NO_TOWN_TEAMS, type TownTeams } from "../townTeams";
 import type { TownFrames } from "./ports";
 import {
@@ -138,6 +139,7 @@ function setup(
       : undefined,
     activateAgent: (key) => log.push(["activate", key]),
     activateRoom: (key) => log.push(["room", key]),
+    openCenter: () => log.push(["center"]),
     move: (command) => {
       moves.push(command);
       return result;
@@ -234,6 +236,37 @@ test("a tap on a room's floor opens the room and zooms to it above desk level", 
   t.time.advance(1000);
   t.lift(t.press(floor), floor);
   expect(t.reasons).not.toContain("room");
+});
+
+test("a tap on the town center opens its menu; a touch hold there pans", () => {
+  const t = setup();
+  const center = t.layout.center;
+  // Look at the center's doors, then tap them.
+  t.camera.jumpTo((center.x + center.w / 2) * T, (center.y + 10) * T, 1);
+  t.draw();
+  const doors = t.screen({
+    x: (center.x + center.w / 2) * T,
+    y: (center.y + center.h - 3) * T,
+  });
+  t.lift(t.press(doors), doors);
+  expect(t.log).toContainEqual(["center"]);
+  expect(t.log.some(([kind]) => kind === "select")).toBe(false);
+  // Hovering it shows a pointer, not an agent's card.
+  t.log.length = 0;
+  t.moveTo(-1, doors);
+  expect(t.log).toContainEqual(["cursor", "pointer"]);
+  expect(t.log).toContainEqual(["hover", null]);
+  // Nothing lifts from it: a touch held there and moved pans the town.
+  t.log.length = 0;
+  t.time.advance(1000);
+  const pointer = t.press(doors, "touch");
+  t.time.advance(TOWN_HOLD_MS * 2);
+  t.moveTo(pointer, offset(doors, 40), "touch");
+  t.lift(pointer, offset(doors, 40));
+  expect(t.log.some(([kind]) => kind === "begin" || kind === "center")).toBe(
+    false,
+  );
+  expect(t.reasons).toContain("pan");
 });
 
 test("a tap on a roofed building zooms to it", () => {
@@ -406,6 +439,28 @@ test("a carry near the edge pans the town each frame until it drops", () => {
   expect(t.frames.pending()).toBe(0);
 });
 
+test("a carry resting on the bin in the edge band holds the town still", () => {
+  // The bin's chip floats at the screen's foot, inside the edge band.
+  const t = setup();
+  t.setBin((at) => at.y > 880);
+  const at = t.deskCentre(t.deskCell(0));
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.moveTo(pointer, { x: 720, y: 890 });
+  expect(last(t.ghost)).toEqual(["aim", "Put in the bin", true, "bin"]);
+  const { x, y } = t.camera;
+  t.reasons.length = 0;
+  t.frames.step();
+  t.frames.step();
+  expect([t.camera.x, t.camera.y]).toEqual([x, y]);
+  expect(t.reasons).toEqual([]);
+  // Off the bin, still in the band, the town scrolls again.
+  t.moveTo(pointer, { x: 720, y: 870 });
+  t.frames.step();
+  expect(t.camera.y).not.toBe(y);
+  t.lift(pointer, { x: 720, y: 870 });
+});
+
 test("a camera that moves under a still carry aims at what is now drawn", () => {
   const t = setup();
   const at = t.deskCentre(t.deskCell(0, 0));
@@ -496,7 +551,7 @@ test("a hovering mouse names what is under it, and leaving clears it", () => {
   const at = t.deskCentre(cell);
   t.interaction.move({ id: 99, at, pointerType: "mouse", client: at });
   expect(t.log).toContainEqual(["hovered", cell.deskKey]);
-  expect(t.log).toContainEqual(["cursor", true]);
+  expect(t.log).toContainEqual(["cursor", "pointer"]);
   expect(t.log).toContainEqual(["hover", cell.deskKey]);
   // The same key again does not set it again.
   t.log.length = 0;
@@ -1068,4 +1123,198 @@ test("a hold through a room card lifts the desk beneath; a tap on the card zooms
   t.time.advance(TOWN_HOLD_MS * 2);
   expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
   t.interaction.up({ id: stray, at, cancel: true });
+});
+
+/** A point on room `index`'s left wall, halfway down, on screen. */
+const roomEdge = (t: ReturnType<typeof setup>, index: number) => {
+  const room = t.rooms[index]!;
+  return t.screen({ x: room.x * T + 3, y: (room.y + room.h / 2) * T });
+};
+
+test("a room dragged by its edge goes where it is dropped, waits, then lands", async () => {
+  const t = setup();
+  const from = t.rooms[0]!;
+  const at = roomEdge(t, 0);
+  // A mouse over the edge shows the grab hand; over a desk, a pointer.
+  t.interaction.move({ id: 99, at, pointerType: "mouse", client: at });
+  expect(last(t.log.filter(([kind]) => kind === "cursor"))).toEqual([
+    "cursor",
+    "grab",
+  ]);
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  expect(t.log.find(([kind]) => kind === "begin")?.slice(0, 3)).toEqual([
+    "begin",
+    "room",
+    from.key,
+  ]);
+  // Back where it was it would go back; anywhere else in its building it
+  // goes, held where it was grabbed.
+  t.moveTo(pointer, at);
+  expect(last(t.ghost)?.[2]).toBe(false);
+  // It lifted where the drag began, and keeps that grip.
+  const grab = t.camera.toWorld(offset(at, 20).x, offset(at, 20).y);
+  const target = t.screen({ x: grab.x + 4 * T, y: grab.y + 6 * T });
+  t.moveTo(pointer, target);
+  expect(last(t.ghost)?.slice(0, 3)).toEqual([
+    "aim",
+    `Move ${t.model.rooms.get(from.key)!.displayLabel} here`,
+    true,
+  ]);
+  t.lift(pointer, target);
+  const spot = townRoomSpotAt(t.layout, from.key, from.x + 4, from.y + 6)!;
+  expect(t.moves).toHaveLength(1);
+  const [command] = t.moves;
+  expect(command).toMatchObject({ kind: "room", roomKey: from.key });
+  const placement = (command as { placement: TownRoomPlacement }).placement;
+  expect(placement.spots.get(from.key)).toEqual(spot);
+  // The renderer showed where every room would stand.
+  expect(last(t.log.filter(([kind]) => kind === "aim"))?.[5]).toBe(placement);
+  expect(t.log).toContainEqual(["end", "park"]);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(t.log).toContainEqual(["finish", "moved"]);
+});
+
+test("a room dropped back on its spot, or never over the bin, goes back", () => {
+  const t = setup();
+  t.setBin(() => true);
+  const at = roomEdge(t, 0);
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 30, 10));
+  // The bin takes desks and agents, never a room.
+  expect(last(t.ghost)?.[3]).not.toBe("bin");
+  t.moveTo(pointer, at);
+  t.lift(pointer, at);
+  expect(t.moves).toEqual([]);
+  expect(t.binned).toEqual([]);
+  expect(t.log).toContainEqual(["end", "cancel"]);
+});
+
+test("a room's name carries the room: dragged, or held by a touch; a tap is the plate's own", () => {
+  const t = setup();
+  const room = t.rooms[1]!;
+  const name = t.screen({
+    x: (room.x + room.w / 2) * T,
+    y: (room.y + 0.5) * T,
+  });
+  const down = (pointerType: string) => {
+    const id = 500 + t.log.length;
+    t.interaction.down({
+      id,
+      at: name,
+      primary: true,
+      pointerType,
+      roomName: room.key,
+    });
+    return id;
+  };
+  // A click on the plate's name neither zooms nor selects.
+  t.lift(down("mouse"), name);
+  expect(t.log.some(([kind]) => kind === "room" || kind === "select")).toBe(
+    false,
+  );
+  t.time.advance(1000);
+  // A touch held still lifts the room.
+  const touch = down("touch");
+  t.time.advance(TOWN_HOLD_MS);
+  expect(t.log).toContainEqual(["held"]);
+  expect(t.log.find(([kind]) => kind === "begin")?.slice(0, 3)).toEqual([
+    "begin",
+    "room",
+    room.key,
+  ]);
+  const target = roomEdge(t, 0);
+  t.moveTo(touch, target, "touch");
+  t.lift(touch, target);
+  expect(t.moves).toHaveLength(1);
+  expect(t.moves[0]).toMatchObject({ kind: "room", roomKey: room.key });
+});
+
+test("a room's Move handle lifts it at once, by touch too; a tap puts it back", () => {
+  const t = setup();
+  const room = t.rooms[1]!;
+  const handle = t.screen({ x: (room.x + 2) * T, y: (room.y - 1) * T });
+  const down = (pointerType: string) => {
+    const id = 800 + t.log.length;
+    t.interaction.down({
+      id,
+      at: handle,
+      primary: true,
+      pointerType,
+      roomName: room.key,
+      handle: true,
+    });
+    return id;
+  };
+  // A touch on the handle needs no hold: the room lifts at once.
+  const touch = down("touch");
+  expect(t.log.find(([kind]) => kind === "begin")?.slice(0, 3)).toEqual([
+    "begin",
+    "room",
+    room.key,
+  ]);
+  // Let go without moving: it goes back, and nothing zooms or opens.
+  t.lift(touch, handle);
+  expect(t.moves).toEqual([]);
+  expect(t.log).toContainEqual(["end", "cancel"]);
+  expect(t.log.some(([kind]) => kind === "room" || kind === "select")).toBe(
+    false,
+  );
+  // Dragged, it goes where it is dropped.
+  t.time.advance(1000);
+  const again = down("touch");
+  const target = offset(handle, 0, 9 * T * 1.2);
+  t.moveTo(again, target, "touch");
+  t.lift(again, target);
+  expect(t.moves).toHaveLength(1);
+  expect(t.moves[0]).toMatchObject({ kind: "room", roomKey: room.key });
+});
+
+test("a room card's name carries the room, and a tap there still zooms it", () => {
+  const t = setup({ level: "overview", zoom: 0.4 });
+  const room = t.rooms[2]!;
+  const at = t.screen({ x: (room.x + room.w / 2) * T, y: (room.y + 1) * T });
+  const tap = 700;
+  t.interaction.down({
+    id: tap,
+    at,
+    primary: true,
+    pointerType: "mouse",
+    card: room.key,
+    roomName: room.key,
+  });
+  t.lift(tap, at);
+  expect(t.log).toContainEqual(["room", room.key]);
+  t.time.advance(1000);
+  t.interaction.down({
+    id: tap + 1,
+    at,
+    primary: true,
+    pointerType: "mouse",
+    card: room.key,
+    roomName: room.key,
+  });
+  t.moveTo(tap + 1, offset(at, 30));
+  expect(t.log.find(([kind]) => kind === "begin")?.slice(0, 3)).toEqual([
+    "begin",
+    "room",
+    room.key,
+  ]);
+});
+
+test("Escape puts a carried room back, and letting go then does nothing", () => {
+  const t = setup();
+  const at = roomEdge(t, 0);
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  const onto = roomEdge(t, 1);
+  t.moveTo(pointer, onto);
+  expect(t.interaction.cancelCarry()).toBe(true);
+  expect(t.log).toContainEqual(["end", "cancel"]);
+  expect(last(t.ghost)).toEqual(["remove"]);
+  t.lift(pointer, onto);
+  expect(t.moves).toEqual([]);
+  // Nothing carried: Escape is left to whatever else uses it.
+  expect(t.interaction.cancelCarry()).toBe(false);
 });

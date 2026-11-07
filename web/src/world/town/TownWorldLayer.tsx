@@ -44,6 +44,17 @@ import type { TownVisible } from "./townVisibleHosts";
 const WALL_RADIUS = 10;
 
 /** Team walls and connectors, under the world layer's cards. */
+/**
+ * Where a room's DOM press landed: its overview card, the name on that card,
+ * the name on its plaque or its plaque's Move handle. A press on a name or
+ * the handle can carry the room.
+ */
+export type TownRoomPress =
+  | "card"
+  | "card-name"
+  | "plaque-name"
+  | "plaque-move";
+
 export const TownTeamsLayer = memo(function TownTeamsLayer({
   teams,
 }: {
@@ -155,10 +166,15 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   onActivate(key: string): void;
   onActivateRoom(key: string): void;
   /**
-   * A press on a room card, passed to the town beneath: a hold over a desk
-   * lifts it, a tap zooms the room. False when the town cannot take it.
+   * A press on a room card or a room's name, passed to the town beneath: a
+   * hold over a desk lifts it, a drag or hold on a name carries the room, a
+   * tap on a card zooms the room. False when the town cannot take it.
    */
-  onRoomCardPress?(event: PointerEvent, roomKey: string): boolean;
+  onRoomCardPress?(
+    event: PointerEvent,
+    roomKey: string,
+    press: TownRoomPress,
+  ): boolean;
   onFocusTarget(target: TownTarget): void;
 }) {
   // A card press the town took ends as the town's tap; only keyboard
@@ -426,8 +442,15 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                         aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
                         onPointerDown={(event) => {
                           cardPressTaken.current =
-                            onRoomCardPress?.(event.nativeEvent, room.key) ??
-                            false;
+                            onRoomCardPress?.(
+                              event.nativeEvent,
+                              room.key,
+                              (event.target as Element).closest?.(
+                                ".town-room-card-name",
+                              )
+                                ? "card-name"
+                                : "card",
+                            ) ?? false;
                         }}
                         onClick={(event) => {
                           const taken =
@@ -577,6 +600,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       { kind: "room", key: room.key },
                       room.workspaceRef,
                     )}
+                    onNamePress={(event, press) =>
+                      onRoomCardPress?.(event, room.key, press) ?? false
+                    }
                   />
                   {roomActions.showCreateSeat(room.key) && seatCell ? (
                     <>

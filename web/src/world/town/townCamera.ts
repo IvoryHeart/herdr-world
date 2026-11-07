@@ -60,7 +60,7 @@ export function townZoomLimits(
   const narrow = layout.formFactor === "narrow";
   const widest = Math.max(1, ...layout.buildings.map((b) => b.w));
   // Wide screens open on the hosts' buildings; lots beyond them (the
-  // reserved town hall) stay just off-screen, and ALL shows them.
+  // town center is centred over them) stay just off-screen; ALL shows them.
   const hosts = townHostsWidth(layout);
   const home = narrow
     ? (usableWidth - 12) / ((widest + 2) * TOWN_TILE)

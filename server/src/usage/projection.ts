@@ -8,10 +8,20 @@ export type NumericUsageRow = {
   first_at: number;
   last_at: number;
 };
+/** A harness's own subscription-limit report: numbers and times only. */
+export type LimitObservation = {
+  at: number;
+  windows: {
+    window_minutes: number;
+    used_percent: number;
+    resets_at: number | null;
+  }[];
+};
 export type SessionUsage = {
   session: string;
   partial: boolean;
   rows: NumericUsageRow[];
+  limits: LimitObservation | null;
 };
 
 /** Self-contained: the exact same function runs on the transcript's SSH host.
@@ -36,6 +46,7 @@ export function createUsageProjection(
     model = "unknown",
     partial = false;
   let previous: UsageTokens | null = null;
+  let limits: LimitObservation | null = null;
   const cumulativeStates = new Map<string, number>();
   const object = (v: any): RecordValue =>
     v && typeof v === "object" && !Array.isArray(v) ? v : {};
@@ -50,6 +61,47 @@ export function createUsageProjection(
     return v as number;
   };
   const time = (v: any) => (typeof v === "number" ? v : Date.parse(v));
+  // Codex reports its account-wide windows with each token count. Keep only
+  // the newest numeric observation; ignore plan, credits and other limit IDs.
+  const rateLimits = (raw: any, at: number) => {
+    const value = object(raw);
+    if (
+      !Number.isFinite(at) ||
+      at > now + 300_000 ||
+      (value.limit_id !== undefined &&
+        value.limit_id !== null &&
+        value.limit_id !== "codex")
+    )
+      return;
+    const windows: LimitObservation["windows"] = [];
+    for (const name of ["primary", "secondary"]) {
+      if (value[name] === null || value[name] === undefined) continue;
+      const w = object(value[name]);
+      const used = w.used_percent,
+        minutes = w.window_minutes,
+        resets = w.resets_at;
+      if (
+        typeof used !== "number" ||
+        !Number.isFinite(used) ||
+        used < 0 ||
+        used > 1000 ||
+        !Number.isSafeInteger(minutes) ||
+        minutes <= 0 ||
+        minutes > 366 * 24 * 60 ||
+        (resets !== undefined &&
+          resets !== null &&
+          (!Number.isSafeInteger(resets) || resets <= 0 || resets > 1e11))
+      )
+        return;
+      windows.push({
+        window_minutes: minutes,
+        used_percent: Math.min(100, used),
+        resets_at: typeof resets === "number" ? resets * 1000 : null,
+      });
+    }
+    if (windows.length && (!limits || at >= limits.at))
+      limits = { at, windows };
+  };
   const remember = (id: any, at: number, name: any, tokens: UsageTokens) => {
     if (
       typeof id !== "string" ||
@@ -87,8 +139,9 @@ export function createUsageProjection(
       if (harness === "codex") {
         if (r.type === "session_meta" && identifier(p.id)) session = hash(p.id);
         if (r.type === "turn_context") model = identifier(p.model) || "unknown";
-        if (r.type !== "event_msg" || p.type !== "token_count" || !p.info)
-          return;
+        if (r.type !== "event_msg" || p.type !== "token_count") return;
+        if (p.rate_limits) rateLimits(p.rate_limits, time(r.timestamp));
+        if (!p.info) return;
         const info = object(p.info),
           u = object(info.total_token_usage);
         if (!Object.keys(u).length) {
@@ -216,6 +269,7 @@ export function createUsageProjection(
           [...events],
           [...cumulativeStates],
           previous,
+          limits,
           model,
           session,
           partial,
@@ -252,7 +306,7 @@ export function createUsageProjection(
         row.first_at = Math.min(row.first_at, e.at);
         row.last_at = Math.max(row.last_at, e.at);
       }
-      return { session, partial, rows: [...rows.values()] };
+      return { session, partial, rows: [...rows.values()], limits };
     },
   };
 }

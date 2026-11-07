@@ -1,0 +1,250 @@
+/* The town center: its name plaque on the frieze and its radial menu.
+   Colours come from the shared `--town-*` tokens (townAsks.css). The plaque
+   is a room plaque's wooden plate; the ring's medallions and hub are Town's
+   control buttons (the zoom group's), its labels Town's dark panels. */
+
+/* The plaque keeps a readable size and shrinks less than the building. */
+.town-world .town-center-sign {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 2.4));
+  transform-origin: 50% 50%;
+  padding: 3px 8px;
+  font:
+    700 12px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--town-plaque-text);
+  background: var(--town-plaque);
+  border: 2px solid var(--town-plaque-edge);
+  border-radius: 5px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: filter 0.12s ease;
+}
+
+.town-world .town-center-sign:hover,
+.town-world .town-center-sign[aria-expanded="true"] {
+  filter: brightness(1.12);
+}
+
+.town-world .town-center-sign:focus-visible {
+  outline: 2px solid var(--town-accent);
+  outline-offset: 2px;
+}
+
+.town-world .town-center-sign:disabled {
+  cursor: default;
+}
+
+/* The menu: a press anywhere outside the ring closes it. */
+.town-center-layer {
+  position: absolute;
+  inset: 0;
+  /* Above the toasts (10); below a carried desk's label (12). */
+  z-index: 11;
+}
+
+.town-center-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  animation: town-center-fade 0.16s ease-out;
+}
+
+/* A zero-size anchor at the ring's middle; items sit around it. */
+.town-center-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+
+.town-center-track {
+  position: absolute;
+  left: calc(var(--ring-radius) * -1 - 44px);
+  top: calc(var(--ring-radius) * -1 - 44px);
+  width: calc(var(--ring-radius) * 2 + 88px);
+  height: calc(var(--ring-radius) * 2 + 88px);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--town-panel) 66%, transparent) 0%,
+    color-mix(in srgb, var(--town-panel) 54%, transparent) 55%,
+    transparent 72%
+  );
+  pointer-events: none;
+  animation: town-center-fade 0.18s ease-out;
+}
+
+.town-center-track::after {
+  content: "";
+  position: absolute;
+  inset: 44px;
+  border: 2px dashed color-mix(in srgb, var(--town-accent) 40%, transparent);
+  border-radius: 50%;
+}
+
+.town-center-action,
+.town-center-hub {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--town-text);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.town-center-action {
+  display: grid;
+  justify-items: center;
+  width: var(--ring-item);
+  height: var(--ring-item);
+  transform: translate(calc(var(--dx) - 50%), calc(var(--dy) - 50%));
+  animation: town-center-open 0.19s ease-out backwards;
+  animation-delay: var(--delay);
+}
+
+/* Medallions and the hub: Town's control button, made round. */
+.town-center-medallion,
+.town-center-hub {
+  color: var(--town-text);
+  background: var(--town-btn);
+  border: 2px solid var(--town-edge);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.07),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 0.12s ease,
+    filter 0.15s ease;
+}
+
+.town-center-medallion {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--ring-item);
+  height: var(--ring-item);
+}
+
+/* The first action wears Town's accent on its edge and icon. */
+.town-center-action[data-primary] .town-center-medallion {
+  color: var(--town-accent);
+  border-color: var(--town-accent);
+}
+
+/* A count, as on a room plaque. */
+.town-center-medallion b {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 20px;
+  padding: 1px 7px;
+  font:
+    700 11px / 1.3 "Silkscreen",
+    ui-monospace,
+    monospace;
+  color: var(--town-ink);
+  background: var(--town-wait);
+  border: 2px solid var(--town-edge);
+  border-radius: 999px;
+}
+
+.town-center-label {
+  display: grid;
+  justify-items: center;
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--town-text);
+  background: var(--town-panel);
+  border: 2px solid var(--town-edge);
+  border-radius: 999px;
+}
+
+.town-center-label small {
+  max-width: 120px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  color: var(--town-muted);
+}
+
+.town-center-action:hover:not([aria-disabled="true"]) .town-center-medallion {
+  transform: scale(1.08);
+  filter: brightness(1.12);
+}
+
+.town-center-action:focus-visible {
+  outline: none;
+}
+
+.town-center-action:focus-visible .town-center-medallion,
+.town-center-hub:focus-visible {
+  outline: 2px solid var(--town-accent);
+  outline-offset: 2px;
+}
+
+.town-center-action[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.town-center-action[aria-disabled="true"] .town-center-medallion {
+  opacity: 0.45;
+}
+
+/* The hub closes the ring. */
+.town-center-hub {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+  animation: town-center-fade 0.16s ease-out;
+}
+
+.town-center-hub:hover {
+  filter: brightness(1.12);
+}
+
+@keyframes town-center-open {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+}
+
+@keyframes town-center-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-center-backdrop,
+  .town-center-track,
+  .town-center-action,
+  .town-center-hub {
+    animation: none;
+  }
+
+  .town-world .town-center-sign,
+  .town-center-medallion,
+  .town-center-hub {
+    transition: none;
+  }
+}

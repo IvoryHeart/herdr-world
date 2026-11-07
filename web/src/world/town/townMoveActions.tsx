@@ -1,5 +1,5 @@
 /**
- * Town's desk and agent moves: dropping or choosing a room or desk, the
+ * Town's desk, agent and room moves: dropping or choosing a room or desk, the
  * confirmation before a move closes its room, one move at a time, and the
  * move and group menus (townMoveMenu.ts, townTeamActions.ts).
  */
@@ -16,15 +16,19 @@ import type {
 } from "../herdrOfficeProjection";
 import type { Relation } from "../../../../shared/relations";
 import { terminalColorKey, type TerminalColor } from "../terminalColor";
+import { officeRoomActionCapabilities } from "../officeRoomActions";
 import type { WorldObject } from "../worldObject";
 import type { DeskPins } from "../useDeskPins";
 import { TownChooser } from "./TownChooser";
-import { townDeskColorTarget } from "./townModel";
+import { townDeskColorTarget, townRoomColorKey } from "./townModel";
+import { saveRoomSpots } from "./townRoomPins";
+import type { TownRoomPlacement } from "./townRoomPlace";
 import { townMoveMenu, type TownMoveFlow } from "./townMoveMenu";
 import {
   requestAgentMove,
   requestDeskMove,
   requestDeskReorder,
+  requestRoomOrder,
   townMoveNotice,
   townMoveResult,
   type TownMoveOutcome,
@@ -236,6 +240,78 @@ export function townMoveActions({
       setMovingKey(null);
     }
   };
+  /** Whether a room's host can change its rooms now, as renaming needs. */
+  const canMoveRoom = (roomKey: string) => {
+    const room = roomForKey(roomKey);
+    return Boolean(room && officeRoomActionCapabilities(world, room).rename);
+  };
+  /**
+   * Save where a building's rooms stand (World keeps the spots, so a reload
+   * and every device show them), then put Herdr's workspace order in their
+   * reading order, so Spaces matches.
+   */
+  const runRoomPlace = async (
+    roomKey: string,
+    placement: TownRoomPlacement,
+  ): Promise<TownMoveResult> => {
+    const room = roomForKey(roomKey);
+    if (!room || movingKey) return "returned";
+    if (!canMoveRoom(roomKey)) {
+      toast(
+        "error",
+        `${room.displayLabel} not moved: this host cannot change rooms now.`,
+      );
+      return "returned";
+    }
+    const rooms = placement.order.map(roomForKey);
+    if (rooms.some((other) => !other)) {
+      toast("error", `${room.displayLabel} not moved: the building changed.`);
+      return "returned";
+    }
+    const spots = Object.fromEntries(
+      [...placement.spots].map(([key, spot]) => [
+        townRoomColorKey(roomForKey(key)!),
+        spot,
+      ]),
+    );
+    setMovingKey(room.key);
+    try {
+      const conflict = await saveRoomSpots(
+        room.workspaceRef.connectionId,
+        spots,
+      );
+      if (conflict) {
+        toast("error", `${room.displayLabel} not moved: ${conflict}`);
+        return "returned";
+      }
+      const outcome = await requestRoomOrder(rooms as OfficeRoom[]).catch(
+        (cause: unknown) => ({
+          status: "refused" as const,
+          reason: "failed",
+          message: String(cause),
+        }),
+      );
+      if (DEVTOOLS)
+        trace.record("move", {
+          label: room.displayLabel,
+          status: outcome.status,
+        });
+      if (outcome.status !== "moved")
+        toast(
+          "error",
+          `${room.displayLabel} moved, but Spaces may show the old order: ${outcome.message}`,
+        );
+      return "moved";
+    } catch (cause) {
+      toast(
+        "error",
+        `${room.displayLabel} may not have moved: ${String(cause)}`,
+      );
+      return "uncertain";
+    } finally {
+      setMovingKey(null);
+    }
+  };
   /** The choices for each step of a move (townMoveMenu.ts). */
   const moveChooser = (flow: NonNullable<typeof moveFlow>) =>
     townMoveMenu(flow, {
@@ -277,6 +353,8 @@ export function townMoveActions({
     runDeskMove,
     runDeskReorder,
     runAgentMove,
+    /** Town's room move actions (TownRoomActions). */
+    roomMoves: { onPlaceRooms: runRoomPlace, canMoveRoom },
     teams,
     dialogs,
   };
