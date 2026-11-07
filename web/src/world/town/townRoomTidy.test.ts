@@ -296,16 +296,32 @@ test("Tidy rooms on a tidy building saves nothing and says so", () => {
   const { actions } = roomMoves(live, calls);
   actions.onTidyRooms!("a");
   expect(calls).toEqual([["tidied", "Alpha", null]]);
-  // A building with one room has nothing to tidy.
-  const single = layoutTown(town([3]), TOWN_SHAPES.wide).layout;
-  const { actions: alone } = roomMoves(
-    {
-      ...single,
-      buildings: single.buildings.filter((b) => b.hostKey === "a"),
-    },
-    calls,
+});
+
+test("Tidy rooms compacts a lone room left far down", async () => {
+  // The other rooms closed after this one moved: it keeps its saved spot,
+  // and a drag needs another room, but Tidy rooms still brings it home.
+  const lone = scattered(town([6]), TOWN_SHAPES.wide);
+  const calls: unknown[][] = [];
+  const { actions } = roomMoves(lone.layout, calls);
+  expect(actions.canMoveRoom!("a/room-0")).toBe(false);
+  expect(actions.canTidyRooms!("a")).toBe(true);
+  actions.onTidyRooms!("a");
+  await Bun.sleep(0);
+  expect(calls.map((call) => call[0])).toEqual([
+    "begin",
+    "place",
+    "finish",
+    "tidied",
+  ]);
+  expect((calls[1]![2] as TownRoomPlacement).spots).toEqual(
+    townRoomTidy(lone.layout, "a")!.spots,
   );
-  expect(alone.canTidyRooms!("a")).toBe(false);
+  // Once tidy, a lone room's building says so and saves nothing.
+  const tidy = layoutTown(town([6]), TOWN_SHAPES.wide).layout;
+  calls.length = 0;
+  roomMoves(tidy, calls).actions.onTidyRooms!("a");
+  expect(calls).toEqual([["tidied", "Alpha", null]]);
 });
 
 test("a glide eases each room along in turn and lands it", () => {

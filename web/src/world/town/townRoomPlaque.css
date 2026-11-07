@@ -249,7 +249,8 @@
   visibility: visible;
 }
 
-/* A building's Tidy rooms, on its reception board beside its colour. */
+/* A building's Tidy rooms: on its sign, and on its reception board beside
+   its colour. */
 .town-tidy-rooms {
   position: static;
   width: 22px;
@@ -261,4 +262,29 @@
 .town-tidy-rooms:hover,
 .town-tidy-rooms:focus-visible {
   color: #ffd166;
+}
+
+/* On the sign, which takes no taps itself, the action does. */
+.town-building-sign .town-tidy-rooms-named {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: auto;
+  min-height: 28px;
+  padding: 3px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff7e0;
+  background: rgba(14, 17, 24, 0.9);
+  border: 2px solid #ffd166;
+  border-radius: 6px;
+  pointer-events: auto;
+}
+
+@media (max-width: 640px) {
+  .town-building-sign .town-tidy-rooms-named {
+    min-height: 40px;
+  }
 }

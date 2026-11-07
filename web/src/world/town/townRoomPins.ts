@@ -74,7 +74,8 @@ export type TownRoomMovesLatest = {
  * The room actions the plaques use, with room moves filled in from the town
  * shown: a room can move when its host can change rooms and it has another
  * room in its building, and Move before or after swaps it with its
- * neighbour in reading order. Tidy rooms lays a building's rooms out afresh
+ * neighbour in reading order. Tidy rooms (any building whose host can change
+ * its rooms, even with one room) lays a building's rooms out afresh
  * and glides them there (`renderer`); its Undo puts them back.
  */
 export function useTownRoomMoves(
@@ -104,10 +105,19 @@ export function townRoomMoves(
   if (!onPlaceRooms) return roomActions;
   const movable = (roomKey: string) =>
     (canMoveRoom?.(roomKey) ?? true) && townRoomDrag(roomKey, model) !== null;
+  // Tidy rooms needs only a room its host can change: unlike a drag, a lone
+  // room left far from its spot still has a building to compact.
   const tidyRoom = (hostKey: string) =>
     layout.buildings
       .find((b) => b.hostKey === hostKey)
-      ?.rooms.find((room) => movable(room.key))?.key;
+      ?.rooms.find((placed) => {
+        const room = model.rooms.get(placed.key);
+        return (
+          room?.canOpenInSpaces &&
+          !room.stale &&
+          (canMoveRoom?.(placed.key) ?? true)
+        );
+      })?.key;
   /** Save a building's rooms where they glide to. */
   const glide = async (
     hostKey: string,

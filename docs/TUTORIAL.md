@@ -405,10 +405,12 @@ hosts stay usable.
    building. World saves the arrangement, so it stays after a reload and
    every device shows it, and Herdr's workspace order follows it (top to
    bottom, left to right), so Spaces lists the rooms in the same order.
-   To put a building back in order, choose the sparkles button (**Tidy
-   rooms**) on its reception board, next to its colour: the rooms glide into
-   neat columns in Herdr's order, without gaps or overlaps, and the note at
-   the top offers **Undo** for a few seconds. Tidying again changes nothing.
+   To put a building back in order, choose **Tidy rooms** (sparkles) on the
+   building's sign when you look over the town, or the sparkles button on
+   its reception board, next to its colour, when you are inside: the rooms
+   glide into neat columns in Herdr's order, without gaps or overlaps, and
+   the note at the top offers **Undo** for a few seconds. Tidying again
+   changes nothing.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room

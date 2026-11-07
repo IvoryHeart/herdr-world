@@ -1,6 +1,6 @@
 import { AnswerDeliverySign } from "./AnswerDeliverySign";
 import { Fragment, memo, useMemo, useRef } from "react";
-import { ChevronsLeft, ChevronsRight, Plus, Sparkles } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import { TOWN_DESK_EXPANSION_STEP } from "../herdrOfficeProjection";
@@ -26,6 +26,7 @@ import {
 } from "./townSummary";
 import { TownFoldIndicators } from "./TownFoldIndicators";
 import { TownTargets } from "./TownAccessibleTargets";
+import { TownTidyRooms } from "./TownTidyRooms";
 import type { TownDeskBadge } from "./townBadges";
 import {
   townFoldedActivityLabel,
@@ -274,6 +275,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               ) : (
                 <span>{`${counts.rooms} rooms · ${counts.desks} desks · ${counts.working} working`}</span>
               )}
+              <TownTidyRooms
+                hostKey={building.hostKey}
+                hostLabel={host?.displayLabel}
+                roomActions={roomActions}
+                named
+              />
               <div className="town-reception-tags">
                 {queue.length ? (
                   <em aria-label={`${queue.length} need you`}>
@@ -316,18 +323,11 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                   {(host?.displayLabel ?? "").toUpperCase()} RECEPTION
                 </span>
                 {queue.length ? <b>{queue.length}</b> : null}
-                {roomActions.onTidyRooms &&
-                roomActions.canTidyRooms?.(building.hostKey) ? (
-                  <button
-                    type="button"
-                    className="world-room-overlay-action town-tidy-rooms"
-                    aria-label={`Tidy rooms in ${host?.displayLabel ?? "this building"}`}
-                    title="Tidy rooms"
-                    onClick={() => roomActions.onTidyRooms?.(building.hostKey)}
-                  >
-                    <Sparkles size={14} aria-hidden="true" />
-                  </button>
-                ) : null}
+                <TownTidyRooms
+                  hostKey={building.hostKey}
+                  hostLabel={host?.displayLabel}
+                  roomActions={roomActions}
+                />
               </div>
               {host?.stale ? (
                 <ConnectionRecoveryBanner
