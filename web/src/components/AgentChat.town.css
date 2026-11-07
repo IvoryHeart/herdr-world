@@ -1,0 +1,330 @@
+/* Chat in a Town window (docs/design/style-guide.md, Skins). Chat keeps its
+   one anatomy; this skin re-maps the shell tokens Chat reads to Town's
+   palette (windows.css), then gives its controls Town's raised keys. Town's
+   window font (Rubik) is inherited. */
+.is-town-skin .agent-chat,
+.is-town-skin.town-skin-portal {
+  --panel: rgb(17 21 29);
+  --panel-2: var(--town-button);
+  --input-bg: var(--town-term);
+  --border: var(--town-edge);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --accent-hover: rgba(255, 209, 102, 0.26);
+  --viewer-code-bg: rgba(255, 255, 255, 0.04);
+  /* One state map: Town's values for working, waiting and done. */
+  --blue: var(--town-work);
+  --info-text: var(--town-work);
+  --yellow: var(--town-wait);
+  --warning-text: var(--town-wait);
+  --warning-soft: color-mix(in srgb, var(--town-wait) 10%, transparent);
+  --green: var(--town-done);
+  --success-text: var(--town-done);
+  --success-soft: color-mix(in srgb, var(--town-done) 12%, transparent);
+  /* Town's raised key, as on the window's own controls. */
+  --town-key-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.is-town-skin .agent-chat-toolbar,
+.is-town-skin .agent-chat-composer {
+  border-color: var(--border-soft);
+}
+
+/* Keys: every Chat button except the quiet icon and link buttons inside
+   messages. */
+.is-town-skin
+  .agent-chat
+  :is(
+    .agent-chat-toolbar button,
+    .agent-chat-unavailable button,
+    .agent-chat-guessed button,
+    .agent-chat-ask-fine button,
+    .agent-chat-ask-options button,
+    .agent-chat-ask-text button,
+    .agent-chat-menu-keys button,
+    .agent-history-chat-older,
+    .agent-history-chat-jump
+  ),
+.is-town-skin.town-skin-portal button {
+  box-sizing: border-box;
+  min-height: 28px;
+  color: var(--text);
+  font-weight: 600;
+  background: var(--panel-2);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--town-key-shadow);
+  transition:
+    transform 120ms ease,
+    filter 120ms ease;
+}
+
+.is-town-skin.town-skin-portal .chat-composer-keys button {
+  padding-inline: 4px;
+  font-weight: 400;
+}
+
+.is-town-skin .agent-chat button:not(:disabled):hover,
+.is-town-skin.town-skin-portal button:not(:disabled):hover {
+  filter: brightness(1.12);
+}
+
+.is-town-skin .agent-chat button:not(:disabled):active,
+.is-town-skin.town-skin-portal button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.is-town-skin .agent-chat button:disabled,
+.is-town-skin.town-skin-portal button:disabled {
+  opacity: 0.45;
+}
+
+.is-town-skin .agent-chat :is(button, input, textarea):focus-visible,
+.is-town-skin.town-skin-portal button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.is-town-skin .agent-chat .agent-chat-toolbar button.agent-chat-stop {
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+}
+
+.is-town-skin .agent-history-chat-jump {
+  height: 32px;
+  margin-bottom: -32px;
+  box-shadow:
+    var(--town-key-shadow),
+    0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* The one recommended action is the soft gold primary, never a solid fill:
+   the agent's recommended answer and Send. */
+.is-town-skin .agent-chat-ask-options button.is-primary {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+}
+
+.is-town-skin
+  .agent-chat-composer
+  .terminal-composer[data-surface="chat"]
+  .terminal-composer-submit.is-primary:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+}
+
+.is-town-skin .agent-chat-composer {
+  --chat-composer-edge: var(--border);
+  --chat-composer-edge-width: 2px;
+  --chat-composer-input-bg: var(--input-bg);
+  --chat-composer-button-bg: var(--panel-2);
+  --chat-composer-radius: 8px;
+  --chat-composer-button-shadow: var(--town-key-shadow);
+  --chat-composer-send-bg: var(--accent-soft);
+  --chat-composer-send-color: var(--accent);
+}
+
+.is-town-skin .agent-chat-composer .terminal-composer-input:focus-visible {
+  border-color: var(--accent);
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Messages: the agent on Town's terminal dark inside the window's edge, you
+   in gold. From 900 px Chat reads as rows (AgentHistoryChat.css), which have
+   no bubbles to frame. */
+@container chat-transcript (max-width: 899px) {
+  .is-town-skin .agent-history-chat-bubble {
+    border: 2px solid var(--border);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+
+  .is-town-skin .agent-history-chat-message.is-user .agent-history-chat-bubble {
+    color: var(--text-strong);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+    box-shadow: none;
+  }
+
+  .is-town-skin
+    .agent-history-chat-message.is-error
+    .agent-history-chat-bubble {
+    border-color: var(--danger-border);
+  }
+}
+
+.is-town-skin .agent-history-chat-tools {
+  background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+  border: 2px solid var(--border);
+}
+
+.is-town-skin
+  .agent-history-chat-tools-toggle
+  > svg:not(.agent-history-chat-tools-chevron) {
+  color: var(--town-work);
+}
+
+/* Text never goes below 11 px. */
+.is-town-skin
+  .agent-chat
+  :is(
+    .agent-history-chat-meta,
+    .agent-history-chat-more,
+    .agent-history-chat-pasted,
+    .agent-history-chat-relayed,
+    .agent-history-chat-tools-names,
+    .agent-history-chat-step-note,
+    .agent-history-chat-step-headline,
+    .agent-history-chat-step-detail h4,
+    .agent-history-chat-args dt,
+    .agent-chat-step-time,
+    .agent-chat-step-badge
+  ) {
+  font-size: 11px;
+}
+
+/* Markdown sized for a message, as in Town's peek. */
+.is-town-skin .agent-history-chat-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1em 0 0.4em;
+  padding: 0;
+  font-size: 14px;
+  border: 0;
+}
+
+.is-town-skin .agent-history-chat-markdown h1 {
+  font-size: 16px;
+}
+
+.is-town-skin .agent-history-chat-markdown :not(pre) > code {
+  color: var(--text-strong);
+  background: rgba(255, 255, 255, 0.08);
+  border: 0;
+}
+
+.is-town-skin .agent-history-chat-markdown pre {
+  border-radius: 8px;
+}
+
+.is-town-skin .agent-history-chat-markdown table {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.is-town-skin .agent-history-chat-markdown :is(th, td) {
+  padding: 4px 8px;
+}
+
+/* A wide table scrolls rather than squeezing a column to a word a line. */
+.is-town-skin .agent-history-chat-markdown td {
+  min-width: 8em;
+}
+
+.is-town-skin .agent-history-chat-markdown th {
+  white-space: nowrap;
+  background: var(--panel-2);
+}
+
+/* The agent's question: Town's waiting colour, and options as keys. */
+.is-town-skin .agent-chat-ask {
+  border-width: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.is-town-skin .agent-chat-ask pre {
+  background: var(--input-bg);
+}
+
+.is-town-skin .agent-chat-ask-text input,
+.is-town-skin .agent-chat-asked-options li {
+  border: 2px solid var(--border);
+  border-radius: 8px;
+}
+
+/* The step running now is work in progress: Town's working blue. */
+.is-town-skin .agent-chat-running {
+  color: var(--blue);
+  border: 2px solid color-mix(in srgb, var(--blue) 40%, var(--border));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-town-skin .agent-chat button,
+  .is-town-skin.town-skin-portal button {
+    transition: none;
+  }
+
+  .is-town-skin .agent-chat button:not(:disabled):active,
+  .is-town-skin.town-skin-portal button:not(:disabled):active {
+    transform: none;
+  }
+}
+
+/* Phones: every control is a 44 px target. Keys draw at 36 px and reach 44
+   px through a transparent edge; the 8 px gaps keep the targets apart. */
+:where(html[data-layout="mobile"]) .is-town-skin {
+  .agent-chat-toolbar {
+    gap: 8px;
+    padding: 4px 10px;
+  }
+
+  .agent-chat
+    :is(
+      .agent-chat-toolbar button,
+      .agent-chat-unavailable button,
+      .agent-chat-guessed button,
+      .agent-chat-ask-fine button,
+      .agent-history-chat-older,
+      .agent-history-chat-jump
+    ) {
+    position: relative;
+    min-width: 36px;
+    min-height: 36px;
+    justify-content: center;
+  }
+
+  .agent-chat
+    :is(
+      .agent-chat-toolbar button,
+      .agent-chat-unavailable button,
+      .agent-chat-guessed button,
+      .agent-chat-ask-fine button,
+      .agent-history-chat-older,
+      .agent-history-chat-jump
+    )::before {
+    position: absolute;
+    /* The padding box plus the 2 px border and 4 px more. */
+    inset: -6px;
+    content: "";
+  }
+
+  .agent-history-chat-jump {
+    height: 36px;
+    margin-bottom: -36px;
+  }
+
+  .agent-chat
+    :is(
+      .agent-chat-ask-options button,
+      .agent-chat-ask-text button,
+      .agent-chat-menu-keys button,
+      .agent-chat-ask-text input
+    ) {
+    min-height: 44px;
+  }
+
+  .agent-history-chat-meta {
+    gap: 12px;
+  }
+
+  .agent-history-chat-meta :is(.agent-history-copy, .agent-history-speak) {
+    position: relative;
+    width: 32px;
+    height: 32px;
+  }
+
+  .agent-history-chat-meta
+    :is(.agent-history-copy, .agent-history-speak)::before {
+    position: absolute;
+    inset: -6px;
+    content: "";
+  }
+}
