@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { TownBuildingLayers } from "./townBuildingLayers";
 import { TownCamera, townZoomLimits } from "./townCamera";
+import { TOWN_LAND_OBJECT_REACH, townWildLine } from "./townLandscape";
 import { layoutTown, TOWN_TILE as T, type TownLayout } from "./townLayout";
 import { townBakeDirty, townBakeKeys } from "./scene/townSceneBake";
 import {
@@ -11,7 +12,10 @@ import {
   townGroundChunks,
   townMotionPose,
   townRetiringAlpha,
+  townLandRect,
+  townRectsMeet,
   townSceneGaps,
+  townWildBands,
   type TownDrawnScene,
   type TownRect,
 } from "./townTransition";
@@ -39,17 +43,14 @@ const keysOf = (layout: TownLayout) =>
     layout,
   );
 
-/** Everything a layout needs drawn, as a whole frame draws it. */
-function whole(layout: TownLayout): TownDrawnScene {
+/**
+ * Everything a layout needs drawn through `view`, as a whole frame draws it:
+ * the ground runs on past the town's edges, through its margin of land.
+ */
+function whole(layout: TownLayout, view: TownRect): TownDrawnScene {
   const keys = keysOf(layout);
-  const all: TownRect = {
-    x: 0,
-    y: 0,
-    w: layout.width * T,
-    h: layout.height * T,
-  };
   return {
-    ground: new Set(townGroundChunks(layout, all).map((chunk) => chunk.key)),
+    ground: new Set(townGroundChunks(layout, view).map((chunk) => chunk.key)),
     buildings: new Map(
       layout.buildings.map((building) => [
         building.hostKey,
@@ -115,7 +116,7 @@ test("a whole frame has no gaps; a missing chunk, building or desk is one", () =
   const key = (building: TownLayout["buildings"][number]) =>
     keys.buildings.get(building.hostKey)!;
   const view = everything(layout);
-  const drawn = whole(layout);
+  const drawn = whole(layout, view);
   expect(townSceneGaps(layout, view, drawn, key, true)).toEqual([]);
   // The ground cleared before the new one is painted (the old scene reset).
   expect(
@@ -259,4 +260,79 @@ test("a building without rooms that moves is baked again in its new place", () =
   const dirty = townBakeDirty(keysOf(before), keysOf(after));
   expect(dirty.removed).toEqual(new Set(["b"]));
   expect(dirty.buildings).toEqual(new Set(["c"]));
+});
+
+test("the ground stops past the wild line; the repeated wild fills the rest", () => {
+  const { layout } = layoutTown(input(["a", "b"]), "wide");
+  const land = townLandRect(layout);
+  const line = townWildLine(layout);
+  // The painted ground reaches past the line as far as anything there draws.
+  const r = TOWN_LAND_OBJECT_REACH;
+  const reach = Math.max(r.left, r.right, r.up, r.down) * T;
+  expect(land).toEqual({
+    x: line.x0 * T - reach,
+    y: line.y0 * T - reach,
+    w: (line.x1 - line.x0) * T + 2 * reach,
+    h: (line.y1 - line.y0) * T + 2 * reach,
+  });
+  // However far the camera sees, chunks tile exactly the land, no farther.
+  const chunks = townGroundChunks(layout, {
+    x: -10_000,
+    y: -10_000,
+    w: 30_000,
+    h: 30_000,
+  });
+  let area = 0;
+  for (const { region } of chunks) {
+    expect(region.x).toBeGreaterThanOrEqual(land.x);
+    expect(region.y).toBeGreaterThanOrEqual(land.y);
+    expect(region.x + region.w).toBeLessThanOrEqual(land.x + land.w);
+    expect(region.y + region.h).toBeLessThanOrEqual(land.y + land.h);
+    area += region.w * region.h;
+  }
+  expect(area).toBe(land.w * land.h);
+  expect(townGroundChunks(layout, { x: -9000, y: 0, w: 100, h: 100 })).toEqual(
+    [],
+  );
+
+  // The wild bands and the land cover any view exactly, never overlapping.
+  const covered = (view: TownRect) => {
+    const bands = townWildBands(land, view);
+    const whole = {
+      x: Math.floor(view.x),
+      y: Math.floor(view.y),
+      w: Math.ceil(view.x + view.w) - Math.floor(view.x),
+      h: Math.ceil(view.y + view.h) - Math.floor(view.y),
+    };
+    let sum = 0;
+    for (const band of bands) {
+      expect(townRectsMeet(band, land)).toBe(false);
+      for (const other of bands)
+        if (other !== band) expect(townRectsMeet(band, other)).toBe(false);
+      expect(band.x).toBeGreaterThanOrEqual(whole.x);
+      expect(band.y).toBeGreaterThanOrEqual(whole.y);
+      expect(band.x + band.w).toBeLessThanOrEqual(whole.x + whole.w);
+      expect(band.y + band.h).toBeLessThanOrEqual(whole.y + whole.h);
+      sum += band.w * band.h;
+    }
+    const lx = Math.max(
+      0,
+      Math.min(whole.x + whole.w, land.x + land.w) - Math.max(whole.x, land.x),
+    );
+    const ly = Math.max(
+      0,
+      Math.min(whole.y + whole.h, land.y + land.h) - Math.max(whole.y, land.y),
+    );
+    expect(sum + lx * ly).toBe(whole.w * whole.h);
+    return bands.length;
+  };
+  // Zoomed far out: a band all round.
+  expect(covered({ x: -5000.4, y: -3000.7, w: 12000.2, h: 9000.9 })).toBe(4);
+  // Panned past one corner, or wholly off the land.
+  expect(covered({ x: land.x - 300.5, y: land.y - 200, w: 900, h: 700 })).toBe(
+    2,
+  );
+  expect(covered({ x: -9000, y: 0, w: 100, h: 100 })).toBe(1);
+  // Inside the land, nothing.
+  expect(covered({ x: land.x + 10, y: land.y + 10, w: 400, h: 300 })).toBe(0);
 });

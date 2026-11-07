@@ -557,7 +557,6 @@ function buildTown() {
   ell(fx, fy, 20, 8, '#4f9fd3'); ell(fx, fy - 1, 15, 5, '#6fb9e6');
   g.fillStyle = '#9d978c'; g.fillRect(fx - 3, fy - 14, 6, 14); g.fillStyle = '#b9b2a5'; g.fillRect(fx - 5, fy - 16, 10, 3);
   const items = [];
-  layout.trees.forEach(tr => items.push([tr.y * TT + 14, () => { const c = sp.trees[tr.variant]; g.drawImage(c, tr.x * TT + 8 - c.width * 17 / 34, tr.y * TT + 14 - c.height * 43 / 44); }]));
   layout.lamps.forEach(l => items.push([l.y * TT + 8, () => g.drawImage(sp.lamp, l.x * TT + 5, l.y * TT - 22)]));
   layout.bushes.forEach(b => items.push([b.y * TT + 13, () => g.drawImage(sp.bush, b.x * TT - 2, b.y * TT + 2)]));
   layout.benches.forEach(b => items.push([b.y * TT + 12, () => g.drawImage(sp.bench, b.x * TT, b.y * TT + 2)]));
