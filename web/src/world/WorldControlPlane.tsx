@@ -371,7 +371,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         world={aggregateWorld}
         onOpenNode={(nodeId) => void openNodeById(nodeId)}
       />
-      <WorldBin always={view === "town" || view === "board"} />
+      <WorldBin
+        always={view === "town" || view === "board"}
+        bus={view === "town"}
+      />
       <GroupsWindow
         world={aggregateWorld}
         onOpenTerminal={(id) => void openTerminalById(id)}

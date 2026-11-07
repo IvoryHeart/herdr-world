@@ -130,6 +130,27 @@ export const binClockLabel = (ms: number) => {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
+/** Town's words for the bin's clock: its bus. */
+export function binBusLabel(bin: WorldBin, now: number) {
+  if (!bin.verified) return "bin unavailable";
+  const { elapsed, next } = binBusClock(bin, now);
+  if (elapsed !== null && bin.bus.stopped) return "bus stopped";
+  return elapsed !== null ? "bus on its way" : `bus in ${binClockLabel(next)}`;
+}
+
+/**
+ * Every other view's words for the bin's clock: there is no bus there, only
+ * when what it holds closes. Those that came after the bus set off wait for
+ * the next one.
+ */
+export function binCloseLabel(bin: WorldBin, now: number) {
+  if (!bin.verified) return "bin unavailable";
+  const { elapsed, next } = binBusClock(bin, now);
+  const leaving = elapsed !== null && bin.entries.some((entry) => entry.riding);
+  if (leaving && bin.bus.stopped) return "paused";
+  return leaving ? "closing soon" : `closes in ${binClockLabel(next)}`;
+}
+
 export type BinAddRequest = BinTarget & {
   label: string;
   view: BinView;

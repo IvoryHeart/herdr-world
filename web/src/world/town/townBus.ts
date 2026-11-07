@@ -5,6 +5,7 @@
  */
 
 import type { BinEntry } from "../../../../shared/bin";
+import { binClockLabel } from "../bin/binStore";
 import {
   TOWN_TILE as T,
   type TownBuilding,
@@ -225,6 +226,44 @@ export function townBusTimeline(
     t += dwell;
   });
   return { start, pieces, halts, cruise, length: route.length };
+}
+
+/** A stop's clock reads "due" from this long before the bus pulls in. */
+export const TOWN_BUS_DUE_MS = 5_000;
+
+/**
+ * What a stop's clock reads. The trip starts with the bus off the map (it
+ * comes in late when it has time to spare, see townBusTimeline) and drives
+ * the route first, so the clock counts to when the bus pulls in at this
+ * stop: `halt` in this trip, seconds into it, for those riding it, and
+ * `nextHalt` in the next one for those waiting for it. It reads "due" in
+ * the last few seconds and while the bus stands there, "stopped" while the
+ * bus is stopped.
+ */
+export function townStopClock({
+  elapsed,
+  next,
+  stopped,
+  riding,
+  halt,
+  nextHalt,
+}: {
+  /** ms into the trip on the map, or null (binBusClock). */
+  elapsed: number | null;
+  /** ms until the next trip sets off (binBusClock). */
+  next: number;
+  stopped: boolean;
+  /** Someone at the stop rides the trip on the map. */
+  riding: boolean;
+  halt: number | undefined;
+  nextHalt: number | undefined;
+}) {
+  if (elapsed !== null && riding && stopped) return "stopped";
+  const until =
+    elapsed !== null && riding
+      ? (halt ?? 0) * 1000 - elapsed
+      : next + (nextHalt ?? 0) * 1000;
+  return until <= TOWN_BUS_DUE_MS ? "due" : binClockLabel(until);
 }
 
 /**

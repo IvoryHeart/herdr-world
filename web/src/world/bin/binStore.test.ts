@@ -5,7 +5,9 @@ import type { WorldLeafObject } from "../worldObject";
 import {
   binAddRequest,
   binBusClock,
+  binBusLabel,
   binClockLabel,
+  binCloseLabel,
   WorldBinStore,
 } from "./binStore";
 
@@ -182,6 +184,29 @@ test("the bus clock runs from when the state was read", async () => {
   expect(binBusClock(stopped, read.readAt + 60_000).elapsed).toBe(10_000);
   expect(binClockLabel(125_000)).toBe("2:05");
   expect(binClockLabel(0)).toBe("0:00");
+});
+
+test("only Town's bin speaks of a bus; elsewhere it says when it closes", () => {
+  const bin = { ...state(), readAt: 0, verified: true };
+  expect(binBusLabel(bin, 0)).toBe("bus in 1:00");
+  expect(binCloseLabel(bin, 0)).toBe("closes in 1:00");
+  const trip = { ...bin.bus, next_ms: 170_000, elapsed_ms: 5_000 };
+  const riding = { ...bin, entries: [entry("a", true)], bus: trip };
+  expect(binBusLabel(riding, 0)).toBe("bus on its way");
+  expect(binCloseLabel(riding, 0)).toBe("closing soon");
+  // Put in after the bus set off, it waits for the next one.
+  const waiting = { ...riding, entries: [entry("b")] };
+  expect(binCloseLabel(waiting, 0)).toBe("closes in 2:50");
+  const stopped = { ...riding, bus: { ...trip, stopped: true } };
+  expect(binBusLabel(stopped, 0)).toBe("bus stopped");
+  expect(binCloseLabel(stopped, 0)).toBe("paused");
+  for (const label of [
+    binCloseLabel(bin, 0),
+    binCloseLabel(riding, 0),
+    binCloseLabel(stopped, 0),
+  ])
+    expect(label).not.toContain("bus");
+  expect(binCloseLabel({ ...bin, verified: false }, 0)).toBe("bin unavailable");
 });
 
 test("each entry remembers when this page first saw it", async () => {

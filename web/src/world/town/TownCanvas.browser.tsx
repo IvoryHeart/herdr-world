@@ -53,6 +53,7 @@ import {
   writeOfficePreferences,
 } from "../officePreferences";
 import { waitForElement } from "../testing/waitForElement";
+import { WorldBin } from "../bin/WorldBin";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -628,7 +629,28 @@ const deskKeyOf = (identity: Record<string, unknown>) =>
     identity.terminal_id,
     identity.agent_session_fingerprint ?? null,
   ]);
+/** Agents put in the (fake) service's bin, which holds nobody. */
+const binAdds: Record<string, unknown>[] = [];
+const binState = () => ({
+  epoch: "town-fixture",
+  revision: binAdds.length,
+  entries: [],
+  closing: [],
+  outcomes: [],
+  bus: {
+    interval_ms: 240_000,
+    trip_ms: 120_000,
+    next_ms: 60_000,
+    elapsed_ms: null,
+    stopped: false,
+    trip: null,
+  },
+});
 worldBridge.call = async (method, params) => {
+  if (method.startsWith("world.bin.")) {
+    if (method === "world.bin.add") binAdds.push(params ?? {});
+    return binState();
+  }
   if (method === "world.desk.get") return structuredClone(desk);
   if (method === "world.desk.review") {
     const mark = params as Record<string, unknown>;
@@ -2945,6 +2967,56 @@ async function run() {
       `desk reorder sent ${JSON.stringify(reorder)}`,
     );
     await landed(drawn, "a reordered desk");
+
+    // The bin floats at the bottom of Town, over the canvas: a desk held and
+    // dropped on it puts its agents in the bin, wherever the stops are.
+    const binHost = document.createElement("div");
+    document.body.append(binHost);
+    const binRoot = createRoot(binHost);
+    binRoot.render(<WorldBin always bus />);
+    const chip = await waitForElement(
+      document.body,
+      () => document.querySelector<HTMLElement>(".world-bin-chip"),
+      "Town shows no floating bin",
+    );
+    const chipBox = chip.getBoundingClientRect();
+    const onChip = [
+      chipBox.left + chipBox.width / 2,
+      chipBox.top + chipBox.height / 2,
+    ] as const;
+    const binnedBefore = binAdds.length;
+    press("pointerdown", at(fromDesk));
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") !== null,
+      "holding a desk did not lift it for the bin",
+    );
+    press("pointermove", onChip);
+    await waitFor(
+      () => chip.hasAttribute("data-bin-over"),
+      "a desk carried over the floating bin did not mark it",
+    );
+    check(
+      host.querySelector(".town-drag-ghost")?.textContent ===
+        "Put in the bin" &&
+        document.documentElement.hasAttribute("data-bin-carry"),
+      "a carry over the floating bin offers to put it in the bin",
+    );
+    press("pointerup", onChip);
+    await waitFor(
+      () => binAdds.length > binnedBefore,
+      "dropping a desk on the floating bin did not put its agents in",
+    );
+    check(
+      binAdds.slice(binnedBefore).every((add) => add.view === "town"),
+      `a Town bin drop names Town (${JSON.stringify(binAdds.slice(binnedBefore))})`,
+    );
+    check(
+      !chip.hasAttribute("data-bin-over") &&
+        !document.documentElement.hasAttribute("data-bin-carry"),
+      "the floating bin's marks clear on drop",
+    );
+    binRoot.unmount();
+    binHost.remove();
 
     // Carried to another room's floor, the desk moves there with
     // town.move_desk and lands the same way.

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { binBusClock, binClockLabel, type WorldBin } from "../bin/binStore";
+import { binBusClock, type WorldBin } from "../bin/binStore";
 import { openWorldBin } from "../bin/worldBinEvents";
 import { useWorldBin, worldBinStore } from "../bin/useWorldBin";
 import {
@@ -12,6 +12,7 @@ import {
   townBusRoute,
   townBusTimeline,
   townRiderWalk,
+  townStopClock,
   type TownBinRider,
   type TownBusRoute,
 } from "./townBus";
@@ -82,13 +83,6 @@ const SEATS = [4, 3] as const;
 /** A waiting rider's walk, from when its actor was seen out of the door. */
 type Walk = { out: number | null };
 
-/** What a stop's clock reads: the next bus, or the one at the stops now. */
-function stopClock(bin: WorldBin, now: number, riding: boolean) {
-  const { elapsed, next } = binBusClock(bin, now);
-  if (elapsed !== null && riding) return bin.bus.stopped ? "stopped" : "due";
-  return binClockLabel(next);
-}
-
 /** A clock that ticks each second while `running`. */
 function useSecondClock(running: boolean) {
   const [now, setNow] = useState(() => performance.now());
@@ -156,6 +150,19 @@ export const TownBusLayer = memo(function TownBusLayer({
     () => townBusTimeline(route, new Set(haltKey.split("\n")), bin.bus.trip_ms),
     [route, haltKey, bin.bus.trip_ms],
   );
+  // The next trip halts where those not yet riding wait.
+  const nextKey = [
+    ...new Set(
+      riders.filter((r) => !r.entry.riding).map((rider) => rider.stop.key),
+    ),
+  ]
+    .sort()
+    .join("\n");
+  const nextTimeline = useMemo(
+    () => townBusTimeline(route, new Set(nextKey.split("\n")), bin.bus.trip_ms),
+    [route, nextKey, bin.bus.trip_ms],
+  );
+  const busClock = binBusClock(bin, now);
 
   useEffect(() => {
     let frame = 0;
@@ -262,11 +269,13 @@ export const TownBusLayer = memo(function TownBusLayer({
         const queue = waiting.get(stop.key) ?? [];
         const count = queue.length;
         const clock = count
-          ? stopClock(
-              bin,
-              now,
-              queue.some((rider) => rider.entry.riding),
-            )
+          ? townStopClock({
+              ...busClock,
+              stopped: bin.bus.stopped,
+              riding: queue.some((rider) => rider.entry.riding),
+              halt: timeline.halts.get(stop.key),
+              nextHalt: nextTimeline.halts.get(stop.key),
+            })
           : null;
         const shown = Math.min(count, TOWN_STOP_QUEUE);
         return [

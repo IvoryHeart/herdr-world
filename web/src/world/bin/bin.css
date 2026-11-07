@@ -25,6 +25,19 @@
   padding: 8px;
   color: var(--muted);
 }
+/* An agent is being dragged (Town or Board): the bin shows itself as a
+   place to drop, a larger target for a finger. */
+:root[data-bin-carry] .world-bin-chip {
+  padding: 10px 16px;
+}
+:root[data-bin-carry] .world-bin-chip:not([data-bin-over]) {
+  color: var(--danger-text);
+  background:
+    linear-gradient(var(--danger-soft), var(--danger-soft)), var(--panel);
+  border-color: var(--danger-border);
+  outline: 2px dashed var(--danger-border);
+  outline-offset: 2px;
+}
 /* A dragged agent is over it: a drop puts it in the bin. */
 .world-bin-chip[data-bin-over] {
   color: var(--text);

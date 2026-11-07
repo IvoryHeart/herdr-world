@@ -2655,6 +2655,14 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         !binCalls.includes("world.bin.resume"),
         "an open tray keeps the bus stopped",
       );
+      // Board has no bus: its bin says when it closes what it holds.
+      const binText = `${chip.getAttribute("aria-label")} ${
+        document.querySelector(".world-bin-tray")!.textContent
+      }`;
+      check(
+        !/\bbus\b/i.test(binText) && binText.includes("closes in"),
+        `Board's bin speaks of no bus (${binText})`,
+      );
       document
         .querySelector<HTMLButtonElement>('[aria-label="Close the bin"]')!
         .click();
