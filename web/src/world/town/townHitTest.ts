@@ -1,4 +1,5 @@
 import type { TownLevel } from "./townCamera";
+import { townCenterContains } from "./townCenter";
 import {
   TOWN_AGENT_SCALE as S,
   TOWN_FACADE,
@@ -20,7 +21,9 @@ export type TownHit =
   | { kind: "room"; key: string }
   /** The reception lobby at desk level, where its board is hidden. */
   | { kind: "reception"; key: string }
-  | { kind: "building"; key: string };
+  | { kind: "building"; key: string }
+  /** The town center: a tap opens its radial menu. */
+  | { kind: "center" };
 
 export type TownHitContext = {
   layout: TownLayout;
@@ -64,6 +67,8 @@ export function townHitTest(
   x: number,
   y: number,
 ): TownHit | null {
+  if (townCenterContains(context.layout.center, T, x, y))
+    return { kind: "center" };
   const building = townBuildingAt(context.layout, x, y);
   if (!building) return null;
   if (context.roofAlpha(building.hostKey) > 0.5)
@@ -142,6 +147,11 @@ export function townHitTest(
 export function townHitKey(hit: TownHit | null) {
   if (!hit) return null;
   if (hit.kind === "cell") return hit.roomKey;
-  if (hit.kind === "building" || hit.kind === "reception") return null;
+  if (
+    hit.kind === "building" ||
+    hit.kind === "reception" ||
+    hit.kind === "center"
+  )
+    return null;
   return hit.key;
 }

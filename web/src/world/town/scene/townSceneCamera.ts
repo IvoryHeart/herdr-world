@@ -16,7 +16,6 @@ import {
 } from "../townCamera";
 import {
   TOWN_FACADE,
-  TOWN_PHONE_BOARD_ROWS,
   TOWN_TILE as T,
   townGeometryKey,
   townReflowShift,
@@ -24,6 +23,7 @@ import {
   type TownLayout,
 } from "../townLayout";
 import type { TownTarget } from "../townTargets";
+import { townCenterEmblem } from "../townCenter";
 
 /** Screen pixels kept above a reception board's foot for the board. */
 const RECEPTION_BOARD_ROOM = 260;
@@ -104,13 +104,24 @@ export class TownSceneCamera {
     if (layout.formFactor === "narrow") {
       const first = layout.buildings[0];
       // The stacked buildings share one axis; side roads run to its right.
+      // The view opens on the town center at the top, the first building
+      // under it, down to its lounge where idle agents rest. A screen too
+      // short for both keeps the whole building and slides the center up,
+      // never past its plaque and doors.
       const x = first ? (first.x + first.w / 2) * T : (layout.width * T) / 2;
       const focus = camera.focusPoint();
-      const y = first
-        ? (first.y - TOWN_PHONE_BOARD_ROWS) * T -
-          24 +
-          (focus.y - viewport.inset.top) / limits.home
-        : (layout.height * T) / 2;
+      const flag = layout.center.y * T - 40;
+      const plaque = townCenterEmblem(layout.center, T).y - 28;
+      const shown =
+        (viewport.height - viewport.inset.top - viewport.inset.bottom) /
+        limits.home;
+      const top = first
+        ? Math.min(
+            plaque,
+            Math.max(flag, (first.y + first.h + TOWN_FACADE) * T - shown),
+          )
+        : flag;
+      const y = top + (focus.y - viewport.inset.top) / limits.home;
       if (animate) camera.flyTo(x, y, limits.home);
       else camera.jumpTo(x, y, limits.home);
     } else {

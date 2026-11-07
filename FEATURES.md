@@ -95,8 +95,21 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
   - Every building has roads on at least three sides: a street above and below
-    each row and a side road to its right. The last lot on the grid is
-    reserved for a town hall: a fenced plot with a sign, not yet in use.
+    each row and a side road to its right.
+  - The **town center** stands at the top of the map, centred over the
+    buildings above the first street: a domed hall with a clock, a columned
+    portico, banners, wings and a paved forecourt. Phones open Town with it at
+    the top and the first building under it; on a short screen the view keeps
+    the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
+    opens a ring of actions around its doors: **New agent** (World's launcher,
+    preselecting the open room when it can start one there), **Town master**
+    (the role holder from **Menu → Sounds**, else the agent named in **Menu →
+    Town master** when nobody holds the role, opened on Chat; a holder not in
+    Town says so; with neither set it opens **Sounds**),
+    **Needs you** with its count, **Summary**, **Profiles** and **New room**
+    (disabled with the reason when no room can be created). Arrow keys, Home
+    and End move around the ring; Escape, a press outside, the centre **✕** or
+    **Back** on a phone closes it.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
@@ -177,7 +190,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     that, and below 360px only the active view, with the others under ⋯.
   - The Town master's chat (**Menu → Town master**, `firstmate` by default,
     matched against the agent's Herdr name, then its label) opens docked on
-    Chat once per visit on wide screens, without moving the pane's focus.
+    Chat once per visit on wide screens, without moving the pane's focus;
+    the town center's **Town master** opens it on demand.
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when
@@ -330,7 +344,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   until its target and safe handoff are verified; no remote update runs.
 - **New agent and agent profiles.** **New agent** starts an agent in a new
   tab of a room you choose, from a profile (one tap) or from any agent kind the
-  host's Herdr supports. It is in the Actions menu of Town and Board, on each
+  host's Herdr supports. It is in the Actions menu of Town and Board, on Board's hub (**+**
+  beside the bin), on each
   Town room's dashed **+** seat (zoom into the room first), beside **+** in
   Spaces' tab bar,
   and in Board's New tab dialog. The room seat preselects its room; the
@@ -442,6 +457,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Board's hub** stands beside the bin at the bottom centre and offers the
+    town center's actions as compact buttons: **+** opens World's launcher
+    (preselecting the selected card's workspace when it can start one there,
+    and the new agent's card appears on Board), the crown opens the **Town
+    master**'s Chat (found as the town center finds it) and **⋯** lists
+    **New agent**, **Town master**, **Needs you**, **Summary** (which takes
+    you to Town with the Town summary open), **Profiles** and **New
+    workspace** (disabled with the reason when no host is ready) in a plain
+    menu. Arrow keys, Home and End move through the menu; Escape, a press
+    outside or **Back** on a phone closes it. Board's controls leave the hub
+    and bin room on their row, folding into Board's **⋯** menu as needed.
+    The bin itself works as before.
   - **Next** cycles waiting agents and shared questions placed on their panes,
     including shell questions, while skipping stale hosts and shells without
     questions. It stays reachable in the Board menu when the controls need more space.

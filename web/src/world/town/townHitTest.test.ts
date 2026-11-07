@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { townHitTest } from "./townHitTest";
-import { layoutTown, townSeat, type TownCell } from "./townLayout";
+import {
+  layoutTown,
+  TOWN_TILE as T,
+  townSeat,
+  type TownCell,
+} from "./townLayout";
 import type { TownModel } from "./townModel";
 
 /** One room with desks of one, two and four panes, each pane an agent. */
@@ -58,7 +63,7 @@ function scene() {
       x,
       y,
     );
-  return { cells, hit, panes, building: layout.buildings[0]! };
+  return { cells, hit, panes, layout, building: layout.buildings[0]! };
 }
 
 test("a tap on a drawn seat selects that seat's agent", () => {
@@ -75,9 +80,22 @@ test("a tap on a drawn seat selects that seat's agent", () => {
     }
 });
 
+test("the town center's hall, dome and flag are its target; the sky beside the dome is not", () => {
+  const { hit, layout } = scene();
+  const { x, y, w, h } = layout.center;
+  const middle = (x + w / 2) * T;
+  // The doors, a wing's end and the flag above the dome.
+  expect(hit(middle, (y + h - 3) * T)).toEqual({ kind: "center" });
+  expect(hit((x + 1) * T, (y + h - 4) * T)).toEqual({ kind: "center" });
+  expect(hit(middle + 4, y * T + 4)).toEqual({ kind: "center" });
+  // Beside the dome, and just outside the drawn building, is open ground.
+  expect(hit((x + 2) * T, y * T + 4)).toBeNull();
+  expect(hit((x + w) * T + 2, (y + h - 3) * T)).toBeNull();
+  expect(hit(middle, (y + h) * T + 2)).toBeNull();
+});
+
 test("at desk level the reception lobby is its own target; above it, the building", () => {
   const { building, hit } = scene();
-  const T = 16;
   const x = (building.entryX + 0.5) * T;
   for (const row of [0, 3, 6])
     expect(hit(x, (building.lobbyY + row) * T + 8)).toEqual({

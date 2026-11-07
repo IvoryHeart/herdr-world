@@ -12,6 +12,12 @@
   --town-idle: #d9c39b;
   --town-btn: #273141;
   --town-term: #0d1117;
+  /* Dark ink on Town's warm fills: count badges on the wait colour. */
+  --town-ink: #2a1a04;
+  /* A wooden name plaque: the town center's sign. */
+  --town-plaque: #6e4a2e;
+  --town-plaque-edge: #3b2414;
+  --town-plaque-text: #ffe9c2;
 }
 
 /* Questions agents asked (`herdr-world ask`), above the waiting agents. */

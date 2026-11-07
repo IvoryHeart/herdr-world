@@ -94,6 +94,8 @@ export type TownInteractionPorts = {
    * where the reception board is hidden, or null when it landed elsewhere.
    */
   openReception?(hostKey: string | null): void;
+  /** Open the town center's radial menu. */
+  openCenter(): void;
   move(command: TownMoveCommand): Promise<TownMoveResult>;
   /** The label that follows a carry: shown on lift, aimed as it moves. */
   ghost: {
@@ -479,6 +481,10 @@ export class TownInteraction {
       return;
     if (!hit) return;
     const { layout } = this.ports.world();
+    if (hit.kind === "center") {
+      this.ports.openCenter();
+      return;
+    }
     if (hit.kind === "reception") {
       this.ports.view.revealReception(layout, hit.key);
       return;

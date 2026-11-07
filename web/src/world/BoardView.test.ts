@@ -38,6 +38,13 @@ const unavailableObservability = {
 test.skipIf(!chrome).each([
   [1440, 900, "", ""],
   [390, 844, "", ""],
+  // A narrow desktop: Board's controls share the bottom row with the dock.
+  [
+    800,
+    900,
+    " with the bin's dock",
+    "Board's hub stands with the bin, clear of Board's controls",
+  ],
   // Reduced motion: moves land at once, and still reach their places.
   [1440, 900, " with reduced motion", ""],
   [
