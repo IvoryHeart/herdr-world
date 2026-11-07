@@ -433,7 +433,6 @@ export class WorldUsageService {
           used_tokens: context.used_tokens,
           window_tokens: contextWindowTokens(
             context.model,
-            context.used_tokens,
             context.window_tokens,
           ),
           observed_at: context.at,

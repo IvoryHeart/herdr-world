@@ -1,11 +1,10 @@
 /**
  * A model's context window in tokens, for the context bar (docs/usage.md).
  * A window the harness reported wins (Codex logs its own). Otherwise a small
- * table by model name; an unknown model has no window, so no bar.
+ * table by model name; an unknown or ambiguous model has no window, so no bar.
  */
 export function contextWindowTokens(
   model: string,
-  used: number,
   reported: number | null = null,
 ): number | null {
   if (reported !== null) return reported;
@@ -14,17 +13,23 @@ export function contextWindowTokens(
   if (claude) {
     const [, family, major, minor] = claude;
     const version = Number(major) * 100 + Number(minor ?? 0);
-    // Native one-million windows, as Claude Code's own model table has them.
+    // Native one-million windows, as Claude Code's model configuration has them.
     if (
       family === "fable" ||
       (family === "opus" && version >= 407) ||
-      (family === "sonnet" && version >= 500)
+      (family === "sonnet" && version >= 500) ||
+      (family === "haiku" && version >= 505)
     )
       return 1_000_000;
-    if (family === "haiku" && version >= 500) return null;
-    // 200k by default. The transcript does not record the opt-in 1M
-    // variant, so a prompt already past 200k must be running on it.
-    return used > 200_000 ? 1_000_000 : 200_000;
+    // Sonnet 4.x and Opus 4.6 also run as an opt-in one-million variant
+    // ("[1m]") that the transcript does not record, so the window is unknown.
+    if (
+      (family === "sonnet" && version >= 400) ||
+      (family === "opus" && version === 406)
+    )
+      return null;
+    if (version >= 400 && version < 500) return 200_000;
+    return null;
   }
   if (/^claude-3/.test(model)) return 200_000;
   if (/^gemini-(?:2\.5|3)(?:\.\d+)?-/.test(model)) return 1_048_576;

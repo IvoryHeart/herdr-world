@@ -165,12 +165,12 @@ into its next turn:
 | Gemini CLI | The newest Gemini message's `input + tool` tokens (cached input is part of `input`). |
 
 `window_tokens` is the window the harness reported (Codex), else a small table
-by model name: Claude models of the 4 family up to Opus 4.6 and Sonnet 4.6, and
-Claude 3, have 200,000; Opus 4.7 and later, Sonnet 5 and later and Fable have
-1,000,000; Gemini 2.5 and 3 have 1,048,576. Claude transcripts do not record the
-opt-in one-million variant, so a 200,000 model whose prompt is already past
-200,000 reads against 1,000,000; below that a session on the variant reads high.
-Any other model has `window_tokens: null`, and Town shows no bar for it. A
+by model name: Opus 4 to 4.5, Haiku 4.5 and Claude 3 have 200,000; Opus 4.7
+and later, Sonnet 5 and later, Haiku 5.5 and later and Fable have 1,000,000;
+Gemini 2.5 and 3 have 1,048,576. Sonnet 4.x and Opus 4.6 also run as an opt-in
+one-million variant (`[1m]`) that Claude transcripts do not record, so their
+window is unknown and they have `window_tokens: null` rather than a guess. Any
+other model has `window_tokens: null` too, and Town shows no bar for it. A
 reading never says zero or full on missing evidence.
 
 Town reads `contexts` every 30 seconds while it or an agent window is shown:

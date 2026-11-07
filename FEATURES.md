@@ -253,7 +253,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     from their own logs). The peek shows a slim bar and the percent beside the
     agent's status, and the agent's window shows the bar under its icon; hover
     either for the reading, such as "Context 72% · 144k of 200k tokens ·
-    claude-opus-4-6". At 85% or more the bar turns red and the agent shows a
+    claude-opus-4-5". At 85% or more the bar turns red and the agent shows a
     sweat drop at its desk: it is about to compact or lose the thread. An
     agent without a reading, or on a model World does not know, shows no bar
     rather than zero. See [harness usage data](docs/usage.md#context-fill).

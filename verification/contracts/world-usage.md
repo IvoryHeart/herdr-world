@@ -36,7 +36,8 @@ and verb-policy models continue to supply operation authority.
 - A pane's context fill is the newest main-thread prompt size of the one
   session uniquely bound to it on a fresh read, with the harness's reported
   window or a model-name table. Numbers, the exact model and digests only
-  leave the host; an unknown model has no window, and duplicate claims, stale
+  leave the host; an unknown model, or one whose window the log cannot settle,
+  has no window, and duplicate claims, stale
   hosts or retired generations produce no entry rather than zero.
 - Closing the service drains its collectors and fences further publication and
   resources before storage closes; reads never allocate durable identity records.

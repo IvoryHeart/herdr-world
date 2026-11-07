@@ -147,30 +147,38 @@ test("Pi and Gemini report their newest prompt size", () => {
 });
 
 test("model windows: a reported window wins, unknown models have none", () => {
-  expect(contextWindowTokens("gpt-synthetic", 10, 258_400)).toBe(258_400);
-  expect(contextWindowTokens("gpt-synthetic", 10)).toBeNull();
-  expect(contextWindowTokens("unknown", 10)).toBeNull();
+  expect(contextWindowTokens("gpt-synthetic", 258_400)).toBe(258_400);
+  expect(contextWindowTokens("gpt-synthetic")).toBeNull();
+  expect(contextWindowTokens("unknown")).toBeNull();
   for (const model of [
-    "claude-opus-4-6",
     "claude-opus-4-20250514",
-    "claude-sonnet-4-5-20250929",
+    "claude-opus-4-1-20250805",
+    "claude-opus-4-5-20251101",
     "claude-haiku-4-5-20251001",
     "claude-3-7-sonnet-20250219",
   ])
-    expect(contextWindowTokens(model, 150_000)).toBe(200_000);
-  // Past 200k the session must be on the opt-in one-million window.
-  expect(contextWindowTokens("claude-sonnet-4-5-20250929", 250_000)).toBe(
-    1_000_000,
-  );
+    expect(contextWindowTokens(model)).toBe(200_000);
   for (const model of [
     "claude-opus-4-7",
     "claude-opus-5-5",
     "claude-sonnet-5",
+    "claude-haiku-5-5",
     "claude-fable-5-1",
   ])
-    expect(contextWindowTokens(model, 10)).toBe(1_000_000);
-  expect(contextWindowTokens("claude-haiku-5-5", 10)).toBeNull();
-  expect(contextWindowTokens("gemini-2.5-pro", 10)).toBe(1_048_576);
+    expect(contextWindowTokens(model)).toBe(1_000_000);
+  expect(contextWindowTokens("gemini-2.5-pro")).toBe(1_048_576);
+});
+
+test("model windows: a model with an unrecorded one-million variant has none", () => {
+  // Claude Code strips "[1m]" before the transcript records the model, so a
+  // 170k prompt could be 85% of 200k or 17% of 1M: no bar either way.
+  for (const model of [
+    "claude-opus-4-6",
+    "claude-sonnet-4-6",
+    "claude-sonnet-4-5-20250929",
+    "claude-sonnet-4-20250514",
+  ])
+    expect(contextWindowTokens(model)).toBeNull();
 });
 
 const roots: string[] = [];

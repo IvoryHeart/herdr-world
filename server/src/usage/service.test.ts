@@ -850,7 +850,7 @@ test("an unreadable status line reading keeps the last Claude numbers stale thro
 });
 
 test("a pane's context bar needs a fresh, unique current-session match", async () => {
-  const context = (at: number, used: number, model = "claude-opus-4-6") => ({
+  const context = (at: number, used: number, model = "claude-opus-4-5") => ({
     harness: "claude",
     session_key: row().session_key,
     file_keys: [],
@@ -872,7 +872,7 @@ test("a pane's context bar needs a fresh, unique current-session match", async (
       tab_id: "t1",
       pane_id: "p1",
       harness: "claude",
-      model: "claude-opus-4-6",
+      model: "claude-opus-4-5",
       used_tokens: 144_000,
       window_tokens: 200_000,
       observed_at: at - 100,

@@ -24,7 +24,7 @@ const context = (
   tab_id: "tab-a",
   pane_id: pane,
   harness: "claude",
-  model: "claude-opus-4-6",
+  model: "claude-opus-4-5",
   used_tokens: used,
   window_tokens: window,
   observed_at: 1,
@@ -40,9 +40,9 @@ test("a fill reads the newest prompt against the model's window", () => {
     percent: 72,
     usedTokens: 144_000,
     windowTokens: 200_000,
-    model: "claude-opus-4-6",
+    model: "claude-opus-4-5",
     tired: false,
-    text: "Context 72% · 144k of 200k tokens · claude-opus-4-6",
+    text: "Context 72% · 144k of 200k tokens · claude-opus-4-5",
   });
   const tired = agentContextFill(ready([context(180_000, 200_000)]), pane);
   expect(tired).toMatchObject({ percent: 90, tired: true });
