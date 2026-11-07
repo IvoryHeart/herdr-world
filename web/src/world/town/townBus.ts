@@ -412,6 +412,36 @@ export function townNearestStop(
 }
 
 /**
+ * A waiting rider's walk outside: whether this page saw its actor indoors
+ * (on its way out), and when it went out of the front door (ms), or null
+ * while it is not out.
+ */
+export type TownRiderOuting = { indoors: boolean; out: number | null };
+
+/**
+ * A rider's outing after the frame drawn at `time`, where its actor is out
+ * of the front door (`out`), indoors, or not drawn yet (null). One seen
+ * indoors walks from the door when it goes out, however long its walk
+ * indoors took (slower on a phone, where frames come less often). One
+ * already out when first seen (Town opened again) stands at its stop, as
+ * every rider does with reduced motion.
+ */
+export function townRiderOuting(
+  outing: TownRiderOuting,
+  out: boolean | null,
+  time: number,
+  still: boolean,
+): TownRiderOuting {
+  if (out === null) return { indoors: outing.indoors, out: null };
+  if (!out) return { indoors: true, out: null };
+  if (outing.out !== null) return outing;
+  return {
+    indoors: outing.indoors,
+    out: outing.indoors && !still ? time : -Infinity,
+  };
+}
+
+/**
  * A binned agent `seconds` after it went out of its front door (`from`):
  * up to the pavement, then along it to its place at the stop (`to`), at
  * the agents' indoor walking speed and with their walking frames (a step

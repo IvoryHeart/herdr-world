@@ -11,10 +11,12 @@ import {
   townBusOpacity,
   townBusRoute,
   townBusTimeline,
+  townRiderOuting,
   townRiderWalk,
   townStopClock,
   type TownBinRider,
   type TownBusRoute,
+  type TownRiderOuting,
 } from "./townBus";
 import { createTownLookResolver } from "./townAppearance";
 import { TOWN_AGENT_SCALE, type TownLayout } from "./townLayout";
@@ -28,8 +30,6 @@ import {
 } from "./townSprites";
 import "./townBus.css";
 
-/** An entry this page first saw longer ago has already walked to its stop. */
-const WALKED_MS = 15_000;
 /** A rider steps aboard this long after the bus has stopped for it. */
 const BOARD_S = 1.5;
 
@@ -80,9 +80,6 @@ const SPRITE = { width: 14, height: 20 };
 /** Seats shown in the bus's windows: upstairs, then downstairs. */
 const SEATS = [4, 3] as const;
 
-/** A waiting rider's walk, from when its actor was seen out of the door. */
-type Walk = { out: number | null };
-
 /** A clock that ticks each second while `running`. */
 function useSecondClock(running: boolean) {
   const [now, setNow] = useState(() => performance.now());
@@ -113,7 +110,6 @@ export const TownBusLayer = memo(function TownBusLayer({
   lookOf,
   framed,
   renderer,
-  firstSeen,
 }: {
   bin: WorldBin;
   route: TownBusRoute;
@@ -122,12 +118,11 @@ export const TownBusLayer = memo(function TownBusLayer({
   /** Set to a step the canvas calls on each drawn frame. */
   framed: { current: (() => void) | null };
   renderer: { readonly current: TownRendererHandle | null };
-  firstSeen(id: string): number;
 }) {
   const bus = useRef<HTMLButtonElement>(null);
   const riderRefs = useRef(new Map<string, HTMLElement>());
   const passengerRefs = useRef(new Map<string, HTMLCanvasElement>());
-  const walks = useRef(new Map<string, Walk>());
+  const walks = useRef(new Map<string, TownRiderOuting>());
   const waiting = new Map<string, TownBinRider[]>();
   for (const rider of riders) {
     const list = waiting.get(rider.stop.key) ?? [];
@@ -192,17 +187,16 @@ export const TownBusLayer = memo(function TownBusLayer({
         const node = riderRefs.current.get(id);
         const canvas = node?.querySelector("canvas");
         if (!node || !canvas) continue;
-        let walk = walks.current.get(id);
-        if (!walk) walks.current.set(id, (walk = { out: null }));
         // Shown once its actor has gone out of the front door (the frame
         // just drawn); from then it walks to its stop.
-        const out = handle
-          ? handle.actorPosition(rider.agentKey) === null
-          : false;
-        if (!out) walk.out = null;
-        else if (walk.out === null)
-          walk.out =
-            !still && time - firstSeen(id) < WALKED_MS ? time : -Infinity;
+        const walk = townRiderOuting(
+          walks.current.get(id) ?? { indoors: false, out: null },
+          handle ? handle.actorPosition(rider.agentKey) === null : null,
+          time,
+          still,
+        );
+        walks.current.set(id, walk);
+        const out = walk.out !== null;
         if (node.hasAttribute("data-out") !== out)
           node.toggleAttribute("data-out", out);
         const pose = townRiderWalk(
@@ -242,7 +236,7 @@ export const TownBusLayer = memo(function TownBusLayer({
       framed.current = null;
       cancelAnimationFrame(frame);
     };
-  }, [bin, route, riders, timeline, lookOf, framed, renderer, firstSeen]);
+  }, [bin, route, riders, timeline, lookOf, framed, renderer]);
 
   const [upstairs, downstairs] = SEATS;
   const seats = [

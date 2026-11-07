@@ -10,3 +10,6 @@
 
 - A Town bus stop's countdown now runs to the bus reaching that stop and reads
   "due" only a few seconds before it pulls in, instead of from the trip's start.
+- An agent put in the bin in Town walks out of its front door and along the
+  pavement to its stop on a phone too, instead of appearing at the stop when
+  its walk indoors took longer than 15 seconds.

@@ -193,8 +193,6 @@ export class WorldBinStore {
   private users = 0;
   private generation = 0;
   private unlisten: (() => void)[] = [];
-  /** When this page first saw each entry, so a remount does not replay its walk. */
-  private seen = new Map<string, number>();
 
   constructor(
     private readonly client: Client,
@@ -208,9 +206,6 @@ export class WorldBinStore {
       this.listeners.delete(listener);
     };
   };
-
-  /** When this page first saw the entry, by its clock. */
-  firstSeen = (id: string) => this.seen.get(id) ?? this.now();
 
   /** Counted: the last user to stop ends the subscription. */
   start() {
@@ -286,11 +281,7 @@ export class WorldBinStore {
       next.revision < this.state.revision
     )
       return;
-    const now = this.now();
-    const live = new Set([...next.entries, ...next.closing].map((e) => e.id));
-    for (const id of live) if (!this.seen.has(id)) this.seen.set(id, now);
-    for (const id of this.seen.keys()) if (!live.has(id)) this.seen.delete(id);
-    this.set({ ...next, readAt: now, verified: true });
+    this.set({ ...next, readAt: this.now(), verified: true });
   }
 
   private set(state: WorldBin) {

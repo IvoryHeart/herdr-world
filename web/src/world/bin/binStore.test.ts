@@ -212,18 +212,6 @@ test("only Town's bin speaks of a bus; elsewhere it says when it closes", () => 
   expect(binCloseLabel({ ...bin, verified: false }, 0)).toBe("bin unavailable");
 });
 
-test("each entry remembers when this page first saw it", async () => {
-  const f = fixture();
-  f.replies.push(state({ entries: [entry("a")] }));
-  await f.store.refresh();
-  const first = f.store.firstSeen("a");
-  f.tick(20_000);
-  f.replies.push(state({ revision: 2, entries: [entry("a"), entry("b")] }));
-  await f.store.refresh();
-  expect(f.store.firstSeen("a")).toBe(first);
-  expect(f.store.firstSeen("b")).toBe(first + 20_000);
-});
-
 test("a pinned desk or a tab pinned in Spaces keeps its tab's last pane", () => {
   const leaf = {
     connectionId: "studio",

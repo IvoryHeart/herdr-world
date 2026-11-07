@@ -10,6 +10,7 @@ import {
   townBusRoute,
   townBusTimeline,
   townNearestStop,
+  townRiderOuting,
   townRiderWalk,
   townStopClock,
 } from "./townBus";
@@ -257,6 +258,27 @@ test("a binned agent walks out to its stop as it walks indoors, then stands ther
       walking: false,
     });
   expect(townRiderWalk(door, stop, Infinity).walking).toBe(false);
+});
+
+test("an agent seen indoors walks out of the door however long it took to reach it", () => {
+  const start = { indoors: false, out: null };
+  // Not drawn yet, then walking indoors to its front door for a long while
+  // (a phone draws fewer frames, so its walk indoors takes longer).
+  let outing = townRiderOuting(start, null, 0, false);
+  expect(outing).toEqual({ indoors: false, out: null });
+  outing = townRiderOuting(outing, false, 1_000, false);
+  expect(outing).toEqual({ indoors: true, out: null });
+  outing = townRiderOuting(outing, false, 40_000, false);
+  // Out of the door: its walk to the stop starts now, and keeps that start.
+  outing = townRiderOuting(outing, true, 41_000, false);
+  expect(outing).toEqual({ indoors: true, out: 41_000 });
+  expect(townRiderOuting(outing, true, 42_000, false).out).toBe(41_000);
+  // Already out when Town first draws it (Town opened again): at its stop.
+  expect(townRiderOuting(start, true, 5_000, false).out).toBe(-Infinity);
+  // With reduced motion, at its stop too.
+  expect(
+    townRiderOuting({ indoors: true, out: null }, true, 5_000, true).out,
+  ).toBe(-Infinity);
 });
 
 test("a stop's clock reads due only just before the bus pulls in there", () => {
