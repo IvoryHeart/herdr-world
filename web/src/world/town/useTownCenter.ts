@@ -1,7 +1,8 @@
 /**
  * The town center's actions (TownCenterMenu.tsx), each reusing what World
  * already has: the agent launcher and profiles, the Town master's chat,
- * Needs you, the Town summary and room creation.
+ * Needs you, the Town summary and room creation. Board's hub beside the bin
+ * (board/BoardHub.tsx) offers the same actions, built by the same helpers.
  */
 
 import {
@@ -30,6 +31,12 @@ import type { TownRoomActions } from "./TownCanvas";
 import { findTownMaster } from "./townMaster";
 import { useTownMaster } from "./useTownMaster";
 
+/** What finding and opening the Town master reads of an agent. */
+export type TownMasterAgent = Pick<
+  OfficeAgent,
+  "key" | "agentName" | "displayLabel" | "stale" | "canOpenInSpaces"
+>;
+
 type RoomActions = Pick<
   TownRoomActions,
   | "canCreateSeat"
@@ -46,12 +53,12 @@ type RoomActions = Pick<
  * assigned holder absent from Town is unavailable: the name never stands in
  * for it, since a same-named agent may live on another connection.
  */
-export async function resolveTownMaster(
+export async function resolveTownMaster<T extends TownMasterAgent>(
   world: Pick<WorldObject, "leaves">,
-  roster: readonly { agent: OfficeAgent }[],
+  roster: readonly { agent: T }[],
   holder: { connection_id: string; terminal_id: string } | null,
   name: string,
-): Promise<OfficeAgent | undefined> {
+): Promise<T | undefined> {
   if (holder) {
     const leaf = world.leaves.find(
       (candidate) =>
@@ -136,13 +143,90 @@ export function townCenterActions({
       ? (office.rooms.find((room) => room.key === selectedRoomKey) ?? null)
       : null;
   const roomBlocked = !rooms.canCreateRoom(selectedRoomKey);
-  const talkToMaster = async () => {
-    const master = await resolveTownMaster(
+  return [
+    launchAction(
+      launchRoom
+        ? {
+            label: launchRoom.displayLabel,
+            run: () => rooms.onNewAgent(launchRoom.key),
+          }
+        : null,
+    ),
+    townMasterAction({
       world,
-      office.roster,
+      roster: office.roster,
       holder,
       name,
-    ).catch(() => undefined);
+      openChat,
+      toast,
+    }),
+    needsYouAction(summary.summary.counts.needsYou),
+    summaryAction(() => summary.open()),
+    profilesAction(),
+    {
+      id: "room",
+      label: "New room",
+      icon: DoorOpen,
+      disabled: roomBlocked,
+      detail: roomBlocked
+        ? (rooms.createRoomReason(selectedRoomKey) ?? "Unavailable")
+        : undefined,
+      run: () => rooms.onCreateRoom(selectedRoomKey),
+    },
+  ];
+}
+
+/**
+ * New agent: in `room` (a workspace, by its label) when given, else the
+ * launcher asks where.
+ */
+export function launchAction(
+  room: { label: string; run(): void } | null,
+): TownCenterAction {
+  return {
+    id: "launch",
+    label: "New agent",
+    icon: UserPlus,
+    detail: room ? `in ${room.label}` : undefined,
+    primary: true,
+    run: () => (room ? room.run() : requestAgentLaunch({})),
+  };
+}
+
+/**
+ * Talk to the Town master (resolveTownMaster), or, while nobody holds the
+ * role and Menu → Town master is empty, choose one in Sounds.
+ */
+export function townMasterAction<T extends TownMasterAgent>({
+  world,
+  roster,
+  holder,
+  name,
+  openChat,
+  toast,
+}: {
+  world: Pick<WorldObject, "leaves">;
+  roster: readonly { agent: T }[];
+  /** The agent given the Town master role, if any. */
+  holder: { connection_id: string; terminal_id: string } | null;
+  /** Menu → Town master, trimmed. */
+  name: string;
+  openChat(agentKey: string): void;
+  toast(kind: "ok" | "error", text: string): void;
+}): TownCenterAction {
+  if (!holder && !name)
+    // Nobody holds the role: Sounds is where the owner gives it.
+    return {
+      id: "master",
+      label: "Town master",
+      icon: Crown,
+      detail: "Choose one",
+      run: openSounds,
+    };
+  const talkToMaster = async () => {
+    const master = await resolveTownMaster(world, roster, holder, name).catch(
+      () => undefined,
+    );
     if (!master) {
       toast(
         "error",
@@ -158,61 +242,44 @@ export function townCenterActions({
     }
     openChat(master.key);
   };
-  return [
-    {
-      id: "launch",
-      label: "New agent",
-      icon: UserPlus,
-      detail: launchRoom ? `in ${launchRoom.displayLabel}` : undefined,
-      primary: true,
-      run: () =>
-        launchRoom ? rooms.onNewAgent(launchRoom.key) : requestAgentLaunch({}),
-    },
-    holder || name
-      ? {
-          id: "master",
-          label: "Town master",
-          icon: Crown,
-          // The role holder wins over the name; its name is its own.
-          detail: holder ? undefined : name,
-          run: () => void talkToMaster(),
-        }
-      : {
-          // Nobody holds the role: Sounds is where the owner gives it.
-          id: "master",
-          label: "Town master",
-          icon: Crown,
-          detail: "Choose one",
-          run: openSounds,
-        },
-    {
-      id: "needs-you",
-      label: "Needs you",
-      icon: Inbox,
-      count: summary.summary.counts.needsYou,
-      run: () => openNeedsYou(),
-    },
-    {
-      id: "summary",
-      label: "Summary",
-      icon: ClipboardList,
-      run: () => summary.open(),
-    },
-    {
-      id: "profiles",
-      label: "Profiles",
-      icon: Shirt,
-      run: () => openProfileEditor(),
-    },
-    {
-      id: "room",
-      label: "New room",
-      icon: DoorOpen,
-      disabled: roomBlocked,
-      detail: roomBlocked
-        ? (rooms.createRoomReason(selectedRoomKey) ?? "Unavailable")
-        : undefined,
-      run: () => rooms.onCreateRoom(selectedRoomKey),
-    },
-  ];
+  return {
+    id: "master",
+    label: "Town master",
+    icon: Crown,
+    // The role holder wins over the name; its name is its own.
+    detail: holder ? undefined : name,
+    run: () => void talkToMaster(),
+  };
 }
+
+/** Needs you, with its count when the view knows it. */
+export const needsYouAction = (count?: number): TownCenterAction => ({
+  id: "needs-you",
+  label: "Needs you",
+  icon: Inbox,
+  count,
+  run: () => openNeedsYou(),
+});
+
+/**
+ * Town's summary: who needs you, finishes, hosts and their rooms, and spend.
+ * `detail` says where it opens, from a view other than Town.
+ */
+export const summaryAction = (
+  open: () => void,
+  detail?: string,
+): TownCenterAction => ({
+  id: "summary",
+  label: "Summary",
+  icon: ClipboardList,
+  detail,
+  run: open,
+});
+
+/** The agent profiles, in the profile editor. */
+export const profilesAction = (): TownCenterAction => ({
+  id: "profiles",
+  label: "Profiles",
+  icon: Shirt,
+  run: () => openProfileEditor(),
+});

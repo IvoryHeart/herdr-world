@@ -248,7 +248,7 @@ hosts stay usable.
    its card. The tab stays open or closed on this device; **✕** in its header
    (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens; **Town master** on
-   the town center opens it at any time. That action finds the agent given the
+   the town center (or the crown beside Board's bin) opens it at any time. That action finds the agent given the
    role under **Menu → Sounds** first, then, when nobody holds the role, the
    name set here. A role holder that is not in Town (for example, filtered
    out) is reported as absent rather than replaced by a namesake; with neither
@@ -596,7 +596,7 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    pick its **Chime** (or keep the class default). **What a
    launch runs** shows the exact Herdr command. Press **Save**.
 3. Open **New agent**: **Actions → New agent**, **New agent** on Town's town
-   center, the dashed **+** seat inside a Town room (zoom into the room first),
+   center, **+** beside Board's bin, the dashed **+** seat inside a Town room (zoom into the room first),
    or the robot beside **+** in Spaces' tab bar. The seat preselects its room. Choose **Terminal**, the first choice,
    for a plain shell tab; to start an agent, optionally type a task and tap a
    profile or a kind under **Quick start**.
@@ -688,6 +688,14 @@ on your phone and desktop.
    returns to it. A faint string joins tabs whose agents know each other.
    Drag a tab onto another tab to group them, or select a tab, press
    **Group…** and tap the other; a grouped tab's bar offers **Ungroup**.
+   The hub beside the bin, at the bottom centre, holds the town center's
+   actions: **+** opens **New agent** (in the selected card's workspace, when
+   it can start one there), the crown opens your **Town master**'s Chat, and
+   **⋯** opens a menu with **New agent**, **Town master**, **Needs you**,
+   **Summary**, **Profiles** and **New workspace**. **Summary** takes you to
+   Town with its summary open. Escape, a tap outside or **Back** on a phone
+   closes the menu. Board's controls keep clear of the hub and bin, folding
+   into their **⋯** menu when the row is short of room.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.

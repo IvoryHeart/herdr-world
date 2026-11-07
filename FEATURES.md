@@ -329,7 +329,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   until its target and safe handoff are verified; no remote update runs.
 - **New agent and agent profiles.** **New agent** starts an agent in a new
   tab of a room you choose, from a profile (one tap) or from any agent kind the
-  host's Herdr supports. It is in the Actions menu of Town and Board, on each
+  host's Herdr supports. It is in the Actions menu of Town and Board, on Board's hub (**+**
+  beside the bin), on each
   Town room's dashed **+** seat (zoom into the room first), beside **+** in
   Spaces' tab bar,
   and in Board's New tab dialog. The room seat preselects its room; the
@@ -441,6 +442,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Board's hub** stands beside the bin at the bottom centre and offers the
+    town center's actions as compact buttons: **+** opens World's launcher
+    (preselecting the selected card's workspace when it can start one there,
+    and the new agent's card appears on Board), the crown opens the **Town
+    master**'s Chat (found as the town center finds it) and **⋯** lists
+    **New agent**, **Town master**, **Needs you**, **Summary** (which takes
+    you to Town with the Town summary open), **Profiles** and **New
+    workspace** (disabled with the reason when no host is ready) in a plain
+    menu. Arrow keys, Home and End move through the menu; Escape, a press
+    outside or **Back** on a phone closes it. Board's controls leave the hub
+    and bin room on their row, folding into Board's **⋯** menu as needed.
+    The bin itself works as before.
   - **Next** cycles waiting agents and shared questions placed on their panes,
     including shell questions, while skipping stale hosts and shells without
     questions. It stays reachable in the Board menu when the controls need more space.
