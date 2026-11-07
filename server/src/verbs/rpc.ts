@@ -257,7 +257,10 @@ export const rpcVerbs = [
     object({ ids: Type.Array(text, { minItems: 1, maxItems: 64 }) }),
   ),
   rpc("world.bin.list", "read", "world"),
+  // Stop the bus on the map (pause) so riders can be put back, or let it go.
+  rpc("world.bin.pause", "reconcilable", "world"),
   rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
+  rpc("world.bin.resume", "reconcilable", "world"),
   rpc("world.board.get", "read", "world"),
   rpc(
     "world.board.patch",

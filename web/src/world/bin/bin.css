@@ -21,6 +21,20 @@
 .world-bin-chip span {
   color: var(--muted);
 }
+.world-bin-chip[data-empty] {
+  padding: 8px;
+  color: var(--muted);
+}
+/* A dragged agent is over it: a drop puts it in the bin. */
+.world-bin-chip[data-bin-over] {
+  color: var(--text);
+  background: var(--danger, #c62828);
+  border-color: var(--danger, #c62828);
+  scale: 1.15;
+}
+.world-bin-chip[data-bin-over] span {
+  color: inherit;
+}
 
 .world-bin-tray {
   position: fixed;
@@ -62,6 +76,10 @@
 .world-bin-tray header button {
   border: 0;
   padding: 2px;
+}
+.world-bin-tray header .world-bin-go {
+  border: 1px solid var(--border);
+  padding: 3px 8px;
 }
 .world-bin-tray button:disabled {
   opacity: 0.45;

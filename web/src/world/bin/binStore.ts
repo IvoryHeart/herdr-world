@@ -95,15 +95,24 @@ export function parseBinState(value: unknown): BinState | null {
       trip_ms: bus.trip_ms,
       next_ms: bus.next_ms,
       elapsed_ms: bus.elapsed_ms as number | null,
+      stopped: bus.stopped === true && bus.elapsed_ms !== null,
+      trip:
+        bus.elapsed_ms !== null && Number.isSafeInteger(bus.trip)
+          ? (bus.trip as number)
+          : null,
     },
   };
 }
 
-/** Where the bus is `now` (performance.now()), from the state as read. */
+/**
+ * Where the bus is `now` (performance.now()), from the state as read. A
+ * stopped bus stands where it was stopped.
+ */
 export function binBusClock(bin: WorldBin, now: number) {
   const since = Math.max(0, now - bin.readAt);
-  const { interval_ms, trip_ms, next_ms, elapsed_ms } = bin.bus;
-  const elapsed = elapsed_ms === null ? null : elapsed_ms + since;
+  const { interval_ms, trip_ms, next_ms, elapsed_ms, stopped } = bin.bus;
+  const elapsed =
+    elapsed_ms === null ? null : elapsed_ms + (stopped ? 0 : since);
   return {
     /** How far into its trip the bus on the map is, or null. */
     elapsed: elapsed !== null && elapsed < trip_ms ? elapsed : null,
@@ -224,6 +233,14 @@ export class WorldBinStore {
   }
   closeNow(ids: readonly string[]) {
     return this.act("world.bin.close_now", { ids: [...ids] });
+  }
+  /** Stop the bus on the map, so nothing closes while riders are put back. */
+  stopBus() {
+    return this.act("world.bin.pause", {});
+  }
+  /** Let a stopped bus drive on. */
+  goBus() {
+    return this.act("world.bin.resume", {});
   }
 
   private async act(method: string, params: Record<string, unknown>) {

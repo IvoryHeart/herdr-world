@@ -397,15 +397,19 @@ Opening a finished agent's terminal also clears its reception stop; neither acti
 is correct. A later completion can need review again. Read the explanation and
 check the diff using chapter 2 before treating the work as complete.
 
-To close an agent you no longer need, open its window and choose **Put in bin**
-from **⋯** (this works the same from Board and Desk). Nothing closes yet: in
-Town the agent walks out of the front door to the nearest bus stop, a **B** sign
-at a road crossing. A **Bin** chip appears at the bottom of the screen with the
-time to the next bus. The bus comes every three minutes, drives past every stop
-and picks everyone up; when it has driven off the map, World closes their agents.
-Changed your mind? Open the tray from the chip (or tap a stop or the bus) and
-choose **Put back** before the bus leaves the map: the agent walks back to its
-desk and stays open. **Close now** skips the wait. A pinned desk or a tab pinned
+To close an agent you no longer need, drag it onto the **bin** icon at the
+bottom of Town or Board, or onto a Town bus stop; or open its window and choose
+**Put in bin** from **⋯** (this also works from Desk). Nothing closes yet: in
+Town the agent walks out of the front door to the nearest bus stop, a London
+stop with a red roundel at a road crossing. The bin shows the time to the next
+bus. Every four minutes a red double-decker comes in, slows to each stop where
+someone waits, stands there about ten seconds while they board, then speeds up
+and drives off the map; only then does World close their agents. Changed your
+mind? Open the tray from the bin (or tap a stop or the bus) and choose **Put
+back** any time before the bus has left the screen, even after the agent has
+boarded: it walks back to its desk and stays open. Tap the bus while it drives
+to stop it where it is: nothing closes while it stands, and **Let the bus go**
+in the tray sends it on. **Close now** skips the wait. A pinned desk or a tab pinned
 in Spaces keeps its last agent, and restarting World empties the bin without
 closing anything.
 

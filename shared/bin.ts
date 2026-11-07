@@ -5,15 +5,20 @@
  * has left the map, `BIN_BUS_TRIP_MS` later, World records one durable close
  * intent per rider, which the effect runner dispatches under its recovery
  * rules. Until the bus has left the map, Put back takes an agent out again,
- * even one Town shows aboard. Holding and the
+ * even one Town shows aboard, and the bus can be stopped where it is so
+ * nothing closes until it is let go. Holding and the
  * trip are reversible staging in the service's memory: a reload keeps them
  * and a service restart drops them without closing anything.
  */
 
 /** The bus sets off this often, on a fixed schedule. */
-export const BIN_BUS_INTERVAL_MS = 180_000;
-/** How long the bus drives its route; its riders close when it ends. */
-export const BIN_BUS_TRIP_MS = 20_000;
+export const BIN_BUS_INTERVAL_MS = 240_000;
+/**
+ * How long a trip lasts; its riders close when it ends. Town fits the bus's
+ * drive into it: it comes in, slows to each stop with riders, waits there
+ * about 10 s, speeds up and leaves the map as the trip ends.
+ */
+export const BIN_BUS_TRIP_MS = 120_000;
 
 /** The view an agent was put in the bin from (reported back with its outcome). */
 export type BinView = "board" | "town" | "desk" | "other";
@@ -65,6 +70,10 @@ export type BinBus = {
   next_ms: number;
   /** How long the bus on the map has driven, or null when none is out. */
   elapsed_ms: number | null;
+  /** The bus on the map was stopped: it stands, and nothing closes, until it goes. */
+  stopped: boolean;
+  /** The trip on the map, counted from 1 in this service run, or null. */
+  trip: number | null;
 };
 
 export type BinState = {
@@ -95,6 +104,8 @@ export const EMPTY_BIN: BinState = {
     trip_ms: BIN_BUS_TRIP_MS,
     next_ms: BIN_BUS_INTERVAL_MS,
     elapsed_ms: null,
+    stopped: false,
+    trip: null,
   },
 };
 

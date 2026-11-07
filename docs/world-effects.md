@@ -112,11 +112,14 @@ model/replay evidence and the required real SQLite source/compiled crash matrix.
 ## Agent bin service
 
 The agent bin holds agents in memory and records a durable close only when
-Town's bus has taken them. One bus runs on a fixed schedule: every three minutes
+Town's bus has taken them. One bus runs on a fixed schedule: every four minutes
 from the service's start (`BIN_BUS_INTERVAL_MS` in
 [shared/bin.ts](../shared/bin.ts)) it sets off if anyone is waiting, everyone
-waiting boards, and it drives for 20 seconds (`BIN_BUS_TRIP_MS`). When its trip
-ends, its riders' closes are recorded. An agent added while the bus is out waits
+waiting boards, and its trip lasts two minutes (`BIN_BUS_TRIP_MS`); each browser
+fits Town's drive into it, ending off the map. When its trip ends, its riders'
+closes are recorded. The bus on the map can be stopped (`world.bin.pause`): its
+trip clock stands and nothing is recorded until it is let go (`world.bin.resume`)
+or every rider has been put back. An agent added while the bus is out waits
 for the next one. Put back works until the bus has left the map, even for an
 agent Town already shows aboard: where the bus picks an agent up depends on
 each browser's Town layout, so the service does not decide boarding. Its browser RPCs (all
@@ -124,9 +127,11 @@ bridge-scoped `world.*`, browser actor only):
 
 | Method | Effect |
 | --- | --- |
-| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, held entries (each `riding` once the bus on the map is taking it), entries whose close is in progress, recent outcomes, and `bus`: interval, trip length, time to the next departure and how long the bus on the map has driven |
+| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, held entries (each `riding` once the bus on the map is taking it), entries whose close is in progress, recent outcomes, and `bus`: interval, trip length, time to the next departure, how long the bus on the map has driven, whether it is stopped and its trip number |
 | `world.bin.add` | Hold one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first. With `preserve_tab` (a pinned desk, or a tab pinned in Spaces), it refuses the tab's last pane that is not already held |
 | `world.bin.restore` | Put back one held entry, until its bus has left the map; nothing is closed |
+| `world.bin.pause` | Stop the bus on the map where it is; its trip clock stands. Without a bus out, nothing changes |
+| `world.bin.resume` | Let a stopped bus drive the rest of its trip |
 | `world.bin.close_now` | `ids`: an explicit list of this run's entry IDs (`bin-<incarnation>-<n>`). Any other run's ID refuses the whole request; there is no unscoped "all" |
 
 Staging lives only in the service's memory, on its monotonic clock: a reload

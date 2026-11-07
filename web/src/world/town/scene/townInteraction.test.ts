@@ -104,6 +104,9 @@ function setup(
     finishMove: (outcome) => log.push(["finish", outcome]),
   };
   const ghost: unknown[][] = [];
+  /** Where the bin lies on the canvas, when a test puts one there. */
+  let binAt: ((at: Point) => boolean) | null = null;
+  const binned: unknown[] = [];
   const interaction = new TownInteraction({
     clock: time.clock,
     frames: frames.frames,
@@ -130,6 +133,8 @@ function setup(
       remove: () => ghost.push(["remove"]),
     },
     held: () => log.push(["held"]),
+    binAt: (at) => Boolean(at && binAt?.(at)),
+    bin: (drag) => binned.push(drag),
   });
   /** Draw a frame, as the renderer does, so presses hit what is drawn. */
   const draw = () => view.drew(camera, level, layout);
@@ -162,6 +167,8 @@ function setup(
     log,
     moves,
     ghost,
+    binned,
+    setBin: (over: (at: Point) => boolean) => (binAt = over),
     reasons,
     draw,
     press,
@@ -299,6 +306,39 @@ test("a drop outside every building springs back and asks nothing", () => {
   t.lift(pointer, outside);
   expect(t.moves).toEqual([]);
   expect(t.log).toContainEqual(["end", "cancel"]);
+});
+
+test("a desk dropped on the bin is put in it and moves nowhere", () => {
+  const t = setup();
+  t.setBin((at) => at.x < 10 && at.y < 10);
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.moveTo(pointer, { x: 4, y: 4 });
+  expect(last(t.ghost)).toEqual(["aim", "Put in the bin", true, "bin"]);
+  t.lift(pointer, { x: 4, y: 4 });
+  expect(t.moves).toEqual([]);
+  expect(t.binned).toEqual([{ kind: "desk", key: cell.deskKey }]);
+  expect(t.log).toContainEqual(["end", "cancel"]);
+});
+
+test("a desk carried over the bin and away drops as usual", () => {
+  const t = setup();
+  t.setBin((at) => at.x < 10 && at.y < 10);
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  const room = t.rooms[1]!;
+  const floor = t.screen({ x: room.x * T + 4, y: (room.y + room.h) * T - 4 });
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.moveTo(pointer, { x: 4, y: 4 });
+  t.moveTo(pointer, floor);
+  t.lift(pointer, floor);
+  expect(t.binned).toEqual([]);
+  expect(t.moves).toEqual([
+    { kind: "desk", deskKey: cell.deskKey!, roomKey: room.key },
+  ]);
 });
 
 test("a desk rested on another desk snaps to it after the magnet time and groups", () => {

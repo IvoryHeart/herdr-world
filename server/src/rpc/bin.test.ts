@@ -104,9 +104,11 @@ test("put back acts only on the held agent", async () => {
   const id = f.registry.list().entries[0]!.id;
   await f.rpc("world.bin.restore", { id });
   expect(f.registry.list().entries).toEqual([]);
+  // With no bus out, stopping it changes nothing.
   await f.rpc("world.bin.pause");
+  expect(f.registry.list().bus.stopped).toBe(false);
   await f.rpc("world.bin.countdown.set", { countdown_s: 10 });
-  expect(f.errors).toEqual(["unknown bin operation", "unknown bin operation"]);
+  expect(f.errors).toEqual(["unknown bin operation"]);
 });
 
 test("a pinned tab's last agent is refused; one with another pane is held", async () => {

@@ -1,12 +1,15 @@
 import { memo, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { binBusClock, type WorldBin } from "../bin/binStore";
 import { openWorldBin } from "../bin/worldBinEvents";
-import { useWorldBin } from "../bin/useWorldBin";
+import { useWorldBin, worldBinStore } from "../bin/useWorldBin";
 import {
   TOWN_STOP_QUEUE,
   townBinRiders,
+  townBusAlong,
   townBusAt,
+  townBusOpacity,
   townBusRoute,
+  townBusTimeline,
   type TownBinRider,
   type TownBusRoute,
 } from "./townBus";
@@ -20,6 +23,8 @@ import "./townBus.css";
 const WALK = 90;
 /** An entry this page first saw longer ago has already walked to its stop. */
 const WALKED_MS = 15_000;
+/** A rider steps aboard this long after the bus has stopped for it. */
+const BOARD_S = 1.5;
 
 /**
  * The bin as Town shows it: the agents it takes out of their rooms (`away`,
@@ -52,9 +57,12 @@ export function markOut(rider: HTMLElement, renderer: TownRendererHandle) {
 }
 
 /**
- * Town's bus stops, the agents waiting at them and the bus. The bus drives
- * the route while the service says one is out, and each rider boards (is no
- * longer drawn) as it passes their stop. Stops and the bus open the bin tray.
+ * Town's bus stops, the agents waiting at them and the bus. While the
+ * service says a bus is out, it drives the route on the trip's clock: it
+ * comes in, slows to each stop where someone waits, stands there about
+ * 10 s while they board, then speeds up and leaves. Clicking it stops it
+ * where it is (nothing closes until it goes on) and opens the bin tray, as
+ * a stop does.
  */
 export const TownBusLayer = memo(function TownBusLayer({
   bin,
@@ -78,33 +86,56 @@ export const TownBusLayer = memo(function TownBusLayer({
   for (const rider of riders)
     waiting.set(rider.stop.key, (waiting.get(rider.stop.key) ?? 0) + 1);
   const riding = riders.filter((rider) => rider.entry.riding).length;
+  // The stops this trip halts at, kept for the whole trip so the bus never
+  // jumps when a rider is put back; a stop is only ever added.
+  const halting = useRef<{ trip: number | null; keys: Set<string> }>({
+    trip: null,
+    keys: new Set(),
+  });
+  if (halting.current.trip !== bin.bus.trip)
+    halting.current = { trip: bin.bus.trip, keys: new Set() };
+  for (const rider of riders)
+    if (rider.entry.riding) halting.current.keys.add(rider.stop.key);
+  const haltKey = [...halting.current.keys].sort().join("\n");
+  const timeline = useMemo(
+    () => townBusTimeline(route, new Set(haltKey.split("\n")), bin.bus.trip_ms),
+    [route, haltKey, bin.bus.trip_ms],
+  );
 
   useEffect(() => {
     let frame = 0;
     const tick = () => {
       const { elapsed } = binBusClock(bin, performance.now());
+      const along = elapsed === null ? null : townBusAlong(timeline, elapsed);
       const element = bus.current;
-      const along =
-        elapsed === null ? -1 : (route.length * elapsed) / bin.bus.trip_ms;
       if (element) {
-        element.hidden = elapsed === null;
-        if (elapsed !== null) {
+        element.hidden = along === null;
+        if (along !== null) {
           const at = townBusAt(route, along);
           element.style.transform = `translate(${at.x}px, ${at.y}px)`;
+          element.style.opacity = String(townBusOpacity(route, at.x));
           element.dataset.facing = at.facing;
         }
       }
       for (const rider of riders) {
         const node = riderRefs.current.get(rider.entry.id);
-        const boarded = rider.entry.riding && along >= rider.stop.at;
+        const halt = timeline.halts.get(rider.stop.key);
+        const boarded =
+          rider.entry.riding &&
+          elapsed !== null &&
+          along !== null &&
+          (halt === undefined
+            ? along >= rider.stop.at
+            : elapsed / 1000 >= halt + BOARD_S);
         if (node && node.hasAttribute("data-boarded") !== boarded)
           node.toggleAttribute("data-boarded", boarded);
       }
-      if (elapsed !== null) frame = requestAnimationFrame(tick);
+      if (elapsed !== null && !bin.bus.stopped)
+        frame = requestAnimationFrame(tick);
     };
     tick();
     return () => cancelAnimationFrame(frame);
-  }, [bin, route, riders]);
+  }, [bin, route, riders, timeline]);
 
   const now = performance.now();
   return (
@@ -123,9 +154,11 @@ export const TownBusLayer = memo(function TownBusLayer({
             tabIndex={count ? 0 : -1}
             aria-hidden={count ? undefined : true}
             aria-label={count ? `Bus stop, ${count} waiting` : undefined}
+            // Dropping an agent here puts it in the bin, as on the bin.
+            data-bin-drop=""
             onClick={openWorldBin}
           >
-            <span aria-hidden="true">B</span>
+            <span className="town-bus-roundel" aria-hidden="true" />
             {count > TOWN_STOP_QUEUE ? (
               <em>+{count - TOWN_STOP_QUEUE}</em>
             ) : null}
@@ -176,10 +209,20 @@ export const TownBusLayer = memo(function TownBusLayer({
         type="button"
         className="town-bus"
         hidden
-        aria-label={`The bus, ${riding} aboard`}
-        onClick={openWorldBin}
+        data-stopped={bin.bus.stopped || undefined}
+        aria-label={
+          bin.bus.stopped
+            ? `The bus, stopped, ${riding} aboard`
+            : `The bus, ${riding} aboard; stop it`
+        }
+        onClick={() => {
+          // Stopped, nothing closes until it is let go from the tray.
+          if (!bin.bus.stopped) void worldBinStore().stopBus();
+          openWorldBin();
+        }}
       >
-        <span className="town-bus-windows" aria-hidden="true" />
+        <span className="town-bus-deck" aria-hidden="true" />
+        <span className="town-bus-deck town-bus-lower" aria-hidden="true" />
       </button>
     </div>
   );

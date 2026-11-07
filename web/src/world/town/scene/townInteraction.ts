@@ -92,6 +92,13 @@ export type TownInteractionPorts = {
   };
   /** A touch hold lifted something. */
   held(): void;
+  /**
+   * Whether canvas point `at` is over the bin or a bus stop (marking it), or
+   * null when the carry ended. Without it nothing is dropped in the bin.
+   */
+  binAt?(at: Point | null): boolean;
+  /** The carried agent or desk was dropped on the bin. */
+  bin?(drag: Pick<TownDrag, "kind" | "key">): void;
   /** Development builds: each step of the gesture machine. */
   trace?(
     before: string,
@@ -397,6 +404,7 @@ export class TownInteraction {
 
   private endDrag() {
     this.ports.ghost.remove();
+    this.ports.binAt?.(null);
     this.clearMagnet();
     this.cancelEdge?.();
     this.cancelEdge = null;
@@ -410,6 +418,17 @@ export class TownInteraction {
   private aim(hit: TownHit | null, at: Point) {
     const stage = this.ports.stage();
     if (!this.carrying || !stage) return;
+    if (this.ports.binAt?.(at)) {
+      this.carrying.target = {
+        key: "bin",
+        label: "Put in the bin",
+        action: "bin",
+      };
+      this.ports.ghost.aim("Put in the bin", true, "bin", at);
+      const world = stage.camera.toWorld(at.x, at.y);
+      stage.moveDrag(world.x, world.y, null);
+      return;
+    }
     const { model, teams } = this.ports.world();
     const target = townDropTarget(
       this.carrying,
@@ -520,6 +539,12 @@ export class TownInteraction {
         const targetKey = drag?.target?.key;
         if (!drag || !targetKey) {
           stage.endDrag("cancel");
+          return;
+        }
+        if (drag.target?.action === "bin") {
+          // It goes back to where it was and walks out to its stop.
+          stage.endDrag("cancel");
+          this.ports.bin?.({ kind: drag.kind, key: drag.key });
           return;
         }
         // Wait at the target while Herdr moves it, then land or spring back.

@@ -38,8 +38,9 @@ export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
  * sets off only when someone is waiting, and everyone waiting boards. When
  * its trip ends the riders are handed to `commit`, which records one durable
  * close intent per entry for the effect runner; the runner reports back
- * through `settle`. Until then, Put back takes an entry out, riding or not.
-Nothing reaches Herdr from here. A reload keeps this
+ * through `settle`. Until then, Put back takes an entry out, riding or not,
+ * and the bus can be stopped (stopBus) so nothing closes until it goes on.
+ * Nothing reaches Herdr from here. A reload keeps this
  * state; a service restart loses it, so nothing held is closed.
  */
 export class WorldBinRegistry {
@@ -53,6 +54,9 @@ export class WorldBinRegistry {
   private readonly anchor: number;
   /** When the bus on the map set off, or null when none is out. */
   private trip: number | null = null;
+  /** When someone stopped the bus on the map, or null while it drives. */
+  private stoppedAt: number | null = null;
+  private trips = 0;
   private readonly interval: number;
   private readonly tripMs: number;
 
@@ -86,7 +90,10 @@ export class WorldBinRegistry {
         interval_ms: this.interval,
         trip_ms: this.tripMs,
         next_ms: this.departure(now) - now,
-        elapsed_ms: this.trip === null ? null : now - this.trip,
+        elapsed_ms:
+          this.trip === null ? null : (this.stoppedAt ?? now) - this.trip,
+        stopped: this.stoppedAt !== null,
+        trip: this.trip === null ? null : this.trips,
       },
     };
   }
@@ -127,8 +134,39 @@ export class WorldBinRegistry {
    */
   restore(id: string): BinState {
     if (!this.entries.delete(id)) return this.list();
+    // A stopped bus with nobody left aboard has nothing to wait for.
+    if (
+      this.stoppedAt !== null &&
+      ![...this.entries.values()].some((entry) => entry.riding)
+    )
+      this.resumeTrip();
     this.changed();
     return this.list();
+  }
+
+  /**
+   * Stop the bus where it is, so its riders can be put back: nothing closes
+   * while it stands. Only a bus on the map stops.
+   */
+  stopBus(): BinState {
+    if (this.trip === null || this.stoppedAt !== null) return this.list();
+    this.stoppedAt = this.deps.clock.monotonic();
+    this.changed();
+    return this.list();
+  }
+
+  /** Let a stopped bus drive on from where it stood. */
+  goBus(): BinState {
+    if (this.stoppedAt === null) return this.list();
+    this.resumeTrip();
+    this.changed();
+    return this.list();
+  }
+
+  private resumeTrip() {
+    if (this.trip !== null && this.stoppedAt !== null)
+      this.trip += this.deps.clock.monotonic() - this.stoppedAt;
+    this.stoppedAt = null;
   }
 
   /**
@@ -202,13 +240,17 @@ export class WorldBinRegistry {
     this.deps.publish(this.revision);
   }
 
-  /** One timer: the bus leaving the map, else the next departure for anyone waiting. */
+  /**
+   * One timer: the bus leaving the map, else the next departure for anyone
+   * waiting. A stopped bus holds the schedule: none is due until it goes.
+   */
   private schedule() {
     this.timer?.cancel();
     this.timer = null;
     const now = this.deps.clock.monotonic();
     let at: number;
     let run: () => void;
+    if (this.stoppedAt !== null) return;
     if (this.trip !== null) {
       at = this.trip + this.tripMs;
       run = () => this.arrive();
@@ -229,12 +271,14 @@ export class WorldBinRegistry {
   private setOff(at: number) {
     if (this.trip !== null || !this.entries.size) return this.schedule();
     this.trip = at;
+    this.trips += 1;
     for (const entry of this.entries.values()) entry.riding = true;
     this.changed();
   }
 
   /** The bus has left the map: its riders' closes are recorded. */
   private arrive() {
+    if (this.stoppedAt !== null) return;
     this.trip = null;
     const riders = [...this.entries.values()].filter((entry) => entry.riding);
     if (riders.length) this.depart(riders);

@@ -371,7 +371,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         world={aggregateWorld}
         onOpenNode={(nodeId) => void openNodeById(nodeId)}
       />
-      <WorldBin />
+      <WorldBin always={view === "town" || view === "board"} />
       <GroupsWindow
         world={aggregateWorld}
         onOpenTerminal={(id) => void openTerminalById(id)}

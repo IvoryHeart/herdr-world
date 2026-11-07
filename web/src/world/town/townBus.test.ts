@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test";
 import type { BinEntry } from "../../../../shared/bin";
 import {
+  TOWN_BUS_DWELL_MS,
   townBinRiders,
+  townBusAlong,
   townBusAt,
+  townBusOpacity,
   townBusRoute,
+  townBusTimeline,
   townNearestStop,
 } from "./townBus";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
@@ -159,4 +163,71 @@ test("bin entries become Town riders by connection, generation and pane", () => 
     x: (building.entryX + 0.5) * T,
     y: building.y * T,
   });
+});
+
+test("the bus comes in, waits about 10 s at each stop with riders and is off the map as its trip ends", () => {
+  const TRIP = 120_000;
+  for (const shape of shapes)
+    for (const hosts of towns) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const route = townBusRoute(layout);
+      const halting = new Set(
+        route.stops
+          .filter((_, index) => index % 2 === 0)
+          .slice(0, 4)
+          .map((s) => s.key),
+      );
+      const timeline = townBusTimeline(route, halting, TRIP);
+      // It has not come in at the start; it is off the map, unseen, at the end.
+      expect(townBusAlong(timeline, 0)).toBeNull();
+      expect(townBusAlong(timeline, TRIP)).toBe(route.length);
+      const end = townBusAt(route, route.length);
+      expect(townBusOpacity(route, end.x)).toBe(0);
+      const begin = townBusAt(
+        route,
+        townBusAlong(timeline, timeline.start * 1000)!,
+      );
+      expect(townBusOpacity(route, begin.x)).toBe(0);
+      // It never goes backwards, and is never fast.
+      let previous = 0;
+      for (let ms = timeline.start * 1000; ms <= TRIP; ms += 100) {
+        const along = townBusAlong(timeline, ms)!;
+        expect(along).toBeGreaterThanOrEqual(previous - 1e-6);
+        expect(along - previous).toBeLessThanOrEqual(
+          timeline.cruise * 0.1 + 1e-6,
+        );
+        previous = along;
+      }
+      expect(timeline.cruise).toBeLessThanOrEqual(400);
+      // It stands at each stop with riders for about 10 s, then goes on.
+      for (const stop of route.stops) {
+        const halt = timeline.halts.get(stop.key);
+        if (!halting.has(stop.key)) continue;
+        expect(halt).toBeDefined();
+        const at = (s: number) => townBusAlong(timeline, s * 1000)!;
+        expect(at(halt!)).toBeCloseTo(stop.at, 3);
+        expect(at(halt! + TOWN_BUS_DWELL_MS / 1000 - 0.01)).toBeCloseTo(
+          stop.at,
+          3,
+        );
+        // It slows to the stop: in the last half second it barely moves.
+        expect(stop.at - at(halt! - 0.5)).toBeLessThan(timeline.cruise * 0.2);
+        expect(at(halt! + TOWN_BUS_DWELL_MS / 1000 + 0.5)).toBeGreaterThan(
+          stop.at,
+        );
+      }
+    }
+});
+
+test("many stops with riders share half the trip, so the bus still drives it", () => {
+  const { layout } = layoutTown(
+    town(Object.fromEntries([..."abcdefgh"].map((key) => [key, [1]]))),
+    TOWN_SHAPES.wide,
+  );
+  const route = townBusRoute(layout);
+  const all = new Set(route.stops.map((stop) => stop.key));
+  const timeline = townBusTimeline(route, all, 120_000);
+  expect(townBusAlong(timeline, 120_000)).toBe(route.length);
+  const dwell = timeline.pieces.find((piece) => !piece.phases.length)!;
+  expect(dwell.t1 - dwell.t0).toBeLessThanOrEqual(60 / all.size + 1e-9);
 });

@@ -20,6 +20,8 @@ const state = (over: Partial<BinState> = {}): BinState => ({
     trip_ms: 20_000,
     next_ms: 60_000,
     elapsed_ms: null,
+    stopped: false,
+    trip: null,
   },
   ...over,
 });
@@ -155,6 +157,8 @@ test("the bus clock runs from when the state was read", async () => {
         trip_ms: 20_000,
         next_ms: 5_000,
         elapsed_ms: null,
+        stopped: false,
+        trip: null,
       },
     }),
   );
@@ -173,6 +177,9 @@ test("the bus clock runs from when the state was read", async () => {
   expect(binBusClock(driving, read.readAt + 5_000).elapsed).toBe(15_000);
   // Past its trip the bus has left the map.
   expect(binBusClock(driving, read.readAt + 10_000).elapsed).toBeNull();
+  // A stopped bus stands where it was stopped, however long it waits.
+  const stopped = { ...driving, bus: { ...driving.bus, stopped: true } };
+  expect(binBusClock(stopped, read.readAt + 60_000).elapsed).toBe(10_000);
   expect(binClockLabel(125_000)).toBe("2:05");
   expect(binClockLabel(0)).toBe("0:00");
 });

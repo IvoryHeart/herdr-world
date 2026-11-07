@@ -82,6 +82,8 @@ test("holding closes nothing until the scheduled bus leaves the map", async () =
     trip_ms: 10_000,
     next_ms: 40_000,
     elapsed_ms: null,
+    stopped: false,
+    trip: null,
   });
   await advance(39_999);
   expect(registry.list().entries[0]!.riding).toBe(false);
@@ -157,6 +159,46 @@ test("put back works until the bus has left the map", async () => {
   expect(ids(committed)).toEqual([["p3"]]);
   // Once it has left, the close is recorded and Put back does nothing.
   expect(registry.restore(c).closing.map((entry) => entry.id)).toEqual([c]);
+});
+
+test("a stopped bus closes nothing until it is let go", async () => {
+  const { registry, committed, advance } = fixture();
+  const a = registry.add(agent("p1")).entries[0]!.id;
+  registry.add(agent("p2"));
+  await advance(60_000 + 4_000);
+  expect(registry.list().bus.trip).toBe(1);
+  expect(registry.stopBus().bus).toMatchObject({
+    stopped: true,
+    elapsed_ms: 4_000,
+  });
+  // It stands well past the trip's end: nothing is recorded.
+  await advance(60_000);
+  expect(committed).toEqual([]);
+  expect(registry.list().bus.elapsed_ms).toBe(4_000);
+  expect(registry.restore(a).entries.map((e) => e.pane_id)).toEqual(["p2"]);
+  expect(registry.list().bus.stopped).toBe(true);
+  // Let go, it drives the rest of its trip from where it stood.
+  expect(registry.goBus().bus).toMatchObject({
+    stopped: false,
+    elapsed_ms: 4_000,
+  });
+  await advance(5_999);
+  expect(committed).toEqual([]);
+  await advance(1);
+  expect(ids(committed)).toEqual([["p2"]]);
+});
+
+test("a stopped bus with nobody left aboard drives on", async () => {
+  const { registry, committed, advance } = fixture();
+  const a = registry.add(agent("p1")).entries[0]!.id;
+  await advance(60_000);
+  registry.stopBus();
+  expect(registry.restore(a).bus.stopped).toBe(false);
+  await advance(10_000);
+  expect(committed).toEqual([]);
+  expect(registry.list().bus.elapsed_ms).toBeNull();
+  // With no bus out, stopping does nothing.
+  expect(registry.stopBus().bus.stopped).toBe(false);
 });
 
 test("close now takes exactly the entries named", async () => {

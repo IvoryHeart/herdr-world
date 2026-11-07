@@ -58,6 +58,7 @@ import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { markOut, TownBusLayer, useTownBin } from "./TownBusLayer";
 import { worldBinStore } from "../bin/useWorldBin";
+import { aimAtBin } from "../bin/binDrop";
 import "./townBoard.css";
 import "./townTeams.css";
 
@@ -113,6 +114,8 @@ export type TownRoomActions = {
   onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
   /** A grouped desk dropped on its own room's floor: leave its team. */
   onUngroupDesk(deskKey: string): Promise<TownMoveResult>;
+  /** An agent, or a desk's agents, dropped on the bin or a bus stop. */
+  onBinDrop?(kind: "agent" | "desk", key: string): void;
 };
 
 /** Camera kept across Office visits within one page session. */
@@ -635,6 +638,15 @@ export function TownCanvas({
         remove: () => ghost.remove(),
       },
       held: () => navigator.vibrate?.(12),
+      // The bin chip and the bus stops lie over the canvas: a carry over
+      // one is dropped in the bin.
+      binAt: (at) => {
+        if (!at || !latest.current.roomActions.onBinDrop) return aimAtBin(null);
+        const rect = host.getBoundingClientRect();
+        return aimAtBin({ x: rect.left + at.x, y: rect.top + at.y });
+      },
+      bin: (drag) =>
+        latest.current.roomActions.onBinDrop?.(drag.kind, drag.key),
       // Town's targets are live hits and drags: trace a summary of each.
       trace: DEVTOOLS
         ? (before, after, event, effects) =>

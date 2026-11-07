@@ -5,26 +5,26 @@
   pointer-events: none;
 }
 
+/*
+ * A London bus stop: a white flag on a dark pole, with the red roundel (a
+ * red ring crossed by a red bar). The flag turns red while agents wait.
+ */
 .town-bus-stop {
   position: absolute;
   z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 12px;
+  display: block;
+  width: 14px;
   height: 12px;
   padding: 0;
   /* Never smaller on screen than at room zoom, so a phone can tap it. */
   translate: -50% -100%;
+  margin-top: -8px;
   scale: max(1, var(--iz));
-  transform-origin: 50% 100%;
-  color: #fff;
-  font-size: 8px;
-  font-weight: 700;
-  line-height: 1;
-  background: #2a5bd7;
-  border: 1px solid #f6f2e6;
-  border-radius: 50%;
-  box-shadow: 0 2px 0 -1px #3b3b3b;
+  transform-origin: 50% calc(100% + 8px);
+  background: #f6f2e6;
+  border: 1px solid #3b3b3b;
+  border-radius: 1px;
+  box-shadow: 0 2px 0 -1px rgb(0 0 0 / 0.35);
   cursor: pointer;
   pointer-events: auto;
 }
@@ -34,16 +34,49 @@
   position: absolute;
   top: 100%;
   left: 50%;
-  width: 1px;
-  height: 7px;
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
   background: #3b3b3b;
 }
+.town-bus-roundel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  translate: -50% -50%;
+  border: 2px solid #d4252b;
+  border-radius: 50%;
+}
+.town-bus-roundel::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: #d4252b;
+}
+/* Someone waits: the flag shows red with a white roundel. */
 .town-bus-stop[data-waiting] {
-  background: #d7432a;
+  background: #d4252b;
+}
+.town-bus-stop[data-waiting] .town-bus-roundel {
+  border-color: #fff;
+}
+.town-bus-stop[data-waiting] .town-bus-roundel::after {
+  background: #fff;
+}
+.town-bus-stop[data-bin-over] {
+  outline: 2px solid #ffd54a;
+  outline-offset: 1px;
 }
 .town-bus-stop em {
   position: absolute;
   left: calc(100% + 2px);
+  top: 1px;
   font-style: normal;
   font-size: 7px;
   color: var(--town-text, #fff);
@@ -85,37 +118,88 @@
   }
 }
 
+/*
+ * A red London double-decker, side on: two decks of windows, a dark
+ * destination blind at the front and two wheels. It faces its way along
+ * the street (data-facing).
+ */
 .town-bus {
   position: absolute;
   left: 0;
   top: 0;
   z-index: 3;
-  width: 44px;
-  height: 20px;
-  margin: -12px 0 0 -22px;
+  width: 46px;
+  height: 30px;
+  margin: -24px 0 0 -23px;
   padding: 0;
-  background: #d7432a;
+  background: linear-gradient(#d4252b 0 47%, #f6f2e6 47% 53%, #d4252b 53% 100%);
   border: 2px solid #3b3b3b;
-  border-radius: 5px 7px 3px 3px;
+  border-radius: 6px 8px 2px 2px;
   box-shadow: 0 3px 0 -1px rgb(0 0 0 / 0.35);
   cursor: pointer;
   pointer-events: auto;
+  transition: opacity 0.2s linear;
 }
 .town-bus[hidden] {
   display: none;
 }
-.town-bus-windows {
+.town-bus-deck {
   position: absolute;
-  inset: 3px 4px 8px 4px;
-  background: repeating-linear-gradient(90deg, #bfe3f2 0 7px, #d7432a 7px 9px);
+  left: 3px;
+  right: 9px;
+  top: 3px;
+  height: 7px;
+  background: repeating-linear-gradient(90deg, #bfe3f2 0 6px, #d4252b 6px 8px);
+  border-radius: 1px;
+}
+.town-bus-lower {
+  top: 15px;
+  right: 11px;
+}
+/* The destination blind above the windscreen, and the windscreen. */
+.town-bus::before {
+  content: "";
+  position: absolute;
+  right: 1px;
+  top: 3px;
+  width: 6px;
+  height: 3px;
+  background: #222;
+  box-shadow:
+    0 5px 0 #bfe3f2,
+    0 13px 0 -1px #bfe3f2;
+}
+/* The wheels. */
+.town-bus::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  bottom: -5px;
+  width: 7px;
+  height: 7px;
+  background: #222;
+  border-radius: 50%;
+  box-shadow: 24px 0 0 #222;
 }
 .town-bus[data-facing="left"] {
   scale: -1 1;
 }
+/* Stopped: its hazard lights blink until it is let go. */
+.town-bus[data-stopped] {
+  outline: 2px solid #ffb300;
+  outline-offset: 1px;
+  animation: town-bus-hazard 1s steps(2, jump-none) infinite;
+}
+@keyframes town-bus-hazard {
+  50% {
+    outline-color: transparent;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .town-bin-rider[data-out][data-walk],
-  .town-bin-rider[data-out][data-walk] img {
+  .town-bin-rider[data-out][data-walk] img,
+  .town-bus[data-stopped] {
     animation: none;
   }
 }
