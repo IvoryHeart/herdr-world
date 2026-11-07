@@ -66,6 +66,7 @@ import type {
   CardColor,
   DeskCell,
   DeskPin,
+  RoomSpot,
   BoardDocument,
   BoardOp,
   BoardPatch,
@@ -183,6 +184,7 @@ export function emptyBoardDocument(): BoardDocument {
       folded: [],
       colors: {},
       desk_pins: {},
+      room_pins: {},
       interest: {},
       group_interest: {},
     },
@@ -260,6 +262,27 @@ function deskPins(value: unknown): Record<string, DeskPin> {
     text(key, "desk_pins key", BOARD_LIMITS.key);
     if (!isObject(entry)) fail("desk pin");
     out[key] = { cell: entry.cell === null ? null : deskCell(entry.cell) };
+  }
+  return out;
+}
+
+/** Town buildings are at most this many tiles across or down. */
+const ROOM_SPOT_MAX = 4_096;
+function roomSpot(value: unknown): RoomSpot {
+  const tile = (entry: unknown) =>
+    Number.isSafeInteger(entry) &&
+    (entry as number) >= 0 &&
+    (entry as number) < ROOM_SPOT_MAX;
+  if (!isObject(value) || !tile(value.x) || !tile(value.y)) fail("room spot");
+  return { x: value.x as number, y: value.y as number };
+}
+function roomPins(value: unknown): Record<string, RoomSpot> {
+  if (value === undefined) return {};
+  if (!isObject(value)) fail("room_pins must be an object");
+  const out: Record<string, RoomSpot> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    text(key, "room_pins key", BOARD_LIMITS.key);
+    out[key] = roomSpot(entry);
   }
   return out;
 }
@@ -377,6 +400,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       colors: colors(layout.colors),
       // Boards saved before desk pins have none.
       desk_pins: deskPins(layout.desk_pins),
+      // Boards saved before room moves have none: every room is stacked.
+      room_pins: roomPins(layout.room_pins),
       // Boards saved before interest have none: every agent is watched.
       interest: interests(layout.interest, BOARD_LIMITS.key),
       group_interest: groupInterests(layout.group_interest, BOARD_LIMITS.key),
@@ -408,6 +433,7 @@ function checkBounds(document: BoardDocument) {
     layout.folded.length +
     Object.keys(layout.colors).length +
     Object.keys(layout.desk_pins).length +
+    Object.keys(layout.room_pins).length +
     Object.keys(layout.interest).length +
     Object.keys(layout.group_interest ?? {}).length;
   if (entries > BOARD_LIMITS.layoutEntries)
@@ -705,6 +731,17 @@ function applyOp(
         next.layout.desk_pins[text(op.key, "desk key", BOARD_LIMITS.key)];
       const cell = deskCell(op.cell);
       if (pin && !pin.cell) pin.cell = cell;
+      return;
+    }
+    case "room.place": {
+      // The host's rooms as the user arranged them: its old spots go.
+      const prefix = `${text(op.connection_id, "room host", BOARD_LIMITS.key)}:`;
+      const spots = roomPins(op.spots);
+      if (Object.keys(spots).some((key) => !key.startsWith(prefix)))
+        fail("room spots belong to their own host");
+      for (const key of Object.keys(next.layout.room_pins))
+        if (key.startsWith(prefix)) delete next.layout.room_pins[key];
+      Object.assign(next.layout.room_pins, spots);
       return;
     }
     case "interest.set":

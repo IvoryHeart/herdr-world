@@ -625,6 +625,62 @@ describe("Board store", () => {
     expect(parseBoardDocument(old).layout.desk_pins).toEqual({});
   });
 
+  test("room spots: a host's spots are replaced together, other hosts' kept", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      {
+        op: "room.place",
+        connection_id: "alpha",
+        spots: { "alpha:w1": { x: 2, y: 9 }, "alpha:w2": { x: 40, y: 9 } },
+      },
+      {
+        op: "room.place",
+        connection_id: "beta",
+        spots: { "beta:w1": { x: 2, y: 20 } },
+      },
+    ]);
+    // A later move of alpha's rooms replaces all of alpha's: w2 has closed.
+    store.patch([
+      {
+        op: "room.place",
+        connection_id: "alpha",
+        spots: { "alpha:w1": { x: 2, y: 30 }, "alpha:w3": { x: 2, y: 9 } },
+      },
+    ]);
+    expect(store.get().layout.room_pins).toEqual({
+      "alpha:w1": { x: 2, y: 30 },
+      "alpha:w3": { x: 2, y: 9 },
+      "beta:w1": { x: 2, y: 20 },
+    });
+    // Spots belong to their own host, and are whole tiles.
+    expect(() =>
+      store.patch([
+        {
+          op: "room.place",
+          connection_id: "alpha",
+          spots: { "beta:w1": { x: 2, y: 9 } },
+        },
+      ]),
+    ).toThrow("room spots belong to their own host");
+    for (const spot of [{ x: -1, y: 9 }, { x: 2.5, y: 9 }, null])
+      expect(() =>
+        store.patch([
+          {
+            op: "room.place",
+            connection_id: "alpha",
+            spots: { "alpha:w1": spot as { x: number; y: number } },
+          },
+        ]),
+      ).toThrow("room spot");
+    // Spots survive a reload, and a board saved before them loads with none.
+    expect(new BoardStore(path).get().layout.room_pins).toEqual(
+      store.get().layout.room_pins,
+    );
+    const old = store.get() as unknown as { layout: Record<string, unknown> };
+    delete old.layout.room_pins;
+    expect(parseBoardDocument(old).layout.room_pins).toEqual({});
+  });
+
   test("a pinned desk moved to another workspace stays pinned, placed afresh", () => {
     const store = new BoardStore(path);
     store.patch([

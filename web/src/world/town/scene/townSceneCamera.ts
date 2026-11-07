@@ -22,6 +22,7 @@ import {
   townShapeKey,
   type TownLayout,
 } from "../townLayout";
+import { townRoomsMoved } from "../townRoomPlace";
 import type { TownTarget } from "../townTargets";
 import { townCenterEmblem } from "../townCenter";
 
@@ -202,7 +203,10 @@ export class TownSceneCamera {
       previous &&
       previous !== layout &&
       !camera.flying &&
-      townGeometryKey(previous) !== townGeometryKey(layout)
+      townGeometryKey(previous) !== townGeometryKey(layout) &&
+      // A moved room lands where the user dropped it, in view: the camera
+      // stays rather than follow a room that made way.
+      !townRoomsMoved(previous, layout)
     ) {
       const focus = camera.focusPoint();
       const at = camera.toWorld(focus.x, focus.y);

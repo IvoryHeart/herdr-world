@@ -1,7 +1,11 @@
 import { useDrawReadiness } from "../useDrawReadiness";
 import "../worldAsks.css";
 import { TownBoard } from "./TownBoard";
-import { TownTeamsLayer, TownWorldLayer } from "./TownWorldLayer";
+import {
+  TownTeamsLayer,
+  TownWorldLayer,
+  type TownRoomPress,
+} from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
 import {
   useCallback,
@@ -11,7 +15,8 @@ import {
   useRef,
   useState,
 } from "react";
-import type { TownMoveResult } from "./townMoves";
+import type { RoomPins } from "./townModel";
+import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
@@ -70,61 +75,8 @@ import { aimAtBin } from "../bin/binDrop";
 import "./townBoard.css";
 import "./townTeams.css";
 
-/** A place's colour in the shared picker (ColorSwatch.tsx). */
-export type PlaceColorChoice = {
-  palette: readonly { id: string; hex: string }[];
-  current: { id: string; custom: boolean };
-  onColor(id: string | null): void;
-  /** The default's colour, shown while the place has none of its own. */
-  defaultHex?: string;
-};
-
-export type TownRoomActions = {
-  showCreateSeat(roomKey: string): boolean;
-  canCreateSeat(roomKey: string): boolean;
-  createSeatReason(roomKey: string): string | null;
-  /** Open this room's launcher: Terminal, a profile or an agent kind. */
-  onNewAgent(roomKey: string): void;
-  showCreateRoom(roomKey: string | null): boolean;
-  canCreateRoom(roomKey: string | null): boolean;
-  createRoomReason(roomKey: string | null): string | null;
-  onCreateRoom(roomKey: string | null): void;
-  canRenameRoom(roomKey: string): boolean;
-  onRenameRoom(roomKey: string): void;
-  canCloseRoom(roomKey: string): boolean;
-  onCloseRoom(roomKey: string): void;
-  /** List every pane of a desk with more panes than drawn seats. */
-  onChoosePanes(deskKey: string): void;
-  /** Keyboard move: choose another room for a desk (key M on its target). */
-  onMoveDesk(deskKey: string): void;
-  /** Keyboard move: choose another desk for an agent (key M on its target). */
-  onMoveAgent(agentKey: string): void;
-  /**
-   * A room's (workspace's) or building's (host's) colour for the shared
-   * picker; null when it cannot be changed here.
-   */
-  placeColor(kind: "room" | "host", key: string): PlaceColorChoice | null;
-  /** A desk dragged onto another room; resolves how the move ended. */
-  onDropDesk(deskKey: string, roomKey: string): Promise<TownMoveResult>;
-  /**
-   * A desk dragged within its room: into `ontoDeskKey`'s slot, or last when
-   * null. Resolves how the reorder ended.
-   */
-  onReorderDesk(
-    deskKey: string,
-    ontoDeskKey: string | null,
-  ): Promise<TownMoveResult>;
-  /** An agent dragged onto another desk; resolves how the move ended. */
-  onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
-  /** Reveal the next group of desks, or fold the room back to 24. */
-  onToggleFold?(roomKey: string, nextLimit?: number): void;
-  /** A desk dragged onto another desk: join its team (townTeams.ts). */
-  onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
-  /** A grouped desk dropped on its own room's floor: leave its team. */
-  onUngroupDesk(deskKey: string): Promise<TownMoveResult>;
-  /** An agent, or a desk's agents, dropped on the bin or a bus stop. */
-  onBinDrop?(kind: "agent" | "desk", key: string): void;
-};
+export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
+import type { TownRoomActions } from "./townRoomActions";
 
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
@@ -132,6 +84,7 @@ const savedCameras = new Map<string, { x: number; y: number; z: number }>();
 const NO_COLORS: TerminalColors = {};
 const NO_RELATIONS = { relations: [], places: new Map() };
 const NO_PINS: DeskPins = {};
+const NO_ROOM_PINS: RoomPins = {};
 const NO_KEYS: ReadonlySet<string> = new Set();
 const NO_QUESTS: ReadonlyMap<string, TownQuestMark> = new Map();
 
@@ -162,6 +115,7 @@ export function TownCanvas({
   terminalColors = NO_COLORS,
   relations = NO_RELATIONS,
   deskPins = NO_PINS,
+  roomPins = NO_ROOM_PINS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
   centerActions,
@@ -216,6 +170,8 @@ export function TownCanvas({
   terminalColors?: TerminalColors;
   /** Saved desk pins (useDeskPins); a pinned desk keeps its cell. */
   deskPins?: DeskPins;
+  /** Where the user put rooms (useRoomPins); other rooms stack. */
+  roomPins?: RoomPins;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
@@ -259,6 +215,7 @@ export function TownCanvas({
     projection,
     terminalColors,
     deskPins,
+    roomPins,
     relations,
     sources,
     shape,
@@ -349,6 +306,8 @@ export function TownCanvas({
     roomActions,
   };
 
+  const placedRoomActions = useTownRoomMoves(roomActions, model, layout);
+
   const anchorFrame = useRef<(() => void) | null>(null);
   const reportAnchors = () => {
     const { onAnchorChange: report, onSelectedAnchorChange: reportSelected } =
@@ -414,9 +373,13 @@ export function TownCanvas({
   const visible = useTownHud(hud, "visible");
   /** Aims a carried desk or agent again at the frame just drawn. */
   const reaimCarry = useRef<(() => void) | null>(null);
-  /** Passes a room card's press to the town beneath it (TownWorldLayer). */
+  /**
+   * Passes a room card's or name's press to the town beneath it
+   * (TownWorldLayer): a press on a name can carry the room.
+   */
   const roomCardPress = useRef<
-    ((event: PointerEvent, roomKey: string) => boolean) | null
+    | ((event: PointerEvent, roomKey: string, press: TownRoomPress) => boolean)
+    | null
   >(null);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
     // The canvas and its targets show this camera until the next frame, so
@@ -637,8 +600,8 @@ export function TownCanvas({
       hovered: () => latest.current.hover,
       setHovered: setHover,
       hover: (hover) => latest.current.onHover?.(hover),
-      cursor: (pointer) => {
-        host.style.cursor = pointer ? "pointer" : "";
+      cursor: (kind) => {
+        host.style.cursor = kind ?? "";
       },
       select: (key) => latest.current.onSelect(key),
       tapCard: (deskKey) => {
@@ -670,6 +633,11 @@ export function TownCanvas({
             return actions.onReorderDesk(command.deskKey, command.ontoDeskKey);
           case "desk":
             return actions.onDropDesk(command.deskKey, command.roomKey);
+          case "room":
+            return (
+              actions.onPlaceRooms?.(command.roomKey, command.placement) ??
+              Promise.resolve("returned")
+            );
         }
       },
       ghost: {
@@ -696,7 +664,9 @@ export function TownCanvas({
         return aimAtBin({ x: rect.left + at.x, y: rect.top + at.y });
       },
       bin: (drag) =>
-        latest.current.roomActions.onBinDrop?.(drag.kind, drag.key),
+        drag.kind === "room"
+          ? undefined
+          : latest.current.roomActions.onBinDrop?.(drag.kind, drag.key),
       // Town's targets are live hits and drags: trace a summary of each.
       trace: DEVTOOLS
         ? (before, after, event, effects) =>
@@ -754,7 +724,7 @@ export function TownCanvas({
     // A room card sits above the canvas: its presses join the town's gesture
     // with the card's room as the tap target. Capturing the pointer on the
     // host keeps the rest of the gesture (moves, lift, drop) on the canvas.
-    roomCardPress.current = (event, roomKey) => {
+    roomCardPress.current = (event, roomKey, press) => {
       if (
         !rendererRef.current ||
         (event.pointerType === "mouse" && event.button !== 0)
@@ -771,10 +741,21 @@ export function TownCanvas({
         at: local(event),
         primary: event.isPrimary,
         pointerType: event.pointerType,
-        card: roomKey,
+        ...(press === "card" || press === "card-name" ? { card: roomKey } : {}),
+        ...(press === "card" ? {} : { roomName: roomKey }),
+        ...(press === "plaque-move" ? { handle: true } : {}),
       });
       return true;
     };
+    // Escape puts back a carried desk, agent or room, before anything else
+    // (a panel, the chooser) takes the key.
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && interaction.cancelCarry()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    window.addEventListener("keydown", escape, true);
     host.addEventListener("pointerdown", down);
     host.addEventListener("pointermove", move);
     host.addEventListener("pointerup", up);
@@ -785,6 +766,7 @@ export function TownCanvas({
       reaimCarry.current = null;
       roomCardPress.current = null;
       interaction.dispose();
+      window.removeEventListener("keydown", escape, true);
       host.removeEventListener("pointerdown", down);
       host.removeEventListener("pointermove", move);
       host.removeEventListener("pointerup", up);
@@ -880,7 +862,7 @@ export function TownCanvas({
             onHoverEntry={hoverEntry}
             selectedKey={selectedKey}
             blockedSince={blockedSince}
-            roomActions={roomActions}
+            roomActions={placedRoomActions}
             selectedRoomKey={selectedRoomKey}
             onSelect={onSelect}
             onActivate={onActivateAgent}
@@ -905,8 +887,8 @@ export function TownCanvas({
               onActivateRoom(key);
               zoomToRoomKey(key);
             }}
-            onRoomCardPress={(event, roomKey) =>
-              roomCardPress.current?.(event, roomKey) ?? false
+            onRoomCardPress={(event, roomKey, press) =>
+              roomCardPress.current?.(event, roomKey, press) ?? false
             }
             onFocusTarget={focusTarget}
             targets={targets}

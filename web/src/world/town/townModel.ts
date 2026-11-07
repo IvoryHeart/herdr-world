@@ -18,6 +18,7 @@ import {
 } from "../terminalColor";
 import type { DeskPins } from "../useDeskPins";
 import type { TownInput, TownPinnedCells } from "./townLayout";
+import { NO_ROOM_SPOTS, type TownRoomSpots } from "./townRoomPlace";
 
 export type TownSeatRef = { deskKey: string; seat: number };
 
@@ -59,6 +60,31 @@ export const NO_PLACE_COLORS: TownPlaceColors = {
 /** What a room's colour is saved under: its workspace's card key. */
 export const townRoomColorKey = (room: OfficeRoom) =>
   workspaceColorKey(room.workspaceRef.connectionId, room.workspaceRef.nativeId);
+
+/** Saved room spots (Board's `room_pins`) by workspace card key. */
+export type RoomPins = Readonly<Record<string, { x: number; y: number }>>;
+
+/** The saved spots by Town room key; the same spots keep the same map. */
+export function townRoomSpots(
+  projection: HerdrOfficeProjection,
+  pins: RoomPins,
+  last: TownRoomSpots = NO_ROOM_SPOTS,
+): TownRoomSpots {
+  if (!Object.keys(pins).length) return NO_ROOM_SPOTS;
+  const next = new Map<string, { x: number; y: number }>();
+  for (const room of projection.rooms) {
+    const spot = pins[townRoomColorKey(room)];
+    if (spot) next.set(room.key, { x: spot.x, y: spot.y });
+  }
+  if (!next.size) return NO_ROOM_SPOTS;
+  return next.size === last.size &&
+    [...next].every(
+      ([key, spot]) =>
+        last.get(key)?.x === spot.x && last.get(key)?.y === spot.y,
+    )
+    ? last
+    : next;
+}
 
 /** The chosen colours of the projection's rooms and buildings. */
 export function townPlaceColors(
