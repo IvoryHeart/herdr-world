@@ -41,3 +41,31 @@ export async function inspectTownTerminal(
   const nodeId = occupant?.nodeId ?? desk.terminalSelectionKeys[0];
   if (nodeId) await open(nodeId);
 }
+
+/**
+ * The agent a table stands for: one that needs you (waiting, then finished)
+ * even while it is away at reception, else the one seated there.
+ */
+export function townDeskAgentKey(
+  office: Pick<HerdrOfficeProjection, "deskRoster" | "roster">,
+  deskKey: string,
+) {
+  const rank = (agent: OfficeAgent) =>
+    agent.semanticStatus === "blocked"
+      ? 0
+      : agent.semanticStatus === "done"
+        ? 1
+        : 2;
+  const occupant = office.deskRoster.find(({ desk }) => desk.key === deskKey)
+    ?.desk.occupantAgentKey;
+  let best: OfficeAgent | null = null;
+  for (const { agent } of office.roster)
+    if (
+      agent.deskKey === deskKey &&
+      (!best ||
+        rank(agent) < rank(best) ||
+        (rank(agent) === rank(best) && agent.key === occupant))
+    )
+      best = agent;
+  return best?.key ?? occupant ?? null;
+}

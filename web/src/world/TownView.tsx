@@ -10,7 +10,7 @@ import { WorldSearchResults } from "./WorldSearchResults";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { openTrace, rememberTrace, TRACE_TOGGLE_EVENT } from "./devtools/trace";
 import { TraceOverlay } from "./devtools/TraceOverlay";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { useStoreSelector } from "../store";
@@ -18,6 +18,7 @@ import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
 import { offerTownSummary } from "./town/townSummaryRequest";
 import { useTownOffice } from "./town/useTownOffice";
+import { useTownToasts } from "./town/TownToasts";
 import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
 import { putTownDropInBin } from "./town/townBinDrop";
@@ -84,6 +85,8 @@ import {
 } from "./town/useTownRoomActions";
 import { townMoveActions, type TownMoveConfirm } from "./town/townMoveActions";
 import type { TownMoveFlow } from "./town/townMoveMenu";
+import { useTownReception } from "./town/useTownReception";
+import { townDeskAgentKey } from "./town/townOpen";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
@@ -429,9 +432,6 @@ export default function TownView({
     [office.paneRoster],
   );
 
-  type Toast = { id: number; kind: "ok" | "error"; text: string };
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastId = useRef(0);
   // The event trace exists only in development builds (devtools/flag.ts).
   const trace = useMemo(() => (DEVTOOLS ? openTrace("town") : NO_TRACE), []);
   const [tracing, setTracing] = useState(trace.enabled);
@@ -453,18 +453,7 @@ export default function TownView({
     window.addEventListener(TRACE_TOGGLE_EVENT, toggle);
     return () => window.removeEventListener(TRACE_TOGGLE_EVENT, toggle);
   }, [trace]);
-  const toast = useCallback(
-    (kind: Toast["kind"], text: string) => {
-      if (DEVTOOLS) trace.record("toast", { kind, text });
-      const id = ++toastId.current;
-      setToasts((current) => [...current.slice(-2), { id, kind, text }]);
-      window.setTimeout(
-        () => setToasts((current) => current.filter((item) => item.id !== id)),
-        kind === "error" ? 6_000 : 2_600,
-      );
-    },
-    [trace],
-  );
+  const { toast, view: toastsView } = useTownToasts(trace);
 
   // A finished agent announces itself once; the rail keeps it until inspected.
   const announced = useRef<Set<string> | null>(null);
@@ -504,6 +493,12 @@ export default function TownView({
     peekTimer.current = window.setTimeout(() => setPeek(next), delay);
   };
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  // Reception's filter keeps some agents at their desks; find shows them (#501).
+  const reception = useTownReception(office, askingKeys, (key, anchor) => {
+    window.clearTimeout(peekTimer.current);
+    holdPeek.current = true;
+    setPeek({ key, anchor });
+  });
   const hoverAgent = (
     key: string | null,
     anchor?: { x: number; y: number },
@@ -694,30 +689,7 @@ export default function TownView({
   const center = { selectedRoomKey, townRoomActions, townSummary, openChat };
   const townCenter = useTownCenter(world, office, preferences, center, toast);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
-  /**
-   * The agent a table stands for: one that needs you (waiting, then
-   * finished) even while it is away at reception, else the one seated there.
-   */
-  const deskAgentKey = (deskKey: string) => {
-    const rank = (agent: OfficeAgent) =>
-      agent.semanticStatus === "blocked"
-        ? 0
-        : agent.semanticStatus === "done"
-          ? 1
-          : 2;
-    const occupant = office.deskRoster.find(({ desk }) => desk.key === deskKey)
-      ?.desk.occupantAgentKey;
-    let best: OfficeAgent | null = null;
-    for (const { agent } of office.roster)
-      if (
-        agent.deskKey === deskKey &&
-        (!best ||
-          rank(agent) < rank(best) ||
-          (rank(agent) === rank(best) && agent.key === occupant))
-      )
-        best = agent;
-    return best?.key ?? occupant ?? null;
-  };
+  const deskAgentKey = (deskKey: string) => townDeskAgentKey(office, deskKey);
   /**
    * Tapping an agent, or its desk even while the agent is away at reception
    * or in the lounge, opens the agent (openAgent). A desk without an agent
@@ -873,12 +845,14 @@ export default function TownView({
               openOfficeTerminal(peekAgent.key);
             }}
             onNext={
-              nextCall(peekAgent.key)
+              reception.step(peekAgent.key, peek!.anchor) ??
+              (nextCall(peekAgent.key)
                 ? () => openAgent(nextCall(peekAgent.key)!.agent.key)
-                : null
+                : null)
             }
             onClose={() => {
               holdPeek.current = false;
+              reception.clear();
               setPeek(null);
             }}
             onHold={(hold) => {
@@ -888,14 +862,7 @@ export default function TownView({
             }}
           />
         ) : null}
-        <div className="town-toasts" role="status" aria-live="polite">
-          {toasts.map((item) => (
-            <div key={item.id} className={`town-toast town-toast-${item.kind}`}>
-              <i aria-hidden="true">{item.kind === "ok" ? "✓" : "!"}</i>
-              {item.text}
-            </div>
-          ))}
-        </div>
+        {toastsView}
         <div className="town-stage">
           <TownHerdrSetupOffer world={world} aggregate={aggregate} />
           <TownCanvas
@@ -911,6 +878,9 @@ export default function TownView({
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
             askingKeys={askingKeys}
+            receptionHeldKeys={reception.held}
+            receptionTakes={reception.takes}
+            onFindHeld={reception.find}
             // A letter at reception: its question in Needs you.
             onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}

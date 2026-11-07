@@ -104,6 +104,21 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
+  - Each reception's sign shows the marks it takes: **!** Needs you, **?** Asks
+    you and **✓** Done, with the ones it leaves out greyed. Press the sign to
+    choose them for that building, or tick **Apply to all buildings** to give
+    every building the same marks; **Reset to default** (all three) resets
+    that building, or every building while **Apply to all buildings** is
+    ticked. An agent whose mark its reception
+    leaves out stays seated at its own desk with that mark overhead; it never
+    walks to reception, the bar or anywhere else. Reception then shows a tag
+    such as `✓ 4 at desks · find`: **find** opens the first of them and the
+    card's **Next ›** steps through the rest. The filter moves bodies, not
+    facts: marks, the Town board, room plaques, Board, Desk and Needs you
+    count and list every agent as before. World saves the filter, so every
+    browser and device shows the same one. Zoomed in to desks, where the
+    reception boards are put away, tap a building's reception lobby to bring
+    its board and sign back; any other tap or zoom level puts it away again.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -331,6 +346,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     in reading order (top to bottom, left to right), so Spaces lists the
     rooms as Town shows them. A building whose rooms were never moved still
     stacks them in Herdr's order.
+  - **Tidy rooms.** **Tidy rooms** (sparkles) on a building's sign, or the
+    sparkles button on its reception board (next to its colour), puts every
+    room of that building back in order in one step: in Herdr's workspace
+    order, each room joins the shortest of the building's columns, two tiles
+    apart, with no gaps or overlaps, exactly as a building whose rooms were
+    never moved stacks them. The rooms glide to
+    their new spots (or simply stand there under calm or reduced motion), and
+    World saves the result like a room move, so it stays after a reload and
+    Spaces keeps the same order. Tidying a tidy building changes nothing.
+    **Undo** in the note that follows (for five seconds) puts the rooms back
+    where they stood. Rooms still move freely afterwards.
   - **Bin and bus.** Dragging an agent (or a desk) onto the bin icon at the
     bottom of Town or Board, or onto a Town bus stop, or **Put in bin** in an
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;

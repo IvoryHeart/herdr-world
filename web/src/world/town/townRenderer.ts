@@ -105,6 +105,9 @@ export type TownRendererHandle = {
   endDrag(mode: "cancel" | "park"): void;
   /** Land on the target with a puff, spring home, or fade when uncertain. */
   finishMove(result: TownMoveResult): void;
+  /** Tidy rooms: glide a building's rooms once the town shows them moved. */
+  beginGlide(hostKey: string): void;
+  finishGlide(result: TownMoveResult): void;
   destroy(): void;
 };
 
@@ -677,11 +680,15 @@ export async function createTownRenderer(
       state.askingKeys ?? new Set(),
       hosts,
       state.awayKeys ?? new Set(),
+      state.heldKeys ?? new Set(),
     );
     stats.actorsReconciled += actors.reconciled;
     for (const hostKey of hosts ?? actorWorld.buildings.keys())
       stats.hostSyncs[hostKey] = (stats.hostSyncs[hostKey] ?? 0) + 1;
     stats.summoned = [...state.summonedKeys].filter(
+      (key) => actors.actors.get(key)?.goal?.kind === "seat",
+    );
+    stats.held = [...(state.heldKeys ?? [])].filter(
       (key) => actors.actors.get(key)?.goal?.kind === "seat",
     );
   };
@@ -705,6 +712,7 @@ export async function createTownRenderer(
     layoutCells: () => layoutCells,
     podOf,
     buildingOf: (hostKey) => buildingByHost.get(hostKey)?.container,
+    roofAlpha: (hostKey) => buildingByHost.get(hostKey)?.roofAlpha ?? 0,
     deskColor,
     lookOf,
     clock: () => clock,
@@ -717,6 +725,8 @@ export async function createTownRenderer(
     moveDrag,
     endDrag,
     finishMove,
+    beginGlide: dragEffects.beginGlide,
+    finishGlide: dragEffects.finishGlide,
     camera,
     get level() {
       return level;

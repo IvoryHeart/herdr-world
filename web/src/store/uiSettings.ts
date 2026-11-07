@@ -5,6 +5,11 @@ import {
   disconnectShortcutPreferences,
   SHORTCUT_SETTING_KEY,
 } from "../shortcutPreferences";
+import {
+  TOWN_RECEPTION_SETTING_KEY,
+  adoptTownReceptionFilter,
+  connectTownReceptionFilter,
+} from "../world/town/townReceptionSetting";
 
 /**
  * Reads interface preferences from the World service and installs their write
@@ -19,12 +24,15 @@ let uiSettingsHydrated = false;
 let uiSettingsEpoch = 0;
 let uiSettingsPushVersion = 0;
 let latestShortcutPush: unknown;
+let receptionPushVersion = 0;
+let latestReceptionPush: unknown;
 
 async function hydrateUiSettings() {
   if (uiSettingsHydrated) return;
   uiSettingsHydrated = true;
   const epoch = uiSettingsEpoch;
   const pushVersion = uiSettingsPushVersion;
+  const receptionVersion = receptionPushVersion;
   try {
     const result = await bridge.call("bridge.ui_settings.get");
     if (epoch !== uiSettingsEpoch) return;
@@ -39,6 +47,17 @@ async function hydrateUiSettings() {
       pushVersion === uiSettingsPushVersion
         ? ui[SHORTCUT_SETTING_KEY]
         : latestShortcutPush,
+    );
+    connectTownReceptionFilter(async (value) => {
+      await bridge.call("bridge.ui_settings.update", {
+        key: TOWN_RECEPTION_SETTING_KEY,
+        value,
+      });
+    });
+    adoptTownReceptionFilter(
+      receptionVersion === receptionPushVersion
+        ? ui[TOWN_RECEPTION_SETTING_KEY]
+        : latestReceptionPush,
     );
   } catch {
     // Either the call lost a race with socket setup, or the service predates
@@ -56,9 +75,16 @@ export function installUiSettings(): void {
       uiSettingsEpoch += 1;
       uiSettingsHydrated = false;
       disconnectShortcutPreferences();
+      connectTownReceptionFilter(null);
     }
   });
   bridge.onUiSetting((push) => {
+    if (push.key === TOWN_RECEPTION_SETTING_KEY) {
+      receptionPushVersion += 1;
+      latestReceptionPush = push.value;
+      adoptTownReceptionFilter(push.value);
+      return;
+    }
     if (push.key !== SHORTCUT_SETTING_KEY) return;
     uiSettingsPushVersion += 1;
     latestShortcutPush = push.value;

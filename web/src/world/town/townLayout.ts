@@ -34,6 +34,8 @@ import {
 } from "./townRoomPlace";
 
 export { TOWN_FACADE, TOWN_PHONE_BOARD_ROWS } from "./townLots";
+/** The reception lobby's rows from `lobbyY`, above the rooms. */
+export { LOBBY_HEIGHT as TOWN_LOBBY_HEIGHT } from "./townLots";
 
 export const TOWN_TILE = 16;
 

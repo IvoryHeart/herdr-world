@@ -203,7 +203,17 @@ hosts stay usable.
    the bar in the building's bottom corner. When the queue is full, the rest
    crowd the lobby and grumble, then nap on the floor after about 90 seconds;
    the front of the crowd takes the next free spot. These locations visualize
-   status; they do not move the underlying pane or change its host. For the
+   status; they do not move the underlying pane or change its host. To keep
+   reception for what matters now, press its sign (the **!** **?** **✓**
+   marks) and untick a mark, for example **✓** Done: those agents stay at
+   their desks with their mark, and reception shows `✓ N at desks · find`.
+   Press **find** to open the first of them and **Next ›** to step through
+   the rest; **Reset to default** brings everyone back. A change applies to
+   that building alone; tick **Apply to all buildings** to give every building
+   the same marks. Counts, Board and Needs you are
+   unchanged, and World keeps the filter for every browser. Zoomed in to
+   desks the boards are put away: tap the reception lobby to bring its board
+   and sign back. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex subscription
    window is left (amber and **low** under 15 %); hover or tap one for its reset
@@ -405,6 +415,12 @@ hosts stay usable.
    building. World saves the arrangement, so it stays after a reload and
    every device shows it, and Herdr's workspace order follows it (top to
    bottom, left to right), so Spaces lists the rooms in the same order.
+   To put a building back in order, choose **Tidy rooms** (sparkles) on the
+   building's sign when you look over the town, or the sparkles button on
+   its reception board, next to its colour, when you are inside: the rooms
+   glide into neat columns in Herdr's order, without gaps or overlaps, and
+   the note at the top offers **Undo** for a few seconds. Tidying again
+   changes nothing.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room

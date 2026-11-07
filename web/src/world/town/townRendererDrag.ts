@@ -33,6 +33,7 @@ import {
 import type { TownModel } from "./townModel";
 import type { TownRoomPlacement } from "./townRoomPlace";
 import type { TownMoveResult } from "./townMoves";
+import { createTownRoomGlide } from "./townRendererGlide";
 import { textureOf, type PodView } from "./townRendererScene";
 import {
   townCharacter,
@@ -57,6 +58,8 @@ export type TownDragContext = {
   podOf(deskKey: string): PodView | undefined;
   /** The container a building's interior, desks and agents are drawn in. */
   buildingOf(hostKey: string): Container | undefined;
+  /** How much of a building its roof hides: 1 under the roof, 0 open. */
+  roofAlpha(hostKey: string): number;
   deskColor(deskKey: string): TerminalColor;
   lookOf(key: string): TownLook;
   /** The renderer's animation clock, in seconds. */
@@ -86,6 +89,7 @@ export function createTownDragEffects(ctx: TownDragContext) {
     }
     return true;
   };
+  const glide = createTownRoomGlide(ctx, quiet, puffAt);
   type Rect = { x: number; y: number; w: number; h: number };
   type DragVisual = {
     kind: "desk" | "agent" | "room";
@@ -481,10 +485,24 @@ export function createTownDragEffects(ctx: TownDragContext) {
     moveDrag,
     endDrag,
     finishMove,
-    /** Advance drag effects and dust; true while anything still moves. */
-    update: updateDrag,
-    clear: clearDrag,
-    /** A desk, agent or room is carried, or landing: the scene changes in place. */
-    active: () => drag !== null,
+    /** Tidy rooms: snapshot a building's rooms to glide to their new spots. */
+    beginGlide: glide.begin,
+    /** How the tidy's save ended: one not saved glides nothing. */
+    finishGlide: glide.finish,
+    /** Advance drag effects, glides and dust; true while anything moves. */
+    update: (dt: number) => {
+      // The glide first: the dust of a landing room moves this frame.
+      const gliding = glide.update();
+      return updateDrag(dt) || gliding;
+    },
+    clear: () => {
+      clearDrag();
+      glide.clear();
+    },
+    /**
+     * A desk, agent or room is carried or landing, or rooms are being
+     * tidied: the scene changes in place.
+     */
+    active: () => drag !== null || glide.active(),
   };
 }
