@@ -141,21 +141,59 @@ test("a Claude transcript ending with a limit refusal is a stop with its reset",
   });
 });
 
-test("Claude's older limit message carries its reset; newer words have none", () => {
+test("Claude's limit messages carry the reset they state", () => {
   expect(
     usageStopFromRecords("claude", [
       claudeRefusal(2, {}, `Claude AI usage limit reached|${reset}`),
     ])?.resets_at,
   ).toBe(reset * 1000);
+  const textReset = (text: string, minute = 2) =>
+    usageStopFromRecords("claude", [
+      claudeRefusal(minute, { error: "rate_limit" }, text),
+    ])?.resets_at;
   expect(
     usageStopFromRecords("claude", [
       claudeRefusal(
         2,
         { error: "rate_limit" },
-        "You've hit your limit · resets 3pm",
+        "You've hit your limit · resets 3pm (UTC)",
       ),
     ]),
-  ).toEqual({ harness: "claude", at: Date.parse(at(2)), resets_at: null });
+  ).toEqual({
+    harness: "claude",
+    at: Date.parse(at(2)),
+    resets_at: reset * 1000,
+  });
+  // The zone's own wall clock: 10:30 in New York is 15:30 UTC in November.
+  expect(
+    textReset(
+      "Claude usage limit reached. Your limit will reset at 10:30am (America/New_York).",
+    ),
+  ).toBe(Date.UTC(2026, 10, 7, 15, 30));
+  // A time already past today is tomorrow's; a stated date is used as given.
+  expect(textReset("You've hit your limit · resets 9am (UTC)")).toBe(
+    Date.UTC(2026, 10, 8, 9, 0),
+  );
+  expect(textReset("Weekly limit reached · resets Nov 10, 9am (UTC)")).toBe(
+    Date.UTC(2026, 10, 10, 9, 0),
+  );
+  // Without a zone the time is the service's own.
+  const local = new Date(Date.parse(at(2)));
+  const expected = new Date(
+    local.getFullYear(),
+    local.getMonth(),
+    local.getDate(),
+    23,
+    59,
+  ).getTime();
+  expect(textReset("You've hit your limit · resets 11:59pm")).toBe(
+    expected > local.getTime() ? expected : expected + 86_400_000,
+  );
+  // No time, or a zone nobody knows: limit reached, with no reset.
+  expect(textReset("You've hit your limit")).toBeNull();
+  expect(
+    textReset("You've hit your limit · resets 3pm (Nowhere/Atlantis)"),
+  ).toBeNull();
 });
 
 test("other Claude errors are not stops, and a later answer ends one", () => {

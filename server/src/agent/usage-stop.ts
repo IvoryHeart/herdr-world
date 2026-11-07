@@ -109,6 +109,89 @@ function codexUsageStop(records: readonly RecordValue[]) {
 const CLAUDE_LEGACY = /^Claude AI usage limit reached\|(\d{1,11})\s*$/;
 const CLAUDE_LIMIT_TEXT =
   /\b(?:usage limit reached|limit reached|hit your (?:usage )?limit)\b/i;
+/**
+ * Claude Code's newer refusal names its reset as a wall-clock time, with an
+ * optional date and time zone: "resets 3pm (UTC)", "will reset at 3:30pm",
+ * "resets Nov 8, 9am (Europe/Paris)". A time needs am/pm or minutes.
+ */
+const CLAUDE_RESET_TEXT =
+  /\bresets?\s+(?:at\s+)?(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:,|\s+at)?\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b\s*(?:\(([^)]+)\))?/i;
+const MONTHS = "janfebmaraprmayjunjulaugsepoctnovdec";
+
+/** The wall-clock fields of an instant in a zone (the service's own if none). */
+function wallClock(ms: number, zone: string | undefined) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+  }).formatToParts(ms);
+  const field = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return {
+    year: field("year"),
+    month: field("month") - 1,
+    day: field("day"),
+    asUtc: Date.UTC(
+      field("year"),
+      field("month") - 1,
+      field("day"),
+      field("hour"),
+      field("minute"),
+      field("second"),
+    ),
+  };
+}
+
+/** The instant a zone's wall clock shows the given fields. */
+function zonedTime(
+  fields: [number, number, number, number, number],
+  zone: string | undefined,
+) {
+  const guess = Date.UTC(...fields);
+  const offset = (ms: number) =>
+    wallClock(ms, zone).asUtc - Math.floor(ms / 1000) * 1000;
+  const first = guess - offset(guess);
+  return guess - offset(first);
+}
+
+/** The first instant after the refusal that matches its stated reset. */
+function claudeTextReset(text: string, at: number) {
+  const match = CLAUDE_RESET_TEXT.exec(text);
+  if (!match || !Number.isFinite(at)) return null;
+  const [, monthName, dayText, hourText, minuteText, meridiem, zoneText] =
+    match;
+  if (!meridiem && minuteText === undefined) return null;
+  let hour = Number(hourText);
+  const minute = Number(minuteText ?? 0);
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    hour = (hour % 12) + (meridiem.toLowerCase() === "pm" ? 12 : 0);
+  }
+  if (hour > 23 || minute > 59) return null;
+  const zone = zoneText?.trim();
+  try {
+    const now = wallClock(at, zone);
+    if (monthName) {
+      const month = MONTHS.indexOf(monthName.toLowerCase()) / 3;
+      const day = Number(dayText);
+      const on = (year: number) =>
+        zonedTime([year, month, day, hour, minute], zone);
+      const reset = on(now.year);
+      return reset > at ? reset : on(now.year + 1);
+    }
+    const on = (day: number) =>
+      zonedTime([now.year, now.month, day, hour, minute], zone);
+    const reset = on(now.day);
+    return reset > at ? reset : on(now.day + 1);
+  } catch {
+    return null; // A zone Intl does not know: the reset cannot be placed.
+  }
+}
 
 function claudeUsageStop(records: readonly RecordValue[]) {
   let stop: AgentUsageStop | null = null;
@@ -131,7 +214,7 @@ function claudeUsageStop(records: readonly RecordValue[]) {
       record.error === "rate_limit" &&
       CLAUDE_LIMIT_TEXT.test(text)
     )
-      resets = null;
+      resets = claudeTextReset(text, at);
     if (resets !== undefined) {
       if (Number.isFinite(at))
         stop = { harness: "claude", at, resets_at: resets };
