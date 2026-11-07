@@ -216,8 +216,9 @@ hosts stay usable.
    and sign back. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex and Claude
-   subscription window is left (amber and **low** under 15 %); hover or tap one
-   for its reset time, how old the numbers are and where they came from. The
+   subscription window is left (amber and **low** under 15 %). A reading more
+   than 15 minutes old says how old it is, such as "seen 1 h ago"; hover or tap
+   a gauge for its reset time, how old the numbers are and where they came from. The
    Claude gauge appears within about a minute of the first answer from a
    Claude agent you started from World, and reads **reached, resets …** while Claude is refusing work at
    its limit. Press **Summary** on the board (on a phone, tap the
