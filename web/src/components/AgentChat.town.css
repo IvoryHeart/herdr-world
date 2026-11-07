@@ -275,10 +275,22 @@
       .agent-history-chat-older,
       .agent-history-chat-jump
     ) {
-    position: relative;
     min-width: 36px;
     min-height: 36px;
     justify-content: center;
+  }
+
+  /* Jump to latest keeps its sticky position, which already anchors the
+     ::before hit area; relative would let it scroll out of the list. */
+  .agent-chat
+    :is(
+      .agent-chat-toolbar button,
+      .agent-chat-unavailable button,
+      .agent-chat-guessed button,
+      .agent-chat-ask-fine button,
+      .agent-history-chat-older
+    ) {
+    position: relative;
   }
 
   .agent-chat

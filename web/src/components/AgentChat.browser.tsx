@@ -1620,6 +1620,32 @@ async function run() {
       const jump = () =>
         container.querySelector<HTMLButtonElement>(".agent-history-chat-jump");
       check(jump() !== null, `Jump to latest should show at ${width}px`);
+      // Jump to latest stays in view while reading back, in Town's phone skin
+      // too, where it gains a larger hit area.
+      for (const town of width === 390 ? [false, true] : [false]) {
+        if (town) {
+          document.documentElement.dataset.layout = "mobile";
+          container.classList.add("is-town-skin");
+        }
+        list.scrollTop = list.scrollHeight / 2;
+        list.dispatchEvent(new Event("scroll"));
+        await settle();
+        const shown = jump()?.getBoundingClientRect();
+        const view = list.getBoundingClientRect();
+        check(
+          shown !== undefined &&
+            shown.top >= view.top &&
+            shown.bottom <= view.bottom + 1,
+          `Jump to latest must stay in the list while reading back at ${width}px${town ? " in Town" : ""} (${shown?.top}/${view.top}-${view.bottom})`,
+        );
+        if (town) {
+          delete document.documentElement.dataset.layout;
+          container.classList.remove("is-town-skin");
+        }
+      }
+      list.scrollTop = 0;
+      list.dispatchEvent(new Event("scroll"));
+      await settle();
       reply = conversation([
         ...long,
         message(`long-${width}-new`, "assistant", "A new message lands."),
