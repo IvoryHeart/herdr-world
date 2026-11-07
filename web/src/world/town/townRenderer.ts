@@ -15,15 +15,8 @@ import { drawTownSelectionEffects } from "./townSelectionEffects";
  * pauses while the user types in a terminal and input budgets hold.
  */
 
-import {
-  Application,
-  CanvasSource,
-  Container,
-  Graphics,
-  Sprite,
-  Texture,
-} from "pixi.js";
-import type { OfficeAgent, OfficeDesk } from "../herdrOfficeProjection";
+import { Application, Container, Graphics, Sprite } from "pixi.js";
+import type { OfficeAgent } from "../herdrOfficeProjection";
 import {
   worldMotionPreference,
   type WorldFrames,
@@ -31,14 +24,8 @@ import {
 import { registerTownFrames } from "./townFrameLifecycle";
 import { createTownDragEffects } from "./townRendererDrag";
 import { createTownActorViews } from "./townRendererActors";
-import {
-  bakeTownBuilding,
-  bakeTownPod,
-  textureOf,
-  townOutdoor,
-  type BuildingView,
-  type PodView,
-} from "./townRendererScene";
+import { textureOf } from "./townRendererScene";
+import { createTownTopology } from "./townRendererTopology";
 import type { TownSceneFrame, TownSceneState } from "./scene/townSceneDiff";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
@@ -59,7 +46,6 @@ import {
   type TownViewport,
 } from "./townCamera";
 import {
-  TOWN_FACADE,
   TOWN_TILE as T,
   townGeometryKey,
   type TownCell,
@@ -70,18 +56,12 @@ import type { TerminalColor } from "../terminalColor";
 import { createTownLookResolver } from "./townAppearance";
 import { createTownBinnedDesks, TOWN_CRUMB_RATE } from "./townBinnedDesks";
 import {
-  paintTownGround,
   townCarpetFor,
   townChosenCarpet,
   townHostTheme,
   type TownHostTheme,
 } from "./townPaint";
-import {
-  buildTownSprites,
-  townCharacter,
-  townHash,
-  type TownCanvas,
-} from "./townSprites";
+import { buildTownSprites, townCharacter, townHash } from "./townSprites";
 
 export type { TownRendererDiagnostics } from "./townDiagnostics";
 
@@ -97,6 +77,13 @@ export type TownRendererHandle = {
   invalidate(reason?: string): void;
   actorPosition(key: string): { x: number; y: number; seated: boolean } | null;
   roofAlpha(hostKey: string): number;
+  /**
+   * A building gliding or fading in after a topology change: its drawn
+   * offset (world pixels) and opacity, for the DOM drawn over it.
+   */
+  buildingMotion(
+    hostKey: string,
+  ): { x: number; y: number; alpha: number } | null;
   /** Lift a desk, agent or room under the pointer for a drag. */
   beginDrag(
     kind: "desk" | "agent" | "room",
@@ -242,8 +229,6 @@ export async function createTownRenderer(
     openHostKey: null,
     calm: false,
   };
-  let buildings: BuildingView[] = [];
-  let ownedTextures: Texture[] = [];
   let level: TownLevel = "overview";
   let disposed = false;
   let last = 0;
@@ -257,30 +242,9 @@ export async function createTownRenderer(
   const visible = (sprite: Sprite | Graphics) =>
     townSpriteVisible(sprite, camera.viewport);
 
-  const outdoor = new Container();
-  outdoor.sortableChildren = true;
-
-  const clearScene = () => {
-    for (const view of buildings) {
-      view.container.destroy({ children: true });
-      for (const texture of view.textures) texture.destroy(true);
-    }
-    buildings = [];
-    buildingByHost.clear();
-    groundLayer.removeChildren().forEach((child) => child.destroy());
-    outdoor.removeChildren().forEach((child) => child.destroy());
-    for (const texture of ownedTextures) texture.destroy(true);
-    ownedTextures = [];
-  };
-
-  /** A texture for a painted canvas; the scene's own unless a building's. */
-  const own = (canvas: TownCanvas, scene = true) => {
-    const texture = new Texture({
-      source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }),
-    });
-    if (scene) ownedTextures.push(texture);
-    return texture;
-  };
+  /** A topology change waits for a whole frame (townTransition.ts). */
+  let topologyPending = false;
+  let transitioning = false;
 
   const themeFor = (hostKey: string): TownHostTheme =>
     townHostTheme(
@@ -291,20 +255,30 @@ export async function createTownRenderer(
   const carpetFor = (roomKey: string) =>
     townChosenCarpet(model?.placeColors.rooms.get(roomKey));
 
-  const buildScene = () => {
-    if (!layout || !model) return;
-    clearScene();
-    groundChunks.clear();
-    pendingPods.clear();
-    sceneLayer.addChild(outdoor);
-    outdoor.zIndex = -1;
-    // Trees, lamps and benches join the scene with the ground chunk under them.
-    outdoorItems = townOutdoor(layout, sprites, outdoor);
-
-    pendingBuildings = [...layout.buildings];
-    recordLayout();
-    agentViews.drop();
-  };
+  let dimDirty = true;
+  const topology = createTownTopology({
+    camera,
+    sprites,
+    groundLayer,
+    sceneLayer,
+    stats,
+    model: () => model,
+    layout: () => layout,
+    deskColor,
+    carpetFor,
+    themeFor,
+    dropActors: (hostKey) => agentViews.drop(hostKey),
+    onBuilt: () => {
+      dimDirty = true;
+    },
+  });
+  const buildingByHost = topology.byHost;
+  // Binned agents' seats fade and crumble until the bus takes them.
+  const binnedDesks = createTownBinnedDesks({
+    container: (hostKey) => buildingByHost.get(hostKey)?.dynamic,
+    carpet: (roomKey) => carpetFor(roomKey) ?? townCarpetFor(roomKey),
+    visible,
+  });
 
   /** The layout and desk count the diagnostics report. */
   const recordLayout = () => {
@@ -329,164 +303,6 @@ export async function createTownRenderer(
       geometry: townGeometryKey(layout),
     };
   };
-
-  /** Walking agents' sprites live in their buildings; they return next frame. */
-  /** Bake one building's textures and retained sprites the first time it is needed. */
-  const buildBuilding = (building: TownLayout["buildings"][number]) => {
-    if (!layout || !model) return;
-    const textures: Texture[] = [];
-    const { view, pendingCells } = bakeTownBuilding(building, {
-      theme: themeFor(building.hostKey),
-      stale: model.hosts.get(building.hostKey)?.stale ?? false,
-      sprites,
-      colorFor: deskColor,
-      carpetFor,
-      own: (canvas) => {
-        const texture = own(canvas, false);
-        textures.push(texture);
-        return texture;
-      },
-      textures,
-      roofAlpha: camera.z >= (camera.limits?.roof ?? 0) ? 0 : 1,
-    });
-    pendingPods.set(building.hostKey, pendingCells);
-    sceneLayer.addChild(view.container);
-    buildings.push(view);
-    buildingByHost.set(building.hostKey, view);
-    dimDirty = true;
-  };
-
-  /** Bake one building again (its colours or desks changed); the rest stay. */
-  const rebakeBuilding = (hostKey: string) => {
-    const view = buildingByHost.get(hostKey);
-    if (view) {
-      view.container.destroy({ children: true });
-      for (const texture of view.textures) texture.destroy(true);
-      buildings = buildings.filter((entry) => entry !== view);
-      buildingByHost.delete(hostKey);
-    }
-    pendingPods.delete(hostKey);
-    const building = layout?.buildings.find((b) => b.hostKey === hostKey);
-    pendingBuildings = pendingBuildings.filter((b) => b.hostKey !== hostKey);
-    if (building) pendingBuildings.push(building);
-    agentViews.drop(hostKey);
-    stats.buildingBakes += 1;
-  };
-
-  const GROUND_CHUNK = 512;
-  /** Below this zoom the baked tables suffice and desk sprites stay hidden. */
-  // Seated people appear at the same zoom as walking and lounging agents.
-  const DETAIL_ZOOM = 0.35;
-  const pendingPods = new Map<string, TownCell[]>();
-  let outdoorItems: { x: number; y: number; place: () => void }[] = [];
-  const buildingByHost = new Map<string, BuildingView>();
-  // Binned agents' seats fade and crumble until the bus takes them.
-  const binnedDesks = createTownBinnedDesks({
-    container: (hostKey) => buildingByHost.get(hostKey)?.dynamic,
-    carpet: (roomKey) => carpetFor(roomKey) ?? townCarpetFor(roomKey),
-    visible,
-  });
-  const groundChunks = new Map<string, Sprite>();
-  let pendingBuildings: TownLayout["buildings"] = [];
-  let dimDirty = true;
-
-  /** Paint visible ground chunks and bake visible buildings, a few per frame. */
-  const MATERIALIZE_BUDGET_MS = 5;
-  const materialize = () => {
-    if (!layout) return false;
-    const began = performance.now();
-    const spent = () => performance.now() - began >= MATERIALIZE_BUDGET_MS;
-    const left = camera.toWorld(-200, -200);
-    const right = camera.toWorld(
-      camera.viewport.width + 200,
-      camera.viewport.height + 200,
-    );
-    let budget = 1;
-    const cx0 = Math.max(0, Math.floor(left.x / GROUND_CHUNK));
-    const cy0 = Math.max(0, Math.floor(left.y / GROUND_CHUNK));
-    const cx1 = Math.min(
-      Math.ceil((layout.width * T) / GROUND_CHUNK),
-      Math.ceil(right.x / GROUND_CHUNK),
-    );
-    const cy1 = Math.min(
-      Math.ceil((layout.height * T) / GROUND_CHUNK),
-      Math.ceil(right.y / GROUND_CHUNK),
-    );
-    for (let cy = cy0; cy < cy1 && budget > 0; cy += 1)
-      for (let cx = cx0; cx < cx1 && budget > 0; cx += 1) {
-        const key = `${cx},${cy}`;
-        if (groundChunks.has(key)) continue;
-        const region = {
-          x: cx * GROUND_CHUNK,
-          y: cy * GROUND_CHUNK,
-          w: Math.min(GROUND_CHUNK, layout.width * T - cx * GROUND_CHUNK),
-          h: Math.min(GROUND_CHUNK, layout.height * T - cy * GROUND_CHUNK),
-        };
-        const sprite = new Sprite(own(paintTownGround(layout, region)));
-        sprite.position.set(region.x, region.y);
-        groundLayer.addChild(sprite);
-        groundChunks.set(key, sprite);
-        outdoorItems = outdoorItems.filter((item) => {
-          const inside =
-            item.x >= region.x &&
-            item.x < region.x + region.w &&
-            item.y >= region.y &&
-            item.y < region.y + region.h;
-          if (inside) item.place();
-          return !inside;
-        });
-        budget -= 1;
-      }
-    let buildingBudget = spent() ? 0 : 1;
-    pendingBuildings = pendingBuildings.filter((building) => {
-      if (buildingBudget <= 0) return true;
-      const visible =
-        building.x * T < right.x &&
-        (building.x + building.w) * T > left.x &&
-        (building.y - 1) * T < right.y &&
-        (building.y + building.h + TOWN_FACADE) * T > left.y;
-      if (!visible) return true;
-      buildBuilding(building);
-      buildingBudget -= 1;
-      return false;
-    });
-    let podsPending = false;
-    if (camera.z >= DETAIL_ZOOM)
-      for (const view of buildings) {
-        const cells = pendingPods.get(view.hostKey);
-        if (!cells?.length || !view.container.visible) continue;
-        const remaining: TownCell[] = [];
-        for (const cell of cells) {
-          const X = (cell.x + 1) * T;
-          const Y = cell.y * T;
-          const visible =
-            X - 20 < right.x &&
-            X + 84 > left.x &&
-            Y - 20 < right.y &&
-            Y + 70 > left.y;
-          if (!visible || spent()) {
-            remaining.push(cell);
-            if (visible) podsPending = true;
-            continue;
-          }
-          view.pods.push(buildPod(cell, view.dynamic));
-        }
-        pendingPods.set(view.hostKey, remaining);
-      }
-    if (dimDirty) {
-      dimDirty = false;
-      updateDim();
-    }
-    return budget <= 0 || buildingBudget <= 0 || podsPending;
-  };
-
-  const buildPod = (cell: TownCell, parent: Container): PodView =>
-    bakeTownPod(cell, parent, {
-      desk: model!.desks.get(cell.deskKey!) as OfficeDesk,
-      wood: deskColor(cell.deskKey!),
-      pinned: model!.deskPins.has(cell.deskKey!),
-      sprites,
-    });
 
   const seatState = (deskKey: string, seat: number) => {
     const desk = model!.desks.get(deskKey);
@@ -518,7 +334,7 @@ export async function createTownRenderer(
     const frame = Math.floor(clock * 6);
     // The same fade as standing and walking agents (updateActors).
     const peopleBlend = Math.max(deskBlend, townBlend(0.35, 0.6, camera.z));
-    for (const building of buildings)
+    for (const building of topology.buildings)
       for (const pod of building.pods) {
         if (!pod.container.visible) continue;
         pod.seats.forEach((view, seat) => {
@@ -636,7 +452,7 @@ export async function createTownRenderer(
   const updateRoofs = (dt: number) => {
     const roofZ = camera.limits?.roof ?? 0;
     let moving = false;
-    for (const building of buildings) {
+    for (const building of topology.buildings) {
       let target = camera.z >= roofZ ? 0 : 1;
       if (state.openHostKey === building.hostKey) target = 0;
       else if (
@@ -670,7 +486,7 @@ export async function createTownRenderer(
 
   const updateDim = () => {
     if (!model || !layout) return;
-    for (const view of buildings) {
+    for (const view of topology.buildings) {
       view.dim.clear();
       const building = layout.buildings.find((b) => b.hostKey === view.hostKey);
       if (!building) continue;
@@ -692,38 +508,6 @@ export async function createTownRenderer(
         view.dim
           .rect(building.x * T, building.y * T, building.w * T, building.h * T)
           .fill({ color: 0x141a2c, alpha: 0.35 });
-    }
-  };
-
-  const cull = () => {
-    if (!layout) return;
-    const left = camera.toWorld(-80, -80);
-    const right = camera.toWorld(
-      camera.viewport.width + 80,
-      camera.viewport.height + 120,
-    );
-    for (const view of buildings) {
-      const building = layout.buildings.find(
-        (b) => b.hostKey === view.hostKey,
-      )!;
-      const visible =
-        building.x * T < right.x &&
-        (building.x + building.w) * T > left.x &&
-        (building.y - 1) * T < right.y &&
-        (building.y + building.h + TOWN_FACADE) * T > left.y;
-      view.container.visible = visible;
-      if (!visible) continue;
-      const detailed = camera.z >= DETAIL_ZOOM;
-      for (const pod of view.pods) {
-        const X = (pod.cell.x + 1) * T;
-        const Y = pod.cell.y * T;
-        pod.container.visible =
-          detailed &&
-          X - 20 < right.x &&
-          X + 84 > left.x &&
-          Y - 20 < right.y &&
-          Y + 70 > left.y;
-      }
     }
   };
 
@@ -769,9 +553,24 @@ export async function createTownRenderer(
       Math.round(camera.viewport.width / 2 - camera.x * camera.z),
       Math.round(camera.viewport.height / 2 - camera.y * camera.z),
     );
-    const materializing = materialize();
+    const materializing = topology.materialize(
+      topologyPending || transitioning,
+    );
+    if (dimDirty) {
+      dimDirty = false;
+      updateDim();
+    }
+    transitioning = topology.step(dt);
+    if (topologyPending) {
+      // Every frame of a topology change is whole (townSceneGaps).
+      const gaps = topology.gaps();
+      if (gaps.length) {
+        stats.topologyGaps += 1;
+        stats.lastTopologyGap = gaps.slice(0, 4).join(", ");
+      } else topologyPending = false;
+    }
     const roofsMoving = updateRoofs(dt);
-    cull();
+    topology.cull();
     updatePods(deskBlend, camera.z >= 0.6, lite);
     if (binnedDesks.update(clock, camera.reducedMotion))
       ambient.every(TOWN_CRUMB_RATE);
@@ -795,13 +594,14 @@ export async function createTownRenderer(
     stats.level = level;
     stats.zoom = camera.z;
     stats.flying = camera.flying;
+    stats.transitioning = transitioning || camera.gliding;
     stats.actors = actors.actors.size;
     stats.walking = [...actors.actors.values()].filter(
       (a) => a.mode === "walk",
     ).length;
     stats.animation = {
       characters: actors.actors.size,
-      monitors: buildings.reduce(
+      monitors: topology.buildings.reduce(
         (sum, b) => sum + b.pods.filter((pod) => pod.container.visible).length,
         0,
       ),
@@ -814,6 +614,7 @@ export async function createTownRenderer(
       actorsMoved ||
       camera.flying ||
       materializing ||
+      transitioning ||
       dragging;
     const animated = !camera.reducedMotion && !state.calm;
     const next = moving
@@ -840,6 +641,7 @@ export async function createTownRenderer(
         actors: actorsMoved,
         flight: camera.flying,
         materialize: materializing,
+        transition: transitioning,
         drag: dragging,
       })
         .filter(([, on]) => on)
@@ -894,7 +696,9 @@ export async function createTownRenderer(
 
   /* ---------- drag and move effects ---------- */
   const podOf = (deskKey: string) =>
-    buildings.flatMap((b) => b.pods).find((pod) => pod.deskKey === deskKey);
+    topology.buildings
+      .flatMap((b) => b.pods)
+      .find((pod) => pod.deskKey === deskKey);
   const dragEffects = createTownDragEffects({
     app,
     camera,
@@ -928,19 +732,39 @@ export async function createTownRenderer(
     get level() {
       return level;
     },
-    apply({ model: nextModel, layout: nextLayout, state: nextState, dirty }) {
+    apply({
+      model: nextModel,
+      layout: nextLayout,
+      state: nextState,
+      dirty,
+      bakeKeys: nextKeys,
+    }) {
       model = nextModel;
       layout = nextLayout;
       state = nextState;
+      topology.setKeys(nextKeys);
       camera.calm = nextState.calm;
-      // Bake again only what changed: the whole scene when the town's size
-      // or a building's rectangle changed, else just the changed buildings.
-      if (dirty.bake.scene) {
-        buildScene();
+      // Bake again only what changed: the ground when the town's size or a
+      // building's rectangle changed, and the changed, new and gone
+      // buildings. What was drawn stays until its replacement is drawn in
+      // the next frame, then glides or fades (townTransition.ts); carried
+      // desks and rooms land in place.
+      const { bake } = dirty;
+      const instant =
+        dirty.first || camera.reducedMotion || dragEffects.active();
+      if (bake.scene) {
+        topology.startGround(instant);
         stats.sceneRenders += 1;
-      } else if (dirty.bake.buildings.size) {
-        for (const hostKey of dirty.bake.buildings) rebakeBuilding(hostKey);
+      }
+      for (const hostKey of bake.removed)
+        topology.removeBuilding(hostKey, instant);
+      for (const hostKey of bake.buildings) {
+        topology.replaceBuilding(hostKey, instant);
+        if (!dirty.first) stats.buildingBakes += 1;
+      }
+      if (bake.scene || bake.removed.size || bake.buildings.size) {
         recordLayout();
+        if (!dirty.first) topologyPending = true;
       }
       binnedDesks.sync(nextLayout, nextModel, nextState.awayKeys ?? new Set());
       // Agents of unchanged hosts keep their goals and paths; every sync
@@ -972,8 +796,9 @@ export async function createTownRenderer(
         : null;
     },
     roofAlpha(hostKey) {
-      return buildings.find((b) => b.hostKey === hostKey)?.roofAlpha ?? 0;
+      return topology.byHost.get(hostKey)?.roofAlpha ?? 0;
     },
+    buildingMotion: topology.motion,
     destroy() {
       if (disposed) return;
       disposed = true;
@@ -981,7 +806,7 @@ export async function createTownRenderer(
       dragEffects.clear();
       motion.removeEventListener("change", onMotion);
       frames?.dispose();
-      clearScene();
+      topology.clear();
       agentViews.dispose();
       app.destroy(true, { children: true, texture: false });
       stats.destroys += 1;

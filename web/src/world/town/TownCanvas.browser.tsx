@@ -3770,6 +3770,102 @@ async function run() {
     }
   }
 
+  // Turning a host off and on changes the town without a blank or
+  // half-drawn frame: the gone building fades out, the others glide to their
+  // new places with their plaques, and it fades back in.
+  {
+    host
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Show the whole town"]',
+      )!
+      .click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await waitFor(
+      () => !diagnostics.flying,
+      "Town did not finish showing the whole town",
+    );
+    // Glides and fades advance per drawn frame, so a slow software renderer
+    // takes longer in wall time: wait for the scene, not a clock.
+    const settled = async (what: string) => {
+      const frames = diagnostics.frames;
+      await waitFor(
+        () =>
+          diagnostics.frames > frames &&
+          !diagnostics.transitioning &&
+          !diagnostics.flying,
+        `Town did not settle after ${what}`,
+      );
+    };
+    const gaps = diagnostics.topologyGaps;
+    const transitions = diagnostics.transitions;
+    const crossfades = diagnostics.crossfades;
+    const buildings = diagnostics.layout!.buildings;
+    let followed = false;
+    const watch = new MutationObserver(() => {
+      if (
+        [...host.querySelectorAll<HTMLElement>(".town-building-layer")].some(
+          (layer) => layer.style.transform !== "",
+        )
+      )
+        followed = true;
+    });
+    watch.observe(host, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    // Hosts stand in label order (atlas, lab, nova): nova moves into lab's lot.
+    const without = base.connections.filter(
+      (connection) => connection.connectionId !== "lab",
+    );
+    check(
+      without.length === base.connections.length - 1,
+      "the fixture has no lab host to turn off",
+    );
+    setWorld(worldFor(without));
+    await waitFor(
+      () => diagnostics.layout!.buildings === buildings - 1,
+      "turning a host off did not remove its building",
+    );
+    await settled("turning a host off");
+    setWorld(worldFor(base.connections));
+    await waitFor(
+      () => diagnostics.layout!.buildings === buildings,
+      "turning a host back on did not bring its building back",
+    );
+    await settled("turning a host back on");
+    watch.disconnect();
+    check(
+      diagnostics.topologyGaps === gaps,
+      `a host turned off and on drew ${diagnostics.topologyGaps - gaps} incomplete frames (${diagnostics.lastTopologyGap})`,
+    );
+    check(
+      diagnostics.transitions >= transitions + 4,
+      `buildings did not fade when a host turned off and on (${diagnostics.transitions - transitions} transitions)`,
+    );
+    // A building that moves is baked again: its interior and desks fade in
+    // over its old drawing as both glide.
+    check(
+      diagnostics.crossfades > crossfades,
+      "no moved building crossfaded when a host turned off and on",
+    );
+    check(
+      followed,
+      "no building's plaques glided with it when a host turned off and on",
+    );
+    check(
+      [...host.querySelectorAll<HTMLElement>(".town-building-layer")].every(
+        (layer) => layer.style.transform === "" && layer.style.opacity === "",
+      ),
+      "a building's plaques stayed moved or faded after its building settled",
+    );
+  }
+  // No topology change in the whole run drew an incomplete frame.
+  check(
+    diagnostics.topologyGaps === 0,
+    `${diagnostics.topologyGaps} frames after topology changes were missing ${diagnostics.lastTopologyGap}`,
+  );
+
   // StrictMode mounts twice; exactly one renderer and canvas must survive.
   check(
     diagnostics.activeApplications === 1,

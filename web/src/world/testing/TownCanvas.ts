@@ -97,8 +97,11 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             );
           }),
           "Office town browser check",
-          // Extended towns at large windows paint far more pixels in software.
-          scale === "extended" || scale === "protected" ? 80_000 : 40_000,
+          // Extended and max towns at large windows paint far more pixels in
+          // software, and each topology change glides over drawn frames.
+          scale === "extended" || scale === "protected" || scale === "max"
+            ? 80_000
+            : 40_000,
         );
         expect(failures).toEqual([]);
       } finally {

@@ -4,6 +4,7 @@
  */
 
 import { TOWN_TILE, type TownLayout } from "./townLayout";
+import { townEase } from "./townTransition";
 
 export type TownViewport = {
   width: number;
@@ -155,6 +156,18 @@ export class TownCamera {
     duration: number;
     dip: number;
   } = null;
+  /** A glide that moves with the town's buildings (townTransition.ts). */
+  private glide: null | {
+    /** Where it began, so it may pass outside a town that shrank. */
+    x0: number;
+    y0: number;
+    dx: number;
+    dy: number;
+    t: number;
+    duration: number;
+    /** How much of it is applied. */
+    done: number;
+  } = null;
   viewport: TownViewport = {
     width: 1,
     height: 1,
@@ -183,8 +196,19 @@ export class TownCamera {
   }
 
   private clampPosition() {
-    this.x = Math.min(this.bounds.width, Math.max(0, this.x));
-    this.y = Math.min(this.bounds.height, Math.max(0, this.y));
+    // A glide ends inside the bounds but may begin outside them (the town
+    // shrank under the camera): its path stays allowed.
+    const glide = this.glide;
+    const lo = { x: 0, y: 0 };
+    const hi = { x: this.bounds.width, y: this.bounds.height };
+    if (glide) {
+      lo.x = Math.min(lo.x, glide.x0, glide.x0 + glide.dx);
+      lo.y = Math.min(lo.y, glide.y0, glide.y0 + glide.dy);
+      hi.x = Math.max(hi.x, glide.x0, glide.x0 + glide.dx);
+      hi.y = Math.max(hi.y, glide.y0, glide.y0 + glide.dy);
+    }
+    this.x = Math.min(hi.x, Math.max(lo.x, this.x));
+    this.y = Math.min(hi.y, Math.max(lo.y, this.y));
   }
 
   toWorld(sx: number, sy: number) {
@@ -221,6 +245,7 @@ export class TownCamera {
 
   jumpTo(wx: number, wy: number, z: number) {
     this.flight = null;
+    this.glide = null;
     this.z = this.targetZ = this.clampZoom(z);
     const centre = this.centreFor(wx, wy, this.z);
     this.x = centre.x;
@@ -255,6 +280,7 @@ export class TownCamera {
         ? Math.min(0.6, Math.log(distance / this.viewport.width + 1) * 0.5)
         : 0;
     this.velocity = { x: 0, y: 0 };
+    this.glide = null;
     this.flight = {
       x0: this.x,
       y0: this.y,
@@ -272,10 +298,68 @@ export class TownCamera {
     return this.flight !== null;
   }
 
+  /** Whether a glide with the town's buildings is still under way. */
+  get gliding() {
+    return this.glide !== null;
+  }
+
+  /** Where the camera is going: a flight's target, else where it is. */
+  get destination() {
+    const flight = this.flight;
+    return flight
+      ? { x: flight.x, y: flight.y, z: flight.z }
+      : { x: this.x, y: this.y, z: this.z };
+  }
+
+  /**
+   * Move by (dx, dy) world pixels over `duration` seconds with the easing
+   * the town's buildings glide with, so what moved with them stays in place
+   * on screen. Pans and zooms meanwhile add to it; a flight or the user's
+   * own pan ends it. Instant under reduced motion. `from` is where the camera
+   * was drawn, when the town's new bounds have since clamped it: the glide
+   * starts there and ends inside the bounds.
+   */
+  glideBy(
+    dx: number,
+    dy: number,
+    duration: number,
+    from?: { x: number; y: number },
+  ) {
+    const left = this.glide
+      ? {
+          x: this.glide.dx * (1 - this.glide.done),
+          y: this.glide.dy * (1 - this.glide.done),
+        }
+      : { x: 0, y: 0 };
+    this.glide = null;
+    if (from) {
+      this.x = from.x;
+      this.y = from.y;
+    }
+    const start = { x: this.x, y: this.y };
+    this.x += left.x + dx;
+    this.y += left.y + dy;
+    this.clampPosition();
+    const end = { x: this.x, y: this.y };
+    if (this.reducedMotion || duration <= 0) return;
+    this.x = start.x;
+    this.y = start.y;
+    this.glide = {
+      x0: start.x,
+      y0: start.y,
+      dx: end.x - start.x,
+      dy: end.y - start.y,
+      t: 0,
+      duration,
+      done: 0,
+    };
+  }
+
   /** Whether update() still has motion to step: a flight, a zoom easing or a fling. */
   get moving() {
     return (
       this.flight !== null ||
+      this.glide !== null ||
       this.z !== this.targetZ ||
       Math.abs(this.velocity.x) + Math.abs(this.velocity.y) > 1
     );
@@ -283,11 +367,13 @@ export class TownCamera {
 
   stop() {
     this.flight = null;
+    this.glide = null;
     this.velocity = { x: 0, y: 0 };
   }
 
   panBy(dx: number, dy: number) {
     this.flight = null;
+    this.glide = null;
     this.x -= dx / this.z;
     this.y -= dy / this.z;
     this.clampPosition();
@@ -328,6 +414,18 @@ export class TownCamera {
 
   /** Advance by dt seconds; returns whether the camera moved. */
   update(dt: number) {
+    let glided = false;
+    if (this.glide) {
+      const glide = this.glide;
+      glide.t = Math.min(1, glide.t + dt / glide.duration);
+      const e = townEase(glide.t);
+      this.x += glide.dx * (e - glide.done);
+      this.y += glide.dy * (e - glide.done);
+      glide.done = e;
+      if (glide.t >= 1) this.glide = null;
+      this.clampPosition();
+      glided = true;
+    }
     if (this.flight) {
       const flight = this.flight;
       flight.t += dt / flight.duration;
@@ -363,6 +461,6 @@ export class TownCamera {
       this.clampPosition();
       moved = true;
     }
-    return moved;
+    return moved || glided;
   }
 }

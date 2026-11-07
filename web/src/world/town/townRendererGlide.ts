@@ -205,5 +205,12 @@ export function createTownRoomGlide(
     return moving;
   };
 
-  return { begin, finish, update, clear };
+  return {
+    begin,
+    finish,
+    update,
+    clear,
+    /** A tidy waits for the town to show it, or its rooms glide. */
+    active: () => glide !== null,
+  };
 }

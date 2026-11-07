@@ -40,6 +40,7 @@ import { townReceptionBoard } from "./townReception";
 import type { TownReceptionTakes } from "./townReceptionFilter";
 import { TownReceptionHeldTag, TownReceptionSign } from "./TownReceptionSign";
 import type { TownRendererHandle } from "./townRenderer";
+import type { TownBuildingLayers } from "./townBuildingLayers";
 import type { TownTarget } from "./townTargets";
 import { townWallPath, type TownTeams } from "./townTeams";
 import type { TownVisible } from "./townVisibleHosts";
@@ -135,6 +136,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   renderer,
   pennants,
   signs,
+  layers,
   summary,
   openDeskKey,
   openReceptionKey,
@@ -151,6 +153,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   /** The room under the mouse on the canvas: zoomed out, its card is open. */
   openRoomKey: string | null;
   signs: TownBuildingSigns;
+  /** Moves each building's layer with its building (townBuildingLayers.ts). */
+  layers: TownBuildingLayers;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
   /** Agents the reception filter keeps at their desks (townReceptionFilter). */
@@ -288,6 +292,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         return (
           <div
             key={building.hostKey}
+            ref={layers.ref(building.hostKey)}
             className="town-building-layer"
             data-stale={host?.stale || undefined}
           >

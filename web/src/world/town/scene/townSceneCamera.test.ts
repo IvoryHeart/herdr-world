@@ -13,7 +13,7 @@ import {
 } from "../townLayout";
 import { townModelFromProjection } from "../townModel";
 import type { TownTarget } from "../townTargets";
-import { office, working } from "./townScene.fixture";
+import { office, town as townOf, working } from "./townScene.fixture";
 import {
   TownSceneCamera,
   townViewport,
@@ -59,7 +59,7 @@ function setup(
 
 /** Let a flight finish, as the renderer's frames would. */
 function settle(camera: TownCamera) {
-  for (let frame = 0; frame < 600 && camera.flying; frame += 1)
+  for (let frame = 0; frame < 600 && camera.moving; frame += 1)
     camera.update(1 / 60);
   camera.update(1 / 60);
   expect(camera.flying).toBe(false);
@@ -386,9 +386,54 @@ test("rooms that move under a still camera keep the room in view where it was", 
   camera.jumpTo((last.x + last.w / 2) * T, (last.y + last.h / 2) * T, 2);
   const before = camera.toScreen((last.x + 1) * T, (last.y + 1) * T);
   reasons.length = 0;
+  const from = { x: camera.x, y: camera.y };
   view.follow(grown, viewport);
-  const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
   expect(reasons).toEqual(["reflow"]);
+  // The camera glides with the room rather than jumping.
+  expect([camera.x, camera.y]).toEqual([from.x, from.y]);
+  expect(camera.moving).toBe(true);
+  settle(camera);
+  const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
+  expect(after.x).toBeCloseTo(before.x, 0);
+  expect(after.y).toBeCloseTo(before.y, 0);
+});
+
+test("a host hidden beside the viewed room keeps the room in place, never jumping", () => {
+  // Three hosts with one eight-desk room each; look closely at the rightmost
+  // room, then hide the middle host: the town shrinks under the camera.
+  const three = townOf({
+    a: { desks: working(8) },
+    b: { desks: working(8) },
+    c: { desks: working(8) },
+  });
+  const { view, layout, viewport, camera } = setup(WIDE, new Map(), three);
+  view.attach(camera, layout, viewport);
+  view.follow(layout, viewport);
+  const room = layout.buildings[2]!.rooms[0]!;
+  camera.jumpTo((room.x + room.w / 2) * T, (room.y + room.h / 2) * T, 2);
+  const before = camera.toScreen((room.x + 1) * T, (room.y + 1) * T);
+  const from = { x: camera.x, y: camera.y };
+  const two = layoutFor(
+    townOf({ a: { desks: working(8) }, c: { desks: working(8) } }),
+    WIDE,
+  );
+  const moved = two.buildings[1]!.rooms[0]!;
+  expect(moved.key).toBe(room.key);
+  expect(moved.x).toBeLessThan(room.x);
+  // The old position lies outside the smaller town.
+  expect(from.x).toBeGreaterThan(two.width * T);
+  view.follow(two, viewport);
+  // The camera stays where it was drawn, then glides with the room.
+  expect([camera.x, camera.y]).toEqual([from.x, from.y]);
+  let worst = 0;
+  for (let frame = 0; frame < 60 && camera.moving; frame += 1) {
+    const prev = camera.x;
+    camera.update(1 / 60);
+    worst = Math.max(worst, Math.abs(camera.x - prev) * camera.z);
+  }
+  // No frame steps more than an eased glide's share.
+  expect(worst).toBeLessThan(Math.abs(from.x - camera.x) * camera.z * 0.2);
+  const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
   expect(after.x).toBeCloseTo(before.x, 0);
   expect(after.y).toBeCloseTo(before.y, 0);
 });
@@ -485,6 +530,19 @@ test("a town viewed whole is framed again when it grows, then fits a narrower vi
     WIDE,
   );
   view.follow(grown, viewport);
+  // It flies to the new home framing with the buildings, and is home there.
+  expect(camera.flying).toBe(true);
+  settle(camera);
+  expect(view.atHome()).toBe(true);
+  // A change while it flies frames the newest town.
+  const shrunk = layoutFor(
+    office({ alpha: working(2), beta: working(3) }),
+    WIDE,
+  );
+  view.follow(shrunk, viewport);
+  camera.update(0.05);
+  view.follow(grown, viewport);
+  settle(camera);
   expect(view.atHome()).toBe(true);
   // Opening a panel narrows the view; the home view fits the town again, so
   // every building stays on screen.
