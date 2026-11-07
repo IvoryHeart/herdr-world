@@ -141,49 +141,55 @@ const ordered = (marks: Iterable<TownReceptionMark>) => {
   return TOWN_RECEPTION_MARKS.filter((mark) => set.has(mark));
 };
 
+const same = (
+  a: readonly TownReceptionMark[],
+  b: readonly TownReceptionMark[],
+) => a.length === b.length && a.every((mark, i) => b[i] === mark);
+
 /**
- * Set the marks a reception takes: the building's own setting when it has
- * one, else the World default.
+ * Set the marks one building's reception takes, leaving every other building
+ * as it is. A building whose marks match the World default keeps no setting
+ * of its own.
  */
 export function withTownReceptionMarks(
   filter: TownReceptionFilter,
   connectionId: string,
   marks: Iterable<TownReceptionMark>,
 ): TownReceptionFilter {
-  return townReceptionOverridden(filter, connectionId)
-    ? { ...filter, hosts: { ...filter.hosts, [connectionId]: ordered(marks) } }
-    : { ...filter, default: ordered(marks) };
-}
-
-/**
- * Give a building its own setting (starting from what it takes now), or
- * return it to the World default.
- */
-export function withTownReceptionOwn(
-  filter: TownReceptionFilter,
-  connectionId: string,
-  own: boolean,
-): TownReceptionFilter {
-  if (own === townReceptionOverridden(filter, connectionId)) return filter;
+  const next = ordered(marks);
   const hosts = { ...filter.hosts };
-  if (own) {
-    if (Object.keys(hosts).length >= MAX_OVERRIDES) return filter;
-    hosts[connectionId] = [...filter.default];
-  } else delete hosts[connectionId];
+  if (same(next, filter.default)) delete hosts[connectionId];
+  else if (
+    townReceptionOverridden(filter, connectionId) ||
+    Object.keys(hosts).length < MAX_OVERRIDES
+  )
+    hosts[connectionId] = next;
+  else return filter;
   return { ...filter, hosts };
 }
 
 /**
- * Reset to default: the building drops its own setting and the World default
- * takes every mark again, so this reception takes everyone it always did.
+ * Apply marks to every building: they become the World default and no
+ * building keeps a setting of its own.
+ */
+export function withTownReceptionAll(
+  marks: Iterable<TownReceptionMark>,
+): TownReceptionFilter {
+  return { default: ordered(marks), hosts: {} };
+}
+
+/**
+ * Reset to default: this building's reception takes every mark again, or,
+ * for every building, the whole filter returns to the default.
  */
 export function withTownReceptionReset(
   filter: TownReceptionFilter,
   connectionId: string,
+  everywhere: boolean,
 ): TownReceptionFilter {
-  const hosts = { ...filter.hosts };
-  delete hosts[connectionId];
-  return { default: TOWN_RECEPTION_MARKS, hosts };
+  return everywhere
+    ? TOWN_RECEPTION_DEFAULT
+    : withTownReceptionMarks(filter, connectionId, TOWN_RECEPTION_MARKS);
 }
 
 /** Whether a filter takes every mark everywhere (stores as nothing). */

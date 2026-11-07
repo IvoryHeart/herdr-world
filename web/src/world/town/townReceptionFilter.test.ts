@@ -14,8 +14,8 @@ import {
   townReceptionMark,
   townReceptionTakes,
   townReceptionTakesAll,
+  withTownReceptionAll,
   withTownReceptionMarks,
-  withTownReceptionOwn,
   withTownReceptionReset,
   type TownReceptionMark,
 } from "./townReceptionFilter";
@@ -42,26 +42,44 @@ test("the default reception takes every mark, as reception always did", () => {
   ).toBe(0);
 });
 
-test("a building's own setting overrides the World default, and reset restores both", () => {
+test("a change applies to its own building unless it applies to all buildings", () => {
+  // By default a change is this building's alone.
   let filter = withTownReceptionMarks(TOWN_RECEPTION_DEFAULT, "c1", [
     "blocked",
     "ask",
   ]);
-  expect(filter.default).toEqual(["blocked", "ask"]);
-  filter = withTownReceptionOwn(filter, "c2", true);
+  expect(filter.default).toEqual(TOWN_RECEPTION_MARKS);
+  expect(townReceptionTakes(filter, "c1")).toEqual(new Set(["blocked", "ask"]));
+  expect(townReceptionTakes(filter, "c2")).toEqual(
+    new Set(TOWN_RECEPTION_MARKS),
+  );
   filter = withTownReceptionMarks(filter, "c2", ["done", "blocked"]);
   expect(townReceptionTakes(filter, "c2")).toEqual(
     new Set(["blocked", "done"]),
   );
-  expect(townReceptionTakes(filter, "c1")).toEqual(new Set(["blocked", "ask"]));
   // Stored and read back, the setting is the same; unknown marks drop out.
   const stored = JSON.parse(JSON.stringify(filter));
   stored.hosts.c3 = ["done", "elsewhere"];
   expect(parseTownReceptionFilter(stored).hosts).toEqual({
+    c1: ["blocked", "ask"],
     c2: ["blocked", "done"],
     c3: ["done"],
   });
-  filter = withTownReceptionReset(filter, "c2");
+  // Reset for this building: it takes everything again, others keep theirs.
+  filter = withTownReceptionReset(filter, "c2", false);
+  expect(filter.hosts).toEqual({ c1: ["blocked", "ask"] });
+  // Apply to all buildings: one World default, no building's own setting.
+  filter = withTownReceptionAll(["ask", "blocked"]);
+  expect(filter).toEqual({ default: ["blocked", "ask"], hosts: {} });
+  for (const id of ["c1", "c2", "c9"])
+    expect(townReceptionTakes(filter, id)).toEqual(new Set(["blocked", "ask"]));
+  // A building set back to the World default keeps no setting of its own.
+  filter = withTownReceptionMarks(filter, "c1", ["done"]);
+  filter = withTownReceptionMarks(filter, "c1", ["blocked", "ask"]);
+  expect(filter.hosts).toEqual({});
+  // Reset for every building restores the default everywhere.
+  filter = withTownReceptionMarks(filter, "c2", ["done"]);
+  filter = withTownReceptionReset(filter, "c2", true);
   expect(townReceptionIsDefault(filter)).toBe(true);
 });
 

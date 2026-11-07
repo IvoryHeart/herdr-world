@@ -198,8 +198,9 @@ hosts stay usable.
    marks) and untick a mark, for example **✓** Done: those agents stay at
    their desks with their mark, and reception shows `✓ N at desks · find`.
    Press **find** to open the first of them and **Next ›** to step through
-   the rest; **Reset to default** brings everyone back. Tick **Only this
-   building** to filter one building alone. Counts, Board and Needs you are
+   the rest; **Reset to default** brings everyone back. A change applies to
+   that building alone; tick **Apply to all buildings** to give every building
+   the same marks. Counts, Board and Needs you are
    unchanged, and World keeps the filter for every browser. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included; press **Summary** on it (on a phone, tap the

@@ -81,8 +81,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     represents state.
   - Each reception's sign shows the marks it takes: **!** Needs you, **?** Asks
     you and **✓** Done, with the ones it leaves out greyed. Press the sign to
-    choose them, set them for **Only this building** instead of every building,
-    or **Reset to default** (all three). An agent whose mark its reception
+    choose them for that building, or tick **Apply to all buildings** to give
+    every building the same marks; **Reset to default** (all three) resets
+    that building, or every building while **Apply to all buildings** is
+    ticked. An agent whose mark its reception
     leaves out stays seated at its own desk with that mark overhead; it never
     walks to reception, the bar or anywhere else. Reception then shows a tag
     such as `✓ 4 at desks · find`: **find** opens the first of them and the

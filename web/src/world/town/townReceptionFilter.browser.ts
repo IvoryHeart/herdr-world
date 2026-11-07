@@ -6,7 +6,8 @@ import { connectTownReceptionFilter } from "./townReceptionSetting";
  * mark, reception keeps no finish, the Town board, building sign, room
  * plaques and Needs you count are unchanged (accessible targets follow the
  * bodies on screen, so they are not counted as facts), find picks the kept agents out
- * and Next walks them, and Reset to default brings everyone back.
+ * and Next walks them, and Reset to default for all buildings brings
+ * everyone back.
  */
 export async function checkTownReceptionFilter(
   host: HTMLElement,
@@ -81,6 +82,13 @@ export async function checkTownReceptionFilter(
     .find((label) => label.textContent?.includes("Done"))
     ?.querySelector<HTMLInputElement>("input");
   check(doneBox?.checked === true, "Done is not ticked by default");
+  const allBox = () =>
+    [...filter()!.querySelectorAll("label")]
+      .find((label) => label.textContent?.includes("Apply to all buildings"))
+      ?.querySelector<HTMLInputElement>("input");
+  check(allBox()?.checked === false, "Apply to all buildings starts ticked");
+  // Every building's finished agents stay at their desks.
+  allBox()?.click();
   doneBox?.click();
   const kept = finished();
   await waitFor(
@@ -142,6 +150,8 @@ export async function checkTownReceptionFilter(
   // Reset to default: everyone who belongs at reception walks back.
   sign().click();
   await waitFor(() => filter() !== null, "the reception sign did not reopen");
+  check(allBox()?.checked === false, "Apply to all buildings stayed ticked");
+  allBox()?.click();
   [...filter()!.querySelectorAll("button")]
     .find((button) => button.textContent === "Reset to default")
     ?.click();

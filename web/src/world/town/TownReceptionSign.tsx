@@ -10,10 +10,9 @@ import { AGENT_MARKS } from "../agentMarks";
 import {
   TOWN_RECEPTION_AGENT_MARK as MARK,
   TOWN_RECEPTION_MARKS,
-  townReceptionOverridden,
   townReceptionTakes,
+  withTownReceptionAll,
   withTownReceptionMarks,
-  withTownReceptionOwn,
   withTownReceptionReset,
   type TownReceptionFilter,
   type TownReceptionMark,
@@ -27,8 +26,9 @@ const word = (mark: TownReceptionMark) => AGENT_MARKS[MARK[mark]].word;
 
 /**
  * Reception's sign: the marks it takes, the others greyed. Pressing it opens
- * the filter: one checkbox per mark, whether this building keeps its own
- * setting, and Reset to default.
+ * the filter: one checkbox per mark, Apply to all buildings and Reset to
+ * default. A change applies to this building alone unless Apply to all
+ * buildings is ticked; it starts unticked each time the filter opens.
  */
 export function TownReceptionSign({
   connectionId,
@@ -39,10 +39,10 @@ export function TownReceptionSign({
 }) {
   const filter = useTownReceptionFilter();
   const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const id = useId();
   const takes = townReceptionTakes(filter, connectionId);
-  const own = townReceptionOverridden(filter, connectionId);
   const save = (next: TownReceptionFilter) => {
     setError(null);
     saveTownReceptionFilter(next).catch((cause: unknown) =>
@@ -51,7 +51,13 @@ export function TownReceptionSign({
   };
   const taken = TOWN_RECEPTION_MARKS.filter((mark) => takes.has(mark));
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setAll(false);
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -89,7 +95,11 @@ export function TownReceptionSign({
                 const next = new Set(takes);
                 if (event.currentTarget.checked) next.add(mark);
                 else next.delete(mark);
-                save(withTownReceptionMarks(filter, connectionId, next));
+                save(
+                  all
+                    ? withTownReceptionAll(next)
+                    : withTownReceptionMarks(filter, connectionId, next),
+                );
               }}
             />
             <AgentMark kind={MARK[mark]} />
@@ -102,23 +112,21 @@ export function TownReceptionSign({
         <label className="town-reception-filter-row">
           <input
             type="checkbox"
-            checked={own}
-            onChange={(event) =>
-              save(
-                withTownReceptionOwn(
-                  filter,
-                  connectionId,
-                  event.currentTarget.checked,
-                ),
-              )
-            }
+            checked={all}
+            onChange={(event) => {
+              const checked = event.currentTarget.checked;
+              setAll(checked);
+              if (checked) save(withTownReceptionAll(takes));
+            }}
           />
-          <span>Only this building</span>
+          <span>Apply to all buildings</span>
         </label>
         <button
           type="button"
           className="town-reception-filter-reset"
-          onClick={() => save(withTownReceptionReset(filter, connectionId))}
+          onClick={() =>
+            save(withTownReceptionReset(filter, connectionId, all))
+          }
         >
           Reset to default
         </button>
