@@ -222,30 +222,6 @@
   outline: 2px solid var(--accent, #79a6ff);
   outline-offset: 2px;
 }
-.world-new-room-canvas-action {
-  position: absolute;
-  width: 56px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  padding: 3px 4px;
-  border: 1px solid color-mix(in srgb, #67d79b 72%, #394758);
-  border-radius: 5px;
-  color: var(--text, #edf2f7);
-  background: color-mix(in srgb, #67d79b 12%, var(--bg, #0e1116));
-  font-size: 7px;
-  letter-spacing: 0.04em;
-  pointer-events: auto;
-}
-.world-new-room-canvas-action:hover:not(:disabled),
-.world-new-room-canvas-action:focus-visible {
-  border-color: #67d79b;
-  background: color-mix(in srgb, #67d79b 24%, var(--bg, #0e1116));
-}
-.world-new-room-canvas-action:disabled {
-  cursor: not-allowed;
-  opacity: 0.56;
-}
 .world-renderer-fallback {
   min-height: 320px;
   display: grid;

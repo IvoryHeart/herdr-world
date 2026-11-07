@@ -27,6 +27,7 @@ import {
 import { TownFoldIndicators } from "./TownFoldIndicators";
 import { TownTargets } from "./TownAccessibleTargets";
 import { TownTidyRooms } from "./TownTidyRooms";
+import { TownAddRoom } from "./TownAddRoom";
 import type { TownDeskBadge } from "./townBadges";
 import {
   townFoldedActivityLabel,
@@ -238,9 +239,6 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     summary: () => townPlaceSummary(summary, model.projection, place),
     usage: { kind: place.kind, target },
   });
-  const newRoomBuilding =
-    layout.buildings.find((b) => b.hostKey === selectedHost) ??
-    layout.buildings[0];
   return (
     <>
       {layout.buildings.map((building) => {
@@ -763,39 +761,17 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                 </div>
               );
             })}
+            <TownAddRoom
+              building={building}
+              hostLabel={host?.displayLabel ?? "host"}
+              roomActions={roomActions}
+              selectedRoomKey={
+                selectedHost === building.hostKey ? selectedRoomKey : null
+              }
+            />
           </div>
         );
       })}
-      {roomActions.showCreateRoom(selectedRoomKey) && newRoomBuilding ? (
-        <div
-          className="town-new-room-wrap"
-          style={{
-            // In the lobby beside the front door, clear of the counter.
-            left: (newRoomBuilding.entryX + 2) * T,
-            top: (newRoomBuilding.y + 2) * T,
-          }}
-        >
-          <button
-            className="world-new-room-canvas-action town-new-room"
-            type="button"
-            aria-label="New room"
-            title={
-              roomActions.createRoomReason(selectedRoomKey) ??
-              "Create a new Herdr workspace"
-            }
-            disabled={!roomActions.canCreateRoom(selectedRoomKey)}
-            onClick={() => roomActions.onCreateRoom(selectedRoomKey)}
-          >
-            <Plus size={16} strokeWidth={3} aria-hidden="true" />
-            <span>New room</span>
-          </button>
-          {roomActions.createRoomReason(selectedRoomKey) ? (
-            <span className="world-creation-reason" role="status">
-              {roomActions.createRoomReason(selectedRoomKey)}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
       <TownTargets
         targets={targets}
         selectedKey={selectedKey}

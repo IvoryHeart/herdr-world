@@ -22,6 +22,7 @@ import {
 } from "./townLots";
 import {
   NO_ROOM_SPOTS,
+  TOWN_ADD_ROOM_SLOT,
   townArrangeRooms,
   townRanksOutOfOrder,
   townRoomSpans,
@@ -197,6 +198,11 @@ export type TownBuilding = {
   };
   /** Reception counter tiles (left x, row y, width). */
   counter: { x: number; y: number; w: number };
+  /**
+   * The + Add room slot: where the building's next room would stand
+   * (TOWN_ADD_ROOM_SLOT), kept clear of its rooms like one of them.
+   */
+  addRoom: { x: number; y: number; w: number; h: number };
   queue: TownSpot[];
   plants: TownPoint[];
   rooms: TownRoom[];
@@ -378,7 +384,12 @@ function mulberry32(seed: number) {
   };
 }
 
-type DraftBuilding = Omit<TownBuilding, "x" | "y" | "roadY" | "rooms"> & {
+type DraftBuilding = Omit<
+  TownBuilding,
+  "x" | "y" | "roadY" | "rooms" | "addRoom"
+> & {
+  /** The Add room slot's spot, tiles from the building's corner. */
+  addRoom: { rx: number; ry: number; w: number; h: number };
   rooms: (Omit<TownRoom, "x" | "y" | "cells"> & {
     deskFold?: "folded" | "expanded";
     rx: number;
@@ -431,40 +442,48 @@ function draftBuilding(
   // column it was given while the scene is live (a new one joins the
   // shortest), so a room that grows moves only the rooms below it in its own
   // column. A building whose rooms were reordered (a room moved in Spaces or
-  // Herdr) is stacked afresh, as a reload would show it.
+  // Herdr) is stacked afresh, as a reload would show it. The Add room slot
+  // goes last, as the next room would, and the floor makes room for it.
+  const slot = TOWN_ADD_ROOM_SLOT;
+  const withSlot = [...placed, slot];
+  const addRoom = { rx: 0, ry: 0, w: slot.w, h: slot.h };
   const arranged = placed.some((room) => spots.has(room.key))
-    ? townArrangeRooms(placed, spots)
+    ? townArrangeRooms(withSlot, spots)
     : null;
   let spans: ReturnType<typeof townStackRooms>["spans"];
   let x: number;
   if (arranged) {
-    ({ spans, width: x } = townRoomSpans(placed, arranged));
+    ({ spans, width: x } = townRoomSpans(withSlot, arranged));
     placed.forEach((room, index) => {
       const spot = arranged.get(room.key)!;
       room.rx = spot.x;
       room.ry = spot.y;
       nextMemory.get(room.key)!.rank = index;
     });
+    const spot = arranged.get(slot.key)!;
+    addRoom.rx = spot.x;
+    addRoom.ry = spot.y;
   } else {
     const reordered = townRanksOutOfOrder(
       placed.map((room) => memory.get(room.key)?.rank),
     );
     const stacked = townStackRooms(
-      placed,
+      withSlot,
       shape.roomColumns,
-      (room) => (reordered ? undefined : memory.get(room.key)?.column),
+      (room) =>
+        reordered || room === slot ? undefined : memory.get(room.key)?.column,
       ROOM_TOP,
     );
     ({ spans, width: x } = stacked);
-    stacked.columns.forEach((column, index) => {
-      const roomMemory = nextMemory.get(placed[index]!.key)!;
-      roomMemory.column = column;
-      roomMemory.rank = index;
-    });
     placed.forEach((room, index) => {
+      const roomMemory = nextMemory.get(room.key)!;
+      roomMemory.column = stacked.columns[index];
+      roomMemory.rank = index;
       room.rx = stacked.positions[index]!.rx;
       room.ry = stacked.positions[index]!.ry;
     });
+    addRoom.rx = stacked.positions[placed.length]!.rx;
+    addRoom.ry = stacked.positions[placed.length]!.ry;
   }
   const { w, h, barX, barWidth } = townFloor(spans, x, shape);
   const barY = h - LOBBY_HEIGHT;
@@ -492,6 +511,7 @@ function draftBuilding(
     queue: [],
     plants: [],
     rooms: placed,
+    addRoom,
   };
 }
 
@@ -702,6 +722,12 @@ export function layoutTown(
       roadY: draft.roadY,
       lounge,
       counter: { x: bx + draft.counter.x, y: lobbyY + 1, w: draft.counter.w },
+      addRoom: {
+        x: bx + draft.addRoom.rx,
+        y: by + draft.addRoom.ry,
+        w: draft.addRoom.w,
+        h: draft.addRoom.h,
+      },
       queue: QUEUE_OFFSETS.map((offset) => ({
         x: doorX - 1 + offset,
         y: lobbyY + 4,

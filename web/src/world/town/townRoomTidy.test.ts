@@ -154,9 +154,12 @@ test("Tidy rooms keeps Herdr's order and gives the never-moved arrangement", () 
       expect(placement.order).toEqual(
         moved.layout.buildings[0]!.rooms.map((room) => room.key),
       );
-      // In Herdr's original order, a tidy building is a never-moved one.
+      // In Herdr's original order, a tidy building's rooms stand as a
+      // never-moved one's. Its Add room slot follows saved rooms' rule for
+      // the next room (townArrangeRooms), so the floor may differ.
       const tidy = saved(input, shape, townRoomTidy(fresh, "a")!);
-      expect(townGeometryKey(tidy.layout)).toBe(townGeometryKey(fresh));
+      expect(boxes(tidy.layout, "a")).toEqual(boxes(fresh, "a"));
+      expect(boxes(tidy.layout, "b")).toEqual(boxes(fresh, "b"));
     }
 });
 
