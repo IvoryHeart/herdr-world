@@ -32,6 +32,7 @@ import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { NeedsYouHost } from "./NeedsYouTab";
+import { usePresenceWatch } from "./presence";
 import { launchedWorldLeaf } from "./worldTerminalPresentation";
 import { worldNodeOpenView } from "./worldInspectorSelection";
 import WorldIntentProfile from "./WorldIntentProfile";
@@ -109,6 +110,8 @@ function AgentDialogs({
   // unlocked audio whichever view is open.
   useAgentProfiles();
   useChimeHost();
+  // Last seen and returns for "Since you left", whichever view is open.
+  usePresenceWatch();
   // A launched agent or login terminal opens once World's snapshot shows it.
   const [pendingOpen, setPendingOpen] = useState<{
     connectionId: string;

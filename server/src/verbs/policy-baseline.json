@@ -179,6 +179,7 @@
   "rpc:world.desk.open": "allow deny deny deny deny deny",
   "rpc:world.desk.review": "allow deny deny deny deny deny",
   "rpc:world.focused.observe": "allow deny deny deny deny deny",
+  "rpc:world.presence.seen": "allow deny deny deny deny deny",
   "rpc:world.profiles.delete": "allow deny deny deny deny deny",
   "rpc:world.profiles.get": "allow deny deny deny deny deny",
   "rpc:world.profiles.save": "allow deny deny deny deny deny",

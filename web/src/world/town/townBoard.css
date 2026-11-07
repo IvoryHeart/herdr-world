@@ -134,3 +134,117 @@
     display: none;
   }
 }
+
+/* "Since you left": after a return, above the board's counts. */
+.town-recap {
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #e7c48a;
+  border-radius: 6px;
+  animation: town-recap-in 0.3s ease-out;
+}
+
+.town-recap header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: #e7c48a;
+}
+
+.town-recap ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.town-recap li button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.town-recap li button:hover,
+.town-recap li button:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.town-recap-clear {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.town-recap-chip {
+  display: none;
+}
+
+@keyframes town-recap-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Phones: the recap is one line under the summary chip. */
+@media (max-width: 640px) {
+  .town-recap-chip {
+    position: absolute;
+    left: 12px;
+    top: 90px;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    max-width: calc(100vw - 24px);
+    min-height: 30px;
+    padding: 0 10px;
+    color: #f1efe6;
+    background: rgba(30, 22, 14, 0.94);
+    border: 2px solid #e7c48a;
+    border-radius: 999px;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+    font-size: 12px;
+    pointer-events: auto;
+    cursor: pointer;
+    animation: town-recap-in 0.3s ease-out;
+  }
+  .town-recap-chip span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .town-recap-chip ~ .town-board {
+    top: 128px;
+  }
+}
+
+/* After the phone rule, so calm and reduced motion win there too. */
+.town-shell[data-calm="true"] .town-recap,
+.town-shell[data-calm="true"] .town-recap-chip {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-recap,
+  .town-recap-chip {
+    animation: none;
+  }
+}

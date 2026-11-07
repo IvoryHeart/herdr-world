@@ -14,6 +14,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import type { RoomPins } from "./townModel";
 import { useTownRoomMoves } from "./townRoomPins";
@@ -109,6 +110,7 @@ export function TownCanvas({
   observability,
   summary: givenSummary,
   onOpenSummary,
+  sinceYouLeft,
   roomFocus = null,
   calm = false,
   terminalColors = NO_COLORS,
@@ -136,6 +138,8 @@ export function TownCanvas({
   summary?: TownSummary;
   /** Open the Town summary window from the board sign or the phone chip. */
   onOpenSummary?: () => void;
+  /** "Since you left" for the board sign and the phone chip, after a return. */
+  sinceYouLeft?: { board: ReactNode; chip: ReactNode };
   /** A room to move the camera to (a new `seq` asks again), as from the summary. */
   roomFocus?: { roomKey: string; seq: number } | null;
   /** Town's event trace (development builds only; see world/devtools). */
@@ -809,7 +813,7 @@ export function TownCanvas({
   }, [view, roomFocus, ready, layout]);
 
   return (
-    <div className="town-shell" ref={shellRef}>
+    <div className="town-shell" ref={shellRef} data-calm={calm}>
       {failure ? (
         <div className="world-renderer-fallback" role="status">
           <strong>Visual scene unavailable</strong>
@@ -901,6 +905,7 @@ export function TownCanvas({
         counts={summary.counts}
         observability={observability}
         onOpenSummary={onOpenSummary}
+        sinceYouLeft={sinceYouLeft}
       />
       <div className="town-zoom" role="group" aria-label="Camera">
         <button type="button" aria-label="Zoom in" onClick={() => stepZoom(1)}>
