@@ -205,16 +205,24 @@ export class WorldUsageService {
       }
       // Retention and admission limits bound the service cache as well as replies.
       value.rows = value.rows.slice(0, 1024);
-      // A failed read keeps the last limits it had, as stale numbers.
+      // A failed or partial read cannot establish a newer observation, so it
+      // keeps the newer cached limits as stale rather than older numbers.
       let limitsStale = false;
+      const cachedCodex = old?.value.limits?.find((l) => l.harness === "codex");
+      const readCodex = value.limits?.find((l) => l.harness === "codex");
       if (
-        !value.limits?.length &&
-        old?.value.limits?.length &&
+        cachedCodex &&
+        (!readCodex || readCodex.at < cachedCodex.at) &&
         value.sources.some(
-          (s) => s.harness === "codex" && s.state === "unavailable",
+          (s) =>
+            s.harness === "codex" &&
+            (s.state === "unavailable" || s.state === "partial"),
         )
       ) {
-        value.limits = old.value.limits;
+        value.limits = [
+          ...(value.limits ?? []).filter((l) => l.harness !== "codex"),
+          cachedCodex,
+        ];
         limitsStale = true;
       }
       if (

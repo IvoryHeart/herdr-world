@@ -339,6 +339,50 @@ test("subscription limits are per host, age to stale, survive a failed read as s
   await s.service.close();
 });
 
+test("a partial read keeps the newer cached limits stale instead of older numbers", async () => {
+  const s = setup();
+  const limit = (offset: number, used: number) => ({
+    harness: "codex",
+    at: at + offset,
+    windows: [
+      { window_minutes: 300, used_percent: used, resets_at: at + 3_600_000 },
+    ],
+  });
+  const withCodex = (
+    state: "available" | "partial",
+    limits: ReturnType<typeof limit>[],
+  ) =>
+    structuredClone({
+      ...value(),
+      sources: value().sources.map((source) =>
+        source.harness === "codex" ? { ...source, state } : source,
+      ),
+      limits,
+    });
+  s.read(async () => withCodex("available", [limit(-60_000, 95)]));
+  const first = await s.service.get();
+  expect(first.limits[0]).toMatchObject({ state: "available" });
+  expect(first.limits[0]!.windows[0]!.used_percent).toBe(95);
+  // The newest rollout fails; another rollout still holds an older 5 % read.
+  s.advance(31_000);
+  s.read(async () => withCodex("partial", [limit(-600_000, 5)]));
+  const partial = await s.service.get();
+  expect(partial.limits[0]).toMatchObject({
+    state: "stale",
+    observed_at: at - 60_000,
+  });
+  expect(partial.limits[0]!.windows[0]!.used_percent).toBe(95);
+  // A partial read that does establish a newer observation replaces it.
+  s.advance(31_000);
+  s.read(async () => withCodex("partial", [limit(30_000, 50)]));
+  const newer = await s.service.get();
+  expect(newer.limits[0]).toMatchObject({
+    state: "available",
+    observed_at: at + 30_000,
+  });
+  await s.service.close();
+});
+
 test("retired collector results cannot attach to a replacement runtime", async () => {
   const s = setup(),
     pending = Promise.withResolvers<RuntimeUsage>();
