@@ -207,10 +207,7 @@ export function TownCanvas({
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys?: ReadonlySet<string>;
   askingKeys?: ReadonlySet<string>;
-  /**
-   * Agents whose mark their reception does not take: they stay seated at
-   * their desks (townReceptionFilter.ts).
-   */
+  /** Agents their reception's filter keeps at their desks. */
   receptionHeldKeys?: ReadonlySet<string>;
   /** The marks each building's reception takes, by host key. */
   receptionTakes?: TownReceptionTakes;
@@ -321,10 +318,7 @@ export function TownCanvas({
   );
   /** A table whose card a touch tap opened; touch has no hover to open it. */
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
-  /**
-   * The building whose reception board a tap on its lobby brought back at
-   * desk level, where boards are hidden; any other tap or zoom level drops it.
-   */
+  /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
   const latest = useRef({
     chrome,

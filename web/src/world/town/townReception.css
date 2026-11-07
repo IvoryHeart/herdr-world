@@ -125,3 +125,11 @@
     height: 20px;
   }
 }
+
+/* Zoomed in to desks boards hide; a tap on the lobby brings its board back,
+   with the reception filter (TownCanvas). */
+.town-world[data-level="desk"] .town-reception[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
