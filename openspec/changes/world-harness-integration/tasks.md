@@ -3,17 +3,21 @@
 - [x] Research Herdr's integration paradigm (source, docs, `herdr integration status`) and Roamgate; adopt Herdr's shape.
 - [x] Per-harness table for all Herdr harnesses: Herdr's file, World skill file, World limits.
 - [x] Define the skill, the Claude limits tap, status, Settings, updates, the migration of #727's tap and slices.
-- [ ] Owner decisions in `proposal.md` answered.
+- [x] Owner decisions in `proposal.md` answered (owner approved PR #740 and its recommendations on 2026-11-08).
 
 ## Slice 1: the World skill for every harness, local host
 
-- [ ] Add `task-summary` to `herdr-world --skill`; pin the guide's digest to the skill version.
-- [ ] Self-contained installer: `status`, `install`, `uninstall` per harness name; folder resolution from Herdr's variables; atomic writes; marker parsing; shared `~/.agents/skills/` rule.
-- [ ] Confirm each skill folder in the table against the harness's own documentation or source; leave unconfirmed ones `unsupported`.
-- [ ] `herdr-world integration install|uninstall|status <harness>` in Herdr's output form.
+Issue #803 implements the CLI and skill only. The Settings/RPC item below is
+explicitly deferred by the owner's mandate; slices 2 and 3 remain separate.
+
+- [x] Add `task-summary` to `herdr-world --skill`; pin the guide's digest to the skill version.
+- [x] Self-contained installer: `status`, `install`, `uninstall` per harness name; folder resolution from Herdr's variables; atomic writes; marker parsing; shared `~/.agents/skills/` rule.
+- [x] Confirm each skill folder in the table against the harness's own documentation or source; leave unconfirmed ones `unsupported`.
+- [x] `herdr-world integration install|uninstall|status <harness>` in Herdr's output form.
 - [ ] `world.integration.list|install|uninstall` verbs (operator only) and World rows beside Herdr's in Settings → Agent integrations.
-- [ ] Tests: per-harness paths and variables; status states; missing config folder; shared-folder uninstall names; Herdr's files untouched; agent calls denied.
-- [ ] Docs: `docs/usage.md`, `FEATURES.md`, `docs/TUTORIAL.md`, knowledge map.
+- [x] Tests: per-harness paths and variables; status states; missing config folder; shared-folder uninstall names; Herdr's files untouched.
+- [ ] Agent-originated install/uninstall calls denied (with the deferred Settings/RPC item).
+- [x] Docs: `docs/usage.md`, `FEATURES.md`, `docs/TUTORIAL.md`, knowledge map.
 
 ## Slice 2: the Claude limits tap
 
