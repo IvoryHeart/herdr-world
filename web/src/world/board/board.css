@@ -1343,3 +1343,15 @@
   width: 22px;
   height: 22px;
 }
+
+/* Search results: the board fills the view, so they float over its top edge,
+   above the cards, as a strip like Town's. */
+.board-search-results {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  border-bottom: 1px solid var(--border, #343942);
+  box-shadow: var(--shadow-lg, 0 8px 24px #0008);
+}

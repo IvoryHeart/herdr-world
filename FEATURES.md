@@ -127,7 +127,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
   - Town shows what the crew spends. The **City expenses** billboard stands
-    by the top street across from the town center: the whole World's tokens
+    on the lawn above the town center, never over it: the whole World's tokens
     and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a
     **Today** / **7 days** toggle. Each building's reception board ends with
     its **Expenses today**: the host's tokens and cost and its three
@@ -142,7 +142,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
     center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
-    reception.
+    reception. At every zoom the reception boards keep clear of the town
+    center, the post office, the billboard and each other: a board that would
+    cover one slides aside the least it can while staying over its building,
+    else it hangs lower, below the center or the board in its way.
   - Town's **post office** stands on the first street left of the town
     center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
     review or assigned to you) as parcels in its sorting yard, ready to merge
@@ -191,7 +194,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     street from the buildings and centred over their first row: a domed hall
     with a clock, a columned portico, banners and wings, whose front steps
     open straight onto the street's pavement. Buildings stand side by side
-    below it with only the normal streets between them. Phones open Town with
+    below it with only the normal streets between them. Wide windows open
+    Town framed on the billboard above the center and the reception boards
+    down to the buildings' street, centred, every board whole, with the park
+    below off-screen. Phones open Town with
     it at the top and the first building under it; on a short screen the view keeps
     the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,
@@ -542,6 +548,25 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is admitted. Search and Hosts
     use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
+  - **Search shows where things are.** Town's search box hangs from the top
+    edge beside the view buttons in Zen, World's default, and sits in the top
+    bar when the bars are shown; on a phone in Zen it is the search button in
+    the bottom-right corner. Typing in Town's search lights up the
+    matching buildings, rooms, tables and agents on the map and dims the rest
+    of Town a little; the camera stays put. The result line counts matches and
+    how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
+    click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
+    a readable zoom and pulses it; choosing it again, or **Enter** a second
+    time, opens it as selecting does. A result Town does not draw, such as
+    an agent at a table its room folds away, opens at once and counts as
+    off-screen. Under **Town calm motion** or reduced motion the camera jumps
+    and nothing pulses. **Escape** (in the box, on a result or on the map),
+    the phone search's **✕** or an empty box ends the search and returns the
+    camera to where the search found it. **/** or **Ctrl+F** (**Cmd+F** on a
+    Mac) puts the cursor in the search of Town, Board or Desk, or opens the
+    phone's search, unless you are typing in a terminal, the Chat composer or
+    another text field; the browser's own find stays closed. Change the keys
+    under **Search the current view** in Settings → Shortcuts.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
   the runtime's existing version and owner. Only a missing Herdr is installed;
@@ -789,7 +814,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Terminal) beside the Desk as a reading pane and folds the lanes
     into one queue. `J`/`K` preview the next agent there, `Enter` opens it using
     **Agents open** and `Esc` closes the pane. Phones open the Inspector full screen.
-  - One search (`/`) filters every mode by agent name, thread title, harness,
+  - One search (`/`, `Ctrl+F` or `Cmd+F`) filters every mode by agent name, thread title, harness,
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
   - `J`/`K` move between cards; `Enter` opens the agent's Inspector using **Agents open** to
@@ -868,6 +893,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   fresh admission. Terminal recovery offers **Retry terminal** and an explicit
   **Reload app**; a no-frame watchdog never reloads the page automatically.
 - Search covers observed entities beyond renderer limits and pages matching results.
+  Every view's search matches each word of the query in any order and any
+  case, as Pane Search does: `builder login` finds the builder agent whose
+  task mentions login, in Town, Board and Desk alike. Each result shows its
+  type (building, room, table, agent or terminal), its name and status mark,
+  and its place (`host › room › table`), so twins on different hosts are told
+  apart. Names come first, then places, then task-summary matches, which show
+  a short excerpt with the matched words picked out. On Board the results
+  float over the top of the board and its count matches the list; **Down**,
+  **Up** and **Enter** pick and select a result, and **Escape** ends the
+  search.
   Counts distinguish observations, rendering omissions and unavailable coverage.
 - Use **Arrange windows** in the shared shell to show the active terminal alone,
   cascade open windows, fit them in columns or rows, tile them in a grid, or
@@ -1800,6 +1835,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Zen mode | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
 | Recent pane switcher | `Ctrl+Tab` | `Ctrl+Alt+J` |
 | Pane Search | `Alt+K` | `Alt+K` |
+| Search the current view (Town, Board, Desk) | `/` or `Cmd+F` | `/` or `Ctrl+F` |
 | Create / close tab or pane | `Cmd+T` / `Cmd+W` | `Ctrl+Alt+T` / `Ctrl+Alt+W` |
 | Previous / next tab | `Cmd+Option+Left/Right` | `Alt+Shift+Left/Right` |
 | Focus neighboring pane | `Cmd+Ctrl+Arrow` | `Ctrl+Shift+Arrow` |
