@@ -4,7 +4,7 @@ import { TownBoard } from "./TownBoard";
 import {
   TownTeamsLayer,
   TownWorldLayer,
-  type TownRoomPress,
+  type TownRoomCardPress,
 } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
 import { TownBuildingLayers } from "./townBuildingLayers";
@@ -442,10 +442,7 @@ export function TownCanvas({
    * Passes a room card's or name's press to the town beneath it
    * (TownWorldLayer): a press on a name can carry the room.
    */
-  const roomCardPress = useRef<
-    | ((event: PointerEvent, roomKey: string, press: TownRoomPress) => boolean)
-    | null
-  >(null);
+  const roomCardPress = useRef<TownRoomCardPress | null>(null);
   // Arrows to what needs you off screen, and N for the next one.
   const edge = useTownEdgeNav(current, view, rendererRef, hostRef);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
