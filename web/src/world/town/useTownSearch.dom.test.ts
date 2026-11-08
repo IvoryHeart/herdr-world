@@ -86,13 +86,7 @@ if (process.env.TOWN_SEARCH_DOM !== "1") {
     act(() => root.render(createElement(Probe)));
     const input = () =>
       element.querySelector<HTMLInputElement>("input[type=search]")!;
-    // Typing starts where a user does: the search icon, then the box.
-    const type = (value: string) => {
-      act(() =>
-        element
-          .querySelector<HTMLButtonElement>('button[aria-label="Search Town"]')
-          ?.click(),
-      );
+    const type = (value: string) =>
       act(() => {
         const field = input();
         const setter = Object.getOwnPropertyDescriptor(
@@ -102,7 +96,6 @@ if (process.env.TOWN_SEARCH_DOM !== "1") {
         setter.call(field, value);
         field.dispatchEvent(new window.Event("input", { bubbles: true }));
       });
-    };
     const rows = () => [
       ...element.querySelectorAll<HTMLButtonElement>(
         "[data-world-search-result]",
@@ -115,8 +108,6 @@ if (process.env.TOWN_SEARCH_DOM !== "1") {
       });
     const escape = (target: HTMLElement) =>
       act(() => {
-        // Keys go where the cursor is.
-        target.focus();
         target.dispatchEvent(
           new KeyboardEvent("keydown", {
             key: "Escape",
@@ -173,13 +164,13 @@ if (process.env.TOWN_SEARCH_DOM !== "1") {
     town.click(row);
     expect(town.chosen()).not.toBeNull();
     town.escape(row);
-    expect(town.input()).toBeNull();
+    expect(town.input().value).toBe("");
     expect(town.rows().length).toBe(0);
     expect(town.chosen()).toBeNull();
 
     town.type("builder");
     town.escape(town.element.querySelector<HTMLElement>(".town-canvas-host")!);
-    expect(town.input()).toBeNull();
+    expect(town.input().value).toBe("");
 
     // Elsewhere, such as a panel's own field, Escape is that panel's.
     town.type("builder");

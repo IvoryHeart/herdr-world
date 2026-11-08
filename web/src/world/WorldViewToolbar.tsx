@@ -1,11 +1,12 @@
 import { Search, X } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import {
-  useFoldingSearch,
-  usePhoneViewport,
-  useViewSearchTitle,
-} from "./useFoldingSearch";
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import { useViewSearchShortcut } from "./viewSearchShortcut";
 
 export {
@@ -38,21 +39,27 @@ export function WorldViewToolbar({
   onClear?(): void;
   children?: ReactNode;
 }) {
-  const compact = usePhoneViewport();
+  const [compact, setCompact] = useState(
+    () => window.matchMedia("(max-width: 720px)").matches,
+  );
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
-  // On desktop the search rests as an icon until it is wanted.
-  const folding = useFoldingSearch(query, !compact);
-  const title = useViewSearchTitle(`Search ${viewLabel}`);
-  // The same as clicking the search icon: a newly opened phone search takes
-  // the cursor through autoFocus.
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  // The same as clicking the search box, or on a phone the search icon:
+  // a newly opened phone search takes the cursor through autoFocus.
   useViewSearchShortcut(() => {
     if (compact && !compactSearchOpen) setCompactSearchOpen(true);
-    else folding.expand();
+    else inputRef.current?.focus();
   });
 
-  // Leaving the phone layout closes its search overlay. Adjusted while
-  // rendering, not in an effect, so mounting commits no extra render.
-  if (!compact && compactSearchOpen) setCompactSearchOpen(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 720px)");
+    const update = () => {
+      setCompact(media.matches);
+      if (!media.matches) setCompactSearchOpen(false);
+    };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -70,13 +77,12 @@ export function WorldViewToolbar({
       }
       role="search"
       onSubmit={submit}
-      {...(compact ? {} : folding.boxProps)}
     >
       <Search size={15} aria-hidden="true" />
       <label>
         <span className="world-sr-only">Search {viewLabel}</span>
         <input
-          ref={folding.inputRef}
+          ref={inputRef}
           autoFocus={compact}
           type="search"
           value={query}
@@ -89,14 +95,10 @@ export function WorldViewToolbar({
             ) {
               event.preventDefault();
               onNavigate(event.key === "ArrowDown" ? 1 : -1);
-            } else if (event.key === "Escape") {
+            } else if (event.key === "Escape" && (compact || onClear)) {
               event.preventDefault();
               if (compact) close();
-              else {
-                if (onClear) onClear();
-                else onQueryChange("");
-                folding.fold();
-              }
+              else onClear?.();
             }
           }}
         />
@@ -130,17 +132,6 @@ export function WorldViewToolbar({
           onClick={() => setCompactSearchOpen((open) => !open)}
         >
           <Search size={16} aria-hidden="true" />
-        </button>
-      ) : folding.folded ? (
-        <button
-          ref={folding.toggleRef}
-          type="button"
-          className="world-view-search-toggle"
-          aria-label={`Search ${viewLabel}`}
-          title={title}
-          onClick={folding.expand}
-        >
-          <Search size={15} aria-hidden="true" />
         </button>
       ) : (
         search

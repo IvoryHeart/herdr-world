@@ -550,39 +550,6 @@ button.desk-host {
 .desk-search:focus-within {
   border-color: var(--accent, #79a6ff);
 }
-/* Desktop: the search rests as this icon and unfolds from it. */
-.desk-search-toggle {
-  width: 38px;
-  height: 38px;
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid var(--border, #343942);
-  border-radius: 10px;
-  color: var(--muted, #9da7b4);
-  background: var(--bg, #0e1116);
-  cursor: pointer;
-}
-.desk-search-toggle:hover,
-.desk-search-toggle:focus-visible {
-  border-color: var(--accent, #79a6ff);
-  color: var(--text, #edf2f7);
-}
-@media (min-width: 721px) {
-  .desk-search {
-    animation: desk-search-unfold 140ms ease-out;
-  }
-}
-@keyframes desk-search-unfold {
-  from {
-    max-width: 38px;
-  }
-  to {
-    max-width: 100%;
-  }
-}
 .desk-search-label {
   color: var(--muted, #9da7b4);
   font-size: 12px;
@@ -877,8 +844,7 @@ button.desk-host {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .desk-screen.is-live::before,
-  .desk-search {
+  .desk-screen.is-live::before {
     animation: none;
   }
 }
