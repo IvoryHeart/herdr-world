@@ -110,7 +110,6 @@ test("town-scale replaces live economy for the city, buildings, cards and Town b
   const billboard = renderToStaticMarkup(
     createElement(TownCityBillboard, {
       center: { x: 0, y: 0, w: 34, h: 15, street: 17 },
-      street: 17,
       folded: false,
       stores: (span) => (span === "today" ? today : week),
     }),

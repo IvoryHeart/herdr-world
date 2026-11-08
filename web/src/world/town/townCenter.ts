@@ -17,10 +17,47 @@ export type TownCenterLot = {
   street: number;
 };
 
-/** The center's top row: two tiles of verge above it. */
-export const TOWN_CENTER_TOP = 2;
+/** A tile's pixels (TOWN_TILE; townLayout.ts imports this module). */
+const TILE = 16;
+
 /** The building's height in tiles, its flag included. */
 export const TOWN_CENTER_HEIGHT = 15;
+
+/**
+ * The city expenses billboard (TownExpenseBoards.tsx) on a wide town: it
+ * stands above the center, never over it, keeping a readable size as the
+ * town zooms within these scales (townExpenses.css matches them).
+ */
+export const TOWN_CITY_BOARD_SCALE = { min: 0.55, max: 2 } as const;
+/** World pixels between the billboard's posts and the center's flag. */
+export const TOWN_CITY_BOARD_GAP = 4;
+/**
+ * The billboard's height in screen pixels, posts included, with its notes
+ * line wrapped: the camera keeps this much above the center in the first
+ * view.
+ */
+export const TOWN_CITY_BOARD_HEIGHT = 104;
+
+/** The billboard's scale at zoom `z`: screen-constant within its limits. */
+export const townCityBoardScale = (z: number) =>
+  Math.min(
+    TOWN_CITY_BOARD_SCALE.max,
+    Math.max(TOWN_CITY_BOARD_SCALE.min, 1 / z),
+  );
+
+/**
+ * The center's top row: two tiles of verge above it, and on a wide town the
+ * billboard's rows above those (its tallest, zoomed out).
+ */
+export const townCenterTop = (wide: boolean) =>
+  2 +
+  (wide
+    ? Math.ceil(
+        (TOWN_CITY_BOARD_HEIGHT * TOWN_CITY_BOARD_SCALE.max +
+          TOWN_CITY_BOARD_GAP) /
+          TILE,
+      )
+    : 0);
 
 /** A phone's center fits its one-column building; wider towns get wings. */
 export const townCenterWidth = (narrowPhone: boolean) =>
@@ -30,7 +67,8 @@ export const townCenterWidth = (narrowPhone: boolean) =>
  * The first street's top row, right under the center: its front steps open
  * straight onto the pavement, so it stands against the road.
  */
-export const TOWN_CENTER_STREET = TOWN_CENTER_TOP + TOWN_CENTER_HEIGHT;
+export const townCenterStreet = (wide: boolean) =>
+  townCenterTop(wide) + TOWN_CENTER_HEIGHT;
 
 /**
  * The paved apron at the foot of the front steps, a little wider than the

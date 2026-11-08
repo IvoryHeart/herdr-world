@@ -1,5 +1,5 @@
-/* Expenses (TownExpenseBoards.tsx), in Town's pixel skin: the city billboard by
-   the first street, a dark board in a wooden frame (the plaque's wood) on two
+/* Expenses (TownExpenseBoards.tsx), in Town's pixel skin: the city billboard
+   above the town center, a dark board in a wooden frame (the plaque's wood) on two
    posts, and each building's expenses as a section of its reception board.
    The folded phone sign is a room plaque's wooden plate. Popovers portal out
    of Town, so they use literal colours. */
@@ -14,10 +14,11 @@
     visibility 0.2s;
 }
 
-/* The billboard stands on its world point above the street, keeping a
-   readable size as the town zooms, like the center's plaque. */
+/* The billboard stands on its world point above the center's flag, keeping a
+   readable size as the town zooms within TOWN_CITY_BOARD_SCALE (townCenter.ts),
+   which leaves it room above the center. */
 .town-world .town-expenses-city {
-  transform: translate(-50%, -100%) scale(clamp(0.55, var(--iz), 2.4));
+  transform: translate(-50%, -100%) scale(clamp(0.55, var(--iz), 2));
   transform-origin: 50% 100%;
 }
 
