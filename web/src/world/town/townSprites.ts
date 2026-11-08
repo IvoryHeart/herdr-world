@@ -488,6 +488,49 @@ export const TOWN_KIND_LOGOS: Record<string, string> = {
 export type TownStaticSprites = ReturnType<typeof buildTownSprites>;
 
 /** Build every non-character sprite once. */
+const tree = (c1: string, c2: string, c3: string, c4: string) =>
+  townSprite(
+    32,
+    42,
+    (R, D) => {
+      R(13, 28, 6, 13, "#6b4a2f");
+      R(13, 28, 2, 13, "#86603e");
+      D(16, 17, 13, c1);
+      D(10, 19, 8, c2);
+      D(22, 20, 8, c2);
+      D(15, 12, 9, c3);
+      D(11, 9, 5, c4);
+      D(21, 12, 4, c3);
+      R(9, 7, 2, 1, townShade(c4, 0.3));
+      R(19, 9, 1, 1, townShade(c4, 0.3));
+    },
+    "#1b2a1f",
+  );
+
+let trees: readonly TownCanvas[] | null = null;
+/** The town's broadleaf trees (two greens and a blossom), drawn once. */
+export function townTrees() {
+  trees ??= [
+    tree("#2e6a39", "#357a40", "#428f48", "#5aa857"),
+    tree("#2a5f3a", "#2f6e44", "#3a8150", "#4f9a5c"),
+    tree("#8a4a6a", "#a5587c", "#c7739a", "#e7a2bf"),
+  ];
+  return trees;
+}
+
+/** A status bubble over an agent's head, its tail pointing down. */
+export const townBubble = (draw: (R: Rect) => void, width = 11) =>
+  townSprite(width, 12, (R) => {
+    const w = "#fffaf0";
+    const tail = (width - 1) / 2;
+    R(1, 0, width - 2, 10, w);
+    R(0, 1, width, 8, w);
+    R(tail - 1, 10, 3, 1, w);
+    R(tail, 11, 1, 1, w);
+    R(1, 9, width - 2, 1, "#e3dac8");
+    draw(R);
+  });
+
 export function buildTownSprites() {
   const tableOf = (W: number, w: string) =>
     townSprite(W, 32, (R) => {
@@ -516,35 +559,7 @@ export function buildTownSprites() {
       R(6, 2, 2, 2, logo);
       R(1, 5, 12, 2, "#3a404b");
     });
-  const bubble = (draw: (R: Rect) => void, width = 11) =>
-    townSprite(width, 12, (R) => {
-      const w = "#fffaf0";
-      const tail = (width - 1) / 2;
-      R(1, 0, width - 2, 10, w);
-      R(0, 1, width, 8, w);
-      R(tail - 1, 10, 3, 1, w);
-      R(tail, 11, 1, 1, w);
-      R(1, 9, width - 2, 1, "#e3dac8");
-      draw(R);
-    });
-  const tree = (c1: string, c2: string, c3: string, c4: string) =>
-    townSprite(
-      32,
-      42,
-      (R, D) => {
-        R(13, 28, 6, 13, "#6b4a2f");
-        R(13, 28, 2, 13, "#86603e");
-        D(16, 17, 13, c1);
-        D(10, 19, 8, c2);
-        D(22, 20, 8, c2);
-        D(15, 12, 9, c3);
-        D(11, 9, 5, c4);
-        D(21, 12, 4, c3);
-        R(9, 7, 2, 1, townShade(c4, 0.3));
-        R(19, 9, 1, 1, townShade(c4, 0.3));
-      },
-      "#1b2a1f",
-    );
+  const bubble = townBubble;
   return {
     table,
     tableSmall,
@@ -647,11 +662,6 @@ export function buildTownSprites() {
       R(7, 13, 2, 2, "#d9644a");
       R(1, 24, 10, 2, "#b9c0c6");
     }),
-    trees: [
-      tree("#2e6a39", "#357a40", "#428f48", "#5aa857"),
-      tree("#2a5f3a", "#2f6e44", "#3a8150", "#4f9a5c"),
-      tree("#8a4a6a", "#a5587c", "#c7739a", "#e7a2bf"),
-    ],
     bush: townSprite(
       18,
       12,

@@ -1,0 +1,321 @@
+/* Town lenses: tints in the world layer, and the legend in the board's place. */
+
+.town-shell {
+  /* Town lenses (townLens.ts): sequential scales are colour-blind safe
+     (orange to blue, inferno-like heat, viridis-like growth); categories
+     use the Okabe–Ito palette. Every lens also says its value in words. */
+  --town-lens-warm-1: #f9a03f;
+  --town-lens-warm-2: #f3d38c;
+  --town-lens-cold-1: #a7d8ef;
+  --town-lens-cold-2: #5aa8e6;
+  --town-lens-cold-3: #3a64d8;
+  --town-lens-none: #4a505e;
+  --town-lens-heat-1: #6a3d8f;
+  --town-lens-heat-2: #b8407a;
+  --town-lens-heat-3: #ef6f3c;
+  --town-lens-heat-4: #ffe14d;
+  --town-lens-fail: #ff6b57;
+  --town-lens-ready: var(--town-done, #7be08f);
+  --town-lens-wait: var(--town-accent, #ffd166);
+  --town-lens-draft: var(--town-muted, #a9b2a4);
+  --town-lens-merged: #b693f5;
+  --town-lens-grow-1: #2e5b50;
+  --town-lens-grow-2: #3f8a6c;
+  --town-lens-grow-3: #5fb67c;
+  --town-lens-grow-4: #9bdc8a;
+  --town-lens-grow-5: #e3f59a;
+  --town-lens-h-claude: #e69f00;
+  --town-lens-h-codex: #56b4e9;
+  --town-lens-h-pi: #009e73;
+  --town-lens-h-other: #cc79a7;
+  --town-lens-h-shell: #8a8f99;
+  --town-lens-no-data: repeating-linear-gradient(
+    45deg,
+    rgba(201, 207, 214, 0.55) 0 4px,
+    rgba(40, 44, 52, 0.55) 4px 8px
+  );
+}
+
+.town-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* Under every sign, card and plaque of the world layer. */
+  z-index: -1;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.town-lens-dim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: rgba(8, 10, 16, 0.55);
+}
+
+.town-lens-room,
+.town-lens-desk,
+.town-lens-seat {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.town-lens-room[data-mark="value"] {
+  background: color-mix(in srgb, var(--lens) 62%, transparent);
+  box-shadow: inset 0 0 0 2px var(--lens);
+}
+
+.town-lens-room[data-mark="no-data"],
+.town-lens-desk[data-mark="no-data"],
+.town-lens-seat[data-mark="no-data"] {
+  background: var(--town-lens-no-data);
+}
+
+/* Nothing to show: the room stays dim, outlined so it still reads. */
+.town-lens-room[data-mark="none"] {
+  box-shadow: inset 0 0 0 1px rgba(241, 239, 230, 0.18);
+}
+
+/* A place with several categories (harnesses): a stripe each, by share,
+   under the label, desks and seats. */
+.town-lens-room[data-mark="mix"]::before,
+.town-lens-desk[data-mark="mix"]::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: var(--lens-mix);
+  border-radius: inherit;
+  opacity: 0.62;
+}
+
+.town-lens-room[data-mark="mix"] {
+  box-shadow: inset 0 0 0 2px rgba(241, 239, 230, 0.55);
+}
+
+.town-lens-desk[data-mark="mix"] {
+  box-shadow: 0 0 0 2px rgba(241, 239, 230, 0.55);
+}
+
+/* Room and desk zoom: desks and agents carry their own colour. */
+.town-world[data-level="room"] .town-lens-room[data-mark],
+.town-world[data-level="desk"] .town-lens-room[data-mark] {
+  background: color-mix(in srgb, var(--lens, transparent) 14%, transparent);
+}
+
+.town-world[data-level="room"] .town-lens-room[data-mark="mix"]::before,
+.town-world[data-level="desk"] .town-lens-room[data-mark="mix"]::before {
+  opacity: 0.14;
+}
+
+.town-lens-desk,
+.town-lens-seat {
+  display: none;
+  border-radius: 6px;
+}
+
+.town-world[data-level="room"] .town-lens-desk,
+.town-world[data-level="desk"] .town-lens-desk,
+.town-world[data-level="room"] .town-lens-seat,
+.town-world[data-level="desk"] .town-lens-seat {
+  display: block;
+}
+
+.town-lens-desk[data-mark="value"] {
+  background: color-mix(in srgb, var(--lens) 58%, transparent);
+  box-shadow: 0 0 0 2px var(--lens);
+}
+
+.town-lens-desk[data-mark="none"] {
+  box-shadow: 0 0 0 1px rgba(241, 239, 230, 0.12);
+}
+
+.town-lens-seat {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.town-lens-seat[data-mark="value"] {
+  box-shadow:
+    0 0 0 3px var(--lens),
+    0 0 0 4px rgba(8, 10, 16, 0.8);
+}
+
+/* Building zoom: each room's name and short reading in its top corner, in
+   place of the room card, so the floor's colour still reads. */
+.town-lens-room-label {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  display: none;
+  gap: 6px;
+  align-items: baseline;
+  max-width: 150px;
+  padding: 2px 6px;
+  color: #f1efe6;
+  background: rgba(14, 17, 24, 0.88);
+  border-left: 4px solid var(--lens, rgba(241, 239, 230, 0.3));
+  border-radius: 4px;
+  transform: scale(var(--iz));
+  transform-origin: 0 0;
+  white-space: nowrap;
+}
+
+.town-lens-room-label b {
+  overflow: hidden;
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.03em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+.town-lens-room-label small {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f1efe6;
+  font-variant-numeric: tabular-nums;
+}
+
+.town-world[data-level="overview"] .town-lens-room-label {
+  display: inline-flex;
+}
+
+/* A lens's room labels stand in for the room cards; taps reach the town. */
+.town-world[data-lens] .town-room-card {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* The legend: the Town board's box, the board's look. */
+.town-board.town-lens-legend {
+  gap: 6px;
+  width: 260px;
+}
+
+.town-lens-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.town-lens-legend button {
+  min-height: 28px;
+  padding: 2px 8px;
+  color: #f1efe6;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #7a5536;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.town-lens-name {
+  overflow: hidden;
+  color: #e7c48a !important;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font:
+    700 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.town-lens-step,
+.town-lens-close {
+  min-width: 28px;
+  font-size: 15px !important;
+  line-height: 1;
+}
+
+.town-lens-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.town-lens-choices button {
+  font-size: 12px;
+}
+
+.town-lens-choices button[aria-checked="true"] {
+  color: #2a1a04;
+  background: #e7c48a;
+}
+
+.town-lens-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: #d9cdb6;
+}
+
+.town-lens-scale li {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.town-lens-scale i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.town-lens-scale li[data-mark="no-data"] i {
+  background: var(--town-lens-no-data);
+}
+
+.town-lens-note,
+.town-lens-readout {
+  margin: 0;
+  font-size: 11px;
+  color: #c9b79a;
+}
+
+.town-lens-readout {
+  color: #f1efe6;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Calm motion: no fades. */
+.town-shell[data-calm="true"] .town-lens,
+.town-shell[data-calm="true"] .town-lens * {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-lens {
+    transition: none;
+  }
+}
+
+/* Phones: the legend takes the summary chip's place, compact, so the first
+   building stays clear: the note gives way to the scale and the reading. */
+@media (max-width: 640px) {
+  .town-board.town-lens-legend {
+    top: 52px;
+    left: 12px;
+    width: min(300px, calc(100vw - 24px));
+    padding: 6px 8px 7px;
+    gap: 4px;
+  }
+  .town-lens-legend .town-lens-note {
+    display: none;
+  }
+}

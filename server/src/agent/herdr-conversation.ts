@@ -18,6 +18,7 @@ import {
   conversationMessages,
   runningTool,
   latestAssistantMessage,
+  latestRequest,
   type AgentQuest,
   type Conversation,
   type ConversationLatest,
@@ -326,6 +327,7 @@ export function createHerdrConversationSource(args: {
         updated_at: new Date(projection.file.mtimeMs).toISOString(),
         messages,
         latest: latestAssistantMessage(messages),
+        latest_request: latestRequest(messages),
         quest: projection.quest,
         running_tool: tool,
         usage_stop: usageStopCurrent(projection.usage_stop, Date.now())

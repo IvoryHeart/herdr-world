@@ -24,15 +24,6 @@ export const NO_ROOM_SPOTS: TownRoomSpots = new Map();
 /** Tiles kept clear between rooms, and between a room and the side walls. */
 const GAP = 2;
 
-/**
- * Every building's + Add room slot: a ghost room where the next room would
- * go. It is laid out as the building's last room, as wide as a new room, so
- * the room it creates stands where it was, and the slot moves on. It is
- * shorter than a room: a phone's home view must still reach the lounge
- * under a one-room building (townSceneCamera's frameHome).
- */
-export const TOWN_ADD_ROOM_SLOT = { key: "\u0000add-room", w: 11, h: 4 };
-
 type Box = TownRoomSpot & { w: number; h: number };
 
 /** Whether two rooms stand too close: closer than GAP, or overlapping. */
@@ -232,14 +223,12 @@ export function townRoomPlacement(
   const current = new Map(
     building.rooms.map((room) => [room.key, spotOf(room, building)]),
   );
-  // The Add room slot takes the first free place after the rooms, as it
-  // will once they are saved, so the floor fits it too.
-  const withSlot = [...building.rooms, TOWN_ADD_ROOM_SLOT];
-  const spots = townArrangeRooms(withSlot, new Map([...current, ...moves]), [
-    ...moves.keys(),
-  ]);
-  const { spans, width } = townRoomSpans(withSlot, spots);
-  spots.delete(TOWN_ADD_ROOM_SLOT.key);
+  const spots = townArrangeRooms(
+    building.rooms,
+    new Map([...current, ...moves]),
+    [...moves.keys()],
+  );
+  const { spans, width } = townRoomSpans(building.rooms, spots);
   const floors = layout.buildings.map((b, i) =>
     i === index
       ? townFloor(spans, width, layout.shape)

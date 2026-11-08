@@ -72,6 +72,12 @@ export type Conversation = {
    * transcript, while that stop still holds; null otherwise.
    */
   usage_stop?: AgentUsageStop | null;
+  /**
+   * The first line of the newest message the user sent the agent, so a
+   * glance (Town's bubble words) can say what it was last asked. Absent
+   * when the transcript is not read.
+   */
+  latest_request?: string | null;
   updated_at: string | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
@@ -384,6 +390,26 @@ export function conversationMessages(
   }
   close();
   return messages;
+}
+
+/** A line that is only markup, such as the tag a pasted block opens with. */
+const MARKUP_LINE = /^(?:<\/?[A-Za-z][\w:-]*(?:\s[^<>]*)?\/?>\s*)+$/;
+
+/**
+ * The first line of words in the newest user message, at most 160
+ * characters: a pasted block's opening tag is passed over.
+ */
+export function latestRequest(
+  messages: readonly ConversationMessage[],
+): string | null {
+  const message = messages.findLast(
+    (candidate) => candidate.role === "user" && candidate.kind === "message",
+  );
+  const line = message?.text
+    .split("\n")
+    .map((text) => text.trim())
+    .find((text) => text && !MARKUP_LINE.test(text));
+  return line ? line.slice(0, 160) : null;
 }
 
 export function latestAssistantMessage(

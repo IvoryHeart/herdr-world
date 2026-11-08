@@ -1,4 +1,7 @@
 import { AnswerOutboxContext } from "./town/answerOutbox";
+import { TownStepStore } from "./town/townStepStore";
+import { useTownStepReads } from "./town/useTownStepReads";
+import { townScaleSceneRequested } from "./town/townScaleScene";
 import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentDeskReads } from "./agentQuests";
@@ -367,12 +370,25 @@ export default function TownView({
   const summonedKeys = useMemo(() => new Set(summoned.keys()), [summoned]);
   // Each agent's quest, marked over its desk by agent key.
   const agentQuests = deskReads.quests;
+  // Working agents' current steps, read only for those Town shows at the
+  // room or desk level; `?scene=town-scale` shows synthetic ones.
+  const [townSteps] = useState(() => new TownStepStore());
+  const [stepScene] = useState(() =>
+    townScaleSceneRequested(window.location.search),
+  );
+  useTownStepReads(townSteps, world.leaves, stepScene);
   // A Town agent's key is its leaf ID, so the marks come straight from the
   // quests (a dense town's roster is large).
   const questMarks = useMemo(
     (): ReadonlyMap<string, TownQuestMark> =>
       new Map([...agentQuests].map(([key, quest]) => [key, questMark(quest)])),
     [agentQuests],
+  );
+  // The Idle time lens reads when each agent last worked, from its leaf.
+  const activityAt = useMemo(
+    () => (agent: { nodeId: string }) =>
+      townLeaf(world, agent.nodeId)?.lastActivityAt,
+    [world],
   );
   const summon = (key: string) => {
     const status = agentByKey.get(key)?.agent.semanticStatus;
@@ -894,6 +910,7 @@ export default function TownView({
             // A letter at reception: its question in Needs you.
             onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}
+            steps={townSteps}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
             onActivateAgent={openReply}
@@ -933,6 +950,7 @@ export default function TownView({
             calm={preferences.townCalm}
             chrome={TOWN_CHROME}
             centerActions={townCenter}
+            activityAt={activityAt}
             roomActions={{
               onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),

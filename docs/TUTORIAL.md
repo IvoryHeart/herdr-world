@@ -174,11 +174,16 @@ hosts stay usable.
    press Enter) for a ring of actions around its doors: **New agent** opens the
    launcher (in the room you have open, when it can start one there), **Town
    master** opens your coordinating agent's Chat, **Needs you** opens that tab,
-   **Summary** the Town summary, **Profiles** the agent profiles and **New
+   **Summary** the Town summary, **Lenses** colours the map by one fact (see
+   [lenses](#town-lenses)), **Profiles** the agent profiles and **New
    room** creates a room. Arrow keys move around the ring; Escape, a tap
    outside, the centre **✕** or **Back** on a phone closes it.
 2. Use **+** and **−** to move between town, building, room and desk detail;
-   **ALL** shows the whole town. Drag the background to pan, or use arrow keys
+   **ALL** shows the whole town. Zoomed out, the land around it is generated
+   woods, meadows, gardens, ponds and footpaths, with each street running on as
+   a country lane, and carries on to the edges of the window however far you
+   zoom out or pan; it looks the same after a reload, and only the land next to
+   a growing building changes. Drag the background to pan, or use arrow keys
    when the scene has focus. Tap a room to zoom in. Large towns may initially
    show roofs; zoom in to see room summaries and desks. Phones stack buildings
    vertically. Room nameplates fit their rooms: long names end in an ellipsis;
@@ -301,6 +306,13 @@ hosts stay usable.
    or `/loop`) shows a swallowtail pennant beside its seat, with a progress
    bar when the quest has steps; tap the pennant to see **Quest** and its
    title.
+   Working agents show a thought bubble over their heads with a glyph for
+   what they are doing now: editing, running tests or a command, reading
+   code, browsing the web, thinking, or waiting on a subagent. A step that
+   has run unusually long shows its time in amber, such as **14m**. Zoom to a
+   desk, or select it, to read what the agent is doing now and the step in
+   words, such as **Run the login tests · tests 3m**. Zoomed out further,
+   the bubbles go.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
@@ -443,10 +455,10 @@ hosts stay usable.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room
-keeps no gap. Each building ends with a dashed **+ Add room** slot where its
-next room would stand: click or tap it to create a workspace on that
-building's host, and the new room appears in its place while the slot moves
-on. The town center's **New room** does the same. Room actions also create
+keeps no gap. Every building has a **+ Add room** doorway just left of its
+bar, and it stays there whatever its rooms do: click or tap it to create a
+workspace on that building's host, and the new room appears where rooms
+normally go. The town center's **New room** does the same. Room actions also create
 tabs and manage the room. Check the destination host before creation. Stale buildings
 remain visible but cannot accept operations. Use search and the Hosts filter to
 narrow the work you are following. The **Town calm motion** setting reduces
@@ -515,6 +527,30 @@ and open its terminal or Inspector without losing its workspace context.
 ![Town with four disposable workspace rooms, one agent waiting at reception and one finished](./images/herdr-world-desktop-town.png)
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
+
+### See one fact across Town: lenses
+
+<a id="town-lenses"></a>
+
+1. Tap the town center and choose **Lenses**, or press `L`. Town dims and
+   every room takes a colour; the Town board sign (on a phone, the summary
+   chip) becomes the lens's legend, with its scale.
+2. Press the lens's name to choose another, or **‹ ›** (`L`, `Shift+L`) to
+   step: **Idle time** (warm is fresh, cold is hours since the agent last
+   worked: who have you forgotten?), **Spend** (today's cost per room and
+   desk; hatched **No data** where a host has no reading, never zero), **Pull
+   requests** (failing, ready, waiting, draft or merged), **Quests** and
+   **Harness** (a room with several harnesses is striped by each one's
+   share).
+3. Zoom into a room: each desk and agent carries its own colour. Hover, focus
+   or tap one and the legend says its value in words, such as "Idle 3 h 12 m",
+   "~$1.40 today" or "#123 CI failing". Taps open what they always do.
+4. Press **✕** or Escape: Town is back exactly as it was, at the same place.
+   Town always opens without a lens; your browser remembers the last one for
+   `L` and **Lenses**.
+
+**You are done when:** you can find the coldest room and the desk with a
+failing pull request, and return to Town as usual.
 
 ### Chat with an agent
 
@@ -1032,8 +1068,19 @@ it does not verify the work for you.
 **You are done when:** you can find the same agent in Town, Board or Desk and
 open its terminal on the expected host.
 
-On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
-windows** to restore minimized ones. On mobile, one Inspector fills the screen:
+Use the visible **− Minimize** button in an Inspector's header to hide its
+window. On desktop, **Open windows** restores it. **Close** (or **‹ Back**) dismisses
+the window; tap the agent or terminal again to reopen it. These controls leave
+agents and terminal sessions running and work in Town, Board and Desk.
+On touch tablets or without a pointing device, narrow Town columns keep 40px
+window controls and hide the pane map to leave room for the agent's name.
+On a phone, a minimized window waits as a chip at the bottom left of Town or
+Board, above the bottom controls and also in Zen: tap the chip once to bring the
+window back. While another window fills the screen, the chips sit in a strip at
+the bottom of that window, below its content, so restoring still takes one tap;
+**Tabs** in the expanded mobile controls also lists windows.
+On desktop, **Arrange windows** can tile or cascade open Inspectors.
+On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
 when Composer is open. The phone's own Back closes Composer first, then the
 terminal on the next press. Tapping the terminal's name opens the workspace

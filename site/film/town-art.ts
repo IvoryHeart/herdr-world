@@ -1,11 +1,24 @@
 /**
- * The film's Town art: the application's own layout, painting and sprite
- * code, bundled by `bun run build:site` into `film/town-art.js`. The film
- * draws its Town scenes with these functions, so its rooms, desks and people
- * are the ones the app draws rather than an approximation of them.
+ * The film's Town art: the application's own layout, painting, sprite and
+ * routing code, bundled by `bun run build:site` into `film/town-art.js`. The
+ * film draws its Town scenes with these functions, so its rooms, desks,
+ * people, town center, bus stops and walks are the ones the app draws rather
+ * than an approximation of them.
  */
 
 import { TERMINAL_COLOR_HEX } from "../../web/src/world/terminalColor";
+import {
+  TownNavigation,
+  townCrowdSpots,
+} from "../../web/src/world/town/townActors";
+import { townArrivalPath } from "../../web/src/world/town/townArrivals";
+import {
+  townBusRoute,
+  townNearestStop,
+  townQueueSpot,
+} from "../../web/src/world/town/townBus";
+import { townCenterEmblem } from "../../web/src/world/town/townCenter";
+import { paintTownCenter } from "../../web/src/world/town/townCenterPaint";
 import {
   TOWN_AGENT_SCALE,
   TOWN_FACADE,
@@ -39,17 +52,25 @@ Object.assign(window, {
     TOWN_FACADE,
     TOWN_HOST_THEMES,
     TOWN_TILE,
+    TownNavigation,
     buildTownSprites,
     layoutTown,
+    paintTownCenter,
     paintTownFacade,
     paintTownGround,
     paintTownInterior,
     paintTownRoof,
+    townArrivalPath,
+    townBusRoute,
     townCarpetFor,
+    townCenterEmblem,
     townCharacter,
+    townCrowdSpots,
     townDeskSlots,
     townDeskTable,
     townLookFor,
+    townNearestStop,
+    townQueueSpot,
     townScreen,
     townSeat,
   },
