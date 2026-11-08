@@ -4,7 +4,7 @@ import { TownBoard } from "./TownBoard";
 import {
   TownTeamsLayer,
   TownWorldLayer,
-  type TownRoomPress,
+  type TownRoomCardPress,
 } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
 import { TownBuildingLayers } from "./townBuildingLayers";
@@ -83,6 +83,7 @@ import {
   type TownReceptionTakes,
 } from "./townReceptionFilter";
 import "./townBoard.css";
+import { useTownCanvasSearch } from "./useTownCanvasSearch";
 import "./townTeams.css";
 import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";
 import { useTownEdgeNav, type TownNeedsYouOrder } from "./useTownEdgeNav";
@@ -139,9 +140,11 @@ export function TownCanvas({
   chrome = NO_CHROME,
   trace = NO_TRACE,
   centerActions,
+  search,
   needsYouOrder,
   activityAt,
 }: {
+  search?: Parameters<typeof useTownCanvasSearch>[0];
   /** Needs you's items in order for N: item key and agent leaf ID, if any. */
   needsYouOrder?: TownNeedsYouOrder;
   /** When an agent last worked (its leaf's activity), for the Idle time lens. */
@@ -329,6 +332,8 @@ export function TownCanvas({
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
+  const searchScene = { model, layout, view, ready, failure, calm };
+  const searching = useTownCanvasSearch(search, rendererRef, searchScene);
   const stepWants = useTownStepWants(steps, () => latest.current, rendererRef);
   const current = {
     chrome,
@@ -437,10 +442,7 @@ export function TownCanvas({
    * Passes a room card's or name's press to the town beneath it
    * (TownWorldLayer): a press on a name can carry the room.
    */
-  const roomCardPress = useRef<
-    | ((event: PointerEvent, roomKey: string, press: TownRoomPress) => boolean)
-    | null
-  >(null);
+  const roomCardPress = useRef<TownRoomCardPress | null>(null);
   // Arrows to what needs you off screen, and N for the next one.
   const edge = useTownEdgeNav(current, view, rendererRef, hostRef);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
@@ -450,6 +452,7 @@ export function TownCanvas({
     // A camera that moved under a still carry (an edge pan, an arrow key)
     // puts something else under it: the target follows what is now drawn.
     if (moved) reaimCarry.current?.();
+    if (moved) searching.countOffscreen();
     const layer = worldRef.current;
     hud.drew(camera, level, latest.current.layout);
     stepWants.want(camera, level);
@@ -516,6 +519,7 @@ export function TownCanvas({
     stepGlyph: latest.current.steps?.hasGlyph,
     openHostKey: null,
     calm: latest.current.calm,
+    search: searching.lit.current,
   });
 
   useEffect(() => {
@@ -625,6 +629,7 @@ export function TownCanvas({
     receptionHeldKeys,
     steps,
     calm,
+    searching.light,
   ]);
 
   // Re-report after any render, so anchors World cleared come back. World

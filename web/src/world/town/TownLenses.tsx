@@ -44,6 +44,7 @@ import type { TownQuestMark } from "./townQuestPennant";
 import { townScaleLensFacts } from "./townScaleLens";
 import { townScaleSceneRequested } from "./townScaleScene";
 import type { TownTarget } from "./townTargets";
+import { keyTakenByViewSearch } from "../viewSearchShortcut";
 import "./townLens.css";
 
 const STORAGE_KEY = "townLens";
@@ -157,6 +158,7 @@ export function useTownLensKeys(
     const keydown = (event: KeyboardEvent) => {
       if (
         event.defaultPrevented ||
+        keyTakenByViewSearch(event) ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey

@@ -1,5 +1,6 @@
 import type { TurnReceipt } from "./handoffs";
 import type { WorldLeafObject } from "./worldObject";
+import { worldSearchWords, worldTextMatches } from "./worldSearch";
 
 /**
  * What the operator recognizes an agent by: the name they gave it, otherwise
@@ -44,7 +45,7 @@ export function matchesQuery(
   query: string,
   question = "",
 ) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = worldSearchWords(query);
   if (!words.length) return true;
   const haystack = [
     leaf.agentName,
@@ -62,6 +63,6 @@ export function matchesQuery(
   ]
     .filter(Boolean)
     .join("\n")
-    .toLowerCase();
-  return words.every((word) => haystack.includes(word));
+    .toLocaleLowerCase();
+  return worldTextMatches(haystack, words);
 }
