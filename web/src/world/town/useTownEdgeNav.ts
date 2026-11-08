@@ -11,6 +11,7 @@ import { formatShortcut, matchesShortcut } from "../../shortcutBindings";
 import { getShortcutSnapshot } from "../../shortcutPreferences";
 import { sharedDeskStore } from "../deskStateStore";
 import { openNeedsYou } from "../needsYou";
+import { keyTakenByViewSearch } from "../viewSearchShortcut";
 import { townWorldAnchor } from "./scene/townHud";
 import type { TownSceneCamera } from "./scene/townSceneCamera";
 import type { TownLevel } from "./townCamera";
@@ -313,7 +314,8 @@ export function useTownEdgeNav(
     if (mobile) return;
     const keydown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
-      if (townKeyIgnored(event.target)) return;
+      // A search bound to N must not also step Needs you.
+      if (keyTakenByViewSearch(event) || townKeyIgnored(event.target)) return;
       const { bindings } = getShortcutSnapshot().preset;
       const direction = matchesShortcut(event, "town.next", bindings)
         ? 1

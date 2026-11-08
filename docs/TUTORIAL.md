@@ -475,6 +475,24 @@ remain visible but cannot accept operations. Use search and the Hosts filter to
 narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
 
+Town's search finds where things are. In World's default full-screen (Zen)
+layout the search box hangs from the top edge beside the view buttons; with
+the bars shown it sits in the top bar. Type part of a room, table or agent
+name, or words from an agent's task, in any order: the matches light up on
+the map, the rest of Town dims a little, and the result line says how many
+there are and how many are off-screen. Each result names its type, its place
+(`host › room › table`) and status, and a task match shows the words it found.
+Click a result, or press **Down** to pick one and **Enter**: the camera
+travels there and the result pulses. Click it or press **Enter** again to
+open it. On a phone, tap the search button in the bottom-right corner, type, and tap a
+result: the box opens at the top of the screen with its results in one panel
+just below it, and the map stays in sight underneath. Press
+**Escape**, tap **✕** or empty the box, and Town goes back to how it was.
+Press **/** or **Ctrl+F** (**Cmd+F** on a Mac) to put the cursor in the search
+of Town, Board or Desk without reaching for the mouse. In a terminal, the Chat
+composer or another text field those keys keep doing what they do there. Change
+them under **Search the current view** in Settings → Shortcuts.
+
 A quiet **?** at reception means an agent has asked you a question with
 `herdr-world ask`. The question also arrives as a Herdr notification, which
 reaches Herdr and, when you enabled them, your phone notifications. It stays
@@ -825,6 +843,10 @@ on your phone and desktop.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
+   Type in **Search Board** (beside the view buttons in Zen, in the top bar
+   otherwise) to keep matching cards lit and dim the rest; the results float
+   over the top of the board. **Down** and **Up** pick a result, **Enter** or
+   a click selects it, and **Escape** ends the search.
 3. Drag a workspace and its tabs follow; cards settle within about a second.
    On a phone, hold a card still before dragging; a quick swipe pans. Add a
    second finger to switch from dragging to pinch zoom without committing a move.

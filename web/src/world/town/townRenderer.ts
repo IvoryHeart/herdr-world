@@ -5,7 +5,10 @@ import {
   createTownBlink,
   createTownScreenResolver,
 } from "./townAmbient";
-import { drawTownSelectionEffects } from "./townSelectionEffects";
+import {
+  drawTownSelectionEffects,
+  type TownSearchPulseClock,
+} from "./townSelectionEffects";
 /**
  * Pixi renderer for the Office town.
  *
@@ -289,6 +292,18 @@ export async function createTownRenderer(
     townChosenCarpet(model?.placeColors.rooms.get(roomKey));
 
   let dimDirty = true;
+  /** A search's matches and pulse, drawn with the selection (townSearch.ts). */
+  const searchFx = {
+    actorPosition: (key: string) => {
+      const actor = actors.actors.get(key);
+      return actor && actor.mode !== "out"
+        ? { x: actor.x, y: actor.y, seated: actor.mode === "seat" }
+        : null;
+    },
+    roofAlpha: (hostKey: string) =>
+      topology.byHost.get(hostKey)?.roofAlpha ?? 1,
+    pulseClock: { seq: null, start: 0 } as TownSearchPulseClock,
+  };
   const topology = createTownTopology({
     camera,
     sprites,
@@ -620,6 +635,7 @@ export async function createTownRenderer(
       camera,
       clock,
       ambient,
+      searchFx,
     );
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);

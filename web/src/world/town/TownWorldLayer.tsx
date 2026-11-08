@@ -65,6 +65,13 @@ export type TownRoomPress =
   | "plaque-name"
   | "plaque-move";
 
+/** A room card's or name's press, passed to the town beneath it. */
+export type TownRoomCardPress = (
+  event: PointerEvent,
+  roomKey: string,
+  press: TownRoomPress,
+) => boolean;
+
 export const TownTeamsLayer = memo(function TownTeamsLayer({
   teams,
 }: {
@@ -201,11 +208,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
    * hold over a desk lifts it, a drag or hold on a name carries the room, a
    * tap on a card zooms the room. False when the town cannot take it.
    */
-  onRoomCardPress?(
-    event: PointerEvent,
-    roomKey: string,
-    press: TownRoomPress,
-  ): boolean;
+  onRoomCardPress?: TownRoomCardPress;
   onFocusTarget(target: TownTarget): void;
 }) {
   // A card press the town took ends as the town's tap; only keyboard

@@ -108,8 +108,15 @@ export default function WorldFoundationApp() {
   );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
   const [zenActive, setZenActive] = useState(false);
-  const [viewToolbarPortal, setViewToolbarPortal] =
+  const [topbarToolbarHost, setTopbarToolbarHost] =
     useState<HTMLDivElement | null>(null);
+  const [zenToolbarHost, setZenToolbarHost] = useState<HTMLDivElement | null>(
+    null,
+  );
+  // Zen, World's default, parks the topbar off screen, so the view's search
+  // moves into the Zen dock while Zen is on.
+  const viewToolbarPortal =
+    zenActive && zenToolbarHost ? zenToolbarHost : topbarToolbarHost;
   const [visualActionExtension, setVisualActionExtension] =
     useState<CommandExtension>(EMPTY_VISUAL_ACTION_EXTENSION);
   const [visualArrangementControl, setVisualArrangementControl] = useState<
@@ -402,6 +409,16 @@ export default function WorldFoundationApp() {
                   <NeedsYouCounter world={topbarWorld} />
                 )
               }
+              // A phone's corner holds Town's search only, clear of the
+              // other views' floating controls.
+              search={
+                view === "spaces" || (mobile && view !== "town") ? null : (
+                  <div
+                    className="world-view-toolbar-host"
+                    ref={setZenToolbarHost}
+                  />
+                )
+              }
             />
           )}
           onZenActiveChange={setZenActive}
@@ -546,7 +563,7 @@ export default function WorldFoundationApp() {
                   />
                   <div
                     className="world-view-toolbar-host"
-                    ref={setViewToolbarPortal}
+                    ref={setTopbarToolbarHost}
                   />
                 </>
               ) : null}
