@@ -1,6 +1,7 @@
 import {
   EllipsisVertical,
   GitPullRequest,
+  Layers,
   Maximize2,
   Minus,
   Plus,
@@ -27,6 +28,7 @@ import { BOARD_SURFACES, type BoardAppearance } from "./boardAppearance";
 
 const CONTROLS: readonly BoardControl[] = [
   "work",
+  "lens",
   "next",
   "home",
   "zoomOut",
@@ -37,6 +39,7 @@ const CONTROLS: readonly BoardControl[] = [
 ];
 const INITIAL_WIDTHS = {
   work: 76,
+  lens: 84,
   next: 64,
   home: 140,
   zoomOut: 36,
@@ -50,6 +53,7 @@ const DOCK_GAP = 12;
 const icon = (control: BoardControl) => {
   const Icon = {
     work: GitPullRequest,
+    lens: Layers,
     next: SkipForward,
     home: null,
     zoomOut: Minus,
@@ -66,6 +70,10 @@ export function BoardControls(props: {
   workRef: RefObject<HTMLButtonElement | null>;
   workOpen: boolean;
   onWork(): void;
+  /** The lens on, by name, or null in Attention (Board as usual). */
+  lens: string | null;
+  /** Opens the lens chooser, or leaves the lens on. */
+  onLens(): void;
   onNext?(): void;
   appearance: BoardAppearance;
   onAppearance(next: BoardAppearance): void;
@@ -187,6 +195,7 @@ export function BoardControls(props: {
   const label = (control: BoardControl) =>
     ({
       work: "Work",
+      lens: props.lens ?? "Lenses",
       next: "Next",
       home: `Needs a home · ${props.count}`,
       zoomOut: "Zoom out",
@@ -198,17 +207,22 @@ export function BoardControls(props: {
   const accessible = (control: BoardControl) =>
     control === "work"
       ? "Work: pull requests and tickets"
-      : control === "next"
-        ? "Next agent needing you"
-        : control === "home"
-          ? `Needs a home: ${props.count} string${props.count === 1 ? "" : "s"}`
-          : control === "tidy"
-            ? props.tidyLabel
-            : label(control);
+      : control === "lens"
+        ? props.lens
+          ? `Lens: ${props.lens}. Leave the lens`
+          : "Lenses (L)"
+        : control === "next"
+          ? "Next agent needing you"
+          : control === "home"
+            ? `Needs a home: ${props.count} string${props.count === 1 ? "" : "s"}`
+            : control === "tidy"
+              ? props.tidyLabel
+              : label(control);
   const content = (control: BoardControl, inMenu = false) => (
     <>
       {icon(control)}
       {control === "work" ||
+      control === "lens" ||
       control === "home" ||
       control === "next" ||
       inMenu ? (
@@ -225,6 +239,7 @@ export function BoardControls(props: {
   const act = (control: BoardControl) => {
     setOpen(false);
     if (control === "work") props.onWork();
+    else if (control === "lens") props.onLens();
     else if (control === "next") props.onNext?.();
     else if (control === "home") props.onHome();
     else if (control === "fit") props.onFit();
@@ -370,7 +385,13 @@ export function BoardControls(props: {
               ref={control === "work" ? props.workRef : undefined}
               aria-label={accessible(control)}
               disabled={control === "next" && !props.onNext}
-              aria-pressed={control === "work" ? props.workOpen : undefined}
+              aria-pressed={
+                control === "work"
+                  ? props.workOpen
+                  : control === "lens"
+                    ? props.lens !== null
+                    : undefined
+              }
               onClick={() => act(control)}
             >
               {content(control)}

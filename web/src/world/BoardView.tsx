@@ -116,6 +116,15 @@ import {
 import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
 import { BoardZoneColor } from "./board/BoardZoneColor";
 import { WorkLens } from "./board/WorkLens";
+import { TOWN_LENS_NAMES } from "./town/townLens";
+import {
+  BoardLensDock,
+  BoardLensReading,
+  BoardTabBadge,
+  BoardWorkBadges,
+  boardLensCard,
+  useBoardLenses,
+} from "./board/BoardLenses";
 import { BoardControls } from "./board/BoardControls";
 import { boardAppearanceStyle } from "./board/boardAppearance";
 import { useBoardAppearance } from "./board/useBoardAppearance";
@@ -1851,7 +1860,11 @@ export default function BoardView({
   /* ---------- Pointer input ---------- */
   /** What a pointer landed on; null for controls and text being edited. */
   function classify(target: HTMLElement): GestureTarget | null {
-    if (target.closest("[contenteditable='true'], .work-lens, .board-facts"))
+    if (
+      target.closest(
+        "[contenteditable='true'], .work-lens, .board-lens-dock, .board-facts",
+      )
+    )
       return null;
     if (
       target.closest("button, input, a, label") &&
@@ -3226,6 +3239,14 @@ export default function BoardView({
   useLayoutEffect(() => {
     selectedKeysRef.current = selectedKeys;
   });
+  // Town's lenses, Since you left and desk badges (board/BoardLenses.tsx).
+  const lenses = useBoardLenses({
+    model,
+    world: shownWorld,
+    quests,
+    shell: boardRef,
+    selectedId,
+  });
 
   /**
    * Colours the user chose. A tab is a terminal and always has its terminal
@@ -3354,7 +3375,10 @@ export default function BoardView({
         data-surface={appearance.surface}
         style={boardAppearanceStyle(appearance)}
         className={`board${far ? " board-far" : ""}${pulses ? "" : " board-no-pulse"}${culling ? " board-culling" : ""}`}
+        data-lens={lenses.view?.lens}
         aria-label="Board of hosts, workspaces and tabs"
+        onPointerOver={(event) => lenses.point(event.target)}
+        onFocus={(event) => lenses.point(event.target)}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -3397,7 +3421,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .board-facts",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .board-lens-dock, .board-facts",
             )
           )
             return;
@@ -3473,303 +3497,331 @@ export default function BoardView({
           {/* Cards in their own container, new when a large board is built,
               so React appends them as one subtree instead of placing each
               among existing siblings (quadratic in cards). */}
-          <div className="board-cards" key={built ? "built" : "frame"}>
-            {(culling
-              ? renderKeys
-                ? model.workspaces.filter((space) => renderKeys.has(space.key))
-                : // Until paint says what is on screen, nothing.
-                  []
-              : model.workspaces
-            ).map((space) => {
-              const folded = collapsed.has(space.key);
-              const attention = space.statuses[0] === "blocked";
-              return (
-                <div
-                  key={space.key}
-                  ref={ref(space.key)}
-                  data-key={space.key}
-                  data-world-node-anchor={space.space.id}
-                  role="button"
-                  aria-pressed={selectedKeys.has(space.key)}
-                  tabIndex={0}
-                  aria-label={`Workspace ${space.label}, ${space.tabKeys.length} tabs`}
-                  // Keyboard and assistive activation arrive as a click with no
-                  // pointer (detail 0); pointer taps are handled as gestures.
-                  onClick={(event) => {
-                    if (event.detail === 0 && !fromNestedControl(event))
-                      selectCard(space.key, model);
-                  }}
-                  style={tintStyle(cardColors[space.key])}
-                  className={[
-                    "board-card board-workspace",
-                    cardColors[space.key] ? "board-tinted" : "",
-                    folded ? "board-folded" : "",
-                    attention ? "board-attn" : "",
-                    space.stale ? "board-stale" : "",
-                    selectedKeys.has(space.key) ? "board-selected" : "",
-                    matches && !matches.has(space.key) ? "board-dim" : "",
-                  ].join(" ")}
-                  onKeyDown={(event) => {
-                    if (fromNestedControl(event)) return;
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      selectCard(space.key, model);
-                    }
-                  }}
-                >
-                  <div className="board-row">
-                    {pinnedKeys.has(space.key) ? <PinBadge /> : null}
-                    <span className="board-label">{space.label}</span>
-                    <button
-                      type="button"
-                      className="board-fold"
-                      aria-label={`${folded ? "Open" : "Fold"} ${space.label}`}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      title={folded ? "Show the tabs" : "Fold the tabs away"}
-                      onClick={() => toggleFold(space)}
-                    >
-                      {folded ? (
-                        <>
-                          {space.tabKeys.length}
-                          <ChevronDown size={14} aria-hidden="true" />
-                        </>
-                      ) : (
-                        <ChevronUp size={14} aria-hidden="true" />
-                      )}
-                    </button>
-                    {space.actionable ? (
+          <BoardWorkBadges model={model}>
+            <div className="board-cards" key={built ? "built" : "frame"}>
+              {(culling
+                ? renderKeys
+                  ? model.workspaces.filter((space) =>
+                      renderKeys.has(space.key),
+                    )
+                  : // Until paint says what is on screen, nothing.
+                    []
+                : model.workspaces
+              ).map((space) => {
+                const folded = collapsed.has(space.key);
+                const attention = space.statuses[0] === "blocked";
+                const lens = boardLensCard(lenses, space.key);
+                return (
+                  <div
+                    key={space.key}
+                    ref={ref(space.key)}
+                    data-key={space.key}
+                    data-world-node-anchor={space.space.id}
+                    role="button"
+                    aria-pressed={selectedKeys.has(space.key)}
+                    tabIndex={0}
+                    aria-label={`Workspace ${space.label}, ${space.tabKeys.length} tabs${lens.label}`}
+                    data-lens-mark={lens.data}
+                    // Keyboard and assistive activation arrive as a click with no
+                    // pointer (detail 0); pointer taps are handled as gestures.
+                    onClick={(event) => {
+                      if (event.detail === 0 && !fromNestedControl(event))
+                        selectCard(space.key, model);
+                    }}
+                    style={{
+                      ...tintStyle(cardColors[space.key]),
+                      ...lens.style,
+                    }}
+                    className={[
+                      "board-card board-workspace",
+                      cardColors[space.key] ? "board-tinted" : "",
+                      folded ? "board-folded" : "",
+                      attention ? "board-attn" : "",
+                      space.stale ? "board-stale" : "",
+                      selectedKeys.has(space.key) ? "board-selected" : "",
+                      matches && !matches.has(space.key) ? "board-dim" : "",
+                    ].join(" ")}
+                    onKeyDown={(event) => {
+                      if (fromNestedControl(event)) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        selectCard(space.key, model);
+                      }
+                    }}
+                  >
+                    {lens.data ? <BoardLensReading mark={lens.mark} /> : null}
+                    <div className="board-row">
+                      {pinnedKeys.has(space.key) ? <PinBadge /> : null}
+                      <span className="board-label">{space.label}</span>
                       <button
                         type="button"
-                        className="board-fold board-add"
-                        aria-label={`New in ${space.label}`}
-                        title="New terminal or agent"
+                        className="board-fold"
+                        aria-label={`${folded ? "Open" : "Fold"} ${space.label}`}
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => setAddTo(space.key)}
+                        title={folded ? "Show the tabs" : "Fold the tabs away"}
+                        onClick={() => toggleFold(space)}
                       >
-                        <Plus size={14} aria-hidden="true" />
+                        {folded ? (
+                          <>
+                            {space.tabKeys.length}
+                            <ChevronDown size={14} aria-hidden="true" />
+                          </>
+                        ) : (
+                          <ChevronUp size={14} aria-hidden="true" />
+                        )}
                       </button>
-                    ) : null}
-                  </div>
-                  <span
-                    className="board-handle"
-                    title="Drag to string this to a note or card"
-                  />
-                  <div className="board-counts">{workspaceCounts(space)}</div>
-                  <BoardWorkspaceEconomy
-                    connectionId={space.connectionId}
-                    generation={space.generation}
-                    nativeId={space.nativeId}
-                    worldId={space.space.id}
-                  />
-                  <div className="board-sum" aria-hidden="true">
-                    {space.squares.length > (culling ? 0 : 64) ? (
-                      <BoardStatusSummary
-                        squares={space.squares}
-                        overview={far}
-                      />
-                    ) : (
-                      space.squares.map((square, i) => (
-                        <span
-                          key={i}
-                          className={
-                            square.isAgent
-                              ? `board-s-${square.status}`
-                              : "board-sq-shell"
-                          }
-                        />
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {/* A large board in the overview draws no tabs at all (they are
-              hidden there), so React does not rebuild thousands of tab cards
-              on every topology update. */}
-            {(culling
-              ? far || !renderKeys
-                ? []
-                : model.tabs.filter((tab) => renderKeys.has(tab.key))
-              : model.tabs
-            ).map((tab) => {
-              if (collapsed.has(tab.workspaceKey)) return null;
-              const pane = primaryPane(tab);
-              const multi = tab.panes.length > 1;
-              const rows = rowsOf(tab, selectedId);
-              const hidden = tab.panes.length - rows.length;
-              return (
-                <div
-                  key={tab.key}
-                  ref={ref(tab.key)}
-                  data-key={tab.key}
-                  data-world-node-anchor={
-                    tab.panes.length === 1 ? tab.panes[0]!.leaf.id : undefined
-                  }
-                  role="button"
-                  aria-pressed={selectedKeys.has(tab.key)}
-                  tabIndex={0}
-                  aria-label={`${tab.label}, ${tabSummary(tab)}`}
-                  onClick={(event) => {
-                    if (event.detail !== 0 || fromNestedControl(event)) return;
-                    const row = (
-                      event.target as HTMLElement
-                    ).closest<HTMLElement>("[data-pane]");
-                    selectCard(tab.key, model, row?.dataset.pane);
-                  }}
-                  style={tintStyle(tabColor(tab))}
-                  className={[
-                    "board-card board-tab",
-                    `board-s-${tab.status}`,
-                    "board-tinted",
-                    tab.shellOnly ? "board-terminal" : "",
-                    multi ? "board-multi" : "",
-                    tab.stale ? "board-stale" : "",
-                    selectedKeys.has(tab.key) ? "board-selected" : "",
-                    matches && !matches.has(tab.key) ? "board-dim" : "",
-                  ].join(" ")}
-                  onKeyDown={(event) => {
-                    if (fromNestedControl(event)) return;
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      selectCard(tab.key, model);
-                    }
-                  }}
-                >
-                  <div className="board-row">
-                    {tab.shellOnly ? (
-                      <span className="board-prompt" aria-hidden="true">
-                        &gt;_
-                      </span>
-                    ) : (
-                      <span className="board-dot" />
-                    )}
-                    <AppearanceAvatar id={pane?.leaf.appearance?.avatar} />
-                    <span className="board-label">{tab.label}</span>
-                    {!multi && pane ? (
-                      <WorldAskMark ask={asking.get(pane.leaf.id)} />
-                    ) : null}
-                    {pinnedKeys.has(tab.key) ? <PinBadge /> : null}
-                    {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
-                      <QuestChip quest={quests.get(pane.leaf.id)!} />
-                    ) : null}
-                    <span className="board-who">
-                      {multi
-                        ? `${tab.panes.length} panes`
-                        : pane
-                          ? paneName(pane)
-                          : ""}
-                    </span>
-                    {!multi && pane ? (
-                      <span
-                        className="board-pane-handle"
-                        data-pane={pane.key}
-                        title="Drag pane to another tab; hold first on a phone"
-                      >
-                        <GripVertical size={16} aria-hidden="true" />
-                      </span>
-                    ) : null}
-                  </div>
-                  {multi ? (
-                    <div className="board-panes">
-                      {rows.map((row) => (
-                        <div
-                          key={row.key}
-                          data-pane={row.key}
-                          data-world-node-anchor={row.leaf.id}
-                          role="button"
-                          aria-pressed={selectedId === row.leaf.id}
-                          className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
-                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "terminal"}`}
-                        >
-                          {row.isAgent ? (
-                            <span className="board-dot" />
-                          ) : (
-                            <span className="board-prompt" aria-hidden="true">
-                              &gt;_
-                            </span>
-                          )}
-                          <span className="board-pane-name">
-                            <AppearanceAvatar
-                              id={row.leaf.appearance?.avatar}
-                            />
-                            {paneName(row)}
-                            <WorldAskMark ask={asking.get(row.leaf.id)} />
-                          </span>
-                          {row.isAgent && quests.get(row.leaf.id) ? (
-                            <QuestChip quest={quests.get(row.leaf.id)!} />
-                          ) : null}
-                          {row.isAgent ? (
-                            <BoardAgentNowLine
-                              leaf={row.leaf}
-                              status={row.status}
-                              presented={facts.presented.get(row.leaf.id)}
-                              steps={steps}
-                              className="board-pane-state"
-                              fallback={STATUS_LABEL[row.status]}
-                            />
-                          ) : (
-                            <span className="board-pane-state">terminal</span>
-                          )}
-                        </div>
-                      ))}
-                      {hidden > 0 ? (
+                      {space.actionable ? (
                         <button
                           type="button"
-                          className="board-more"
+                          className="board-fold board-add"
+                          aria-label={`New in ${space.label}`}
+                          title="New terminal or agent"
                           onPointerDown={(event) => event.stopPropagation()}
-                          onClick={() => setChooser({ tabKey: tab.key })}
+                          onClick={() => setAddTo(space.key)}
                         >
-                          +{hidden} more
+                          <Plus size={14} aria-hidden="true" />
                         </button>
                       ) : null}
                     </div>
-                  ) : (
-                    <div className="board-line">
-                      {tab.shellOnly ? "$ " : ""}
-                      {pane
-                        ? paneLine(pane, tab.status)
-                        : STATUS_LABEL[tab.status]}
-                      {pane?.isAgent ? (
-                        <BoardAgentNowLine
-                          leaf={pane.leaf}
-                          status={pane.status}
-                          presented={facts.presented.get(pane.leaf.id)}
-                          steps={steps}
-                          className="board-now-inline"
+                    <span
+                      className="board-handle"
+                      title="Drag to string this to a note or card"
+                    />
+                    <div className="board-counts">{workspaceCounts(space)}</div>
+                    <BoardWorkspaceEconomy
+                      connectionId={space.connectionId}
+                      generation={space.generation}
+                      nativeId={space.nativeId}
+                      worldId={space.space.id}
+                    />
+                    <div className="board-sum" aria-hidden="true">
+                      {space.squares.length > (culling ? 0 : 64) ? (
+                        <BoardStatusSummary
+                          squares={space.squares}
+                          overview={far}
                         />
+                      ) : (
+                        space.squares.map((square, i) => (
+                          <span
+                            key={i}
+                            className={
+                              square.isAgent
+                                ? `board-s-${square.status}`
+                                : "board-sq-shell"
+                            }
+                          />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {/* A large board in the overview draws no tabs at all (they are
+              hidden there), so React does not rebuild thousands of tab cards
+              on every topology update. */}
+              {(culling
+                ? far || !renderKeys
+                  ? []
+                  : model.tabs.filter((tab) => renderKeys.has(tab.key))
+                : model.tabs
+              ).map((tab) => {
+                if (collapsed.has(tab.workspaceKey)) return null;
+                const pane = primaryPane(tab);
+                const multi = tab.panes.length > 1;
+                const rows = rowsOf(tab, selectedId);
+                const hidden = tab.panes.length - rows.length;
+                const lens = boardLensCard(lenses, tab.key);
+                return (
+                  <div
+                    key={tab.key}
+                    ref={ref(tab.key)}
+                    data-key={tab.key}
+                    data-world-node-anchor={
+                      tab.panes.length === 1 ? tab.panes[0]!.leaf.id : undefined
+                    }
+                    role="button"
+                    aria-pressed={selectedKeys.has(tab.key)}
+                    tabIndex={0}
+                    aria-label={`${tab.label}, ${tabSummary(tab)}${lens.label}`}
+                    data-lens-mark={lens.data}
+                    onClick={(event) => {
+                      if (event.detail !== 0 || fromNestedControl(event))
+                        return;
+                      const row = (
+                        event.target as HTMLElement
+                      ).closest<HTMLElement>("[data-pane]");
+                      selectCard(tab.key, model, row?.dataset.pane);
+                    }}
+                    style={{ ...tintStyle(tabColor(tab)), ...lens.style }}
+                    className={[
+                      "board-card board-tab",
+                      `board-s-${tab.status}`,
+                      "board-tinted",
+                      tab.shellOnly ? "board-terminal" : "",
+                      multi ? "board-multi" : "",
+                      tab.stale ? "board-stale" : "",
+                      selectedKeys.has(tab.key) ? "board-selected" : "",
+                      matches && !matches.has(tab.key) ? "board-dim" : "",
+                    ].join(" ")}
+                    onKeyDown={(event) => {
+                      if (fromNestedControl(event)) return;
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        selectCard(tab.key, model);
+                      }
+                    }}
+                  >
+                    {lens.data ? <BoardLensReading mark={lens.mark} /> : null}
+                    <div className="board-row">
+                      {tab.shellOnly ? (
+                        <span className="board-prompt" aria-hidden="true">
+                          &gt;_
+                        </span>
+                      ) : (
+                        <span className="board-dot" />
+                      )}
+                      <AppearanceAvatar id={pane?.leaf.appearance?.avatar} />
+                      <span className="board-label">{tab.label}</span>
+                      {!multi && pane ? (
+                        <WorldAskMark ask={asking.get(pane.leaf.id)} />
+                      ) : null}
+                      {pinnedKeys.has(tab.key) ? <PinBadge /> : null}
+                      <BoardTabBadge tab={tab} />
+                      {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
+                        <QuestChip quest={quests.get(pane.leaf.id)!} />
+                      ) : null}
+                      <span className="board-who">
+                        {multi
+                          ? `${tab.panes.length} panes`
+                          : pane
+                            ? paneName(pane)
+                            : ""}
+                      </span>
+                      {!multi && pane ? (
+                        <span
+                          className="board-pane-handle"
+                          data-pane={pane.key}
+                          title="Drag pane to another tab; hold first on a phone"
+                        >
+                          <GripVertical size={16} aria-hidden="true" />
+                        </span>
                       ) : null}
                     </div>
-                  )}
-                  {pane?.leaf.appearance?.status ? (
-                    <div
-                      className="appearance-status"
-                      title={pane.leaf.appearance.status}
-                    >
-                      {pane.leaf.appearance.status}
-                    </div>
-                  ) : null}
-                  {/* Its ! or ✓ opens Needs you at this agent. */}
-                  <button
-                    type="button"
-                    className="board-badge"
-                    aria-label={`Open ${tab.label} in Needs you`}
-                    disabled={tab.status === "unknown"}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openNeedsYou(
-                        pane ? needsYouLeafKey(pane.leaf.id) : undefined,
-                      );
-                    }}
-                  />
-                  <span
-                    className="board-handle"
-                    title="Drag to string this to a note or card"
-                  />
-                </div>
-              );
-            })}
-          </div>
+                    {multi ? (
+                      <div className="board-panes">
+                        {rows.map((row) => {
+                          const rowLens =
+                            lenses.view && row.isAgent
+                              ? boardLensCard(lenses, tab.key, row.leaf.id)
+                              : null;
+                          return (
+                            <div
+                              key={row.key}
+                              data-pane={row.key}
+                              data-world-node-anchor={row.leaf.id}
+                              role="button"
+                              aria-pressed={selectedId === row.leaf.id}
+                              className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
+                              aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "terminal"}${rowLens?.label ?? ""}`}
+                              data-lens-mark={rowLens?.data}
+                              style={rowLens?.style}
+                            >
+                              {row.isAgent ? (
+                                <span className="board-dot" />
+                              ) : (
+                                <span
+                                  className="board-prompt"
+                                  aria-hidden="true"
+                                >
+                                  &gt;_
+                                </span>
+                              )}
+                              <span className="board-pane-name">
+                                <AppearanceAvatar
+                                  id={row.leaf.appearance?.avatar}
+                                />
+                                {paneName(row)}
+                                <WorldAskMark ask={asking.get(row.leaf.id)} />
+                              </span>
+                              {row.isAgent && quests.get(row.leaf.id) ? (
+                                <QuestChip quest={quests.get(row.leaf.id)!} />
+                              ) : null}
+                              {row.isAgent ? (
+                                <BoardAgentNowLine
+                                  leaf={row.leaf}
+                                  status={row.status}
+                                  presented={facts.presented.get(row.leaf.id)}
+                                  steps={steps}
+                                  className="board-pane-state"
+                                  fallback={STATUS_LABEL[row.status]}
+                                />
+                              ) : (
+                                <span className="board-pane-state">
+                                  terminal
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {hidden > 0 ? (
+                          <button
+                            type="button"
+                            className="board-more"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() => setChooser({ tabKey: tab.key })}
+                          >
+                            +{hidden} more
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="board-line">
+                        {tab.shellOnly ? "$ " : ""}
+                        {pane
+                          ? paneLine(pane, tab.status)
+                          : STATUS_LABEL[tab.status]}
+                        {pane?.isAgent ? (
+                          <BoardAgentNowLine
+                            leaf={pane.leaf}
+                            status={pane.status}
+                            presented={facts.presented.get(pane.leaf.id)}
+                            steps={steps}
+                            className="board-now-inline"
+                          />
+                        ) : null}
+                      </div>
+                    )}
+                    {pane?.leaf.appearance?.status ? (
+                      <div
+                        className="appearance-status"
+                        title={pane.leaf.appearance.status}
+                      >
+                        {pane.leaf.appearance.status}
+                      </div>
+                    ) : null}
+                    {/* Its ! or ✓ opens Needs you at this agent. */}
+                    <button
+                      type="button"
+                      className="board-badge"
+                      aria-label={`Open ${tab.label} in Needs you`}
+                      disabled={tab.status === "unknown"}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openNeedsYou(
+                          pane ? needsYouLeafKey(pane.leaf.id) : undefined,
+                        );
+                      }}
+                    />
+                    <span
+                      className="board-handle"
+                      title="Drag to string this to a note or card"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </BoardWorkBadges>
           {(saved?.notes ?? []).map((note) => (
             <div
               key={note.id}
@@ -4189,6 +4241,10 @@ export default function BoardView({
           workRef={workButtonRef}
           workOpen={workOpen}
           onWork={() => setWorkOpen(!workOpen)}
+          lens={lenses.view ? TOWN_LENS_NAMES[lenses.view.lens] : null}
+          onLens={() =>
+            lenses.state.shown ? lenses.state.close() : lenses.state.open()
+          }
           count={detached.length}
           onHome={() => setTrayOpen(!trayOpen)}
           onZoom={(factor) => {
@@ -4211,6 +4267,7 @@ export default function BoardView({
           tracing={tracing}
           onTrace={DEVTOOLS ? () => setTrace(!tracing) : undefined}
         />
+        <BoardLensDock lenses={lenses} world={shownWorld} />
         {workOpen ? (
           <WorkLens
             world={world}
