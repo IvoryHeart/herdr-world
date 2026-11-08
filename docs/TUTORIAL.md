@@ -474,6 +474,10 @@ travels there and the result pulses. Click it or press **Enter** again to
 open it. On a phone, tap the search button in the bottom-right corner, type, and tap a
 result. Press
 **Escape**, tap **✕** or empty the box, and Town goes back to how it was.
+Press **/** or **Ctrl+F** (**Cmd+F** on a Mac) to put the cursor in the search
+of Town, Board or Desk without reaching for the mouse. In a terminal, the Chat
+composer or another text field those keys keep doing what they do there. Change
+them under **Search the current view** in Settings → Shortcuts.
 
 A quiet **?** at reception means an agent has asked you a question with
 `herdr-world ask`. The question also arrives as a Herdr notification, which

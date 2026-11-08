@@ -510,7 +510,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     off-screen. Under **Town calm motion** or reduced motion the camera jumps
     and nothing pulses. **Escape** (in the box, on a result or on the map),
     the phone search's **✕** or an empty box ends the search and returns the
-    camera to where the search found it.
+    camera to where the search found it. **/** or **Ctrl+F** (**Cmd+F** on a
+    Mac) puts the cursor in the search of Town, Board or Desk, or opens the
+    phone's search, unless you are typing in a terminal, the Chat composer or
+    another text field; the browser's own find stays closed. Change the keys
+    under **Search the current view** in Settings → Shortcuts.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
   the runtime's existing version and owner. Only a missing Herdr is installed;
@@ -758,7 +762,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Terminal) beside the Desk as a reading pane and folds the lanes
     into one queue. `J`/`K` preview the next agent there, `Enter` opens it using
     **Agents open** and `Esc` closes the pane. Phones open the Inspector full screen.
-  - One search (`/`) filters every mode by agent name, thread title, harness,
+  - One search (`/`, `Ctrl+F` or `Cmd+F`) filters every mode by agent name, thread title, harness,
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
   - `J`/`K` move between cards; `Enter` opens the agent's Inspector using **Agents open** to
@@ -1778,6 +1782,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Zen mode | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
 | Recent pane switcher | `Ctrl+Tab` | `Ctrl+Alt+J` |
 | Pane Search | `Alt+K` | `Alt+K` |
+| Search the current view (Town, Board, Desk) | `/` or `Cmd+F` | `/` or `Ctrl+F` |
 | Create / close tab or pane | `Cmd+T` / `Cmd+W` | `Ctrl+Alt+T` / `Ctrl+Alt+W` |
 | Previous / next tab | `Cmd+Option+Left/Right` | `Alt+Shift+Left/Right` |
 | Focus neighboring pane | `Cmd+Ctrl+Arrow` | `Ctrl+Shift+Arrow` |

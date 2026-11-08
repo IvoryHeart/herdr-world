@@ -1,6 +1,13 @@
 import { Search, X } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
+import { useViewSearchShortcut } from "./viewSearchShortcut";
 
 export {
   worldNodeSearchText,
@@ -36,6 +43,13 @@ export function WorldViewToolbar({
     () => window.matchMedia("(max-width: 720px)").matches,
   );
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  // The same as clicking the search box, or on a phone the search icon:
+  // a newly opened phone search takes the cursor through autoFocus.
+  useViewSearchShortcut(() => {
+    if (compact && !compactSearchOpen) setCompactSearchOpen(true);
+    else inputRef.current?.focus();
+  });
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 720px)");
@@ -68,6 +82,7 @@ export function WorldViewToolbar({
       <label>
         <span className="world-sr-only">Search {viewLabel}</span>
         <input
+          ref={inputRef}
           autoFocus={compact}
           type="search"
           value={query}
