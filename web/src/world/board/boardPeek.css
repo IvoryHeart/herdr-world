@@ -1,0 +1,144 @@
+/* Board's peek at an agent (BoardPeek.tsx): Town's preview in Board's own
+   card colours. A hover card beside the agent, or a sheet on a phone. */
+.board-peek {
+  position: absolute;
+  z-index: 41;
+  display: grid;
+  gap: 8px;
+  width: min(340px, calc(100% - 24px));
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--board-line);
+  border-radius: 14px;
+  background: var(--board-card);
+  color: var(--board-ink);
+  box-shadow: var(--board-lift);
+  cursor: default;
+}
+.board-peek.board-s-blocked {
+  border-color: var(--s-blocked);
+}
+.board-peek-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.board-peek-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.board-peek-head b {
+  display: block;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-peek-head small {
+  display: block;
+  overflow: hidden;
+  color: var(--board-soft);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-peek button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--board-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.board-peek button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.board-peek .board-peek-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  padding: 0;
+  font-size: 17px;
+}
+.board-peek-screen {
+  max-height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--board-ink) 7%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.board-peek-screen .town-peek-markdown {
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+}
+.board-peek-screen .town-peek-message time,
+.board-peek-screen .town-peek-empty,
+.board-peek-screen .town-peek-unavailable {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--board-soft);
+  font-size: 12px;
+}
+.board-peek-screen .town-question {
+  margin: 6px 0 0;
+  font: inherit;
+  white-space: pre-wrap;
+}
+.board-peek-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.board-peek-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.board-peek-actions button span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-peek .board-peek-primary {
+  border-color: var(--board-accent);
+  background: var(--board-accent);
+  color: var(--board-card);
+  font-weight: 700;
+}
+@media (max-width: 720px) {
+  .board-peek {
+    left: 8px;
+    right: 8px;
+    bottom: 72px;
+    width: auto;
+    max-height: 70%;
+    overflow: auto;
+  }
+}
+
+/* The selected card's Herdr actions in its bar: they change Herdr (and so
+   Town and Spaces), where dragging a card changes only the Board. */
+.board-notebar .board-herdr {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--board-line);
+}
+.board-herdr-label {
+  color: var(--board-soft);
+  font-size: 12px;
+}

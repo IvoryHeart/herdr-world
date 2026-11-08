@@ -57,9 +57,22 @@ export function officeRoomActionCapabilities(
   world: WorldObject,
   room: Pick<OfficeRoom, "hostKey" | "workspaceRef" | "stale">,
 ): OfficeRoomActionCapabilities {
-  const space = officeSpaceForRoom(world, room);
+  return spaceRoomActionCapabilities(
+    officeSpaceForRoom(world, room),
+    room.stale,
+  );
+}
+
+/**
+ * What a workspace (room) can do now, from World's own space object: Town
+ * and Board offer the same room actions.
+ */
+export function spaceRoomActionCapabilities(
+  space: WorldSpaceObject | null,
+  stale = false,
+): OfficeRoomActionCapabilities {
   const operational = Boolean(
-    space && space.actionable && !space.stale && !room.stale,
+    space && space.actionable && !space.stale && !stale,
   );
   return {
     createSeat: operational && space?.capabilities.launcher === true,

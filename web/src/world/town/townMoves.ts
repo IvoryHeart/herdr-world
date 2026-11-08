@@ -5,10 +5,14 @@
  */
 
 import { bridge } from "../../api";
-import { operationalStore } from "../../store";
 import { deskReorderIndex } from "../../../../shared/tabOrder";
 export { deskReorderIndex };
-import type { Tab, Workspace } from "../../types";
+import {
+  herdrWorkspaceOrderMoves,
+  requestTabReorder,
+  requestWorkspaceOrder,
+  type HerdrOrderOutcome,
+} from "../herdrOrder";
 import type {
   OfficeDesk,
   OfficePaneDevice,
@@ -113,18 +117,11 @@ export async function requestDeskMove(
   );
 }
 
-const TAB_MOVE_UNSUPPORTED: TownMoveOutcome = {
-  status: "refused",
-  reason: "tab_move_unsupported",
-  message: "This host's Herdr cannot reorder tabs. Herdr 0.7.2 or later can.",
-};
-
 /**
  * Reorder a desk within its room: it takes `onto`'s slot, as a tab dragged
- * onto another in Spaces, or goes last when `onto` is null. Town reads the room's order from Herdr, then moves
- * the tab with Spaces' tab.move on the exact connection and runtime
- * generation. Town shows no order of its own: desks move when Herdr's new
- * order arrives.
+ * onto another in Spaces, or goes last when `onto` is null. Herdr's order
+ * moves (herdrOrder.ts); Town shows no order of its own: desks move when
+ * Herdr's new order arrives.
  */
 export async function requestDeskReorder(
   desk: OfficeDesk,
@@ -139,85 +136,21 @@ export async function requestDeskReorder(
       reason: "other_room",
       message: "Desks reorder only within one room.",
     };
-  const owner = {
-    connectionId: desk.tabRef.connectionId,
-    runtimeGeneration: desk.tabRef.generation,
-  };
-  const operations = operationalStore(owner);
-  const observed = operations.get();
-  if (observed.lastRefresh > 0 && !observed.tabMoveSupported)
-    return TAB_MOVE_UNSUPPORTED;
-  const listed = (await bridge
-    .connection(owner.connectionId, owner.runtimeGeneration)
-    .call("tab.list", {})) as
-    | { tabs?: Tab[]; tab_move_supported?: boolean }
-    | undefined;
-  if (listed?.tab_move_supported === false) return TAB_MOVE_UNSUPPORTED;
-  const tabs = listed?.tabs ?? [];
-  const tabId = desk.tabRef.nativeId;
-  const workspaceId = tabs.find((tab) => tab.tab_id === tabId)?.workspace_id;
-  const order = tabs
-    .filter((tab) => tab.workspace_id === workspaceId)
-    .map((tab) => tab.tab_id);
-  const insertIndex = workspaceId
-    ? deskReorderIndex(order, tabId, onto?.tabRef.nativeId ?? null)
-    : undefined;
-  if (!workspaceId || insertIndex === undefined)
-    return {
-      status: "refused",
-      reason: "changed",
-      message: "The room changed. Try again.",
-    };
-  if (insertIndex === null)
-    return { status: "moved", tab_id: tabId, workspace_id: workspaceId };
-  const result = await operations.moveTab(tabId, insertIndex);
-  if (result !== undefined)
-    return { status: "moved", tab_id: tabId, workspace_id: workspaceId };
-  return {
-    status: "refused",
-    reason: "tab_move",
-    message: operations.get().error ?? "Herdr did not reorder the tab.",
-  };
+  return requestTabReorder(
+    desk.tabRef,
+    desk.tabRef.nativeId,
+    onto?.tabRef.nativeId ?? null,
+  );
 }
 
-export type TownRoomMoveOutcome =
-  | { status: "moved" }
-  | { status: "refused"; reason: string; message: string };
+export type TownRoomMoveOutcome = HerdrOrderOutcome;
 
-/**
- * The workspace.move calls that put a building's workspaces (`rooms`, in
- * reading order) in that order within Herdr's (`order`), leaving other
- * workspaces where they are. Herdr inserts before the workspace at
- * `insert_index`, counted before removal, as tab.move does. Undefined when a
- * room is not in Herdr's order.
- */
-export function townRoomOrderMoves(
-  order: readonly string[],
-  rooms: readonly string[],
-): { workspace_id: string; insert_index: number }[] | undefined {
-  if (rooms.some((id) => !order.includes(id))) return undefined;
-  const target = [...order];
-  order
-    .map((id, index) => (rooms.includes(id) ? index : -1))
-    .filter((index) => index >= 0)
-    .forEach((slot, n) => (target[slot] = rooms[n]!));
-  const current = [...order];
-  const moves: { workspace_id: string; insert_index: number }[] = [];
-  target.forEach((id, index) => {
-    if (current[index] === id) return;
-    // Every workspace before `index` is already in place, so this one is
-    // after it: inserting before the one at `index` puts it there.
-    current.splice(current.indexOf(id), 1);
-    current.splice(index, 0, id);
-    moves.push({ workspace_id: id, insert_index: index });
-  });
-  return moves;
-}
+/** Herdr's workspace order for a building's rooms (herdrOrder.ts). */
+export const townRoomOrderMoves = herdrWorkspaceOrderMoves;
 
 /**
  * Put a building's rooms (Herdr workspaces, in reading order) in that order
- * in Herdr, so Spaces lists them as Town shows them. Town reads the order
- * from Herdr, then moves workspaces with workspace.move on the rooms' exact
+ * in Herdr, so Spaces lists them as Town shows them, on the rooms' exact
  * connection and runtime generation.
  */
 export async function requestRoomOrder(
@@ -231,27 +164,10 @@ export async function requestRoomOrder(
       reason: "other_host",
       message: "Rooms stay in their own host's building.",
     };
-  const client = bridge.connection(
-    first.workspaceRef.connectionId,
-    first.workspaceRef.generation,
-  );
-  const listed = (await client.call("workspace.list", {})) as
-    | { workspaces?: Workspace[] }
-    | undefined;
-  const moves = townRoomOrderMoves(
-    [...(listed?.workspaces ?? [])]
-      .sort((a, b) => a.number - b.number)
-      .map((workspace) => workspace.workspace_id),
+  return requestWorkspaceOrder(
+    first.workspaceRef,
     rooms.map((room) => room.workspaceRef.nativeId),
   );
-  if (!moves)
-    return {
-      status: "refused",
-      reason: "changed",
-      message: "The building changed. Try again.",
-    };
-  for (const move of moves) await client.call("workspace.move", move);
-  return { status: "moved" };
 }
 
 /**

@@ -905,6 +905,21 @@ on your phone and desktop.
    Cancelling the drag or dropping on empty board sends no move. If moving the
    pane would close its old room, Board asks for confirmation first. Strings
    to that pane follow it.
+   Select a workspace for Town's room actions in its bar: **Rename…** and
+   **Close…** use Town's dialogs (closing asks first, because its terminals
+   end). **Herdr order ‹ Earlier / Later ›** in a workspace's or tab's bar
+   moves the room among its host's rooms, or the tab among its room's tabs,
+   in Herdr's own order, so Town's buildings and desks and Spaces follow.
+   Dragging a card and Tidy still arrange only the Board.
+   Rest the mouse on an agent's tab or pane row for a peek, as in Town: its
+   latest Chat message, the question it is asking with answer buttons, and
+   **Mark reviewed** for a finished agent (which also sends it on from Town's
+   reception). On a phone, select the agent's tab and press **Preview** in its
+   bar; a finished agent's bar also offers **Mark reviewed** directly. An
+   agent counts as finished when Herdr reports it done, or idle after a turn
+   World saw end, as in Town and Needs you. To try these without touching
+   your hosts, open World with `?scene=town-scale`: its synthetic hosts take
+   every one of these actions in the page.
 
 9. Press the labelled **Work** pill, first in Board's bottom-right controls:
    if an Inspector fills the phone screen, close it with **X** or **Back** first.
