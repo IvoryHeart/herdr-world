@@ -8,6 +8,7 @@ import {
 } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
 import { TownBuildingLayers } from "./townBuildingLayers";
+import { TownBoardPlacement } from "./townBoardPlacement";
 import {
   useCallback,
   useEffect,
@@ -413,12 +414,9 @@ export function TownCanvas({
 
   const levelRef = useRef<TownLevel>("overview");
   const [layers] = useState(() => new TownBuildingLayers());
-  const [signs] = useState(
-    () =>
-      new TownBuildingSigns(() =>
-        rendererRef.current?.invalidate("building-sign"),
-      ),
-  );
+  const signFrame = () => rendererRef.current?.invalidate("building-sign");
+  const [signs] = useState(() => new TownBuildingSigns(signFrame));
+  const [boards] = useState(() => new TownBoardPlacement(rendererRef, view));
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
       latest.current.onHover?.(
@@ -462,6 +460,7 @@ export function TownCanvas({
       layer.style.transform = `translate(${tx}px, ${ty}px) scale(${camera.z})`;
       layer.style.setProperty("--z", String(camera.z));
       layer.style.setProperty("--iz", String(1 / camera.z));
+      boards.place(camera.z, latest.current.layout);
       if (levelRef.current !== level) {
         levelRef.current = level;
         layer.dataset.level = level;
@@ -929,6 +928,7 @@ export function TownCanvas({
             visible={visible}
             signs={signs}
             layers={layers}
+            boards={boards}
             onHoverEntry={hoverEntry}
             selectedKey={selectedKey}
             blockedSince={blockedSince}

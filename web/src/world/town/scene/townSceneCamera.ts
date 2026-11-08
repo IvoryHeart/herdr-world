@@ -9,6 +9,8 @@
 import { buildingZoom, roomZoom } from "../townCameraTargets";
 import {
   TownCamera,
+  type TownBoardHeights,
+  townHomeSpan,
   townHostsWidth,
   townRoomFocus,
   type TownLevel,
@@ -67,6 +69,10 @@ export class TownSceneCamera {
   private signature = "";
   private lastShape: string | null = null;
   private lastLayout: TownLayout | null = null;
+  /** The layout the camera frames now, from attach on. */
+  private layout: TownLayout | null = null;
+  /** The reception boards as last measured (townBoardPlacement). */
+  private boardHeights: TownBoardHeights = new Map();
   private consumedRoomFocus: number | null = null;
   /** Where the camera looked before a search moved it, at the focus point. */
   private searchReturn: TownPose | null = null;
@@ -84,6 +90,8 @@ export class TownSceneCamera {
   /** A ready renderer's camera, placed at the saved pose or home. */
   attach(camera: TownCamera, layout: TownLayout, viewport: TownViewport) {
     this.camera = camera;
+    this.layout = layout;
+    camera.boardHeights = this.boardHeights;
     camera.configure(layout, viewport);
     const saved = this.poses.get(townShapeKey(layout.shape));
     if (saved && !saved.home) {
@@ -100,6 +108,24 @@ export class TownSceneCamera {
 
   detach() {
     this.camera = null;
+  }
+
+  /**
+   * The reception boards were measured anew: the home zoom and framing keep
+   * them whole, and a town still at home is framed again.
+   */
+  boardsResized(heights: TownBoardHeights) {
+    this.boardHeights = heights;
+    const camera = this.camera;
+    const layout = this.layout;
+    if (!camera || !layout) return;
+    // A flight just begun (to a room) still sits at home; only a camera
+    // resting at home, or flying there, is framed again.
+    const homeBound = this.flyingHome();
+    const wasHome = homeBound || (!camera.flying && this.atHome());
+    camera.boardHeights = heights;
+    camera.configure(layout, camera.viewport);
+    if (wasHome) this.frameHome(layout, camera.viewport, homeBound, homeBound);
   }
 
   /**
@@ -141,8 +167,9 @@ export class TownSceneCamera {
       else if (animate) camera.flyTo(x, y, limits.home);
       else camera.jumpTo(x, y, limits.home);
     } else {
-      // The hosts' buildings, centred but never past the town's left edge;
-      // ALL frames the whole town.
+      // The hosts' buildings, centred but never past the town's left edge,
+      // from the city billboard and the reception boards down to their
+      // street (townHomeSpan); ALL frames the whole town.
       const focus = camera.focusPoint();
       const usable =
         viewport.width - viewport.inset.left - viewport.inset.right;
@@ -153,7 +180,8 @@ export class TownSceneCamera {
               (townHostsWidth(layout) * T) / 2,
               (focus.x - viewport.inset.left) / limits.home,
             );
-      const y = (layout.height * T) / 2;
+      const span = townHomeSpan(layout, camera.boardHeights);
+      const y = (span.top(limits.home) + span.bottom) / 2;
       if (follow) camera.flyTo(x, y, limits.home, TOWN_TRANSITION_SECONDS);
       else if (animate) camera.flyTo(x, y, limits.home);
       else camera.jumpTo(x, y, limits.home);
@@ -256,6 +284,7 @@ export class TownSceneCamera {
     }
     this.lastShape = shapeKey;
     this.lastLayout = layout;
+    this.layout = layout;
   }
 
   /**

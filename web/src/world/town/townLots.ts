@@ -7,8 +7,8 @@
 
 import {
   TOWN_CENTER_HEIGHT,
-  TOWN_CENTER_STREET,
-  TOWN_CENTER_TOP,
+  townCenterStreet,
+  townCenterTop,
   townCenterWidth,
   type TownCenterLot,
 } from "./townCenter";
@@ -134,7 +134,7 @@ export function townPlaceLots(
   }[] = [];
   const verticalRoads: TownVerticalRoad[] = [];
   const widestLot = Math.max(0, ...floors.map((lot) => lot.w));
-  let road = TOWN_CENTER_STREET;
+  let road = townCenterStreet(!narrow);
   const roads: number[] = [road];
   /** Every row's left edge: right of the road down the town's left side. */
   const left = MARGIN + ROAD_GAP;
@@ -184,7 +184,7 @@ export function townPlaceLots(
   const axis = left + Math.max(firstRowRight - left, centerW) / 2;
   const center: TownCenterLot = {
     x: Math.max(MARGIN, Math.round(axis - centerW / 2)),
-    y: TOWN_CENTER_TOP,
+    y: townCenterTop(!narrow),
     w: centerW,
     h: TOWN_CENTER_HEIGHT,
     street: roads[0]!,
