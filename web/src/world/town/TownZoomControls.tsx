@@ -1,11 +1,11 @@
-import { EllipsisVertical } from "lucide-react";
 import { useEffect } from "react";
+import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
 
 /**
  * Town's camera buttons. The zoom buttons step between whole town, one
  * building, one room and one desk, choosing whatever is nearest the centre
- * of the screen; the current step is read from the zoom, so pinching and
+ * of the screen. The current step is read from the zoom, so pinching and
  * wheel zoom mix freely. On the phone the shell's More menu joins them.
  */
 export function TownZoomControls({
