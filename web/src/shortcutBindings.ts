@@ -30,6 +30,7 @@ const base = {
   "panes.recent": ["Ctrl+Alt+J"],
   "plugin.herdrFloat.toggle": ["Ctrl+Alt+F"],
   "panes.search": ["Alt+K"],
+  "view.search": ["Slash", "Ctrl+F"],
   "tab.create": ["Ctrl+Alt+T"],
   "tab.close": ["Ctrl+Alt+W"],
   "tab.previous": ["Alt+Shift+ArrowLeft"],
@@ -149,6 +150,7 @@ export function defaultShortcutBindings(
       "terminal.paste": ["Meta+V"],
       "terminal.link": ["Meta+Click"],
       "preview.search": ["Meta+F"],
+      "view.search": ["Slash", "Meta+F"],
       "preview.selectAll": ["Meta+A"],
       "composer.send": ["Meta+Enter"],
       "annotation.submit": ["Meta+Enter"],
@@ -320,7 +322,7 @@ export function shortcutScope(id: ShortcutId): string {
     id === "annotations.toggle"
   )
     return "global";
-  if (/^(terminal|preview|composer|annotation|annotations)\./.test(id))
+  if (/^(terminal|preview|composer|annotation|annotations|view)\./.test(id))
     return id.split(".")[0];
   return "global";
 }
@@ -368,7 +370,10 @@ export function validateShortcutKeys(id: ShortcutId, keys: unknown): string[] {
       throw new Error(
         "Use a modified Click for terminal links and keyboard keys for other actions.",
       );
+    // View search acts only outside terminals and text fields, so a plain
+    // key such as "/" leaves typing available.
     if (
+      id !== "view.search" &&
       !/^(Ctrl|Alt|Meta)\+/.test(key) &&
       !/^(Shift\+)?(F\d+|PageUp|PageDown|Home|End|Insert|Delete|Enter|Backspace|Arrow\w+)$/.test(
         key,

@@ -49,6 +49,7 @@ import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
 import { DeskOtherHosts } from "./DeskOtherHosts";
+import { useViewSearchShortcut } from "./viewSearchShortcut";
 export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
 
@@ -298,6 +299,7 @@ export function DeskBoard({
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  useViewSearchShortcut(() => searchRef.current?.focus());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [fullReports, setFullReports] = useState<Map<string, string>>(
     () => new Map(),
@@ -482,19 +484,6 @@ export function DeskBoard({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      // "/" jumps to search from anywhere on the Desk.
-      if (
-        event.key === "/" &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        (target === document.body || rootRef.current?.contains(target)) &&
-        !target?.closest?.("input, textarea, select")
-      ) {
-        event.preventDefault();
-        searchRef.current?.focus();
-        return;
-      }
       if (
         event.key === "Escape" &&
         reading &&
