@@ -18,6 +18,8 @@ import {
   type TownLayout,
 } from "./townLayout";
 import { paintTownCenter } from "./townCenterPaint";
+import { townPostLot } from "./townPost";
+import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
   paintTownFacade,
   paintTownInterior,
@@ -182,6 +184,12 @@ export function townOutdoor(
     center.y * T,
     (center.y + center.h) * T,
   );
+  // The post office by the park: its house above the walk, its yard below.
+  const post = townPostLot(layout);
+  if (post) {
+    add(paintTownPostHouse(), post.x * T, post.y * T, post.walkY * T);
+    add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
+  }
   return outdoorItems;
 }
 

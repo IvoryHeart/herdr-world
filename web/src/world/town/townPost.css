@@ -1,0 +1,485 @@
+/* The post office (TownPostOffice.tsx), in Town's pixel skin: a wooden
+   shop sign under the eave with the counts, and kraft parcels on the yard's
+   planks, each tied with a coloured tag for its state. Popovers portal out
+   of Town, so they use literal colours. */
+
+.town-world .town-post-sign,
+.town-world .town-post-yard {
+  --post-ready: #5fbf5a;
+  --post-failing: #d4252b;
+  --post-waiting: #ffd166;
+  --post-unknown: #9aa3ad;
+  --post-draft: #e8e2d0;
+}
+
+/* The sign hangs from the eave, keeping a readable size as the town zooms,
+   like the city billboard. */
+.town-world .town-post-sign {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 96px;
+  padding: 3px 7px 4px;
+  color: #ffe9c2;
+  background: #6e4a2e;
+  border: 2px solid #3b2414;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px #8a5a34,
+    0 2px 0 #3b2414;
+  transform: translate(-50%, -100%) scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  image-rendering: pixelated;
+}
+
+.town-world .town-post-sign:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-post-sign-title {
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+
+/* Counts wrap after ready, failing and waiting, so the sign stays about
+   the house's width. */
+.town-post-sign-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px 6px;
+  max-width: 176px;
+  font-weight: 600;
+  white-space: normal;
+  text-align: center;
+}
+
+.town-post-sign-counts > span {
+  white-space: nowrap;
+}
+
+.town-post-sign-counts i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 3px;
+  vertical-align: 1px;
+  border: 1px solid #1c1722;
+}
+
+.town-post-sign-counts [data-state="ready"] i {
+  background: var(--post-ready);
+}
+.town-post-sign-counts [data-state="failing"] i {
+  background: var(--post-failing);
+}
+.town-post-sign-counts [data-state="waiting"] i {
+  background: var(--post-waiting);
+}
+.town-post-sign-counts [data-state="unknown"] i {
+  background: var(--post-unknown);
+}
+.town-post-sign-counts [data-state="draft"] i {
+  background: var(--post-draft);
+}
+
+/* Closed or opening: the sign is quiet, no counts that look like data. */
+.town-world .town-post-sign[data-quiet] .town-post-sign-counts {
+  font-weight: 400;
+  color: #d8c8a8;
+}
+
+/* The yard lies on the painted planks; parcels stand in its slots. */
+.town-world .town-post-yard {
+  position: absolute;
+  pointer-events: none;
+}
+
+.town-world .town-post-parcel,
+.town-post-icon {
+  position: absolute;
+  width: 16px;
+  height: 13px;
+  padding: 0;
+  background:
+    linear-gradient(#dcae7a 0 3px, transparent 3px),
+    linear-gradient(90deg, transparent 6px, #e8d2a8 6px 9px, transparent 9px),
+    #c8915a;
+  border: 1px solid #1c1722;
+  border-radius: 1px;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.25);
+  image-rendering: pixelated;
+}
+
+.town-world .town-post-parcel {
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    left 0.35s ease,
+    top 0.35s ease;
+}
+
+/* The state's tag, tied on the parcel's right shoulder. */
+.town-world .town-post-parcel::after,
+.town-post-icon::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  background: var(--post-tag);
+  border: 1px solid #1c1722;
+  border-radius: 1px;
+}
+
+.town-world .town-post-parcel[data-state="ready"],
+.town-post-icon[data-state="ready"] {
+  --post-tag: var(--post-ready, #5fbf5a);
+}
+/* A ready parcel is lifted onto the trolley's height and glints. */
+.town-world .town-post-parcel[data-state="ready"] {
+  box-shadow:
+    0 0 0 1px #fff4b8,
+    0 3px 0 rgb(0 0 0 / 0.3);
+}
+.town-world .town-post-parcel[data-state="failing"],
+.town-post-icon[data-state="failing"] {
+  --post-tag: var(--post-failing, #d4252b);
+}
+/* A failing parcel carries a red "return" band. */
+.town-world .town-post-parcel[data-state="failing"],
+.town-post-icon[data-state="failing"] {
+  background:
+    linear-gradient(#dcae7a 0 3px, transparent 3px),
+    linear-gradient(90deg, transparent 6px, #d4252b 6px 9px, transparent 9px),
+    #c8915a;
+}
+.town-world .town-post-parcel[data-state="waiting"],
+.town-post-icon[data-state="waiting"] {
+  --post-tag: var(--post-waiting, #ffd166);
+}
+/* Unknown: an unmarked grey crate. Never mistaken for ready. */
+.town-world .town-post-parcel[data-state="unknown"],
+.town-post-icon[data-state="unknown"] {
+  --post-tag: var(--post-unknown, #9aa3ad);
+  background:
+    linear-gradient(#b7b4ad 0 3px, transparent 3px),
+    repeating-linear-gradient(90deg, #8f8a80 0 1px, #a49f94 1px 5px);
+}
+/* A draft is a letter, not yet a parcel: flat, pale and muted. */
+.town-world .town-post-parcel[data-state="draft"],
+.town-post-icon[data-state="draft"] {
+  --post-tag: var(--post-draft, #e8e2d0);
+  height: 10px;
+  margin-top: 3px;
+  background:
+    linear-gradient(160deg, transparent 45%, #b8ad94 45% 55%, transparent 55%),
+    linear-gradient(20deg, transparent 45%, #b8ad94 45% 55%, transparent 55%),
+    #f1ead6;
+  opacity: 0.6;
+}
+
+.town-world .town-post-parcel:hover,
+.town-world .town-post-parcel:focus-visible {
+  z-index: 2;
+}
+
+.town-world .town-post-parcel:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+/* Hover or focus names the parcel above it, readable at any zoom. */
+.town-post-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  display: none;
+  gap: 1px;
+  width: max-content;
+  max-width: 240px;
+  padding: 3px 6px;
+  color: #f1efe6;
+  background: #1b2230;
+  border: 2px solid #6e4a2e;
+  border-radius: 2px;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+  transform: translateX(-50%) scale(clamp(0.6, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+  pointer-events: none;
+}
+
+.town-post-label b {
+  display: block;
+  font-weight: 700;
+}
+
+.town-post-label span {
+  display: block;
+  color: #a9b2a4;
+}
+
+.town-world .town-post-parcel:hover .town-post-label,
+.town-world .town-post-parcel:focus-visible .town-post-label {
+  display: grid;
+}
+
+/* Parcels beyond the yard: a pile with its count. */
+.town-world .town-post-pile {
+  position: absolute;
+  width: 18px;
+  height: 14px;
+  padding: 0;
+  color: #2a1a04;
+  background: #ffd166;
+  border: 1px solid #1c1722;
+  border-radius: 2px;
+  box-shadow:
+    -2px -2px 0 -1px #c8915a,
+    -2px -2px 0 0 #1c1722;
+  font:
+    700 8px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-world .town-post-pile:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+/* Leaving: a merged parcel is carried off to the trolley and away; any
+   other just fades. Calm or reduced motion: it is simply gone. */
+.town-world .town-post-parcel[data-leaving] {
+  z-index: 3;
+  pointer-events: none;
+  animation: town-post-gone 0.6s ease-in forwards;
+}
+
+.town-world .town-post-parcel[data-leaving="posted"] {
+  animation: town-post-posted 1.4s ease-in forwards;
+}
+
+@keyframes town-post-posted {
+  0% {
+    transform: none;
+    opacity: 1;
+  }
+  25% {
+    transform: translateY(-10px) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(150px, -6px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+@keyframes town-post-gone {
+  to {
+    opacity: 0;
+  }
+}
+
+.town-shell[data-calm="true"] .town-post-parcel[data-leaving] {
+  display: none;
+}
+
+.town-shell[data-calm="true"] .town-world .town-post-parcel {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-world .town-post-parcel[data-leaving] {
+    display: none;
+  }
+  .town-world .town-post-parcel {
+    transition: none;
+  }
+}
+
+.town-post-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Folded: a wooden plate on the town center, like the billboard's. */
+.town-world .town-post-fold {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #ffe9c2;
+  background: #6e4a2e;
+  border: 2px solid #3b2414;
+  border-radius: 4px;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-world .town-post-fold:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-post-fold-counts {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.town-post-fold-counts b {
+  min-width: 12px;
+  padding: 0 2px;
+  color: #1c1722;
+  border-radius: 2px;
+  text-align: center;
+}
+
+.town-post-fold-counts [data-state="ready"] {
+  background: #5fbf5a;
+}
+.town-post-fold-counts [data-state="failing"] {
+  background: #d4252b;
+  color: #fff;
+}
+.town-post-fold-counts [data-state="waiting"] {
+  background: #ffd166;
+}
+
+/* The folded sign's and the pile's list. */
+.popover-content.town-post-popover {
+  z-index: 6100;
+  display: grid;
+  gap: 6px;
+  width: min(320px, calc(100vw - 16px));
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  padding: 8px 10px;
+  color: #f1efe6;
+  background: #1b2230;
+  border: 3px solid #6e4a2e;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 2px #3b2414,
+    0 3px 0 #3b2414;
+  font-size: 12px;
+}
+
+.town-post-popover-title {
+  font:
+    700 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+
+.town-post-popover-counts,
+.town-post-popover-note {
+  margin: 0;
+  color: #a9b2a4;
+}
+
+.town-post-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-post-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 4px 4px 2px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.town-post-row:hover,
+.town-post-row:focus-visible {
+  background: #273141;
+}
+
+.town-post-row:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: -2px;
+}
+
+.town-post-row .town-post-icon {
+  position: relative;
+  grid-row: span 2;
+  align-self: center;
+  margin-left: 2px;
+}
+
+.town-post-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.town-post-row-why {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #a9b2a4;
+}
+
+.town-post-setup {
+  justify-self: start;
+  min-height: 28px;
+  padding: 2px 10px;
+  color: #2a1a04;
+  background: #ffd166;
+  border: 1px solid #3b2414;
+  border-radius: 2px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
