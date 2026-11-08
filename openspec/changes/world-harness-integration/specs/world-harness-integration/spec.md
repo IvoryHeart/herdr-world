@@ -1,158 +1,130 @@
 ## ADDED Requirements
 
-### Requirement: World integration packages per harness
+### Requirement: Herdr-shaped World integration per harness
 
-World SHALL ship one integration package per supported harness as part of each
-World release. A package SHALL consist of World-owned files in World's
-integration folder on the host, registered with the harness's own plugin
-commands where the harness has them, or as one World-named file in a folder the
-harness loads whole. Every package SHALL carry a positive integer version and
-the World release that produced it, and SHALL be named so World and the user can
-tell it apart from their own and Herdr's entries. A package SHALL NOT include
-credentials, the user's settings values, or anything specific to one user or
-host, and SHALL NOT set or replace a harness setting the user owns, such as
-Claude Code's `statusLine`.
+World SHALL offer one integration per harness that Herdr integrates, under
+Herdr's harness names, through `herdr-world integration install <harness>`,
+`herdr-world integration uninstall <harness>` and `herdr-world integration
+status [<harness>]`. Each integration SHALL consist only of World-named files in
+the harness's own user extension folders, plus, where stated, one World-owned
+configuration entry. Each World file SHALL carry the marker lines `installed by
+herdr-world`, `HERDR_WORLD_INTEGRATION_ID=<id>` and
+`HERDR_WORLD_INTEGRATION_VERSION=<n>`. World SHALL resolve each harness's
+folders from the same variables Herdr uses, and SHALL NOT create a harness's
+configuration folder. Nothing SHALL be installed except by an explicit install
+command or Settings action.
 
-#### Scenario: Package visible in the harness
-- **WHEN** World's Claude Code package is installed on a host
-- **THEN** `claude plugin list` on that host shows the `herdr-world` plugin from
-  World's local marketplace, and the user's `statusLine` and hook entries are
-  unchanged
+#### Scenario: Status lists every harness
+- **WHEN** the operator runs `herdr-world integration status`
+- **THEN** it prints one line per Herdr harness name in Herdr's form,
+  `<harness>: <state> (<path or reason>)`, where state is `current (vN)`,
+  `outdated (vN)`, `not installed` or `unsupported`
 
-#### Scenario: Harness not installed or too old
-- **WHEN** a host has no executable for a harness, or a version without the
-  capability the package needs
-- **THEN** World reports that harness as `harness_missing` or `unsupported` and
-  installs nothing for it
+#### Scenario: Harness folder missing
+- **WHEN** the operator installs an integration for a harness whose
+  configuration folder does not exist on the host
+- **THEN** World writes nothing and says the folder must exist first
 
-### Requirement: Explicit per-host lifecycle
+#### Scenario: Status from the files
+- **WHEN** World's file for a harness is missing, has a lower version marker or
+  has the release's version
+- **THEN** status reports `not installed`, `outdated (vN)` or `current (vN)`
+  respectively, without any other installation record
 
-World SHALL install, update and remove a package only through a host's qualified
-local or SSH connection, with a self-contained program that runs on that host,
-and never through another connection. The first installation of a package on a
-host SHALL be an explicit operator action from Settings or the CLI; an
-agent-originated verb SHALL NOT install, update or remove a package. Before
-writing, World SHALL show every file it will create, every harness command it
-will run and every configuration entry it will add. After a package is
-installed, an explicit World update or Herdr upgrade SHALL refresh it to the
-release's version and SHALL NOT install packages that are not already installed.
-Each operation SHALL report `installed`, `updated`, `current`, `removed`,
-`skipped` or `failed` with a short reason, per harness and host.
+### Requirement: World skill for every harness
 
-#### Scenario: Install on an SSH host
-- **WHEN** the operator installs the Claude Code package on an SSH host
-- **THEN** the installer runs only through that host's qualified connection,
-  changes only that host, and reports the outcome for that host
+Every integration SHALL install the World skill as `herdr-world/SKILL.md` in the
+harness's user skill folder, with Agent Skills frontmatter, the World marker
+lines, and as its body the release's `herdr-world --skill` text, which SHALL
+cover `ask`, `result`, `task-summary` and `stamp`. A harness without a
+documented user skill folder SHALL report `unsupported` with the reason, and
+install SHALL write nothing for it. Harnesses that share a user skill folder
+SHALL share one file, and uninstalling for one of them SHALL name the others
+that lose it.
 
-#### Scenario: World update with packages installed
-- **WHEN** an explicit World update runs on a host that has an older Claude Code
-  package and no Codex package
-- **THEN** the Claude Code package is updated and Codex stays not installed
+#### Scenario: Install the skill for Codex
+- **WHEN** the operator runs `herdr-world integration install codex`
+- **THEN** `herdr-world/SKILL.md` appears in Codex's user skill folder with the
+  release's version, and status for `codex`, `pi` and `kimi` shows that path
 
-#### Scenario: Connection lost during install
-- **WHEN** the connection fails while the installer runs
-- **THEN** the host keeps either its previous or the complete new state, and the
-  next status read reports which
+#### Scenario: Harness without a skill folder
+- **WHEN** the operator installs the integration for a harness whose skill
+  folder is not documented
+- **THEN** World writes nothing and reports `unsupported` with the reason
 
-### Requirement: Manifest-bound changes
+#### Scenario: Guide changes
+- **WHEN** a release changes the `herdr-world --skill` text
+- **THEN** the skill version is higher than the previous release's, and
+  installed copies report `outdated`
 
-World SHALL keep a manifest on each host listing, per harness, the package
-version, every file it created with its digest, every harness command it ran and
-every configuration entry it added with the bytes it replaced. Removal SHALL use
-the harness's own uninstall commands, delete only files in the manifest and
-restore each replaced value exactly. When the user has disabled World's plugin
-or changed a World file or entry, World SHALL report `changed_by_user` and SHALL
-leave it as the user set it on update and removal. World SHALL NOT modify,
-remove, reorder or report under the identity of Herdr's integration files or
-entries, and SHALL NOT write a harness's trust state or pass a trust-bypass
-option.
+### Requirement: Claude limits tap as a chained status line
 
-#### Scenario: Install and remove round trip
-- **WHEN** the operator installs and then removes the Claude Code package on a
-  host
-- **THEN** the plugin and World's marketplace are gone from `claude plugin list`,
-  World's files are deleted, and every Claude setting other than the entries
-  Claude's own plugin commands manage is byte-identical to before the install
+The `claude` integration SHALL also install #727's status line tap as a
+World-named script in Claude's user hooks folder, save the user-scope
+`statusLine` value it replaces in a World-owned file beside it with owner-only
+permissions, and set `statusLine` in the user `settings.json` to that script,
+keeping every other key. The tap SHALL run the saved previous command with the
+same input and return its output unchanged, and SHALL record only the limit
+numbers and times in the file the usage collector already reads. Uninstall
+SHALL restore the saved value exactly, or remove the key if there was none.
+Status for `claude` SHALL be `current` only when the skill, the script, the
+saved value and the entry are all present and current.
 
-#### Scenario: User disabled the plugin
-- **WHEN** the user disables World's plugin in the harness after installation
-- **THEN** status reports `changed_by_user`, and update does not enable it again
+#### Scenario: Claude limits from a session World did not start
+- **WHEN** the `claude` integration is current on a host and the user runs
+  Claude Code in a terminal outside World and gets one answer
+- **THEN** the user's own status line output is shown unchanged, and World's
+  Claude gauge for that host shows the five-hour and weekly numbers
+
+#### Scenario: Install and uninstall round trip
+- **WHEN** the operator installs and then uninstalls the `claude` integration
+- **THEN** `settings.json` is identical to before install, apart from
+  formatting that preserves every key and value, and World's files are gone
+
+#### Scenario: User replaced the status line
+- **WHEN** the user sets a different `statusLine` after installation
+- **THEN** status for `claude` reports `outdated`, and World does not
+  re-register until the operator reinstalls
+
+#### Scenario: Unparseable settings
+- **WHEN** Claude's `settings.json` cannot be parsed
+- **THEN** World changes nothing for `claude` and reports why
+
+### Requirement: Coexistence with Herdr and the user
+
+World SHALL NOT modify, remove, reorder or read as its own any of Herdr's
+integration files or entries. It SHALL NOT edit any configuration key other than
+the entries this capability names, and SHALL NOT write a harness's trust state.
+Uninstall SHALL delete only World's files and entries. All writes SHALL be
+atomic.
 
 #### Scenario: Herdr's integration present
-- **WHEN** Herdr's integration for the same harness is installed on the host
-- **THEN** installing, updating and removing World's package leaves Herdr's
-  script and its hook entries byte-identical
+- **WHEN** Herdr's integration for the same harness is installed
+- **THEN** installing, updating and uninstalling World's integration leaves
+  Herdr's files and entries byte-identical, and `herdr integration status` is
+  unchanged
 
-#### Scenario: Unparseable configuration
-- **WHEN** a configuration file World would edit itself cannot be parsed
-- **THEN** World changes nothing for that harness and reports why
+### Requirement: Per-host Settings and updates
 
-### Requirement: Visible integration state
+Settings → Agent integrations SHALL show World's state, version and path
+beside Herdr's for each harness and host, with Install, Update and Remove.
+World SHALL run the installer on a host only through that host's qualified
+local or SSH connection. Install and uninstall SHALL be operator actions, and
+agent-originated calls SHALL be denied. After an explicit World update or
+Herdr upgrade, World SHALL reinstall its own `outdated` integrations and SHALL
+NOT install others.
 
-World SHALL show, per host and harness, World's package beside Herdr's
-integration in Settings → Agent integrations and in `herdr-world integration
-status`. The state SHALL be one of `harness_missing`, `unsupported`,
-`not_installed`, `current`, `outdated`, `changed_by_user`, `waiting_for_trust` or
-`unknown`, with the installed and available package versions and the time of
-the latest heartbeat. A state that cannot be read SHALL show as `unknown`, never
-as installed or not installed.
-
-#### Scenario: Package installed but not yet trusted
-- **WHEN** World's Codex package is installed and no heartbeat from it has
-  arrived since installation
-- **THEN** Settings shows it as waiting for trust in Codex, and World changes
-  nothing in Codex's trust state
+#### Scenario: Install on an SSH host
+- **WHEN** the operator installs an integration on an SSH host from Settings
+- **THEN** only that host changes, through its qualified connection, and its row
+  reports the result
 
 #### Scenario: Unreachable host
 - **WHEN** an SSH host is offline
-- **THEN** its rows show the last known state as stale and offer no install,
-  update or remove action
+- **THEN** its rows show the last known state as stale and offer no actions
 
-### Requirement: Bounded package data channel
-
-A package SHALL report to World only by writing records to a spool on its own
-host: one small, versioned JSON file per record kind and configuration scope,
-written atomically with owner-only permissions, replacing the previous record.
-Records SHALL contain only numbers, timestamps, package and harness versions,
-allow-listed enums and opaque digests; never conversation content, prompts,
-file paths, native session IDs, account or plan fields, tokens or credentials.
-A package SHALL NOT wait on the network or on World, and SHALL NOT fail or
-change the harness's behaviour when the spool cannot be written. World SHALL
-read the spool only through the host's qualified connection, with the file,
-size and validation bounds of other usage sources, and SHALL publish only
-validated fields.
-
-#### Scenario: Claude limits from a session World did not start
-- **WHEN** the Claude Code package is current on a host and the user runs Claude
-  Code in a terminal outside World and gets one answer
-- **THEN** the package records the five-hour and weekly limit numbers in the
-  spool, and World's Claude gauge for that host shows them with source
-  `claude-plugin`
-
-#### Scenario: Record with unknown fields
-- **WHEN** a spool record contains a field outside its kind's allow list
-- **THEN** World ignores that field and publishes none of its value
-
-#### Scenario: Spool not writable
-- **WHEN** the spool folder cannot be written
-- **THEN** the session runs unchanged and World shows the last reading as stale
-  once it ages
-
-### Requirement: Per-launch tap fallback
-
-When World starts a Claude agent, it SHALL determine whether the session will
-load World's current Claude Code plugin with mod support, using Claude Code's
-settings precedence in the launch folder. World SHALL add #727's per-launch
-status line tap only when it will not. The tap and the plugin SHALL write the
-same record kind.
-
-#### Scenario: Plugin covers the launch
-- **WHEN** World starts a Claude agent on a host whose plugin is current,
-  enabled and supported by the installed Claude Code
-- **THEN** the launch carries no per-launch status line settings and the gauge
-  still receives readings
-
-#### Scenario: Plugin missing, disabled or unsupported
-- **WHEN** World starts a Claude agent where the plugin is not installed, is
-  disabled for the user or the project, or the Claude Code version has no mods
-- **THEN** the launch keeps the per-launch tap
+#### Scenario: Upgrade with one integration installed
+- **WHEN** World is upgraded on a host with an outdated `claude` integration and
+  no `codex` integration
+- **THEN** `claude` is reinstalled at the new version and `codex` stays not
+  installed
