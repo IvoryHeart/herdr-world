@@ -164,11 +164,11 @@ export function useTownSearch(
       onChoose: choose,
       offscreen,
     },
-    /** TownCanvas's search props. */
+    /** TownCanvas's search prop. */
     canvas: {
       search,
-      onSearchOffscreen: setOffscreen,
-      onSearchUnmapped: (key: string) => {
+      onOffscreen: setOffscreen,
+      onUnmapped: (key: string) => {
         // Nothing to show on the map: open it as selecting does.
         if (chosen?.key === key) void onSelect(chosen.nodeId);
       },

@@ -26,31 +26,36 @@ export type TownCanvasSearch = {
   chosen: { key: string; seq: number } | null;
 } | null;
 
-export function useTownCanvasSearch({
-  search,
-  model,
-  layout,
-  view,
-  renderer,
-  ready,
-  failure,
-  calm,
-  onOffscreen,
-  onUnmapped,
-}: {
+/** TownCanvas's search prop: the matches and what the map reports back. */
+export type TownCanvasSearchProps = {
   search: TownCanvasSearch;
-  model: TownModel;
-  layout: TownLayout;
-  view: TownSceneCamera;
-  renderer: RefObject<TownRendererHandle | null>;
-  ready: boolean;
-  failure: boolean;
-  calm: boolean;
   /** How many matches are off-screen, when that changes. */
   onOffscreen?: (count: number) => void;
   /** A chosen match Town does not draw, so it cannot be shown. */
   onUnmapped?: (key: string) => void;
-}) {
+};
+
+export function useTownCanvasSearch(
+  props: TownCanvasSearchProps | undefined,
+  {
+    model,
+    layout,
+    view,
+    renderer,
+    ready,
+    failure,
+    calm,
+  }: {
+    model: TownModel;
+    layout: TownLayout;
+    view: TownSceneCamera;
+    renderer: RefObject<TownRendererHandle | null>;
+    ready: boolean;
+    failure: boolean;
+    calm: boolean;
+  },
+) {
+  const { search = null, onOffscreen, onUnmapped } = props ?? {};
   const light = useMemo(
     () => (search ? townSearchLight(model, search.keys, search.chosen) : null),
     [model, search],

@@ -81,10 +81,7 @@ import {
   type TownReceptionTakes,
 } from "./townReceptionFilter";
 import "./townBoard.css";
-import {
-  useTownCanvasSearch,
-  type TownCanvasSearch,
-} from "./useTownCanvasSearch";
+import { useTownCanvasSearch } from "./useTownCanvasSearch";
 import "./townTeams.css";
 import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
 import type { OfficeAgent } from "../officeProjectionTypes";
@@ -138,15 +135,11 @@ export function TownCanvas({
   chrome = NO_CHROME,
   trace = NO_TRACE,
   centerActions,
-  search = null,
-  onSearchOffscreen,
-  onSearchUnmapped,
+  search,
   activityAt,
 }: {
   /** A search's matches to light up, and the one to show (#159). */
-  search?: TownCanvasSearch;
-  onSearchOffscreen?: (count: number) => void;
-  onSearchUnmapped?: (key: string) => void;
+  search?: Parameters<typeof useTownCanvasSearch>[0];
   /** When an agent last worked (its leaf's activity), for the Idle time lens. */
   activityAt?: (agent: OfficeAgent) => number | undefined;
   /** The town center's radial menu; without it the center only shows. */
@@ -330,8 +323,7 @@ export function TownCanvas({
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
-  const searching = useTownCanvasSearch({
-    search,
+  const searching = useTownCanvasSearch(search, {
     model,
     layout,
     view,
@@ -339,12 +331,9 @@ export function TownCanvas({
     ready,
     failure,
     calm,
-    onOffscreen: onSearchOffscreen,
-    onUnmapped: onSearchUnmapped,
   });
-  const searchLight = searching.light;
   const current = {
-    searchLight,
+    searchLight: searching.light,
     chrome,
     calm,
     model,
@@ -459,10 +448,8 @@ export function TownCanvas({
     const { moved, posed } = view.drew(camera, level, latest.current.layout);
     // A camera that moved under a still carry (an edge pan, an arrow key)
     // puts something else under it: the target follows what is now drawn.
-    if (moved) {
-      reaimCarry.current?.();
-      searching.countOffscreen();
-    }
+    if (moved) reaimCarry.current?.();
+    if (moved) searching.countOffscreen();
     const layer = worldRef.current;
     hud.drew(camera, level, latest.current.layout);
     if (layer) {
@@ -644,7 +631,7 @@ export function TownCanvas({
     arrivingKeys,
     receptionHeldKeys,
     calm,
-    searchLight,
+    searching.light,
   ]);
 
   // Re-report after any render, so anchors World cleared come back. World

@@ -940,7 +940,7 @@ export default function TownView({
               ...townRoomActions,
               placeColor: placeColorOf,
             }}
-            {...search.canvas}
+            search={search.canvas}
           />
         </div>
         {sceneHover && sceneHover.key !== selectedKey ? (
