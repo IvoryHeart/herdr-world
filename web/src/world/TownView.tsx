@@ -1,4 +1,7 @@
 import { AnswerOutboxContext } from "./town/answerOutbox";
+import { TownStepStore } from "./town/townStepStore";
+import { useTownStepReads } from "./town/useTownStepReads";
+import { townScaleSceneRequested } from "./town/townScaleScene";
 import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentQuests } from "./agentQuests";
@@ -357,6 +360,13 @@ export default function TownView({
   const summonedKeys = useMemo(() => new Set(summoned.keys()), [summoned]);
   // Each agent's quest, marked over its desk by agent key.
   const agentQuests = useAgentQuests(world.leaves);
+  // Working agents' current steps, read only for those Town shows at the
+  // room or desk level; `?scene=town-scale` shows synthetic ones.
+  const [townSteps] = useState(() => new TownStepStore());
+  const [stepScene] = useState(() =>
+    townScaleSceneRequested(window.location.search),
+  );
+  useTownStepReads(townSteps, world.leaves, stepScene);
   // A Town agent's key is its leaf ID, so the marks come straight from the
   // quests (a dense town's roster is large).
   const questMarks = useMemo(
@@ -890,6 +900,7 @@ export default function TownView({
             // A letter at reception: its question in Needs you.
             onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}
+            steps={townSteps}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
             onActivateAgent={openReply}

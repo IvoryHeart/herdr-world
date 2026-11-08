@@ -2,8 +2,11 @@ import { expect, test } from "bun:test";
 import { buildWorldObject } from "../worldObject";
 import {
   townScaleConnections,
+  townScaleSceneConnection,
   townScaleSceneRequested,
+  townScaleStep,
 } from "./townScaleScene";
+import { townStepLong } from "./townSteps";
 
 test("the scale scene is the owner's maximum: 3 hosts, 8 rooms, 11–15 desks, 1–4 panes", () => {
   const hosts = townScaleConnections();
@@ -59,4 +62,30 @@ test("only ?scene=town-scale asks for the scene", () => {
   expect(townScaleSceneRequested("?view=town&scene=town-scale")).toBe(true);
   expect(townScaleSceneRequested("")).toBe(false);
   expect(townScaleSceneRequested("?scene=other")).toBe(false);
+});
+
+test("the scale scene's working agents have a mix of steps, some long", () => {
+  const loadedAt = Date.parse("2026-11-08T12:00:00.000Z");
+  const [atlas] = townScaleConnections();
+  const working = atlas!.snapshot!.panes.filter(
+    (pane) => pane.agent && pane.agent_status === "working",
+  );
+  const steps = working.map((pane) => townScaleStep(pane.pane_id, loadedAt));
+  const kinds = new Set(steps.map((step) => step?.kind ?? null));
+  for (const kind of ["edit", "test", "command", "read", "think"])
+    expect(kinds.has(kind as never)).toBe(true);
+  // The first room has a test run long enough for its amber tag.
+  const firstRoom = working
+    .filter((pane) => pane.workspace_id === "atlas-orbit")
+    .map((pane) => townScaleStep(pane.pane_id, loadedAt));
+  expect(
+    firstRoom.some(
+      (step) => step && townStepLong(step, loadedAt) && step.kind === "test",
+    ),
+  ).toBe(true);
+  expect(townScaleStep(working[0]!.pane_id, loadedAt)).toEqual(
+    townScaleStep(working[0]!.pane_id, loadedAt),
+  );
+  expect(townScaleSceneConnection("scene-atlas")).toBe(true);
+  expect(townScaleSceneConnection("example")).toBe(false);
 });

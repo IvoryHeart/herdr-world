@@ -19,6 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import type { RoomPins } from "./townModel";
+import { useTownStepWants, type TownStepStore } from "./useTownStepWants";
 import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
@@ -111,6 +112,7 @@ export function TownCanvas({
   onFindHeld,
   onActivateAsk,
   quests = NO_QUESTS,
+  steps,
   conversationTargets,
   onSelect,
   onActivateAgent,
@@ -186,6 +188,8 @@ export function TownCanvas({
   onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
+  /** Working agents' steps, as thought bubbles (useTownStepWants). */
+  steps?: TownStepStore;
   conversationTargets: readonly WorldConversationAnchorTarget[];
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
@@ -319,6 +323,7 @@ export function TownCanvas({
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
+  const stepWants = useTownStepWants(steps, () => latest.current, rendererRef);
   const current = {
     chrome,
     calm,
@@ -335,6 +340,7 @@ export function TownCanvas({
     arrivingKeys,
     receptionHeldKeys,
     quests,
+    steps,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -437,6 +443,7 @@ export function TownCanvas({
     if (moved) reaimCarry.current?.();
     const layer = worldRef.current;
     hud.drew(camera, level, latest.current.layout);
+    stepWants.want(camera, level);
     if (layer) {
       const tx = camera.viewport.width / 2 - camera.x * camera.z;
       const ty = camera.viewport.height / 2 - camera.y * camera.z;
@@ -496,6 +503,7 @@ export function TownCanvas({
     awayKeys: latest.current.awayKeys,
     arrivingKeys: latest.current.arrivingKeys,
     heldKeys: latest.current.receptionHeldKeys,
+    stepGlyph: latest.current.steps?.hasGlyph,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -614,6 +622,7 @@ export function TownCanvas({
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
+    steps,
     calm,
   ]);
 
@@ -950,6 +959,7 @@ export function TownCanvas({
             targets={lens.targets}
             deskBadges={deskBadges}
             quests={quests}
+            steps={steps}
             renderer={rendererRef}
             pennants={pennants.current}
           />

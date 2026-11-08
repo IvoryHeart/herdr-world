@@ -39,6 +39,8 @@ export type TownSceneState = {
    * outside their front door until they reach it (townArrivals.ts).
    */
   arrivingKeys?: ReadonlySet<string>;
+  /** Whether an agent shows a step bubble (TownStepBubble): no typing dots. */
+  stepGlyph?: (agentKey: string) => boolean;
   /** Building currently held open (for example while moving a desk). */
   openHostKey: string | null;
   calm: boolean;
