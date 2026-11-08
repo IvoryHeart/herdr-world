@@ -194,10 +194,21 @@ export function useTownEdgeNav({
     keepOut.current = { at: now, rects };
     return rects;
   };
+  const [pulse, setPulse] = useState<TownPulse | null>(null);
+  const pulseSeq = useRef(0);
+  /** A pulse whose camera is still on its way; the next still frame shows it. */
+  const pulseComing = useRef<TownPulse | null>(null);
   const frameArrows = (
     camera: TownRendererHandle["camera"],
     level: TownLevel,
   ) => {
+    // The pulse waits for the camera, whose glide runs on frame time and
+    // can outlast its seconds when frames are slow.
+    const coming = pulseComing.current;
+    if (coming && !camera.flying) {
+      pulseComing.current = null;
+      setPulse(coming);
+    }
     arrowsShown.current = townEdgeArrowsShown(level);
     const list = arrowsShown.current ? edgeMarked() : NO_MARKED;
     if (!list.length) {
@@ -211,14 +222,9 @@ export function useTownEdgeNav({
     }
     arrowStore.set(townEdgeArrows(targets, camera, level, edgeKeepOut()));
   };
-  const [pulse, setPulse] = useState<TownPulse | null>(null);
-  const pulseSeq = useRef(0);
   useEffect(() => {
     if (!pulse) return;
-    const timer = window.setTimeout(
-      () => setPulse(null),
-      (pulse.delay + 1.7) * 1000,
-    );
+    const timer = window.setTimeout(() => setPulse(null), 1700);
     return () => window.clearTimeout(timer);
   }, [pulse]);
   /**
@@ -230,10 +236,18 @@ export function useTownEdgeNav({
     if (!point) return;
     const { model: m, roomsByKey: rooms, calm: still } = latest.current;
     const room = rooms.get(m.agents.get(key)?.roomKey ?? "") ?? null;
-    const delay = view.goTo(point, room, still);
+    view.goTo(point, room, still);
+    setPulse(null);
+    pulseComing.current = null;
     if (still || view.camera?.reducedMotion) return;
     pulseSeq.current += 1;
-    setPulse({ seq: pulseSeq.current, mark, x: point.x, y: point.y, delay });
+    pulseComing.current = {
+      seq: pulseSeq.current,
+      mark,
+      x: point.x,
+      y: point.y,
+    };
+    rendererRef.current?.invalidate("edge-pulse");
   };
   const goToArrow = (arrow: TownEdgeArrow) => {
     const key = arrow.keys[0];

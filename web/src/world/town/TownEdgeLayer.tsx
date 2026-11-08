@@ -86,14 +86,13 @@ export function TownEdgeArrows({
   );
 }
 
-/** A brief ring on the agent an arrow or Next went to, in world pixels. */
+/** A brief ring on the agent an arrow or Next went to, in world pixels,
+ * shown once the camera has arrived. */
 export type TownPulse = {
   seq: number;
   mark: TownEdgeMark;
   x: number;
   y: number;
-  /** Seconds until the camera arrives. */
-  delay: number;
 };
 
 export function TownPulseRing({ pulse }: { pulse: TownPulse | null }) {
@@ -107,7 +106,6 @@ export function TownPulseRing({ pulse }: { pulse: TownPulse | null }) {
       style={{
         left: `${pulse.x}px`,
         top: `${pulse.y}px`,
-        animationDelay: `${pulse.delay}s`,
       }}
     />
   );
