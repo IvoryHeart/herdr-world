@@ -58,7 +58,9 @@ if (process.env.BOARD_FACTS_DOM !== "1") {
         hostLabel: "atlas",
         roomKey: "r1",
         roomLabel: "orbit",
-        since: Date.now() - 5 * 60_000,
+        // Board's clock was read at import, a little before this line; the
+        // extra 20 s keeps the age at 5 m on a slow runner.
+        since: Date.now() - 5 * 60_000 - 20_000,
       },
     ],
     hosts: [
