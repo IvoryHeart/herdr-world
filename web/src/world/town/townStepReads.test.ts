@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { ConnectionClient } from "../../api";
 import type { WorldLeafObject } from "../worldObject";
 import { TownStepStore } from "./townStepStore";
-import { TownStepReads } from "./useTownStepReads";
+import { TOWN_STEP_BATCH, TownStepReads } from "./useTownStepReads";
 
 const leaf = (id: string, agent = "claude") =>
   ({
@@ -166,4 +166,62 @@ test("the scale scene's agents show synthetic steps without any read", async () 
   expect(store.get("a")?.task).toBe("Synthetic");
   reads.dispose();
   expect(store.get("a")).toBeUndefined();
+});
+
+test("a change during a read waits for it, even with a fresh client per lookup, so the newest step wins", async () => {
+  // bridge.connection() returns a new client object on every lookup.
+  const calls: string[] = [];
+  const replies: ((value: unknown) => void)[] = [];
+  const clientFor = () =>
+    ({
+      connectionId: "example",
+      generation: 1,
+      isCurrent: () => true,
+      call: (_method: string, { pane_ids }: { pane_ids: string[] }) => {
+        calls.push(pane_ids.join());
+        return new Promise((resolve) => replies.push(resolve));
+      },
+    }) as unknown as ConnectionClient;
+  const watched = new Map<string, () => void>();
+  const store = new TownStepStore();
+  const reads = new TownStepReads(store, () => leaf("a"), {
+    clientFor,
+    batchMs: 0,
+    watch: (_client, paneId, onChange) => {
+      watched.set(paneId, onChange);
+      return () => void watched.delete(paneId);
+    },
+  });
+  store.onWant(() => reads.sync());
+  store.want(["a"]);
+  await settle();
+  expect(calls).toHaveLength(1);
+  // The agent moves on while the first read is still out.
+  watched.get("pane-a")!();
+  await settle();
+  expect(calls).toHaveLength(1);
+  replies[0]!({ conversations: [reply("pane-a", "Edit")] });
+  await settle();
+  expect(store.get("a")?.kind).toBe("edit");
+  expect(calls).toHaveLength(2);
+  replies[1]!({ conversations: [reply("pane-a", "Read")] });
+  await settle();
+  expect(store.get("a")?.kind).toBe("read");
+});
+
+test("every working agent on screen is read, in turns of at most TOWN_STEP_BATCH", async () => {
+  // A full room: fifteen four-seat desks, sixty working agents.
+  const leaves = Array.from({ length: 60 }, (_, index) => leaf(`k${index}`));
+  const { store, calls, answer } = setup(leaves);
+  answer(({ pane_ids }) => ({
+    conversations: pane_ids.map((id) => reply(id, "Edit")),
+  }));
+  store.want(leaves.map((entry) => entry.id));
+  await settle();
+  await settle();
+  expect(calls.map((call) => call.params.pane_ids.length)).toEqual([
+    TOWN_STEP_BATCH,
+    60 - TOWN_STEP_BATCH,
+  ]);
+  for (const entry of leaves) expect(store.get(entry.id)?.kind).toBe("edit");
 });

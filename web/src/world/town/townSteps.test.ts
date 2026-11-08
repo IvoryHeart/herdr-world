@@ -55,6 +55,36 @@ test("a word that only contains 'test' is not a test run", () => {
   expect(townStepKind("Bash", "gh attest verify")).toBe("command");
 });
 
+test("a shell step is classed by the operation it runs, not by its arguments", () => {
+  // Reading or searching test files is reading.
+  expect(townStepKind("Bash", "cat web/src/login.test.ts")).toBe("read");
+  expect(townStepKind("Bash", "sed -n 1,100p web/src/login.test.ts")).toBe(
+    "read",
+  );
+  expect(townStepKind("Bash", "rg tests web/src")).toBe("read");
+  expect(townStepKind("shell", "cd web && grep -rn jest src")).toBe("read");
+  expect(townStepKind("Bash", "ls tests/")).toBe("read");
+  // Running tests, however launched.
+  expect(townStepKind("Bash", "bun run test web/src/login.test.ts")).toBe(
+    "test",
+  );
+  expect(townStepKind("Bash", "cd web && npx vitest run")).toBe("test");
+  expect(townStepKind("shell", "python -m pytest tests -q")).toBe("test");
+  expect(townStepKind("shell", "go test ./...")).toBe("test");
+  expect(townStepKind("Bash", "CI=1 timeout 600 make test 2>&1 | tail")).toBe(
+    "test",
+  );
+  expect(townStepKind("Bash", "./node_modules/.bin/jest login")).toBe("test");
+  expect(townStepKind("Bash", "bun run typecheck:quick && bun test")).toBe(
+    "test",
+  );
+  // A command that only mentions tests, and other shell work.
+  expect(townStepKind("Bash", "git add web/src/login.test.ts")).toBe("command");
+  expect(townStepKind("Bash", "test -f web/src/login.ts")).toBe("command");
+  expect(townStepKind("Bash", "sed -i s/a/b/ login.test.ts")).toBe("command");
+  expect(townStepKind("Bash", "Show the login tests")).toBe("command");
+});
+
 test("a tool Town does not know is working with no glyph", () => {
   expect(townStepKind("mcp__example__lookup", "x")).toBeNull();
   expect(townStepKind("SomethingNew", null)).toBeNull();

@@ -1,11 +1,12 @@
 /**
  * Reads the steps Town's thought bubbles show, for the agents Town wants
  * (TownStepStore.want): working agents in rooms on screen at the room or desk
- * level, at most TOWN_STEP_LIMIT. Nothing is polled. Each wanted agent's pane
- * is watched as Chat watches it (conversationWatch.ts); the service says
- * when its conversation changed (a transcript write, a status or title
- * change), and Town reads the conversation summary Chat's Now bar reads
- * (`agent_conversation.latest`), one batched call per connection.
+ * level. Nothing is polled. Each wanted agent's pane is watched as Chat
+ * watches it (conversationWatch.ts); the service says when its conversation
+ * changed (a transcript write, a status or title change), and Town reads the
+ * conversation summary Chat's Now bar reads (`agent_conversation.latest`):
+ * one call at a time per connection, of at most TOWN_STEP_BATCH agents, so
+ * a crowded screen is read in turns rather than all at once.
  */
 
 import { useEffect, useRef } from "react";
@@ -23,6 +24,9 @@ import type { TownStepStore } from "./townStepStore";
 
 /** Changes within this window share one read. */
 const BATCH_MS = 200;
+
+/** The most agents one read asks a connection about. */
+export const TOWN_STEP_BATCH = 32;
 
 const leafClient = (leaf: WorldLeafObject): ConnectionClient | null =>
   deskClient(
@@ -45,7 +49,11 @@ export class TownStepReads {
   private readonly watches = new Map<string, () => void>();
   private readonly steps = new Map<string, TownStep>();
   private readonly pending = new Set<string>();
-  private readonly reading = new Set<ConnectionClient>();
+  /** Connections (by ID and generation) with a read in flight. */
+  private readonly reading = new Set<string>();
+  /** Each agent's newest read; an older reply for it is dropped. */
+  private readonly issued = new Map<string, number>();
+  private serial = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
 
@@ -69,6 +77,7 @@ export class TownStepReads {
         stop();
         this.watches.delete(key);
         this.steps.delete(key);
+        this.issued.delete(key);
       }
     for (const key of [...this.steps.keys()])
       if (!wanted.has(key)) this.steps.delete(key);
@@ -101,53 +110,64 @@ export class TownStepReads {
   private queue(key: string) {
     if (this.disposed) return;
     this.pending.add(key);
+    this.schedule();
+  }
+
+  private schedule() {
+    if (this.disposed || !this.pending.size) return;
     this.timer ??= setTimeout(() => {
       this.timer = undefined;
-      void this.flush();
+      this.flush();
     }, this.options.batchMs ?? BATCH_MS);
   }
 
-  private async flush() {
+  /**
+   * Start a read on each idle connection for up to TOWN_STEP_BATCH of its
+   * pending agents. The rest wait: a read's end schedules the next.
+   */
+  private flush() {
     const groups = new Map<
-      ConnectionClient,
-      { leaf: WorldLeafObject; key: string }[]
+      string,
+      {
+        client: ConnectionClient;
+        group: { leaf: WorldLeafObject; key: string }[];
+      }
     >();
-    const clients = new Map<string, ConnectionClient>();
     for (const key of [...this.pending]) {
       const leaf = this.watches.has(key) ? this.leafOf(key) : undefined;
       if (!leaf) {
         this.pending.delete(key);
         continue;
       }
+      // A connection's client is a fresh object on each lookup: its ID and
+      // generation name it.
       const scope = `${leaf.connectionId}\0${leaf.generation}`;
-      let client = clients.get(scope);
-      if (!client) {
-        const found = (this.options.clientFor ?? leafClient)(leaf);
-        if (!found) {
+      if (this.reading.has(scope)) continue;
+      let entry = groups.get(scope);
+      if (!entry) {
+        const client = (this.options.clientFor ?? leafClient)(leaf);
+        if (!client) {
           this.pending.delete(key);
           continue;
         }
-        clients.set(scope, (client = found));
+        groups.set(scope, (entry = { client, group: [] }));
       }
-      // One read at a time per connection; what changes meanwhile waits
-      // for the next.
-      if (this.reading.has(client)) continue;
+      if (entry.group.length >= TOWN_STEP_BATCH) continue;
       this.pending.delete(key);
-      const group = groups.get(client) ?? [];
-      group.push({ leaf, key });
-      groups.set(client, group);
+      entry.group.push({ leaf, key });
     }
-    await Promise.all(
-      [...groups].map(([client, group]) => this.read(client, group)),
-    );
-    if (this.pending.size) this.queue([...this.pending][0]!);
+    for (const [scope, { client, group }] of groups)
+      void this.read(scope, client, group);
   }
 
   private async read(
+    scope: string,
     client: ConnectionClient,
     group: { leaf: WorldLeafObject; key: string }[],
   ) {
-    this.reading.add(client);
+    this.reading.add(scope);
+    const serial = ++this.serial;
+    for (const { key } of group) this.issued.set(key, serial);
     try {
       const reply = (await client.call(
         "agent_conversation.latest",
@@ -161,7 +181,8 @@ export class TownStepReads {
         ),
       );
       for (const { leaf, key } of group) {
-        if (!this.watches.has(key)) continue;
+        // Only this agent's newest read sets its step.
+        if (!this.watches.has(key) || this.issued.get(key) !== serial) continue;
         const conversation = byPane.get(leaf.pane.pane_id);
         // A session found only by guessing from the folder may be another
         // agent's: it shows no step.
@@ -176,7 +197,8 @@ export class TownStepReads {
     } catch {
       // A failed read keeps the last steps; the next change reads again.
     } finally {
-      this.reading.delete(client);
+      this.reading.delete(scope);
+      this.schedule();
     }
   }
 
@@ -187,6 +209,7 @@ export class TownStepReads {
     this.watches.clear();
     this.steps.clear();
     this.pending.clear();
+    this.issued.clear();
     this.publish();
   }
 }

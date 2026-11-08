@@ -80,12 +80,118 @@ const WEB = new Set(["webfetch", "websearch", "web_search", "fetch"]);
 const AGENT = new Set(["task", "agent", "spawn_agent", "wait_agent"]);
 const THINK = new Set(["todowrite", "update_plan", "exitplanmode"]);
 
-/** A command that runs tests, by its runner or its description. */
-const TESTS =
-  /\b(?:tests?|testing|pytest|vitest|jest|mocha|playwright|cypress|rspec|phpunit)\b/i;
-/** A command that only reads or searches files. */
-const READS =
-  /^(?:cd\s+\S+\s*&&\s*)?(?:cat|sed\s+-n|head|tail|rg|grep|ugrep|ls|find|fd|wc|tree|less|bat)\b/;
+/** Programs that run tests themselves. */
+const RUNNERS = new Set([
+  "pytest",
+  "vitest",
+  "jest",
+  "mocha",
+  "playwright",
+  "cypress",
+  "rspec",
+  "phpunit",
+  "ctest",
+  "tox",
+  "nox",
+]);
+/** Programs that run a test runner or a test script by name. */
+const LAUNCHERS = new Set([
+  "bun",
+  "bunx",
+  "npm",
+  "npx",
+  "pnpm",
+  "pnpx",
+  "yarn",
+  "deno",
+  "cargo",
+  "go",
+  "make",
+  "dotnet",
+  "mvn",
+  "gradle",
+  "gradlew",
+  "python",
+  "python3",
+  "uv",
+  "poetry",
+  "mix",
+]);
+/** A launcher's words that hand on to the script or module named next. */
+const HAND_ON = new Set(["run", "exec", "x", "dlx", "-m"]);
+/** A test script or subcommand: `test`, `tests`, `test:unit`. */
+const TEST_SCRIPT = /^tests?(?::\S*)?$/;
+/** Programs that only read or search files (`sed` only with `-n`). */
+const READERS = new Set([
+  "cat",
+  "head",
+  "tail",
+  "rg",
+  "grep",
+  "ugrep",
+  "ls",
+  "find",
+  "fd",
+  "wc",
+  "tree",
+  "less",
+  "bat",
+]);
+/** Words before the program that do not change what it does. */
+const WRAPPERS = new Set(["env", "time", "nice", "command"]);
+/** A description (Claude's) that says it runs tests: "Run the unit tests". */
+const RUNS_TESTS =
+  /^(?:re-?)?(?:run|runs|running|execute|executing)\b.*\b(?:tests?|specs?)\b/i;
+
+/** A shell segment's program and its arguments, past wrappers. */
+function program(segment: string): string[] {
+  const words = segment.trim().split(/\s+/).filter(Boolean);
+  let index = 0;
+  while (index < words.length) {
+    const word = words[index]!;
+    if (/^[A-Za-z_]\w*=/.test(word) || WRAPPERS.has(word)) index += 1;
+    else if (word === "timeout") index += 2;
+    else break;
+  }
+  const rest = words.slice(index);
+  if (rest.length) rest[0] = rest[0]!.replace(/^.*\//, "");
+  return rest;
+}
+
+/** Whether a shell segment runs tests: a runner, or a launcher's test script. */
+function runsTests([name, ...args]: string[]) {
+  if (!name) return false;
+  if (RUNNERS.has(name)) return true;
+  if (!LAUNCHERS.has(name)) return false;
+  // The launcher's first word past its flags, or the one after `run`.
+  const words = args.filter((word) => word === "-m" || !word.startsWith("-"));
+  const first = words[0];
+  if (!first) return false;
+  if (TEST_SCRIPT.test(first) || RUNNERS.has(first)) return true;
+  if (!HAND_ON.has(first)) return false;
+  const next = words[1]?.replace(/^.*\//, "");
+  return !!next && (TEST_SCRIPT.test(next) || RUNNERS.has(next));
+}
+
+/**
+ * A shell step's kind from its summary, by the operation it runs, not by the
+ * words in its arguments: `cat login.test.ts` reads, `bun test` tests. A
+ * description, such as Claude writes, tests when it says it runs tests.
+ */
+function shellKind(summary: string | null): TownStepKind {
+  if (!summary) return "command";
+  const text = summary.trim();
+  if (RUNS_TESTS.test(text)) return "test";
+  const segments = text
+    .split(/&&|\|\||;|\|/)
+    .map(program)
+    .filter((words) => words.length && words[0] !== "cd");
+  if (segments.some(runsTests)) return "test";
+  const [name, flag] = segments[0] ?? [];
+  if (name && READERS.has(name)) return "read";
+  if (name === "sed" && flag === "-n") return "read";
+  return "command";
+}
 
 /**
  * The kind of step a harness's tool call is: its tool name, and for a shell
@@ -102,11 +208,7 @@ export function townStepKind(
   if (WEB.has(name)) return "web";
   if (AGENT.has(name)) return "agent";
   if (THINK.has(name)) return "think";
-  if (COMMAND.has(name)) {
-    if (summary && TESTS.test(summary)) return "test";
-    if (summary && READS.test(summary.trim())) return "read";
-    return "command";
-  }
+  if (COMMAND.has(name)) return shellKind(summary);
   return null;
 }
 

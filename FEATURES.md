@@ -288,8 +288,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     `Fix login redirect · tests 3m`. Steps come from the same conversation
     summary as Chat's Now bar, for Claude Code, Codex and Pi; another harness,
     or a tool Town does not know, keeps the typing dots. Town reads steps only
-    for working agents on screen at the room or desk level (at most 32), when
-    the service reports their conversation changed; nothing is polled.
+    for working agents on screen at the room or desk level, when the service
+    reports their conversation changed, at most 32 per read and one read at a
+    time per connection; nothing is polled.
     Bubbles do not move, and hovering the agent still opens its peek.
   - **Open terminal** in the card's header opens the live pane; **Open chat**
     opens the agent's window, whose Files and Changes views hold the rest.

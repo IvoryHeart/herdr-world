@@ -1,10 +1,6 @@
 import { expect, test } from "bun:test";
 import { TOWN_TILE as T } from "./townLayout";
-import {
-  TOWN_STEP_LIMIT,
-  TownStepStore,
-  townStepWanted,
-} from "./townStepStore";
+import { TownStepStore, townStepWanted } from "./townStepStore";
 import type { TownStep } from "./townSteps";
 
 const step = (kind: TownStep["kind"]): TownStep => ({
@@ -52,7 +48,7 @@ test("glyph keys follow the agents with steps, and change only when they do", ()
   expect(told).toBe(1);
 });
 
-test("an agent no longer wanted loses its step, and the wanted list is bounded", () => {
+test("an agent no longer wanted loses its step, and every agent on screen is wanted", () => {
   const store = new TownStepStore();
   store.want(["a", "b"]);
   store.set(
@@ -70,7 +66,7 @@ test("an agent no longer wanted loses its step, and the wanted list is bounded",
   expect(store.get("a")).toBeUndefined();
   expect(store.get("b")?.kind).toBe("test");
   store.want(Array.from({ length: 100 }, (_, index) => `k${index}`));
-  expect(store.wantedKeys()).toHaveLength(TOWN_STEP_LIMIT);
+  expect(store.wantedKeys()).toHaveLength(100);
 });
 
 test("Town wants working agents at desks on screen, nearest the middle first", () => {

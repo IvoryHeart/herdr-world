@@ -9,9 +9,6 @@
 import { TOWN_TILE as T } from "./townLayout";
 import type { TownStep } from "./townSteps";
 
-/** The most agents whose steps are read at once (each is one watch). */
-export const TOWN_STEP_LIMIT = 32;
-
 /** The same agents, in any order: panning reorders them, nothing more. */
 const sameKeys = (a: readonly string[], b: readonly string[]) => {
   if (a.length !== b.length) return false;
@@ -31,9 +28,9 @@ export class TownStepStore {
   private readonly wantListeners = new Set<() => void>();
   private readonly glyphListeners = new Set<() => void>();
 
-  /** The agents Town wants steps for, nearest first, at most TOWN_STEP_LIMIT. */
+  /** The agents Town wants steps for, nearest first. */
   want(keys: readonly string[]) {
-    const next = keys.slice(0, TOWN_STEP_LIMIT);
+    const next = [...keys];
     if (sameKeys(next, this.wanted)) return;
     this.wanted = next;
     // An agent no longer wanted shows no step: it left the screen or the
@@ -108,7 +105,9 @@ export type TownStepView = { x0: number; y0: number; x1: number; y1: number };
 /**
  * The agents whose steps Town wants at the room or desk level: working
  * agents (an asking agent's bubble is its question) at desks on screen,
- * nearest the middle of the screen first, at most TOWN_STEP_LIMIT.
+ * nearest the middle of the screen first, so the nearest are read first.
+ * Every one is wanted: the room and desk levels bound how many are on
+ * screen, and the reads take them in turns (TOWN_STEP_BATCH).
  */
 export function townStepWanted(
   rooms: readonly {
@@ -142,6 +141,5 @@ export function townStepWanted(
   }
   return found
     .sort((a, b) => a.distance - b.distance || (a.key < b.key ? -1 : 1))
-    .slice(0, TOWN_STEP_LIMIT)
     .map(({ key }) => key);
 }
