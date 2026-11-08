@@ -37,7 +37,6 @@
   white-space: nowrap;
 }
 .board-controls-space .board-control-work,
-.board-controls-space .board-control-lens,
 .board-controls-space .board-control-next,
 .board-controls-space .board-control-home {
   width: auto;
@@ -47,8 +46,7 @@
   margin-right: 6px;
   font-weight: 650;
 }
-.board-controls-space .board-control-work[aria-pressed="true"],
-.board-controls-space .board-control-lens[aria-pressed="true"] {
+.board-controls-space .board-control-work[aria-pressed="true"] {
   background: var(--board-accent);
   color: var(--board-ground);
 }

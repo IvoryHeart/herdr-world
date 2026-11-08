@@ -1,6 +1,5 @@
 export type BoardControl =
   | "work"
-  | "lens"
   | "next"
   | "home"
   | "zoomOut"
@@ -31,7 +30,6 @@ export function boardControlsLayout({
 }): BoardControlsLayout {
   let inline: BoardControl[] = [
     "work",
-    "lens",
     "next",
     ...(count > 0 ? ["home" as const] : []),
     "zoomOut",
@@ -44,11 +42,8 @@ export function boardControlsLayout({
     chrome +
     Math.max(0, inline.length - 1) * gap +
     inline.reduce((total, control) => total + widths[control], 0);
-  // Lenses gives way first after the note chip: on a phone it is one tap
-  // away in the menu, and its legend steps the lenses once one is on.
   for (const control of [
     "home",
-    "lens",
     "fit",
     "zoomIn",
     "zoomOut",
@@ -61,7 +56,7 @@ export function boardControlsLayout({
   return {
     inline,
     overflow: (
-      ["home", "lens", "tidy", "fit", "zoomIn", "zoomOut", "next"] as const
+      ["home", "tidy", "fit", "zoomIn", "zoomOut", "next"] as const
     ).filter((control) => !inline.includes(control)),
   };
 }

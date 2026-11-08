@@ -9,7 +9,8 @@
  */
 
 import type { WorkItem } from "../../../../shared/worldSources";
-import type { LensAgent, LensDesk, TownLensFacts } from "./townLens";
+import type { OfficeAgent, OfficeDesk } from "../officeProjectionTypes";
+import type { TownLensFacts } from "./townLens";
 import type { TownPlaceEconomy, TownUsagePlace } from "./townPlaceUsage";
 import type { TownQuestMark } from "./townQuestPennant";
 
@@ -67,7 +68,7 @@ export function townScaleLensFacts(
   };
   return {
     now,
-    activityAt(agent: LensAgent) {
+    activityAt(agent: OfficeAgent) {
       const roll = townScaleRoll(agent.key, "idle");
       if (roll > 0.96) return undefined;
       // Some rooms were left alone: their agents run colder.
@@ -98,7 +99,7 @@ export function townScaleLensFacts(
         partial: false,
       };
     },
-    work(desk: LensDesk): WorkItem | undefined {
+    work(desk: OfficeDesk): WorkItem | undefined {
       if (!desk.occupantAgentKey) return undefined;
       const roll = townScaleRoll(desk.key, "pull");
       if (roll > 0.4) return undefined;

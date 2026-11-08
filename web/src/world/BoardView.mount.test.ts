@@ -125,10 +125,6 @@ if (!order) {
     const { bridge } = await import("../api");
     const { fixtureHost, fixtureWorld } = await import("./board/boardFixture");
     const { default: BoardView } = await import("./BoardView");
-    // The cards' work badges read World sources; that read is not the
-    // mount's scheduling, so it stays pending here and commits nothing.
-    const { worldSourcesStore } = await import("./worldSources");
-    worldSourcesStore.useFetch(() => new Promise<Response>(() => {}));
     const { initializeLayoutPreferences } = await import(
       "../layoutPreferences"
     );

@@ -15,10 +15,7 @@ import {
 } from "react";
 import { Layers } from "lucide-react";
 import { worldLocalStorage } from "../../browserStorage";
-import type {
-  WorkItem,
-  WorldSourcesSnapshot,
-} from "../../../../shared/worldSources";
+import type { WorldSourcesSnapshot } from "../../../../shared/worldSources";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type { OfficeAgent } from "../officeProjectionTypes";
 import type { TownCenterAction } from "./TownCenterMenu";
@@ -27,12 +24,9 @@ import {
   TOWN_LENSES,
   TOWN_LENS_HINTS,
   TOWN_LENS_NAMES,
-  lensView,
-  townLensPlaces,
   townLensStep,
+  townLensView,
   townLensWords,
-  type LensAgent,
-  type LensPlaces,
   type TownLensFacts,
   type TownLensId,
   type TownLensMark,
@@ -204,23 +198,23 @@ const USAGE_REFRESH_MS = 60_000;
 const LENS_TICK_MS = 30_000;
 
 /**
- * The marks for the lens on over a view's places (Town's or Board's), from
- * what World has: activity times, today's usage, the desks' linked work and
- * quests. The scale scene (`?scene=town-scale`) brings its own synthetic
- * facts. `places` and `deskWork` are only read while a lens is on.
+ * The marks for the lens on, from what World has: activity times, today's
+ * usage, the desks' linked work and quests. The scale scene
+ * (`?scene=town-scale`) brings its own synthetic facts.
  */
-export function useLensView(
+export function useTownLensView(
   lens: TownLensId,
-  places: () => LensPlaces,
+  model: TownModel,
   {
-    deskWork,
+    projection,
+    sources,
     quests,
     activityAt,
   }: {
-    /** Each desk's linked work item, by lens desk key. */
-    deskWork: () => ReadonlyMap<string, WorkItem>;
+    projection: HerdrOfficeProjection;
+    sources: WorldSourcesSnapshot;
     quests: ReadonlyMap<string, TownQuestMark>;
-    activityAt?: (agent: LensAgent) => number | undefined;
+    activityAt?: (agent: OfficeAgent) => number | undefined;
   },
 ): TownLensView | null {
   const [scene] = useState(() =>
@@ -245,16 +239,16 @@ export function useLensView(
     const timer = window.setInterval(() => store.request(), USAGE_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [lens, scene, store]);
-  const shown = useMemo(() => (on ? places() : null), [on, places]);
-  const work = useMemo(
-    () => (lens === "pulls" && !scene ? deskWork() : null),
-    [lens, scene, deskWork],
+  const deskWork = useMemo(
+    () =>
+      lens === "pulls" && !scene ? townDeskWork(projection, sources) : null,
+    [lens, scene, projection, sources],
   );
   return useMemo(() => {
-    if (!shown) return null;
+    if (!on) return null;
     const facts: TownLensFacts = scene
       ? townScaleLensFacts(now, (workspaceId) => {
-          const room = shown.rooms.find(
+          const room = [...model.rooms.values()].find(
             (candidate) => candidate.workspaceRef.nativeId === workspaceId,
           );
           return room ? room.desks.map((desk) => desk.tabRef.nativeId) : [];
@@ -264,48 +258,11 @@ export function useLensView(
           activityAt: (agent) => activityAt?.(agent),
           economy: (place) =>
             townPlaceEconomy(townUsageCurrent(usage, now), place),
-          work: (desk) => work?.get(desk.key),
+          work: (desk) => deskWork?.get(desk.key),
           quest: (key) => quests.get(key),
         };
-    return lensView(lens, shown, facts);
-  }, [lens, shown, scene, usage, now, work, quests, activityAt]);
-}
-
-/** Town's lens marks: its presented rooms and desks (useLensView). */
-export function useTownLensView(
-  lens: TownLensId,
-  model: TownModel,
-  {
-    projection,
-    sources,
-    quests,
-    activityAt,
-  }: {
-    projection: HerdrOfficeProjection;
-    sources: WorldSourcesSnapshot;
-    quests: ReadonlyMap<string, TownQuestMark>;
-    activityAt?: (agent: OfficeAgent) => number | undefined;
-  },
-): TownLensView | null {
-  const places = useCallback(() => townLensPlaces(model), [model]);
-  const deskWork = useCallback(
-    () => townDeskWork(projection, sources),
-    [projection, sources],
-  );
-  const agentActivity = useMemo(
-    () =>
-      activityAt &&
-      ((agent: LensAgent) => {
-        const full = model.agents.get(agent.key);
-        return full ? activityAt(full) : undefined;
-      }),
-    [activityAt, model],
-  );
-  return useLensView(lens, places, {
-    deskWork,
-    quests,
-    activityAt: agentActivity,
-  });
+    return townLensView(lens, model, facts);
+  }, [on, lens, model, scene, usage, now, deskWork, quests, activityAt]);
 }
 
 /** A hovered, focused or selected place's reading, for the legend. */
@@ -348,8 +305,7 @@ export function townLensTargets(
   });
 }
 
-/** How a reading draws: a colour, stripes, hatching or nothing. */
-export const markData = (mark: TownLensMark | undefined) =>
+const markData = (mark: TownLensMark | undefined) =>
   mark?.mix
     ? "mix"
     : mark === undefined || mark.swatch === null
@@ -371,11 +327,7 @@ function mixStripes(view: TownLensView, mix: NonNullable<TownLensMark["mix"]>) {
   return `linear-gradient(90deg, ${bands.join(", ")})`;
 }
 
-/** A reading's colour (`--lens`) or stripes (`--lens-mix`). */
-export const markStyle = (
-  view: TownLensView,
-  mark: TownLensMark | undefined,
-) =>
+const markStyle = (view: TownLensView, mark: TownLensMark | undefined) =>
   mark?.mix
     ? ({ "--lens-mix": mixStripes(view, mark.mix) } as React.CSSProperties)
     : typeof mark?.swatch === "number"

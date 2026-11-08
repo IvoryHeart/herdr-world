@@ -77,8 +77,6 @@ if (process.env.BOARD_CONTROLS_DOM_TEST !== "1") {
             onAppearance() {},
             count: 0,
             onWork() {},
-            lens: null,
-            onLens() {},
             onHome() {},
             onZoom() {},
             onFit() {},
