@@ -818,6 +818,10 @@ on your phone and desktop.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
+   Type in **Search Board** (beside the view buttons in Zen, in the top bar
+   otherwise) to keep matching cards lit and dim the rest; the results float
+   over the top of the board. **Down** and **Up** pick a result, **Enter** or
+   a click selects it, and **Escape** ends the search.
 3. Drag a workspace and its tabs follow; cards settle within about a second.
    On a phone, hold a card still before dragging; a quick swipe pans. Add a
    second finger to switch from dragging to pinch zoom without committing a move.

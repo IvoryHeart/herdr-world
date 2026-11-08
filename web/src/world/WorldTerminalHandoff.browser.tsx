@@ -1395,6 +1395,40 @@ async function run() {
     document.querySelector(".sidebar") === sharedNavigator,
     "Board replaced the shared workspace navigator",
   );
+  // Board fills its stage, so its search results float over it, in sight
+  // and taking a click, rather than drawn under the board.
+  const boardSearch = document.querySelector<HTMLInputElement>(
+    'input[placeholder="Search Board"]',
+  )!;
+  enterSearch(boardSearch, "Builder");
+  const boardResultRow = () =>
+    document.querySelector<HTMLElement>(
+      ".board-search-results [data-world-search-result]",
+    );
+  await until(boardResultRow, "Board search results");
+  {
+    const boardResult = boardResultRow()!;
+    const box = boardResult.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    );
+    check(
+      boardResult.contains(hit),
+      `Board search result is covered by ${hit?.tagName}.${hit?.className}`,
+    );
+  }
+  boardSearch.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await until(
+    () => !document.querySelector(".board-search-results"),
+    "Escape ends Board's search",
+  );
   viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(

@@ -823,7 +823,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   type (building, room, table, agent or terminal), its name and status mark,
   and its place (`host › room › table`), so twins on different hosts are told
   apart. Names come first, then places, then task-summary matches, which show
-  a short excerpt with the matched words picked out.
+  a short excerpt with the matched words picked out. On Board the results
+  float over the top of the board and its count matches the list; **Down**,
+  **Up** and **Enter** pick and select a result, and **Escape** ends the
+  search.
   Counts distinguish observations, rendering omissions and unavailable coverage.
 - Use **Arrange windows** in the shared shell to show the active terminal alone,
   cascade open windows, fit them in columns or rows, tile them in a grid, or

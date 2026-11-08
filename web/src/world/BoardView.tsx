@@ -134,7 +134,7 @@ import {
 } from "./terminalColor";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
-import { boardSearchMatches } from "./board/boardSearch";
+import { useBoardSearch } from "./board/useBoardSearch";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
@@ -587,7 +587,6 @@ export default function BoardView({
     });
   }, [pinnedKeys]);
   useEffect(() => () => publishBoardCardPins(null), []);
-  const [query, setQuery] = useState("");
   const [workOpen, setWorkOpen] = useState(false);
   const workButtonRef = useRef<HTMLButtonElement | null>(null);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
@@ -3161,10 +3160,8 @@ export default function BoardView({
   };
 
   /* ---------- Search ---------- */
-  const matches = useMemo(
-    () => boardSearchMatches(model, query),
-    [model, query],
-  );
+  const search = useBoardSearch(world, model, onSelect);
+  const { matches } = search;
 
   const selectedKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -3278,24 +3275,7 @@ export default function BoardView({
   };
   togglePinRef.current = togglePin;
 
-  const toolbar = (
-    <WorldViewToolbar
-      viewLabel="Board"
-      query={query}
-      onQueryChange={setQuery}
-      resultLabel={
-        matches
-          ? matches.size
-            ? `${matches.size} matches`
-            : "No matches"
-          : undefined
-      }
-      onSubmit={() => {
-        const first = model.tabs.find((tab) => matches?.has(tab.key));
-        if (first) selectCard(first.key, model);
-      }}
-    />
-  );
+  const toolbar = <WorldViewToolbar viewLabel="Board" {...search.toolbar} />;
 
   const ref = useMemo(
     () => createBoardCardRefs(cardEls.current, () => resizes.current),
@@ -3307,8 +3287,17 @@ export default function BoardView({
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       {/* Search covers everything observed, including what the board leaves
-          out, as in the other views. */}
-      <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+          out, as in the other views. The board fills the view, so the
+          results float over its top edge rather than under the board. */}
+      {search.open ? (
+        <div className="board-search-results">
+          <WorldSearchResults
+            world={world}
+            onSelect={onSelect}
+            {...search.results}
+          />
+        </div>
+      ) : null}
       {paneMoves.dialog}
       <div
         ref={boardRef}

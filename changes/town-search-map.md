@@ -12,4 +12,6 @@
 
 - Search matches every word in any order and any case in Town, Board and
   Desk, and each result shows its type, place, status mark and, for a task
-  match, an excerpt with the matched words picked out.
+  match, an excerpt with the matched words picked out. Board's results float
+  over the board instead of hiding under it, its count matches the list, and
+  Down, Up, Enter and Escape work there as in Town.
