@@ -64,10 +64,10 @@ const lane = (road: number) => (road + STREET / 2) * T;
 const OFF_MAP = 6;
 
 /**
- * Every crossing of a street and a side road has a stop. The bus drives
- * every street from one edge of the map to the other, alternating
- * direction, so it passes every crossing whatever the rows' widths; between
- * streets it is off the map.
+ * Every crossing of a street and a side road right of a lot has a stop (the
+ * town's left edge road has none). The bus drives every street from one edge
+ * of the map to the other, alternating direction, so it passes every
+ * crossing whatever the rows' widths; between streets it is off the map.
  */
 export function townBusRoute(layout: TownLayout): TownBusRoute {
   const roads = [...new Set(layout.roads)].sort((a, b) => a - b);
@@ -83,7 +83,7 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
   roads.forEach((road, index) => {
     const leg = legs[index]!;
     for (const side of layout.verticalRoads)
-      if (side.y0 === road + STREET || side.y1 === road) {
+      if (!side.edge && (side.y0 === road + STREET || side.y1 === road)) {
         const key = `${side.x}:${road}`;
         if (stops.some((stop) => stop.key === key)) continue;
         const wait = { x: (side.x - 0.5) * T, y: (road + STREET - 0.5) * T };

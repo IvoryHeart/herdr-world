@@ -181,7 +181,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     unknown sits at its desk scratching its head under a purple `??` instead
     of dozing.
   - Every building has roads on at least three sides: a street above and below
-    each row and a side road to its right.
+    each row and a side road to its right. A matching road runs down the left
+    of each row's first building, so the town is bounded by roads on both
+    sides; it has no bus stop.
   - The land around the town is generated: woods with pines, meadows, hedged
     flower gardens and orchards, ponds with reeds, winding footpaths, and each
     street running on beyond the town as a country lane. It fills the whole

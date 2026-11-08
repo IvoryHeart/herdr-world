@@ -43,6 +43,19 @@ export const YARD = 2;
 /** The most rows a building sits below the street above its row. */
 const FRONT_YARD = 12;
 
+/**
+ * A side road from the street above a row of lots (y0, the row under that
+ * street) to the street below (y1, that street's row), `x` its left
+ * pavement. Every lot has one on its right; the town's `edge` roads run down
+ * the left of each row's first lot and have no bus stop.
+ */
+export type TownVerticalRoad = {
+  x: number;
+  y0: number;
+  y1: number;
+  edge?: true;
+};
+
 /** A room column: its left and right edge and the row under its last room. */
 export type TownColumnSpan = { x0: number; x1: number; bottom: number };
 
@@ -91,7 +104,9 @@ export function townFloor(
  * Where the buildings (floors, in host order) and the town center stand.
  * Up to four buildings share one street; larger towns wrap into a grid of
  * streets. Every row of lots has a street above and below it (neighbouring
- * rows share one), and a road right of every lot from street to street.
+ * rows share one), and a road right of every lot from street to street; a
+ * matching road down the left of each row's first lot (`edge`) bounds the
+ * town on that side too.
  *
  * The center stands at the top of the town, just across the first street
  * from the buildings and centred over the first row, facing down onto the
@@ -117,24 +132,33 @@ export function townPlaceLots(
     roadY: number;
     topRoadY: number;
   }[] = [];
-  const verticalRoads: { x: number; y0: number; y1: number }[] = [];
+  const verticalRoads: TownVerticalRoad[] = [];
   const widestLot = Math.max(0, ...floors.map((lot) => lot.w));
   let road = TOWN_CENTER_STREET;
   const roads: number[] = [road];
+  /** Every row's left edge: right of the road down the town's left side. */
+  const left = MARGIN + ROAD_GAP;
   let width = MARGIN;
   /** The right edge of the first row's last building. */
-  let firstRowRight = MARGIN + widestLot;
+  let firstRowRight = left + widestLot;
   for (let i = 0; i < floors.length; i += perRow) {
     const row = floors.slice(i, i + perRow);
     const tallest = Math.max(...row.map((lot) => lot.h));
     const top = road + ROAD_GAP + YARD + (narrow ? TOWN_PHONE_BOARD_ROWS : 0);
     const roadY = top + tallest + TOWN_FACADE + YARD;
-    let x = MARGIN;
+    let x = left;
     for (const lot of row) {
       // A single stacked lot is centred on its street so every floor plan
-      // shares one vertical axis on phones; its side road runs beside it.
+      // shares one vertical axis on phones; its side roads run beside it.
       const lx =
-        row.length === 1 ? MARGIN + Math.floor((widestLot - lot.w) / 2) : x;
+        row.length === 1 ? left + Math.floor((widestLot - lot.w) / 2) : x;
+      if (lot === row[0])
+        verticalRoads.push({
+          x: lx - ROAD_GAP,
+          y0: road + ROAD_GAP,
+          y1: roadY,
+          edge: true,
+        });
       // A lot far shorter than its row grows (a building gains floor above
       // its bar), so it sits at most FRONT_YARD rows below the street above.
       const h = Math.max(lot.h, tallest + YARD - FRONT_YARD);
@@ -157,7 +181,7 @@ export function townPlaceLots(
   }
   // Centred over the first row (a stacked town's shared axis), facing it
   // across the first street.
-  const axis = MARGIN + Math.max(firstRowRight - MARGIN, centerW) / 2;
+  const axis = left + Math.max(firstRowRight - left, centerW) / 2;
   const center: TownCenterLot = {
     x: Math.max(MARGIN, Math.round(axis - centerW / 2)),
     y: TOWN_CENTER_TOP,
