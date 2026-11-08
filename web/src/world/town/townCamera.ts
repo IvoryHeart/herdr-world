@@ -4,6 +4,7 @@
  */
 
 import { TOWN_TILE, type TownLayout } from "./townLayout";
+import { townPostLot } from "./townPost";
 import { townEase } from "./townTransition";
 
 export type TownViewport = {
@@ -32,12 +33,16 @@ export type TownZoomLimits = {
 
 /**
  * Tiles from the town's left edge past the side road of the last host's
- * building or the town center, whichever stands further right.
+ * building, the town center or the post office beside it, whichever stands
+ * further right.
  */
 export function townHostsWidth(layout: TownLayout) {
   if (!layout.buildings.length) return layout.width;
+  // The post office beside the center counts too (townPostLot.ts).
+  const post = townPostLot(layout);
   const right = Math.max(
     layout.center.x + layout.center.w,
+    post ? post.x + post.w : 0,
     ...layout.buildings.map((b) => b.x + b.w),
   );
   // The side road right of the last lot, and a tile of verge.

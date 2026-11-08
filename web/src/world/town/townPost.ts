@@ -11,6 +11,7 @@ import type {
 } from "../../../../shared/worldSources";
 import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
+import { townPostLotBeside, type TownPostLot } from "./townPostLot";
 
 /**
  * Town's post office (#760): a projection of the GitHub source's open pull
@@ -244,12 +245,14 @@ export const townPostLabel = (parcel: TownPostParcel) =>
 
 /* ---------- where it stands ---------- */
 
-/** The lot's width in tiles: the building and its yard share it. */
-export const TOWN_POST_WIDTH = 12;
-/** The building's rows, from the street's pavement down to the park walk. */
-export const TOWN_POST_HOUSE_ROWS = 6;
-/** The sorting yard's rows, under the park walk. */
-export const TOWN_POST_YARD_ROWS = 4;
+export {
+  TOWN_POST_HOUSE_ROWS,
+  TOWN_POST_WIDTH,
+  TOWN_POST_YARD_ROWS,
+  townPostReserve,
+  type TownPostLot,
+} from "./townPostLot";
+
 /** Columns of parcels in the yard; its right end keeps the mail cart. */
 export const TOWN_POST_COLUMNS = 7;
 export const TOWN_POST_ROWS = 3;
@@ -260,36 +263,15 @@ export const TOWN_POST_SLOTS = TOWN_POST_COLUMNS * TOWN_POST_ROWS;
 export const TOWN_POST_PITCH = { x: 20, y: 18 } as const;
 export const TOWN_POST_INSET = { x: 6, y: 6 } as const;
 
-export type TownPostLot = {
-  /** Left column and the building's top row, in tiles. */
-  x: number;
-  y: number;
-  w: number;
-  /** The park walk the door opens onto. */
-  walkY: number;
-  /** The sorting yard's top row, under the walk. */
-  yardY: number;
-};
-
 /**
- * The post office's lot: in the park below the last street, just left of
- * the plaza, outside the building grid. Its door opens onto the park's walk
- * and its sorting yard lies across the walk. A narrow (stacked) town folds
- * it to a sign on the town center instead, as it does the city billboard.
- * Nothing in the layout moves for it; the landscape keeps its lot clear.
+ * The post office's lot: right beside the town center, outside the building
+ * grid (townPostLot.ts). A narrow (stacked) town folds it to a sign on the
+ * town center instead, as it does the city billboard. Nothing in the layout
+ * moves for it; the landscape keeps its lot clear.
  */
 export function townPostLot(layout: TownLayout): TownPostLot | null {
   if (layout.formFactor === "narrow") return null;
-  const { plaza } = layout;
-  // The plaza's ellipse is 8 tiles each way; its benches stand inside it.
-  const x = Math.max(1, plaza.x - 9 - TOWN_POST_WIDTH);
-  return {
-    x,
-    y: plaza.y - TOWN_POST_HOUSE_ROWS,
-    w: TOWN_POST_WIDTH,
-    walkY: plaza.y,
-    yardY: plaza.y + 1,
-  };
+  return townPostLotBeside(layout.center);
 }
 
 /**
@@ -302,16 +284,6 @@ export function townPostFoldAt(center: TownCenterLot) {
   return {
     x: (center.x + center.w) * TOWN_TILE - 60,
     y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 40,
-  };
-}
-
-/** Tiles the lot keeps clear (x1, y1 exclusive), with a tile of verge. */
-export function townPostReserve(lot: TownPostLot) {
-  return {
-    x0: lot.x - 1,
-    y0: lot.y - 1,
-    x1: lot.x + lot.w + 1,
-    y1: lot.yardY + TOWN_POST_YARD_ROWS + 1,
   };
 }
 

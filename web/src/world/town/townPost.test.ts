@@ -9,7 +9,7 @@ import { fixturePullRequest } from "../testing/pullRequestFixture";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { townBusRoute } from "./townBus";
 import { TownCamera } from "./townCamera";
-import { townLandscape } from "./townLandscape";
+import { TOWN_BILLBOARD_VERGE, townLandscape } from "./townLandscape";
 import {
   layoutTown,
   TOWN_SHAPES,
@@ -210,39 +210,33 @@ const towns: [string, TownInput, TownShape][] = [
 ];
 
 test.each(towns)(
-  "the post office stands in the park beside the plaza (%s), on clear land",
+  "the post office stands beside the town center (%s), on clear land",
   (_, input, shape) => {
     const { layout } = layoutTown(input, shape);
     const lot = townPostLot(layout)!;
     expect(lot).not.toBeNull();
     const area = townPostReserve(lot);
-    // Inside the town, below the last street, never on the plaza.
-    expect(area.x0).toBeGreaterThanOrEqual(0);
-    expect(lot.x + lot.w).toBeLessThanOrEqual(layout.plaza.x - 8);
-    expect(lot.y).toBeGreaterThan(Math.max(...layout.roads) + 4);
-    expect(lot.yardY + TOWN_POST_YARD_ROWS).toBeLessThanOrEqual(layout.height);
-    // Its door opens onto the park walk; the house and yard stand on grass.
-    expect(layout.ground[lot.walkY * layout.width + lot.x + 6]).toBe(
-      TownGround.walk,
+    const { center } = layout;
+    const firstStreet = Math.min(...layout.roads);
+    // Right of the center's east wing, a short lawn between, inside the town.
+    expect(area.x0).toBeGreaterThan(center.x + center.w);
+    expect(lot.x - (center.x + center.w)).toBeLessThanOrEqual(3);
+    expect(area.y0).toBeGreaterThanOrEqual(0);
+    expect(area.x1).toBeLessThanOrEqual(layout.width);
+    // Level with the center, its yard clear of the lawn kept above the first
+    // street for the billboards, so above every street and building.
+    expect(lot.y).toBeGreaterThanOrEqual(center.y);
+    expect(lot.yardY + TOWN_POST_YARD_ROWS).toBeLessThanOrEqual(
+      firstStreet - TOWN_BILLBOARD_VERGE,
     );
-    for (let y = lot.y; y < lot.yardY + TOWN_POST_YARD_ROWS; y += 1) {
-      if (y === lot.walkY) continue;
+    for (const b of layout.buildings) expect(b.y).toBeGreaterThan(area.y1);
+    // The house and the yard stand on grass.
+    for (let y = lot.y; y < lot.yardY + TOWN_POST_YARD_ROWS; y += 1)
       for (let x = lot.x; x < lot.x + lot.w; x += 1)
         expect(layout.ground[y * layout.width + x]).toBe(TownGround.grass);
-    }
-    // Clear of buildings, benches, the board and every bus stop.
-    for (const b of layout.buildings)
-      expect(lot.y > b.y + b.h + 2 || lot.x + lot.w < b.x).toBe(true);
-    for (const bench of layout.benches)
-      expect(bench.x >= area.x1 || bench.y >= area.y1).toBe(true);
-    expect(layout.board.x).toBeGreaterThanOrEqual(area.x1);
-    // A stop's sign stands on the pavement above the house, never on it.
-    for (const stop of townBusRoute(layout).stops) {
-      const sx = Math.floor(stop.wait.x / T);
-      const sy = Math.floor(stop.wait.y / T);
-      const clear = sy < lot.y || sx + 2 < lot.x || sx - 4 >= lot.x + lot.w;
-      expect(clear).toBe(true);
-    }
+    // Every bus stop's sign stands on a street's pavement below it.
+    for (const stop of townBusRoute(layout).stops)
+      expect(Math.floor(stop.wait.y / T) - 5).toBeGreaterThanOrEqual(area.y1);
     // No tree, hedge or pond grows on its lot.
     const land = townLandscape(layout);
     for (let y = area.y0; y < area.y1; y += 1)
@@ -250,6 +244,55 @@ test.each(towns)(
         expect(land.reserved(x, y)).toBe(0);
         expect(land.objectAt(x, y)).toBeNull();
       }
+  },
+);
+
+test("making room for the post office moves nothing else", () => {
+  // A one-building town has no lawn right of its center: the town grows to
+  // the right, and its park plaza stays centred on the town it had.
+  const { layout } = layoutTown(town({ a: [1] }), TOWN_SHAPES.wide);
+  const lot = townPostLot(layout)!;
+  expect(layout.width).toBe(townPostReserve(lot).x1 + 3);
+  // The plaza keeps the middle of the town it had, not the wider one.
+  expect(layout.plaza.x).toBeLessThan(Math.floor(layout.width / 2));
+  expect(layout.plaza.x).toBeLessThan(lot.x);
+  // A wide first row already has lawn there: the town keeps its width.
+  const wide = layoutTown(
+    town({ a: [3, 3], b: [3, 3], c: [3, 3], d: [3, 3] }),
+    TOWN_SHAPES.wide,
+  ).layout;
+  const wideLot = townPostLot(wide)!;
+  expect(townPostReserve(wideLot).x1 + 3).toBeLessThanOrEqual(wide.width);
+  expect(wide.plaza.x).toBe(Math.floor(wide.width / 2));
+});
+
+test.each([
+  ["laptop, one building", town({ a: [1] }), 1440, 900],
+  ["small laptop, two buildings", town({ a: [2], b: [1] }), 1280, 720],
+  [
+    "laptop, two streets",
+    town({ a: [2], b: [1], c: [1], d: [1], e: [1] }),
+    1440,
+    900,
+  ],
+] as const)(
+  "the post office is in a laptop's home view (%s)",
+  (_, input, width, height) => {
+    const { layout } = layoutTown(input, TOWN_SHAPES.wide);
+    const viewport = townViewport(width, height, { left: 0, right: 0 });
+    const camera = new TownCamera();
+    camera.viewport = viewport;
+    new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
+    const lot = townPostLot(layout)!;
+    const topLeft = camera.toScreen(lot.x * T, lot.y * T);
+    const bottomRight = camera.toScreen(
+      (lot.x + lot.w) * T,
+      (lot.yardY + TOWN_POST_YARD_ROWS) * T,
+    );
+    expect(topLeft.x).toBeGreaterThanOrEqual(viewport.inset.left);
+    expect(topLeft.y).toBeGreaterThanOrEqual(viewport.inset.top);
+    expect(bottomRight.x).toBeLessThanOrEqual(width - viewport.inset.right);
+    expect(bottomRight.y).toBeLessThanOrEqual(height - viewport.inset.bottom);
   },
 );
 

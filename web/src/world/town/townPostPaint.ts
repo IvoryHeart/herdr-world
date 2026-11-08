@@ -1,12 +1,11 @@
 /**
  * The post office's art (#760), in Town's pixel style and palette: a red
  * brick house under the center's slate, cream stone trim, a striped awning
- * over a lit door, a red pillar box, and across the park walk a plank
- * sorting yard with an empty mail trolley. Every parcel is the DOM layer's
+ * over a lit door, a red pillar box, and at the door a plank sorting yard
+ * with an empty mail trolley. Every parcel is the DOM layer's
  * (TownPostOffice.tsx), one per pull request: the art paints none, so a
  * closed post office shows none. Painted once and shared; the renderer places
- * the house and the yard as two outdoor sprites, so walkers on the walk pass
- * in front of the house and over nothing.
+ * the house and the yard as two outdoor sprites.
  */
 
 import { TOWN_TILE as T } from "./townLayout";
@@ -139,7 +138,7 @@ function paintHouse(W: number, H: number) {
     disc(mid - 16 + i * 4, doorY - 3, 2, stripe);
   }
   rect(mid - 18, doorY - 11, 36, 1, townShade(POST_RED, -0.45));
-  // The step onto the walk.
+  // The step down onto the yard.
   rect(mid - 15, H - 3, 30, 3, STONE);
 
   // A red pillar box beside the door.

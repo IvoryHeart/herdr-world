@@ -24,3 +24,8 @@ regenerated: the pinned capture did not start in this environment.
 
 After the owner's phone review the folded sign's envelope became the red
 pillar box painted by the house door; `phone-folded.png` predates that change.
+
+After the owner's laptop review the post office moved from the park beside
+the plaza to the lawn right of the town center, its yard now at the door with
+no park walk between. The captures above predate that move: the house, yard,
+parcels and sign are unchanged, the plain walk row under the house is gone.

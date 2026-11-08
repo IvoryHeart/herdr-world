@@ -139,7 +139,7 @@ const FOLDED_WAITING = {
 
 /**
  * Town's post office (#760): your open pull requests as parcels in its
- * sorting yard by the park, ready to merge first, each opening the pull
+ * sorting yard beside the town center, ready to merge first, each opening the pull
  * request card the desk badge opens. Its sign counts them without hovering.
  * On a narrow (stacked) town it folds to a sign on the town center that
  * opens the same parcels as a list, as the city billboard folds.
@@ -188,7 +188,7 @@ export const TownPostOffice = memo(function TownPostOffice({
       return;
     const lot = townPostLot(layout);
     const at = lot
-      ? { x: (lot.x + lot.w / 2) * T, y: lot.walkY * T }
+      ? { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T }
       : townPostFoldAt(layout.center);
     handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");

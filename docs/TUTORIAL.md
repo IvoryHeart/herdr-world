@@ -224,7 +224,7 @@ hosts stay usable.
    Without a price table they show tokens and "no price table"; a host whose
    logs cannot be read says "no data", never 0. On a phone, tap the coin
    signs to open them. With the GitHub source signed in, the **post office**
-   in the park left of the plaza holds your open pull requests as parcels,
+   beside the town center holds your open pull requests as parcels,
    ready to merge first; its sign counts ready, failing and waiting. Hover a
    parcel for its title and state and tap it for the pull request card with
    **Merge…**; a merged parcel is carried off. On a phone, tap the post box

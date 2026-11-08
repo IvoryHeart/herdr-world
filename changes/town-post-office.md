@@ -1,6 +1,6 @@
 ### Added
 
-- Town has a post office in the park beside the plaza: your open pull
+- Town has a post office beside the town center: your open pull
   requests, including those whose agent has gone, as parcels in its sorting
   yard, ready to merge first, with counts on its sign. Tap a parcel for the
   pull request card the desk badge opens; a merged one is carried off. It is

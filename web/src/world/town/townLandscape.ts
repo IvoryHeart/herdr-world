@@ -19,7 +19,8 @@
  */
 
 import { townBusRoute } from "./townBus";
-import { townPostLot, townPostReserve } from "./townPost";
+import { townPostLot } from "./townPost";
+import { townPostReserve } from "./townPostLot";
 import {
   TOWN_FACADE,
   TOWN_TILE as T,
