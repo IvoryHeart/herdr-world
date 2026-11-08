@@ -494,7 +494,8 @@ select one as clicking it in Town does. The same box creates rooms, tabs and
 agents, acts on the selected agent and goes to Board, Desk or Spaces. In Zen
 the **⌘** button beside the view buttons opens it too; on a phone, tap the
 corner view button and then **Find or act**. In a terminal, the Chat composer
-or a text field, Ctrl+K keeps its meaning there; press **Ctrl+Alt+K** instead.
+or a text field, Ctrl+K and Cmd+K keep their meaning there; press
+**Ctrl+Alt+K** (**Cmd+Option+K** on a Mac) instead.
 **Escape** or the same key closes the box.
 
 A quiet **?** at reception means an agent has asked you a question with

@@ -13,4 +13,6 @@
 - The command menu's key is `Ctrl+K` on Windows and Linux. In a terminal, the
   Chat composer or a text field `Ctrl+K` keeps its shell and editor meaning;
   `Ctrl+Alt+K` opens the menu from there, and from a text field it now opens
-  it too (`Cmd+K` does on a Mac). Saved shortcut presets keep their keys.
+  it too. On a Mac `Cmd+K` likewise stays with a terminal or text field, and
+  `Cmd+Option+K` opens the menu from there. Saved shortcut presets keep their
+  keys.

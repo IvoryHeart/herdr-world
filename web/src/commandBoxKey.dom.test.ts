@@ -107,10 +107,16 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
     expect(commandBoxKey(held)).toBe(false);
   });
 
-  test("on a Mac Cmd+K opens it everywhere and Ctrl+K is left alone", () => {
+  test("on a Mac Cmd+K opens it but where text is typed", () => {
     selectShortcutPreset("mac");
-    for (const target of [document.body, ...typed])
-      expect(opens(target, { metaKey: true })).toBe(true);
+    expect(opens(document.body, { metaKey: true })).toBe(true);
+    expect(opens(button, { metaKey: true })).toBe(true);
+    // A terminal, the Chat composer and text fields keep Cmd+K.
+    for (const target of typed)
+      expect(opens(target, { metaKey: true })).toBe(false);
+    // Cmd+Option+K opens the box from there.
+    for (const target of typed)
+      expect(opens(target, { metaKey: true, altKey: true })).toBe(true);
     for (const target of [document.body, ...typed])
       expect(opens(target, { ctrlKey: true })).toBe(false);
     selectShortcutPreset("linux");

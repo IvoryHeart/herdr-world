@@ -117,7 +117,8 @@ export function defaultShortcutBindings(
   if (platform === "windows") bindings["terminal.paste"] = ["Ctrl+V"];
   if (platform === "mac")
     Object.assign(bindings, {
-      "command.menu": ["Meta+K"],
+      // Cmd+K stays with a terminal or text field; Cmd+Option+K opens it there.
+      "command.menu": ["Meta+K", "Alt+Meta+K"],
       "shortcuts.show": ["Meta+Shift+K"],
       "sidebar.toggle": ["Meta+B"],
       "inspector.toggle": ["Meta+Shift+B"],
@@ -300,11 +301,11 @@ export function shortcutFromEvent(event: ShortcutEvent): string | null {
 }
 
 /**
- * Whether a binding is safe where text is typed: it has Alt or Meta, so it is
- * not a shell or editor key such as Ctrl+K or Ctrl+Shift+K.
+ * Whether a binding is safe where text is typed: it has Alt, so it is not a
+ * shell or editor key such as Ctrl+K, Ctrl+Shift+K or Cmd+K.
  */
 export function shortcutLeavesTyping(binding: string) {
-  return /(^|\+)(Alt|Meta)\+/.test(binding);
+  return /(^|\+)Alt\+/.test(binding);
 }
 
 export function matchesShortcut(

@@ -112,17 +112,22 @@ describe("platform shortcut maps", () => {
       );
   });
   test("the command box opens with Cmd+K on a Mac and Ctrl+K elsewhere", () => {
-    expect(defaultShortcutBindings("mac")["command.menu"]).toEqual(["Meta+K"]);
+    expect(defaultShortcutBindings("mac")["command.menu"]).toEqual([
+      "Meta+K",
+      "Alt+Meta+K",
+    ]);
     for (const platform of ["linux", "windows"] as const)
       expect(defaultShortcutBindings(platform)["command.menu"]).toEqual([
         "Ctrl+K",
         "Ctrl+Alt+K",
       ]);
-    // Only Alt or Meta keys are safe where text is typed: Ctrl+K kills a line.
+    // Only Alt keys are safe where text is typed: Ctrl+K kills a line, and
+    // editors and terminals use Cmd+K too.
     expect(shortcutLeavesTyping("Ctrl+K")).toBe(false);
     expect(shortcutLeavesTyping("Ctrl+Shift+K")).toBe(false);
     expect(shortcutLeavesTyping("Ctrl+Alt+K")).toBe(true);
-    expect(shortcutLeavesTyping("Meta+K")).toBe(true);
+    expect(shortcutLeavesTyping("Meta+K")).toBe(false);
+    expect(shortcutLeavesTyping("Alt+Meta+K")).toBe(true);
     expect(shortcutLeavesTyping("Alt+K")).toBe(true);
   });
   test("detects desktop and mobile client platforms", () => {

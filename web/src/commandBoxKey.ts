@@ -1,9 +1,9 @@
 /**
  * When the command box's key (Cmd+K on a Mac, Ctrl+K elsewhere) opens it.
  * Where text is typed (a terminal, the Chat composer, any text field) Ctrl+K
- * is a shell and editor key, so there only a binding with Alt or Meta opens
- * the box: Cmd+K on a Mac, Ctrl+Alt+K elsewhere. Inside the box, its key
- * closes it.
+ * and Cmd+K are shell and editor keys, so there only a binding with Alt opens
+ * the box: Cmd+Option+K on a Mac, Ctrl+Alt+K elsewhere. Inside the box, its
+ * key closes it.
  */
 
 import { shortcutFromEvent, shortcutLeavesTyping } from "./shortcutBindings";

@@ -938,9 +938,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   **Enter** or a click selects it as clicking it in the view does. It also
   goes to another view. In Zen it opens from the **⌘** button beside the
   view buttons; on a phone, from **Find or act** in the corner view menu. In
-  a terminal, the Chat composer or a text field `Ctrl+K` stays a shell and
-  editor key; `Ctrl+Alt+K` opens the box from there (`Cmd+K` on a Mac works
-  everywhere).
+  a terminal, the Chat composer or a text field `Ctrl+K` and `Cmd+K` stay
+  shell and editor keys; `Ctrl+Alt+K` (`Cmd+Option+K` on a Mac) opens the box
+  from there.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
@@ -1188,8 +1188,8 @@ root and revalidate its qualified binding before acting.
   in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
   panes before dropping. Overflowing desktop tab strips offer scroll controls.
 - Search workspace, worktree, file, tab, pane, and agent actions in the command
-  menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Ctrl+Alt+K` from a terminal or
-  text field). A workspace-relative or
+  menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Cmd+Option+K`/`Ctrl+Alt+K`
+  from a terminal or text field). A workspace-relative or
   absolute path opens the file.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
@@ -1795,7 +1795,7 @@ Common defaults (Linux/Android overrides follow the table):
 
 | Action | macOS / iOS | Windows / Linux / Android |
 | --- | --- | --- |
-| Command menu | `Cmd+K` | `Ctrl+K`; `Ctrl+Alt+K` in a terminal or text field |
+| Command menu | `Cmd+K`; `Cmd+Option+K` in a terminal or text field | `Ctrl+K`; `Ctrl+Alt+K` in a terminal or text field |
 | Sidebar | `Cmd+B` | `Ctrl+Alt+B` |
 | Workspace Inspector | `Cmd+Shift+B` | `Ctrl+Alt+Shift+B` |
 | Expand / restore Inspector (desktop) | `Cmd+Option+Enter` | `Ctrl+Alt+Shift+Enter` |
