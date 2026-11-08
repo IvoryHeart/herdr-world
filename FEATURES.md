@@ -451,6 +451,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is admitted. Search and Hosts
     use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
+  - **Search shows where things are.** Typing in Town's search lights up the
+    matching buildings, rooms, tables and agents on the map and dims the rest
+    of Town a little; the camera stays put. The result line counts matches and
+    how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
+    click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
+    a readable zoom and pulses it; choosing it again, or **Enter** a second
+    time, opens it as selecting does. A result Town does not draw opens at
+    once. Under **Town calm motion** or reduced motion the camera jumps and
+    nothing pulses. **Escape**, the phone search's **✕** or an empty box
+    ends the search and returns the camera to where the search found it.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
   the runtime's existing version and owner. Only a missing Herdr is installed;
@@ -777,6 +787,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   fresh admission. Terminal recovery offers **Retry terminal** and an explicit
   **Reload app**; a no-frame watchdog never reloads the page automatically.
 - Search covers observed entities beyond renderer limits and pages matching results.
+  Every view's search matches each word of the query in any order and any
+  case, as Pane Search does: `builder login` finds the builder agent whose
+  task mentions login, in Town, Board and Desk alike. Each result shows its
+  type (building, room, table, agent or terminal), its name and status mark,
+  and its place (`host › room › table`), so twins on different hosts are told
+  apart. Names come first, then places, then task-summary matches, which show
+  a short excerpt with the matched words picked out.
   Counts distinguish observations, rendering omissions and unavailable coverage.
 - Use **Arrange windows** in the shared shell to show the active terminal alone,
   cascade open windows, fit them in columns or rows, tile them in a grid, or

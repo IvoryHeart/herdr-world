@@ -87,6 +87,67 @@
   width: 100%;
   margin: 0;
 }
+.world-search-results nav {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.world-search-result {
+  min-width: 0;
+  max-width: 340px;
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 8px;
+  text-align: left;
+}
+.world-search-result[aria-current="true"] {
+  border-color: var(--accent, #79a6ff);
+  box-shadow: inset 0 0 0 1px var(--accent, #79a6ff);
+}
+.world-search-result > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-search-result-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.world-search-result-kind {
+  flex: 0 0 auto;
+  color: var(--muted, #9da7b4);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.world-search-result-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.world-search-result-stale,
+.world-search-result-place,
+.world-search-result-excerpt {
+  color: var(--muted, #9da7b4);
+  font-size: 11px;
+}
+.world-search-result-excerpt mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  color: var(--text, #edf2f7);
+  background: var(--accent-soft, rgb(121 166 255 / 24%));
+}
+/* The phone's search floats over the top of the results. */
+body:has(> .world-view-search-overlay) .world-search-results {
+  padding-top: 52px;
+}
 .world-outside-filter {
   position: absolute;
   bottom: 4px;

@@ -24,6 +24,7 @@ import {
 } from "../townLayout";
 import { townRoomsMoved } from "../townRoomPlace";
 import type { TownTarget } from "../townTargets";
+import type { TownSearchRect } from "../townSearch";
 import { townCenterEmblem } from "../townCenter";
 import { TOWN_TRANSITION_SECONDS } from "../townTransition";
 
@@ -67,6 +68,9 @@ export class TownSceneCamera {
   private lastShape: string | null = null;
   private lastLayout: TownLayout | null = null;
   private consumedRoomFocus: number | null = null;
+  /** Where the camera looked before a search moved it, at the focus point. */
+  private searchReturn: TownPose | null = null;
+  private consumedSearch: number | null = null;
 
   /**
    * `poses` keeps the camera per town shape for the page's lifetime, across
@@ -552,5 +556,63 @@ export class TownSceneCamera {
       return;
     this.zoomToRoom(layout, request.roomKey);
     this.consumedRoomFocus = request.seq;
+  }
+
+  /**
+   * Show a chosen search match where it can be read (a new `seq` asks
+   * again): a building or room whole, anything else at desk level. The
+   * first remembers the camera, which `searchEnd` returns to. Calm jumps.
+   */
+  searchFocus(
+    request: { key: string; seq: number },
+    rect: TownSearchRect,
+    layout: TownLayout,
+    calm: boolean,
+  ) {
+    const camera = this.camera;
+    const limits = camera?.limits;
+    if (!camera || !limits || this.consumedSearch === request.seq) return;
+    this.consumedSearch = request.seq;
+    if (!this.searchReturn) {
+      const focus = camera.focusPoint();
+      const at = camera.toWorld(focus.x, focus.y);
+      this.searchReturn = { x: at.x, y: at.y, z: camera.z };
+    }
+    const duration = calm ? 0 : 0.7;
+    const building = layout.buildings.find((b) => b.hostKey === request.key);
+    const room = building
+      ? undefined
+      : layout.buildings
+          .flatMap((b) => b.rooms)
+          .find((r) => r.key === request.key);
+    if (building) {
+      camera.flyTo(
+        (building.x + building.w / 2) * T,
+        (building.y + (building.h + TOWN_FACADE) / 2) * T,
+        buildingZoom(camera, building),
+        duration,
+      );
+    } else if (room) {
+      const z = roomZoom(camera, room);
+      const focus = townRoomFocus(room, camera.viewport, z);
+      camera.flyTo(focus.x, focus.y, z, duration);
+    } else {
+      // Close enough to read its name, never further out than now.
+      const z = Math.min(
+        limits.max,
+        Math.max(camera.z, limits.desk * 1.2, limits.desk + 0.2),
+      );
+      camera.flyTo(rect.x + rect.w / 2, rect.y + rect.h / 2, z, duration);
+    }
+    this.invalidate("search");
+  }
+
+  /** The search ended: back to where it found the camera, if it moved it. */
+  searchEnd(calm: boolean) {
+    const back = this.searchReturn;
+    this.searchReturn = null;
+    if (!back || !this.camera) return;
+    this.camera.flyTo(back.x, back.y, back.z, calm ? 0 : 0.6);
+    this.invalidate("search");
   }
 }

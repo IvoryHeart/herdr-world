@@ -88,7 +88,8 @@ import type { TownMoveFlow } from "./town/townMoveMenu";
 import { useTownReception } from "./town/useTownReception";
 import { townDeskAgentKey } from "./town/townOpen";
 import type { WorldObject } from "./worldObject";
-import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
+import { WorldViewToolbar } from "./WorldViewToolbar";
+import { useTownSearch } from "./town/useTownSearch";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
 import { reviewedAgentKeys, useReviewedWork } from "./useReviewedWork";
 import { useShownReport } from "./shownReport";
@@ -175,11 +176,6 @@ export default function TownView({
     EMPTY_OFFICE_OBSERVABILITY,
   );
   const [observabilityRevision, setObservabilityRevision] = useState(0);
-  const [query, setQuery] = useState("");
-  const searchMatches = useMemo(
-    () => worldSearchMatches(world, query),
-    [query, world],
-  );
   preferencesRef.current = preferences;
 
   useEffect(() => {
@@ -752,31 +748,20 @@ export default function TownView({
     };
   };
 
+  const search = useTownSearch(world, office, onSelect);
+
   if (!world.hosts.length) return <TownNoHosts />;
 
-  const toolbar = (
-    <WorldViewToolbar
-      viewLabel="Town"
-      query={query}
-      onQueryChange={setQuery}
-      resultLabel={
-        query.trim()
-          ? searchMatches.length
-            ? `${searchMatches.length} matches · Enter to select`
-            : "No matches"
-          : undefined
-      }
-      onSubmit={() => {
-        const match = searchMatches[0];
-        if (match) void onSelect(match.id);
-      }}
-    />
-  );
+  const toolbar = <WorldViewToolbar viewLabel="Town" {...search.toolbar} />;
 
   return (
     <AnswerOutboxContext.Provider value={townSummary.openOutbox}>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
-      <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+      <WorldSearchResults
+        world={world}
+        onSelect={onSelect}
+        {...search.results}
+      />
       {townSummary.window}
       <div
         className={`world-office-shell world-stage-shell town-view-shell`}
@@ -948,6 +933,7 @@ export default function TownView({
               ...townRoomActions,
               placeColor: placeColorOf,
             }}
+            {...search.canvas}
           />
         </div>
         {sceneHover && sceneHover.key !== selectedKey ? (
