@@ -1,26 +1,35 @@
+import { useEffect } from "react";
 import { EllipsisVertical } from "lucide-react";
-import type { useMobileControls } from "../../components/MobileControls";
+import { useMobileControls } from "../../components/MobileControls";
 
 /**
- * Town's camera controls, centred on the right edge: zoom in and out, and
- * ALL for the whole town. On the phone the shell's More menu joins them, so
- * Town has one set of floating controls.
+ * Town's camera buttons. The zoom buttons step between whole town, one
+ * building, one room and one desk, choosing whatever is nearest the centre
+ * of the screen. The current step is read from the zoom, so pinching and
+ * wheel zoom mix freely. On the phone the shell's More menu joins them.
  */
 export function TownZoomControls({
-  onZoom,
+  onStep,
   onAll,
-  shellControls,
 }: {
-  onZoom(direction: 1 | -1): void;
+  onStep(direction: 1 | -1): void;
   onAll(): void;
-  shellControls: ReturnType<typeof useMobileControls>;
 }) {
+  const shellControls = useMobileControls();
+  const ownsShellControls = shellControls !== null;
+  useEffect(() => {
+    if (!ownsShellControls) return;
+    document.documentElement.dataset.townControls = "";
+    return () => {
+      delete document.documentElement.dataset.townControls;
+    };
+  }, [ownsShellControls]);
   return (
     <div className="town-zoom" role="group" aria-label="Camera">
-      <button type="button" aria-label="Zoom in" onClick={() => onZoom(1)}>
+      <button type="button" aria-label="Zoom in" onClick={() => onStep(1)}>
         +
       </button>
-      <button type="button" aria-label="Zoom out" onClick={() => onZoom(-1)}>
+      <button type="button" aria-label="Zoom out" onClick={() => onStep(-1)}>
         −
       </button>
       <button
@@ -32,6 +41,8 @@ export function TownZoomControls({
         ALL
       </button>
       {shellControls ? (
+        // The shell's More menu joins the camera group on the phone, so
+        // Town has one set of floating controls.
         <button
           type="button"
           className="town-zoom-more"

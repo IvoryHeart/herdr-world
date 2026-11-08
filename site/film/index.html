@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#080b12">
 <title>Promoted to CEO - a Herdr.World film</title>
-<meta name="description" content="A 62-second film about Herdr.World: your agents work in a pixel Town, plan on a Board and answer you in Chat.">
+<meta name="description" content="An 88-second film about Herdr.World: your agents live in a pixel Town, ride the bus home, plan on a Board and ask you in Chat, even at 3 AM.">
 <meta property="og:type" content="video.other">
 <meta property="og:title" content="Promoted to CEO - a Herdr.World film">
-<meta property="og:description" content="You hired 12 AI agents. They hired a babysitter. Herdr.World gives them a Town and promotes you to CEO.">
+<meta property="og:description" content="You hired 12 AI agents. They hired a babysitter. Herdr.World gives them a Town, a bus home and a morning recap, and promotes you to CEO.">
 <meta property="og:url" content="https://herdr.world/film/">
 <meta property="og:image" content="https://herdr.world/assets/herdr-world-film-poster.jpg">
 <meta property="og:image:width" content="1280">
@@ -157,9 +157,9 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="eyebrow"><a href="../">← Herdr.World</a><span>Promoted to CEO · 62 s · sound on</span></div>
+  <div class="eyebrow"><a href="../">← Herdr.World</a><span>Promoted to CEO · 88 s · sound on</span></div>
   <div class="stage">
-    <video id="video" controls playsinline preload="metadata" poster="../assets/herdr-world-film-poster.jpg" aria-label="Promoted to CEO, a 62-second film about Herdr.World" aria-describedby="film-summary"></video>
+    <video id="video" controls playsinline preload="metadata" poster="../assets/herdr-world-film-poster.jpg" aria-label="Promoted to CEO, an 88-second film about Herdr.World" aria-describedby="film-summary"></video>
     <button class="yt" id="yt" type="button" hidden><span>▶ Play on YouTube<br><small>Loads youtube-nocookie.com only when you click</small></span></button>
     <canvas id="film" width="1920" height="1080" role="img" aria-label="Animated film: Promoted to CEO, about Herdr.World. A text version follows the player." aria-describedby="film-summary"></canvas>
     <p class="rotate-hint" aria-hidden="true">Turn your phone sideways for a bigger picture</p>
@@ -167,12 +167,12 @@
       <span class="disc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l16 9-16 9z"/></svg></span>
     </button>
   </div>
-  <p id="film-summary" class="sr-only">Your AI agents become pixel people in a Town: workspaces are rooms and tabs are desks. Finished or blocked agents queue at reception, checked agents rest in the lounge, and you answer them in Chat, from a peek or a chat window docked beside Town. Every host is a building. Board shows the same terminals as cards and strings, and the phone app lets you reply from anywhere.</p>
+  <p id="film-summary" class="sr-only">Your AI agents become pixel people in a Town: workspaces are rooms and tabs are desks. Finished or stuck agents queue at reception, checked ones rest at the bar, and you answer them in Chat. An agent dropped in the bin walks to a bus stop and leaves on a red double-decker; a new agent hired at the town center walks to its desk. Every host is a building, with fuel gauges and expenses boards. Board shows the same agents as cards and strings. At 3 AM an agent asks from your phone and you answer from Needs you; in the morning Since you left sums up the night over a town of 291 agents.</p>
   <div class="bar">
     <button id="play" type="button">Play</button>
     <button id="restart" type="button" aria-label="Restart from the beginning">↺</button>
-    <input id="scrub" type="range" min="0" max="620" value="619" aria-label="Seek">
-    <span id="clock">1:02 / 1:02</span>
+    <input id="scrub" type="range" min="0" max="880" value="879" aria-label="Seek">
+    <span id="clock">1:28 / 1:28</span>
     <button id="mute" type="button" aria-pressed="false">Sound on</button>
     <button id="fullscreen" type="button" aria-pressed="false">Full screen</button>
   </div>
@@ -183,14 +183,17 @@
     <ol>
       <li><b>0:00 — 2:47 AM.</b> A wall of terminals multiplies from 16 to 63; one by one they stop and wait for an answer. “You hired 12 AI agents. They hired a babysitter. (It’s you.)”</li>
       <li><b>0:09 — The promotion.</b> The terminals fall away, <code>herdr-world</code> is typed, and a stamp lands: “Promoted to CEO of a company that never sleeps.”</li>
-      <li><b>0:13 — Town.</b> The roof lifts off a pixel office. “Workspaces are rooms. Tabs are desks.” Each desk carries a nameplate in its terminal’s colour, and agents type at their tables.</li>
-      <li><b>0:17 — Reception.</b> One agent finishes and walks to reception with a ✓; another needs an answer and joins the queue with a “?”. “Done or stuck? They come to reception.”</li>
-      <li><b>0:21 — Lounge.</b> The finished work is checked, so that agent heads to the lounge sofa. “Checked off? Off to the lounge.”</li>
-      <li><b>0:24 — Chat.</b> A click on the waiting agent opens its peek, which shows its latest Chat message, “Push 3 commits to origin and open a PR?”, with answers and an Open chat button. Open chat docks the conversation as a window on the right; you reply “Yes, push it and open the PR.” and the agent walks back to its desk. “Answer in Chat. Peek to answer, or open the chat.”</li>
-      <li><b>0:27 — Every host.</b> The camera pulls back to a street of three buildings, one per host, each with its own reception board. “Every host is a building. Local or over plain OpenSSH. Nothing to get but herdr-world.”</li>
-      <li><b>0:37 — Board.</b> The same terminals appear as cards strung to their workspaces, in the same colours; sticky notes drop in and are strung to the work they describe. “Plan on the Board.”</li>
-      <li><b>0:46 — Pocket.</b> A phone shows Town and a notification: an agent on another host needs you. Its chat fills the phone screen; you answer and it goes back to work. “Herd from your pocket.”</li>
-      <li><b>0:53 — Finale.</b> The whole herd walks across the screen. “Stop babysitting. Start herding.” Install with <code>npx @ivoryheart/herdr-world</code> from https://herdr.world.</li>
+      <li><b>0:13 — Town.</b> The camera drops from the town center to a building and its roof lifts off. “Workspaces are rooms. Tabs are desks.” Each desk carries a nameplate in its terminal’s colour.</li>
+      <li><b>0:17 — Reception.</b> One agent finishes and walks up to reception, at the top of the building, with a ✓; another needs an answer and joins the queue with a “!”. “Done or stuck? They come to reception.” The finished one is checked off and walks down to the bar.</li>
+      <li><b>0:24 — Chat.</b> A click on the waiting agent opens its peek; Open chat docks the conversation beside Town, in Town’s gold-on-dark look. You reply “Yes, push it and open the PR.” and the agent walks back to its desk.</li>
+      <li><b>0:27 — The bus.</b> You drag an idle agent from the bar onto the bin. It walks out of the front door to the London bus stop; the stop’s clock counts down, a red double-decker pulls up, the agent climbs aboard and the bus drives off. “Done with one? Put it on the bus.”</li>
+      <li><b>0:34 — The town center.</b> A click on the domed town center opens its ring: New agent, Town master, Needs you, Summary, Profiles and New room. New agent sends a new agent out of its doors, along the street, in at the front door and to an empty desk, where it sits with a sparkle and its name. “Hire at the town center.”</li>
+      <li><b>0:42 — Every host.</b> The camera pulls back over the woods and ponds to three buildings, one per host, each with its reception board over the street. “Every host is a building. One town. Local or over plain OpenSSH.”</li>
+      <li><b>0:47 — Fuel and bill.</b> The Town board shows Claude and Codex subscription limits as fuel gauges (Codex is low), the city expenses billboard shows today’s spend and each reception board its host’s. “Know the fuel. Know the bill.”</li>
+      <li><b>0:50 — Board.</b> The same agents appear as cards strung to their workspaces, in the same colours, with Board’s hub beside its bin; sticky notes drop in and are strung to their work. “Plan on the Board.”</li>
+      <li><b>0:56 — 3:12 AM.</b> Under the moon a phone buzzes: “metrics asks you: Keep the best checkpoint and delete the other 47?” Needs you opens full screen; you answer “Keep the best three.”, attach loss-curve.png and send. “Herd from your pocket. Agents ask you with herdr-world ask. Answer from Needs you, files and all.” Then sleep.</li>
+      <li><b>1:06 — 7:30 AM.</b> Dawn over a much bigger town. The Town board’s Since you left lists who asked for you, what finished and six merged pull requests. At a full reception the overflow crowds the lobby cursing “#@!”, and some have fallen asleep on the floor. The camera pulls back over three buildings, 24 rooms and 312 desks. “12 agents? Try 291.”</li>
+      <li><b>1:17 — Finale.</b> The herd walks across the screen with the bus behind. “Stop babysitting. Start herding.” Install with <code>npx @ivoryheart/herdr-world</code> from https://herdr.world.</li>
     </ol>
   </details>
   <p class="note">The video is recorded from the live film, which is drawn and scored in your browser with canvas pixels and Web Audio.
@@ -206,7 +209,9 @@
 'use strict';
 const LOGO_SRC = "data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkhlcmRyIGxvZ28iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCBtZWV0Ij4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iI2Q5ZGFkOCIvPgogIDxnIGZpbGw9IiMzMDM0MzgiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAgNTEyKSBzY2FsZSguMSAtLjEpIiBzdHJva2U9Im5vbmUiPgogICAgPHBhdGggZD0iTTI3OTQgMzcxMCBjLTEyOSAtMzMgLTI5OSAtMTM1IC0zNTkgLTIxNCAtMjEgLTI4IC0yNiAtNDIgLTIxIC02MyA5IC0zOCAxNTQgLTE3OCAxOTkgLTE5MiAzMiAtMTEgNDEgLTkgMTA0IDIzIDE3MSA4NiAzNTQgNzAgNDc1IC00MyAxNTAgLTEzOCAxNTAgLTM3OSAwIC01MTEgLTEwNyAtOTUgLTI3OCAtOTQgLTM4NiAyIGwtNDYgNDAgLTExIC0yOSBjLTE2IC00MCAtMTQgLTEyMiA0IC0xNjQgNjAgLTE0NCAyNjQgLTIyMiA0NTIgLTE3NCAzNjAgOTIgNTU5IDQ5NCA0MzAgODY4IC0zNiAxMDMgLTgxIDE3MyAtMTc1IDI2NyAtNzEgNzIgLTEwMCA5MyAtMTgwIDEzMiAtNTIgMjYgLTEyNyA1NCAtMTY3IDYyIC05NiAyMSAtMjMwIDIwIC0zMTkgLTR6IE0yMTgzIDM2OTUgYy0xMTYgLTMyIC0yMjEgLTEwOCAtMjczIC0xOTkgLTE3IC0yOCAtMzAgLTU0IC0zMCAtNTggMCAtNCAyMCAxIDQ1IDEyIDY2IDI4IDIyMCA2OCAyOTQgNzYgNjQgNyA2NSA3IDEzNyA4MyA0MCA0MSA3MSA3NyA2OSA3OSAtMiAyIC0yMSA4IC00MiAxMyAtNTUgMTIgLTE0MCAxMCAtMjAwIC02eiBNMjIxMiAzMzg4IGMtMTU5IC0yMiAtMzkwIC0xMjIgLTU1OSAtMjQxIC0yOTkgLTIxMCAtNTg1IC02MDAgLTYwOSAtODI4IC0xMiAtMTE4IDQwIC0yNTEgMTI1IC0zMTggOTYgLTc2IDE3OCAtOTggNDI2IC0xMTYgMTEwIC04IDIyNCAtMjEgMjU0IC0yOSAxMjUgLTM0IDIzMCAtMTE1IDI3MiAtMjExIDExIC0yNCAyNCAtODEgMzAgLTEyNyAyMCAtMTcwIDY1IC0yNzEgMTY2IC0zNzQgMzQgLTM1IDYzIC02NSA2MyAtNjcgMCAtMSAtMTAgLTI3IC0yMiAtNTcgLTI5IC03NiAtMzcgLTI1OSAtMTQgLTM1MCA0MiAtMTcwIDE1OCAtMzE4IDMxMSAtMzk3IDQ0IC0yMyA5OCAtNDYgMTIwIC01MiAyMiAtNiA0NSAtMTQgNTEgLTE4IDUgLTUgMTUgLTQ4IDIyIC05NiA2IC00OCAxNCAtOTIgMTcgLTk3IDQgLTYgNDE1IC0xMCAxMTMxIC0xMCBsMTEyNCAwIDAgMTU4NCAwIDE1ODUgLTU1IC0xOSBjLTg0IC0yOSAtMTQzIC02OCAtMjMyIC0xNTQgbC04MyAtNzggLTU0IDQ5IGMtMTExIDEwMiAtMjMzIDE1MSAtMzkxIDE2MCAtMTEzIDYgLTE5OSAtMTAgLTI5OCAtNTQgbC02MCAtMjcgLTI2IDM0IGMtMzcgNTEgLTEyMCAxMzQgLTEyNyAxMjggLTMgLTQgMCAtMzQgNyAtNjcgMTcgLTg5IDcgLTI2OCAtMjEgLTM1NiAtMTAzIC0zMjggLTM3NyAtNTQ1IC02ODggLTU0NSAtMTYxIDAgLTI3MyA0MSAtMzczIDEzNyAtMzcgMzUgLTY2IDc1IC04NSAxMTYgLTc5IDE3MyAtOCA0MDcgMTI0IDQwNyA0NCAwIDY4IC0xNCAxMTcgLTY2IDc0IC03OCAxNjcgLTgyIDIzOCAtOSA2MCA2MiA3MiAxNDcgMzMgMjMxIC00MiA5MCAtMTIwIDEzMCAtMjM4IDEyMiAtNTAgLTQgLTg1IC0xNCAtMTMxIC0zNyAtODkgLTQ1IC0xMjIgLTUyIC0xNzYgLTQwIC05MiAyMCAtMjYyIDE2MyAtMzAyIDI1MyAtMTEgMjUgLTIxIDQ1IC0yMiA0NSAtMSAtMSAtMzAgLTYgLTY1IC0xMXogbS0yNTYgLTUwNSBjMTE1IC04OCAxMjkgLTEwMiAxMzIgLTEzMSAyIC0xOCAtMiAtNDAgLTkgLTQ5IC03IC04IC02OSAtNTUgLTEzOCAtMTA1IC0xMDMgLTczIC0xMzAgLTg4IC0xNTEgLTgzIC0zNSA4IC01MSAzNCAtNDggNzQgMyAzMSAxMiA0MiA4MyA5MiA0NCAzMSA4MCA2MSA4MiA2NiAxIDQgLTMwIDMxIC02OSA1OCAtMzkgMjggLTc3IDU2IC04NSA2MyAtMTggMTkgLTE2IDcyIDQgOTQgMzIgMzUgNjMgMjMgMTk5IC03OXogbTUyOCAtODggYzIzIC0yNCAyOCAtNTIgMTQgLTgyIGwtMTMgLTI4IC0xNDEgLTMgYy0xMzAgLTIgLTE0MiAtMSAtMTU4IDE3IC0yMyAyNiAtMjQgNjYgLTEgOTEgMTYgMTggMzIgMjAgMTUxIDIwIDEwNSAwIDEzNiAtMyAxNDggLTE1eiIvPgogIDwvZz4KPC9zdmc+Cg==";
 const TA = window.HerdrTownArt;
-const W = 1920, H = 1080, DUR = 62;
+const W = 1920, H = 1080, DUR = 88;
+// The frame an embedded player shows before it plays, and the poster's frame.
+const POSTER_T = 32.4;
 
 // ---------- math ----------
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
@@ -346,14 +351,20 @@ const CC = [
   [10.9, 13.2, 'Promoted to CEO of a company that never sleeps.'],
   [14.2, 17.3, 'Workspaces are rooms. Tabs are desks.'],
   [17.6, 20.8, 'Done or stuck? They come to reception.'],
-  [21.0, 23.7, 'Checked off? Off to the lounge.'],
+  [21.0, 23.7, 'Checked off? Off to the bar.'],
   [23.9, 27.1, 'Answer in Chat. Peek to answer, or open the chat.'],
-  [30.6, 33.9, 'Every host is a building. One town.'],
-  [34.0, 36.9, 'Local or over plain OpenSSH. Nothing to get but herdr-world.'],
-  [37.7, 45.9, 'Plan on the Board: cards and strings, in the same colours as Town.'],
-  [46.6, 53.2, 'Herd from your pocket. Install it as an app and answer agents from anywhere.'],
-  [53.2, 56.0, 'Stop babysitting. Start herding.'],
-  [56.5, 62, 'Herdr.World. npx @ivoryheart/herdr-world. https://herdr.world']
+  [29.4, 34.0, 'Done with one? Put it on the bus. Drop it in the bin; it walks to the stop and the next bus takes it.'],
+  [34.4, 41.4, 'Hire at the town center. A new agent steps out, walks to work and takes a desk.'],
+  [42.8, 46.9, 'Every host is a building. One town. Local or over plain OpenSSH. Nothing to get but herdr-world.'],
+  [47.7, 50.6, 'Know the fuel. Know the bill. Claude and Codex limits left, and what every host spends today.'],
+  [51.0, 57.3, 'Plan on the Board: the same agents as cards and strings, in the same colours as Town.'],
+  [57.3, 64.4, 'Herd from your pocket. Agents ask you with herdr-world ask; answer from Needs you, files and all.'],
+  [64.6, 66.4, 'Then sleep.'],
+  [66.7, 69.6, 'Wake up to Since you left: what finished, what merged and who asked for you overnight.'],
+  [70.5, 73.2, 'Kept waiting? They grumble. A full reception spills into the lobby, then they nap on the floor.'],
+  [73.6, 77.4, '12 agents? Try 291. 3 hosts, 24 rooms, 312 desks, one Town.'],
+  [77.8, 80.6, 'Stop babysitting. Start herding.'],
+  [81.1, 88, 'Herdr.World. npx @ivoryheart/herdr-world. https://herdr.world']
 ];
 
 // ---------- terminals ----------
@@ -507,50 +518,41 @@ function S2(t) {
   });
 }
 
-// ================= TOWN: the app's own layout, paint and sprites =================
-const TT = TA.TOWN_TILE, AS = TA.TOWN_AGENT_SCALE;
-const TOWN_HOSTS = [['laptop', 'local'], ['gpu-box', 'ssh'], ['build-vm', 'ssh']];
-// [room key, host, label, [[desk key, panes, terminal colour]]]
-const TOWN_ROOMS = [
-  ['atlas', 'laptop', 'Atlas', [['web', 2, 'blue'], ['api', 1, 'orange'], ['docs', 1, 'purple']]],
-  ['harbor', 'laptop', 'Harbor', [['cli', 2, 'teal'], ['checks', 1, 'green']]],
-  ['meadow', 'laptop', 'Meadow', [['evals', 1, 'pink'], ['notes', 1, 'yellow']]],
-  ['train', 'gpu-box', 'Train', [['trainer', 1, 'red'], ['sweep', 2, 'teal'], ['data', 1, 'blue']]],
-  ['ci', 'build-vm', 'CI', [['pipeline', 2, 'green'], ['release', 1, 'purple']]]
-];
-const DESK_COLOR = {};
-TOWN_ROOMS.forEach(r => r[3].forEach(d => { DESK_COLOR[d[0]] = d[2]; }));
-// Agents: identity, kind, desk and seat; st = [[time, status]]; moves = [[t0, t1, place, index]].
-const AGENTS = [
-  { k: 'builder', kind: 'claude', desk: 'web', seat: 0 },
-  { k: 'stylist', kind: 'gemini', desk: 'web', seat: 1 },
-  { k: 'reviewer', kind: 'codex', desk: 'api', seat: 0, st: [[18.2, 'blocked'], [26.1, 'working']], moves: [[18.6, 20.5, 'queue', 1], [26.4, 28.6, 'seat']] },
-  { k: 'scribe', kind: 'claude', desk: 'docs', seat: 0, st: [[17.4, 'done'], [21.0, 'idle']], moves: [[17.8, 19.7, 'queue', 0], [21.25, 23.3, 'lounge', 2]] },
-  { k: 'migrator', kind: 'claude', desk: 'cli', seat: 0 },
-  { k: 'tester', kind: 'codex', desk: 'checks', seat: 0 },
-  { k: 'evaluator', kind: 'gemini', desk: 'evals', seat: 0 },
-  { k: 'sweeper', kind: 'claude', desk: 'notes', seat: 0, st: [[0, 'idle']], at: ['lounge', 0] },
-  { k: 'trainer', kind: 'claude', desk: 'trainer', seat: 0 },
-  { k: 'tuner', kind: 'codex', desk: 'sweep', seat: 0 },
-  { k: 'metrics', kind: 'gemini', desk: 'data', seat: 0, st: [[0, 'blocked']], at: ['queue', 0] },
-  { k: 'ci-fixer', kind: 'codex', desk: 'pipeline', seat: 0 },
-  { k: 'releaser', kind: 'claude', desk: 'release', seat: 0, st: [[0, 'done']], at: ['queue', 0] }
-];
-const SHELLS = { cli: [1], sweep: [1], pipeline: [1] };
-const GLOW = { working: '111,195,255', blocked: '255,181,71', done: '123,224,143', shell: '127,191,122' };
 
-let TW = null;
-function buildTown() {
+// ================= TOWN: the app's own layout, paint, sprites and routes =================
+const TT = TA.TOWN_TILE, AS = TA.TOWN_AGENT_SCALE;
+const tileFeet = (x, y) => [x * TT + 8, y * TT + 13];
+const GLOW = { working: '111,195,255', blocked: '255,181,71', done: '123,224,143', shell: '127,191,122' };
+let SPRITES = null;
+const townSprites = () => SPRITES || (SPRITES = TA.buildTownSprites());
+const SCREENS = new Map();
+function screenOf(state, frame) {
+  const key = state + ':' + frame;
+  let c = SCREENS.get(key);
+  if (!c) SCREENS.set(key, (c = TA.townScreen(state, frame)));
+  return c;
+}
+
+/**
+ * A Town built the way the app builds one: its layout, ground and landscape,
+ * town center, buildings, walkable floors and bus route, from rooms and agents.
+ * spec: { hosts: [[key, how]], rooms: [[key, host, label, [[desk, seats, colour]]]],
+ *         agents: [{ k, kind, desk, seat, st, at, moves }], shells, margin }
+ */
+function makeTown(spec) {
+  const deskColor = {};
+  spec.rooms.forEach(r => r[3].forEach(d => { deskColor[d[0]] = d[2]; }));
   const input = {
-    hosts: TOWN_HOSTS.map(([key], i) => ({ key, displayOrder: i })),
-    rooms: TOWN_ROOMS.map(([key, hostKey, , desks], i) => ({ key, hostKey, order: i, deskKeys: desks.map(d => d[0]), deskSeats: desks.map(d => d[1]) }))
+    hosts: spec.hosts.map(([key], i) => ({ key, displayOrder: i })),
+    rooms: spec.rooms.map(([key, hostKey, , desks], i) => ({ key, hostKey, order: i, deskKeys: desks.map(d => d[0]), deskSeats: desks.map(d => d[1]) }))
   };
   const { layout } = TA.layoutTown(input, 'wide');
-  const sp = TA.buildTownSprites();
-  const Wp = layout.width * TT, Hp = layout.height * TT;
+  const sp = townSprites();
+  const M = spec.margin * TT, Wp = layout.width * TT + 2 * M, Hp = layout.height * TT + 2 * M;
   const base = document.createElement('canvas'); base.width = Wp; base.height = Hp;
   const g = base.getContext('2d'); g.imageSmoothingEnabled = false;
-  g.drawImage(TA.paintTownGround(layout, { x: 0, y: 0, w: Wp, h: Hp }), 0, 0);
+  g.drawImage(TA.paintTownGround(layout, { x: -M, y: -M, w: Wp, h: Hp }), 0, 0);
+  g.translate(M, M);
   const fx = layout.plaza.x * TT + 8, fy = layout.plaza.y * TT + 4;
   const ell = (x, y, rx, ry, c) => { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fillStyle = c; g.fill(); };
   ell(fx + 2, fy + 6, 26, 12, 'rgba(0,0,0,.18)'); ell(fx, fy + 2, 25, 11, '#9d978c'); ell(fx, fy, 25, 11, '#b9b2a5');
@@ -561,11 +563,14 @@ function buildTown() {
   layout.bushes.forEach(b => items.push([b.y * TT + 13, () => g.drawImage(sp.bush, b.x * TT - 2, b.y * TT + 2)]));
   layout.benches.forEach(b => items.push([b.y * TT + 12, () => g.drawImage(sp.bench, b.x * TT, b.y * TT + 2)]));
   items.push([layout.board.y * TT + 14, () => g.drawImage(sp.board, layout.board.x * TT - 8, layout.board.y * TT - 16)]);
+  // The town center, Town's landmark across the first street.
+  const center = layout.center;
+  items.push([(center.y + center.h) * TT, () => g.drawImage(TA.paintTownCenter(center.w), center.x * TT, center.y * TT)]);
   items.sort((a, b) => a[0] - b[0]).forEach(i => i[1]());
-  const cells = new Map(), roofs = [];
+  const cells = new Map(), roofs = [], nav = new Map();
   layout.buildings.forEach((b, i) => {
     const theme = TA.TOWN_HOST_THEMES[i % TA.TOWN_HOST_THEMES.length];
-    g.drawImage(TA.paintTownInterior(b, theme, { table: sp.table, tableSmall: sp.tableSmall, chair: sp.chair, chairBack: sp.chairBack, colorFor: k => DESK_COLOR[k] || 'blue' }), b.x * TT, b.y * TT);
+    g.drawImage(TA.paintTownInterior(b, theme, { table: sp.table, tableSmall: sp.tableSmall, chair: sp.chair, chairBack: sp.chairBack, colorFor: k => deskColor[k] || 'blue' }), b.x * TT, b.y * TT);
     b.plants.forEach(p => g.drawImage(sp.plant, p.x * TT, (p.y + 1) * TT - 24));
     const L = b.lounge;
     g.drawImage(sp.sofa, (L.x + 1) * TT - 1, (L.y + 1) * TT - 8);
@@ -579,41 +584,56 @@ function buildTown() {
     g.drawImage(TA.paintTownFacade(b, theme), b.x * TT, (b.y + b.h) * TT);
     roofs.push({ host: b.hostKey, c: TA.paintTownRoof(b, theme, false), x: b.x * TT - 4, y: b.y * TT - 12 });
     b.rooms.forEach(r => r.cells.forEach(cell => { if (cell.deskKey) cells.set(cell.deskKey, { cell, room: r, b }); }));
-  });
-  const occupants = {};
-  for (const [desk, info] of cells) occupants[desk] = Array.from({ length: info.cell.seats }, (_, i) => (SHELLS[desk] || []).includes(i) ? 'shell' : null);
-  AGENTS.forEach(a => {
-    const d = cells.get(a.desk);
-    Object.assign(a, { b: d.b, cell: d.cell, geo: TA.townSeat(d.cell, a.seat) });
-    occupants[a.desk][a.seat] = a;
-    for (const m of a.moves || []) m.path = null;
+    nav.set(b.hostKey, new TA.TownNavigation(b));
   });
   const hosts = new Map(layout.buildings.map(b => [b.hostKey, b]));
-  TW = { layout, sp, base, roofs, cells, occupants, hosts, screens: new Map() };
+  const occupants = {};
+  for (const [desk, info] of cells) occupants[desk] = Array.from({ length: TA.townDeskSlots(info.cell.seats).length }, (_, i) => i >= info.cell.seats ? null : (spec.shells?.[desk] || []).includes(i) ? 'shell' : null);
+  const town = { spec, layout, sp, base, M, roofs, cells, occupants, hosts, nav, deskColor, route: TA.townBusRoute(layout), crowds: new Map(), agents: [] };
+  for (const a of spec.agents) {
+    const d = cells.get(a.desk);
+    if (!d || occupants[a.desk][a.seat] === undefined) continue;
+    Object.assign(a, { town, b: d.b, cell: d.cell, geo: TA.townSeat(d.cell, a.seat) });
+    occupants[a.desk][a.seat] = a;
+    for (const m of a.moves || []) m.path = null;
+    town.agents.push(a);
+  }
+  return town;
+}
+function crowdOf(town, b) {
+  let spots = town.crowds.get(b.hostKey);
+  if (!spots) town.crowds.set(b.hostKey, (spots = TA.townCrowdSpots(b, town.nav.get(b.hostKey))));
+  return spots;
 }
 
-// ---------- town actors ----------
-const tileFeet = (x, y) => [(x + .5) * TT, (y + 1) * TT - 3];
+// ---------- town actors: places, indoor routes (the app's A*) and walks ----------
+function spotOf(a, place) {
+  if (place[0] === 'queue') return a.b.queue[place[1]];
+  if (place[0] === 'bar') return a.b.lounge.spots[place[1]];
+  if (place[0] === 'crowd') return crowdOf(a.town, a.b)[place[1]];
+  return null;
+}
+function placeTile(a, place) {
+  const s = spotOf(a, place);
+  if (s) return [s.x, s.y];
+  if (place[0] === 'door') return [a.b.entryX, a.b.y + 1];
+  return [a.geo.entry.x, a.geo.entry.y];
+}
 function placePoint(a, place) {
-  const b = a.b;
-  if (place[0] === 'queue') return tileFeet(b.queue[place[1]].x, b.queue[place[1]].y);
-  if (place[0] === 'lounge') return tileFeet(b.lounge.spots[place[1]].x, b.lounge.spots[place[1]].y);
+  const s = spotOf(a, place);
+  if (s) return tileFeet(s.x, s.y);
+  if (place[0] === 'door') return tileFeet(a.b.entryX, a.b.y + 1);
+  if (place[0] === 'at') return typeof place[1] === 'function' ? place[1](a) : place[1];
   return [a.geo.cx, a.geo.top ? a.geo.tableY + 12 : a.geo.tableY + 52];
 }
-// Each place walks to a hub in the lobby beside the reception counter.
-function toHub(a, place) {
-  const b = a.b, ly = (b.lobbyY + .5) * TT, hx = (b.counter.x - 2 + .5) * TT;
-  const p = placePoint(a, place);
-  if (place[0] === 'queue') return [p, [hx, p[1]], [hx, ly]];
-  if (place[0] === 'lounge') {
-    const uy = (b.lounge.y + b.lounge.h + .5) * TT, corr = (b.rooms[0].x - 1 + .5) * TT;
-    return [p, [p[0], uy], [corr, uy], [corr, ly], [hx, ly]];
-  }
-  const e = tileFeet(a.geo.entry.x, a.geo.entry.y);
-  return [p, e, [e[0], ly], [hx, ly]];
+/** Indoors, an agent walks the app's own A* path across its building's floor. */
+function indoor(a, from, to) {
+  const [sx, sy] = placeTile(a, from), [tx, ty] = placeTile(a, to);
+  const p = a.town.nav.get(a.b.hostKey).path(sx, sy, tx, ty) || [];
+  return [placePoint(a, from), ...p.map(([x, y]) => tileFeet(x, y)), placePoint(a, to)];
 }
-function route(a, from, to) {
-  const path = [...toHub(a, from), ...toHub(a, to).reverse()];
+function routeOf(a, from, to, opts) {
+  const path = opts && opts.via ? opts.via(a) : indoor(a, from, to);
   return path.filter((q, i) => !i || Math.hypot(q[0] - path[i - 1][0], q[1] - path[i - 1][1]) > .5);
 }
 function pathAt(path, p) {
@@ -630,29 +650,25 @@ function pathAt(path, p) {
   }
   const e = path[path.length - 1]; return { x: e[0], y: e[1], dir: 'down', walked: L };
 }
+const moveOpts = m => { const o = m[m.length - 1]; return o && o.constructor === Object ? o : null; };
 function agentAt(a, t) {
   let status = 'working';
   for (const [ts, s] of a.st || []) if (t >= ts) status = s;
   let place = a.at || ['seat'], walk = null;
   for (const m of a.moves || []) {
-    const to = m.slice(2);
+    const opts = moveOpts(m), to = m.slice(2, opts ? -1 : undefined);
     if (t >= m[1]) { place = to; continue; }
-    if (t >= m[0]) { m.path ||= route(a, place, to); walk = pathAt(m.path, seg(t, m[0], m[1])); }
+    if (t >= m[0]) { m.path ||= routeOf(a, place, to, opts); walk = pathAt(m.path, seg(t, m[0], m[1])); }
     break;
   }
-  if (walk) return { status, place, x: walk.x, y: walk.y, dir: walk.dir, frame: Math.floor(walk.walked / 6) % 4, walking: true, seated: false };
+  if (walk) return { status, place, x: walk.x, y: walk.y, dir: walk.dir, frame: Math.floor(t * 9 + a.k.length) % 4, walking: true, seated: false };
+  if (place[0] === 'gone' || place[0] === 'held') return { status, place, x: 0, y: 0, hidden: true, seated: false };
   const [x, y] = placePoint(a, place);
-  const spot = place[0] === 'queue' ? a.b.queue[place[1]] : place[0] === 'lounge' ? a.b.lounge.spots[place[1]] : null;
+  const spot = spotOf(a, place);
   return { status, place, x, y, dir: spot ? spot.face : 'down', frame: 0, walking: false, seated: place[0] === 'seat' };
 }
 
 // ---------- town drawing ----------
-function screenOf(state, frame) {
-  const key = state + ':' + frame;
-  let c = TW.screens.get(key);
-  if (!c) TW.screens.set(key, (c = TA.townScreen(state, frame)));
-  return c;
-}
 function charImg(c, x, y, ax, ay) {
   const w = c.width * AS, h = c.height * AS;
   ctx.drawImage(c, x - w * ax, y - h * ay, w, h);
@@ -662,27 +678,30 @@ function glowAt(x, y, size, rgb, alpha) {
   g.addColorStop(0, `rgba(${rgb},${alpha * .55})`); g.addColorStop(1, `rgba(${rgb},0)`);
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.fillRect(x - size / 2, y - size / 2, size, size); ctx.restore();
 }
+const waits = s => s === 'blocked' || s === 'asking';
 function seatInfo(occ, t) {
   if (occ === 'shell') return { state: 'shell' };
   if (!occ) return { state: 'empty' };
   const s = agentAt(occ, t);
-  return { a: occ, s, state: s.status === 'blocked' ? 'blocked' : s.seated ? s.status : 'off' };
+  if (s.hidden && s.place[0] === 'gone') return { state: 'empty' };
+  return { a: occ, s, state: waits(s.status) ? 'blocked' : s.seated ? (s.status === 'unknown' ? 'idle' : s.status) : 'off' };
 }
-function drawPod(cell, t, bubbles) {
-  const { sp } = TW, X = (cell.x + 1) * TT, Y = cell.y * TT;
+function drawPod(town, cell, t, bubbles, glow, host) {
+  const { sp } = town, X = (cell.x + 1) * TT, Y = cell.y * TT;
   const slots = TA.townDeskSlots(cell.seats), place = TA.townDeskTable(cell.seats);
-  const info = TW.occupants[cell.deskKey].map(o => seatInfo(o, t));
+  const info = town.occupants[cell.deskKey].map(o => seatInfo(o, t));
   const frame = Math.floor(t * 6);
   ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fillRect(X + place.x + 4, Y + 50, place.w - 2, 4);
   const seated = (i, top) => {
     const n = info[i]; if (!n.a || !n.s.seated) return;
     const typing = n.s.status === 'working' ? Math.floor(t * 7 + hash(n.a.k.length + i) * 7) % 2 : 0;
-    const c = TA.townCharacter(TA.townLookFor(n.a.k), top ? 'down' : 'up', typing, 'sit', top && n.s.status === 'idle');
+    const pose = n.s.status === 'unknown' ? 'scratch' : 'sit';
+    const c = TA.townCharacter(TA.townLookFor(n.a.k), top ? 'down' : 'up', typing, pose, top && n.s.status === 'idle');
     const cx = X + slots[i].chairX + 7;
     if (top) charImg(c, cx, Y + 25, .5, 1); else charImg(c, cx, Y + 34, .5, 0);
   };
   slots.forEach((s, i) => { if (s.top) { ctx.drawImage(sp.chair, X + s.chairX, Y + 2); seated(i, true); } });
-  ctx.drawImage((cell.seats <= 2 ? sp.tableSmall : sp.table)[DESK_COLOR[cell.deskKey]], X + place.x, Y + 17);
+  ctx.drawImage((cell.seats <= 2 ? sp.tableSmall : sp.table)[town.deskColor[cell.deskKey]], X + place.x, Y + 17);
   slots.forEach((s, i) => {
     const n = info[i]; if (n.state === 'empty') return;
     const lit = n.a && n.state !== 'off' && n.state !== 'idle';
@@ -692,60 +711,115 @@ function drawPod(cell, t, bubbles) {
   });
   slots.forEach((s, i) => { if (!s.top) { seated(i, false); ctx.drawImage(sp.chairBack, X + s.chairX, Y + 45); } });
   slots.forEach((s, i) => {
-    const n = info[i], rgb = GLOW[n.state]; if (!rgb) return;
-    const pulse = n.state === 'blocked' ? .55 + .35 * Math.sin(t * 5) : .5 + (REDUCED ? 0 : .08 * Math.sin(t * 23 + i));
-    glowAt(X + s.chairX + 7, s.top ? Y + 12 : Y + 30, s.top ? 38 : 30, rgb, n.state === 'shell' ? .3 : pulse);
+    const n = info[i], rgb = GLOW[n.state];
+    if (rgb && glow) {
+      const pulse = n.state === 'blocked' ? .55 + .35 * Math.sin(t * 5) : .5 + (REDUCED ? 0 : .08 * Math.sin(t * 23 + i));
+      glowAt(X + s.chairX + 7, s.top ? Y + 12 : Y + 30, s.top ? 38 : 30, rgb, n.state === 'shell' ? .3 : pulse);
+    }
     if (n.a && n.s.seated) {
       const head = s.top ? [X + s.chairX + 7, Y + 24 - 20 * AS] : [X + s.chairX + 7, Y + 33];
-      const chat = n.s.status === 'working' && !REDUCED && ((t * .35 + hash(n.a.k.length * 3 + i)) % 1) < .33;
-      const kind = n.s.status === 'blocked' ? 'blocked' : n.s.status === 'idle' ? 'sleep' : chat ? 'typing' + (Math.floor(t * 3) % 3) : null;
-      if (kind) bubbles.push([head[0], head[1], kind, n.a.k]);
+      const st = n.s.status;
+      const chat = st === 'working' && !REDUCED && ((t * .35 + hash(n.a.k.length * 3 + i)) % 1) < .33;
+      const kind = st === 'blocked' ? 'blocked' : st === 'asking' ? 'ask' : st === 'unknown' ? 'confused' : st === 'idle' ? 'sleep' : chat ? 'typing' + (Math.floor(t * 3) % 3) : null;
+      if (kind) bubbles.push([head[0], head[1], kind, n.a.k, host]);
     }
   });
 }
 function drawStanding(a, s, bubbles) {
+  ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(s.x) - 5 * AS, Math.round(s.y) - 1, 10 * AS, 3);
+  const crowd = s.place[0] === 'crowd' && !s.walking;
+  if (crowd && a.nap) {
+    // A napping agent lies along the lobby floor, as the app draws it.
+    const side = a.k.length % 2 ? 1 : -1, c = TA.townCharacter(TA.townLookFor(a.k), 'down', 0, 'stand', true);
+    ctx.save(); ctx.translate(Math.round(s.x), Math.round(s.y) - 6); ctx.rotate(side * Math.PI / 2); charImg(c, 0, 0, .5, .5); ctx.restore();
+    bubbles.push([s.x + side * 10, s.y - 14, 'sleep', a.k, a.b.hostKey]);
+    return;
+  }
   const c = TA.townCharacter(TA.townLookFor(a.k), s.dir, s.frame, 'stand', false);
   const bob = s.walking && s.frame % 2 ? -1 : 0;
-  ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(s.x) - 5 * AS, Math.round(s.y) - 1, 10 * AS, 3);
   charImg(c, Math.round(s.x), Math.round(s.y) + 1 + bob, .5, 1);
-  const kind = s.status === 'blocked' ? 'blocked' : s.status === 'done' ? 'done' : s.status === 'idle' && !s.walking ? 'idle' : null;
-  if (kind) bubbles.push([s.x, s.y - 20 * AS, kind, a.k]);
+  const kind = crowd ? 'curse' : s.status === 'blocked' ? 'blocked' : s.status === 'asking' ? 'ask' : s.status === 'done' ? 'done' : s.status === 'idle' && !s.walking ? 'idle' : null;
+  if (kind) bubbles.push([s.x, s.y - 20 * AS, kind, a.k, s.place[0] === 'at' ? null : a.b.hostKey]);
 }
-/** Draw Town through a camera {x, y, z} into a viewport; o: roof(host) alpha, plates, signs, near. */
-function drawTown(t, cam, vp = { x: 0, y: 0, w: W, h: H }, o = {}) {
+// A London bus stop: a dark pole and a white flag with the red roundel; red while someone waits.
+function drawStop(stop, waiting) {
+  const x = stop.wait.x, y = stop.wait.y;
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + 12, y + 1, 5, 2);
+  ctx.fillStyle = '#3b3b3b'; ctx.fillRect(x + 12, y - 43, 3, 44);
+  fillRR(x + 1, y - 66, 26, 22, 2, waiting ? '#d4252b' : '#f6f2e6'); strokeRR(x + 1, y - 66, 26, 22, 2, '#3b3b3b', 1);
+  const ring = waiting ? '#fff' : '#d4252b';
+  ctx.beginPath(); ctx.arc(x + 14, y - 55, 5.5, 0, Math.PI * 2); ctx.strokeStyle = ring; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = ring; ctx.fillRect(x + 5, y - 56.5, 18, 3);
+}
+// A red London double-decker, side on, its riders in the windows.
+function drawBus(x, y, hazard, riders) {
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y));
+  const L = -31, T0 = -34, w = 62, h = 42;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(L + 3, T0 + h + 2, w - 6, 4);
+  ctx.fillStyle = '#222'; [L + 12, L + 44].forEach(cx => { ctx.beginPath(); ctx.arc(cx, T0 + h + 1, 5, 0, Math.PI * 2); ctx.fill(); });
+  rr(L, T0, w, h, [7, 10, 2, 2]); ctx.fillStyle = '#d4252b'; ctx.fill();
+  ctx.fillStyle = '#f6f2e6'; ctx.fillRect(L + 1, T0 + h * .44, w - 2, 3);
+  const deck = (x0, y0, ww, list) => {
+    ctx.fillStyle = '#bfe3f2'; ctx.fillRect(x0, y0, ww, 11);
+    ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, ww, 11); ctx.clip();
+    list.forEach((k, i) => ctx.drawImage(TA.townCharacter(TA.townLookFor(k), 'right', 0, 'stand', false), x0 + 1 + i * 12, y0 + 1));
+    ctx.restore();
+    ctx.fillStyle = '#d4252b'; for (let px = x0 + 9; px < x0 + ww; px += 11) ctx.fillRect(px, y0, 2, 11);
+  };
+  deck(L + 4, T0 + 4, w - 16, riders.slice(0, 4)); deck(L + 4, T0 + 22, w - 19, riders.slice(4));
+  ctx.fillStyle = '#222'; ctx.fillRect(L + w - 10, T0 + 3, 8, 4);
+  ctx.fillStyle = '#bfe3f2'; ctx.fillRect(L + w - 10, T0 + 9, 8, 4); ctx.fillRect(L + w - 10, T0 + 21, 8, 4);
+  rr(L, T0, w, h, [7, 10, 2, 2]); ctx.strokeStyle = '#3b3b3b'; ctx.lineWidth = 2; ctx.stroke();
+  if (hazard) { rr(L - 3, T0 - 3, w + 6, h + 6, 9); ctx.strokeStyle = '#ffb300'; ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.restore();
+}
+/**
+ * Draw a Town through a camera {x, y, z} into a viewport.
+ * o: roof(host) alpha, plates(alpha), signs(alpha), near, bus(t), stops, over(w2s), glow.
+ */
+function drawTown(town, t, cam, vp = { x: 0, y: 0, w: W, h: H }, o = {}) {
   ctx.save(); ctx.beginPath(); ctx.rect(vp.x, vp.y, vp.w, vp.h); ctx.clip();
-  ctx.fillStyle = '#5c9a48'; ctx.fillRect(vp.x, vp.y, vp.w, vp.h);
+  ctx.fillStyle = '#4f8a3f'; ctx.fillRect(vp.x, vp.y, vp.w, vp.h);
   const ox = vp.x + vp.w / 2, oy = vp.y + vp.h / 2;
   const w2s = (x, y) => [ox + (x - cam.x) * cam.z, oy + (y - cam.y) * cam.z];
   const left = cam.x - vp.w / 2 / cam.z - 80, right = cam.x + vp.w / 2 / cam.z + 80, top = cam.y - vp.h / 2 / cam.z - 80, bottom = cam.y + vp.h / 2 / cam.z + 80;
   ctx.save(); ctx.translate(ox, oy); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y);
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(TW.base, 0, 0);
-  const list = [], bubbles = [];
-  for (const { cell } of TW.cells.values()) {
+  ctx.drawImage(town.base, -town.M, -town.M);
+  const list = [], bubbles = [], glow = o.glow ?? cam.z > .7;
+  for (const { cell, b } of town.cells.values()) {
     const X = (cell.x + 1) * TT, Y = cell.y * TT;
     if (X + 84 < left || X - 20 > right || Y + 70 < top || Y - 20 > bottom) continue;
-    list.push([Y + 52, () => drawPod(cell, t, bubbles)]);
+    list.push([Y + 52, () => drawPod(town, cell, t, bubbles, glow, b.hostKey)]);
   }
-  for (const a of AGENTS) {
+  for (const a of town.agents) {
     const s = agentAt(a, t);
-    if (s.seated || s.x < left || s.x > right || s.y < top || s.y > bottom) continue;
+    if (s.seated || s.hidden || s.x < left || s.x > right || s.y < top || s.y > bottom) continue;
     list.push([s.y, () => drawStanding(a, s, bubbles)]);
   }
+  if (o.stops) for (const stop of town.route.stops) {
+    if (stop.wait.x < left || stop.wait.x > right || stop.wait.y < top || stop.wait.y > bottom) continue;
+    list.push([stop.wait.y + 1, () => drawStop(stop, o.stops(stop))]);
+  }
+  const bus = o.bus && o.bus(t);
+  if (bus) list.push([bus.y + 8, () => drawBus(bus.x, bus.y, bus.hazard, bus.riders)]);
   list.sort((p, q) => p[0] - q[0]).forEach(e => e[1]());
-  for (const r of TW.roofs) { const ra = o.roof ? o.roof(r.host) : 0; if (ra > .01) withA(ra, () => ctx.drawImage(r.c, r.x, r.y)); }
+  for (const r of town.roofs) { const ra = o.roof ? o.roof(r.host) : 0; if (ra > .01) withA(ra, () => ctx.drawImage(r.c, r.x, r.y)); }
+  if (o.world) o.world(w2s);
   ctx.restore();
   ctx.imageSmoothingEnabled = false;
-  if (o.plates) withA(o.plates, () => townPlates(t, cam, w2s));
+  if (o.plates) withA(o.plates, () => townPlates(town, t, cam, w2s));
   const near = o.near ?? cam.z >= 1.4;
-  const bs = near ? clamp(Math.round(cam.z * 1.5), 2, 4) : 2;
-  for (const [x, y, kind, key] of bubbles) {
-    if (!near && kind !== 'blocked' && kind !== 'done') continue;
-    const c = TW.sp.bubble[kind], [sx, sy] = w2s(x, y);
-    const bounce = kind === 'blocked' && !REDUCED ? Math.abs(Math.sin(t * 4 + key.length)) * 3 : 0;
+  const bs = near ? clamp(Math.round(cam.z * 1.5), 2, 4) : cam.z < .7 ? 1 : 2;
+  const FAR = { blocked: 1, ask: 1, done: 1, curse: 1, sleep: 1, confused: 1 };
+  for (const [x, y, kind, key, host] of bubbles) {
+    if (!near && !FAR[kind]) continue;
+    if (host && o.roof && o.roof(host) > .5) continue;
+    const c = town.sp.bubble[kind], [sx, sy] = w2s(x, y);
+    const bounce = (kind === 'blocked' || kind === 'curse') && !REDUCED ? Math.abs(Math.sin(t * (kind === 'curse' ? 7 : 4) + key.length)) * 3 : 0;
     ctx.drawImage(c, Math.round(sx - c.width * bs / 2), Math.round(sy - 2 - bounce - c.height * bs), c.width * bs, c.height * bs);
   }
-  if (o.signs) withA(o.signs, () => townSigns(t, cam, w2s));
+  if (o.over) o.over(w2s);
   ctx.restore();
 }
 function plate(x, y, label, size, o = {}) {
@@ -761,35 +835,37 @@ function plate(x, y, label, size, o = {}) {
     text(o.badge, x0 + w - bw / 2 - size * .3, y + h * .7, size, '#1a1206', { fam: F.px, weight: 700, align: 'center' });
   }
 }
-function townPlates(t, cam, w2s) {
-  const z = cam.z / 2;
-  const laptop = TW.hosts.get('laptop');
-  for (const room of laptop.rooms) {
-    const def = TOWN_ROOMS.find(r => r[0] === room.key);
-    const blocked = room.cells.filter(c => c.deskKey).flatMap(c => TW.occupants[c.deskKey]).filter(o => o && o !== 'shell' && agentAt(o, t).status === 'blocked').length;
+/** Room plaques (name, desks, waiting) and desk nameplates in the main town's laptop building. */
+function townPlates(town, t, cam, w2s) {
+  const z = cam.z / 2, b = town.hosts.get('laptop');
+  for (const room of b.rooms) {
+    const def = town.spec.rooms.find(r => r[0] === room.key), desks = room.cells.filter(c => c.deskKey);
+    const people = desks.flatMap(c => town.occupants[c.deskKey]).filter(o => o && o !== 'shell');
+    const blocked = people.filter(o => waits(agentAt(o, t).status)).length;
+    const busy = desks.filter(c => town.occupants[c.deskKey].some(o => o && o !== 'shell' && agentAt(o, t).seated && agentAt(o, t).status === 'working')).length;
     // On the carpet's front edge, clear of the speech bubbles above the desks.
     const [x, y] = w2s((room.x + room.w / 2) * TT, (room.y + room.h) * TT);
-    plate(x, y - 20 * z, `${def[2].toUpperCase()} ${room.cells.filter(c => c.deskKey).length}`, 17 * z, { badge: blocked ? '!' + blocked : null });
-    for (const cell of room.cells) {
-      if (!cell.deskKey) continue;
+    plate(x, y - 20 * z, `${def[2].toUpperCase()} ${busy}/${desks.length}`, 17 * z, { badge: blocked ? '!' + blocked : null });
+    for (const cell of desks) {
       const [px, py] = w2s((cell.x + 1) * TT + 32, cell.y * TT + 44);
-      const col = TA.TERMINAL_COLOR_HEX[DESK_COLOR[cell.deskKey]];
+      const col = TA.TERMINAL_COLOR_HEX[town.deskColor[cell.deskKey]];
       plate(px, py, cell.deskKey, 13 * z, { fam: F.mono, bg: 'rgba(14,17,24,.9)', border: col, stripe: col });
     }
   }
-  const [yx, yy] = w2s(laptop.doorX * TT, (laptop.counter.y + 1) * TT - 36);
+  const [yx, yy] = w2s(b.doorX * TT, (b.counter.y + 1) * TT - 36);
   plate(yx, yy, 'YOU', 12 * z, { bg: '#151b29', border: C.gold, color: C.text });
 }
-function townSigns(t, cam, w2s) {
-  for (const [host, how] of TOWN_HOSTS) {
-    const b = TW.hosts.get(host);
-    const here = AGENTS.filter(a => a.b === b).map(a => [a, agentAt(a, t)]);
+/** Every building's sign, and its reception board hung over the street above it. */
+function townSigns(town, t, w2s, o = {}) {
+  for (const [host, how] of town.spec.hosts) {
+    const b = town.hosts.get(host);
+    const here = town.agents.filter(a => a.b === b).map(a => [a, agentAt(a, t)]);
     const desks = b.rooms.reduce((n, r) => n + r.cells.filter(c => c.deskKey).length, 0);
     const working = here.filter(([, s]) => s.status === 'working' && s.seated).length;
     const queue = here.filter(([, s]) => s.place[0] === 'queue' && !s.walking).sort((p, q) => p[1].place[1] - q[1].place[1]);
-    const need = queue.filter(([, s]) => s.status === 'blocked').length;
-    const [sx, sy] = w2s((b.x + b.w / 2) * TT, (b.y + b.h * .38) * TT);
-    const title = `${host} · ${how}`, meta = `${b.rooms.length} rooms · ${desks} desks · ${working} working`;
+    const need = queue.filter(([, s]) => waits(s.status)).length;
+    const [sx, sy] = w2s((b.x + b.w / 2) * TT, (b.y + b.h * .5) * TT);
+    const title = `${host} · ${how}`, meta = `${b.rooms.length} ${b.rooms.length === 1 ? 'room' : 'rooms'} · ${desks} desks · ${working} working`;
     const w = Math.max(textW(title, 30, F.mono, 700), textW(meta, 17, F.mono, 400)) + 48;
     ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 24;
     fillRR(sx - w / 2, sy - 50, w, 92, 10, 'rgba(14,17,24,.9)'); ctx.shadowBlur = 0;
@@ -797,25 +873,47 @@ function townSigns(t, cam, w2s) {
     circle(sx - w / 2 + 20, sy - 25, 6, C.green);
     text(title, sx + 6, sy - 14, 30, C.text, { weight: 700, align: 'center' });
     text(meta, sx, sy + 24, 17, C.soft, { align: 'center' });
-    if (need) { fillRR(sx + w / 2 - 30, sy - 64, 52, 36, 8, C.amber); text('!' + need, sx + w / 2 - 4, sy - 38, 22, '#1a1206', { fam: F.px, weight: 700, align: 'center' }); }
-    // Reception board, hanging under the building like the app's.
-    const [rx, ry] = w2s(b.doorX * TT, (b.y + b.h + TA.TOWN_FACADE) * TT + 6);
-    const bw = Math.max(230, queue.length * 64 + 24), bh = queue.length ? 112 : 64;
-    fillRR(rx - bw / 2, ry, bw, bh, 10, 'rgba(14,17,24,.92)'); strokeRR(rx - bw / 2, ry, bw, bh, 10, need ? '#ffb547' : '#4b5568', 2);
-    text(`${host.toUpperCase()} RECEPTION`, rx - bw / 2 + 12, ry + 24, 13, '#f1efe6', { fam: F.px, weight: 700 });
-    if (!queue.length) text('Nobody waiting', rx - bw / 2 + 12, ry + 48, 14, C.muted);
+    // The reception board, over the street above the building, as the app hangs it.
+    const cost = o.cost && o.cost[host];
+    const [rx, ry] = w2s(b.doorX * TT, b.y * TT - 6);
+    const bw = Math.max(250, queue.length * 64 + 24), qh = queue.length ? 82 : 30, bh = 36 + qh + (cost ? 50 : 0);
+    const by = ry - bh;
+    ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 18;
+    fillRR(rx - bw / 2, by, bw, bh, 10, 'rgba(24,19,28,.95)'); ctx.shadowBlur = 0;
+    strokeRR(rx - bw / 2, by, bw, bh, 10, need ? '#ffb547' : '#c9a227', 2);
+    text(`${host.toUpperCase()} RECEPTION`, rx - bw / 2 + 12, by + 24, 13, '#f1efe6', { fam: F.px, weight: 700 });
+    if (!queue.length) text('Nobody waiting', rx - bw / 2 + 12, by + 52, 14, C.muted);
     queue.forEach(([a, s], i) => {
-      const ex = rx - bw / 2 + 12 + i * 64, ey = ry + 34, done = s.status === 'done';
+      const ex = rx - bw / 2 + 12 + i * 64, ey = by + 34, done = s.status === 'done';
       fillRR(ex, ey, 56, 70, 7, '#1b2230'); strokeRR(ex, ey, 56, 70, 7, done ? '#7be08f' : '#ffb547', 1.5);
       person(a.k, ex + 28, ey + 40, 1.6);
       text(a.k.slice(0, 7), ex + 28, ey + 53, 10, '#f1efe6', { weight: 700, align: 'center' });
       text(done ? 'done ✓' : '! 2m', ex + 28, ey + 65, 10, done ? '#7be08f' : '#ffb547', { weight: 700, align: 'center' });
     });
+    if (cost) {
+      const cy = by + 36 + qh;
+      ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(rx - bw / 2 + 10, cy - 4, bw - 20, 1);
+      text('EXPENSES TODAY', rx - bw / 2 + 12, cy + 14, 11, '#ffcf6b', { fam: F.px, weight: 700 });
+      text(cost, rx - bw / 2 + 12, cy + 36, 15, C.text, { weight: 700 });
+    }
+    if (need) { fillRR(rx + bw / 2 - 30, by - 14, 52, 36, 8, C.amber); text('!' + need, rx + bw / 2 - 4, by + 12, 22, '#1a1206', { fam: F.px, weight: 700, align: 'center' }); }
   }
 }
 
+/** A camera track: [[time, {x, y, z}], …]; eased moves, or cuts under reduced motion. */
+function camAt(track, t) {
+  if (t <= track[0][0]) return track[0][1];
+  for (let i = 1; i < track.length; i++) {
+    const [t1, c1] = track[i], [t0, c0] = track[i - 1];
+    if (t > t1) continue;
+    const p = REDUCED ? (t >= (t0 + t1) / 2 ? 1 : 0) : eio(seg(t, t0, t1));
+    return { x: lerp(c0.x, c1.x, p), y: lerp(c0.y, c1.y, p), z: lerp(c0.z, c1.z, p) };
+  }
+  return track[track.length - 1][1];
+}
+
 // ---------- app chrome ----------
-function appBar(t, view, y0 = 0) {
+function appBar(t, view, y0 = 0, need = 0) {
   ctx.save(); ctx.translate(0, y0);
   ctx.fillStyle = '#0d111b'; ctx.fillRect(0, 0, W, 64); ctx.fillStyle = C.line; ctx.fillRect(0, 63, W, 1);
   logoTile(42, 32, 38);
@@ -824,16 +922,19 @@ function appBar(t, view, y0 = 0) {
   circle(440, 32, 6, C.green);
   fillRR(462, 14, 520, 36, 7, C.panel); strokeRR(462, 14, 520, 36, 7, C.line, 1.5); text('⌕  Search ' + view, 480, 38, 16, C.muted);
   fillRR(1010, 14, 160, 36, 7, C.panel); strokeRR(1010, 14, 160, 36, 7, C.line, 1.5); text('All hosts ▾', 1030, 38, 16, C.text, { weight: 700 });
+  fillRR(1500, 14, 180, 36, 18, need ? '#3a2c12' : C.panel); strokeRR(1500, 14, 180, 36, 18, need ? C.amber : C.line, 1.5);
+  text(`Needs you ${need}`, 1590, 38, 15, need ? C.amber : C.soft, { weight: 700, align: 'center' });
   fillRR(1700, 14, 90, 36, 7, C.panel); text('Actions', 1745, 38, 15, C.soft, { align: 'center' });
   fillRR(1800, 14, 90, 36, 7, C.panel); text('Menu', 1845, 38, 15, C.soft, { align: 'center' });
   ctx.restore();
 }
 
-// ---------- chat ----------
-/** Chat bubbles in a box, newest at the bottom. msgs: [who, text, t0, needsYou]. */
+// ---------- chat, in Town's skin ----------
+const GOLD = '#ffd166';
+/** Chat messages in a box, newest at the bottom. msgs: [who, text, t0, needsYou]. */
 function chatBody(x, y, w, h, t, msgs, size) {
   const shown = msgs.filter(m => t >= m[2]);
-  const lh = size * 1.4, pad = size * .8, maxW = w * .78;
+  const lh = size * 1.4, pad = size * .8, maxW = w * .8;
   const blocks = shown.map(m => ({ m, lines: wrap(m[1], maxW - pad * 2, size) }));
   let by = y + h;
   ctx.save(); rr(x, y, w, h, 0); ctx.clip();
@@ -844,22 +945,23 @@ function chatBody(x, y, w, h, t, msgs, size) {
     const bx = mine ? x + w - bw : x;
     const pop = eback(seg(t, m[2], m[2] + .3));
     ctx.save(); ctx.translate(bx + (mine ? bw : 0), by + bh); ctx.scale(pop, pop); ctx.translate(-bx - (mine ? bw : 0), -by - bh);
-    fillRR(bx, by, bw, bh, size * .7, mine ? C.blueD : m[3] ? '#2d2414' : C.panel3);
-    if (m[3]) strokeRR(bx, by, bw, bh, size * .7, C.amber, 2);
-    lines.forEach((l, k) => text(l, bx + pad, by + pad * .65 + lh * (k + .78), size, mine ? '#fff' : C.text));
+    fillRR(bx, by, bw, bh, size * .5, mine ? 'rgba(255,209,102,.16)' : m[3] ? '#2d2414' : '#0d1117');
+    strokeRR(bx, by, bw, bh, size * .5, mine ? 'rgba(255,209,102,.6)' : m[3] ? C.amber : 'rgba(255,255,255,.12)', 2);
+    lines.forEach((l, k) => text(l, bx + pad, by + pad * .65 + lh * (k + .78), size, C.text));
     ctx.restore();
   }
   ctx.restore();
 }
-function composer(x, y, w, h, t, typed, t0, t1, sent, size) {
-  fillRR(x, y, w, h, 10, C.panel); strokeRR(x, y, w, h, 10, t >= t0 && t < sent ? C.blue : C.line, 2);
+function composer(x, y, w, h, t, typed, t0, t1, sent, size, hint = 'Message the agent…') {
+  fillRR(x, y, w, h, 8, '#0d1117'); strokeRR(x, y, w, h, 8, t >= t0 && t < sent ? GOLD : '#2a3242', 2);
   const k = t >= sent ? 0 : Math.floor(seg(t, t0, t1) * typed.length);
   const s = typed.slice(0, k);
   if (s) text(s + (Math.floor(t * 3) % 2 ? '▍' : ''), x + size * .8, y + h * .62, size, C.text);
-  else text('Reply to the agent…', x + size * .8, y + h * .62, size, C.muted);
+  else text(hint, x + size * .8, y + h * .62, size, C.muted);
   const hot = t >= sent - .2 && t < sent + .15;
-  fillRR(x + w - size * 5, y + 8, size * 4.4, h - 16, 8, hot ? C.blueB : C.blueD);
-  text('Send', x + w - size * 2.8, y + h * .62, size, '#fff', { weight: 700, align: 'center' });
+  fillRR(x + w - size * 5, y + 8, size * 4.4, h - 16, 8, hot ? 'rgba(255,209,102,.45)' : 'rgba(255,209,102,.16)');
+  strokeRR(x + w - size * 5, y + 8, size * 4.4, h - 16, 8, 'rgba(255,209,102,.6)', 2);
+  text('Send', x + w - size * 2.8, y + h * .62, size, GOLD, { weight: 700, align: 'center' });
 }
 const DESK_CHAT = [
   ['you', 'Fix the expired-session bug in api, then run the tests.', -1],
@@ -868,31 +970,109 @@ const DESK_CHAT = [
   ['you', 'Yes, push it and open the PR.', 25.95],
   ['agent', 'Pushed. PR #42 is open.', 26.4]
 ];
-// Town's panels: dark glass with a hard edge, as in the Town prototype.
+// Town's panels: dark glass with a hard edge.
 function townPanel(x, y, w, h) {
   ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
-  fillRR(x, y, w, h, 12, 'rgba(17,21,29,.95)'); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  fillRR(x, y, w, h, 12, 'rgba(17,21,29,.96)'); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   strokeRR(x, y, w, h, 12, '#090c11', 2); strokeRR(x + 2, y + 2, w - 4, h - 4, 10, 'rgba(255,255,255,.07)', 1);
 }
+// Town's raised keys.
 function townButton(x, y, w, h, label, o = {}) {
-  fillRR(x, y, w, h, 9, o.hot ? '#e3aa3a' : o.on ? '#3a4459' : '#273141');
-  if (o.ring) strokeRR(x, y, w, h, 9, C.blueB, 3);
-  text(label, x + w / 2, y + h * .64, o.size || 17, o.hot ? '#1f1606' : C.text, { weight: 700, align: 'center' });
+  fillRR(x, y, w, h, 9, o.hot ? 'rgba(255,209,102,.4)' : o.gold ? 'rgba(255,209,102,.16)' : o.on ? '#3a4459' : '#273141');
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x + 4, y + h - 3, w - 8, 3);
+  strokeRR(x, y, w, h, 9, o.gold || o.hot ? 'rgba(255,209,102,.65)' : '#141a24', 2);
+  if (o.ring) strokeRR(x - 2, y - 2, w + 4, h + 4, 10, C.blueB, 3);
+  text(label, x + w / 2, y + h * .64, o.size || 17, o.gold || o.hot ? GOLD : C.text, { weight: 700, align: 'center' });
 }
-/** The reviewer's place at reception, on screen. */
+
+// ================= MAIN TOWN: three hosts =================
+const MAIN = {
+  margin: 34,
+  hosts: [['laptop', 'local'], ['gpu-box', 'ssh'], ['build-vm', 'ssh']],
+  rooms: [
+    ['atlas', 'laptop', 'Atlas', [['web', 2, 'blue'], ['api', 1, 'orange'], ['docs', 1, 'purple']]],
+    ['harbor', 'laptop', 'Harbor', [['cli', 2, 'teal'], ['checks', 1, 'green']]],
+    ['meadow', 'laptop', 'Meadow', [['evals', 1, 'pink'], ['notes', 1, 'yellow'], ['ideas', 1, 'red']]],
+    ['train', 'gpu-box', 'Train', [['trainer', 1, 'red'], ['sweep', 2, 'teal'], ['data', 1, 'blue']]],
+    ['ci', 'build-vm', 'CI', [['pipeline', 2, 'green'], ['release', 1, 'purple']]]
+  ],
+  shells: { cli: [1], sweep: [1], pipeline: [1] },
+  agents: []
+};
+// Times of the Town beats.
+const BIN = { grab: 27.9, drop: 28.6, out: 30.5, stop: 31.4, busIn: 30.7, halt: 31.9, board: 32.35, go: 32.9, gone: 34.0 };
+const NEW = { click: 35.1, pick: 35.95, out: 36.3, sit: 40.0 };
+const laptopOf = town => town.hosts.get('laptop');
+const binStop = town => TA.townNearestStop(town.route, town.layout, laptopOf(town), 'meadow');
+MAIN.agents = [
+  { k: 'builder', kind: 'claude', desk: 'web', seat: 0 },
+  { k: 'stylist', kind: 'gemini', desk: 'web', seat: 1 },
+  { k: 'reviewer', kind: 'codex', desk: 'api', seat: 0, st: [[18.2, 'blocked'], [26.1, 'working']], moves: [[18.6, 20.5, 'queue', 1], [26.4, 28.4, 'seat']] },
+  { k: 'scribe', kind: 'claude', desk: 'docs', seat: 0, st: [[17.4, 'done'], [21.0, 'idle']], moves: [[17.8, 19.7, 'queue', 0], [21.25, 23.3, 'bar', 2]] },
+  { k: 'migrator', kind: 'claude', desk: 'cli', seat: 0 },
+  { k: 'tester', kind: 'codex', desk: 'checks', seat: 0 },
+  { k: 'evaluator', kind: 'gemini', desk: 'evals', seat: 0 },
+  // Binned: picked up at the bar, out of the front door, to the bus stop and away.
+  { k: 'sweeper', kind: 'claude', desk: 'notes', seat: 0, st: [[0, 'idle']], at: ['bar', 0], moves: [
+    [BIN.grab, BIN.grab, 'held'],
+    [BIN.drop, BIN.stop, 'at', a => { const q = TA.townQueueSpot(binStop(a.town), 0); return [q.x, q.y]; }, { via: a => {
+      const inside = indoor(a, ['bar', 0], ['door']), d = inside[inside.length - 1], q = TA.townQueueSpot(binStop(a.town), 0);
+      return [...inside, [d[0], q.y], [q.x, q.y]];
+    } }],
+    [BIN.board, BIN.board, 'gone']
+  ] },
+  // Hired at the town center: out of its door, along the street, in at the front door, to a desk.
+  { k: 'rookie', kind: 'claude', desk: 'ideas', seat: 0, at: ['gone'], moves: [[NEW.out, NEW.sit, 'seat', { via: a => {
+    const out = TA.townArrivalPath(a.town.layout, a.town.route, { hostKey: 'laptop', roomKey: 'meadow' }, 'center') || [];
+    return [...out.map(p => [p.x, p.y]), ...indoor(a, ['door'], ['seat']).slice(1)];
+  } }]] },
+  { k: 'trainer', kind: 'claude', desk: 'trainer', seat: 0 },
+  { k: 'tuner', kind: 'codex', desk: 'sweep', seat: 0 },
+  { k: 'metrics', kind: 'gemini', desk: 'data', seat: 0, st: [[0, 'blocked']], at: ['queue', 0] },
+  { k: 'ci-fixer', kind: 'codex', desk: 'pipeline', seat: 0 },
+  { k: 'releaser', kind: 'claude', desk: 'release', seat: 0, st: [[0, 'done']], at: ['queue', 0] }
+];
+let TW = null, SCALE = null;
+
+/** The main town's bus: in from the left, a halt at the stop by the laptop, then off. */
+function mainBus(t) {
+  if (t < BIN.busIn || t > BIN.gone) return null;
+  const stop = binStop(TW), leg = TW.route.legs[0], hx = stop.wait.x - 46;
+  let x;
+  if (t < BIN.halt) x = lerp(leg.from, hx, eo(seg(t, BIN.busIn, BIN.halt)));
+  else if (t < BIN.go) x = hx;
+  else x = lerp(hx, hx + 1500, Math.pow(seg(t, BIN.go, BIN.gone), 2));
+  const stopped = t >= BIN.halt && t < BIN.go;
+  return { x, y: leg.y, hazard: stopped && (REDUCED || Math.floor(t * 4) % 2 === 0), riders: t >= BIN.board ? ['sweeper'] : [] };
+}
+function townCams(town) {
+  const b = laptopOf(town), L = town.layout;
+  const cz = Math.min(1290 / (b.w * TT), 1000 / ((b.h + TA.TOWN_FACADE) * TT));
+  const close = { x: b.x * TT + 340 / cz, y: b.y * TT + 474 / cz, z: cz };
+  const above = { x: b.x * TT + b.w * TT / 2, y: (L.center.y + L.center.h) * TT - 10, z: 1.1 };
+  const stop = binStop(town);
+  const street = { x: stop.wait.x - 120, y: stop.wait.y - 10, z: 2.05 };
+  const em = TA.townCenterEmblem(L.center, TT);
+  const square = { x: (b.entryX * TT + (L.center.x + L.center.w) * TT) / 2 - 20, y: (L.center.y * TT + (b.y + 10) * TT) / 2, z: 1.22 };
+  const ideas = town.cells.get('ideas').cell;
+  const desk = { x: (ideas.x + 3) * TT, y: (ideas.y + 1) * TT, z: 2.3 };
+  const all = { x: L.width * TT / 2, y: L.height * TT / 2 - 20, z: Math.min(W / (L.width * TT + 120), H / (L.height * TT + 40)) };
+  const fuel = { x: em.x - 300, y: b.y * TT - 60, z: 1.12 };
+  return [[13.3, above], [14.9, close], [28.7, close], [30.3, street], [33.4, street], [34.8, square], [38.4, square], [39.6, desk], [41.0, desk], [42.8, all], [47.0, all], [48.4, fuel]];
+}
+let CAMS = null;
 function reviewerAt(t) {
-  const b = TW.hosts.get('laptop'), q = b.queue[1], cam = townCam(t);
+  const b = laptopOf(TW), q = b.queue[1], cam = camAt(CAMS, t);
   return [W / 2 + ((q.x + .5) * TT - cam.x) * cam.z, H / 2 + ((q.y + 1) * TT - 26 - cam.y) * cam.z];
 }
 const PEEK_W = 480, PEEK_H = 334;
-function peekBox(t) { const [ax, ay] = reviewerAt(t); return [clamp(ax - PEEK_W / 2, 700, W - PEEK_W - 20), ay - PEEK_H - 60]; }
-// A click on an agent opens its peek, as Town's does: the latest Chat
-// message and answers. Typing happens in Chat, which Open chat docks.
+function peekBox(t) { const [ax, ay] = reviewerAt(t); return [clamp(ax - PEEK_W / 2, 700, W - PEEK_W - 20), clamp(ay + 60, 80, H - PEEK_H - 20)]; }
+// A click on an agent opens its peek: the latest Chat message and answers.
 function townPeek(t) {
   const op = eback(seg(t, 24.3, 24.5)) * (1 - seg(t, 24.85, 25.0));
   if (op <= .01) return;
   const [x, y] = peekBox(t), w = PEEK_W;
-  ctx.save(); ctx.translate(x + w / 2, y + PEEK_H); ctx.scale(op, op); ctx.translate(-x - w / 2, -y - PEEK_H);
+  ctx.save(); ctx.translate(x + w / 2, y); ctx.scale(op, op); ctx.translate(-x - w / 2, -y);
   townPanel(x, y, w, PEEK_H);
   fillRR(x + 14, y + 14, 44, 50, 6, '#1b2230'); person('reviewer', x + 36, y + 60, 2);
   text('reviewer', x + 70, y + 38, 20, C.text, { fam: F.px, weight: 700 });
@@ -901,8 +1081,8 @@ function townPeek(t) {
   townButton(x + w - 52, y + 18, 38, 36, '×', { size: 20 });
   fillRR(x + 14, y + 76, w - 28, 92, 8, '#0d1117');
   text('LATEST MESSAGE', x + 28, y + 100, 12, '#a9b2a4', { fam: F.px, weight: 700 });
-  wrap('Push 3 commits to origin and open a PR?', w - 60, 18).forEach((l, k) => text(l, x + 28, y + 128 + k * 24, 18, '#ffd166'));
-  townButton(x + 14, y + 180, (w - 34) / 2, 42, 'Yes  ¹');
+  wrap('Push 3 commits to origin and open a PR?', w - 60, 18).forEach((l, k) => text(l, x + 28, y + 128 + k * 24, 18, GOLD));
+  townButton(x + 14, y + 180, (w - 34) / 2, 42, 'Yes  ¹', { gold: true });
   townButton(x + 20 + (w - 34) / 2, y + 180, (w - 34) / 2, 42, 'No  ²');
   townButton(x + 14, y + 232, w - 28, 42, 'Open chat', { size: 16, hot: t > 24.62 });
   townButton(x + 14, y + 284, (w - 34) / 2, 36, 'Inspector', { size: 16 });
@@ -930,48 +1110,180 @@ function chatDock(t) {
     ['Chat', 'Terminal', 'Changes', 'Files'].forEach((tb, k) => townButton(x + 12 + k * 118, y + 78, 110, 34, tb, { on: !k, size: 15 }));
     const answers = t < 25.95;
     const bottom = y + h - 84 - (answers ? 56 : 0);
-    fillRR(x + 12, y + 130, dw - 24, bottom - y - 140, 8, '#0d1117');
+    fillRR(x + 12, y + 130, dw - 24, bottom - y - 140, 8, '#0b0e14');
     chatBody(x + 28, y + 140, dw - 56, bottom - y - 164, t, DESK_CHAT, 19);
     if (answers) {
-      townButton(x + 12, y + h - 132, (dw - 30) / 2, 46, 'Yes, push it');
+      townButton(x + 12, y + h - 132, (dw - 30) / 2, 46, 'Yes, push it', { gold: true });
       townButton(x + 18 + (dw - 30) / 2, y + h - 132, (dw - 30) / 2, 46, 'Not yet');
     }
     composer(x + 12, y + h - 76, dw - 24, 62, t, 'Yes, push it and open the PR.', 25.35, 25.8, 25.95, 18);
     ctx.restore();
   });
 }
-
-// ================= SCENES 3+4: Town, then every host =================
-function townCam(t) {
-  const b = TW.hosts.get('laptop'), street = TW.layout;
-  // The whole building fills the frame right of the caption column.
-  const cz = Math.min(1290 / (b.w * TT), 1000 / ((b.h + TA.TOWN_FACADE) * TT));
-  const close = { x: b.x * TT + 340 / cz, y: b.y * TT + 474 / cz, z: cz };
-  const wide = { x: b.x * TT + b.w * TT / 2, y: 330, z: 1.1 };
-  const far = { x: street.width * TT / 2, y: 372, z: .88 };
-  // Less motion: cut between framings instead of zooming.
-  const p = REDUCED ? 1 : eio(seg(t, 13.3, 14.9)), q = REDUCED ? (t >= 28.4 ? 1 : 0) : eio(seg(t, 27.2, 30.0));
-  const mix = (a, c, k) => ({ x: lerp(a.x, c.x, k), y: lerp(a.y, c.y, k), z: lerp(a.z, c.z, k) });
-  return mix(mix(wide, close, p), far, q);
-}
-function S34(t) {
-  const a = seg(t, 13.1, 13.6) * (1 - seg(t, 36.8, 37.5));
+// The floating bin at the bottom of Town; it lights up while an agent is dragged.
+function binButton(t) {
+  const a = seg(t, 27.2, 27.5) * (1 - seg(t, 29.0, 29.4));
+  if (a <= 0) return;
   withA(a, () => {
-    const cam = townCam(t);
-    const roofOff = eio(seg(t, 13.9, 14.7));
-    drawTown(t, cam, undefined, {
-      roof: host => host === 'laptop' ? 1 - roofOff : 1 - eio(seg(t, 27.6, 28.6)),
-      plates: seg(t, 14.6, 15.0) * (1 - seg(t, 27.2, 27.6)),
-      signs: seg(t, 29.2, 29.8)
+    const x = W / 2, y = H - 92, hot = t >= 28.2 && t < BIN.drop + .15, pop = t >= BIN.drop && t < BIN.drop + .3 ? 1 + .15 * Math.sin(seg(t, BIN.drop, BIN.drop + .3) * Math.PI) : 1;
+    ctx.save(); ctx.translate(x, y); ctx.scale(pop, pop);
+    ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 24;
+    fillRR(-130, -38, 260, 76, 14, hot ? '#4a3a12' : 'rgba(17,21,29,.95)'); ctx.shadowBlur = 0;
+    strokeRR(-130, -38, 260, 76, 14, hot ? '#ffd54a' : '#2a3242', hot ? 4 : 2);
+    // a bin: lid, handle and ribbed can
+    ctx.fillStyle = hot ? '#ffd54a' : C.soft;
+    ctx.fillRect(-104, -16, 34, 5); ctx.fillRect(-93, -21, 12, 5);
+    rr(-100, -9, 26, 30, 3); ctx.fill();
+    ctx.fillStyle = hot ? '#4a3a12' : 'rgba(17,21,29,1)'; [-93, -87, -81].forEach(px => ctx.fillRect(px, -4, 2, 20));
+    text('Bin', -50, -4, 22, C.text, { fam: F.px, weight: 700 });
+    text('next bus 0:03', -50, 22, 16, hot ? '#ffd54a' : C.muted, { weight: 700 });
+    ctx.restore();
+  });
+}
+// The town center's ring of actions around its emblem.
+const RING = [['+', 'New agent'], ['♛', 'Town master'], ['!', 'Needs you'], ['≡', 'Summary'], ['☺', 'Profiles'], ['⌂', 'New room']];
+function centerRing(t, w2s) {
+  const open = eback(seg(t, NEW.click + .05, NEW.click + .35)) * (1 - eio(seg(t, NEW.pick + .1, NEW.pick + .35)));
+  if (open <= .01) return;
+  const em = TA.townCenterEmblem(TW.layout.center, TT), [cx, cy] = w2s(em.x, em.y);
+  withA(clamp(open), () => {
+    ctx.fillStyle = 'rgba(8,11,18,.35)'; ctx.beginPath(); ctx.arc(cx, cy, 200 * open, 0, Math.PI * 2); ctx.fill();
+    RING.forEach(([g, label], i) => {
+      const ang = -Math.PI / 2 + i * Math.PI / 3, r = 150 * open, x = cx + Math.cos(ang) * r, y = cy + Math.sin(ang) * r;
+      const hot = i === 0 && t >= NEW.pick - .45;
+      ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 16;
+      circle(x, y, 34, hot ? '#e3aa3a' : '#273141'); ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(x, y, 34, 0, Math.PI * 2); ctx.strokeStyle = hot ? '#ffe2a0' : '#141a24'; ctx.lineWidth = 3; ctx.stroke();
+      text(g, x, y + 10, 28, hot ? '#1f1606' : C.text, { weight: 700, align: 'center' });
+      font(15, F.px, 700); const lw = ctx.measureText(label).width + 14;
+      fillRR(x - lw / 2, y + 40, lw, 24, 6, 'rgba(14,17,24,.92)');
+      text(label, x, y + 57, 15, hot ? GOLD : C.text, { fam: F.px, weight: 700, align: 'center' });
     });
-    // caption panel on the left of the close-up
+    circle(cx, cy, 22, '#273141'); text('×', cx, cy + 8, 24, C.text, { weight: 700, align: 'center' });
+  });
+}
+// A new agent's welcome: a sparkle and its name over it once it sits.
+function welcome(t, w2s) {
+  const p = seg(t, NEW.sit, NEW.sit + 1.6);
+  if (p <= 0 || p >= 1) return;
+  const a = TW.agents.find(x => x.k === 'rookie'), [sx, sy] = w2s(a.geo.cx, a.geo.tableY - 12);
+  const fade = 1 - seg(p, .7, 1);
+  withA(fade, () => {
+    if (!REDUCED) for (let i = 0; i < 6; i++) {
+      const ang = i * Math.PI / 3 + p * 2, r = 30 + p * 50;
+      const x = sx + Math.cos(ang) * r, y = sy + Math.sin(ang) * r, s = 9 * (1 - p * .5);
+      ctx.fillStyle = i % 2 ? '#fff6c9' : GOLD;
+      ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s * .3, y - s * .3); ctx.lineTo(x + s, y); ctx.lineTo(x + s * .3, y + s * .3); ctx.lineTo(x, y + s); ctx.lineTo(x - s * .3, y + s * .3); ctx.lineTo(x - s, y); ctx.lineTo(x - s * .3, y - s * .3); ctx.fill();
+    }
+    const tag = 'rookie · claude';
+    font(20, F.px, 700); const tw = ctx.measureText(tag).width + 28;
+    const ty = sy - 70 - eo(seg(p, 0, .2)) * 14;
+    fillRR(sx - tw / 2, ty, tw, 38, 19, 'rgba(255,209,102,.95)');
+    text(tag, sx, ty + 26, 20, '#1f1606', { fam: F.px, weight: 700, align: 'center' });
+  });
+}
+// The stop's countdown board over the waiting agent's head.
+function stopClock(t, w2s) {
+  if (t < BIN.stop - .3 || t >= BIN.board) return;
+  const q = TA.townQueueSpot(binStop(TW), 0), [x, y] = w2s(q.x, q.y - 44);
+  const left = Math.max(0, Math.ceil(BIN.halt - t));
+  const s = t >= BIN.halt ? 'due' : `0:0${left}`;
+  font(18, F.mono, 700); const w = ctx.measureText(s).width + 38;
+  fillRR(x - w / 2, y - 30, w, 32, 4, '#1c1722'); strokeRR(x - w / 2, y - 30, w, 32, 4, '#3b3b3b', 2);
+  ctx.beginPath(); ctx.arc(x - w / 2 + 14, y - 14, 7, 0, Math.PI * 2); ctx.strokeStyle = '#ffb300'; ctx.lineWidth = 2; ctx.stroke();
+  text(s, x - w / 2 + 26, y - 7, 18, '#ffb300', { weight: 700 });
+}
+/** The Town board, as the app pins it top left: counts, fuel, economy and Since you left. */
+function townBoard(x, y, w, o) {
+  const rows = o.recap ? o.recap.length : 0;
+  const h = 196 + (o.fuel ? 132 : 0) + (o.economy ? 64 : 0) + (rows ? 64 + rows * 34 : 0);
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 26;
+  fillRR(x, y, w, h, 12, 'rgba(28,23,30,.95)'); ctx.shadowBlur = 0;
+  strokeRR(x, y, w, h, 12, '#4a3d2a', 2);
+  text('TOWN BOARD', x + 20, y + 34, 18, '#f1d38a', { fam: F.px, weight: 700 });
+  o.counts.forEach(([label, n], i) => {
+    const bx = x + 18 + i * ((w - 36) / 4), bw = (w - 36) / 4 - 8;
+    fillRR(bx, y + 52, bw, 74, 8, 'rgba(255,255,255,.05)');
+    text(label, bx + 12, y + 76, 15, C.soft);
+    text(String(n), bx + 12, y + 112, 30, i === 1 && n ? C.amber : C.text, { weight: 700 });
+  });
+  text(o.population, x + 20, y + 162, 16, C.soft);
+  let cy = y + 196;
+  if (o.fuel) {
+    text('FUEL', x + 20, cy + 6, 15, '#f1d38a', { fam: F.px, weight: 700 });
+    o.fuel.forEach(([name, wins], i) => {
+      const ry = cy + 30 + i * 50;
+      text(name, x + 20, ry + 20, 18, C.text, { weight: 700 });
+      wins.forEach(([label, pct], k) => {
+        const gx = x + 120 + k * ((w - 140) / 2), gw = (w - 140) / 2 - 16, p = clamp(pct * o.fill / 100), low = pct < 15;
+        text(label, gx, ry + 4, 13, C.muted, { weight: 700 });
+        fillRR(gx, ry + 12, gw - 60, 14, 4, 'rgba(255,255,255,.08)');
+        fillRR(gx, ry + 12, Math.max(6, (gw - 60) * p), 14, 4, low ? C.amber : C.green);
+        text(low ? `${Math.round(pct * o.fill)}% low` : `${Math.round(pct * o.fill)}%`, gx + gw - 52, ry + 25, 15, low ? C.amber : C.text, { weight: 700 });
+      });
+    });
+    cy += 132;
+  }
+  if (o.economy) {
+    text('ECONOMY', x + 20, cy + 6, 15, '#f1d38a', { fam: F.px, weight: 700 });
+    text(o.economy, x + 20, cy + 38, 18, C.text, { weight: 700 });
+    cy += 64;
+  }
+  if (rows) {
+    fillRR(x + 12, cy, w - 24, 52 + rows * 34, 10, 'rgba(255,209,102,.1)'); strokeRR(x + 12, cy, w - 24, 52 + rows * 34, 10, 'rgba(255,209,102,.55)', 2);
+    text(o.recapTitle, x + 28, cy + 32, 17, GOLD, { weight: 700 });
+    o.recap.forEach(([dot, line], i) => {
+      const q = REDUCED ? 1 : eo(seg(o.t, o.recapT + i * .25, o.recapT + i * .25 + .35));
+      withA(q, () => {
+        circle(x + 34, cy + 62 + i * 34, 6, dot);
+        text(line + '  ›', x + 50 + (1 - q) * 30, cy + 68 + i * 34, 18, C.text, { weight: 700 });
+      });
+    });
+  }
+}
+// City expenses billboard by the top street, beside the town center.
+function cityBillboard(t, w2s, a) {
+  const L = TW.layout, [x, y] = w2s((L.center.x + L.center.w) * TT + 70, (L.center.y + L.center.h) * TT - 34);
+  withA(a, () => {
+    const w = 330, h = 128, pulse = REDUCED ? 0 : Math.max(0, Math.sin((t - 47) * 5)) * seg(t, 47.4, 47.8) * (1 - seg(t, 49.6, 50.2));
+    ctx.fillStyle = '#4b3a2a'; ctx.fillRect(x - 100, y - 8, 8, 40); ctx.fillRect(x + 92, y - 8, 8, 40);
+    ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 18;
+    fillRR(x - w / 2, y - h, w, h, 10, 'rgba(24,19,28,.96)'); ctx.shadowBlur = 0;
+    strokeRR(x - w / 2, y - h, w, h, 10, pulse > .05 ? `rgba(255,213,74,${.5 + .5 * pulse})` : '#c9a227', 2 + pulse * 3);
+    text('CITY EXPENSES', x - w / 2 + 16, y - h + 30, 14, '#f1efe6', { fam: F.px, weight: 700 });
+    fillRR(x + 30, y - h + 12, 64, 26, 6, '#e3aa3a'); text('Today', x + 62, y - h + 31, 14, '#1f1606', { weight: 700, align: 'center' });
+    text('7 days', x + 126, y - h + 31, 14, C.soft, { weight: 700, align: 'center' });
+    text('$41.80', x - w / 2 + 16, y - h + 82, 36, C.text, { fam: F.disp, weight: 900 });
+    text('3.1M tokens · 9 models', x - w / 2 + 16, y - h + 112, 15, C.soft);
+  });
+}
+const MAIN_COSTS = { laptop: '$27.40 · atlas $14.90', 'gpu-box': '$11.20 · train $11.20', 'build-vm': '$3.20 · ci $3.20' };
+
+function S3(t) {
+  const a = seg(t, 13.1, 13.6) * (1 - seg(t, 50.2, 50.9));
+  withA(a, () => {
+    const cam = camAt(CAMS, t);
+    const roofOff = eio(seg(t, 13.9, 14.7));
+    drawTown(TW, t, cam, undefined, {
+      roof: host => host === 'laptop' ? 1 - roofOff : 1 - eio(seg(t, 41.2, 42.2)),
+      plates: seg(t, 14.6, 15.0) * (1 - seg(t, 28.5, 28.9)),
+      stops: stop => stop.key === binStop(TW).key && t >= BIN.stop - .2 && t < BIN.board,
+      bus: mainBus,
+      over: w2s => {
+        if (t >= 42.0) withA(seg(t, 42.0, 42.8), () => townSigns(TW, t, w2s, { cost: t >= 46.8 ? MAIN_COSTS : null }));
+        if (t >= 46.6) cityBillboard(t, w2s, seg(t, 46.6, 47.2) * (1 - seg(t, 50.2, 50.9)));
+        stopClock(t, w2s);
+        centerRing(t, w2s);
+        welcome(t, w2s);
+      }
+    });
+    // caption column on the left of the close-up
     withA(seg(t, 13.6, 14.2) * (1 - seg(t, 27.2, 27.8)), () => {
       const g = ctx.createLinearGradient(0, 0, 820, 0);
       g.addColorStop(0, 'rgba(8,11,18,.94)'); g.addColorStop(.72, 'rgba(8,11,18,.82)'); g.addColorStop(1, 'rgba(8,11,18,0)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, 820, H);
     });
-    if (REDUCED) withA(1 - Math.abs(t - 28.4) / .5, () => { ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H); });
-    appBar(t, 'Town', -76 * (1 - eo(seg(t, 13.25, 13.75))));
+    appBar(t, 'Town', -76 * (1 - eo(seg(t, 13.25, 13.75))), t < 18.2 ? 2 : t < 26.1 ? 3 : 2);
     const L = { x: 64, align: 'left', size: 90 };
     caption(t, 14.2, 17.3, 'Workspaces', { ...L, y: 400 });
     caption(t, 14.3, 17.3, 'are *rooms.*', { ...L, y: 510 });
@@ -982,8 +1294,8 @@ function S34(t) {
     caption(t, 18.2, 20.8, '*reception.*', { ...L, y: 660, accent: C.amber });
     caption(t, 18.6, 20.8, '✓ finished  ·  ? needs you', { ...L, y: 750, size: 34, fam: F.mono, weight: 700, color: C.soft, stagger: .03 });
     caption(t, 21.0, 23.7, 'Checked off?', { ...L, y: 480 });
-    caption(t, 21.3, 23.7, 'Off to the *lounge.*', { ...L, y: 600 });
-    caption(t, 23.9, 27.1, 'Answer in *Chat.*', { ...L, y: 470, accent: C.green });
+    caption(t, 21.3, 23.7, 'Off to the *bar.*', { ...L, y: 600, accent: C.green });
+    caption(t, 23.9, 27.1, 'Answer in *Chat.*', { ...L, y: 470, accent: GOLD });
     caption(t, 24.4, 27.1, 'Peek to answer, or open the chat.', { ...L, y: 560, size: 34, fam: F.mono, weight: 700, color: C.soft, stagger: .03 });
     townPeek(t);
     chatDock(t);
@@ -994,91 +1306,146 @@ function S34(t) {
       const mx = lerp(lerp(1500, tx, cp), px + PEEK_W / 2 + 40, bp), my = lerp(lerp(980, ty, cp), py + 258, bp);
       clickRing(mx, my, t, 24.25); clickRing(mx, my, t, 24.72); pointer(mx, my);
     }
-    band(t, 30.5, 37.0, 120, 250);
-    caption(t, 30.6, 33.9, 'Every host is a *building.* One town.', { y: 150, size: 100 });
-    caption(t, 34.0, 36.9, 'Local or over plain *OpenSSH.* Nothing to get but herdr-world.', { y: 140, size: 50, weight: 800, color: C.soft, stagger: .035 });
+    // the bin: drag an idle agent from the bar onto it
+    binButton(t);
+    if (t >= BIN.grab && t < BIN.drop) {
+      // The dragged agent dangles from the pointer, kicking its feet.
+      const [mx, my] = binCursor(t), c = TA.townCharacter(TA.townLookFor('sweeper'), 'down', Math.floor(t * 8) % 4, 'stand', false);
+      const s = camAt(CAMS, t).z * AS;
+      ctx.save(); ctx.translate(mx, my + 6); ctx.rotate(Math.sin(t * 9) * .12); ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(c, -c.width * s / 2, 0, c.width * s, c.height * s); ctx.restore();
+    }
+    if (t >= 27.3 && t < 29.2) { const [mx, my] = binCursor(t); clickRing(mx, my, t, BIN.grab); clickRing(mx, my, t, BIN.drop); pointer(mx, my); }
+    band(t, 29.3, 34.0, 975, 200);
+    caption(t, 29.4, 34.0, 'Done with one? Put it on the *bus.*', { y: 990, size: 84, accent: '#ff5a5f' });
+    caption(t, 29.9, 34.0, 'Drop it in the bin. It walks to the stop and the next bus takes it.', { y: 1046, size: 30, fam: F.mono, weight: 700, color: C.soft, stagger: .02 });
+    // the town center: open its ring, pick New agent; the new agent walks to work
+    if (t >= 34.5 && t < 36.3) {
+      const cam2 = camAt(CAMS, t), em = TA.townCenterEmblem(TW.layout.center, TT);
+      const ex = W / 2 + (em.x - cam2.x) * cam2.z, ey = H / 2 + (em.y - cam2.y) * cam2.z;
+      const nx = ex, ny = ey - 150;
+      const cp = eio(seg(t, 34.5, NEW.click - .05)), np = eio(seg(t, NEW.click + .4, NEW.pick - .05));
+      const mx = lerp(lerp(1700, ex + 10, cp), nx + 8, np), my = lerp(lerp(980, ey + 10, cp), ny + 8, np);
+      clickRing(mx, my, t, NEW.click); clickRing(mx, my, t, NEW.pick); pointer(mx, my);
+    }
+    band(t, 34.3, 41.4, 975, 200);
+    caption(t, 34.4, 41.4, 'Hire at the *town center.*', { y: 990, size: 84, accent: GOLD });
+    caption(t, 35.4, 41.4, 'A new agent steps out, walks to work and takes a desk.', { y: 1046, size: 30, fam: F.mono, weight: 700, color: C.soft, stagger: .02 });
+    // every host is a building; the fuel and the bill
+    band(t, 42.7, 46.9, 990, 190);
+    caption(t, 42.8, 46.9, 'Every host is a *building.* One town.', { y: 1000, size: 88 });
+    caption(t, 43.6, 46.9, 'Local or over plain OpenSSH. Nothing to get but herdr-world.', { y: 1056, size: 30, fam: F.mono, weight: 700, color: C.soft, stagger: .02 });
+    if (t >= 47.0) withA(seg(t, 47.0, 47.4), () => {
+      const slide = REDUCED ? 0 : (1 - eo(seg(t, 47.0, 47.5))) * -520;
+      ctx.save(); ctx.translate(slide, 0);
+      townBoard(28, 90, 480, {
+        counts: [['Busy', 8], ['Waiting', 1], ['Done', 1], ['Quiet', 2]], population: '12 agents in 3 buildings',
+        fuel: [['Claude', [['5 h', 62], ['week', 81]]], ['Codex', [['5 h', 12], ['week', 54]]]], fill: eo(seg(t, 47.4, 48.4)),
+        economy: '$41.80 today · 3.1M tokens'
+      });
+      ctx.restore();
+    });
+    band(t, 47.6, 50.6, 1000, 160);
+    caption(t, 47.7, 50.6, 'Know the *fuel.* Know the *bill.*', { y: 1010, size: 80, accent: '#ffcf6b' });
+    caption(t, 48.3, 50.6, 'Claude and Codex limits left, and what every host spends today.', { y: 1060, size: 28, fam: F.mono, weight: 700, color: C.soft, stagger: .02 });
   });
 }
+/** The pointer that carries the idle agent from the bar to the bin. */
+function binCursor(t) {
+  const a = TW.agents.find(x => x.k === 'sweeper'), cam = camAt(CAMS, Math.min(t, 28.69));
+  const [ax, ay] = placePoint(a, ['bar', 0]);
+  const sx = W / 2 + (ax - cam.x) * cam.z, sy = H / 2 + (ay - 20 - cam.y) * cam.z;
+  const p = eio(seg(t, 27.3, BIN.grab - .05)), q = eio(seg(t, BIN.grab + .05, BIN.drop - .05)), r = eio(seg(t, BIN.drop + .1, 29.2));
+  return [lerp(lerp(lerp(1500, sx, p), W / 2 - 60, q), W + 60, r), lerp(lerp(lerp(860, sy, p), H - 100, q), H + 60, r)];
+}
 
-// ================= SCENE 5: Board =================
+// ================= BOARD =================
 const BOARD_WS = [
   { key: 'atlas', label: 'Atlas', x: 400, y: 560, meta: '3 agents', tabs: [['web', 'builder · stylist', 400, 330], ['api', 'reviewer', 400, 790], ['docs', 'scribe', 700, 560]] },
   { key: 'harbor', label: 'Harbor', x: 1070, y: 560, meta: '2 agents · 1 shell', tabs: [['cli', 'migrator · $ shell', 1070, 330], ['checks', 'tester', 1070, 790]] },
-  { key: 'meadow', label: 'Meadow', x: 1560, y: 560, meta: '2 agents', tabs: [['evals', 'evaluator', 1560, 330], ['notes', 'sweeper · idle', 1560, 790]] }
+  { key: 'meadow', label: 'Meadow', x: 1560, y: 560, meta: '2 agents · 1 new', tabs: [['evals', 'evaluator', 1560, 330], ['ideas', 'rookie · new', 1560, 790]] }
 ];
-const KIND_OF = {};
-AGENTS.forEach(a => { KIND_OF[a.desk] ||= a.kind; });
+const KIND_OF = { web: 'claude', api: 'codex', docs: 'claude', cli: 'claude', checks: 'codex', evals: 'gemini', ideas: 'claude' };
+const BOARD_SHIFT = 13.3;
 const NOTES = [
   { x: 680, y: 830, w: 220, h: 128, c: '#e9d98a', lines: ['Session fix', 'Ship PR #42 after', 'review.'], to: ['api', 1], t0: 39.8 },
   { x: 1170, y: 205, w: 220, h: 128, c: '#b9d3ee', lines: ['Evals', 'Rerun the suite', 'after the merge.'], to: ['evals', -1], t0: 40.6 }
 ];
-function boardDrag(t) { const p = eio(seg(t, 42.3, 43.3)), back = 0; return [0, (p - back) * 70]; }
+function boardDrag(u) { return [0, eio(seg(u, 41.8, 42.8)) * 70]; }
+// Board's hub beside its bin: + new agent, the crown for the Town master, ⋯ more.
+function boardHub(u) {
+  withA(seg(u, 38.0, 38.4), () => {
+    const y = H - 70;
+    [['🗑', 'Bin'], ['+', 'New agent'], ['♛', 'Town master'], ['⋯', 'More']].forEach(([g, label], i) => {
+      const x = W / 2 - 165 + i * 110;
+      fillRR(x - 46, y - 30, 92, 60, 12, 'rgba(17,21,29,.95)'); strokeRR(x - 46, y - 30, 92, 60, 12, i === 1 ? 'rgba(255,209,102,.6)' : '#2a3242', 2);
+      if (i === 0) { ctx.fillStyle = C.soft; ctx.fillRect(x - 13, y - 16, 26, 4); ctx.fillRect(x - 5, y - 20, 10, 4); rr(x - 10, y - 10, 20, 22, 3); ctx.fill(); }
+      else text(g, x, y + 4, 26, i === 1 ? GOLD : C.text, { weight: 700, align: 'center' });
+      text(label, x, y + 24, 11, C.muted, { fam: F.px, weight: 700, align: 'center' });
+    });
+  });
+}
 function S5(t) {
-  const A = seg(t, 36.9, 37.6) * (1 - seg(t, 45.8, 46.5));
+  const u = t - BOARD_SHIFT;
+  const A = seg(u, 36.9, 37.6) * (1 - seg(u, 43.6, 44.1));
   withA(A, () => {
     ctx.fillStyle = '#1f2421'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#343b36';
     for (let y = 100; y < H; y += 28) for (let x = 14; x < W; x += 28) ctx.fillRect(x, y, 2, 2);
-    appBar(t, 'Board');
-    // host frame
-    withA(seg(t, 37.2, 37.6), () => {
+    appBar(u, 'Board', 0, 1);
+    withA(seg(u, 37.2, 37.6), () => {
       ctx.setLineDash([12, 9]); strokeRR(150, 180, 1650, 800, 26, '#6b746e', 2); ctx.setLineDash([]);
       fillRR(176, 160, 150, 40, 20, '#26302b'); strokeRR(176, 160, 150, 40, 20, '#7aa2f7', 2);
       text('laptop', 200, 187, 19, C.text, { weight: 700 }); circle(304, 180, 10, C.blueD); text('+', 304, 186, 17, '#fff', { weight: 700, align: 'center' });
     });
-    const off = k => k === 'harbor' ? boardDrag(t) : [0, 0];
-    const lag = k => k === 'harbor' ? boardDrag(t - .12) : [0, 0];
+    const off = k => k === 'harbor' ? boardDrag(u) : [0, 0];
+    const lag = k => k === 'harbor' ? boardDrag(u - .12) : [0, 0];
     const tabPos = {};
-    BOARD_WS.forEach((ws, i) => ws.tabs.forEach(([key, , x, y]) => { const [dx, dy] = lag(ws.key); tabPos[key] = [x + dx, y + dy]; }));
-    // strings from workspace to tabs
+    BOARD_WS.forEach(ws => ws.tabs.forEach(([key, , x, y]) => { const [dx, dy] = lag(ws.key); tabPos[key] = [x + dx, y + dy]; }));
     BOARD_WS.forEach((ws, i) => {
       const [dx, dy] = off(ws.key);
       ws.tabs.forEach(([key], j) => {
-        const p = eo(seg(t, 38.1 + i * .15 + j * .08, 38.7 + i * .15 + j * .08)); if (p <= 0) return;
+        const p = eo(seg(u, 38.1 + i * .15 + j * .08, 38.7 + i * .15 + j * .08)); if (p <= 0) return;
         const [tx, ty] = tabPos[key], sx = ws.x + dx, sy = ws.y + dy;
         ctx.strokeStyle = '#6b716d'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lerp(sx, tx, p), lerp(sy, ty, p)); ctx.stroke();
       });
     });
-    // note strings
     NOTES.forEach(n => {
-      const p = eo(seg(t, n.t0 + .5, n.t0 + 1.0)); if (p <= 0) return;
+      const p = eo(seg(u, n.t0 + .5, n.t0 + 1.0)); if (p <= 0) return;
       const [tx, ty] = tabPos[n.to[0]], ex = tx + n.to[1] * 135, sx = n.x + n.w / 2, sy = n.y + 10;
       const mx = (sx + ex) / 2, my = Math.max(sy, ty) + 60;
       ctx.strokeStyle = '#e8735a'; ctx.lineWidth = 3; ctx.beginPath();
       for (let k = 0; k <= 30 * p; k++) { const s = k / 30, x = (1 - s) * (1 - s) * sx + 2 * (1 - s) * s * mx + s * s * ex, y = (1 - s) * (1 - s) * sy + 2 * (1 - s) * s * my + s * s * ty; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
       ctx.stroke();
     });
-    // workspace cards
     BOARD_WS.forEach((ws, i) => {
-      const p = eback(seg(t, 37.4 + i * .12, 37.8 + i * .12)); if (p <= 0) return;
+      const p = eback(seg(u, 37.4 + i * .12, 37.8 + i * .12)); if (p <= 0) return;
       const [dx, dy] = off(ws.key), x = ws.x + dx, y = ws.y + dy;
       ctx.save(); ctx.translate(x, y); ctx.scale(p, p);
       ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 24; fillRR(-150, -58, 300, 116, 10, '#2b302c'); ctx.shadowBlur = 0;
       strokeRR(-150, -58, 300, 116, 10, '#4a514c', 2);
       text(ws.label, -128, -18, 26, C.text, { weight: 700 });
       text(ws.meta, -128, 12, 15, C.muted);
-      ws.tabs.forEach(([key], k) => fillRR(-128 + k * 28, 26, 20, 20, 4, TA.TERMINAL_COLOR_HEX[DESK_COLOR[key]]));
+      ws.tabs.forEach(([key], k) => fillRR(-128 + k * 28, 26, 20, 20, 4, TA.TERMINAL_COLOR_HEX[MAIN_COLORS[key]]));
       circle(-150, -58, 12, '#3a403c'); text('⌃', -150, -52, 14, C.soft, { align: 'center' });
       ctx.restore();
     });
-    // tab cards: the Town desks, in the same colours
     BOARD_WS.forEach((ws, i) => ws.tabs.forEach(([key, who], j) => {
-      const p = eback(seg(t, 37.7 + i * .12 + j * .07, 38.1 + i * .12 + j * .07)); if (p <= 0) return;
-      const [x, y] = tabPos[key], col = TA.TERMINAL_COLOR_HEX[DESK_COLOR[key]];
+      const p = eback(seg(u, 37.7 + i * .12 + j * .07, 38.1 + i * .12 + j * .07)); if (p <= 0) return;
+      const [x, y] = tabPos[key], col = TA.TERMINAL_COLOR_HEX[MAIN_COLORS[key]];
       ctx.save(); ctx.translate(x, y); ctx.scale(p, p);
       ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 18; fillRR(-135, -44, 270, 88, 9, '#202523'); ctx.shadowBlur = 0;
       strokeRR(-135, -44, 270, 88, 9, '#3e4541', 2);
       ctx.fillStyle = col; ctx.fillRect(-133, -42, 7, 84);
       text('>_ ' + key, -114, -10, 20, C.text, { weight: 700 });
       text((KIND_OF[key] || 'shell').toUpperCase(), 122, -12, 12, C.muted, { fam: F.px, align: 'right' });
-      text(who, -114, 24, 15, who.includes('idle') ? C.muted : C.green);
+      text(who, -114, 24, 15, who.includes('new') ? GOLD : C.green);
       ctx.restore();
     }));
-    // sticky notes
     NOTES.forEach((n, i) => {
-      const p = seg(t, n.t0, n.t0 + .45); if (p <= 0) return;
+      const p = seg(u, n.t0, n.t0 + .45); if (p <= 0) return;
       const y = n.y - (1 - eback(p)) * 160;
-      withA(seg(t, n.t0, n.t0 + .15), () => {
+      withA(seg(u, n.t0, n.t0 + .15), () => {
         ctx.save(); ctx.translate(n.x + n.w / 2, y + n.h / 2); ctx.rotate((i ? 1.5 : -1.2) * Math.PI / 180);
         ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 20; ctx.shadowOffsetY = 8;
         fillRR(-n.w / 2, -n.h / 2, n.w, n.h, 4, n.c); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
@@ -1087,109 +1454,288 @@ function S5(t) {
         ctx.restore();
       });
     });
-    // drag the Harbor card: the strings follow
-    if (t >= 41.7 && t < 44.2) {
-      const [dx, dy] = boardDrag(t), cp = eio(seg(t, 41.7, 42.25));
-      const mx = lerp(1500, 1070 + 90, cp) + dx, my = lerp(1000, 560 + 6, cp) + (t > 42.25 ? dy : 0);
-      clickRing(mx, my, t, 42.25); pointer(mx, my);
+    boardHub(u);
+    if (u >= 41.2 && u < 43.6) {
+      const [dx, dy] = boardDrag(u), cp = eio(seg(u, 41.2, 41.75));
+      const mx = lerp(1500, 1070 + 90, cp) + dx, my = lerp(1000, 560 + 6, cp) + (u > 41.8 ? dy : 0);
+      clickRing(mx, my, u, 41.8); pointer(mx, my);
     }
-    caption(t, 37.7, 45.9, 'Plan on the *Board.*', { y: 150, size: 100, accent: C.green });
-    band(t, 38.6, 45.9, 1036, 96);
-    caption(t, 38.6, 45.9, 'Cards and strings for every terminal, in the same colours as Town.', { y: 1050, size: 40, fam: F.mono, weight: 700, color: C.soft, stagger: .025 });
+    caption(u, 37.7, 44.0, 'Plan on the *Board.*', { y: 150, size: 100, accent: C.green });
+    caption(u, 38.6, 44.0, 'The same agents as cards and strings, in the same colours as Town.', { y: 214, size: 30, fam: F.mono, weight: 700, color: C.soft, stagger: .02 });
   });
 }
+const MAIN_COLORS = {};
+MAIN.rooms.forEach(r => r[3].forEach(d => { MAIN_COLORS[d[0]] = d[2]; }));
 
-// ================= SCENE 6: pocket =================
-const PHONE_CHAT = [
-  ['agent', 'Sweep finished: 48 runs, best loss 0.212.', -1],
-  ['agent', 'Keep the best checkpoint and delete the other 47?', -1, true],
-  ['you', 'Keep the best three.', 50.3],
-  ['agent', 'Kept 3, removed 45. Back to the evals.', 50.75]
-];
+// ================= NIGHT: pocket =================
+const NIGHT = { in: 56.7, out: 66.6, ping: 58.4, open: 59.6, type0: 60.1, type1: 60.9, clip: 61.3, send: 61.9 };
+function nightSky(t, warm = 0) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#050816'); g.addColorStop(.7, '#0b1430'); g.addColorStop(1, '#141c3a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 140; i++) {
+    const x = hash(i * 3.1) * W, y = hash(i * 7.7) * H * .8, tw = REDUCED ? .7 : .45 + .55 * Math.abs(Math.sin(t * (1 + hash(i) * 2) + i));
+    ctx.fillStyle = `rgba(230,236,255,${tw * (.35 + hash(i * 1.3) * .6) * (1 - warm)})`; ctx.fillRect(x, y, hash(i * 5) > .9 ? 3 : 2, hash(i * 5) > .9 ? 3 : 2);
+  }
+  const mx = 300, my = 210 + warm * 500;
+  const mg = ctx.createRadialGradient(mx, my, 20, mx, my, 220); mg.addColorStop(0, `rgba(244,241,220,${.25 * (1 - warm)})`); mg.addColorStop(1, 'rgba(244,241,220,0)');
+  ctx.fillStyle = mg; ctx.fillRect(mx - 220, my - 220, 440, 440);
+  circle(mx, my, 62, `rgba(244,241,220,${1 - warm})`); circle(mx + 22, my - 14, 12, `rgba(214,210,186,${1 - warm})`); circle(mx - 18, my + 20, 8, `rgba(214,210,186,${1 - warm})`);
+  if (warm > 0) {
+    const s = ctx.createLinearGradient(0, H, 0, 0);
+    s.addColorStop(0, `rgba(255,160,90,${.85 * warm})`); s.addColorStop(.5, `rgba(255,120,120,${.35 * warm})`); s.addColorStop(1, `rgba(80,110,200,${.25 * warm})`);
+    ctx.fillStyle = s; ctx.fillRect(0, 0, W, H);
+  }
+}
+function paperclip(x, y, s, c) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-.6); ctx.strokeStyle = c; ctx.lineWidth = 2.4;
+  rr(-s * .25, -s * .6, s * .5, s * 1.2, s * .25); ctx.stroke(); rr(-s * .12, -s * .4, s * .24, s * .8, s * .12); ctx.stroke(); ctx.restore();
+}
+/** Needs you, full screen on the phone: one question, answered with a file attached. */
+function needsYouPhone(t, sx, sy, sw, sh) {
+  ctx.fillStyle = '#0d111b'; ctx.fillRect(sx, sy + 56, sw, 64);
+  townButton(sx + 14, sy + 66, 76, 44, '‹ Back', { size: 15 });
+  text('Needs you', sx + 104, sy + 96, 20, C.text, { fam: F.px, weight: 700 });
+  const left = t < NIGHT.send + .2 ? 1 : 0;
+  fillRR(sx + sw - 64, sy + 74, 44, 28, 14, left ? C.amber : '#2a3242'); text(String(left), sx + sw - 42, sy + 94, 16, left ? '#1a1206' : C.soft, { weight: 700, align: 'center' });
+  const gone = eio(seg(t, NIGHT.send + .1, NIGHT.send + .5));
+  const x = sx + 14 + gone * sw, y = sy + 138, w = sw - 28, h = 350;
+  if (gone < 1) withA(1 - gone, () => {
+    fillRR(x, y, w, h, 12, '#11151d'); strokeRR(x, y, w, h, 12, 'rgba(255,181,71,.7)', 2);
+    fillRR(x + 12, y + 12, 40, 46, 6, '#1b2230'); person('metrics', x + 32, y + 54, 1.7);
+    circle(x + 50, y + 16, 10, C.amber); text('?', x + 50, y + 22, 15, '#1a1206', { weight: 700, align: 'center' });
+    text('metrics', x + 64, y + 34, 18, C.text, { fam: F.px, weight: 700 });
+    text('gpu-box · Train · 2 min', x + 64, y + 54, 14, '#a9b2a4');
+    // Open in Chat, and dismiss
+    strokeRR(x + w - 90, y + 16, 34, 28, 8, '#a9b2a4', 2); ctx.beginPath(); ctx.moveTo(x + w - 80, y + 44); ctx.lineTo(x + w - 84, y + 52); ctx.lineTo(x + w - 70, y + 44); ctx.fillStyle = '#a9b2a4'; ctx.fill();
+    text('✕', x + w - 30, y + 38, 20, '#a9b2a4', { weight: 700, align: 'center' });
+    wrap('Keep the best checkpoint and delete the other 47?', w - 32, 18).forEach((l, k) => text(l, x + 16, y + 96 + k * 26, 18, GOLD));
+    text('asked with herdr-world ask', x + 16, y + 160, 13, C.muted);
+    // answer field: paperclip, text, attachment chip, Send
+    const fy = y + 182;
+    fillRR(x + 12, fy, w - 24, 150, 10, '#0b0e14'); strokeRR(x + 12, fy, w - 24, 150, 10, t >= NIGHT.type0 && t < NIGHT.send ? GOLD : '#2a3242', 2);
+    paperclip(x + 34, fy + 30, 18, t >= NIGHT.clip - .2 && t < NIGHT.clip + .3 ? GOLD : '#a9b2a4');
+    const typed = 'Keep the best three.', k = Math.floor(seg(t, NIGHT.type0, NIGHT.type1) * typed.length);
+    if (k) text(typed.slice(0, k) + (t < NIGHT.send && Math.floor(t * 3) % 2 ? '▍' : ''), x + 56, fy + 37, 17, C.text);
+    else text('Answer metrics…', x + 56, fy + 37, 17, C.muted);
+    if (t >= NIGHT.clip) {
+      const cp = eback(seg(t, NIGHT.clip, NIGHT.clip + .3));
+      ctx.save(); ctx.translate(x + 28, fy + 66); ctx.scale(cp, cp);
+      fillRR(0, 0, 232, 64, 8, '#1b2230'); strokeRR(0, 0, 232, 64, 8, '#3a4459', 1.5);
+      fillRR(8, 8, 48, 48, 4, '#0d1117');
+      ctx.strokeStyle = C.green; ctx.lineWidth = 2; ctx.beginPath();
+      for (let i = 0; i <= 10; i++) { const px = 12 + i * 4, py = 18 + 28 * Math.exp(-i / 3.5) + hash(i) * 4; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.stroke();
+      text('loss-curve.png', 66, 28, 14, C.text, { weight: 700 }); text('84 KB', 66, 48, 12, C.muted);
+      text('✕', 214, 38, 14, C.muted, { align: 'center' });
+      ctx.restore();
+    }
+    const hot = t >= NIGHT.send - .2 && t < NIGHT.send + .15;
+    fillRR(x + w - 120, fy + 98, 96, 42, 9, hot ? 'rgba(255,209,102,.45)' : 'rgba(255,209,102,.16)'); strokeRR(x + w - 120, fy + 98, 96, 42, 9, 'rgba(255,209,102,.65)', 2);
+    text('Send', x + w - 72, fy + 125, 16, GOLD, { weight: 700, align: 'center' });
+    // the rest of Needs you, below
+    fillRR(x, y + h + 16, w, 96, 12, '#11151d'); strokeRR(x, y + h + 16, w, 96, 12, 'rgba(123,224,143,.55)', 2);
+    text('releaser', x + 16, y + h + 50, 16, C.text, { fam: F.px, weight: 700 }); text('done ✓  · build-vm · CI', x + 140, y + h + 50, 13, C.green);
+    text('Release notes are drafted for v0.3.', x + 16, y + h + 82, 15, C.soft);
+  });
+  if (t >= NIGHT.send + .2) {
+    const tp = eback(seg(t, NIGHT.send + .2, NIGHT.send + .5));
+    ctx.save(); ctx.translate(sx + sw / 2, sy + 168); ctx.scale(tp, tp);
+    fillRR(-170, -30, 340, 60, 30, C.green); text('✓ Sent, with 1 file', 0, 7, 18, '#0b0f18', { weight: 700, align: 'center' });
+    ctx.restore();
+    withA(seg(t, NIGHT.send + .6, NIGHT.send + 1), () => {
+      text('Nothing needs you.', sx + sw / 2, sy + 420, 22, C.text, { weight: 700, align: 'center' });
+      text('Go back to sleep.', sx + sw / 2, sy + 456, 18, C.muted, { align: 'center' });
+    });
+  }
+}
 function S6(t) {
-  const A = seg(t, 45.9, 46.5) * (1 - seg(t, 52.9, 53.4));
+  const A = seg(t, NIGHT.in, NIGHT.in + .6) * (1 - seg(t, 66.0, 66.6));
   withA(A, () => {
-    const g = ctx.createRadialGradient(1440, 540, 50, 1440, 540, 900);
-    g.addColorStop(0, 'rgba(73,121,223,.28)'); g.addColorStop(1, 'rgba(8,11,18,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    const rise = REDUCED ? 0 : 1 - eo(seg(t, 46.0, 46.9));
-    const [bx, by] = (t > 47.7 && t < 48.5) ? shake(t, 9) : [0, 0];
-    const px = 1440 - 220 + bx, py = 90 + rise * 1000 + by, pw = 440, ph = 900;
+    nightSky(t, eio(seg(t, 64.6, 66.4)));
+    const rise = REDUCED ? 0 : 1 - eo(seg(t, NIGHT.in + .1, NIGHT.in + 1.0));
+    const [bx, by] = (t > NIGHT.ping + .1 && t < NIGHT.ping + .9) ? shake(t, 9) : [0, 0];
+    const px = 1400 - 220 + bx, py = 90 + rise * 1000 + by, pw = 440, ph = 900;
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 80; fillRR(px, py, pw, ph, 64, '#05070c'); ctx.shadowBlur = 0;
     strokeRR(px, py, pw, ph, 64, '#2b3348', 4);
     const sx = px + 18, sy = py + 18, sw = pw - 36, sh = ph - 36;
     rr(sx, sy, sw, sh, 48); ctx.save(); ctx.clip();
     ctx.fillStyle = C.bg; ctx.fillRect(sx, sy, sw, sh);
-    fillRR(sx + sw / 2 - 60, sy + 12, 120, 30, 15, '#000');
-    text('9:41', sx + 40, sy + 36, 18, C.text, { weight: 700 });
-    if (t < 49.1) {
+    if (t < NIGHT.open) {
       ctx.fillStyle = '#0d111b'; ctx.fillRect(sx, sy + 56, sw, 56);
       logoTile(sx + 34, sy + 84, 30); text('Herdr.World', sx + 58, sy + 91, 18, C.text, { weight: 700 });
       fillRR(sx + 236, sy + 68, 150, 32, 6, C.panel); text('Town ▾', sx + 252, sy + 90, 15, C.soft, { weight: 700 });
-      const b = TW.hosts.get('gpu-box');
-      drawTown(30.5, { x: (b.doorX - 4) * TT, y: (b.y + 22) * TT, z: 1.15 }, { x: sx, y: sy + 112, w: sw, h: sh - 112 }, { near: true });
-      if (t >= 47.6) {
-        const np = eback(seg(t, 47.6, 47.95)), ny = sy + lerp(-140, 60, np);
-        ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 30; fillRR(sx + 14, ny, sw - 28, 110, 22, 'rgba(36,44,64,.97)'); ctx.shadowBlur = 0;
+      const b = TW.hosts.get('gpu-box'), vp = { x: sx, y: sy + 112, w: sw, h: sh - 112 }, cam = { x: (b.doorX - 2) * TT, y: (b.y + 4) * TT, z: 1.3 };
+      drawTown(TW, 30.0, cam, vp, { near: true, roof: () => 0 });
+      // night over the phone's Town: lamps glow
+      ctx.save(); ctx.beginPath(); ctx.rect(vp.x, vp.y, vp.w, vp.h); ctx.clip();
+      ctx.fillStyle = 'rgba(10,16,48,.5)'; ctx.fillRect(vp.x, vp.y, vp.w, vp.h);
+      for (const l of TW.layout.lamps) {
+        const lx = vp.x + vp.w / 2 + ((l.x + .5) * TT - cam.x) * cam.z, ly = vp.y + vp.h / 2 + (l.y * TT - 14 - cam.y) * cam.z;
+        if (lx > vp.x - 80 && lx < vp.x + vp.w + 80 && ly > vp.y - 80 && ly < vp.y + vp.h + 80) glowAt(lx, ly, 160, '255,214,140', .9);
+      }
+      ctx.restore();
+      if (t >= NIGHT.ping) {
+        const np = eback(seg(t, NIGHT.ping, NIGHT.ping + .35)), ny = sy + lerp(-160, 60, np);
+        ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 30; fillRR(sx + 14, ny, sw - 28, 132, 22, 'rgba(36,44,64,.97)'); ctx.shadowBlur = 0;
         logoTile(sx + 50, ny + 40, 34);
         text('HERDR.WORLD', sx + 80, ny + 34, 14, C.muted, { fam: F.px, weight: 700 }); text('now', sx + sw - 40, ny + 34, 14, C.muted, { align: 'right' });
-        text('metrics needs you', sx + 80, ny + 64, 19, C.text, { weight: 700 });
-        text('gpu-box · Train · gemini', sx + 80, ny + 90, 16, C.soft);
-        if (t >= 48.9) { const rp = seg(t, 48.9, 49.2); circle(sx + sw / 2, ny + 55, 30 + rp * 30, `rgba(255,255,255,${.35 * (1 - rp)})`); }
+        text('metrics asks you', sx + 80, ny + 64, 19, C.text, { weight: 700 });
+        text('Keep the best checkpoint and', sx + 80, ny + 90, 15, C.soft);
+        text('delete the other 47?', sx + 80, ny + 112, 15, C.soft);
+        if (t >= NIGHT.open - .3) { const rp = seg(t, NIGHT.open - .3, NIGHT.open); circle(sx + sw / 2, ny + 66, 30 + rp * 30, `rgba(255,255,255,${.35 * (1 - rp)})`); }
       }
-    } else {
-      ctx.fillStyle = '#0d111b'; ctx.fillRect(sx, sy + 56, sw, 64);
-      // On a phone the chat window fills the screen; Back returns to Town.
-      townButton(sx + 14, sy + 66, 44, 44, '‹', { size: 24 });
-      text('metrics', sx + 70, sy + 86, 18, C.text, { fam: F.px, weight: 700 });
-      text('gemini · Train · gpu-box', sx + 70, sy + 106, 14, '#a9b2a4');
-      ['Chat', 'Terminal', 'Files'].forEach((tb, k) => townButton(sx + 14 + k * 124, sy + 132, 116, 36, tb, { on: !k, size: 15 }));
-      chatBody(sx + 16, sy + 184, sw - 32, 560, t, PHONE_CHAT, 18);
-      composer(sx + 14, sy + 758, sw - 28, 58, t, 'Keep the best three.', 49.6, 50.05, 50.3, 16);
-      if (t >= 51.1) {
-        const tp = eback(seg(t, 51.1, 51.4));
-        ctx.save(); ctx.translate(sx + sw / 2, sy + 228); ctx.scale(tp, tp);
-        fillRR(-170, -30, 340, 60, 30, C.green); text('✓ metrics is back to work', 0, 7, 17, '#0b0f18', { weight: 700, align: 'center' });
-        ctx.restore();
-      }
-    }
+    } else needsYouPhone(t, sx, sy, sw, sh);
+    fillRR(sx + sw / 2 - 60, sy + 12, 120, 30, 15, '#000');
+    text('3:12', sx + 40, sy + 36, 18, C.text, { weight: 700 });
+    // the phone sleeps again
+    withA(seg(t, 64.0, 64.6), () => { ctx.fillStyle = '#000'; ctx.fillRect(sx, sy, sw, sh); });
     ctx.restore(); ctx.restore();
-    caption(t, 46.6, 53.2, 'Herd from your *pocket.*', { x: 120, align: 'left', y: 470, size: 112 });
-    caption(t, 47.4, 53.2, 'Install it as an app on your phone or desktop.', { x: 124, align: 'left', y: 560, size: 40, fam: F.mono, weight: 700, color: C.soft, stagger: .03 });
-    caption(t, 47.9, 53.2, 'Answer agents in Chat, from anywhere.', { x: 124, align: 'left', y: 616, size: 40, fam: F.mono, weight: 700, color: C.soft, stagger: .03 });
+    caption(t, 57.3, 64.4, 'Herd from your *pocket.*', { x: 120, align: 'left', y: 430, size: 112 });
+    caption(t, 58.3, 64.4, 'Agents ask you with herdr-world ask.', { x: 124, align: 'left', y: 524, size: 38, fam: F.mono, weight: 700, color: C.soft, stagger: .025 });
+    caption(t, 59.2, 64.4, 'Answer from Needs you, files and all.', { x: 124, align: 'left', y: 578, size: 38, fam: F.mono, weight: 700, color: C.soft, stagger: .025 });
+    caption(t, 64.6, 66.4, 'Then sleep.', { x: 120, align: 'left', y: 520, size: 112, color: '#ffe1b8' });
   });
 }
 
-// ================= SCENE 7: finale =================
+// ================= DAWN: the town at scale =================
+/** A synthetic town at the app's scale scene's size: 3 hosts, 24 rooms, 312 desks, 291 agents. */
+function scaleSpec() {
+  const hosts = [['atlas', 'local'], ['nova', 'ssh'], ['zephyr', 'ssh']];
+  const ROOMS = [['orbit', 'harbor', 'lantern', 'meadow', 'quarry', 'summit', 'tidepool', 'vale'], ['beacon', 'canyon', 'delta', 'ember', 'fjord', 'grove', 'haven', 'isle'], ['juniper', 'kestrel', 'lagoon', 'mesa', 'nectar', 'oasis', 'prairie', 'ridge']];
+  const DESKS = [15, 11, 13, 14, 12, 15, 11, 13];
+  const NAMES = ['api', 'auth', 'billing', 'build', 'cache', 'docs', 'e2e', 'ingest', 'lint', 'migrate', 'notify', 'perf', 'release', 'search', 'ui'];
+  const COLORS = Object.keys(TA.TERMINAL_COLOR_HEX), KINDS = ['claude', 'codex', 'pi', 'gemini'];
+  const rooms = [], seats = [], shells = {};
+  hosts.forEach(([h], hi) => ROOMS[hi].forEach((room, r) => {
+    const desks = [];
+    for (let i = 0; i < DESKS[r]; i++) {
+      const key = `${room}/${NAMES[i]}`, n = Math.min(4, 1 + ((i * 7 + r * 3 + hi) % 4 === 0 ? 1 : 0) + ((i + r) % 5 === 0 ? 2 : 0));
+      desks.push([key, n, COLORS[Math.floor(hash(hi * 97 + r * 13 + i) * COLORS.length)]]);
+      for (let s = 0; s < n; s++) seats.push([key, s, hi]);
+    }
+    rooms.push([room, h, room[0].toUpperCase() + room.slice(1), desks]);
+  }));
+  const agents = [], byHost = [[], [], []];
+  let n = 0;
+  for (const [desk, seat, hi] of seats) {
+    const r = hash(n * 3.7 + seat * 11.3 + 5);
+    if (r > .62 || agents.length >= 291) { if (r > .9) (shells[desk] ||= []).push(seat); n++; continue; }
+    const m = hash(n * 1.9 + 2) * 100;
+    const st = m < 46 ? 'working' : m < 52 ? 'asking' : m < 56 ? 'blocked' : m < 68 ? 'done' : m < 88 ? 'idle' : 'unknown';
+    const a = { k: `${desk}#${seat}`, kind: KINDS[n % 4], desk, seat, st: [[0, st]] };
+    agents.push(a); byHost[hi].push(a); n++;
+  }
+  // Waiting and finished agents fill each reception; the rest crowd the lobby,
+  // grumbling, and the longest-waiting nap on the floor. Idle ones take the bar.
+  byHost.forEach(list => {
+    let q = 0, c = 0, bar = 0;
+    for (const a of list) {
+      const st = a.st[0][1];
+      if (st === 'asking' || st === 'blocked' || st === 'done') {
+        if (q < 10) a.at = ['queue', q++];
+        else if (c < 14) { a.at = ['crowd', c]; a.nap = c % 3 === 2; c++; }
+      } else if (st === 'idle' && bar < 12 && hash(a.k.length + bar) > .3) a.at = ['bar', bar++];
+    }
+  });
+  return { margin: 26, hosts, rooms, shells, agents };
+}
+function scaleCounts(t) {
+  const n = { working: 0, waiting: 0, done: 0, quiet: 0, unknown: 0 };
+  for (const a of SCALE.agents) {
+    const s = a.st[0][1];
+    if (s === 'working') n.working++; else if (s === 'asking' || s === 'blocked') n.waiting++; else if (s === 'done') n.done++; else { n.quiet++; if (s === 'unknown') n.unknown++; }
+  }
+  return n;
+}
+let SCALE_N = null;
+function dawnCams() {
+  const L = SCALE.layout, b = SCALE.hosts.get('atlas');
+  const all = { x: L.width * TT / 2, y: L.height * TT / 2 + 20, z: Math.min(W / (L.width * TT + 80), H / (L.height * TT + 160)) };
+  const atlas = { x: (b.x + b.w * .55) * TT, y: (b.y + 14) * TT, z: 1.0 };
+  const lobby = { x: b.doorX * TT, y: (b.lobbyY + 4) * TT, z: 3.1 };
+  return [[66.0, atlas], [69.3, atlas], [70.4, lobby], [73.2, lobby], [76.4, all]];
+}
+let DAWN_CAMS = null;
+function hudClock(label, l1, c1, l2) {
+  fillRR(40, 40, 640, 96, 12, 'rgba(8,11,18,.92)'); strokeRR(40, 40, 640, 96, 12, C.line, 2);
+  text(label, 66, 104, 46, C.amber, { fam: F.px, weight: 700 });
+  text(l1, 656, 80, 22, c1, { fam: F.px, weight: 700, align: 'right' });
+  text(l2, 656, 112, 22, C.soft, { fam: F.px, weight: 700, align: 'right' });
+}
 function S7(t) {
-  const A = seg(t, 52.9, 53.4);
+  const A = seg(t, 65.9, 66.6) * (1 - seg(t, 77.4, 78.1));
   withA(A, () => {
-    const lead = -260 + (t - 52.9) * 185;
-    AGENTS.slice(0, 12).forEach((a, i) => {
-      const x = lead - 150 - i * 112, frame = REDUCED ? 0 : Math.floor((t * 8 + i * .7) % 4);
+    const cam = camAt(DAWN_CAMS, t);
+    drawTown(SCALE, t, cam, undefined, { roof: () => 0, near: cam.z >= 1.4 });
+    // morning light washing over the town
+    const warm = 1 - eio(seg(t, 66.2, 69.0));
+    if (warm > 0) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = `rgba(255,140,60,${.7 * warm})`; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    const N = SCALE_N;
+    const mins = 30 + Math.floor(seg(t, 66, 78) * 8);
+    withA(seg(t, 66.3, 66.8) * (1 - seg(t, 72.8, 73.3)), () => hudClock(`07:${String(mins).padStart(2, '0')} AM`, `${N.waiting} WAITING`, C.amber, `${SCALE.agents.length} AGENTS`));
+    // Since you left, on the Town board
+    if (t >= 66.6 && t < 70.0) withA(seg(t, 66.6, 67.0) * (1 - seg(t, 69.4, 69.9)), () => {
+      townBoard(40, 160, 560, {
+        counts: [['Busy', N.working], ['Waiting', N.waiting], ['Done', N.done], ['Quiet', N.quiet]],
+        population: `${SCALE.agents.length} agents in 3 buildings · ${N.unknown} unknown`,
+        recap: [[C.amber, `${N.waiting} new for you, from metrics and others`], [C.green, `${N.done} finished`], [C.blueB, '6 PRs merged']],
+        recapTitle: 'Since 1:12 AM · away 6 h', recapT: 67.2, t
+      });
+    });
+    band(t, 66.6, 69.6, 990, 170);
+    caption(t, 66.7, 69.6, 'Wake up to *Since you left.*', { y: 1010, size: 86, accent: GOLD });
+    caption(t, 67.4, 69.6, 'What finished, what merged and who asked for you overnight.', { y: 1060, size: 28, fam: F.mono, weight: 700, color: C.soft, stagger: .02 });
+    band(t, 70.4, 73.2, 990, 170);
+    caption(t, 70.5, 73.2, 'Kept waiting? They *grumble.*', { y: 1010, size: 86, accent: '#ff6b5f' });
+    caption(t, 71.2, 73.2, 'A full reception spills into the lobby. Then they nap on the floor.', { y: 1060, size: 28, fam: F.mono, weight: 700, color: C.soft, stagger: .02 });
+    // the pull-back: hundreds of agents, three buildings, one town
+    if (t >= 73.4) {
+      const k = Math.round(12 + (SCALE.agents.length - 12) * eo(seg(t, 73.5, 75.6)));
+      band(t, 73.5, 77.4, 975, 230);
+      caption(t, 73.6, 77.4, `12 agents? Try *${t > 75.6 ? SCALE.agents.length : k}.*`, { y: 1000, size: 112, accent: C.blueB, stagger: 0 });
+      caption(t, 74.4, 77.4, '3 hosts · 24 rooms · 312 desks · one Town.', { y: 1058, size: 32, fam: F.mono, weight: 700, color: C.soft, stagger: .025 });
+    }
+  });
+}
+
+// ================= FINALE =================
+const FIN = 24.6;
+function S8(t) {
+  const u = t - FIN;
+  const A = seg(u, 52.9, 53.4);
+  withA(A, () => {
+    const lead = -260 + (u - 52.9) * 210;
+    const herd = MAIN.agents.filter(a => a.k !== 'sweeper');
+    herd.forEach((a, i) => {
+      const x = lead - 150 - i * 112, frame = REDUCED ? 0 : Math.floor((u * 8 + i * .7) % 4);
       if (x > -80 && x < W + 80) person(a.k, x, 1046, 4, 'right', frame);
     });
-    if (lead > -100) { ctx.save(); ctx.translate(lead, 990 - Math.abs(Math.sin(t * 6)) * 10); ctx.rotate(Math.sin(t * 6) * .06); logoTile(0, 0, 84, .6); ctx.restore(); }
+    if (lead > -100) { ctx.save(); ctx.translate(lead, 990 - Math.abs(Math.sin(u * 6)) * 10); ctx.rotate(Math.sin(u * 6) * .06); logoTile(0, 0, 84, .6); ctx.restore(); }
+    // the bus brings up the rear, with the binned one waving from the top deck
+    const bx = lead - 150 - herd.length * 112 - 70;
+    if (bx > -300 && bx < W + 300) { ctx.save(); ctx.translate(bx, 1046); ctx.scale(4, 4); ctx.imageSmoothingEnabled = false; drawBus(0, -8, false, ['sweeper']); ctx.restore(); }
     ctx.fillStyle = C.line; ctx.fillRect(0, 1048, W, 2);
-    const out = eio(seg(t, 56.0, 56.5));
+    const out = eio(seg(u, 56.0, 56.5));
     withA(1 - out, () => {
-      if (t >= 53.2) { const p = seg(t, 53.2, 53.45); withA(p, () => { ctx.save(); ctx.translate(W / 2, 420); const s = lerp(1.35, 1, eo(p)); ctx.scale(s, s); text('STOP BABYSITTING.', 0, 0, 200, C.text, { fam: F.disp, weight: 900, align: 'center' }); ctx.restore(); }); }
-      if (t >= 54.6) { const p = seg(t, 54.6, 54.85); withA(p, () => { ctx.save(); ctx.translate(W / 2, 650); const s = lerp(1.35, 1, eo(p)); ctx.scale(s, s); ctx.shadowColor = 'rgba(122,162,247,.6)'; ctx.shadowBlur = 50; text('START HERDING.', 0, 0, 230, C.blue, { fam: F.disp, weight: 900, align: 'center' }); ctx.restore(); }); }
+      if (u >= 53.2) { const p = seg(u, 53.2, 53.45); withA(p, () => { ctx.save(); ctx.translate(W / 2, 420); const s = lerp(1.35, 1, eo(p)); ctx.scale(s, s); text('STOP BABYSITTING.', 0, 0, 200, C.text, { fam: F.disp, weight: 900, align: 'center' }); ctx.restore(); }); }
+      if (u >= 54.6) { const p = seg(u, 54.6, 54.85); withA(p, () => { ctx.save(); ctx.translate(W / 2, 650); const s = lerp(1.35, 1, eo(p)); ctx.scale(s, s); ctx.shadowColor = 'rgba(122,162,247,.6)'; ctx.shadowBlur = 50; text('START HERDING.', 0, 0, 230, C.blue, { fam: F.disp, weight: 900, align: 'center' }); ctx.restore(); }); }
     });
-    if (t >= 56.2) {
-      const lp = eback(seg(t, 56.2, 56.65));
+    if (u >= 56.2) {
+      const lp = eback(seg(u, 56.2, 56.65));
       ctx.save(); ctx.translate(W / 2, 270); ctx.scale(lp, lp); logoTile(0, 0, 200, 1); ctx.restore();
-      withA(seg(t, 56.45, 56.8), () => text('Herdr.World', W / 2, 520, 150, C.text, { fam: F.disp, weight: 900, align: 'center', ls: 2 }));
-      if (t >= 56.9) {
-        withA(seg(t, 56.9, 57.1), () => {
+      withA(seg(u, 56.45, 56.8), () => text('Herdr.World', W / 2, 520, 150, C.text, { fam: F.disp, weight: 900, align: 'center', ls: 2 }));
+      if (u >= 56.9) {
+        withA(seg(u, 56.9, 57.1), () => {
           const cmd = 'npx @ivoryheart/herdr-world';
-          const k = Math.floor(seg(t, 57.1, 58.8) * cmd.length);
+          const k = Math.floor(seg(u, 57.1, 58.8) * cmd.length);
           fillRR(W / 2 - 520, 580, 1040, 92, 14, C.panel); strokeRR(W / 2 - 520, 580, 1040, 92, 14, C.line, 2);
           text('$', W / 2 - 480, 640, 34, C.blue, { weight: 700 });
-          text(cmd.slice(0, k) + (Math.floor(t * 2.5) % 2 ? '▍' : ''), W / 2 - 440, 640, 34, C.text, { weight: 700 });
+          text(cmd.slice(0, k) + (Math.floor(u * 2.5) % 2 ? '▍' : ''), W / 2 - 440, 640, 34, C.text, { weight: 700 });
         });
       }
-      withA(seg(t, 59.1, 59.5), () => {
+      withA(seg(u, 59.1, 59.5), () => {
         text('https://herdr.world', W / 2, 768, 72, C.blueB, { fam: F.disp, weight: 900, align: 'center', ls: 2 });
         text('FREE AND OPEN SOURCE · MIT · MACOS · LINUX · WINDOWS', W / 2, 826, 22, C.muted, { fam: F.px, weight: 700, align: 'center', ls: 2 });
       });
@@ -1197,6 +1743,12 @@ function S7(t) {
   });
 }
 
+function buildTowns() {
+  TW = makeTown(MAIN); CAMS = townCams(TW);
+  SCALE = makeTown(scaleSpec()); SCALE_N = scaleCounts(); DAWN_CAMS = dawnCams();
+  // Draw each scene once now, so its sprites and screens are made before playback.
+  for (const t of [10, 12, 13.6, 24.5, 29, 31.5, 35.5, 38, 43, 47.5, 50.5, 52, 58, 60.5, 66, 68, 70.5, 74, 76.5, 79, 84]) frame(t);
+}
 function vignette() {
   const g = ctx.createRadialGradient(W / 2, H / 2, 600, W / 2, H / 2, 1250);
   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.45)');
@@ -1207,10 +1759,11 @@ function frame(t) {
   ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
   if (t < 9.06) S1(t);
   if (t >= 9 && t < 13.7) S2(t);
-  if (t >= 13.1 && t < 37.6) S34(t);
-  if (t >= 36.9 && t < 46.6) S5(t);
-  if (t >= 45.9 && t < 53.5) S6(t);
-  if (t >= 52.9) S7(t);
+  if (t >= 13.1 && t < 50.9) S3(t);
+  if (t >= 50.2 && t < 57.4) S5(t);
+  if (t >= 56.7 && t < 66.6) S6(t);
+  if (t >= 65.9 && t < 78.1) S7(t);
+  if (t >= 77.5) S8(t);
   vignette();
 }
 
@@ -1235,26 +1788,28 @@ function buildScore() {
   E(10.95, A => { A.noise(10.95, { dur: .14, vol: .7, type: 'lowpass', freq: 1400 }); A.tone(10.95, { f: 160, f2: 60, dur: .22, type: 'sine', vol: .7 }); });
   E(11.5, A => [60, 64, 67, 72].forEach(m => A.tone(11.5, { f: mf(m), dur: 1.9, type: 'sawtooth', vol: .05, a: .04, r: 1, lp: 700, lp2: 3200 })));
   E(12.5, A => [62, 67, 71, 74].forEach(m => A.tone(12.5, { f: mf(m), dur: .95, type: 'sawtooth', vol: .045, a: .02, r: .5, lp: 900, lp2: 3600 })));
-  // groove
-  const G0 = 13.5, GEND = 53.0, beat = .5;
+  // The groove: day in Town (13.5–56.5), and again at dawn (66.2–77.4).
+  const beat = .5;
   const prog = [[48, [60, 64, 67, 72]], [43, [67, 71, 74, 79]], [45, [69, 72, 76, 81]], [41, [65, 69, 72, 77]]];
   const pat = [0, 1, 2, 3, 2, 1, 0, 2];
-  for (let t = G0; t < GEND - .01; t += beat / 2) {
-    const tt = t, step = Math.round((t - G0) / (beat / 2)), bar = Math.floor(step / 8), [root, ch] = prog[bar % 4];
-    const duck = (tt >= 46 && tt < 53) ? .45 : 1, inBeat = step % 2 === 0, beatN = Math.floor(step / 2) % 4;
-    if (inBeat && duck === 1) E(tt, A => A.kick(tt));
-    if (inBeat && (beatN === 1 || beatN === 3) && duck === 1) E(tt, A => A.snare(tt));
-    E(tt, A => A.noise(tt, { dur: .04, vol: (inBeat ? .05 : .08) * duck, type: 'highpass', freq: 7500 }));
-    if (inBeat) E(tt, A => A.tone(tt, { f: mf(root - (beatN === 3 ? -7 : 0)), dur: .42, type: 'square', vol: .1 * duck, lp: 520, r: .08 }));
-    if (tt >= 15.5) {
-      for (let s16 = 0; s16 < 2; s16++) {
+  const groove = (G0, GEND, arpFrom, lift) => {
+    for (let t = G0; t < GEND - .01; t += beat / 2) {
+      const tt = t, step = Math.round((t - G0) / (beat / 2)), bar = Math.floor(step / 8), [root, ch] = prog[bar % 4];
+      const inBeat = step % 2 === 0, beatN = Math.floor(step / 2) % 4, up = lift(tt);
+      if (inBeat) E(tt, A => A.kick(tt));
+      if (inBeat && (beatN === 1 || beatN === 3)) E(tt, A => A.snare(tt));
+      E(tt, A => A.noise(tt, { dur: .04, vol: inBeat ? .05 : .08, type: 'highpass', freq: 7500 }));
+      if (inBeat) E(tt, A => A.tone(tt, { f: mf(root - (beatN === 3 ? -7 : 0)), dur: .42, type: 'square', vol: .1, lp: 520, r: .08 }));
+      if (tt >= arpFrom) for (let s16 = 0; s16 < 2; s16++) {
         const t16 = tt + s16 * beat / 4, idx = (step * 2 + s16) % 8;
-        E(t16, A => A.tone(t16, { f: mf(ch[pat[idx]] + (tt >= 27 && tt < 37 ? 12 : 0)), dur: .11, type: 'square', vol: .032 * duck, lp: 2600, r: .05 }));
+        E(t16, A => A.tone(t16, { f: mf(ch[pat[idx]] + up), dur: .11, type: 'square', vol: .032, lp: 2600, r: .05 }));
       }
+      if (step % 8 === 0) E(tt, A => ch.slice(0, 3).forEach(m => A.tone(tt, { f: mf(m - 12), dur: 1.9, type: 'sawtooth', vol: .018, a: .2, r: .8, lp: 900 })));
     }
-    if (step % 8 === 0) E(tt, A => ch.slice(0, 3).forEach(m => A.tone(tt, { f: mf(m - 12), dur: 1.9, type: 'sawtooth', vol: .018 * duck, a: .2, r: .8, lp: 900 })));
-  }
-  // S3: roof lifts, nameplates, reception, lounge, Chat
+  };
+  groove(13.5, 56.5, 15.5, tt => (tt >= 41.0 && tt < 50.5 ? 12 : 0));
+  groove(66.5, 77.5, 70.4, tt => (tt >= 73.2 ? 12 : 0));
+  // Town: roof, nameplates, reception, bar, Chat
   E(13.9, A => A.noise(13.9, { dur: .8, vol: .14, type: 'bandpass', freq: 400, freq2: 3200, q: 1.2 }));
   for (let i = 0; i < 10; i++) { const tt = 14.6 + i * .05, m = [72, 74, 76, 79, 81, 84][i % 6]; E(tt, A => A.tone(tt, { f: mf(m), dur: .07, type: 'square', vol: .05, lp: 4000 })); }
   E(17.4, A => [76, 79, 84].forEach((m, k) => A.tone(17.4 + k * .07, { f: mf(m), dur: .22, type: 'triangle', vol: .16 })));
@@ -1267,26 +1822,56 @@ function buildScore() {
   for (let k = 0; k < 9; k++) { const tt = 25.35 + k * .05; E(tt, A => A.noise(tt, { dur: .018, vol: .08, type: 'bandpass', freq: 2200 + hash(k + 7) * 1500, q: 2 })); }
   E(25.95, A => A.tone(25.95, { f: mf(79), f2: mf(86), dur: .12, type: 'sine', vol: .12 }));
   E(26.4, A => [72, 76, 79, 84].forEach((m, k) => A.tone(26.4 + k * .06, { f: mf(m), dur: .25, type: 'triangle', vol: .15 })));
-  // S4
-  E(27.2, A => A.noise(27.2, { dur: 1.8, vol: .2, type: 'bandpass', freq: 3500, freq2: 250, q: 1.5 }));
-  [29.2, 29.4, 29.6].forEach((tt, k) => E(tt, A => A.tone(tt, { f: mf(81 + k * 2), f2: mf(93 + k * 2), dur: .14, type: 'square', vol: .05, lp: 4000 })));
-  E(30.0, A => A.tone(30.0, { f: 65, dur: 1.4, type: 'sine', vol: .45, r: 1.1 }));
-  // S5: cards pop, strings, notes drop, a drag
-  for (let i = 0; i < 10; i++) { const tt = 37.4 + i * .08; E(tt, A => A.tone(tt, { f: mf(76 + (i % 5) * 2), dur: .06, type: 'square', vol: .045, lp: 3800 })); }
-  NOTES.forEach(n => E(n.t0 + .3, A => { A.tone(n.t0 + .3, { f: 140, f2: 70, dur: .16, type: 'sine', vol: .35 }); A.noise(n.t0 + .5, { dur: .45, vol: .08, type: 'bandpass', freq: 1200, freq2: 2600, q: 3 }); }));
-  E(42.25, A => A.noise(42.25, { dur: 1.0, vol: .1, type: 'bandpass', freq: 500, freq2: 1500, q: 1.5 }));
-  // S6
-  for (let k = 0; k < 3; k++) { const tt = 47.7 + k * .25; E(tt, A => A.tone(tt, { f: 72, dur: .16, type: 'square', vol: .12, lp: 280 })); }
-  E(48.9, A => A.noise(48.9, { dur: .03, vol: .25, type: 'highpass', freq: 1800 }));
-  for (let k = 0; k < 6; k++) { const tt = 49.6 + k * .08; E(tt, A => A.noise(tt, { dur: .018, vol: .08, type: 'bandpass', freq: 2400 + hash(k + 21) * 1200, q: 2 })); }
-  E(50.3, A => A.tone(50.3, { f: mf(79), f2: mf(86), dur: .12, type: 'sine', vol: .12 }));
-  E(51.1, A => [76, 79, 84].forEach((m, k) => A.tone(51.1 + k * .07, { f: mf(m), dur: .22, type: 'triangle', vol: .14 })));
-  // S7
-  E(53.2, A => { A.kick(53.2, 1.2); A.noise(53.2, { dur: 1.4, vol: .25, type: 'highpass', freq: 3000 }); [48, 60, 64, 67].forEach(m => A.tone(53.2, { f: mf(m), dur: 1.4, type: 'sawtooth', vol: .05, a: .01, r: .9, lp: 1800 })); });
-  E(54.6, A => { A.kick(54.6, 1.2); A.noise(54.6, { dur: 1.4, vol: .25, type: 'highpass', freq: 3000 }); [43, 62, 67, 71].forEach(m => A.tone(54.6, { f: mf(m), dur: 1.5, type: 'sawtooth', vol: .05, a: .01, r: .9, lp: 1800 })); });
-  E(56.2, A => { A.kick(56.2, 1); [36, 48, 60, 64, 67, 74].forEach(m => A.tone(56.2, { f: mf(m), dur: 5.6, type: 'sawtooth', vol: .04, a: .05, r: 3.5, lp: 600, lp2: 2400 })); });
-  for (let k = 0; k < 39; k++) { const tt = 57.1 + k * (1.7 / 39); E(tt, A => A.noise(tt, { dur: .015, vol: .07, type: 'bandpass', freq: 2200 + hash(k) * 1500, q: 2 })); }
-  E(59.1, A => [84, 88, 91, 96].forEach((m, k) => A.tone(59.1 + k * .09, { f: mf(m), dur: .5, type: 'triangle', vol: .09, r: .4 })));
+  // Bin and bus: pick up, drop in the bin, the stop's clock, the bus's horn, away
+  E(BIN.grab, A => A.tone(BIN.grab, { f: mf(72), f2: mf(84), dur: .14, type: 'sine', vol: .1 }));
+  E(BIN.drop, A => { A.noise(BIN.drop, { dur: .12, vol: .3, type: 'lowpass', freq: 900 }); A.tone(BIN.drop, { f: 180, f2: 90, dur: .18, type: 'sine', vol: .45 }); });
+  for (let k = 0; k < 3; k++) { const tt = BIN.stop - .1 + k * .5; E(tt, A => A.tone(tt, { f: 1760, dur: .05, type: 'square', vol: .03, lp: 5000 })); }
+  E(BIN.busIn, A => A.noise(BIN.busIn, { dur: 1.3, vol: .1, type: 'bandpass', freq: 180, freq2: 400, q: 1.5, a: .6 }));
+  E(BIN.halt - .25, A => A.noise(BIN.halt - .25, { dur: .35, vol: .12, type: 'highpass', freq: 4000, freq2: 2000 }));
+  E(BIN.halt + .1, A => { A.tone(BIN.halt + .1, { f: mf(64), dur: .16, type: 'sine', vol: .14 }); A.tone(BIN.halt + .3, { f: mf(60), dur: .26, type: 'sine', vol: .14 }); });
+  E(BIN.go - .1, A => [0, .22].forEach(d => A.tone(BIN.go - .1 + d, { f: 233, dur: .18, type: 'sawtooth', vol: .06, lp: 1200 })));
+  E(BIN.go, A => A.noise(BIN.go, { dur: 1.1, vol: .1, type: 'bandpass', freq: 220, freq2: 700, q: 1.5 }));
+  // Town center: the ring opens, New agent, footsteps, the welcome sparkle
+  E(NEW.click, A => { A.noise(NEW.click, { dur: .03, vol: .3, type: 'highpass', freq: 2000 }); [72, 76, 79, 84, 88, 91].forEach((m, k) => A.tone(NEW.click + .05 + k * .04, { f: mf(m), dur: .1, type: 'triangle', vol: .07 })); });
+  E(NEW.pick, A => { A.noise(NEW.pick, { dur: .03, vol: .3, type: 'highpass', freq: 2000 }); A.tone(NEW.pick, { f: mf(79), f2: mf(91), dur: .14, type: 'sine', vol: .1 }); });
+  for (let k = 0; k < 15; k++) { const tt = NEW.out + .1 + k * .24; E(tt, A => A.noise(tt, { dur: .03, vol: .05, type: 'bandpass', freq: 900 + (k % 2) * 300, q: 3 })); }
+  E(NEW.sit, A => [84, 88, 91, 96, 100].forEach((m, k) => A.tone(NEW.sit + k * .06, { f: mf(m), dur: .3, type: 'triangle', vol: .08, r: .25 })));
+  // Every host, then the fuel and the bill
+  E(41.0, A => A.noise(41.0, { dur: 1.8, vol: .2, type: 'bandpass', freq: 3500, freq2: 250, q: 1.5 }));
+  [42.0, 42.2, 42.4].forEach((tt, k) => E(tt, A => A.tone(tt, { f: mf(81 + k * 2), f2: mf(93 + k * 2), dur: .14, type: 'square', vol: .05, lp: 4000 })));
+  E(42.8, A => A.tone(42.8, { f: 65, dur: 1.4, type: 'sine', vol: .45, r: 1.1 }));
+  for (let k = 0; k < 8; k++) { const tt = 47.4 + k * .1; E(tt, A => A.tone(tt, { f: mf(72 + k * 2), dur: .06, type: 'square', vol: .04, lp: 3800 })); }
+  E(47.9, A => { A.tone(47.9, { f: 2093, dur: .3, type: 'sine', vol: .07 }); A.tone(47.98, { f: 2637, dur: .4, type: 'sine', vol: .06 }); });
+  // Board: cards pop, strings, notes drop, a drag
+  for (let i = 0; i < 10; i++) { const tt = 50.7 + i * .08; E(tt, A => A.tone(tt, { f: mf(76 + (i % 5) * 2), dur: .06, type: 'square', vol: .045, lp: 3800 })); }
+  NOTES.forEach(n => { const tt = n.t0 + BOARD_SHIFT; E(tt + .3, A => { A.tone(tt + .3, { f: 140, f2: 70, dur: .16, type: 'sine', vol: .35 }); A.noise(tt + .5, { dur: .45, vol: .08, type: 'bandpass', freq: 1200, freq2: 2600, q: 3 }); }); });
+  E(55.1, A => A.noise(55.1, { dur: 1.0, vol: .1, type: 'bandpass', freq: 500, freq2: 1500, q: 1.5 }));
+  // Night: the beat drops out; a slow pad, the ask, typing, a file, Send
+  E(56.6, A => A.noise(56.6, { dur: 1.2, vol: .12, type: 'lowpass', freq: 2000, freq2: 200 }));
+  [[56.8, [45, 57, 60, 64]], [59.2, [41, 57, 60, 65]], [61.6, [43, 55, 59, 62]], [64.0, [48, 55, 60, 64, 67]]].forEach(([tt, ch]) =>
+    E(tt, A => ch.forEach(m => A.tone(tt, { f: mf(m), dur: 2.6, type: 'triangle', vol: .045, a: .6, r: 1.4 }))));
+  for (let k = 0; k < 10; k++) { const tt = 57 + k * .9; E(tt, A => A.tone(tt, { f: mf([84, 88, 91, 86, 89, 93, 83, 86, 91, 96][k]), dur: .5, type: 'sine', vol: .03, r: .45 })); }
+  for (let k = 0; k < 3; k++) { const tt = NIGHT.ping + .1 + k * .25; E(tt, A => A.tone(tt, { f: 72, dur: .16, type: 'square', vol: .12, lp: 280 })); }
+  E(NIGHT.ping, A => { A.tone(NIGHT.ping, { f: mf(88), dur: .2, type: 'sine', vol: .1 }); A.tone(NIGHT.ping + .14, { f: mf(84), dur: .3, type: 'sine', vol: .1 }); });
+  E(NIGHT.open - .3, A => A.noise(NIGHT.open - .3, { dur: .03, vol: .25, type: 'highpass', freq: 1800 }));
+  for (let k = 0; k < 7; k++) { const tt = NIGHT.type0 + k * .11; E(tt, A => A.noise(tt, { dur: .018, vol: .08, type: 'bandpass', freq: 2400 + hash(k + 21) * 1200, q: 2 })); }
+  E(NIGHT.clip, A => A.tone(NIGHT.clip, { f: mf(76), f2: mf(88), dur: .12, type: 'sine', vol: .1 }));
+  E(NIGHT.send, A => A.tone(NIGHT.send, { f: mf(79), f2: mf(86), dur: .12, type: 'sine', vol: .12 }));
+  E(NIGHT.send + .2, A => [76, 79, 84].forEach((m, k) => A.tone(NIGHT.send + .2 + k * .07, { f: mf(m), dur: .22, type: 'triangle', vol: .14 })));
+  // Dawn: a sunrise swell; grumbles; a riser into the pull-back
+  E(65.4, A => [48, 55, 60, 64, 67, 72].forEach((m, k) => A.tone(65.4 + k * .12, { f: mf(m), dur: 3.2, type: 'sawtooth', vol: .035, a: 1.2, r: 1.5, lp: 600, lp2: 3000 })));
+  E(67.2, A => [0, 1, 2].forEach(k => A.tone(67.2 + k * .25, { f: mf([76, 79, 84][k]), dur: .2, type: 'triangle', vol: .12 })));
+  for (let k = 0; k < 8; k++) { const tt = 70.6 + k * .3 + hash(k) * .1; E(tt, A => A.tone(tt, { f: 120 + hash(k + 3) * 80, f2: 70, dur: .18, type: 'sawtooth', vol: .05, lp: 700 })); }
+  E(72.0, A => A.noise(72.0, { dur: 1.3, vol: .16, type: 'bandpass', freq: 300, freq2: 6000, q: 2, a: 1.2 }));
+  E(73.3, A => { A.kick(73.3, 1.3); A.noise(73.3, { dur: 1.8, vol: .25, type: 'highpass', freq: 2800 }); [36, 48, 55, 60, 64, 67].forEach(m => A.tone(73.3, { f: mf(m), dur: 2.4, type: 'sawtooth', vol: .045, a: .01, r: 1.4, lp: 1400, lp2: 4000 })); });
+  for (let k = 0; k < 20; k++) { const tt = 73.5 + k * .1; E(tt, A => A.tone(tt, { f: mf(72 + (k % 8) * 2), dur: .05, type: 'square', vol: .025, lp: 5000 })); }
+  // Finale
+  const f = FIN;
+  E(53.2 + f, A => { A.kick(53.2 + f, 1.2); A.noise(53.2 + f, { dur: 1.4, vol: .25, type: 'highpass', freq: 3000 }); [48, 60, 64, 67].forEach(m => A.tone(53.2 + f, { f: mf(m), dur: 1.4, type: 'sawtooth', vol: .05, a: .01, r: .9, lp: 1800 })); });
+  E(54.6 + f, A => { A.kick(54.6 + f, 1.2); A.noise(54.6 + f, { dur: 1.4, vol: .25, type: 'highpass', freq: 3000 }); [43, 62, 67, 71].forEach(m => A.tone(54.6 + f, { f: mf(m), dur: 1.5, type: 'sawtooth', vol: .05, a: .01, r: .9, lp: 1800 })); });
+  E(56.2 + f, A => { A.kick(56.2 + f, 1); [36, 48, 60, 64, 67, 74].forEach(m => A.tone(56.2 + f, { f: mf(m), dur: 5.6, type: 'sawtooth', vol: .04, a: .05, r: 3.5, lp: 600, lp2: 2400 })); });
+  for (let k = 0; k < 39; k++) { const tt = 57.1 + f + k * (1.7 / 39); E(tt, A => A.noise(tt, { dur: .015, vol: .07, type: 'bandpass', freq: 2200 + hash(k) * 1500, q: 2 })); }
+  E(59.1 + f, A => [84, 88, 91, 96].forEach((m, k) => A.tone(59.1 + f + k * .09, { f: mf(m), dur: .5, type: 'triangle', vol: .09, r: .4 })));
   return ev.sort((a, b) => a.t - b.t);
 }
 let NOISE = null;
@@ -1334,7 +1919,7 @@ function schedule(c, out, from, base) {
 }
 
 // ================= playback =================
-let audio = null, playing = false, cur = START ?? (EMBED ? 0 : 61.95), offset = 0, t0perf = 0, muted = false;
+let audio = null, playing = false, cur = START ?? (EMBED ? 0 : DUR - .05), offset = 0, t0perf = 0, muted = false;
 let controlsTimer = null, spoken = '';
 function startAudio(from) {
   stopAudio();
@@ -1397,8 +1982,8 @@ function startLive() {
     logo.decode().catch(() => {}),
     document.fonts.load('900 80px "Big Shoulders Display"'), document.fonts.load('700 20px "Silkscreen"'),
     document.fonts.load('400 20px "Silkscreen"'), document.fonts.load('700 20px "JetBrains Mono"'), document.fonts.load('400 20px "JetBrains Mono"')
-  ].map(p => Promise.resolve(p).catch(() => {}))).then(() => document.fonts.ready).then(buildTown);
-  ready.then(() => { frame(START ?? (EMBED ? 18.9 : cur)); ui(); });
+  ].map(p => Promise.resolve(p).catch(() => {}))).then(() => document.fonts.ready).then(buildTowns);
+  ready.then(() => { frame(START ?? (EMBED ? POSTER_T : cur)); ui(); });
   if (RENDER) return ready;
   $('bigplay').addEventListener('click', play);
   cv.addEventListener('click', () => { if (playing) pause(); });
