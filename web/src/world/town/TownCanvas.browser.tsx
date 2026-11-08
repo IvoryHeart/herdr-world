@@ -1,4 +1,5 @@
 import { prepareTownEdgeDrop } from "./townEdgeScroll.browser";
+import { checkTownEdgeArrows } from "./townEdgeArrows.browser";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
 import { checkTownBuildingSigns } from "./townBuildingSigns.browser";
 import { checkTownReceptionFilter } from "./townReceptionFilter.browser";
@@ -1369,6 +1370,7 @@ async function run() {
       desk(selectedDeskId) !== undefined,
       "preferred room admission displaced the selected desk",
     );
+    await checkTownEdgeArrows({ host, check, waitFor });
     // A repeated request moving again, and no replay once its room leaves
     // and returns, are scene rules (scene/townSceneCamera.test.ts).
     setWorld(worldFor(base.connections.slice(0, -1)));

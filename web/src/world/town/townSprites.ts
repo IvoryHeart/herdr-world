@@ -504,6 +504,19 @@ export function townTrees() {
   return trees;
 }
 
+/** A status bubble over an agent's head, its tail pointing down. */
+export const townBubble = (draw: (R: Rect) => void, width = 11) =>
+  townSprite(width, 12, (R) => {
+    const w = "#fffaf0";
+    const tail = (width - 1) / 2;
+    R(1, 0, width - 2, 10, w);
+    R(0, 1, width, 8, w);
+    R(tail - 1, 10, 3, 1, w);
+    R(tail, 11, 1, 1, w);
+    R(1, 9, width - 2, 1, "#e3dac8");
+    draw(R);
+  });
+
 export function buildTownSprites() {
   const tableOf = (W: number, w: string) =>
     townSprite(W, 32, (R) => {
@@ -532,17 +545,7 @@ export function buildTownSprites() {
       R(6, 2, 2, 2, logo);
       R(1, 5, 12, 2, "#3a404b");
     });
-  const bubble = (draw: (R: Rect) => void, width = 11) =>
-    townSprite(width, 12, (R) => {
-      const w = "#fffaf0";
-      const tail = (width - 1) / 2;
-      R(1, 0, width - 2, 10, w);
-      R(0, 1, width, 8, w);
-      R(tail - 1, 10, 3, 1, w);
-      R(tail, 11, 1, 1, w);
-      R(1, 9, width - 2, 1, "#e3dac8");
-      draw(R);
-    });
+  const bubble = townBubble;
   return {
     table,
     tableSmall,

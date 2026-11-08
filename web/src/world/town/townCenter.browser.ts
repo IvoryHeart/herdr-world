@@ -50,7 +50,7 @@ export async function checkTownCenter(
     () => ring() !== null,
     "a tap on the town center opened no menu",
   );
-  check(actions().length === 6, `the ring has ${actions().length} actions`);
+  check(actions().length === 7, `the ring has ${actions().length} actions`);
   check(
     document.activeElement === actions()[0],
     "the ring did not focus its first action",
@@ -111,4 +111,31 @@ export async function checkTownCenter(
   } finally {
     window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, launched);
   }
+
+  // Lenses turns a lens on, its legend in the Town board's place; ✕ leaves
+  // it and the board comes back.
+  const legend = () => host.querySelector<HTMLElement>(".town-lens-legend");
+  sign()!.click();
+  await waitFor(() => ring() !== null, "the plaque did not reopen the menu");
+  actions()
+    .find((action) => action.dataset.action === "lenses")!
+    .click();
+  await waitFor(() => legend() !== null, "Lenses showed no legend");
+  check(
+    host.querySelector(".town-board:not(.town-lens-legend)") === null,
+    "the Town board stayed beside the lens legend",
+  );
+  await waitFor(
+    () => host.querySelector(".town-lens-room") !== null,
+    "the lens tinted no room",
+  );
+  legend()!
+    .querySelector<HTMLButtonElement>('[aria-label="Leave the lens"]')!
+    .click();
+  await waitFor(() => legend() === null, "✕ did not leave the lens");
+  check(host.querySelector(".town-lens") === null, "the lens tints stayed");
+  check(
+    host.querySelector(".town-board") !== null,
+    "the Town board did not come back",
+  );
 }

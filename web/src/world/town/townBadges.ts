@@ -27,7 +27,27 @@ export function townDeskBadges(
   snapshot: WorldSourcesSnapshot,
 ): ReadonlyMap<string, TownDeskBadge> {
   const badges = new Map<string, TownDeskBadge>();
-  if (!snapshot.links.length) return badges;
+  for (const [deskKey, item] of townDeskWork(projection, snapshot))
+    badges.set(deskKey, {
+      text: workBadgeText(item),
+      tone: toneOf(item),
+      url: item.url,
+      itemKey: item.key,
+    });
+  return badges;
+}
+
+/**
+ * The work item each desk's badge shows: its agents' open pull request
+ * before a merged one, then a ticket. Town's Pull requests lens reads the
+ * same items (townLens.ts).
+ */
+export function townDeskWork(
+  projection: HerdrOfficeProjection,
+  snapshot: WorldSourcesSnapshot,
+): ReadonlyMap<string, WorkItem> {
+  const work = new Map<string, WorkItem>();
+  if (!snapshot.links.length) return work;
   const panes = new Map(
     projection.rooms.flatMap((room) =>
       room.desks.flatMap((desk) =>
@@ -54,15 +74,9 @@ export function townDeskBadges(
           : [],
       );
       const item = [...items].sort((a, b) => rank(a) - rank(b))[0];
-      if (item)
-        badges.set(desk.key, {
-          text: workBadgeText(item),
-          tone: toneOf(item),
-          url: item.url,
-          itemKey: item.key,
-        });
+      if (item) work.set(desk.key, item);
     }
-  return badges;
+  return work;
 }
 
 function rank(item: WorkItem) {

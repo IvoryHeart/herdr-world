@@ -219,6 +219,8 @@ const panes: Pane[] = [
   },
 ];
 let notificationSessionId = "reviewer-session";
+/** Reads that returned a swapped-in agent session, which the app refuses. */
+let replacedSessionReads = 0;
 let replaceNotificationSessionAfterRead = false;
 let replaceNotificationSessionOnSnapshot = false;
 let omitNextOperationalTabPanes: string | null = null;
@@ -384,6 +386,7 @@ let client: ConnectionClient = {
     }
     if (method === "agent_session.get" && !params.agent) {
       const value = notificationSessionId;
+      if (value === "replacement-session") replacedSessionReads += 1;
       if (replaceNotificationSessionAfterRead) {
         notificationSessionId = "replacement-session";
         replaceNotificationSessionAfterRead = false;
@@ -906,6 +909,19 @@ async function run() {
     worldLocalStorage.getItem("zenMode.world") === null,
     "World's default Zen was stored as if the user had chosen it",
   );
+  // Zen parks the topbar off screen, so Town's search sits in the Zen dock,
+  // in sight, and moves back to the topbar when Zen ends.
+  await until(() => {
+    const zenSearch = document.querySelector<HTMLInputElement>(
+      '.zen-dock .world-zen-search input[placeholder="Search Town"]',
+    );
+    const rect = zenSearch?.getBoundingClientRect();
+    return Boolean(rect && rect.width > 100 && rect.top >= 0);
+  }, "Town's search in sight beside the views in Zen");
+  check(
+    !document.querySelector('.topbar input[placeholder="Search Town"]'),
+    "Town's search stayed in the hidden topbar during Zen",
+  );
   document.querySelector<HTMLButtonElement>(".zen-dock .zen-island")?.click();
   await until(
     () => document.querySelector(".app")?.classList.contains("zen") === false,
@@ -914,6 +930,12 @@ async function run() {
   check(
     worldLocalStorage.getItem("zenMode.world") === "0",
     "leaving Zen did not keep World's Zen choice",
+  );
+  await until(
+    () =>
+      document.querySelector('.topbar input[placeholder="Search Town"]') !==
+      null,
+    "Town's search back in the topbar after Zen",
   );
   await until(() => {
     const seat = document.querySelector<HTMLButtonElement>(
@@ -1379,6 +1401,40 @@ async function run() {
   check(
     document.querySelector(".sidebar") === sharedNavigator,
     "Board replaced the shared workspace navigator",
+  );
+  // Board fills its stage, so its search results float over it, in sight
+  // and taking a click, rather than drawn under the board.
+  const boardSearch = document.querySelector<HTMLInputElement>(
+    'input[placeholder="Search Board"]',
+  )!;
+  enterSearch(boardSearch, "Builder");
+  const boardResultRow = () =>
+    document.querySelector<HTMLElement>(
+      ".board-search-results [data-world-search-result]",
+    );
+  await until(boardResultRow, "Board search results");
+  {
+    const boardResult = boardResultRow()!;
+    const box = boardResult.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    );
+    check(
+      boardResult.contains(hit),
+      `Board search result is covered by ${hit?.tagName}.${hit?.className}`,
+    );
+  }
+  boardSearch.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await until(
+    () => !document.querySelector(".board-search-results"),
+    "Escape ends Board's search",
   );
   viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1855,6 +1911,7 @@ async function run() {
   const snapshotsBeforeReplacement = calls.filter(
     ({ method }) => method === "world.snapshot",
   ).length;
+  const replacedReadsBefore = replacedSessionReads;
   window.dispatchEvent(
     new CustomEvent("herdr-world:visual-notification", {
       detail: {
@@ -1873,6 +1930,13 @@ async function run() {
       notificationSessionId === "replacement-session",
     "notification priority refresh replaced agent session",
   );
+  // The notification checks the session again once the priority refresh
+  // lands. Restoring the fake's session before that read would admit the
+  // notification late and open the Reviewer's Chat over later steps.
+  await until(
+    () => replacedSessionReads > replacedReadsBefore,
+    "notification read the replaced agent session",
+  );
   await settle();
   check(
     !document.querySelector(".workspace-inspector"),
@@ -1880,8 +1944,12 @@ async function run() {
   );
   notificationSessionId = "reviewer-session";
   flushSync(() => floatingPreferenceNavigatorRow()?.click());
+  // The window opens on Terminal and moves to Chat once Chat is readable, so
+  // identify it by its window and selection rather than its terminal layout.
   await until(
-    () => inspectorPane() === "reviewer-pane",
+    () =>
+      reviewerInspectorActive() &&
+      store.get().selectedPaneId === "reviewer-pane",
     "Reviewer Inspector restored after rejected notification",
   );
   document
@@ -1900,11 +1968,20 @@ async function run() {
     'input[placeholder="Search Town"]',
   )!;
   enterSearch(officeSearch, "Local");
-  officeSearch
-    .closest("form")!
-    .dispatchEvent(
-      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
-    );
+  const submitTownSearch = () =>
+    officeSearch
+      .closest("form")!
+      .dispatchEvent(
+        new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+      );
+  // The first Enter shows the result on the map; the second opens it.
+  submitTownSearch();
+  await settle();
+  check(
+    !document.querySelector('.world-selection-panel[data-kind="host"]'),
+    "first Town search Enter only shows the result",
+  );
+  submitTownSearch();
   await until(
     () =>
       document

@@ -159,6 +159,30 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
     reception.
+  - Town's **post office** stands on the first street left of the town
+    center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
+    review or assigned to you) as parcels in its sorting yard, ready to merge
+    first. Its sign counts them without hovering, such as "2 ready · 1
+    failing · 3 waiting", adding unknown and draft when there are some. A
+    parcel's tag shows its state: green ready to merge, red CI failing on its
+    head, amber waiting (for CI, a review, a fix or GitHub), a grey crate for
+    unknown and a pale letter for a draft. It reads the GitHub source and the
+    pull request card's merge rules, so stale or partial detail is unknown,
+    never ready. Hover or focus a parcel for "#123 title", its repository and
+    its state in words; tap it for the same pull request card the desk badge
+    opens (**Details**, **Merge…** and the rest). A merged parcel is carried
+    off the yard (with calm or reduced motion it just goes); a closed one
+    fades. More than the yard holds make a "+N" pile that opens the rest as a
+    list. With the GitHub source off, signed out or not yet answered, the
+    post office is closed and says to connect GitHub in **Sources**, with no
+    parcels and no counts; when a refresh fails it keeps the last list as
+    unknown and says GitHub is out of date. On a phone it folds to a sign on
+    the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
+    failing and waiting counts) that opens the parcels as a list. For trying it without real pull
+    requests, open World with `?townPostFixture` (synthetic pull requests in
+    every state; ten seconds later the first ready one merges),
+    `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
+    the page drops the parameter at once and only the post office uses it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -167,7 +191,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     unknown sits at its desk scratching its head under a purple `??` instead
     of dozing.
   - Every building has roads on at least three sides: a street above and below
-    each row and a side road to its right.
+    each row and a side road to its right. A matching road runs down the left
+    of each row's first building, so the town is bounded by roads on both
+    sides; it has no bus stop.
   - The land around the town is generated: woods with pines, meadows, hedged
     flower gardens and orchards, ponds with reeds, winding footpaths, and each
     street running on beyond the town as a country lane. It fills the whole
@@ -189,16 +215,41 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (the role holder from **Menu → Sounds**, else the agent named in **Menu →
     Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
-    **Needs you** with its count, **Summary**, **Profiles** and **New room**
-    (disabled with the reason when no room can be created). Arrow keys, Home
-    and End move around the ring; Escape, a press outside, the centre **✕** or
-    **Back** on a phone closes it.
+    **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
+    **New room** (disabled with the reason when no room can be created). Arrow
+    keys, Home and End move around the ring; Escape, a press outside, the
+    centre **✕** or **Back** on a phone closes it.
+  - **Lenses** colour the whole map by one fact, as strategy games' map
+    overlays do, so you see at a glance where it is high or low. Turn one on
+    from the town center's **Lenses** or with `L` (`Shift+L` steps back); the
+    Town board sign (on a phone, the summary chip) becomes the lens's legend:
+    its name (press it to choose a lens), **‹ ›** to step, **✕** to leave, the
+    scale, and the reading of the place under the pointer, keyboard focus or
+    last tap. Town dims; at home and building zoom each room's floor takes its
+    room's colour, with the room's name and short reading at building zoom;
+    at room and desk zoom each desk and seated agent carries its own.
+    **Idle time** runs from under 5 minutes (warm) to 8 hours and more (cold)
+    since each agent last worked; a room shows its coldest quarter.
+    **Spend** is today's estimated cost per room and desk (by tokens when
+    some usage is unpriced), from the same usage as the expenses boards; a
+    host or place without a reading is hatched **No data**, never zero.
+    **Pull requests** colours desks with a linked pull request as failing,
+    ready, waiting, draft or merged, from the same links as the desk badge;
+    a room shows its most urgent. **Quests** shows each agent's quest
+    progress; **Harness** shows Claude, Codex, Pi, other agents and plain
+    shells, and a room or desk with several harnesses is striped by each
+    one's share. Desks and agents with nothing to show stay plain. Screen readers
+    hear each place's reading in its name. A lens changes only how Town is
+    drawn: taps open what they always do, nothing moves, Escape or **✕**
+    returns Town exactly as it was, and Town always opens in **Attention**
+    (Town as usual). The browser remembers the last lens for `L` and
+    **Lenses**. With `?scene=town-scale` every lens has synthetic data.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
     attention choices move into the window's ellipsis menu.
     Tapping an agent or its table, activating it (double-click,
-    **Shift+Enter**), **Chat about this** in Needs you, **N** and **Next** open that window on
+    **Shift+Enter**), **Chat about this** in Needs you and **Next** open that window on
     **Chat**: the conversation's latest 200 entries, which scroll inside the
     window, with **Jump to latest** when you have scrolled back (counting new
     agent messages until you reach the bottom) and the
@@ -292,6 +343,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     shows a blue pennant (green when done, amber when blocked) beside it in
     a room or at a desk, with a progress bar when the quest has steps; the
     pennant leaves with the agent. Hover or tap the pennant for **Quest**, its title and progress.
+  - Zoomed into a room, each working agent shows a thought bubble over its
+    head with a glyph for the step it runs now: a pencil for editing files,
+    a test tube for tests, a prompt for a command, a magnifier for reading or
+    searching code, a globe for the web, a light bulb for thinking or
+    writing, and two figures for a subagent. A step that has run long for its
+    kind (an edit over 3 minutes, a read or fetch over 5, a test run or
+    command over 10, a subagent over 20) shows its time in an amber tag. At
+    the desk level, or on the selected desk, the bubble adds what the agent
+    is doing now and the step with its timer, such as
+    `Run the login tests · tests 3m`. The words are the running step's own
+    detail (a command's description, the file it edits, the search query),
+    else the plan item it marked in progress, else the latest request it was
+    given; the terminal title is the last resort, since Claude Code names
+    only the session's first topic there. Steps come from the same conversation
+    summary as Chat's Now bar, for Claude Code, Codex and Pi; another harness,
+    or a tool Town does not know, keeps the typing dots. Town reads steps only
+    for working agents on screen at the room or desk level, when the service
+    reports their conversation changed, at most 32 per read and one read at a
+    time per connection; nothing is polled.
+    Bubbles do not move, and hovering the agent still opens its peek.
   - **Open terminal** in the card's header opens the live pane; **Open chat**
     opens the agent's window, whose Files and Changes views hold the rest.
     **Next** opens the next waiting agent's window,
@@ -309,7 +380,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
-    **Town calm motion** reduces ambient animation. Room actions support
+    **Town calm motion** reduces ambient animation.
+  - Zoomed into a room or desk, every agent that needs you outside the view
+    gets an arrow on the view's edge pointing at it, with its mark (**!**,
+    **?** or **✓**); arrows pointing the same way or at one building merge
+    with a count, such as `! 3`. Click or tap one and the camera glides there
+    and the agent's mark pulses (under calm or reduced motion it jumps, with
+    no pulse). On a desktop, **N** moves the camera to the next thing that
+    needs you in Needs you's order and opens Needs you at it, with a brief
+    "2 of 7 · N next"; **Shift+N** goes back, and after you answer one, **N**
+    goes on from there. Both keys are Town actions in Keyboard shortcuts and
+    stay silent while you type. Neither answers, reviews or moves anything.
+  - Room actions support
     workspace/tab creation and room management on the captured host. Every
     building has a **+ Add room** doorway just left of its bar (just **+** at
     the room-card zoom), which stays put when rooms open, close, move or are
@@ -467,6 +549,25 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is admitted. Search and Hosts
     use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
+  - **Search shows where things are.** Town's search box hangs from the top
+    edge beside the view buttons in Zen, World's default, and sits in the top
+    bar when the bars are shown; on a phone in Zen it is the search button in
+    the bottom-right corner. Typing in Town's search lights up the
+    matching buildings, rooms, tables and agents on the map and dims the rest
+    of Town a little; the camera stays put. The result line counts matches and
+    how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
+    click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
+    a readable zoom and pulses it; choosing it again, or **Enter** a second
+    time, opens it as selecting does. A result Town does not draw, such as
+    an agent at a table its room folds away, opens at once and counts as
+    off-screen. Under **Town calm motion** or reduced motion the camera jumps
+    and nothing pulses. **Escape** (in the box, on a result or on the map),
+    the phone search's **✕** or an empty box ends the search and returns the
+    camera to where the search found it. **/** or **Ctrl+F** (**Cmd+F** on a
+    Mac) puts the cursor in the search of Town, Board or Desk, or opens the
+    phone's search, unless you are typing in a terminal, the Chat composer or
+    another text field; the browser's own find stays closed. Change the keys
+    under **Search the current view** in Settings → Shortcuts.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
   the runtime's existing version and owner. Only a missing Herdr is installed;
@@ -714,7 +815,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Terminal) beside the Desk as a reading pane and folds the lanes
     into one queue. `J`/`K` preview the next agent there, `Enter` opens it using
     **Agents open** and `Esc` closes the pane. Phones open the Inspector full screen.
-  - One search (`/`) filters every mode by agent name, thread title, harness,
+  - One search (`/`, `Ctrl+F` or `Cmd+F`) filters every mode by agent name, thread title, harness,
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
   - `J`/`K` move between cards; `Enter` opens the agent's Inspector using **Agents open** to
@@ -793,6 +894,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   fresh admission. Terminal recovery offers **Retry terminal** and an explicit
   **Reload app**; a no-frame watchdog never reloads the page automatically.
 - Search covers observed entities beyond renderer limits and pages matching results.
+  Every view's search matches each word of the query in any order and any
+  case, as Pane Search does: `builder login` finds the builder agent whose
+  task mentions login, in Town, Board and Desk alike. Each result shows its
+  type (building, room, table, agent or terminal), its name and status mark,
+  and its place (`host › room › table`), so twins on different hosts are told
+  apart. Names come first, then places, then task-summary matches, which show
+  a short excerpt with the matched words picked out. On Board the results
+  float over the top of the board and its count matches the list; **Down**,
+  **Up** and **Enter** pick and select a result, and **Escape** ends the
+  search.
   Counts distinguish observations, rendering omissions and unavailable coverage.
 - Use **Arrange windows** in the shared shell to show the active terminal alone,
   cascade open windows, fit them in columns or rows, tile them in a grid, or
@@ -894,7 +1005,8 @@ each source's state, switch it off or configure it.
   `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
   (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
-  lens names it on the card. A link holds only for the agent session and
+  lens names it on the card. Town's post office shows every open pull
+  request for you as a parcel, including those whose agent has gone. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
   per check), each explicitly attributed rev agent's latest `RESULT #N: …`
@@ -1724,6 +1836,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Zen mode | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
 | Recent pane switcher | `Ctrl+Tab` | `Ctrl+Alt+J` |
 | Pane Search | `Alt+K` | `Alt+K` |
+| Search the current view (Town, Board, Desk) | `/` or `Cmd+F` | `/` or `Ctrl+F` |
 | Create / close tab or pane | `Cmd+T` / `Cmd+W` | `Ctrl+Alt+T` / `Ctrl+Alt+W` |
 | Previous / next tab | `Cmd+Option+Left/Right` | `Alt+Shift+Left/Right` |
 | Focus neighboring pane | `Cmd+Ctrl+Arrow` | `Ctrl+Shift+Arrow` |

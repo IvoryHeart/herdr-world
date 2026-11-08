@@ -5,7 +5,10 @@ import {
   createTownBlink,
   createTownScreenResolver,
 } from "./townAmbient";
-import { drawTownSelectionEffects } from "./townSelectionEffects";
+import {
+  drawTownSelectionEffects,
+  type TownSearchPulseClock,
+} from "./townSelectionEffects";
 /**
  * Pixi renderer for the Office town.
  *
@@ -29,7 +32,7 @@ import { createTownTopology } from "./townRendererTopology";
 import type { TownSceneFrame, TownSceneState } from "./scene/townSceneDiff";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
-import { DEVTOOLS } from "../devtools/flag";
+import { DEVTOOLS, type ViewTrace } from "../devtools/flag";
 
 import {
   TownActors,
@@ -134,6 +137,18 @@ const kindOf = (agent: OfficeAgent) => {
 /** Yield to the browser so pending input runs before the next setup step. */
 export const nextTownTask = () =>
   new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+
+/**
+ * Record a renderer that failed to start: in the devtools trace (development
+ * builds only) and for browser checks.
+ */
+export function townRendererFailed(error: unknown, trace: ViewTrace) {
+  if (DEVTOOLS)
+    trace.record("error", { where: "renderer", message: String(error) });
+  if (window.__HERDR_TOWN_RENDERER__)
+    window.__HERDR_TOWN_RENDERER__.lastError =
+      error instanceof Error ? error.message.slice(0, 160) : "renderer failed";
+}
 
 export async function createTownRenderer(
   element: HTMLElement,
@@ -277,6 +292,18 @@ export async function createTownRenderer(
     townChosenCarpet(model?.placeColors.rooms.get(roomKey));
 
   let dimDirty = true;
+  /** A search's matches and pulse, drawn with the selection (townSearch.ts). */
+  const searchFx = {
+    actorPosition: (key: string) => {
+      const actor = actors.actors.get(key);
+      return actor && actor.mode !== "out"
+        ? { x: actor.x, y: actor.y, seated: actor.mode === "seat" }
+        : null;
+    },
+    roofAlpha: (hostKey: string) =>
+      topology.byHost.get(hostKey)?.roofAlpha ?? 1,
+    pulseClock: { seq: null, start: 0 } as TownSearchPulseClock,
+  };
   const topology = createTownTopology({
     camera,
     sprites,
@@ -608,6 +635,7 @@ export async function createTownRenderer(
       camera,
       clock,
       ambient,
+      searchFx,
     );
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);

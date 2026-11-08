@@ -43,6 +43,9 @@ hour.
   a chat or a move fails with an unknown-connection error. Nothing reaches your
   Herdr. Answers to `herdr-world ask` questions come from the service, so the
   scene has none; its asking agents use Herdr's `blocked` status.
+  Its working agents show synthetic current steps in their thought bubbles (a
+  mix of edits, tests, commands, reads and thinking, some long enough for the
+  amber time tag); nothing is read for them.
 - **Captures and frame time:** the opt-in report harness mounts the production
   `TownCanvas` with the scene in headless Chrome. It starts no World or Herdr,
   saves PNGs at each zoom step for a laptop (1512 × 982) and a phone (390 × 844),
@@ -54,6 +57,8 @@ hour.
     bun run test scripts/town-scale.browser.test.ts
   ```
 
+  The captures show the working agents' thought bubbles with the scene's
+  synthetic steps; `TOWN_SCALE_STEPS=off` measures the town without them.
   The outputs go to `.agents/town-scale/` (PNGs and `report.json`). The harness
   is [`scripts/town-scale.ts`](../../scripts/town-scale.ts), and its page is
   [`TownScale.browser.tsx`](../../web/src/world/testing/town-scale/TownScale.browser.tsx).
