@@ -7,6 +7,7 @@ import {
   normalizeShortcut,
   SHORTCUT_IDS,
   shortcutConflicts,
+  shortcutLeavesTyping,
   shortcutFromEvent,
   shortcutScope,
   validateShortcutKeys,
@@ -109,6 +110,20 @@ describe("platform shortcut maps", () => {
       expect(defaultShortcutBindings("linux")[id]).toEqual(
         defaultShortcutBindings("windows")[id],
       );
+  });
+  test("the command box opens with Cmd+K on a Mac and Ctrl+K elsewhere", () => {
+    expect(defaultShortcutBindings("mac")["command.menu"]).toEqual(["Meta+K"]);
+    for (const platform of ["linux", "windows"] as const)
+      expect(defaultShortcutBindings(platform)["command.menu"]).toEqual([
+        "Ctrl+K",
+        "Ctrl+Alt+K",
+      ]);
+    // Only Alt or Meta keys are safe where text is typed: Ctrl+K kills a line.
+    expect(shortcutLeavesTyping("Ctrl+K")).toBe(false);
+    expect(shortcutLeavesTyping("Ctrl+Shift+K")).toBe(false);
+    expect(shortcutLeavesTyping("Ctrl+Alt+K")).toBe(true);
+    expect(shortcutLeavesTyping("Meta+K")).toBe(true);
+    expect(shortcutLeavesTyping("Alt+K")).toBe(true);
   });
   test("detects desktop and mobile client platforms", () => {
     expect(
