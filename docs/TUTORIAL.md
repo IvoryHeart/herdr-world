@@ -174,7 +174,8 @@ hosts stay usable.
    press Enter) for a ring of actions around its doors: **New agent** opens the
    launcher (in the room you have open, when it can start one there), **Town
    master** opens your coordinating agent's Chat, **Needs you** opens that tab,
-   **Summary** the Town summary, **Profiles** the agent profiles and **New
+   **Summary** the Town summary, **Lenses** colours the map by one fact (see
+   [lenses](#town-lenses)), **Profiles** the agent profiles and **New
    room** creates a room. Arrow keys move around the ring; Escape, a tap
    outside, the centre **✕** or **Back** on a phone closes it.
 2. Use **+** and **−** to move between town, building, room and desk detail;
@@ -517,6 +518,30 @@ and open its terminal or Inspector without losing its workspace context.
 ![Town with four disposable workspace rooms, one agent waiting at reception and one finished](./images/herdr-world-desktop-town.png)
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
+
+### See one fact across Town: lenses
+
+<a id="town-lenses"></a>
+
+1. Tap the town center and choose **Lenses**, or press `L`. Town dims and
+   every room takes a colour; the Town board sign (on a phone, the summary
+   chip) becomes the lens's legend, with its scale.
+2. Press the lens's name to choose another, or **‹ ›** (`L`, `Shift+L`) to
+   step: **Idle time** (warm is fresh, cold is hours since the agent last
+   worked: who have you forgotten?), **Spend** (today's cost per room and
+   desk; hatched **No data** where a host has no reading, never zero), **Pull
+   requests** (failing, ready, waiting, draft or merged), **Quests** and
+   **Harness** (a room with several harnesses is striped by each one's
+   share).
+3. Zoom into a room: each desk and agent carries its own colour. Hover, focus
+   or tap one and the legend says its value in words, such as "Idle 3 h 12 m",
+   "~$1.40 today" or "#123 CI failing". Taps open what they always do.
+4. Press **✕** or Escape: Town is back exactly as it was, at the same place.
+   Town always opens without a lens; your browser remembers the last one for
+   `L` and **Lenses**.
+
+**You are done when:** you can find the coldest room and the desk with a
+failing pull request, and return to Town as usual.
 
 ### Chat with an agent
 
