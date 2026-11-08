@@ -10,6 +10,7 @@
 
 import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
+import type { TownStep, TownStepKind } from "./townSteps";
 
 export const TOWN_SCALE_SCENE = "town-scale";
 
@@ -191,4 +192,69 @@ export function townScaleConnections(): WorldRuntimeConnection[] {
 /** Whether this page asked for the scale scene (`?scene=town-scale`). */
 export function townScaleSceneRequested(search: string) {
   return new URLSearchParams(search).get("scene") === TOWN_SCALE_SCENE;
+}
+
+/** Whether a connection is one of the scale scene's synthetic hosts. */
+export function townScaleSceneConnection(connectionId: string) {
+  return HOSTS.some((name) => connectionId === `scene-${name}`);
+}
+
+const SCENE_TASKS = [
+  "Fix login redirect",
+  "Add retry to the sync job",
+  "Speed up the search index",
+  "Tidy the billing tests",
+  "Write the release notes",
+  "Migrate the cache keys",
+  "Trim the bundle size",
+] as const;
+/**
+ * The scene's current steps and how many minutes each has run: a mix of
+ * edits, tests, commands, reads and thinking, with a few long ones (a 14
+ * minute test run, a 12 minute command, an 8 minute read) that show their
+ * time in amber. One kind in ten is a tool Town does not know: no glyph.
+ */
+const SCENE_STEPS: readonly [TownStepKind | null, number][] = [
+  ["edit", 1],
+  ["test", 14],
+  ["command", 2],
+  ["read", 0],
+  ["think", 0],
+  ["test", 3],
+  ["web", 1],
+  ["agent", 6],
+  ["command", 12],
+  ["read", 8],
+  ["edit", 0],
+  [null, 0],
+];
+
+/**
+ * A scene agent's synthetic step: its kind, task and start, minutes before
+ * the page loaded (`loadedAt`), so timers move on as the page stays open.
+ * Steps follow the desk order, so the first room's second desk runs the
+ * long test.
+ */
+export function townScaleStep(
+  paneId: string,
+  loadedAt: number,
+): TownStep | null {
+  const match = /^([a-z]+)-([a-z]+)-t(\d+)-p(\d+)$/.exec(paneId);
+  if (!match) return null;
+  const host = HOSTS.indexOf(match[1] as (typeof HOSTS)[number]);
+  const room = host < 0 ? -1 : ROOMS[host]!.indexOf(match[2] as never);
+  if (room < 0) return null;
+  const desk = Number(match[3]);
+  const seat = Number(match[4]);
+  const [kind, minutes] =
+    SCENE_STEPS[(desk + 7 * seat + 3 * room + host) % SCENE_STEPS.length]!;
+  if (!kind) return null;
+  return {
+    kind,
+    since:
+      kind === "think"
+        ? null
+        : loadedAt - minutes * 60_000 - ((desk * 13 + seat * 7) % 50) * 1000,
+    task: SCENE_TASKS[(desk + room) % SCENE_TASKS.length]!,
+  };
 }
