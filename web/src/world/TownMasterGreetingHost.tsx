@@ -1,6 +1,6 @@
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { lazyWithReload } from "../lazyWithReload";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLayoutPreferences } from "../layoutPreferences";
+import TownMasterGreetingLayer from "./TownMasterCard";
 import { useOwnerPresence } from "./presence";
 import {
   GREETING_CARD_ESTIMATE,
@@ -12,11 +12,6 @@ import {
   useGreeting,
 } from "./townMasterGreeting";
 import type { WorldObject } from "./worldObject";
-
-const TownMasterGreetingLayer = lazyWithReload(
-  "town-master-greeting",
-  () => import("./TownMasterCard"),
-);
 
 /**
  * The Town Master's greeting in Town, Board and Desk. On wide screens it
@@ -54,14 +49,12 @@ export function TownMasterGreetingHost({
   }, [greeting, step]);
   if (!state.open || covered || !placed) return null;
   return (
-    <Suspense fallback={null}>
-      <TownMasterGreetingLayer
-        world={world}
-        here={here}
-        mobile={mobile}
-        anchor={mobile ? null : state.anchor}
-      />
-    </Suspense>
+    <TownMasterGreetingLayer
+      world={world}
+      here={here}
+      mobile={mobile}
+      anchor={mobile ? null : state.anchor}
+    />
   );
 }
 

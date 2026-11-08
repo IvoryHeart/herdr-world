@@ -1,6 +1,5 @@
 import { useNow } from "../handoffs";
-import { needsYouItems, openNeedsYou } from "../needsYou";
-import { itemName } from "../NeedsYouItem";
+import { itemName, needsYouItems, openNeedsYou } from "../needsYou";
 import {
   sharedPresence,
   useOwnerPresence,

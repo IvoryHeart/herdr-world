@@ -25,7 +25,7 @@ import "./townMasterCard.css";
 
 /**
  * The open greeting: the card at its anchor on wide screens, a sheet with
- * Back on phones. Loaded when it first opens (TownMasterGreetingHost.tsx).
+ * Back on phones. Shown by TownMasterGreetingHost.tsx.
  */
 export default function TownMasterGreetingLayer({
   world,
