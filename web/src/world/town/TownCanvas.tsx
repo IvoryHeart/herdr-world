@@ -944,7 +944,6 @@ export function TownCanvas({
       </div>
       <TownBoard
         counts={summary.counts}
-        observability={observability}
         onOpenSummary={onOpenSummary}
         sinceYouLeft={sinceYouLeft}
       />

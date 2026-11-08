@@ -10,16 +10,13 @@ import type { ConnectionStatus } from "../connections/types";
 import type { WorldSnapshotResult } from "../world/snapshot";
 import type { OfficeObservabilitySnapshot } from "../world/observability";
 import type { RuntimeUsage } from "./host";
-import {
-  estimateUsage,
-  parseUsagePrices,
-  tokenTotal,
-  usageRollups,
-  usageTotal,
-} from "./totals";
+import { estimateUsage, parseUsagePrices, tokenTotal } from "./totals";
 import { usageDigest } from "./host";
 import type { Scheduler } from "../service/ports";
 import { usageScope } from "./lifetime";
+import { codexIdsFromTitle } from "../agent/session-resolver";
+import { normalizeAgentName } from "../agent/chat-harnesses";
+import { boundUsageDetails, summarizeUsage } from "./summary";
 
 import type { HerdrCall } from "../agent/session-types";
 
@@ -72,7 +69,9 @@ const topologyKey = (agents: Record<string, unknown>[]) =>
             a.agent,
             a.agent_session,
             a.terminal_id,
-            a.terminal_title,
+            normalizeAgentName(String(a.agent ?? "")) === "codex"
+              ? codexIdsFromTitle(String(a.terminal_title ?? ""))
+              : null,
             a.pane_id,
             a.tab_id,
             a.workspace_id,
@@ -169,7 +168,7 @@ export class WorldUsageService {
               Array.isArray(current.agents) && current.agents.length > 128;
             if (
               !Array.isArray(current.agents) ||
-              value.truncated ||
+              current.agents.length > 128 ||
               topologyKey(agents) !== topologyKey(current.agents)
             )
               value.bindings = [];
@@ -407,10 +406,6 @@ export class WorldUsageService {
           : [];
       for (const row of value.rows) {
         if (Date.parse(row.day) < from || Date.parse(row.day) >= now) continue;
-        if (entities.length >= 128) {
-          truncated = true;
-          break;
-        }
         const matches = bindings.filter(
           (b) =>
             b.harness === row.harness &&
@@ -461,9 +456,19 @@ export class WorldUsageService {
       truncated,
       entities,
       sources,
-      total: usageTotal(entities),
-      unattributed: usageTotal(entities.filter((e) => !e.pane_id)),
-      rollups: usageRollups(entities),
+      price_table_version: table?.version ?? null,
+      ...summarizeUsage(entities),
+      ...(kind === "7d"
+        ? {
+            today: summarizeUsage(
+              entities.filter(
+                (e) =>
+                  Date.parse(e.day) >=
+                  Math.floor(now / 86_400_000) * 86_400_000,
+              ),
+            ),
+          }
+        : {}),
       limits,
       telemetry: {
         role: "comparison",
@@ -474,19 +479,7 @@ export class WorldUsageService {
         total_tokens: telemetry.totalUsage,
       },
     };
-    // Leave space for the RPC envelope and future shared projection fields.
-    while (
-      Buffer.byteLength(JSON.stringify(response)) > 768 * 1024 &&
-      response.entities.length
-    ) {
-      response.truncated = true;
-      response.entities.pop();
-      response.total = usageTotal(response.entities);
-      response.unattributed = usageTotal(
-        response.entities.filter((e) => !e.pane_id),
-      );
-      response.rollups = usageRollups(response.entities);
-    }
+    boundUsageDetails(response);
     return response;
   }
 }

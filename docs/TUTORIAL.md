@@ -221,6 +221,10 @@ hosts stay usable.
    today**: that host's tokens and estimated cost and its three costliest
    rooms; the **City expenses** billboard by the top street, beside the town
    center, shows the whole World, with **Today** and **7 days** buttons.
+   **Today** uses UTC; **7 days** includes today. The Town board's **Economy
+   today · UTC · harness logs** shows the same Today figures and pricing rule.
+   Building totals add up to the city. **Unattributed (included)** is part of
+   those totals, not another charge; a detail limit never lowers totals.
    Without a price table they show tokens and "no price table"; a host whose
    logs cannot be read says "no data", never 0. On a phone, tap the coin
    signs to open them. For the

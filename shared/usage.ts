@@ -55,7 +55,14 @@ export type UsageTotal = {
 export type UsageRollup = UsageTotal &
   UsageTarget & {
     level: "host" | "workspace" | "tab" | "pane";
+    /** Host usage without a current room, computed before detail limits. */
+    unattributed?: UsageTotal;
   };
+export type UsageSummary = {
+  total: UsageTotal;
+  unattributed: UsageTotal;
+  rollups: UsageRollup[];
+};
 export type WorldUsageSnapshot = {
   version: 1;
   incarnation: string;
@@ -63,6 +70,11 @@ export type WorldUsageSnapshot = {
   window: { kind: "today" | "7d"; from: number; until: number };
   retention_days: 7;
   truncated: boolean;
+  /** Detail rows/rollups omitted for transport; summary totals are unaffected. */
+  details_truncated?: boolean;
+  price_table_version?: string | null;
+  /** Today's projection from this same read, supplied with a seven-day read. */
+  today?: UsageSummary;
   entities: UsageEntity[];
   sources: UsageSource[];
   total: UsageTotal;

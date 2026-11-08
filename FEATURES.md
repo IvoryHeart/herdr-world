@@ -131,7 +131,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a
     **Today** / **7 days** toggle. Each building's reception board ends with
     its **Expenses today**: the host's tokens and cost and its three
-    costliest rooms. Figures come from [harness usage](./docs/usage.md). The
+    costliest rooms. The Town board's **Economy today · UTC · harness logs**
+    shows the same Today total and price-table estimate as the city board.
+    Both windows share one read, and seven days includes today. Building totals
+    add up to the city; unattributed usage is already included. Detail limits
+    leave totals intact and are labelled. Figures come from [harness usage](./docs/usage.md). The
     boards never show a missing number as zero: without a price table they
     show tokens and say "no price table" (or "some models unpriced"); a host
     whose harness logs cannot be read says "no data"; a quiet host says
