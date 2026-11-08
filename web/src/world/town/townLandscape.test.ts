@@ -421,6 +421,7 @@ test("unchanged ground chunks keep their plan through a layout change", () => {
   expect(townGroundPlan(b, far).key).toBe(townGroundPlan(a, far).key);
   // Under the grown building's moved bar door the plan, and its key, changes.
   const building = b.buildings[1]!;
+  expect(building.barDoorX).not.toBe(a.buildings[1]!.barDoorX);
   const under = {
     x: Math.floor((building.barDoorX * T) / 512) * 512,
     y: Math.floor(((building.y + building.h) * T) / 512) * 512,
