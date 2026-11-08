@@ -63,18 +63,21 @@ export function townPlaceBoards(
     });
     const blocks = [...fixed, ...placed];
     const own = Math.min(board.w, board.x1 - board.x0) / 3;
-    const fits = (shifted: TownBox) =>
+    // Only what shares a lowered board's rows can be in its way.
+    const fits = (shifted: TownBox, row: readonly TownBox[]) =>
       shifted.x0 >= 0 &&
       shifted.x1 <= width &&
       Math.min(shifted.x1, board.x1) - Math.max(shifted.x0, board.x0) >=
         own - 0.01 &&
-      !blocks.some((block) => overlaps(shifted, block));
+      !row.some((block) => overlaps(shifted, block));
     // Sideways: beside each thing in the way, the nearest first.
     const shifts = [
-      0,
-      ...blocks.flatMap((block) => [
-        block.x0 - gap - (board.x + board.w / 2),
-        block.x1 + gap - (board.x - board.w / 2),
+      ...new Set([
+        0,
+        ...blocks.flatMap((block) => [
+          block.x0 - gap - (board.x + board.w / 2),
+          block.x1 + gap - (board.x - board.w / 2),
+        ]),
       ]),
     ].sort((a, b) => Math.abs(a) - Math.abs(b));
     // Failing that, lower: below each thing in its way, the least first,
@@ -87,12 +90,16 @@ export function townPlaceBoards(
       ]),
     ].sort((a, b) => a - b);
     let offset: TownBoardOffset | undefined;
-    search: for (const dy of drops)
+    search: for (const dy of drops) {
+      const y0 = top + dy;
+      const y1 = board.y + dy;
+      const row = blocks.filter((block) => block.y0 < y1 && y0 < block.y1);
       for (const dx of shifts)
-        if (fits(box({ dx, dy }))) {
+        if (fits(box({ dx, dy }), row)) {
           offset = { dx, dy };
           break search;
         }
+    }
     offset ??= { dx: 0, dy: drops[drops.length - 1]! };
     offsets.set(board.key, offset);
     placed.push(box(offset));
@@ -164,6 +171,7 @@ export class TownBoardPlacement {
               h: box ? box.blockSize : entry.contentRect.height,
             });
           }
+          this.version++;
           this.requestFrame();
           const heights = this.heights();
           const key = [...heights].join(";");
@@ -173,6 +181,11 @@ export class TownBoardPlacement {
         })
       : null;
   private heightsKey = "";
+  /** Bumped when a board is added, removed or resized. */
+  private version = 0;
+  /** The inputs of the last placement, so still frames compute nothing. */
+  private placed: { z: number; layout: TownLayout; version: number } | null =
+    null;
 
   /**
    * Asks the renderer for a frame when a board is added or resized, and
@@ -202,10 +215,12 @@ export class TownBoardPlacement {
 
   private watch(node: BoardNode) {
     this.observer?.observe(node as unknown as Element);
+    this.version++;
     this.requestFrame();
     return () => {
       this.observer?.unobserve(node as unknown as Element);
       this.sizes.delete(node);
+      this.version++;
     };
   }
 
@@ -213,6 +228,7 @@ export class TownBoardPlacement {
   readonly cityRef = (node: BoardNode | null) => {
     if (this.city) this.observer?.unobserve(this.city as unknown as Element);
     this.city = node;
+    this.version++;
     if (node) this.watch(node);
   };
 
@@ -252,6 +268,15 @@ export class TownBoardPlacement {
   /** Place the boards for zoom `z` over `layout`. */
   place(z: number, layout: TownLayout) {
     if (!this.receptions.size) return;
+    const last = this.placed;
+    if (
+      last &&
+      last.z === z &&
+      last.layout === layout &&
+      last.version === this.version
+    )
+      return;
+    this.placed = { z, layout, version: this.version };
     const boards: TownBoardRequest[] = [];
     const nodes = new Map<string, BoardNode>();
     for (const building of layout.buildings) {
