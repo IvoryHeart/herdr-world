@@ -1,7 +1,8 @@
 /* Town lenses: tints in the world layer, and the legend in the board's place. */
 
-.town-shell {
-  /* Town lenses (townLens.ts): sequential scales are colour-blind safe
+.town-shell,
+.board {
+  /* Town lenses (townLens.ts), on Board too (boardLens.css): sequential scales are colour-blind safe
      (orange to blue, inferno-like heat, viridis-like growth); categories
      use the Okabe–Ito palette. Every lens also says its value in words. */
   --town-lens-warm-1: #f9a03f;
