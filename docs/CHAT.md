@@ -492,8 +492,9 @@ recorded questions, `unanswerable` for the reason no options are offered,
 `screen` for a prompt shown as drawn, and `trust` for the pre-session
 folder-trust question), `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
-assistant message), `quest` (see [Quests](#quests)) and a `status` of `ok` or
-`unavailable`. Each message has a
+assistant message), `latest_request` (the first line of words in the newest
+user message, which Town's thought bubbles fall back on), `quest` (see
+[Quests](#quests)) and a `status` of `ok` or `unavailable`. Each message has a
 `role` (`user`, `assistant` or `tool`) and a `kind`:
 
 - `message`: user or assistant text.

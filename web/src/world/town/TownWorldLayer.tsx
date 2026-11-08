@@ -19,6 +19,8 @@ import {
   type TownPlaceCardContent,
 } from "./TownRoomPlaque";
 import { TownDeskTitle } from "./TownDeskTitle";
+import { TownStepBubble } from "./TownStepBubble";
+import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
 import { TownPostOffice } from "./TownPostOffice";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
@@ -137,6 +139,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   targets,
   deskBadges,
   quests,
+  steps,
   renderer,
   pennants,
   signs,
@@ -180,6 +183,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
   /** Quests by agent key, as pennants at their seats. */
   quests: ReadonlyMap<string, TownQuestMark>;
+  /** Working agents' current steps, as thought bubbles at their seats. */
+  steps?: TownStepStore;
   /** Tells a pennant whether its agent is seated. */
   renderer: { readonly current: TownRendererHandle | null };
   pennants: Set<HTMLElement>;
@@ -739,6 +744,25 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                   >
                                     {device.displayLabel}
                                   </span>
+                                  {steps &&
+                                  device.agentKey &&
+                                  !askingKeys.has(device.agentKey) &&
+                                  model.agents.get(device.agentKey)
+                                    ?.semanticStatus === "working" ? (
+                                    <TownStepBubble
+                                      steps={steps}
+                                      hud={hud}
+                                      agentKey={device.agentKey}
+                                      top={slot.top}
+                                      x={slot.chairX + 7}
+                                      selected={
+                                        selectedKey === device.agentKey ||
+                                        selectedKey === desk.key
+                                      }
+                                      renderer={renderer}
+                                      pennants={pennants}
+                                    />
+                                  ) : null}
                                   {quest ? (
                                     <TownQuestPennant
                                       quest={quest}

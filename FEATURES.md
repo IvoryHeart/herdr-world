@@ -197,10 +197,35 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (the role holder from **Menu → Sounds**, else the agent named in **Menu →
     Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
-    **Needs you** with its count, **Summary**, **Profiles** and **New room**
-    (disabled with the reason when no room can be created). Arrow keys, Home
-    and End move around the ring; Escape, a press outside, the centre **✕** or
-    **Back** on a phone closes it.
+    **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
+    **New room** (disabled with the reason when no room can be created). Arrow
+    keys, Home and End move around the ring; Escape, a press outside, the
+    centre **✕** or **Back** on a phone closes it.
+  - **Lenses** colour the whole map by one fact, as strategy games' map
+    overlays do, so you see at a glance where it is high or low. Turn one on
+    from the town center's **Lenses** or with `L` (`Shift+L` steps back); the
+    Town board sign (on a phone, the summary chip) becomes the lens's legend:
+    its name (press it to choose a lens), **‹ ›** to step, **✕** to leave, the
+    scale, and the reading of the place under the pointer, keyboard focus or
+    last tap. Town dims; at home and building zoom each room's floor takes its
+    room's colour, with the room's name and short reading at building zoom;
+    at room and desk zoom each desk and seated agent carries its own.
+    **Idle time** runs from under 5 minutes (warm) to 8 hours and more (cold)
+    since each agent last worked; a room shows its coldest quarter.
+    **Spend** is today's estimated cost per room and desk (by tokens when
+    some usage is unpriced), from the same usage as the expenses boards; a
+    host or place without a reading is hatched **No data**, never zero.
+    **Pull requests** colours desks with a linked pull request as failing,
+    ready, waiting, draft or merged, from the same links as the desk badge;
+    a room shows its most urgent. **Quests** shows each agent's quest
+    progress; **Harness** shows Claude, Codex, Pi, other agents and plain
+    shells, and a room or desk with several harnesses is striped by each
+    one's share. Desks and agents with nothing to show stay plain. Screen readers
+    hear each place's reading in its name. A lens changes only how Town is
+    drawn: taps open what they always do, nothing moves, Escape or **✕**
+    returns Town exactly as it was, and Town always opens in **Attention**
+    (Town as usual). The browser remembers the last lens for `L` and
+    **Lenses**. With `?scene=town-scale` every lens has synthetic data.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
@@ -300,6 +325,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     shows a blue pennant (green when done, amber when blocked) beside it in
     a room or at a desk, with a progress bar when the quest has steps; the
     pennant leaves with the agent. Hover or tap the pennant for **Quest**, its title and progress.
+  - Zoomed into a room, each working agent shows a thought bubble over its
+    head with a glyph for the step it runs now: a pencil for editing files,
+    a test tube for tests, a prompt for a command, a magnifier for reading or
+    searching code, a globe for the web, a light bulb for thinking or
+    writing, and two figures for a subagent. A step that has run long for its
+    kind (an edit over 3 minutes, a read or fetch over 5, a test run or
+    command over 10, a subagent over 20) shows its time in an amber tag. At
+    the desk level, or on the selected desk, the bubble adds what the agent
+    is doing now and the step with its timer, such as
+    `Run the login tests · tests 3m`. The words are the running step's own
+    detail (a command's description, the file it edits, the search query),
+    else the plan item it marked in progress, else the latest request it was
+    given; the terminal title is the last resort, since Claude Code names
+    only the session's first topic there. Steps come from the same conversation
+    summary as Chat's Now bar, for Claude Code, Codex and Pi; another harness,
+    or a tool Town does not know, keeps the typing dots. Town reads steps only
+    for working agents on screen at the room or desk level, when the service
+    reports their conversation changed, at most 32 per read and one read at a
+    time per connection; nothing is polled.
+    Bubbles do not move, and hovering the agent still opens its peek.
   - **Open terminal** in the card's header opens the live pane; **Open chat**
     opens the agent's window, whose Files and Changes views hold the rest.
     **Next** opens the next waiting agent's window,
