@@ -87,7 +87,7 @@ Herdr's skill documentation uses, and it resolves the same variables Herdr does.
 
 | Harness | Herdr's file today | World skill file (`…/herdr-world/SKILL.md`) | World limits |
 | --- | --- | --- | --- |
-| `claude` | `~/.claude/hooks/herdr-agent-state.sh` + `settings.json` hooks | `$CLAUDE_CONFIG_DIR/skills/` (`~/.claude/skills/`) | Tap: `~/.claude/hooks/herdr-world-status-line.sh` + `statusLine` (D3) |
+| `claude` | `~/.claude/hooks/herdr-agent-state.sh` + `settings.json` hooks | `$CLAUDE_CONFIG_DIR/skills/` (`~/.claude/skills/`) | Tap: `~/.claude/herdr-world/herdr-world-claude-tap.sh` + `statusLine` (D3) |
 | `codex` | `~/.codex/herdr-agent-state.sh` + `hooks.json` | `~/.agents/skills/` (shared) | None needed: rollouts carry `rate_limits` |
 | `pi` | `~/.pi/agent/extensions/herdr-agent-state.ts` | `~/.agents/skills/` (shared) | None: no subscription limits |
 | `kimi` | `~/.kimi-code/hooks/herdr-agent-state.sh` + `config.toml` | `~/.agents/skills/` (shared) | None exposed |
@@ -180,11 +180,10 @@ World differs from Herdr in two places:
 
 `herdr-world integration install claude` also:
 
-1. writes `$CLAUDE_CONFIG_DIR/hooks/herdr-world-status-line.sh`: the same
-   marker header, then #727's tap program run by the Bun or Node that the
-   installer resolved on the host (the probe #727 already uses);
-2. writes `herdr-world-status-line.json` beside it, mode 0600, holding the
-   user-scope `statusLine` value it replaces, or `null`;
+1. writes `$CLAUDE_CONFIG_DIR/herdr-world/herdr-world-claude-tap.sh`: a
+   World marker header, then #727's tap program run by World's executable as Bun;
+2. writes `claude-status-line.json` beside it, mode 0600, holding the
+   previous and installed settings bytes, including an absent file or key;
 3. sets `statusLine` in `$CLAUDE_CONFIG_DIR/settings.json` to
    `{ "type": "command", "command": "<script path>" }`. The file is parsed and
    every other key kept. A file that doesn't parse is refused.
@@ -193,7 +192,10 @@ The tap's chaining rule gains one case. When the effective `statusLine` it finds
 is World's own script, it runs the saved previous command instead. In both
 cases it passes the same stdin and returns the output unchanged. If the
 runtime is gone, the script still runs the saved command. Uninstall puts back
-the saved value, or removes the key if it was absent, then deletes both files.
+unchanged settings byte for byte, removing the file or key if originally absent,
+then deletes both files. Intervening unrelated edits survive; a replaced status
+line or deleted file stays as the user left it. Malformed settings or backups are
+refused without discarding recovery files.
 Herdr's Claude hook entries live under `hooks`, which World never touches.
 
 Status for `claude` is `current` only when the skill, the script, the saved

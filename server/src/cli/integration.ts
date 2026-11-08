@@ -26,6 +26,7 @@ import {
   type WorldHarness,
 } from "./integration-paths";
 import { WORLD_SKILL } from "./world-skill";
+import { changeClaudeTap, claudeTapCurrent } from "./integration-claude";
 
 export const WORLD_SKILL_VERSION = 1;
 
@@ -88,7 +89,8 @@ export const integrationCommand: CliCommand = {
 
 Harnesses: ${WORLD_HARNESSES.join(", ")}
 
-Installs only the release's World skill on this host. The harness's config
+Installs the release's World skill on this host, plus Claude's chained limits tap.
+The harness's config
 folder must already exist. Codex, Pi and Kimi share ~/.agents/skills/herdr-world/SKILL.md;
 removing any of them removes that file for all three. No service is required.`,
   async run(args, context) {
@@ -129,6 +131,8 @@ removing any of them removes that file for all three. No service is required.`,
           );
         requireRegular(paths.folder, true);
         requireRegular(paths.file);
+        if (harness === "claude")
+          changeClaudeTap(paths.config, "install", context.runtime);
         mkdirSync(paths.folder, { recursive: true });
         const temporary = join(paths.folder, `.SKILL.md-${randomUUID()}.tmp`);
         try {
@@ -144,6 +148,8 @@ removing any of them removes that file for all three. No service is required.`,
       } else if (action === "uninstall") {
         requireRegular(paths.folder, true);
         requireRegular(paths.file);
+        if (harness === "claude")
+          changeClaudeTap(paths.config, "uninstall", context.runtime);
         if (stat(paths.file)) unlinkSync(paths.file);
         try {
           rmdirSync(paths.folder);
@@ -170,10 +176,16 @@ removing any of them removes that file for all three. No service is required.`,
               .join(" and ")}.`,
           );
         }
-      } else
-        context.log(
-          `${harness}: ${installedState(paths.file, paths.id)} (${path})`,
-        );
+      } else {
+        let state = installedState(paths.file, paths.id);
+        if (
+          harness === "claude" &&
+          state.startsWith("current") &&
+          !claudeTapCurrent(paths.config, context.runtime)
+        )
+          state = "outdated (Claude limits tap)";
+        context.log(`${harness}: ${state} (${path})`);
+      }
     }
     return exit;
   },
