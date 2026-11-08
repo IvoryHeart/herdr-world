@@ -373,6 +373,12 @@ export default function TownView({
       new Map([...agentQuests].map(([key, quest]) => [key, questMark(quest)])),
     [agentQuests],
   );
+  // The Idle time lens reads when each agent last worked, from its leaf.
+  const activityAt = useMemo(
+    () => (agent: { nodeId: string }) =>
+      townLeaf(world, agent.nodeId)?.lastActivityAt,
+    [world],
+  );
   const summon = (key: string) => {
     const status = agentByKey.get(key)?.agent.semanticStatus;
     if (status)
@@ -923,6 +929,7 @@ export default function TownView({
             chrome={TOWN_CHROME}
             centerActions={townCenter}
             needsYouOrder={needsYouOrder}
+            activityAt={activityAt}
             roomActions={{
               onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),

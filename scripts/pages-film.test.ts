@@ -28,6 +28,10 @@ frame.onload = async () => {
   try {
     await film.FILM.ready;
     if (!film.HerdrTownArt) failures.push("town-art.js did not load");
+    // The video's captions track is written from this list.
+    film.FILM.captions.forEach(([a, b, line], i, all) => {
+      if (!(a < b && b <= film.FILM.DUR && (!i || a >= all[i - 1][0]))) failures.push("caption out of place: " + line);
+    });
     for (let t = 0; t < film.FILM.DUR && failures.length < 5; t += 0.25) {
       try { film.FILM.renderFrame(t); } catch (error) { failures.push(t.toFixed(2) + "s: " + error.message); }
     }
