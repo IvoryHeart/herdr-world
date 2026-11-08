@@ -19,6 +19,7 @@ import {
   TOWN_FACADE,
   townFloor,
   townPlaceLots,
+  type TownVerticalRoad,
 } from "./townLots";
 import {
   NO_ROOM_SPOTS,
@@ -224,10 +225,11 @@ export type TownLayout = {
   roads: number[];
   /**
    * A road right of every lot, from the street above it (y0, the row under
-   * that street) to the street below (y1, that street's row): every lot has
-   * roads on at least three sides.
+   * that street) to the street below (y1, that street's row), and an `edge`
+   * road down the left of each row's first lot: every lot has roads on at
+   * least three sides, and the town on both.
    */
-  verticalRoads: { x: number; y0: number; y1: number }[];
+  verticalRoads: TownVerticalRoad[];
   /**
    * The town center: at the top, across the first street from the
    * buildings, centred over the first row (townLots.ts).

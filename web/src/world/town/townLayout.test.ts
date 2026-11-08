@@ -724,6 +724,56 @@ test("every building has roads on at least three sides", () => {
     }
 });
 
+test("a road runs down each side of the town, matching street to street", () => {
+  for (const shape of Object.values(TOWN_SHAPES))
+    for (const hosts of [{ a: [3] }, ...HOST_SETS]) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const { width, ground } = layout;
+      const at = (x: number, y: number) => ground[y * width + x];
+      const land = townLandscape(layout);
+      const streets = [...layout.roads].sort((a, b) => a - b);
+      for (let row = 1; row < streets.length; row += 1) {
+        const y0 = streets[row - 1]! + ROAD_BAND;
+        const y1 = streets[row]!;
+        const lots = layout.buildings
+          .filter((b) => b.y >= y0 && b.y < y1)
+          .sort((a, b) => a.x - b.x);
+        const first = lots[0]!;
+        const last = lots[lots.length - 1]!;
+        const sides = layout.verticalRoads.filter(
+          (v) => v.y0 === y0 && v.y1 === y1,
+        );
+        const leftRoad = sides.find((v) => v.x + ROAD_BAND === first.x);
+        const rightRoad = sides.find((v) => v.x === last.x + last.w);
+        expect(leftRoad?.edge).toBe(true);
+        expect(rightRoad?.edge).toBeUndefined();
+        // Nothing stands left of the left road but land.
+        expect(Math.min(...sides.map((v) => v.x))).toBe(leftRoad!.x);
+        // The same pavement, carriageway and pavement, from the street above
+        // to the street below, as the right road.
+        for (const road of [leftRoad!, rightRoad!]) {
+          for (let y = y0; y < y1; y += 1) {
+            expect([y, at(road.x, y), at(road.x + 4, y)]).toEqual([
+              y,
+              TownGround.walk,
+              TownGround.walk,
+            ]);
+            for (let x = road.x + 1; x < road.x + 4; x += 1)
+              expect(at(x, y)).toBe(TownGround.road);
+            expect(land.objectAt(road.x + 2, y)).toBeNull();
+          }
+          for (let x = road.x; x < road.x + ROAD_BAND; x += 1) {
+            expect(at(x, y0 - 2)).toBe(TownGround.road);
+            expect(at(x, y1 + 2)).toBe(TownGround.road);
+          }
+        }
+        // The landscape starts beyond it: grass ground right outside.
+        for (let y = y0; y < y1; y += 1)
+          expect(at(leftRoad!.x - 1, y)).toBe(TownGround.grass);
+      }
+    }
+});
+
 test("the town center stands at the top, just across the first street", () => {
   for (const shape of Object.values(TOWN_SHAPES))
     for (const hosts of [...HOST_SETS, {}]) {
