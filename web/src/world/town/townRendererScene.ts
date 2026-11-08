@@ -184,7 +184,7 @@ export function townOutdoor(
     center.y * T,
     (center.y + center.h) * T,
   );
-  // The post office beside the center: its house, its yard at the door.
+  // The post office left of the center: its house, its yard on the street.
   const post = townPostLot(layout);
   if (post) {
     add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);

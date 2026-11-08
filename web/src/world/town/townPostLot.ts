@@ -1,12 +1,13 @@
 /**
- * Where Town's post office (#760) stands, as tiles: right beside the town
- * center, so the center, its billboard and the post office make one place
- * to act from at the top of the town. Pure geometry with no layout import,
- * so the layout can make room for the lot (townLayout.ts) and everything
- * else reads it from the laid-out center (townPost.ts).
+ * Where Town's post office (#760) stands, as tiles: left of the town center,
+ * fronting the first street as the center does, so the center, its billboard
+ * and the post office make one place to act from at the top of the town.
+ * Pure geometry with no layout import, so the lots can make room for it
+ * (townLots.ts) and everything else reads it from the laid-out center
+ * (townPost.ts).
  */
 
-import { TOWN_CENTER_TOP, type TownCenterLot } from "./townCenter";
+import type { TownCenterLot } from "./townCenter";
 
 /** The lot's width in tiles: the building and its yard share it. */
 export const TOWN_POST_WIDTH = 12;
@@ -14,14 +15,10 @@ export const TOWN_POST_WIDTH = 12;
 export const TOWN_POST_HOUSE_ROWS = 6;
 /** The sorting yard's rows, in front of the door. */
 export const TOWN_POST_YARD_ROWS = 4;
-/** Lawn between the center's east wing and the post office. */
+/** Lawn between the post office and the center's west wing. */
 export const TOWN_POST_GAP = 2;
-/**
- * The house's top row: a row under the center's, so the yard's front edge
- * meets the lawn kept above the first street (TOWN_BILLBOARD_VERGE) and never
- * enters it.
- */
-const TOWN_POST_TOP = TOWN_CENTER_TOP + 1;
+/** Columns a wide town keeps left of its center for the lot and its lawn. */
+export const TOWN_POST_ROOM = TOWN_POST_WIDTH + TOWN_POST_GAP;
 
 export type TownPostLot = {
   /** Left column and the building's top row, in tiles. */
@@ -33,17 +30,18 @@ export type TownPostLot = {
 };
 
 /**
- * The lot right of the town center's east wing. Nothing that stands today
- * moves for it: a town without lawn there grows wider to the right
- * (townLayout.ts), its park plaza kept where it was.
+ * The lot left of the town center's west wing, its yard's front edge on the
+ * first street's pavement, so parcels go straight from the yard to the road.
+ * Every wide town stands that much further right to keep lawn there
+ * (townLots.ts), so the lot never makes anything move as the town grows.
  */
 export function townPostLotBeside(center: TownCenterLot): TownPostLot {
-  const y = TOWN_POST_TOP;
+  const yardY = center.street - TOWN_POST_YARD_ROWS;
   return {
-    x: center.x + center.w + TOWN_POST_GAP,
-    y,
+    x: center.x - TOWN_POST_ROOM,
+    y: yardY - TOWN_POST_HOUSE_ROWS,
     w: TOWN_POST_WIDTH,
-    yardY: y + TOWN_POST_HOUSE_ROWS,
+    yardY,
   };
 }
 

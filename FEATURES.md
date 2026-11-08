@@ -143,8 +143,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
     reception.
-  - Town's **post office** stands right beside the town center, above the
-    first street: your open pull requests (opened by you, waiting on your
+  - Town's **post office** stands on the first street left of the town
+    center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
     review or assigned to you) as parcels in its sorting yard, ready to merge
     first. Its sign counts them without hovering, such as "2 ready · 1
     failing · 3 waiting", adding unknown and draft when there are some. A

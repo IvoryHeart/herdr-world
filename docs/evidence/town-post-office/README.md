@@ -29,3 +29,10 @@ After the owner's laptop review the post office moved from the park beside
 the plaza to the lawn right of the town center, its yard now at the door with
 no park walk between. The captures above predate that move: the house, yard,
 parcels and sign are unchanged, the plain walk row under the house is gone.
+
+After the owner's next laptop review it moved again, to the left of the town
+center with its yard's front edge on the first street's pavement, so it
+fronts the road as the center does. Every wide town stands the lot's
+columns further right to keep lawn there, the same for every town, so growth
+never moves what stands. The captures above predate this move too; the art
+is unchanged.

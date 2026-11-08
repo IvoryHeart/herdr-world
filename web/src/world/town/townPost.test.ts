@@ -9,7 +9,7 @@ import { fixturePullRequest } from "../testing/pullRequestFixture";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { townBusRoute } from "./townBus";
 import { TownCamera } from "./townCamera";
-import { TOWN_BILLBOARD_VERGE, townLandscape } from "./townLandscape";
+import { townLandscape } from "./townLandscape";
 import {
   layoutTown,
   TOWN_SHAPES,
@@ -29,6 +29,7 @@ import {
   townPostSlot,
   townPostState,
 } from "./townPost";
+import { TOWN_POST_ROOM } from "./townPostLot";
 import {
   townPostFixtureMerged,
   townPostFixtureSnapshot,
@@ -210,7 +211,7 @@ const towns: [string, TownInput, TownShape][] = [
 ];
 
 test.each(towns)(
-  "the post office stands beside the town center (%s), on clear land",
+  "the post office stands left of the town center on the first street (%s), on clear land",
   (_, input, shape) => {
     const { layout } = layoutTown(input, shape);
     const lot = townPostLot(layout)!;
@@ -218,25 +219,30 @@ test.each(towns)(
     const area = townPostReserve(lot);
     const { center } = layout;
     const firstStreet = Math.min(...layout.roads);
-    // Right of the center's east wing, a short lawn between, inside the town.
-    expect(area.x0).toBeGreaterThan(center.x + center.w);
-    expect(lot.x - (center.x + center.w)).toBeLessThanOrEqual(3);
-    expect(area.y0).toBeGreaterThanOrEqual(0);
-    expect(area.x1).toBeLessThanOrEqual(layout.width);
-    // Level with the center, its yard clear of the lawn kept above the first
-    // street for the billboards, so above every street and building.
+    // Left of the center's west wing, a short lawn between, inside the town.
+    expect(area.x1).toBeLessThan(center.x);
+    expect(center.x - (lot.x + lot.w)).toBeLessThanOrEqual(3);
+    expect(area.x0).toBeGreaterThanOrEqual(0);
+    expect(lot.x).toBeGreaterThanOrEqual(3);
+    // Its yard's front edge on the first street's pavement, as the center's
+    // steps are, so it fronts the road; above every building.
     expect(lot.y).toBeGreaterThanOrEqual(center.y);
-    expect(lot.yardY + TOWN_POST_YARD_ROWS).toBeLessThanOrEqual(
-      firstStreet - TOWN_BILLBOARD_VERGE,
+    expect(lot.yardY + TOWN_POST_YARD_ROWS).toBe(firstStreet);
+    expect(layout.ground[firstStreet * layout.width + lot.x]).toBe(
+      TownGround.walk,
     );
     for (const b of layout.buildings) expect(b.y).toBeGreaterThan(area.y1);
+    // No street lamp stands in front of the yard.
+    for (const lamp of layout.lamps)
+      if (lamp.y === firstStreet)
+        expect(lamp.x < area.x0 || lamp.x >= area.x1).toBe(true);
     // The house and the yard stand on grass.
     for (let y = lot.y; y < lot.yardY + TOWN_POST_YARD_ROWS; y += 1)
       for (let x = lot.x; x < lot.x + lot.w; x += 1)
         expect(layout.ground[y * layout.width + x]).toBe(TownGround.grass);
-    // Every bus stop's sign stands on a street's pavement below it.
+    // Every bus stop waits on a street's pavement across the road from it.
     for (const stop of townBusRoute(layout).stops)
-      expect(Math.floor(stop.wait.y / T) - 5).toBeGreaterThanOrEqual(area.y1);
+      expect(Math.floor(stop.wait.y / T)).toBeGreaterThan(firstStreet);
     // No tree, hedge or pond grows on its lot.
     const land = townLandscape(layout);
     for (let y = area.y0; y < area.y1; y += 1)
@@ -247,23 +253,22 @@ test.each(towns)(
   },
 );
 
-test("making room for the post office moves nothing else", () => {
-  // A one-building town has no lawn right of its center: the town grows to
-  // the right, and its park plaza stays centred on the town it had.
+test("making room for the post office moves nothing as the town grows", () => {
+  // Every wide town stands the lot's columns further right, its side roads
+  // and plaza with it, so even a one-building town has lawn for the lot.
   const { layout } = layoutTown(town({ a: [1] }), TOWN_SHAPES.wide);
-  const lot = townPostLot(layout)!;
-  expect(layout.width).toBe(townPostReserve(lot).x1 + 3);
-  // The plaza keeps the middle of the town it had, not the wider one.
-  expect(layout.plaza.x).toBeLessThan(Math.floor(layout.width / 2));
-  expect(layout.plaza.x).toBeLessThan(lot.x);
-  // A wide first row already has lawn there: the town keeps its width.
-  const wide = layoutTown(
-    town({ a: [3, 3], b: [3, 3], c: [3, 3], d: [3, 3] }),
-    TOWN_SHAPES.wide,
-  ).layout;
-  const wideLot = townPostLot(wide)!;
-  expect(townPostReserve(wideLot).x1 + 3).toBeLessThanOrEqual(wide.width);
-  expect(wide.plaza.x).toBe(Math.floor(wide.width / 2));
+  const shift = TOWN_POST_ROOM;
+  expect(townPostLot(layout)!.x).toBe(layout.center.x - shift);
+  expect(townPostLot(layout)!.x).toBeGreaterThanOrEqual(3);
+  const b = layout.buildings[0]!;
+  expect(b.x).toBe(3 + shift);
+  expect(layout.verticalRoads[0]!.x).toBe(b.x + b.w);
+  expect(layout.plaza.x).toBe(shift + Math.floor((layout.width - shift) / 2));
+  // A town that grows a building keeps its first one where it stood; its
+  // center, centred over the wider row, takes the post office with it.
+  const grown = layoutTown(town({ a: [1], b: [1] }), TOWN_SHAPES.wide).layout;
+  expect(grown.buildings[0]!.x).toBe(b.x);
+  expect(townPostLot(grown)!.x).toBe(grown.center.x - shift);
 });
 
 test.each([

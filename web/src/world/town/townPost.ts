@@ -264,10 +264,10 @@ export const TOWN_POST_PITCH = { x: 20, y: 18 } as const;
 export const TOWN_POST_INSET = { x: 6, y: 6 } as const;
 
 /**
- * The post office's lot: right beside the town center, outside the building
- * grid (townPostLot.ts). A narrow (stacked) town folds it to a sign on the
- * town center instead, as it does the city billboard. Nothing in the layout
- * moves for it; the landscape keeps its lot clear.
+ * The post office's lot: left of the town center on the first street,
+ * outside the building grid (townPostLot.ts). A narrow (stacked) town folds
+ * it to a sign on the town center instead, as it does the city billboard.
+ * The landscape keeps its lot clear.
  */
 export function townPostLot(layout: TownLayout): TownPostLot | null {
   if (layout.formFactor === "narrow") return null;
