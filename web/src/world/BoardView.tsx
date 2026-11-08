@@ -23,6 +23,7 @@ import {
   type CSSProperties,
   lazy,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   Suspense,
   startTransition,
   useCallback,
@@ -141,6 +142,7 @@ import { TownStepStore } from "./town/townStepStore";
 import { useTownStepReads } from "./town/useTownStepReads";
 import { townScaleSceneRequested } from "./town/townScaleScene";
 import { useBoardPaneMoves } from "./board/useBoardPaneMoves";
+import { useBoardHerdrActions } from "./board/useBoardHerdrActions";
 import type { BoardPaneMove } from "./board/boardPaneMove";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { TraceOverlay } from "./devtools/TraceOverlay";
@@ -670,6 +672,16 @@ export default function BoardView({
   } | null>(null);
 
   const boardRef = useRef<HTMLDivElement>(null);
+  // Town's actions: rename and close rooms, Herdr's order, Mark reviewed
+  // and a peek at an agent.
+  const herdr = useBoardHerdrActions({
+    model,
+    selectedId,
+    boardStore,
+    boardRef,
+    notify: (_kind, text) => setToast({ text }),
+    onOpen,
+  });
   const worldRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const cardEls = useRef(new Map<string, HTMLElement>());
@@ -1862,7 +1874,7 @@ export default function BoardView({
   function classify(target: HTMLElement): GestureTarget | null {
     if (
       target.closest(
-        "[contenteditable='true'], .work-lens, .board-lens-dock, .board-facts",
+        "[contenteditable='true'], .work-lens, .board-lens-dock, .board-facts, .board-peek",
       )
     )
       return null;
@@ -2325,8 +2337,12 @@ export default function BoardView({
   }
 
   const onWheel = useCallback((event: WheelEvent) => {
-    // The Work lens and the summary scroll their own content.
-    if ((event.target as Element | null)?.closest?.(".work-lens, .board-facts"))
+    // The Work lens, summary and peek scroll their own content.
+    if (
+      (event.target as Element | null)?.closest?.(
+        ".work-lens, .board-facts, .board-peek",
+      )
+    )
       return;
     event.preventDefault();
     camGoal.current = null;
@@ -3370,6 +3386,7 @@ export default function BoardView({
         </div>
       ) : null}
       {paneMoves.dialog}
+      {herdr.dialogs}
       <div
         ref={boardRef}
         data-surface={appearance.surface}
@@ -3421,7 +3438,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .board-lens-dock, .board-facts",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .board-lens-dock, .board-facts, .board-peek",
             )
           )
             return;
@@ -4130,6 +4147,7 @@ export default function BoardView({
               }
               pinned={pinnedKeys.has(colorKey)}
               onPin={() => togglePin(colorKey)}
+              herdr={herdr.barItems(colorKey)}
             />
           ) : null}
           {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
@@ -4160,6 +4178,7 @@ export default function BoardView({
             />
           ) : null}
         </div>
+        {herdr.overlay}
         {chooser && model.tabByKey.get(chooser.tabKey) ? (
           <div
             className="board-chooser"
@@ -4673,6 +4692,7 @@ function CardBar({
   team,
   pinned,
   onPin,
+  herdr,
 }: {
   label: string;
   color: CardColor | null;
@@ -4687,6 +4707,8 @@ function CardBar({
   };
   pinned: boolean;
   onPin(): void;
+  /** The card's Herdr actions (useBoardHerdrActions). */
+  herdr?: ReactNode;
 }) {
   return (
     <div
@@ -4735,6 +4757,7 @@ function CardBar({
         <Pin size={14} aria-hidden="true" />
         {pinned ? "Unpin" : "Pin"}
       </button>
+      {herdr}
     </div>
   );
 }

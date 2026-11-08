@@ -793,6 +793,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     possibly delivered to another agent. Check the pane before sending again.
     A note offers **Start an agent** in a chosen workspace: World starts the
     agent in a new tab and sends the note once it is ready.
+  - Town's room and agent actions are in a selected card's bar too: a
+    workspace offers **Rename…** and **Close…** with Town's dialogs and
+    confirmation; workspaces and tabs offer **Herdr order ‹ Earlier / Later
+    ›**, which moves the room or tab in Herdr's own order (Town's buildings
+    and desks and Spaces follow; Town's saved room spots swap with it), while
+    dragging and Tidy arrange only the Board. Resting the mouse on an agent's
+    tab or pane row opens a peek like Town's (latest Chat message, its
+    question and answer buttons, **Mark reviewed**, **Open**); on a phone,
+    **Preview** in the tab's bar opens it, and a finished agent's bar offers
+    **Mark reviewed** (done, or idle after a turn World saw end, as Town
+    counts it). The `?scene=town-scale` preview's synthetic hosts take all of
+    these actions in the page, so they can be tried without real hosts.
   - Drag a tab onto another workspace of its host to move it (asks first).
     On phones, hold a card still before dragging; adding a second finger switches
     to pinch zoom without committing a move. Settling pauses while you type in

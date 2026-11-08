@@ -1,5 +1,11 @@
 import { useAppearanceDocument, worldWithAppearance } from "./appearance";
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { bridge } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, useStoreSelector } from "../store";
@@ -16,10 +22,10 @@ import {
 import { useMediaQuery } from "./DeskView";
 import { hasValidSelectedConnection } from "./worldInspectorSelection";
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
-import {
-  townScaleConnections,
-  townScaleSceneRequested,
-} from "./town/townScaleScene";
+import { townScaleRuntime } from "./town/townScaleRuntime";
+
+const noSubscription = () => () => {};
+const noScene = () => null;
 
 type Input = Pick<WorldControlPlaneProps, "onPresentedWorldChange">;
 
@@ -27,10 +33,11 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
   const runtime = useWorldRuntime();
   // `?scene=town-scale` swaps every host for the synthetic scale scene, read
   // once per page load, so Town can be judged at the owner's maximum scale.
-  const [scene] = useState(() =>
-    townScaleSceneRequested(window.location.search)
-      ? townScaleConnections()
-      : null,
+  // Its page-local runtime answers Town's and Board's actions.
+  const [sceneRuntime] = useState(townScaleRuntime);
+  const scene = useSyncExternalStore(
+    sceneRuntime?.subscribe ?? noSubscription,
+    sceneRuntime?.get ?? noScene,
   );
   const appearance = useAppearanceDocument();
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
