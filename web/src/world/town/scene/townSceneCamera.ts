@@ -115,10 +115,13 @@ export class TownSceneCamera {
     const camera = this.camera;
     const layout = this.layout;
     if (!camera || !layout) return;
-    const wasHome = this.atHome();
+    // A flight just begun (to a room) still sits at home; only a camera
+    // resting at home, or flying there, is framed again.
+    const homeBound = this.flyingHome();
+    const wasHome = homeBound || (!camera.flying && this.atHome());
     camera.boardHeights = heights;
     camera.configure(layout, camera.viewport);
-    if (wasHome) this.frameHome(layout, camera.viewport, false);
+    if (wasHome) this.frameHome(layout, camera.viewport, homeBound, homeBound);
   }
 
   /**

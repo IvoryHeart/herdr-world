@@ -393,6 +393,29 @@ test("a room request runs once per seq, when the camera and room are ready", () 
   expect(reasons).toEqual(["room", "fit", "room"]);
 });
 
+test("measured boards re-frame a town at home, never a room flight just begun", () => {
+  const { view, layout, viewport, camera } = setup();
+  view.attach(camera, layout, viewport);
+  const heights = new Map(
+    layout.buildings.map((building) => [building.hostKey, 400]),
+  );
+  // At home: the taller boards move the home framing with them.
+  const before = { x: camera.x, y: camera.y, z: camera.z };
+  view.boardsResized(heights);
+  expect(camera.flying).toBe(false);
+  expect(view.atHome()).toBe(true);
+  expect({ x: camera.x, y: camera.y, z: camera.z }).not.toEqual(before);
+  // A room request starts its flight from home; boards measured on the
+  // next frame keep it flying to the room.
+  const roomKey = layout.buildings[0]!.rooms[1]!.key;
+  view.roomFocus({ roomKey, seq: 1 }, layout);
+  expect(camera.flying).toBe(true);
+  const destination = { ...camera.destination };
+  view.boardsResized(new Map([...heights].map(([key]) => [key, 300])));
+  expect(camera.flying).toBe(true);
+  expect(camera.destination).toEqual(destination);
+});
+
 test("panels re-frame the town only while it is still at home", () => {
   const { view, layout, viewport, camera, reasons } = setup();
   view.attach(camera, layout, viewport);
