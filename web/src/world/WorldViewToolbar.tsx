@@ -1,5 +1,5 @@
 import { Search, X } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   useFoldingSearch,
@@ -50,9 +50,9 @@ export function WorldViewToolbar({
     else folding.expand();
   });
 
-  useEffect(() => {
-    if (!compact) setCompactSearchOpen(false);
-  }, [compact]);
+  // Leaving the phone layout closes its search overlay. Adjusted while
+  // rendering, not in an effect, so mounting commits no extra render.
+  if (!compact && compactSearchOpen) setCompactSearchOpen(false);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
