@@ -221,6 +221,24 @@ export function normalizeShortcut(value: string): string | null {
   );
 }
 
+const keySymbols: Record<string, string> = {
+  Minus: "-",
+  Equal: "=",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Semicolon: ";",
+  Quote: "'",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Backquote: "`",
+};
+
+const symbolKeys = new Map(
+  Object.entries(keySymbols).map(([name, symbol]) => [symbol, name]),
+);
+
 export type ShortcutEvent = Pick<
   KeyboardEvent,
   "key" | "ctrlKey" | "altKey" | "metaKey" | "shiftKey"
@@ -248,6 +266,13 @@ export function shortcutFromEvent(event: ShortcutEvent): string | null {
       event.key.toUpperCase() !== codeKey
     )
       return null;
+  }
+  // A punctuation key typed without Ctrl, Alt or Meta is the character it
+  // types, wherever the layout puts it: "/" is Shift+7 on a German keyboard,
+  // whose physical Slash key types "-".
+  if (!event.ctrlKey && !event.altKey && !event.metaKey) {
+    const symbol = symbolKeys.get(event.key);
+    if (symbol) return symbol;
   }
   let key = event.key;
   // Modifier-produced characters (Option+1, Shift+2) still address the same key.
@@ -277,20 +302,6 @@ export function matchesShortcut(
   const key = shortcutFromEvent(event);
   return key !== null && bindings[id].includes(key);
 }
-
-const keySymbols: Record<string, string> = {
-  Minus: "-",
-  Equal: "=",
-  BracketLeft: "[",
-  BracketRight: "]",
-  Backslash: "\\",
-  Semicolon: ";",
-  Quote: "'",
-  Comma: ",",
-  Period: ".",
-  Slash: "/",
-  Backquote: "`",
-};
 
 export function formatShortcut(
   binding: string,

@@ -31,6 +31,17 @@ export function viewSearchShortcutApplies(event: KeyboardEvent): boolean {
   return !document.querySelector(KEYBOARD_OWNERS);
 }
 
+const takenBySearch = new WeakSet<Event>();
+
+/**
+ * Whether `event` is the search shortcut, which a view's own key handler
+ * must leave alone whichever listener runs first: a search bound to J must
+ * not also move the Desk selection.
+ */
+export function keyTakenByViewSearch(event: KeyboardEvent): boolean {
+  return takenBySearch.has(event) || viewSearchShortcutApplies(event);
+}
+
 /** Puts the cursor in the mounted view's search on the `view.search` keys. */
 export function useViewSearchShortcut(onSearch: () => void) {
   const onSearchRef = useRef(onSearch);
@@ -38,6 +49,7 @@ export function useViewSearchShortcut(onSearch: () => void) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!viewSearchShortcutApplies(event)) return;
+      takenBySearch.add(event);
       event.preventDefault();
       if (!event.repeat) onSearchRef.current();
     };

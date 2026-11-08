@@ -40,8 +40,10 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     });
   const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { getShortcutSnapshot } = await import("../shortcutPreferences");
+  const { getShortcutSnapshot, selectShortcutPreset, updateShortcut } =
+    await import("../shortcutPreferences");
   const { WorldViewToolbar } = await import("./WorldViewToolbar");
+  const { keyTakenByViewSearch } = await import("./viewSearchShortcut");
 
   // Ctrl+F, or Cmd+F where this DOM reports a Mac.
   const findModifier = getShortcutSnapshot().preset.bindings[
@@ -127,6 +129,42 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     expect(town.focused()).toBe(false);
     for (const node of [terminal, composer, field, editable, menu])
       node.remove();
+    town.unmount();
+  });
+
+  test("a search key never also runs a view's own key handler", () => {
+    // A view handler registered before the search, and one after it.
+    const seen: string[] = [];
+    const view = (when: string) => (event: KeyboardEvent) => {
+      if (!keyTakenByViewSearch(event)) seen.push(`${when} ${event.key}`);
+    };
+    const before = view("before");
+    window.addEventListener("keydown", before);
+    const town = mount();
+    const after = view("after");
+    window.addEventListener("keydown", after);
+    updateShortcut("view.search", ["J"]);
+    const pressJ = (key: string) => {
+      const event = new KeyboardEvent("keydown", {
+        key,
+        code: `Key${key.toUpperCase()}`,
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        document.body.dispatchEvent(event);
+      });
+    };
+    pressJ("j");
+    expect(town.focused()).toBe(true);
+    expect(seen).toEqual([]);
+    town.input()!.blur();
+    // Other keys still reach the view.
+    pressJ("k");
+    expect(seen).toEqual(["before k", "after k"]);
+    selectShortcutPreset("auto");
+    window.removeEventListener("keydown", before);
+    window.removeEventListener("keydown", after);
     town.unmount();
   });
 

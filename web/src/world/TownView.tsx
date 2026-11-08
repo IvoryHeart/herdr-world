@@ -96,6 +96,7 @@ import { useShownReport } from "./shownReport";
 import { needsYouLeafKey, offerNeedsYouOutbox, openNeedsYou } from "./needsYou";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
+import { keyTakenByViewSearch } from "./viewSearchShortcut";
 
 /** Town's chrome insets: Needs you is a World tab now, not a Town rail. */
 const TOWN_CHROME = { left: 0, right: 0 };
@@ -717,6 +718,7 @@ export default function TownView({
       // A key sent to the document or window has no element target.
       const target = event.target instanceof HTMLElement ? event.target : null;
       if (
+        keyTakenByViewSearch(event) ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||

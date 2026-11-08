@@ -149,6 +149,7 @@ import {
 import { inheritedColorKey } from "../../../shared/terminalColor";
 import { aimAtBin } from "./bin/binDrop";
 import { putAgentInBin } from "./bin/WorldBin";
+import { keyTakenByViewSearch } from "./viewSearchShortcut";
 import {
   groupTerminals,
   terminalsAreGrouped,
@@ -3118,6 +3119,7 @@ export default function BoardView({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
+        keyTakenByViewSearch(event) ||
         (event.target as HTMLElement | null)?.closest?.(
           "input, textarea, [contenteditable='true']",
         )

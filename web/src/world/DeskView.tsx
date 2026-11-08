@@ -49,7 +49,10 @@ import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
 import { DeskOtherHosts } from "./DeskOtherHosts";
-import { useViewSearchShortcut } from "./viewSearchShortcut";
+import {
+  keyTakenByViewSearch,
+  useViewSearchShortcut,
+} from "./viewSearchShortcut";
 export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
 
@@ -483,6 +486,7 @@ export function DeskBoard({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (keyTakenByViewSearch(event)) return;
       const target = event.target as HTMLElement | null;
       if (
         event.key === "Escape" &&

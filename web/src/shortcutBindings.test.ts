@@ -727,3 +727,28 @@ test("older presets gain view search without replacing saved keys", () => {
     ).toEqual(defaults);
   }
 });
+
+test("an unmodified punctuation key is the character it types", () => {
+  // German layout: "/" is Shift+7, and the physical Slash key types "-".
+  expect(
+    matchesShortcut(
+      event({ key: "/", code: "Digit7", shiftKey: true }),
+      "view.search",
+      linux(),
+    ),
+  ).toBe(true);
+  expect(
+    matchesShortcut(event({ key: "-", code: "Slash" }), "view.search", linux()),
+  ).toBe(false);
+  expect(
+    shortcutFromEvent(event({ key: "/", code: "Digit7", shiftKey: true })),
+  ).toBe("Slash");
+  // "?" is no named key, so US Shift+/ still records as the key it is.
+  expect(
+    shortcutFromEvent(event({ key: "?", code: "Slash", shiftKey: true })),
+  ).toBe("Shift+Slash");
+  // With Ctrl, Alt or Meta the physical key still addresses the shortcut.
+  expect(
+    shortcutFromEvent(event({ key: "-", code: "Slash", ctrlKey: true })),
+  ).toBe("Ctrl+Slash");
+});
