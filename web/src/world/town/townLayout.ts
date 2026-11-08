@@ -9,6 +9,7 @@
  */
 
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
+import { townPostLotBeside } from "./townPostLot";
 import {
   ADD_ROOM_WIDTH,
   LOBBY_HEIGHT,
@@ -727,7 +728,12 @@ export function layoutTown(
   const court = townCenterForecourt(center);
   strip(court.x0, court.y0, court.x1, court.y1, TownGround.plaza);
 
-  const plaza = { x: Math.floor(width / 2), y: lastRoad + ROAD_GAP + 6 };
+  // Centred on the town before it shifted for the post office's lawn, and
+  // shifted with it (townLots.ts).
+  const plaza = {
+    x: lots.shift + Math.floor((width - lots.shift) / 2),
+    y: lastRoad + ROAD_GAP + 6,
+  };
   for (let ty = plaza.y - 5; ty <= plaza.y + 5; ty += 1)
     for (let tx = plaza.x - 8; tx <= plaza.x + 8; tx += 1)
       if (((tx - plaza.x) / 8) ** 2 + ((ty - plaza.y) / 5.2) ** 2 <= 1)
@@ -738,14 +744,23 @@ export function layoutTown(
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
+  const post = formFactor === "narrow" ? null : townPostLotBeside(center);
   const lamps: TownPoint[] = [];
+  // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
-    for (let tx = 6; tx < width - 4; tx += 11) {
+    for (let tx = 6 + (lots.shift % 11); tx < width - 4; tx += 11) {
       if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
       // The center stands on this pavement and brings its own lamps.
       const underCenter =
         ry === center.street && tx >= center.x - 1 && tx <= center.x + center.w;
       if (underCenter) continue;
+      // The post office's yard fronts it too (townPostLot.ts).
+      const underPost =
+        post &&
+        ry === center.street &&
+        tx >= post.x - 1 &&
+        tx <= post.x + post.w;
+      if (underPost) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 

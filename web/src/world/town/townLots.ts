@@ -13,6 +13,7 @@ import {
   type TownCenterLot,
 } from "./townCenter";
 import type { TownShape } from "./townLayout";
+import { TOWN_POST_ROOM } from "./townPostLot";
 
 export const ROOM_TOP = 9;
 /** The bar's height with the wall row under it, and the lobby's height. */
@@ -164,5 +165,17 @@ export function townPlaceLots(
     h: TOWN_CENTER_HEIGHT,
     street: roads[0]!,
   };
-  return { buildings: placed, verticalRoads, roads, width, center };
+  // The post office stands left of the center (townPostLot.ts): a wide town
+  // keeps lawn for it by standing everything that many columns right. The
+  // shift is the same for every wide town, so a town that grows (and its
+  // center with it) never moves what already stands. A narrow town folds
+  // the post office to a sign instead.
+  const shift = narrow ? 0 : TOWN_POST_ROOM;
+  if (shift) {
+    for (const lot of placed) lot.x += shift;
+    for (const road of verticalRoads) road.x += shift;
+    center.x += shift;
+    width += shift;
+  }
+  return { buildings: placed, verticalRoads, roads, width, center, shift };
 }
