@@ -200,18 +200,32 @@ export function BoardWorkBadges({
       ? false
       : townScaleSceneRequested(window.location.search),
   );
-  const sources = useSourcesWhile(!scene);
-  const kept = useRef(NO_BADGES);
-  const badges = useMemo(() => {
+  // Badges are selected inside the subscription: a poll that leaves them
+  // unchanged returns the same map, so React skips the render and commit.
+  const kept = useRef<{
+    sources: WorldSourcesSnapshot | null;
+    model: BoardModel;
+    badges: ReadonlyMap<string, TownDeskBadge>;
+  } | null>(null);
+  const selectBadges = useCallback(() => {
+    const sources = scene ? null : worldSourcesStore.snapshot();
+    const was = kept.current;
+    if (was && was.sources === sources && was.model === model)
+      return was.badges;
     const next = deskBadges(
-      scene
-        ? boardSceneWork(boardLensPlaces(model), Date.now())
-        : boardDeskWork(model, sources!),
+      sources
+        ? boardDeskWork(model, sources)
+        : boardSceneWork(boardLensPlaces(model), Date.now()),
     );
-    // An unchanged poll keeps the same badges, so no card redraws.
-    if (!sameTownBadges(kept.current, next)) kept.current = next;
-    return kept.current;
-  }, [scene, model, sources]);
+    const badges = was && sameTownBadges(was.badges, next) ? was.badges : next;
+    kept.current = { sources, model, badges };
+    return badges;
+  }, [scene, model]);
+  const badges = useSyncExternalStore(
+    scene ? noSubscription : worldSourcesStore.subscribe,
+    selectBadges,
+    selectBadges,
+  );
   return <BoardBadges.Provider value={badges}>{children}</BoardBadges.Provider>;
 }
 
