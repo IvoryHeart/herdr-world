@@ -147,16 +147,28 @@ function wallClock(ms: number, zone: string | undefined) {
   };
 }
 
-/** The instant a zone's wall clock shows the given fields. */
-function zonedTime(
+const DAY = 86_400_000;
+
+/**
+ * Every instant a zone's wall clock shows the given fields, earliest first:
+ * two in a repeated hour when clocks go back. A time skipped when clocks go
+ * forward has none, so it takes the offset from before the change, as the
+ * clock read when the time was named.
+ */
+function zonedTimes(
   fields: [number, number, number, number, number],
   zone: string | undefined,
 ) {
   const guess = Date.UTC(...fields);
   const offset = (ms: number) =>
     wallClock(ms, zone).asUtc - Math.floor(ms / 1000) * 1000;
-  const first = guess - offset(guess);
-  return guess - offset(first);
+  // A zone changes its offset at most once within a day of any instant.
+  const offsets = new Set([offset(guess - DAY), offset(guess + DAY)]);
+  const matches = [...offsets]
+    .map((value) => guess - value)
+    .filter((ms) => wallClock(ms, zone).asUtc === guess)
+    .sort((a, b) => a - b);
+  return matches.length ? matches : [guess - offset(guess - DAY)];
 }
 
 /** The first instant after the refusal that matches its stated reset. */
@@ -176,18 +188,23 @@ function claudeTextReset(text: string, at: number) {
   const zone = zoneText?.trim();
   try {
     const now = wallClock(at, zone);
-    if (monthName) {
-      const month = MONTHS.indexOf(monthName.toLowerCase()) / 3;
-      const day = Number(dayText);
-      const on = (year: number) =>
-        zonedTime([year, month, day, hour, minute], zone);
-      const reset = on(now.year);
-      return reset > at ? reset : on(now.year + 1);
-    }
-    const on = (day: number) =>
-      zonedTime([now.year, now.month, day, hour, minute], zone);
-    const reset = on(now.day);
-    return reset > at ? reset : on(now.day + 1);
+    const candidates = monthName
+      ? [now.year, now.year + 1].flatMap((year) =>
+          zonedTimes(
+            [
+              year,
+              MONTHS.indexOf(monthName.toLowerCase()) / 3,
+              Number(dayText),
+              hour,
+              minute,
+            ],
+            zone,
+          ),
+        )
+      : [now.day, now.day + 1].flatMap((day) =>
+          zonedTimes([now.year, now.month, day, hour, minute], zone),
+        );
+    return candidates.find((reset) => reset > at) ?? null;
   } catch {
     return null; // A zone Intl does not know: the reset cannot be placed.
   }

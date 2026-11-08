@@ -47,6 +47,7 @@ import type {
 import "./chat/blocks/now.css";
 import { ChatStatusBadge } from "./chat/blocks/status-badge";
 import { useCurrentUsageStop } from "../world/town/townOutOfFuel";
+import { useOutOfFuelTrialPane } from "../world/town/townOutOfFuelTrial";
 import { usageStopText } from "../../../shared/usageStop";
 // After every Chat style it re-skins.
 import "./AgentChat.town.css";
@@ -418,7 +419,8 @@ export function AgentChat({
     liveStatus === "working" ? (conversation?.running_tool ?? null) : null;
   // Out of fuel: stopped on its usage limit, in Town's words, until the
   // limit resets or the agent works again.
-  const usageStop = useCurrentUsageStop(conversation?.usage_stop);
+  const trialStop = useOutOfFuelTrialPane(pane);
+  const usageStop = useCurrentUsageStop(conversation?.usage_stop ?? trialStop);
   const fuel =
     usageStop && liveStatus !== "working"
       ? usageStopText(usageStop, Date.now())

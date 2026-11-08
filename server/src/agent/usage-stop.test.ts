@@ -196,6 +196,50 @@ test("Claude's limit messages carry the reset they state", () => {
   ).toBeNull();
 });
 
+test("a reset in a repeated or skipped hour is the first match after the refusal", () => {
+  // New York's clocks went back at 2am EDT on 1 November 2026, so 1:30am
+  // happened twice: 05:30 UTC (EDT), then 06:30 UTC (EST).
+  const resetAt = (
+    refusal: number,
+    text = "resets 1:30am (America/New_York)",
+  ) =>
+    usageStopFromRecords("claude", [
+      claudeRefusal(
+        0,
+        { error: "rate_limit", timestamp: new Date(refusal).toISOString() },
+        `You've hit your limit · ${text}`,
+      ),
+    ])?.resets_at;
+  expect(resetAt(Date.UTC(2026, 10, 1, 5, 10))).toBe(
+    Date.UTC(2026, 10, 1, 5, 30),
+  );
+  expect(resetAt(Date.UTC(2026, 10, 1, 5, 40))).toBe(
+    Date.UTC(2026, 10, 1, 6, 30),
+  );
+  expect(resetAt(Date.UTC(2026, 10, 1, 6, 10))).toBe(
+    Date.UTC(2026, 10, 1, 6, 30),
+  );
+  expect(resetAt(Date.UTC(2026, 10, 1, 6, 40))).toBe(
+    Date.UTC(2026, 10, 2, 6, 30),
+  );
+  expect(
+    resetAt(
+      Date.UTC(2026, 9, 31, 12, 0),
+      "resets Nov 1, 1:30am (America/New_York)",
+    ),
+  ).toBe(Date.UTC(2026, 10, 1, 5, 30));
+  expect(
+    resetAt(
+      Date.UTC(2026, 10, 1, 5, 40),
+      "resets Nov 1, 1:30am (America/New_York)",
+    ),
+  ).toBe(Date.UTC(2026, 10, 1, 6, 30));
+  // 2:30am never happened on 8 March 2026: the clock read 3:30am EDT then.
+  expect(
+    resetAt(Date.UTC(2026, 2, 8, 6, 0), "resets 2:30am (America/New_York)"),
+  ).toBe(Date.UTC(2026, 2, 8, 7, 30));
+});
+
 test("other Claude errors are not stops, and a later answer ends one", () => {
   expect(
     usageStopFromRecords("claude", [

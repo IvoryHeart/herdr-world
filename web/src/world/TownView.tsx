@@ -3,6 +3,7 @@ import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentDeskReads } from "./agentQuests";
 import { useCurrentUsageStops, withTownOutOfFuel } from "./town/townOutOfFuel";
+import { useOutOfFuelTrial } from "./town/townOutOfFuelTrial";
 import { useCreationProgress } from "../creationRequests";
 import { isMobileLayout } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
@@ -244,7 +245,9 @@ export default function TownView({
   );
   // Each agent's quest and usage-limit stop, read from its own session.
   const deskReads = useAgentDeskReads(world.leaves);
-  const usageStops = useCurrentUsageStops(deskReads.stops);
+  const usageStops = useCurrentUsageStops(
+    useOutOfFuelTrial(world.leaves, deskReads.stops),
+  );
   const office = useMemo(
     () =>
       withTownOutOfFuel(
