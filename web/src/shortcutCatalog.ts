@@ -88,6 +88,8 @@ const descriptions: [ShortcutId, string, string][] = [
     "Pre-fill agent with review feedback",
     "Preview & review",
   ],
+  ["town.next", "Go to the next thing that needs you", "Town"],
+  ["town.previous", "Go back to the previous thing that needs you", "Town"],
 ];
 export const SHORTCUT_CATALOG: ShortcutDescription[] = descriptions.map(
   ([id, label, group]) => ({ id, label, group }),

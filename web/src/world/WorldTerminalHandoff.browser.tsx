@@ -1929,8 +1929,12 @@ async function run() {
   );
   notificationSessionId = "reviewer-session";
   flushSync(() => floatingPreferenceNavigatorRow()?.click());
+  // The window opens on Terminal and moves to Chat once Chat is readable, so
+  // identify it by its window and selection rather than its terminal layout.
   await until(
-    () => inspectorPane() === "reviewer-pane",
+    () =>
+      reviewerInspectorActive() &&
+      store.get().selectedPaneId === "reviewer-pane",
     "Reviewer Inspector restored after rejected notification",
   );
   document

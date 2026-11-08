@@ -752,3 +752,49 @@ test("an unmodified punctuation key is the character it types", () => {
     shortcutFromEvent(event({ key: "-", code: "Slash", ctrlKey: true })),
   ).toBe("Ctrl+Slash");
 });
+
+describe("Town's Next keys", () => {
+  test("N and Shift+N are Town actions any preset can rebind", () => {
+    for (const platform of ["mac", "windows", "linux"] as const) {
+      const bindings = defaultShortcutBindings(platform);
+      expect(bindings["town.next"]).toEqual(["N"]);
+      expect(bindings["town.previous"]).toEqual(["Shift+N"]);
+    }
+    expect(shortcutScope("town.next")).toBe("town");
+    const n = event({ key: "n", code: "KeyN" });
+    const shiftN = event({ key: "N", code: "KeyN", shiftKey: true });
+    expect(matchesShortcut(n, "town.next", linux())).toBe(true);
+    expect(matchesShortcut(n, "town.previous", linux())).toBe(false);
+    expect(matchesShortcut(shiftN, "town.previous", linux())).toBe(true);
+    expect(matchesShortcut(shiftN, "town.next", linux())).toBe(false);
+    // Ctrl+N is the browser's, never Town's.
+    expect(matchesShortcut({ ...n, ctrlKey: true }, "town.next", linux())).toBe(
+      false,
+    );
+    const bindings = linux();
+    bindings["town.next"] = validateShortcutKeys("town.next", ["Period"]);
+    expect(
+      matchesShortcut(
+        event({ key: ".", code: "Period" }),
+        "town.next",
+        bindings,
+      ),
+    ).toBe(true);
+    expect(matchesShortcut(n, "town.next", bindings)).toBe(false);
+  });
+  test("only Town's actions take plain letters", () => {
+    expect(validateShortcutKeys("town.next", ["J"])).toEqual(["J"]);
+    expect(validateShortcutKeys("town.previous", ["Shift+J"])).toEqual([
+      "Shift+J",
+    ]);
+    expect(() => validateShortcutKeys("tab.next", ["J"])).toThrow();
+  });
+  test("a preset saved before Town's keys gains them", () => {
+    const bindings: Partial<ShortcutBindings> = linux();
+    delete bindings["town.next"];
+    delete bindings["town.previous"];
+    const loaded = validateShortcutPreset({ ...preset(), bindings });
+    expect(loaded.bindings["town.next"]).toEqual(["N"]);
+    expect(loaded.bindings["town.previous"]).toEqual(["Shift+N"]);
+  });
+});

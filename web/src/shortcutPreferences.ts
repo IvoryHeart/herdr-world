@@ -58,6 +58,8 @@ const LATE_SHORTCUT_IDS: ShortcutId[] = [
   "terminal.focus",
   "shortcuts.show",
   "view.search",
+  "town.next",
+  "town.previous",
 ];
 export function validateShortcutPreset(value: unknown): ShortcutPreset {
   if (!value || typeof value !== "object")

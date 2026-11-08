@@ -470,6 +470,33 @@ export class TownSceneCamera {
     }
   }
 
+  /**
+   * Bring a world point to the middle of the view, for Town's edge arrows
+   * and Next: a glide that keeps the zoom, zooming in to `room` first when
+   * the camera is out at town or building level; a jump under calm or
+   * reduced motion. Returns the glide's seconds (0 for a jump).
+   */
+  goTo(
+    point: { x: number; y: number },
+    room: TownLayout["buildings"][number]["rooms"][number] | null,
+    calm: boolean,
+  ) {
+    const camera = this.camera;
+    if (!camera) return 0;
+    const out = this.level === "town" || this.level === "overview";
+    const z =
+      out && room ? Math.max(camera.z, roomZoom(camera, room)) : camera.z;
+    this.invalidate("go-to");
+    if (calm || camera.reducedMotion) {
+      camera.jumpTo(point.x, point.y, z);
+      return 0;
+    }
+    const seconds = 0.6;
+    camera.flyTo(point.x, point.y, z, seconds, { level: !out });
+    // A flight that dips out for a long trip takes a quarter second more.
+    return out ? seconds + 0.25 : seconds;
+  }
+
   zoomToRoom(layout: TownLayout, roomKey: string) {
     const camera = this.camera;
     if (!camera) return;

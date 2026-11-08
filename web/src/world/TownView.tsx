@@ -94,12 +94,20 @@ import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import { useTownSearch } from "./town/useTownSearch";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
-import { reviewedAgentKeys, useReviewedWork } from "./useReviewedWork";
+import {
+  awaitsReviewNow,
+  reviewedAgentKeys,
+  useReviewedWork,
+} from "./useReviewedWork";
 import { useShownReport } from "./shownReport";
-import { needsYouLeafKey, offerNeedsYouOutbox, openNeedsYou } from "./needsYou";
+import {
+  needsYouItems,
+  needsYouLeafKey,
+  offerNeedsYouOutbox,
+  openNeedsYou,
+} from "./needsYou";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
-import { keyTakenByViewSearch } from "./viewSearchShortcut";
 
 /** Town's chrome insets: Needs you is a World tab now, not a Town rail. */
 const TOWN_CHROME = { left: 0, right: 0 };
@@ -723,31 +731,20 @@ export default function TownView({
     }
     selectOfficeKey(key);
   };
-  useEffect(() => {
-    const keydown = (event: KeyboardEvent) => {
-      // A key sent to the document or window has no element target.
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      if (
-        keyTakenByViewSearch(event) ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        (target &&
-          (target.isContentEditable ||
-            ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
-            target.closest(".xterm")))
-      )
-        return;
-      if (event.key === "n" || event.key === "N") {
-        const next = nextCall(null);
-        if (!next) return;
-        event.preventDefault();
-        openAgent(next.agent.key);
-      }
-    };
-    window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
-  });
+  /**
+   * Needs you's items in its order for Town's N, read when it is pressed so
+   * the service's stop notices do not re-render Town.
+   */
+  const needsYouOrder = () =>
+    needsYouItems(
+      latestWorld.current,
+      townSummary.summary.asks,
+      awaitsReviewNow(),
+    ).map((item) => ({
+      itemKey: item.key,
+      leafId: item.leaf?.id ?? null,
+      mark: item.kind,
+    }));
   /** The peeked agent's desk colour: its terminal's, shared across World. */
   const peekDeskColor = (agentKey: string) => {
     const deskKey = office.paneRoster.find(
@@ -927,6 +924,7 @@ export default function TownView({
             calm={preferences.townCalm}
             chrome={TOWN_CHROME}
             centerActions={townCenter}
+            needsYouOrder={needsYouOrder}
             activityAt={activityAt}
             roomActions={{
               onToggleFold: toggleRoomFold,
