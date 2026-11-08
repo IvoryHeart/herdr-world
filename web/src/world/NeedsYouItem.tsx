@@ -16,7 +16,7 @@ import { MarkdownPreview } from "../components/markdown";
 import { AgentHoverCard } from "./AgentHoverCard";
 import { leafOwner, useConversationRead } from "./conversationRead";
 import { townAgo } from "./town/TownRail";
-import { askDeliveryMessage, askerName, type WorldAsk } from "./worldAsks";
+import { askDeliveryMessage, type WorldAsk } from "./worldAsks";
 import type { WorldLeafObject } from "./worldObject";
 import { filesFromTerminalDrop, isNativeFileDrag } from "../terminalFileDrop";
 import {
@@ -28,18 +28,10 @@ import {
   NeedsYouAttachmentChips,
   useAnswerAttachments,
 } from "./NeedsYouAttachments";
-import type { NeedsYouItem } from "./needsYou";
+import { itemName, type NeedsYouItem } from "./needsYou";
 
-/** An agent's name as Chat titles it: its Herdr name, else its label. */
-export const leafName = (leaf: WorldLeafObject) => leaf.agentName ?? leaf.label;
 export const leafWhere = (leaf: WorldLeafObject) =>
   [leaf.tabLabel, leaf.spaceLabel, leaf.hostLabel].filter(Boolean).join(" · ");
-export const itemName = (item: NeedsYouItem) =>
-  item.leaf
-    ? leafName(item.leaf)
-    : item.kind === "asks"
-      ? askerName(item.ask)
-      : "";
 
 /** A card's header: its kind's own close action, if any, after Chat. */
 type Head = (close: ReactNode) => ReactNode;

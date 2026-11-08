@@ -49,6 +49,7 @@ import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
 import { DeskOtherHosts } from "./DeskOtherHosts";
+import { useGreetingAnchor } from "./townMasterGreeting";
 import {
   keyTakenByViewSearch,
   useViewSearchShortcut,
@@ -263,6 +264,8 @@ export function DeskBoard({
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
 }) {
+  // The Town Master's greeting opens at the summary on wide screens.
+  const greetingAnchor = useGreetingAnchor();
   const now = useNow(10_000);
   const asks = useWorldAsks();
   const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
@@ -822,7 +825,11 @@ export function DeskBoard({
       }}
     >
       <header className="desk-top">
-        <div className="desk-summary" aria-label="Attention summary">
+        <div
+          ref={greetingAnchor}
+          className="desk-summary"
+          aria-label="Attention summary"
+        >
           <button
             type="button"
             className={`desk-stat is-needs${needs.length ? " is-hot" : ""}`}

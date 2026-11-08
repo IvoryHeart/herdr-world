@@ -261,7 +261,16 @@ hosts stay usable.
    for you, what finished and what merged while you were away. Each line
    opens **Needs you** at that item, which carries a "new" dot (the merged
    line opens **Needs you** itself); **✕** clears
-   the recap. Answer a question from its offered
+   the recap. Each time you come back (World opening, or its page
+   back on screen after 30 minutes or more hidden), the **Town Master**, the
+   small figure beside the board, greets you with one card: when you were
+   last here, the same since-you-left lines and, when a newer World release
+   is out, a **See update** button that opens **Menu** at its update entry.
+   Board shows the card at its hub beside the bin, Desk at its summary, and
+   a phone as a sheet with **Back**. It waits while Chat, **Needs you** or
+   another window covers its place (on a phone, while any is open). Close it with **✕**, Escape or a tap elsewhere;
+   tap the figure to see it again, and untick **Show this on start** (or
+   switch off **Menu → Town Master greeting**) to stop it. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound

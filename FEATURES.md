@@ -103,6 +103,22 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     which opens **Needs you**. Calm motion shows it without animation. The
     service remembers your last sighting in memory; after a service restart,
     each browser's own last sighting decides.
+  - **Town Master greeting**: each visit (World opening, or its page coming
+    back on screen after 30 minutes or more hidden), the Town Master, a small
+    figure beside the town board, opens one card: hello with the time you
+    were last here, the same **Since you left** lines as the board sign (each
+    opens **Needs you** at its item; "Nothing new since you left." when there
+    are none) and, when World's update check reports a newer release, one
+    line whose **See update** opens **Menu** at its update entry (the greeting
+    never installs anything). Board opens it at its hub beside the bin and
+    Desk at its summary; a phone shows it as a sheet with **Back**. It never
+    opens over an open window or sheet such as Chat or **Needs you**: on a
+    phone it waits until they close; on a wide screen it waits only while one
+    lies over the figure or the card's place, so an intent window or Chat
+    docked on the other side does not hold it back. **✕**, Escape, Back or a press outside closes it; tap
+    the figure to open it again. Untick **Show this on start** at its foot,
+    or switch **Menu → Town Master greeting**, to stop it on this browser.
+    Your very first visit is greeted too, without a last time.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
     A queued agent without a Herdr name is labelled with its room rather than
