@@ -622,11 +622,15 @@ export default function BoardView({
     const keys: string[] = [];
     for (const tab of tabs) {
       if (collapsed.has(tab.workspaceKey)) continue;
-      for (const pane of tab.panes.length > 1 ? rowsOf(tab) : tab.panes)
+      // The same rows the card draws, including a selected pane promoted
+      // into them.
+      for (const pane of tab.panes.length > 1
+        ? rowsOf(tab, selectedId)
+        : tab.panes)
         if (pane.isAgent && pane.status === "working") keys.push(pane.leaf.id);
     }
     return keys;
-  }, [far, model, renderKeys, collapsed]);
+  }, [far, model, renderKeys, collapsed, selectedId]);
   useEffect(() => steps.want(stepKeys), [steps, stepKeys]);
   const [query, setQuery] = useState("");
   const [workOpen, setWorkOpen] = useState(false);

@@ -4,8 +4,9 @@
  * is Town's number for the same thing. Nothing here is Board's own copy:
  *
  * - counts, hosts and unreviewed finishes are the Town summary
- *   (town/townSummary.ts) over Town's office projection, with Town's
- *   finishes (town/townFinished.ts) and the one reviewed record
+ *   (town/townSummary.ts) over Town's office projection, with the page's
+ *   one finish observation (town/townFinished.ts), which Town feeds while it
+ *   is open and Board while it is, and the one reviewed record
  *   (useReviewedWork.ts) applied as Town applies them;
  * - each agent's status as Town presents it (a finished, unreviewed agent is
  *   done; a reviewed one is quiet) comes from that same projection.

@@ -688,6 +688,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     time (amber once it has run long, as Town's thought bubbles), **Not
     reviewed** or **Reviewed** for a finish, or **Idle** and how long. Board
     reads steps only for working agents on tab cards it draws; nothing moves.
+    Town and Board share one record of finishes, so an agent that finished
+    while Town was open is still a finish when you switch to Board, and the
+    other way round.
   - **Board's hub** stands beside the bin at the bottom centre and offers the
     town center's actions as compact buttons: **+** opens World's launcher
     (preselecting the selected card's workspace when it can start one there,
