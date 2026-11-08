@@ -10,8 +10,8 @@ import { createSessionProjectionCache } from "./session-projection-cache";
 import { createAgentSessionResolverContext } from "./session-resolver";
 import type { HerdrCall } from "./session-types";
 
-// What runs now: the tool call the agent has started and not finished, and
-// the task its terminal title names. Synthetic transcripts only.
+// What runs now: the tool call the agent has started and not finished, the
+// latest request it was given, and the task its terminal title names. Synthetic transcripts only.
 
 const call = (
   id: string,
@@ -94,7 +94,11 @@ describe("a conversation read while the agent works", () => {
         {
           type: "user",
           timestamp: now,
-          message: { role: "user", content: "Run the tests" },
+          message: {
+            role: "user",
+            content:
+              '<pasted_content id="a1">\n\nRun the tests\nThen fix what fails',
+          },
         },
         {
           type: "assistant",
@@ -146,5 +150,9 @@ describe("a conversation read while the agent works", () => {
       name: "Bash",
       summary: "bun test server/src/link",
     });
+    // The newest request's first line: what the agent was last asked.
+    expect(read.latest_request).toBe("Run the tests");
+    const [latest] = await source.latestAll(["w1:p1"]);
+    expect(latest?.latest_request).toBe("Run the tests");
   });
 });
