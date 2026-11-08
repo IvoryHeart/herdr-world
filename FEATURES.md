@@ -143,6 +143,30 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
     reception.
+  - Town's **post office** stands on the first street left of the town
+    center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
+    review or assigned to you) as parcels in its sorting yard, ready to merge
+    first. Its sign counts them without hovering, such as "2 ready · 1
+    failing · 3 waiting", adding unknown and draft when there are some. A
+    parcel's tag shows its state: green ready to merge, red CI failing on its
+    head, amber waiting (for CI, a review, a fix or GitHub), a grey crate for
+    unknown and a pale letter for a draft. It reads the GitHub source and the
+    pull request card's merge rules, so stale or partial detail is unknown,
+    never ready. Hover or focus a parcel for "#123 title", its repository and
+    its state in words; tap it for the same pull request card the desk badge
+    opens (**Details**, **Merge…** and the rest). A merged parcel is carried
+    off the yard (with calm or reduced motion it just goes); a closed one
+    fades. More than the yard holds make a "+N" pile that opens the rest as a
+    list. With the GitHub source off, signed out or not yet answered, the
+    post office is closed and says to connect GitHub in **Sources**, with no
+    parcels and no counts; when a refresh fails it keeps the last list as
+    unknown and says GitHub is out of date. On a phone it folds to a sign on
+    the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
+    failing and waiting counts) that opens the parcels as a list. For trying it without real pull
+    requests, open World with `?townPostFixture` (synthetic pull requests in
+    every state; ten seconds later the first ready one merges),
+    `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
+    the page drops the parameter at once and only the post office uses it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -151,7 +175,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     unknown sits at its desk scratching its head under a purple `??` instead
     of dozing.
   - Every building has roads on at least three sides: a street above and below
-    each row and a side road to its right.
+    each row and a side road to its right. A matching road runs down the left
+    of each row's first building, so the town is bounded by roads on both
+    sides; it has no bus stop.
   - The land around the town is generated: woods with pines, meadows, hedged
     flower gardens and orchards, ponds with reeds, winding footpaths, and each
     street running on beyond the town as a country lane. It fills the whole
@@ -207,7 +233,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
     attention choices move into the window's ellipsis menu.
     Tapping an agent or its table, activating it (double-click,
-    **Shift+Enter**), **Chat about this** in Needs you, **N** and **Next** open that window on
+    **Shift+Enter**), **Chat about this** in Needs you and **Next** open that window on
     **Chat**: the conversation's latest 200 entries, which scroll inside the
     window, with **Jump to latest** when you have scrolled back (counting new
     agent messages until you reach the bottom) and the
@@ -347,7 +373,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
-    **Town calm motion** reduces ambient animation. Room actions support
+    **Town calm motion** reduces ambient animation.
+  - Zoomed into a room or desk, every agent that needs you outside the view
+    gets an arrow on the view's edge pointing at it, with its mark (**!**,
+    **?** or **✓**); arrows pointing the same way or at one building merge
+    with a count, such as `! 3`. Click or tap one and the camera glides there
+    and the agent's mark pulses (under calm or reduced motion it jumps, with
+    no pulse). On a desktop, **N** moves the camera to the next thing that
+    needs you in Needs you's order and opens Needs you at it, with a brief
+    "2 of 7 · N next"; **Shift+N** goes back, and after you answer one, **N**
+    goes on from there. Both keys are Town actions in Keyboard shortcuts and
+    stay silent while you type. Neither answers, reviews or moves anything.
+  - Room actions support
     workspace/tab creation and room management on the captured host. Every
     building has a **+ Add room** doorway just left of its bar (just **+** at
     the room-card zoom), which stays put when rooms open, close, move or are
@@ -932,7 +969,8 @@ each source's state, switch it off or configure it.
   `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
   (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
-  lens names it on the card. A link holds only for the agent session and
+  lens names it on the card. Town's post office shows every open pull
+  request for you as a parcel, including those whose agent has gone. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
   per check), each explicitly attributed rev agent's latest `RESULT #N: …`

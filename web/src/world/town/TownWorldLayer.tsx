@@ -22,6 +22,7 @@ import { TownDeskTitle } from "./TownDeskTitle";
 import { TownStepBubble } from "./TownStepBubble";
 import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
+import { TownPostOffice } from "./TownPostOffice";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
@@ -270,6 +271,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         street={layout.roads[0] ?? layout.center.street}
         folded={folded}
       />
+      <TownPostOffice layout={layout} renderer={renderer} />
       {layout.buildings.map((building) => {
         if (!visible.hosts.has(building.hostKey)) return null;
         const host = model.hosts.get(building.hostKey);

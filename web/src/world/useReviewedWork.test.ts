@@ -5,6 +5,7 @@ import { handoffId, IDLE_WINDOW_MS } from "./handoffs";
 import { deskIdentity, deskMetadata } from "./useDeskState";
 import {
   awaitsReview,
+  awaitsReviewNow,
   isReviewedStop,
   markReviewed,
   reviewStop,
@@ -219,4 +220,31 @@ test("a report with only activity cannot claim review after a service stop appea
     false,
   );
   expect(f.calls).toEqual([]);
+});
+
+test("Town's Next reads finished work from the store as Needs you does", () => {
+  const idle = agent("idle");
+  const store = (verified: boolean) => ({
+    get: () => ({
+      revision: 1,
+      records: [record(idle)],
+      verified,
+      error: null,
+    }),
+  });
+  // The idle agent's stop is recent: it waits for review.
+  expect(awaitsReviewNow(store(true), NOW)(idle)).toBe(true);
+  // Unverified records count for nothing, as in Needs you.
+  expect(awaitsReviewNow(store(false), NOW)(idle)).toBe(false);
+  const marked = {
+    get: () => ({
+      revision: 2,
+      records: [
+        record(idle, { reviewed_stop: reviewStop(idle, record(idle)) }),
+      ],
+      verified: true,
+      error: null,
+    }),
+  };
+  expect(awaitsReviewNow(marked, NOW)(idle)).toBe(false);
 });

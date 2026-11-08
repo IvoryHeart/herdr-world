@@ -215,6 +215,8 @@ const panes: Pane[] = [
   },
 ];
 let notificationSessionId = "reviewer-session";
+/** Reads that returned a swapped-in agent session, which the app refuses. */
+let replacedSessionReads = 0;
 let replaceNotificationSessionAfterRead = false;
 let replaceNotificationSessionOnSnapshot = false;
 let omitNextOperationalTabPanes: string | null = null;
@@ -380,6 +382,7 @@ let client: ConnectionClient = {
     }
     if (method === "agent_session.get" && !params.agent) {
       const value = notificationSessionId;
+      if (value === "replacement-session") replacedSessionReads += 1;
       if (replaceNotificationSessionAfterRead) {
         notificationSessionId = "replacement-session";
         replaceNotificationSessionAfterRead = false;
@@ -1851,6 +1854,7 @@ async function run() {
   const snapshotsBeforeReplacement = calls.filter(
     ({ method }) => method === "world.snapshot",
   ).length;
+  const replacedReadsBefore = replacedSessionReads;
   window.dispatchEvent(
     new CustomEvent("herdr-world:visual-notification", {
       detail: {
@@ -1869,6 +1873,13 @@ async function run() {
       notificationSessionId === "replacement-session",
     "notification priority refresh replaced agent session",
   );
+  // The notification checks the session again once the priority refresh
+  // lands. Restoring the fake's session before that read would admit the
+  // notification late and open the Reviewer's Chat over later steps.
+  await until(
+    () => replacedSessionReads > replacedReadsBefore,
+    "notification read the replaced agent session",
+  );
   await settle();
   check(
     !document.querySelector(".workspace-inspector"),
@@ -1876,8 +1887,12 @@ async function run() {
   );
   notificationSessionId = "reviewer-session";
   flushSync(() => floatingPreferenceNavigatorRow()?.click());
+  // The window opens on Terminal and moves to Chat once Chat is readable, so
+  // identify it by its window and selection rather than its terminal layout.
   await until(
-    () => inspectorPane() === "reviewer-pane",
+    () =>
+      reviewerInspectorActive() &&
+      store.get().selectedPaneId === "reviewer-pane",
     "Reviewer Inspector restored after rejected notification",
   );
   document
