@@ -163,5 +163,45 @@ export function validateHostUsage(raw: any): HostUsage {
           }),
     };
   });
-  return { rows, sources, truncated: raw.truncated, limits, title_matches };
+  if (
+    raw.contexts !== undefined &&
+    (!Array.isArray(raw.contexts) || raw.contexts.length > 256)
+  )
+    throw new Error("Invalid usage contexts");
+  const contexts = (raw.contexts ?? []).map((c: any) => {
+    if (
+      !harnesses.includes(c?.harness) ||
+      !digest(c.session_key) ||
+      !Array.isArray(c.file_keys) ||
+      c.file_keys.length > 16 ||
+      !c.file_keys.every(digest) ||
+      typeof c.model !== "string" ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_.:/@+-]{0,159}$/.test(c.model) ||
+      !count(c.at) ||
+      !count(c.used_tokens) ||
+      c.used_tokens > 1e12 ||
+      (c.window_tokens !== null &&
+        (!count(c.window_tokens) ||
+          c.window_tokens === 0 ||
+          c.window_tokens > 1e8))
+    )
+      throw new Error("Invalid usage context");
+    return {
+      harness: c.harness as string,
+      session_key: c.session_key as string,
+      file_keys: c.file_keys as string[],
+      model: c.model as string,
+      at: c.at as number,
+      used_tokens: c.used_tokens as number,
+      window_tokens: c.window_tokens as number | null,
+    };
+  });
+  return {
+    rows,
+    sources,
+    truncated: raw.truncated,
+    limits,
+    contexts,
+    title_matches,
+  };
 }

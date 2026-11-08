@@ -5,6 +5,8 @@ import { agentStateWord } from "../agentMarks";
 import { AgentLatestMessage } from "../AgentHoverCard";
 import type { TownChoice, TownConversation } from "./townChat";
 import { townPortrait } from "./townSprites";
+import { ContextFillBar } from "../../components/ContextFillBar";
+import { useAgentContextFill } from "../agentContextFill";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import {
   TERMINAL_COLOR_PALETTE,
@@ -83,6 +85,11 @@ export function TownPeek({
   const follow = useRef(true);
   const latest = conversation?.latest ?? null;
   const text = `${latest?.id ?? ""}${question.join("\n")}`;
+  const contextFill = useAgentContextFill({
+    connectionId: agent.currentPaneRef.connectionId,
+    generation: agent.currentPaneRef.generation,
+    paneId: agent.currentPaneRef.nativeId,
+  });
   useEffect(() => {
     follow.current = true;
   }, [agent.key]);
@@ -137,7 +144,11 @@ export function TownPeek({
           <small>
             <span className={`town-pill town-pill-${agent.semanticStatus}`}>
               {townStatusText(agent)}
-            </span>{" "}
+            </span>
+            {/* Before the place, so a long place never clips it. */}
+            {contextFill && !agent.stale ? (
+              <ContextFillBar fill={contextFill} variant="inline" />
+            ) : null}{" "}
             {where}
           </small>
         </div>

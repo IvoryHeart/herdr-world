@@ -43,6 +43,8 @@ import { TOWN_TILE as T, townDeskSlots, type TownLayout } from "./townLayout";
 import { townAttention, townRoomCounts, type TownModel } from "./townModel";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { TownQuestPennant, type TownQuestMark } from "./townQuestPennant";
+import { TownTiredMark } from "./TownTiredMark";
+import { agentContextFill, useContextUsage } from "../agentContextFill";
 import { townReceptionBoard } from "./townReception";
 import type { TownReceptionTakes } from "./townReceptionFilter";
 import { TownReceptionHeldTag, TownReceptionSign } from "./TownReceptionSign";
@@ -222,6 +224,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   // A card press the town took ends as the town's tap; only keyboard
   // activation (or an untaken press) zooms through the card's own click.
   const cardPressTaken = useRef(false);
+  // Context fills, for a tired look at nearly full agents' seats.
+  const usage = useContextUsage(true);
   const terminalAsksByHost = useMemo(() => {
     type Device = (typeof model.projection.paneRoster)[number]["device"];
     const byHost = new Map<string, Device[]>();
@@ -748,6 +752,14 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                               const quest = device?.agentKey
                                 ? quests.get(device.agentKey)
                                 : undefined;
+                              const fill =
+                                device?.agentKey && !device.stale
+                                  ? agentContextFill(usage, {
+                                      connectionId: device.paneRef.connectionId,
+                                      generation: device.paneRef.generation,
+                                      paneId: device.paneRef.nativeId,
+                                    })
+                                  : null;
                               const usageStop = device?.agentKey
                                 ? model.agents.get(device.agentKey)?.usageStop
                                 : undefined;
@@ -796,6 +808,17 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                       agentLabel={device.displayLabel}
                                       renderer={renderer}
                                       pennants={pennants}
+                                      top={slot.top}
+                                      x={slot.chairX + 7}
+                                    />
+                                  ) : null}
+                                  {fill?.tired ? (
+                                    <TownTiredMark
+                                      fill={fill}
+                                      agentKey={device.agentKey!}
+                                      agentLabel={device.displayLabel}
+                                      renderer={renderer}
+                                      marks={pennants}
                                       top={slot.top}
                                       x={slot.chairX + 7}
                                     />

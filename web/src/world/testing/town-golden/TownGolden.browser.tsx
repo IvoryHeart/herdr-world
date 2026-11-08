@@ -8,7 +8,8 @@ import {
   TOWN_PRESENTATION_BOUNDS,
 } from "../../herdrOfficeProjection";
 import { EMPTY_OFFICE_OBSERVABILITY } from "../../officeObservability";
-import { goldenConnections } from "./scene";
+import { goldenConnections, goldenUsage } from "./scene";
+import { bridge } from "../../../api";
 import { comparePixels } from "./pixels";
 import "../../../styles/tokens.css";
 import "../../../styles/base.css";
@@ -78,6 +79,14 @@ async function prepare() {
     if (paints.count === 0) paint();
     else paints.pending = paint;
   };
+
+  // The town's usage read answers with synthetic context readings, so nearly
+  // full agents look tired at their desks; nothing contacts a runtime.
+  const call = bridge.call.bind(bridge);
+  bridge.call = (method, ...rest) =>
+    method === "world.usage.get"
+      ? Promise.resolve(goldenUsage())
+      : call(method, ...rest);
 
   const projection = projectWorldOffice(
     buildWorldObject(goldenConnections(), "host-0"),

@@ -70,6 +70,11 @@ export type WorldUsageSnapshot = {
   rollups: UsageRollup[];
   /** Subscription limits per host and harness, independent of `window`. */
   limits: UsageLimit[];
+  /**
+   * How full each attributed agent's context is, independent of `window`.
+   * Absent from older services.
+   */
+  contexts?: UsageContext[];
   telemetry: {
     role: "comparison";
     included_in_totals: false;
@@ -78,6 +83,24 @@ export type WorldUsageSnapshot = {
     observed_at: number;
     total_tokens: number;
   };
+};
+
+/**
+ * One agent pane's current session: the newest response's prompt (input plus
+ * cached tokens) against its model's window. Only panes with a unique current
+ * session match appear; `window_tokens` is null when the model is unknown.
+ */
+export type UsageContext = {
+  connection_id: string;
+  connection_generation: number;
+  workspace_id: string;
+  tab_id: string;
+  pane_id: string;
+  harness: string;
+  model: string;
+  used_tokens: number;
+  window_tokens: number | null;
+  observed_at: number;
 };
 
 /** One subscription window: its length, how much is used and when it resets. */
