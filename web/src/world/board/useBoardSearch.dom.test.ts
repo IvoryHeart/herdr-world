@@ -174,4 +174,33 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
     expect(board.input()).toBeNull();
     board.unmount();
   });
+
+  test("after a click on the board, Escape still ends the search", () => {
+    const board = mount();
+    const surface = document.createElement("div");
+    surface.className = "board";
+    surface.tabIndex = -1;
+    board.element.append(surface);
+    board.type("login");
+    // The query keeps the box open when the cursor leaves it.
+    act(() => surface.focus());
+    expect(board.input()?.value).toBe("login");
+    board.key(surface, "Escape");
+    expect(board.input()).toBeNull();
+    expect(board.rows().length).toBe(0);
+    // A key something else took, such as a carried pane, keeps the search.
+    board.type("login");
+    act(() => surface.focus());
+    act(() => {
+      const event = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
+      event.preventDefault();
+      surface.dispatchEvent(event);
+    });
+    expect(board.input()?.value).toBe("login");
+    board.unmount();
+  });
 }

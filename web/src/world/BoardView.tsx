@@ -3167,7 +3167,8 @@ export default function BoardView({
         }
       }
       if (event.key === "Escape") {
-        paneMoves.cancel();
+        // Putting back a carried pane takes the key from Board's search.
+        if (paneMoves.cancel()) event.preventDefault();
         setPicked(null);
         setStringFrom(null);
       }

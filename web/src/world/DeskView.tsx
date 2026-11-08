@@ -510,6 +510,19 @@ export function DeskBoard({
         onCloseReading?.();
         return;
       }
+      // A query keeps the search open after a click elsewhere on the Desk;
+      // Escape there still clears it and folds it to its icon.
+      if (
+        event.key === "Escape" &&
+        query &&
+        (target === document.body || rootRef.current?.contains(target)) &&
+        !target?.closest?.("input, textarea, select, [role='dialog']")
+      ) {
+        event.preventDefault();
+        setQuery("");
+        search.fold();
+        return;
+      }
       if (!order.length) return;
       const action = deskShortcut({
         key: event.key,
