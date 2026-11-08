@@ -144,9 +144,34 @@
   color: var(--text, #edf2f7);
   background: var(--accent-soft, rgb(121 166 255 / 24%));
 }
-/* The phone's search floats over the top of the results. */
+/* The phone's search is one opaque sheet: the box, and its results hanging
+   just below it over the top of the view, with the count once, beneath the
+   box. The view keeps its place underneath, so the map stays in sight. */
 body:has(> .world-view-search-overlay) .world-search-results {
-  padding-top: 52px;
+  position: fixed;
+  z-index: 999;
+  top: calc(var(--world-search-overlay-top, 52px) + 46px);
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  max-height: min(240px, calc(var(--app-viewport-height, 100dvh) * 0.4));
+  padding: 6px;
+  border: 1px solid var(--border, #343942);
+  border-radius: 7px;
+  background: var(--panel, #202331);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 42%);
+}
+body:has(> .world-view-search-overlay) .world-search-results p {
+  color: var(--muted, #9da7b4);
+  font-size: 11px;
+}
+body:has(> .world-view-search-overlay) .world-search-result {
+  max-width: none;
+  flex-basis: 100%;
+}
+body:has(.world-search-results)
+  > .world-view-search-overlay
+  .world-view-toolbar-results {
+  display: none;
 }
 .world-outside-filter {
   position: absolute;
