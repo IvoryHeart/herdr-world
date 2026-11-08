@@ -19,11 +19,12 @@ import {
   type ReactNode,
 } from "react";
 import type { RoomPins } from "./townModel";
+import { useTownStepWants, type TownStepStore } from "./useTownStepWants";
+import { TownZoomControls } from "./TownZoomControls";
 import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
-import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type {
@@ -110,6 +111,7 @@ export function TownCanvas({
   onFindHeld,
   onActivateAsk,
   quests = NO_QUESTS,
+  steps,
   conversationTargets,
   onSelect,
   onActivateAgent,
@@ -182,6 +184,8 @@ export function TownCanvas({
   onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
+  /** Working agents' steps, as thought bubbles (useTownStepWants). */
+  steps?: TownStepStore;
   conversationTargets: readonly WorldConversationAnchorTarget[];
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
@@ -304,6 +308,7 @@ export function TownCanvas({
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
+  const stepWants = useTownStepWants(steps, () => latest.current, rendererRef);
   const current = {
     chrome,
     calm,
@@ -320,6 +325,7 @@ export function TownCanvas({
     arrivingKeys,
     receptionHeldKeys,
     quests,
+    steps,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -422,6 +428,7 @@ export function TownCanvas({
     if (moved) reaimCarry.current?.();
     const layer = worldRef.current;
     hud.drew(camera, level, latest.current.layout);
+    stepWants.want(camera, level);
     if (layer) {
       const tx = camera.viewport.width / 2 - camera.x * camera.z;
       const ty = camera.viewport.height / 2 - camera.y * camera.z;
@@ -481,6 +488,7 @@ export function TownCanvas({
     awayKeys: latest.current.awayKeys,
     arrivingKeys: latest.current.arrivingKeys,
     heldKeys: latest.current.receptionHeldKeys,
+    stepGlyph: latest.current.steps?.hasGlyph,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -599,6 +607,7 @@ export function TownCanvas({
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
+    steps,
     calm,
   ]);
 
@@ -937,6 +946,7 @@ export function TownCanvas({
             targets={targets}
             deskBadges={deskBadges}
             quests={quests}
+            steps={steps}
             renderer={rendererRef}
             pennants={pennants.current}
           />
@@ -948,40 +958,11 @@ export function TownCanvas({
         onOpenSummary={onOpenSummary}
         sinceYouLeft={sinceYouLeft}
       />
-      <div className="town-zoom" role="group" aria-label="Camera">
-        <button type="button" aria-label="Zoom in" onClick={() => stepZoom(1)}>
-          +
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          onClick={() => stepZoom(-1)}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          className="town-zoom-all"
-          aria-label="Show the whole town"
-          onClick={() => view.fitAll(latest.current.layout)}
-        >
-          ALL
-        </button>
-        {shellControls ? (
-          // The shell's More menu joins the camera group on the phone, so
-          // Town has one set of floating controls.
-          <button
-            type="button"
-            className="town-zoom-more"
-            aria-label="More options"
-            aria-haspopup="menu"
-            aria-expanded={shellControls.moreOpen}
-            onClick={shellControls.toggleMore}
-          >
-            <EllipsisVertical size={18} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
+      <TownZoomControls
+        onZoom={stepZoom}
+        onAll={() => view.fitAll(latest.current.layout)}
+        shellControls={shellControls}
+      />
       {ring.open && centerActions?.length ? (
         <TownCenterMenu
           actions={centerActions}

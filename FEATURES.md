@@ -276,6 +276,21 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     shows a blue pennant (green when done, amber when blocked) beside it in
     a room or at a desk, with a progress bar when the quest has steps; the
     pennant leaves with the agent. Hover or tap the pennant for **Quest**, its title and progress.
+  - Zoomed into a room, each working agent shows a thought bubble over its
+    head with a glyph for the step it runs now: a pencil for editing files,
+    a test tube for tests, a prompt for a command, a magnifier for reading or
+    searching code, a globe for the web, a light bulb for thinking or
+    writing, and two figures for a subagent. A step that has run long for its
+    kind (an edit over 3 minutes, a read or fetch over 5, a test run or
+    command over 10, a subagent over 20) shows its time in an amber tag. At
+    the desk level, or on the selected desk, the bubble adds the task from the
+    terminal title and the step with its timer, such as
+    `Fix login redirect · tests 3m`. Steps come from the same conversation
+    summary as Chat's Now bar, for Claude Code, Codex and Pi; another harness,
+    or a tool Town does not know, keeps the typing dots. Town reads steps only
+    for working agents on screen at the room or desk level (at most 32), when
+    the service reports their conversation changed; nothing is polled.
+    Bubbles do not move, and hovering the agent still opens its peek.
   - **Open terminal** in the card's header opens the live pane; **Open chat**
     opens the agent's window, whose Files and Changes views hold the rest.
     **Next** opens the next waiting agent's window,

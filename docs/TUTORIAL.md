@@ -303,6 +303,12 @@ hosts stay usable.
    or `/loop`) shows a swallowtail pennant beside its seat, with a progress
    bar when the quest has steps; tap the pennant to see **Quest** and its
    title.
+   Working agents show a thought bubble over their heads with a glyph for
+   what they are doing now: editing, running tests or a command, reading
+   code, browsing the web, thinking, or waiting on a subagent. A step that
+   has run unusually long shows its time in amber, such as **14m**. Zoom to a
+   desk, or select it, to read the task and step in words, such as
+   **Fix login redirect · tests 3m**. Zoomed out further, the bubbles go.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
