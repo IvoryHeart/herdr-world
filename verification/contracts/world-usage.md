@@ -39,6 +39,12 @@ and verb-policy models continue to supply operation authority.
   "limit reached" without a percent and is stale once its reset passes. The tap
   is added per launch with `--settings`, never written to Claude settings
   files, and passes the user's own status line output through unchanged.
+- A pane's context fill is the newest main-thread prompt size of the one
+  session uniquely bound to it on a fresh read, with the harness's reported
+  window or a model-name table. Numbers, the exact model and digests only
+  leave the host; an unknown model, or one whose window the log cannot settle,
+  has no window, and duplicate claims, stale
+  hosts or retired generations produce no entry rather than zero.
 - Closing the service drains its collectors and fences further publication and
   resources before storage closes; reads never allocate durable identity records.
 
@@ -76,6 +82,11 @@ new platform conformance is claimed.
   records, no account fields) and the tap reading versus refusal precedence,
   including rejected and symlinked readings, locally and over SSH;
   `service.test.ts` covers per-host limit states and failed-read retention.
+- `context.test.ts`: per-harness prompt sizes (sidechain, API-error, synthetic
+  and future records skipped; an older line never wins), the model-window
+  table, collection locally and through the SSH program, and remote reply
+  validation; `service.test.ts` covers unique fresh attribution, unknown
+  windows, duplicate claims and failed hosts.
 - `claude-tap.test.ts`: the tap records only numbers, finds the user's status
   line by Claude Code's precedence without recursing, and as a real program
   passes the same input to it and its output and exit code through unchanged;
