@@ -147,6 +147,7 @@ test("Summary reuses unchanged room contributions and removes closed rooms on re
     finished: 0,
     quiet: 0,
     unknown: 0,
+    outOfFuel: 0,
   });
   expect(second.hosts[0]!.rooms[1]!.counts).toBe(
     first.hosts[0]!.rooms[1]!.counts,
@@ -451,6 +452,7 @@ test("the summary counts what the call rail shows, room by room", () => {
     finished: 1,
     quiet: 1,
     unknown: 0,
+    outOfFuel: 0,
     agents: 5,
     buildings: 1,
   });
@@ -465,8 +467,28 @@ test("the summary counts what the call rail shows, room by room", () => {
   expect(summary.finished[0]!.since).toBe(3_000);
   const [host] = summary.hosts;
   expect(host!.rooms.map((room) => [room.label, room.counts])).toEqual([
-    ["alpha", { needsYou: 1, working: 1, finished: 1, quiet: 0, unknown: 0 }],
-    ["beta", { needsYou: 0, working: 1, finished: 0, quiet: 1, unknown: 0 }],
+    [
+      "alpha",
+      {
+        needsYou: 1,
+        working: 1,
+        finished: 1,
+        quiet: 0,
+        unknown: 0,
+        outOfFuel: 0,
+      },
+    ],
+    [
+      "beta",
+      {
+        needsYou: 0,
+        working: 1,
+        finished: 0,
+        quiet: 1,
+        unknown: 0,
+        outOfFuel: 0,
+      },
+    ],
   ]);
   expect(host!.counts.working).toBe(2);
 });

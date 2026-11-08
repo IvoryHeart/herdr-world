@@ -1,3 +1,4 @@
+import { usageStopText } from "../../../../shared/usageStop";
 import { useState, type ReactNode } from "react";
 import {
   formatOfficeCost,
@@ -59,9 +60,9 @@ export function TownBoard({
   const gauges = townFuelGauges(limits, now);
   const notes = townFuelNotes(limits, gauges);
   const lowest = townFuelLowest(gauges);
-  const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet; ${population}${
-    lowest ? `; ${townFuelLowestText(lowest, now)}` : ""
-  }`;
+  const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet${
+    counts.outOfFuel ? `, ${counts.outOfFuel} out of fuel` : ""
+  }; ${population}${lowest ? `; ${townFuelLowestText(lowest, now)}` : ""}`;
   return (
     <>
       <button
@@ -115,6 +116,7 @@ export function TownBoard({
         <p className="town-board-population">
           {population}
           {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
+          {counts.outOfFuel ? ` · ${counts.outOfFuel} out of fuel` : ""}
         </p>
         <TownBoardEconomy
           {...(available
@@ -211,7 +213,14 @@ export function TownPlaceSummaryCard({
       <p className="town-board-population">
         {counts.agents} {counts.agents === 1 ? "agent" : "agents"}
         {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
+        {counts.outOfFuel ? ` · ${counts.outOfFuel} out of fuel` : ""}
       </p>
+      {place.fuel.map(({ label, stop }, index) => (
+        <p key={index} className="town-place-fuel">
+          {place.fuel.length > 1 ? `${label}: ` : ""}
+          {usageStopText(stop, Date.now())}
+        </p>
+      ))}
       {economy.status === "ready" ? (
         <TownBoardEconomy
           label="ECONOMY TODAY"

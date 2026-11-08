@@ -548,6 +548,32 @@ test("a pinned agent waits at reception on doubt or completion, then walks strai
   }
 });
 
+test("an agent out of fuel stays slumped at its desk, then takes its break once it has fuel", () => {
+  const actors = new TownActors();
+  const town = (fuel: boolean) => {
+    const built = world({ a: "working", b: "working" });
+    // Town presents an agent stopped on its usage limit as idle with its stop.
+    for (const key of ["a", "b"])
+      Object.assign(built.model.agents.get(key)!, {
+        semanticStatus: "idle",
+        usageStop:
+          key === "a" && fuel
+            ? { harness: "codex", at: 0, resets_at: null }
+            : undefined,
+      });
+    return built.actorWorld;
+  };
+  actors.sync(world({ a: "working", b: "working" }).actorWorld, true);
+  actors.sync(town(true), false);
+  settle(actors);
+  expect(actors.actors.get("a")!.mode).toBe("seat");
+  expect(actors.actors.get("a")!.queueSlot).toBeNull();
+  expect(actors.actors.get("a")!.spot).toBeNull();
+  expect(actors.actors.get("b")!.spot).not.toBeNull();
+  actors.sync(town(false), false);
+  expect(actors.actors.get("a")!.goal?.kind).toBe("lounge");
+});
+
 test("unpinning lets an idle agent go to the lounge again", () => {
   const actors = new TownActors();
   actors.sync(world({ a: "idle" }, 4, undefined, [0]).actorWorld, true);
