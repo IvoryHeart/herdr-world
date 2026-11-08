@@ -1896,11 +1896,20 @@ async function run() {
     'input[placeholder="Search Town"]',
   )!;
   enterSearch(officeSearch, "Local");
-  officeSearch
-    .closest("form")!
-    .dispatchEvent(
-      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
-    );
+  const submitTownSearch = () =>
+    officeSearch
+      .closest("form")!
+      .dispatchEvent(
+        new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+      );
+  // The first Enter shows the result on the map; the second opens it.
+  submitTownSearch();
+  await settle();
+  check(
+    !document.querySelector('.world-selection-panel[data-kind="host"]'),
+    "first Town search Enter only shows the result",
+  );
+  submitTownSearch();
   await until(
     () =>
       document
