@@ -5,7 +5,7 @@
  * once. Clearing the search ends it.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { officePresentationKey } from "../officeSelection";
 import type { WorldObject } from "../worldObject";
@@ -23,6 +23,9 @@ export function townSearchKey(
     ? (officePresentationKey(office, result.id) ?? result.id)
     : result.id;
 }
+
+/** Where Escape ends Town's search: its results and the map. */
+const TOWN_SEARCH_ESCAPE_SCOPE = ".world-search-results, .town-canvas-host";
 
 /** "7 matches · 3 off-screen", or "No matches". */
 export function townSearchLabel(matches: number, offscreen: number) {
@@ -98,12 +101,45 @@ export function useTownSearch(
     return false;
   };
   const activate = (id: string) => setActive({ query, id });
+  /** End the search: Town as it was, no result shown or chosen. */
+  const clear = () => {
+    setQuery("");
+    setActive(null);
+    setChosenResult(null);
+  };
+
+  // Escape ends the search from its results or the map too, not only from
+  // the search box (which handles its own). A key something else took, such
+  // as putting back a carried desk, is left alone.
+  useEffect(() => {
+    if (!open) return;
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target &&
+        target !== document.body &&
+        !target.closest(TOWN_SEARCH_ESCAPE_SCOPE)
+      )
+        return;
+      event.preventDefault();
+      clear();
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [open]);
 
   return {
     /** WorldViewToolbar's search props. */
     toolbar: {
       query,
-      onQueryChange: setQuery,
+      // A new query starts afresh: a result chosen for an earlier one is
+      // not chosen again when that query comes back.
+      onQueryChange: (next: string) => {
+        setQuery(next);
+        setActive(null);
+        setChosenResult(null);
+      },
       resultLabel: open
         ? townSearchLabel(results.length, offscreen)
         : undefined,
@@ -117,11 +153,7 @@ export function useTownSearch(
         const next = Math.min(results.length - 1, Math.max(0, at + step));
         activate(results[next]!.id);
       },
-      onClear: () => {
-        setQuery("");
-        setActive(null);
-        setChosenResult(null);
-      },
+      onClear: clear,
     },
     /** WorldSearchResults' props, besides the world and onSelect. */
     results: {

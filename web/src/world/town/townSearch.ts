@@ -71,8 +71,9 @@ const deskRect = (layout: TownLayout, deskKey: string | null | undefined) => {
 
 /**
  * Where a match is drawn, in world pixels: an agent where it sits or
- * stands, a table or terminal at its table, a room or building whole. A
- * match in a folded room is its room; one Town does not draw is null.
+ * stands, a table or terminal at its table, a room or building whole. One
+ * Town does not draw is null, such as a table, or anything at a table, that
+ * its room folds away: its room is not where it can be seen.
  */
 export function townSearchRect(
   key: string,
@@ -91,11 +92,12 @@ export function townSearchRect(
       h: (building.h + TOWN_FACADE) * T,
     };
   if (model.rooms.has(key)) return roomRect(layout, key);
-  const desk = model.desks.get(key);
-  if (desk) return deskRect(layout, key) ?? roomRect(layout, desk.roomKey);
+  if (model.desks.has(key)) return deskRect(layout, key);
   const device = model.devices.get(key);
   if (device)
-    return deskRect(layout, device.deskKey) ?? roomRect(layout, device.roomKey);
+    return device.deskKey
+      ? deskRect(layout, device.deskKey)
+      : roomRect(layout, device.roomKey);
   const agent = model.agents.get(key);
   if (!agent) return null;
   const position = actorPosition(key);
@@ -109,7 +111,9 @@ export function townSearchRect(
     }
   }
   if (position) return { x: position.x - 10, y: position.y - 28, w: 20, h: 32 };
-  return deskRect(layout, agent.deskKey) ?? roomRect(layout, agent.roomKey);
+  return agent.deskKey
+    ? deskRect(layout, agent.deskKey)
+    : roomRect(layout, agent.roomKey);
 }
 
 /** Whether a world rectangle shows inside the viewport, past its insets. */

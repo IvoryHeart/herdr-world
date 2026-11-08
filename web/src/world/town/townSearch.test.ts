@@ -94,6 +94,36 @@ test("each match is drawn where it is: room, table, agent and building", () => {
   expect(townSearchRect("not drawn", model, layout, noActors)).toBeNull();
 });
 
+test("an agent at a table its room folds away is not drawn, so not its room", () => {
+  // Thirty tables fold to the room's first 24; six agents sit at the rest.
+  const model = townModelFromProjection(
+    town({ north: { alpha: working(30) } }),
+  );
+  const { layout } = layoutTown(
+    model.input,
+    townShapeFor(WIDE.width, WIDE.height),
+    new Map(),
+    new Map(),
+  );
+  const room = layout.buildings[0]!.rooms[0]!;
+  const drawn = new Set(room.cells.map((cell) => cell.deskKey));
+  const hidden = [...model.agents.values()].filter(
+    (agent) => agent.deskKey && !drawn.has(agent.deskKey),
+  );
+  expect(hidden.length).toBe(6);
+  for (const agent of hidden)
+    expect(townSearchRect(agent.key, model, layout, noActors)).toBeNull();
+  // Choosing one opens it (unmapped); it counts as off-screen however
+  // much of its room shows.
+  expect(
+    townSearchOffscreen(
+      [room.key, hidden[0]!.key],
+      (key) => townSearchRect(key, model, layout, noActors),
+      () => true,
+    ),
+  ).toBe(1);
+});
+
 test("matches outside the view, or not drawn, count as off-screen", () => {
   const { model, layout } = scene();
   const camera = new TownCamera();

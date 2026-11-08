@@ -134,7 +134,7 @@ import {
 } from "./terminalColor";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
-import { worldSearchWords, worldTextMatches } from "./worldSearch";
+import { boardSearchMatches } from "./board/boardSearch";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
@@ -3161,34 +3161,10 @@ export default function BoardView({
   };
 
   /* ---------- Search ---------- */
-  const matches = useMemo(() => {
-    // Every word, in any order, as World's search matches (worldSearch.ts).
-    const words = worldSearchWords(query);
-    if (!words.length) return null;
-    const hit = new Set<string>();
-    const spaceLabels = new Map(
-      model.workspaces.map((space) => [space.key, space.label]),
-    );
-    for (const tab of model.tabs) {
-      const text = [
-        spaceLabels.get(tab.workspaceKey),
-        tab.label,
-        ...tab.panes.map(
-          (pane) => `${pane.leaf.label} ${pane.leaf.agentLabel ?? ""}`,
-        ),
-      ]
-        .join(" ")
-        .toLocaleLowerCase();
-      if (worldTextMatches(text, words)) {
-        hit.add(tab.key);
-        hit.add(tab.workspaceKey);
-      }
-    }
-    for (const space of model.workspaces)
-      if (worldTextMatches(space.label.toLocaleLowerCase(), words))
-        hit.add(space.key);
-    return hit;
-  }, [model, query]);
+  const matches = useMemo(
+    () => boardSearchMatches(model, query),
+    [model, query],
+  );
 
   const selectedKeys = useMemo(() => {
     const keys = new Set<string>();

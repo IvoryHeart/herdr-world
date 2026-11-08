@@ -457,10 +457,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
     click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
     a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. A result Town does not draw opens at
-    once. Under **Town calm motion** or reduced motion the camera jumps and
-    nothing pulses. **Escape**, the phone search's **✕** or an empty box
-    ends the search and returns the camera to where the search found it.
+    time, opens it as selecting does. A result Town does not draw, such as
+    an agent at a table its room folds away, opens at once and counts as
+    off-screen. Under **Town calm motion** or reduced motion the camera jumps
+    and nothing pulses. **Escape** (in the box, on a result or on the map),
+    the phone search's **✕** or an empty box ends the search and returns the
+    camera to where the search found it.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
   the runtime's existing version and owner. Only a missing Herdr is installed;
