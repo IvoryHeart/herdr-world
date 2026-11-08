@@ -1,5 +1,6 @@
 import type { WorldUsageSnapshot } from "../../../../shared/usage";
 import type { UsageFixtureRow } from "../testing/usageFixture";
+import { townScaleUsageClient } from "./townScaleUsage";
 
 /** Explicit, one-load testing switch. Normal reads and settings are untouched. */
 export function townEconomyPreviewClient<
@@ -9,6 +10,8 @@ export function townEconomyPreviewClient<
 >(client: T): Pick<T, "call"> {
   if (typeof window === "undefined") return client;
   const url = new URL(window.location.href);
+  const sceneClient = townScaleUsageClient(client, url.search);
+  if (sceneClient !== client) return sceneClient;
   const mode = url.searchParams.get("town-economy-preview");
   if (!mode) return client;
   url.searchParams.delete("town-economy-preview");

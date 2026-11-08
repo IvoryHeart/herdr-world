@@ -189,6 +189,13 @@ Town reads `world.usage.get` for its boards (`web/src/world/town/townExpenses.ts
 
 Tests use the synthetic fixture in `web/src/world/testing/usageFixture.ts`,
 which shapes reads like the service with example hosts, models and rates.
+With `?scene=town-scale`, all Town economy readers use one synthetic observation
+for the scene's Atlas, Nova and Zephyr buildings, including the Town board,
+city billboard, reception expenses, room/table cards and Spend lens. The boards
+say **TEST DATA**. Atlas and Nova sum to the city; Zephyr deliberately has no
+data. Seven days is twice today's usage, and all estimates use the same
+synthetic price table. No live usage read supplies these figures. Remove
+`scene=town-scale` and reload to return to the connected hosts and their usage.
 
 ## Optional local price table
 

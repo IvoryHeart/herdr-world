@@ -122,7 +122,11 @@ export function TownBoard({
           {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
         </p>
         <TownBoardEconomy
-          label="ECONOMY TODAY · UTC · HARNESS LOGS"
+          label={
+            expenses.status === "ready" && expenses.coverage.testData
+              ? "ECONOMY TODAY · UTC · TEST DATA"
+              : "ECONOMY TODAY · UTC · HARNESS LOGS"
+          }
           cost={
             expenses.status === "ready" && expenses.total.price === "priced"
               ? (townCostText(expenses.total) ?? undefined)

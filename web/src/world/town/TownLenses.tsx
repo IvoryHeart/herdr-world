@@ -232,7 +232,7 @@ export function useTownLensView(
     return () => window.clearInterval(timer);
   }, [on, store]);
   useEffect(() => {
-    if (lens !== "spend" || scene) return;
+    if (lens !== "spend") return;
     store.request();
     const timer = window.setInterval(() => store.request(), USAGE_REFRESH_MS);
     return () => window.clearInterval(timer);
@@ -259,7 +259,10 @@ export function useTownLensView(
           work: (desk) => deskWork?.get(desk.key),
           quest: (key) => quests.get(key),
         };
-    return townLensView(lens, model, facts);
+    return townLensView(lens, model, {
+      ...facts,
+      economy: (place) => townPlaceEconomy(townUsageCurrent(usage, now), place),
+    });
   }, [on, lens, model, scene, usage, now, deskWork, quests, activityAt]);
 }
 

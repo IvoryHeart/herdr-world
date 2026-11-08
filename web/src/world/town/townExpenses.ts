@@ -159,7 +159,8 @@ function coverage(
       entities.some((e) => e.state === "stale"),
     noDataHosts,
     ...(snapshot.details_truncated ? { detailsLimited: true } : {}),
-    ...(snapshot.incarnation === "town-economy-preview"
+    ...(snapshot.incarnation === "town-economy-preview" ||
+    snapshot.incarnation === "town-scale"
       ? { testData: true }
       : {}),
   };
@@ -322,7 +323,7 @@ export function townCoverageNotes(
   unattributed: TownExpenseTotal,
 ) {
   const notes: string[] = [];
-  if (coverage.testData) notes.push("TEST DATA · economy preview");
+  if (coverage.testData) notes.push("TEST DATA · synthetic economy");
   if (unattributed.records)
     notes.push(
       `${formatOfficeUsage(unattributed.tokens)} unattributed (included)`,
