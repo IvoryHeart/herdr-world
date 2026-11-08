@@ -121,7 +121,7 @@ test("a change the service reports reads that agent again, and its bubble follow
   expect(store.get("a")).toEqual({
     kind: "test",
     since: Date.parse("2026-11-08T10:05:00.000Z"),
-    task: "Fix login redirect",
+    task: "bun test",
   });
 });
 

@@ -283,9 +283,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     writing, and two figures for a subagent. A step that has run long for its
     kind (an edit over 3 minutes, a read or fetch over 5, a test run or
     command over 10, a subagent over 20) shows its time in an amber tag. At
-    the desk level, or on the selected desk, the bubble adds the task from the
-    terminal title and the step with its timer, such as
-    `Fix login redirect · tests 3m`. Steps come from the same conversation
+    the desk level, or on the selected desk, the bubble adds what the agent
+    is doing now and the step with its timer, such as
+    `Run the login tests · tests 3m`. The words are the running step's own
+    detail (a command's description, the file it edits, the search query),
+    else the plan item it marked in progress, else the latest request it was
+    given; the terminal title is the last resort, since Claude Code names
+    only the session's first topic there. Steps come from the same conversation
     summary as Chat's Now bar, for Claude Code, Codex and Pi; another harness,
     or a tool Town does not know, keeps the typing dots. Town reads steps only
     for working agents on screen at the room or desk level, when the service

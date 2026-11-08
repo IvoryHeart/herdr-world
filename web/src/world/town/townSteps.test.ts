@@ -105,11 +105,11 @@ const conversation = (
   ...fields,
 });
 
-test("a step is the open tool call and the title's task, as Chat's Now bar reads them", () => {
+test("a step is the open tool call and what it says it does, as Chat's Now bar reads them", () => {
   expect(townStepOf(conversation())).toEqual({
     kind: "test",
     since: Date.parse("2026-11-08T10:00:00.000Z"),
-    task: "Fix login redirect",
+    task: "Run the unit tests",
   });
   // No open call: a known harness is thinking or writing, with no timer.
   expect(townStepOf(conversation({ running_tool: null }))).toEqual({
@@ -120,6 +120,84 @@ test("a step is the open tool call and the title's task, as Chat's Now bar reads
   expect(
     townStepOf(conversation({ terminal_title: null, running_tool: null })),
   ).toEqual({ kind: "think", since: null, task: null });
+});
+
+test("the words say what the agent does now: step detail, plan item, latest request, then the title", () => {
+  const plan = {
+    steps: [
+      { text: "Read the login flow", status: "done" },
+      { text: "Fix the redirect loop", status: "active" },
+      { text: "Run the tests", status: "pending" },
+    ],
+  };
+  const request = "Fix the login redirect for expired sessions";
+  // The running step's own detail comes first.
+  expect(
+    townStepOf(conversation({ quest: plan, latest_request: request }))?.task,
+  ).toBe("Run the unit tests");
+  // A file path shows its file name; a URL its address.
+  expect(
+    townStepOf(
+      conversation({
+        running_tool: {
+          name: "Edit",
+          summary: "/work/example/web/src/login.ts",
+          started_at: "2026-11-08T10:00:00.000Z",
+        },
+      }),
+    )?.task,
+  ).toBe("login.ts");
+  expect(
+    townStepOf(
+      conversation({
+        running_tool: {
+          name: "WebFetch",
+          summary: "https://example.com/docs/redirects",
+          started_at: "2026-11-08T10:00:00.000Z",
+        },
+      }),
+    )?.task,
+  ).toBe("example.com/docs/redirects");
+  // A step that names nothing: the plan item in progress.
+  const bare = {
+    name: "Bash",
+    summary: null,
+    started_at: "2026-11-08T10:00:00.000Z",
+  };
+  expect(
+    townStepOf(
+      conversation({
+        running_tool: bare,
+        quest: plan,
+        latest_request: request,
+      }),
+    )?.task,
+  ).toBe("Fix the redirect loop");
+  // Thinking between steps: the plan item, then the latest request.
+  expect(
+    townStepOf(
+      conversation({
+        running_tool: null,
+        quest: plan,
+        latest_request: request,
+      }),
+    )?.task,
+  ).toBe("Fix the redirect loop");
+  expect(
+    townStepOf(
+      conversation({
+        running_tool: null,
+        quest: { steps: [{ text: "Read the login flow", status: "done" }] },
+        latest_request: request,
+      }),
+    )?.task,
+  ).toBe(request);
+  // The title, which Claude Code sets once from the session's first topic,
+  // only when nothing newer says what the agent does.
+  expect(
+    townStepOf(conversation({ running_tool: null, latest_request: "  " }))
+      ?.task,
+  ).toBe("Fix login redirect");
 });
 
 test("harnesses whose steps Chat does not read, unreadable transcripts and unknown tools show no step", () => {

@@ -1,7 +1,7 @@
 /**
  * Town's thought bubbles: what each working agent is doing now, projected
- * from the facts Chat's Now bar reads (the conversation summary's running
- * tool and the terminal title). A step is a small set of kinds, each with a
+ * from the conversation summary Chat's Now bar reads (its running tool,
+ * plan, latest request and terminal title). A step is a small set of kinds, each with a
  * glyph; a harness or tool Town does not know is just "working", with no
  * glyph, and keeps its typing dots.
  */
@@ -32,7 +32,11 @@ export type TownStep = {
   kind: TownStepKind;
   /** When the step started (ms), or null when the read does not say. */
   since: number | null;
-  /** The task its harness names in the terminal title, as Chat shows it. */
+  /**
+   * What the agent is doing now, in a few words (townStepDoing): the running
+   * step's own detail, its current plan item, its latest request, or, last,
+   * its terminal title.
+   */
   task: string | null;
 };
 
@@ -223,7 +227,42 @@ export type TownStepConversation = {
     summary: string | null;
     started_at: string;
   } | null;
+  latest_request?: string | null;
+  quest?: {
+    steps: readonly { text: string; status: string }[];
+  } | null;
 };
+
+/** A step's detail in a few words: a path's file name, a URL's address. */
+function detailWords(summary: string | null | undefined) {
+  const text = summary?.trim();
+  if (!text) return null;
+  if (/^[a-z][\w+.-]*:\/\//i.test(text))
+    return text.replace(/^[a-z][\w+.-]*:\/\//i, "");
+  if (!/\s/.test(text) && text.includes("/"))
+    return text.replace(/\/+$/, "").replace(/^.*\//, "") || text;
+  return text;
+}
+
+/**
+ * What the agent is doing now, in a few words, newest fact first: the
+ * running step's own detail (a command's description, the file it edits, the
+ * search query), then the plan item it marked in progress, then the latest
+ * request it was given. The terminal title comes last: Claude Code names the
+ * session's first topic there and does not change it, so on a long session
+ * it says what the agent did first, not what it does now.
+ */
+export function townStepDoing(conversation: TownStepConversation) {
+  return (
+    detailWords(conversation.running_tool?.summary) ??
+    (conversation.quest?.steps
+      .find((step) => step.status === "active")
+      ?.text.trim() ||
+      null) ??
+    (conversation.latest_request?.trim() || null) ??
+    titleTask(conversation.terminal_title)
+  );
+}
 
 /**
  * A working agent's step from its conversation summary, as Chat's Now bar
@@ -239,7 +278,7 @@ export function townStepOf(
   const agent = (conversation.agent ?? harness ?? "").toLowerCase();
   if (!TOWN_STEP_HARNESSES.has(agent) || conversation.status !== "ok")
     return null;
-  const task = titleTask(conversation.terminal_title);
+  const task = townStepDoing(conversation);
   const tool = conversation.running_tool;
   if (!tool) return { kind: "think", since: null, task };
   const kind = townStepKind(tool.name, tool.summary);
@@ -300,7 +339,7 @@ export function townStepLabel(step: TownStep, now: number) {
     : TOWN_STEP_WORDS[step.kind];
 }
 
-/** A bubble's words at desk zoom: "Fix login redirect · tests 3m". */
+/** A bubble's words at desk zoom: "Run the login tests · tests 3m". */
 export function townStepWords(step: TownStep, now: number) {
   const label = townStepLabel(step, now);
   return step.task ? `${step.task} · ${label}` : label;
