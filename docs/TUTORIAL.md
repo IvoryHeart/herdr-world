@@ -183,7 +183,15 @@ hosts stay usable.
    a country lane, and carries on to the edges of the window however far you
    zoom out or pan; it looks the same after a reload, and only the land next to
    a growing building changes. Drag the background to pan, or use arrow keys
-   when the scene has focus. Tap a room to zoom in. Large towns may initially
+   when the scene has focus. Tap a room to zoom in. Zoomed into a room or
+   desk, an arrow on the view's edge points at each agent that needs you out
+   of sight, with its mark (**!**, **?** or **✓**) and a count when several
+   lie the same way, such as `! 3`; click or tap it to travel there and see
+   the agent's mark pulse. On a desktop, press **N** to visit the next thing
+   that needs you, in Needs you's order: the camera moves to the agent, Needs
+   you opens at it and a label counts "1 of 7 · N next". **Shift+N** goes
+   back. With nothing waiting, **N** says "Nothing needs you". Rebind both
+   under **Town** in Keyboard shortcuts. Large towns may initially
    show roofs; zoom in to see room summaries and desks. Phones stack buildings
    vertically. Room nameplates fit their rooms: long names end in an ellipsis;
    hover the name for its full text. The colour, active/total agent count and

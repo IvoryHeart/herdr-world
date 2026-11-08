@@ -23,8 +23,7 @@ import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
-import { EllipsisVertical } from "lucide-react";
-import { useMobileControls } from "../../components/MobileControls";
+import { TownZoomControls } from "./TownZoomControls";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type {
   WorldCanvasAnchor,
@@ -83,6 +82,8 @@ import {
 } from "./townReceptionFilter";
 import "./townBoard.css";
 import "./townTeams.css";
+import { TownEdgeArrows, TownNextLabel, TownPulseRing } from "./TownEdgeLayer";
+import { useTownEdgeNav, type TownNeedsYouOrder } from "./useTownEdgeNav";
 
 export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
 import type { TownRoomActions } from "./townRoomActions";
@@ -133,7 +134,13 @@ export function TownCanvas({
   chrome = NO_CHROME,
   trace = NO_TRACE,
   centerActions,
+  needsYouOrder,
 }: {
+  /**
+   * Needs you's items in its order, read when N is pressed: each item's key
+   * and its agent's leaf ID (Town's agent key), if it has one.
+   */
+  needsYouOrder?: TownNeedsYouOrder;
   /** The town center's radial menu; without it the center only shows. */
   centerActions?: readonly TownCenterAction[];
   /** Which terminals know each other (world/relations.ts). */
@@ -413,6 +420,18 @@ export function TownCanvas({
     | ((event: PointerEvent, roomKey: string, press: TownRoomPress) => boolean)
     | null
   >(null);
+  // Arrows to what needs you off screen, and N for the next one.
+  const edge = useTownEdgeNav({
+    model,
+    layout,
+    askingKeys,
+    calm,
+    needsYouOrder,
+    view,
+    rendererRef,
+    shellRef,
+    hostRef,
+  });
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
     // The canvas and its targets show this camera until the next frame, so
     // presses are hit-tested against it (view.drawn).
@@ -444,6 +463,7 @@ export function TownCanvas({
     }
     hud.framed();
     ring.place();
+    edge.frameArrows(camera, level);
     // Inspected agents walk under a still camera, so their lines follow every
     // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
     if (posed || latest.current.conversationTargets.length > 0)
@@ -816,15 +836,6 @@ export function TownCanvas({
    * desk, choosing whatever is nearest the centre of the screen. The current
    * step is read from the zoom, so pinching and wheel zoom mix freely.
    */
-  const shellControls = useMobileControls();
-  const ownsShellControls = shellControls !== null;
-  useEffect(() => {
-    if (!ownsShellControls) return;
-    document.documentElement.dataset.townControls = "";
-    return () => {
-      delete document.documentElement.dataset.townControls;
-    };
-  }, [ownsShellControls]);
   const stepZoom = (direction: 1 | -1) => {
     if (rendererRef.current)
       view.stepZoom(direction, latest.current.layout, viewport());
@@ -941,47 +952,24 @@ export function TownCanvas({
             pennants={pennants.current}
           />
         </TownHudContext.Provider>
+        <TownPulseRing pulse={edge.pulse} />
       </div>
+      <TownEdgeArrows
+        store={edge.arrowStore}
+        buildingLabel={edge.buildingLabel}
+        onGo={edge.goToArrow}
+      />
+      <TownNextLabel text={edge.nextText} />
       <TownBoard
         counts={summary.counts}
         observability={observability}
         onOpenSummary={onOpenSummary}
         sinceYouLeft={sinceYouLeft}
       />
-      <div className="town-zoom" role="group" aria-label="Camera">
-        <button type="button" aria-label="Zoom in" onClick={() => stepZoom(1)}>
-          +
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          onClick={() => stepZoom(-1)}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          className="town-zoom-all"
-          aria-label="Show the whole town"
-          onClick={() => view.fitAll(latest.current.layout)}
-        >
-          ALL
-        </button>
-        {shellControls ? (
-          // The shell's More menu joins the camera group on the phone, so
-          // Town has one set of floating controls.
-          <button
-            type="button"
-            className="town-zoom-more"
-            aria-label="More options"
-            aria-haspopup="menu"
-            aria-expanded={shellControls.moreOpen}
-            onClick={shellControls.toggleMore}
-          >
-            <EllipsisVertical size={18} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
+      <TownZoomControls
+        onStep={stepZoom}
+        onAll={() => view.fitAll(latest.current.layout)}
+      />
       {ring.open && centerActions?.length ? (
         <TownCenterMenu
           actions={centerActions}
