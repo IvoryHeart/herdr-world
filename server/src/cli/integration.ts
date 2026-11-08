@@ -227,30 +227,35 @@ removing any of them removes that file for all three. No service is required.`,
       );
     let exit = EXIT_OK;
     for (const harness of name ? [name as WorldHarness] : WORLD_HARNESSES) {
-      const status = worldIntegrationStatus(harness, context.runtime);
-      if (status.state === "unsupported") {
-        context.log(`${harness}: unsupported (${status.reason})`);
+      const paths = integrationPaths(harness, context.runtime);
+      if (!paths) {
+        context.log(`${harness}: unsupported (${UNSUPPORTED_REASON})`);
         if (action !== "status") exit = EXIT_FAILURE;
         continue;
       }
+      // Mutations never read the existing file: an unreadable SKILL.md is
+      // still replaced or removed, as the installer itself allows.
+      const path = displayPath(paths.file, context.runtime);
       if (action === "install") {
         installWorldIntegration(harness, context.runtime);
-        context.log(`${harness}: installed (${status.path})`);
+        context.log(`${harness}: installed (${path})`);
       } else if (action === "uninstall") {
         uninstallWorldIntegration(harness, context.runtime);
-        context.log(`${harness}: uninstalled (${status.path})`);
-        if (status.shared_with.length > 0)
+        context.log(`${harness}: uninstalled (${path})`);
+        const others = SHARED_HARNESSES.filter((other) => other !== harness);
+        if (SHARED_HARNESSES.includes(harness))
           context.log(
-            `The shared file is also removed for ${status.shared_with
+            `The shared file is also removed for ${others
               .map((other) => SHARED_LABELS[other])
               .join(" and ")}.`,
           );
       } else {
+        const status = worldIntegrationStatus(harness, context.runtime);
         const label =
           status.state === "not_installed" ? "not installed" : status.state;
         const version =
           status.version === undefined ? "" : ` (v${status.version})`;
-        context.log(`${harness}: ${label}${version} (${status.path})`);
+        context.log(`${harness}: ${label}${version} (${path})`);
       }
     }
     return exit;

@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -252,6 +253,28 @@ test("refuses symlinked managed folders and files without changing their targets
     expect(readFileSync(join(other, "SKILL.md"), "utf8")).toBe("keep");
   }
 });
+
+test.skipIf(process.getuid?.() === 0)(
+  "install and uninstall replace an unreadable skill file without reading it",
+  async () => {
+    cli = createTestCli();
+    mkdirSync(join(cli.home, ".claude/skills/herdr-world"), {
+      recursive: true,
+    });
+    const file = join(cli.home, ".claude/skills/herdr-world/SKILL.md");
+    writeFileSync(file, "unreadable");
+    chmodSync(file, 0o000);
+    expect(
+      await runCli(["integration", "install", "claude"], cli.context),
+    ).toBe(0);
+    expect(readFileSync(file, "utf8")).toContain("HERDR_WORLD_INTEGRATION_ID=");
+    chmodSync(file, 0o000);
+    expect(
+      await runCli(["integration", "uninstall", "claude"], cli.context),
+    ).toBe(0);
+    expect(existsSync(file)).toBe(false);
+  },
+);
 
 test("strict command usage; unsupported and absent removal write nothing", async () => {
   cli = createTestCli();
