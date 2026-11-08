@@ -240,11 +240,13 @@ hosts stay usable.
    its way.
    **Today** uses UTC; **7 days** includes today. The Town board's **Economy
    today · UTC · harness logs** shows the same Today figures and pricing rule.
-   Building totals add up to the city. **Unattributed (included)** is part of
-   those totals, not another charge; a detail limit never lowers totals.
-   Without a price table they show tokens and "no price table"; a host whose
-   logs cannot be read says "no data", never 0. On a phone, tap the coin
-   signs to open them. With the GitHub source signed in, the **post office**
+   Building totals add up to the city. Under each figure one short line names
+   its caveats, such as "partial · 1 host missing"; hover it, or tap it on a
+   phone, for the full explanation, including unattributed usage (already part
+   of the totals, not another charge) and a detail limit (which never lowers
+   totals). Without a price table they show tokens and "no price table"; a
+   host whose logs cannot be read says "no data", never 0. On a phone, tap the
+   coin signs to open them. With the GitHub source signed in, the **post office**
    left of the town center, on the first street, holds your open pull requests as parcels,
    ready to merge first; its sign counts ready, failing and waiting. Hover a
    parcel for its title and state and tap it for the pull request card with

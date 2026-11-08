@@ -155,9 +155,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     boards never show a missing number as zero: without a price table they
     show tokens and say "no price table" (or "some models unpriced"); a host
     whose harness logs cannot be read says "no data"; a quiet host says
-    "none recorded"; and notes name usage tied to no pane or room
-    ("unattributed"), partial reads, stale numbers left out and hosts with no
-    data. The boards re-read usage about once a minute and when the page
+    "none recorded". Each figure has at most one short caveat line, such as
+    "partial · stale left out · 1 host missing"; hovering it, or tapping it on
+    a phone, explains each caveat in full, including usage tied to no pane or
+    room ("unattributed", already in the totals) and a limited detail list. The boards re-read usage about once a minute and when the page
     regains focus; when re-reads fail, the last figures stay for at most five
     minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
     center's corner and each reception's expenses to a sign in its title;

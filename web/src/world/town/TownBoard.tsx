@@ -15,7 +15,9 @@ import {
   townPriceNote,
   townCityExpenses,
   townExpenseText,
-  townCoverageNotes,
+  townCoverageCaveats,
+  TOWN_PARTIAL_CAVEAT,
+  type TownExpenseCaveat,
   townCostText,
   useTownExpensesUsage,
 } from "./townExpenses";
@@ -31,6 +33,7 @@ import {
   townFuelLowest,
   townFuelLowestText,
 } from "./TownFuelGauge";
+import { TownExpenseCaveats } from "./TownExpenseCaveats";
 
 /**
  * The Town board counts the whole town from the Town summary (townSummary.ts):
@@ -134,17 +137,20 @@ export function TownBoard({
               ? (townCostText(expenses.total) ?? undefined)
               : undefined
           }
+          caveats={
+            expenses.status === "ready"
+              ? townCoverageCaveats(
+                  expenses.coverage,
+                  expenses.unattributed,
+                  "pane",
+                )
+              : undefined
+          }
           detail={
             expenses.status === "ready"
-              ? [
-                  expenses.total.price === "priced"
-                    ? `${formatOfficeUsage(expenses.total.tokens)} tokens`
-                    : townExpenseText(expenses.total),
-                  ...townCoverageNotes(
-                    expenses.coverage,
-                    expenses.unattributed,
-                  ),
-                ].join(" · ")
+              ? expenses.total.price === "priced"
+                ? `${formatOfficeUsage(expenses.total.tokens)} tokens`
+                : townExpenseText(expenses.total)
               : expenses.status === "loading"
                 ? "Reading usage…"
                 : expenses.status === "stale"
@@ -184,21 +190,30 @@ function TownBoardCounts({ counts }: { counts: TownSummaryCounts }) {
   );
 }
 
-/** The board's economy numbers: a cost, then tokens and models, or why not. */
+/**
+ * The board's economy numbers: a cost, then tokens and models, or why not,
+ * and one short caveat line explained on hover or tap.
+ */
 function TownBoardEconomy({
   label = "ECONOMY",
   cost,
   detail,
+  caveats = [],
 }: {
   label?: string;
   cost?: string;
   detail: string;
+  caveats?: readonly TownExpenseCaveat[];
 }) {
   return (
     <div className="town-board-economy">
       <span>{label}</span>
       {cost === undefined ? null : <b>{cost}</b>}
       <small>{detail}</small>
+      <TownExpenseCaveats
+        caveats={caveats}
+        className="town-board-economy-caveats"
+      />
     </div>
   );
 }
@@ -255,9 +270,8 @@ export function TownPlaceSummaryCard({
             economy.models.length
               ? ` · ${formatOfficeModelNames(economy.models.map((model) => ({ model })))}`
               : ""
-          }${economy.price === "priced" ? "" : ` · ${townPriceNote(economy.price)}`}${
-            economy.partial ? " · partial" : ""
-          }`}
+          }${economy.price === "priced" ? "" : ` · ${townPriceNote(economy.price)}`}`}
+          caveats={economy.partial ? [TOWN_PARTIAL_CAVEAT] : []}
         />
       ) : (
         <TownBoardEconomy

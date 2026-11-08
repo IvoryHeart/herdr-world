@@ -16,7 +16,7 @@ import {
 import {
   TOWN_WINDOW_LABEL,
   townCityExpenses,
-  townCoverageNotes,
+  townCoverageCaveats,
   townExpenseText,
   townHostExpenses,
   townUsd,
@@ -25,6 +25,7 @@ import {
   type TownCityExpenses,
   type TownHostExpenses,
 } from "./townExpenses";
+import { TownExpenseCaveats } from "./TownExpenseCaveats";
 import "./townExpenses.css";
 
 const WAITING_TEXT = {
@@ -53,12 +54,6 @@ function Headline({
       </b>
     </p>
   );
-}
-
-function Notes({ notes }: { notes: readonly string[] }) {
-  return notes.length ? (
-    <p className="town-expenses-notes">{notes.join(" · ")}</p>
-  ) : null;
 }
 
 /**
@@ -212,8 +207,12 @@ export function TownCityBillboard({
       </header>
       <Headline span={span} expenses={expenses} />
       {expenses.status === "ready" ? (
-        <Notes
-          notes={townCoverageNotes(expenses.coverage, expenses.unattributed)}
+        <TownExpenseCaveats
+          caveats={townCoverageCaveats(
+            expenses.coverage,
+            expenses.unattributed,
+            "pane",
+          )}
         />
       ) : null}
     </Board>
@@ -265,8 +264,12 @@ export function TownReceptionExpenses({
         </ol>
       ) : null}
       {expenses.status === "ready" ? (
-        <Notes
-          notes={townCoverageNotes(expenses.coverage, expenses.unattributed)}
+        <TownExpenseCaveats
+          caveats={townCoverageCaveats(
+            expenses.coverage,
+            expenses.unattributed,
+            "room",
+          )}
         />
       ) : null}
     </>
