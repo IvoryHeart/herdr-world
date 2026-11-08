@@ -4,9 +4,13 @@
  * waiting) to idle while Town is open has finished, and stays finished until
  * the user checks it. Town presents it as done, so it waits at reception with
  * its work on the desk, and a checked one goes for a break.
+ *
+ * Board shows the same finishes (#787), so there is one observation for the
+ * page: whichever of the two views is open feeds it, and switching views
+ * keeps what was seen.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { withOfficeReadModel } from "../officeReadModel";
 import type {
   HerdrOfficeProjection,
@@ -18,7 +22,10 @@ const BUSY = new Set(["working", "blocked"]);
 /**
  * One observation, in a single pass over the roster: agents that went from
  * busy to idle have finished; agents that are busy again, or gone, are no
- * longer finished.
+ * longer finished. With `present`, an agent outside this observation that the
+ * World still has keeps its last status and finish: Town and Board present
+ * different rooms (Town promotes the selected one), and an agent is gone only
+ * when the World no longer has it.
  */
 export function nextTownFinished<
   T extends Pick<OfficeAgent, "key" | "semanticStatus">,
@@ -26,6 +33,7 @@ export function nextTownFinished<
   before: ReadonlyMap<string, string>,
   agents: Iterable<T>,
   current: ReadonlySet<string>,
+  present?: () => ReadonlySet<string>,
 ) {
   const statuses = new Map<string, string>();
   const started: string[] = [];
@@ -40,6 +48,12 @@ export function nextTownFinished<
       started.push(agent.key);
       if (!current.has(agent.key)) change().add(agent.key);
     } else if (busy && current.has(agent.key)) change().delete(agent.key);
+  }
+  if (present) {
+    let keys: ReadonlySet<string> | null = null;
+    for (const [key, status] of before)
+      if (!statuses.has(key) && (keys ??= present()).has(key))
+        statuses.set(key, status);
   }
   for (const key of current) if (!statuses.has(key)) change().delete(key);
   return { statuses, started, finished: next ?? current };
@@ -58,26 +72,54 @@ export function townTrackedAgents(office: HerdrOfficeProjection) {
   return agents;
 }
 
-/** Agents that finished while Town was watching and are not yet checked. */
-export function useTownFinished(office: HerdrOfficeProjection) {
-  const previous = useRef(new Map<string, string>());
-  const [finished, setFinished] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const finishedRef = useRef(finished);
-  finishedRef.current = finished;
-  useEffect(() => {
+/**
+ * The page's one finish observation, fed by whichever view is open. Views
+ * read it through `useTownFinished`.
+ */
+export class TownFinishedTracker {
+  private previous: ReadonlyMap<string, string> = new Map();
+  private finished: ReadonlySet<string> = new Set();
+  private readonly listeners = new Set<() => void>();
+
+  readonly get = () => this.finished;
+
+  readonly subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  observe(office: HerdrOfficeProjection) {
     const step = nextTownFinished(
-      previous.current,
+      this.previous,
       townTrackedAgents(office),
-      finishedRef.current,
+      this.finished,
+      () => new Set(office.roster.map(({ agent }) => agent.key)),
     );
-    previous.current = step.statuses;
-    if (step.finished !== finishedRef.current) {
-      finishedRef.current = step.finished;
-      setFinished(step.finished);
-    }
-  }, [office]);
+    this.previous = step.statuses;
+    if (step.finished === this.finished) return;
+    this.finished = step.finished;
+    for (const listener of this.listeners) listener();
+  }
+}
+
+const sharedTracker = new TownFinishedTracker();
+
+/**
+ * Agents that finished while Town or Board was watching and are not yet
+ * checked, as one record for both views.
+ */
+export function useTownFinished(
+  office: HerdrOfficeProjection,
+  tracker: TownFinishedTracker = sharedTracker,
+) {
+  const finished = useSyncExternalStore(
+    tracker.subscribe,
+    tracker.get,
+    tracker.get,
+  );
+  useEffect(() => tracker.observe(office), [tracker, office]);
   return { finished };
 }
 

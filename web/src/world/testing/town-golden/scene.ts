@@ -66,7 +66,7 @@ export function goldenConnections(): WorldRuntimeConnection[] {
  * known window show nothing at the desk. The rest have no reading.
  */
 export function goldenUsage(): WorldUsageSnapshot {
-  const snapshot = usageFixture({ rows: [], sources: [] });
+  const snapshot = usageFixture({ rows: [], sources: [], window: "7d" });
   const reading = (
     host: number,
     room: number,
@@ -89,6 +89,12 @@ export function goldenUsage(): WorldUsageSnapshot {
   });
   return {
     ...snapshot,
+    // The shared seven-day read supplies today to the context and economy boards.
+    today: {
+      total: snapshot.total,
+      unattributed: snapshot.unattributed,
+      rollups: snapshot.rollups,
+    },
     contexts: [
       reading(0, 0, 0, "claude", "claude-opus-4-5", 180_000, 200_000),
       reading(0, 0, 1, "codex", "example-codex", 106_000, 258_400),

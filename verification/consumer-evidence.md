@@ -857,7 +857,10 @@ a retired waiter. `BoardView.test.ts` registers the actual production Town/Board
 in `testing/captureReadinessBrowser.ts`: held image/font responses, current-dimension
 receipts, valid empty views, missing/blank output, screenshot-time replacement and
 never-ready failure with an empty output directory, then same-owner recovery after
-removing the still-unresolved image. The actual optional Board writer has a missing
+removing the still-unresolved image.
+The same consumer exhausts the materialization budget after the scene is baked:
+elapsed frame time without deferred buildings cannot invalidate a ready receipt.
+The actual optional Board writer has a missing
 card negative control that leaves no PNG; populated handoff, Board and answer-gallery
 entry points all supply visible content expectations. Optional five-size evidence
 uses the same helper. Manual-clock Board evidence drives scene frames from

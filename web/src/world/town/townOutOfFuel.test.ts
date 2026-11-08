@@ -168,7 +168,6 @@ test("an agent stopped on its usage limit is quiet, out of fuel and never waitin
     renderToStaticMarkup(
       createElement(TownBoard, {
         counts: summary.counts,
-        observability: NO_METRICS,
       }),
     ),
   ).toContain("4 agents in 1 building · 3 out of fuel");

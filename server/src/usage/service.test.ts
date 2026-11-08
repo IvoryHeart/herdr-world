@@ -503,9 +503,9 @@ test("admission and aggregate frames are bounded and clipping is visible", async
   data.rows = Array.from({ length: 1024 }, (_, i) => row(`session-${i}`));
   s.data(data);
   const result = await s.service.get();
-  expect(result.truncated).toBe(true);
+  expect(result.details_truncated).toBe(true);
   expect(result.entities.length).toBeLessThanOrEqual(128);
-  expect(result.total.records).toBe(result.entities.length);
+  expect(result.total.records).toBe(1024);
   expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(1024 * 1024);
   await s.service.close();
 });
@@ -847,6 +847,95 @@ test("an unreadable status line reading keeps the last Claude numbers stale thro
     await s.service.close();
     await fs.rm(home, { recursive: true, force: true });
   }
+});
+
+test("busy multi-host windows keep all collected totals beyond the detail budget", async () => {
+  const s = setup(["alpha", "beta"]);
+  const data = value();
+  data.truncated = true; // A bounded log scan must not erase valid bindings.
+  data.rows = Array.from({ length: 300 }, (_, i) => ({
+    ...row(
+      i === 160 ? "session-a" : `loose-${i}`,
+      i < 160 ? "2026-10-31" : "2026-11-01",
+    ),
+    model: i % 3 ? "synthetic-model" : "unlisted-model",
+    harness: i % 2 ? "codex" : "claude",
+  }));
+  s.data(data);
+  const today = await s.service.get();
+  const week = await s.service.get({ window: "7d" });
+  expect(today.total.total_tokens).toBe(140 * 20 * 2);
+  expect(week.total.total_tokens).toBe(300 * 20 * 2);
+  expect(week.total.total_tokens).toBeGreaterThanOrEqual(
+    today.total.total_tokens,
+  );
+  for (const snapshot of [today, week]) {
+    const hosts = snapshot.rollups.filter((r) => r.level === "host");
+    expect(hosts).toHaveLength(2);
+    expect(hosts.reduce((sum, h) => sum + h.total_tokens, 0)).toBe(
+      snapshot.total.total_tokens,
+    );
+    expect(
+      hosts.every((h) => h.total_tokens <= snapshot.total.total_tokens),
+    ).toBe(true);
+    // Only one session has a current pane; bounded source coverage does not
+    // invalidate the independently revalidated session-a claim.
+    expect(snapshot.unattributed.total_tokens).toBe(
+      snapshot.total.total_tokens - 40,
+    );
+    expect(snapshot.total.estimated_cost_usd).toBeNull();
+    expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThanOrEqual(
+      768 * 1024,
+    );
+  }
+  await s.service.close();
+});
+
+test("a new seven-day read supplies today's summary from the same observation", async () => {
+  const s = setup();
+  s.data({ ...value(), rows: [row("session-a", "2026-10-31"), row()] });
+  const week = await s.service.get({ window: "7d" });
+  const today = await s.service.get();
+  expect(week.today).toMatchObject({
+    total: today.total,
+    unattributed: today.unattributed,
+    rollups: today.rollups,
+  });
+  s.advance(12 * 3_600_000); // Exactly UTC midnight, within the same cache owner.
+  const midnight = await s.service.get({ window: "7d" });
+  expect(midnight.today!.total.records).toBe(0);
+  expect(midnight.total.total_tokens).toBe(40);
+  await s.service.close();
+});
+
+test("changing activity titles does not erase otherwise identical pane claims", async () => {
+  const s = setup();
+  s.inventory([{ ...agent, terminal_title: "Working on a synthetic task" }]);
+  const result = await s.service.get();
+  expect(result.entities[0]?.pane_id).toBe("p1");
+  expect(result.unattributed.records).toBe(0);
+  await s.service.close();
+});
+
+test("one failed host stays outside both current windows while the other remains counted", async () => {
+  const s = setup(["alpha", "beta"]);
+  await s.service.get();
+  s.advance(31_000);
+  let reads = 0;
+  s.read(async () => {
+    if (++reads % 2 === 0) throw new Error("unavailable synthetic host");
+    return value();
+  });
+  const week = await s.service.get({ window: "7d" });
+  expect(week.total.total_tokens).toBe(20);
+  expect(week.today!.total.total_tokens).toBe(20);
+  expect(week.entities.find((e) => e.connection_id === "beta")?.state).toBe(
+    "stale",
+  );
+  expect(
+    week.rollups.filter((r) => r.level === "host").map((r) => r.total_tokens),
+  ).toEqual([20, 0]);
+  await s.service.close();
 });
 
 test("a pane's context bar needs a fresh, unique current-session match", async () => {

@@ -20,8 +20,8 @@ See [migration and backups](./docs/DEPLOYMENT.md#durable-questions-results-and-b
 The service also exposes shared [harness usage data](./docs/usage.md): bounded
 token records from Claude Code, Codex, Pi and Gemini logs on qualified local or
 SSH hosts, with source health, host/workspace/tab/pane rollups and optional
-versioned price-table estimates. Town's expenses boards read it (below); the
-`world.usage.get` read contract is also ready for Board projections.
+versioned price-table estimates. Town's expenses boards and Board's summary,
+host zones and workspace cards read it (below).
 
 ## World update notifications
 
@@ -147,7 +147,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a
     **Today** / **7 days** toggle. Each building's reception board ends with
     its **Expenses today**: the host's tokens and cost and its three
-    costliest rooms. Figures come from [harness usage](./docs/usage.md). The
+    costliest rooms. The Town board's **Economy today · UTC · harness logs**
+    shows the same Today total and price-table estimate as the city board.
+    Both windows share one read, and seven days includes today. Building totals
+    add up to the city; unattributed usage is already included. Detail limits
+    leave totals intact and are labelled. Figures come from [harness usage](./docs/usage.md). The
     boards never show a missing number as zero: without a price table they
     show tokens and say "no price table" (or "some models unpriced"); a host
     whose harness logs cannot be read says "no data"; a quiet host says
@@ -162,6 +166,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     center, the post office, the billboard and each other: a board that would
     cover one slides aside the least it can while staying over its building,
     else it hangs lower, below the center or the board in its way.
+    The `?scene=town-scale` preview replaces every economy reader with labelled
+    test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
     center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
     review or assigned to you) as parcels in its sorting yard, ready to merge
@@ -737,6 +743,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Town's facts on Board.** Board reads the same read models as Town, so
+    each number matches Town's for the same thing. The chip at the top left
+    counts **Busy**, **Waiting** (including open questions), **Done** (finished
+    and not yet reviewed) and **Quiet** agents across all hosts; tap it for the
+    **Board summary**: those counts with the number of agents and hosts,
+    expenses today and over 7 days (UTC, estimated from harness logs, with
+    what the totals leave out), each harness's limits with the reading's age,
+    the finished work not yet reviewed (each with its room, host and last
+    activity; tap one to show it on the board) and each host's counts,
+    expenses and limits. Escape or the chip closes it. Each host zone's label
+    carries that host's counts, expenses today and over 7 days, and limits;
+    each workspace card shows its usage today and over 7 days, as Town's room
+    card does. A single agent's tab card ends its line with what the agent is
+    doing now, and a pane row shows it as its state: the running step and its
+    time (amber once it has run long, as Town's thought bubbles), **Not
+    reviewed** or **Reviewed** for a finish, or **Idle** and how long. Board
+    reads steps only for working agents on tab cards it draws; nothing moves.
+    Town and Board share one record of finishes, so an agent that finished
+    while Town was open is still a finish when you switch to Board, and the
+    other way round.
   - **Board's hub** stands beside the bin at the bottom centre and offers the
     town center's actions as compact buttons: **+** opens World's launcher
     (preselecting the selected card's workspace when it can start one there,

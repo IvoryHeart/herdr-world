@@ -4,7 +4,7 @@ World collects token usage on demand from supported harness session files by
 default. The service owns the numeric records; Town and Board can both read
 `world.usage.get`. Town's expenses boards read it: the city billboard (today
 or 7 days), the expenses on each reception board and the Economy line on room and
-table cards; see [Town expenses boards](#town-expenses-boards). Existing Town
+table cards and the Town board's **Economy today** line; see [Town expenses boards](#town-expenses-boards). Existing Town
 Summary spend controls still use their configured metrics provider.
 
 ## Sources and inventory
@@ -80,10 +80,17 @@ The response is typed by `shared/usage.ts`:
   claims remain host-level `unattributed` usage. Topology changes invalidate
   cached pane attribution until the connector refreshes. More than 128 supplied
   agents disclose truncation and keep all usage host-level. A complete
-  post-collection agent listing must preserve the initial claim set; changed,
+  post-collection agent listing must preserve the initial claim set; unrelated
+  activity-title changes and partial log coverage do not erase a valid binding. Changed,
   newly added or conflicting claims invalidate pane attribution for that read.
 - `total`, `unattributed` and `rollups` for host, workspace, tab and pane. Each
-  level is a projection of the same entities; do not add levels together.
+  level projects all collected records before transport detail limits; do not add
+  levels together. Host rollups include an `unattributed` subtotal for usage
+  without a current room. This subtotal is already included in the host total.
+  A seven-day read also supplies `today` (total, unattributed and rollups) from
+  the same observation, and `price_table_version` names its table or is null.
+  `details_truncated` means detail rows or non-host rollups were omitted to fit
+  the frame; city and host totals remain intact.
   Stale entities remain visible but are excluded from current totals.
 - `sources`: `available`, `partial`, `missing`, `stale`, `unavailable` or
   `unsupported`, with check/success times and `refreshing`. Missing records
@@ -191,11 +198,23 @@ tired at its desk; see FEATURES.md.
 
 Town reads `world.usage.get` for its boards (`web/src/world/town/townExpenses.ts`):
 
+Economy amounts use the bundled JetBrains Mono font with tabular digits on the
+city, reception, room/table and Town boards, including compact phone signs.
+
+- All Town economy figures share one seven-day service observation, including
+  its today projection. The Town board's **Economy today · UTC · harness logs**
+  uses exactly the city board's Today total and local price-table rule. The
+  metrics provider is not used for this line. Both windows turn at UTC midnight;
+  seven days contains today and six previous dates.
 - The city billboard shows `total` for the chosen window, plus `unattributed`
   (usage tied to no pane). A building's reception board shows that host's `host` rollup
   and its three costliest `workspace` rollups (by cost when all are priced,
-  otherwise by tokens), plus the host's entities with no workspace as
+  otherwise by tokens), plus the host's no-workspace subtotal as
   unattributed. Each figure is one rollup level; levels are never added.
+  Building totals sum to the city total. Unattributed means no uniquely linked
+  current pane/room; it is already included, not another charge to add. Closed
+  sessions can legitimately remain unattributed. Stale hosts contribute to neither
+  window's current figures. A limited detail list says so without reducing totals.
 - A reception's expenses use the connection's newest runtime generation in the read
   and never another connection's numbers.
 - Stale entities stay out of the figures; the board says "stale data left
@@ -216,6 +235,13 @@ Town reads `world.usage.get` for its boards (`web/src/world/town/townExpenses.ts
 
 Tests use the synthetic fixture in `web/src/world/testing/usageFixture.ts`,
 which shapes reads like the service with example hosts, models and rates.
+With `?scene=town-scale`, all Town economy readers use one synthetic observation
+for the scene's Atlas, Nova and Zephyr buildings, including the Town board,
+city billboard, reception expenses, room/table cards and Spend lens. The boards
+say **TEST DATA**. Atlas and Nova sum to the city; Zephyr deliberately has no
+data. Seven days is twice today's usage, and all estimates use the same
+synthetic price table. No live usage read supplies these figures. Remove
+`scene=town-scale` and reload to return to the connected hosts and their usage.
 
 ## Optional local price table
 
@@ -266,8 +292,11 @@ Daily rollups retain at most seven UTC dates, 1,024 rows and a 512 KiB numeric h
 The service refreshes on reads, at most once per 30 seconds per runtime, with
 up to four collectors concurrently and a two-second wait before returning the
 current observation plus `refreshing`. It admits 16 connections and returns at
-most 128 entities plus their rollups, with a 768 KiB response budget below the
-1 MiB frame. Bounds set `truncated`; totals describe the returned entities.
+most 128 detail entities, with a 768 KiB response budget below the 1 MiB frame.
+Totals and rollups are computed from all admitted hosts' collected rows first.
+Response capacity sets `details_truncated` and can omit non-host rollups, while
+preserving city/host totals, host unattributed subtotals and both UTC windows.
+Collection bounds still set `truncated` and disclose incomplete source coverage.
 Fixed counts and deadlines bound work and do not promise full host history.
 The private cache admits at most 448 files and 32 MiB of encoded state, evicting
 oldest session groups when either bound is reached. Runtime replacement, close
@@ -285,3 +314,21 @@ reader without waiting for another request. A replacement generation starts
 independently of its cancelled predecessor; shutdown drains the owned resources before
 finishing. A still-current source that times out reports unavailable and retains
 its last bounded numbers as stale, outside current totals.
+
+## Testing Town economy in a preview
+
+Open the preview's Town with `?town-economy-preview=busy` appended to its URL.
+The parameter is removed immediately and all expense boards say **TEST DATA**;
+only this page load uses synthetic usage on the connected buildings. With at
+least two connections, City expenses and Economy today show **1.2M tokens**;
+the first two buildings show **900k** and **300k**, and seven days shows **1.8M**.
+With one connection its building shows the full 1.2M. **180k unattributed
+(included)** is a subtotal, and a synthetic stale record stays out of totals.
+This fixture includes cache tokens and Claude/Codex usage; it does not alter
+agents, transcripts, settings or services.
+
+Use `?town-economy-preview=unpriced` for **some models unpriced**, or
+`?town-economy-preview=no-table` for **no price table** on both main boards.
+Use `?town-economy-preview=midnight` to start just before UTC midnight: within
+30 seconds both windows and the Economy line read out of date together.
+Reload the URL without the parameter to return to live usage.

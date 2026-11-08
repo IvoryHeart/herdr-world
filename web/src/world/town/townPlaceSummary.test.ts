@@ -128,7 +128,6 @@ test("the Town board counts every agent in every building, quiet ones too", asyn
   const html = renderToStaticMarkup(
     createElement(TownBoard, {
       counts: summary.counts,
-      observability: NO_METRICS,
     }),
   );
   // The lab's quiet agents count on the board, not only the studio's.

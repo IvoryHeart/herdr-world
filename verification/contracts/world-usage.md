@@ -17,7 +17,13 @@ and verb-policy models continue to supply operation authority.
   never publish a retired collector's fresh result.
 - Source failure preserves explicit stale evidence outside fresh totals; empty
   observations with missing sources do not prove zero spend.
+- A building total is no greater than the city total for the same observation;
+  host totals sum to the city. Unattributed is a subtotal, not an added charge.
+  Detail/frame clipping cannot reduce collected balances or erase valid bindings
+  solely because log coverage is partial. Activity-title changes without a session identity change do not change claims.
 - UTC query boundaries reset today and preserve the bounded seven-day rollups.
+  Seven days includes today from the same observation; Town's Economy and city
+  Today share this observation and the exact-model local pricing rule.
   Source and response capacity limits disclose truncation and preserve frame
   admission. No raw content, native session IDs, paths or errors enter output.
 - Unknown prices preserve tokens and null estimates. OTel comparison data cannot
@@ -62,6 +68,10 @@ new platform conformance is claimed.
   and SSH caches, stdin request privacy, exact host selection, incomplete claims,
   cancellation/deadline termination, stream overflow, invalid/idle reply failure
   teardown and exit/reap ownership.
+- `summary.test.ts`: maximum 16-host/128-pane/seven-day frame clipping preserves
+  city, host and today balances, including disjoint cache/reasoning counters.
+- `web/src/world/town/townEconomy.test.ts`: shared-window refresh, UTC rollover,
+  pricing reasons, building partitions and fixture/board agreement.
 - `service.test.ts`: host isolation, rollups, unique complete revalidation, lease
   replacement, stale/missing sources, windows, deterministic IDs without writes,
   estimates, telemetry exclusion, frame limits and shutdown.
@@ -89,7 +99,7 @@ new platform conformance is claimed.
 Run the complete consumer set with:
 
 ```bash
-bun run test server/src/usage server/src/rpc/usage.test.ts
+bun run test server/src/usage server/src/rpc/usage.test.ts web/src/world/town/townEconomy.test.ts web/src/world/town/townExpenses.test.ts web/src/world/town/townPlaceSummary.test.ts
 ```
 
 Existing runtime, service shutdown, OTel and verb consumers remain mandatory.

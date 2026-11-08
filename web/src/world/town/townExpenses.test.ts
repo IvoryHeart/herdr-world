@@ -51,7 +51,7 @@ test("the city board shows the service's total, with stale numbers left out", ()
     noDataHosts: 1,
   });
   expect(townCoverageNotes(city.coverage, city.unattributed)).toEqual([
-    "45.5k unattributed",
+    "45.5k unattributed (included)",
     "stale data left out",
     "no data from 1 host",
   ]);

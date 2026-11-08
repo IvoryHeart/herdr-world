@@ -10,7 +10,8 @@ import {
   contextTokens,
 } from "./agentContextFill";
 import { TownTiredMark } from "./town/TownTiredMark";
-import type { TownUsageState } from "./town/townPlaceUsage";
+import { TownUsageStore, type TownUsageState } from "./town/townPlaceUsage";
+import { goldenUsage } from "./testing/town-golden/scene";
 
 /** Synthetic connections, panes and readings only. */
 const context = (
@@ -134,4 +135,30 @@ test("an agent at 90% looks tired at its desk", () => {
   expect(html).toContain('class="town-tired town-tired-top"');
   expect(html).toContain('data-agent="agent-a"');
   expect(html).toContain('aria-label="otter is tired: Context 90%');
+});
+
+test("the golden Town keeps its context readings through the shared today projection", async () => {
+  const snapshot = goldenUsage();
+  const client = { call: async () => snapshot };
+  const week = new TownUsageStore(client, () => snapshot.observed_at, "7d");
+  const today = new TownUsageStore(
+    client,
+    () => snapshot.observed_at,
+    "today",
+    week,
+  );
+  today.request();
+  await Promise.resolve();
+  const state = today.get();
+  expect(state.status).toBe("ready");
+  expect(
+    snapshot.contexts!.map(
+      (context) =>
+        agentContextFill(state, {
+          connectionId: context.connection_id,
+          generation: context.connection_generation,
+          paneId: context.pane_id,
+        })?.tired ?? false,
+    ),
+  ).toEqual([true, false, true, false]);
 });

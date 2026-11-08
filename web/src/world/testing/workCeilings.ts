@@ -38,17 +38,24 @@ const ONE_SNAPSHOT = {
   "world.room-prepare": 32_768,
 };
 
+/**
+ * Town's rooms, prepared once per snapshot and presented within Town's
+ * bounds. Board shows Town's facts (#787) from the same projection, so it
+ * keeps the same preparation running.
+ */
+const TOWN_ROOMS = {
+  "office.room-prepare": 32_768,
+  "office.room-project": 128,
+};
+
 /** ProductionContexts: one preparation and one view projection per stage. */
 export function productionWorkCeilings(view: string): WorkByPhase {
   const stage = {
     ...ONE_SNAPSHOT,
+    ...TOWN_ROOMS,
     ...(view === "board"
       ? { ...BOARD_HOSTS, "board.project": 1, "board.room-project": 32_768 }
-      : {
-          "office.project": 1,
-          "office.room-prepare": 32_768,
-          "office.room-project": 128,
-        }),
+      : { "office.project": 1 }),
   };
   if (view === "board") return { initial: stage, refresh: stage };
   // Terminal colours are derived once per colour hook when its inputs change
@@ -109,8 +116,9 @@ export function concurrentWorkViolations(
           "office.room-project": 128,
           "board.room-project": 32_768,
         },
-        // Mounting Board projects its World once.
-        render: { "board.project": 1 },
+        // Mounting Board projects its World once, and presents Town's
+        // prepared rooms once for Town's facts (#787).
+        render: { "board.project": 1, "office.room-project": 128 },
         // A status refresh prepares the new snapshot and Board projects it.
         refresh: {
           ...BOARD_HOSTS,
@@ -134,8 +142,9 @@ export function concurrentWorkViolations(
       {
         // Mount, the dense transition and its visible cards; at 390 pixels
         // also the controls' measured layout. Frames publish nothing until
-        // placement, and only from committed renders (see BoardView).
-        render: { commits: width === 1440 ? 3 : 4 },
+        // placement, and only from committed renders (see BoardView). Town's
+        // facts read harness usage once on mount: loading, then its result.
+        render: { commits: width === 1440 ? 5 : 6 },
         refresh: { commits: 2 },
       },
       "Board",
