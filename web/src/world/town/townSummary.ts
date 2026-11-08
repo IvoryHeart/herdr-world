@@ -8,6 +8,8 @@ import type { TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
 import { officeReadModel, type OfficeStatusCounts } from "../officeReadModel";
 import type { WorldAgentStatus } from "../worldObject";
+import { townOutOfFuelRooms } from "./townOutOfFuel";
+import type { AgentUsageStop } from "../../../../shared/usageStop";
 
 /**
  * The Town summary: one read model behind the Town board sign, the phone
@@ -51,6 +53,8 @@ export type TownSummaryCounts = {
   finished: number;
   quiet: number;
   unknown: number;
+  /** Stopped on a usage limit (townOutOfFuel.ts), apart from quiet. */
+  outOfFuel: number;
 };
 
 export type TownSummaryHost = {
@@ -84,6 +88,7 @@ const emptyCounts = (): TownSummaryCounts => ({
   finished: 0,
   quiet: 0,
   unknown: 0,
+  outOfFuel: 0,
 });
 
 const COUNT_KEYS = Object.keys(emptyCounts()) as (keyof TownSummaryCounts)[];
@@ -116,6 +121,8 @@ function summaryTopology(office: HerdrOfficeProjection) {
   const previous = topologies.get(office);
   if (previous) return previous;
   const read = officeReadModel(office);
+  // Out-of-fuel agents are presented idle; count them apart from quiet.
+  const fuel = townOutOfFuelRooms(office);
   const byHost = new Map<string, TownSummaryHost["rooms"][number][]>();
   const totals = emptyCounts();
   for (const room of office.roomRoster) {
@@ -129,6 +136,8 @@ function summaryTopology(office: HerdrOfficeProjection) {
         roomContributions.set(raw, counts);
       }
     }
+    const out = fuel.get(room.key) ?? 0;
+    if (out) counts = { ...counts, quiet: counts.quiet - out, outOfFuel: out };
     addCounts(totals, counts);
     let rooms = byHost.get(room.hostKey);
     if (!rooms) byHost.set(room.hostKey, (rooms = []));
@@ -186,6 +195,7 @@ export function townSummary(
       finished: finished.length,
       quiet: totals.quiet,
       unknown: totals.unknown,
+      outOfFuel: totals.outOfFuel,
       agents: townSummaryAgents(totals),
       buildings: hosts.length,
     },
@@ -215,6 +225,8 @@ export function townSummary(
  */
 export type TownPlaceSummary = {
   counts: TownSummaryCounts & { agents: number };
+  /** A table's agents that are out of fuel, for its card to name. */
+  fuel: readonly { label: string; stop: AgentUsageStop }[];
 };
 
 export type TownPlace = { kind: "room" | "desk"; key: string };
@@ -226,6 +238,10 @@ const roomIndexes = new WeakMap<
 const deskIndexes = new WeakMap<
   readonly OfficeRosterEntry[],
   ReadonlyMap<string, TownSummaryCounts>
+>();
+const deskFuel = new WeakMap<
+  readonly OfficeRosterEntry[],
+  ReadonlyMap<string, TownPlaceSummary["fuel"]>
 >();
 
 /**
@@ -239,6 +255,7 @@ export function townPlaceSummary(
   place: TownPlace,
 ): TownPlaceSummary {
   let counts: TownSummaryCounts | undefined;
+  let fuel: TownPlaceSummary["fuel"] = [];
   if (place.kind === "room") {
     let index = roomIndexes.get(summary.hosts);
     if (!index) {
@@ -254,15 +271,23 @@ export function townPlaceSummary(
     let index = deskIndexes.get(office.roster);
     if (!index) {
       const desks = new Map<string, TownSummaryCounts>();
+      const stopped = new Map<string, TownPlaceSummary["fuel"][number][]>();
       for (const { agent } of office.roster) {
         if (agent.deskKey === null) continue;
         let desk = desks.get(agent.deskKey);
         if (!desk) desks.set(agent.deskKey, (desk = emptyCounts()));
-        desk[COUNT_OF[agent.semanticStatus]] += 1;
+        if (agent.usageStop) {
+          desk.outOfFuel += 1;
+          let list = stopped.get(agent.deskKey);
+          if (!list) stopped.set(agent.deskKey, (list = []));
+          list.push({ label: agent.displayLabel, stop: agent.usageStop });
+        } else desk[COUNT_OF[agent.semanticStatus]] += 1;
       }
       deskIndexes.set(office.roster, (index = desks));
+      deskFuel.set(office.roster, stopped);
     }
     counts = index.get(place.key);
+    fuel = deskFuel.get(office.roster)?.get(place.key) ?? [];
   }
   const here = (item: TownSummaryItem) =>
     place.kind === "room"
@@ -276,8 +301,10 @@ export function townPlaceSummary(
       finished: summary.finished.filter(here).length,
       quiet: agents.quiet,
       unknown: agents.unknown,
+      outOfFuel: agents.outOfFuel,
       agents: townSummaryAgents(agents),
     },
+    fuel,
   };
 }
 

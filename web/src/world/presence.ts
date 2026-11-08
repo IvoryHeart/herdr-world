@@ -60,10 +60,16 @@ export class OwnerPresence {
   #lastSighting = -Infinity;
   #lastService = -Infinity;
   #asking = false;
+  /**
+   * This browser's last seen as it was before this page wrote one: when the
+   * owner was last here, for the Town Master's greeting.
+   */
+  readonly lastSeenBefore: number | null;
 
   constructor(deps: PresenceDeps) {
     this.#deps = deps;
     this.#snapshot = this.#read();
+    this.lastSeenBefore = this.#number(LAST_SEEN);
   }
 
   get = () => this.#snapshot;

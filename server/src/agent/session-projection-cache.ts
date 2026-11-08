@@ -15,6 +15,8 @@ import { isRecord } from "./session-utils";
 import { summarizeTokenUsage } from "./token-usage";
 import { readAntigravitySessionRecords } from "./antigravity-session";
 import { questFromSession, type Quest } from "./quest";
+import { usageStopFromRecords } from "./usage-stop";
+import type { AgentUsageStop } from "../../../shared/usageStop";
 
 function parseJsonl(text: string) {
   const records: Record<string, unknown>[] = [];
@@ -52,6 +54,7 @@ export async function readSessionProjection(
     messages,
     entries: historyEntriesFromTrajectory(projectionFile, trajectory),
     quest: questFromSession(agent, trajectory, records),
+    usage_stop: usageStopFromRecords(agent, records),
     worktree: sessionWorktreeMetadata(agent, records),
     stats: {
       turns: messages.filter((message) => message.role === "user").length,
@@ -145,7 +148,14 @@ export function createSessionProjectionCache(
   const pending = new Map<string, Promise<Cached>>();
   // Quests are small, so many more are kept than projections: an agent's
   // quest can be shown without rereading a transcript that has not changed.
-  const quests = new Map<string, { signature: string; quest: Quest | null }>();
+  const quests = new Map<
+    string,
+    {
+      signature: string;
+      quest: Quest | null;
+      usage_stop: AgentUsageStop | null;
+    }
+  >();
   // A session file's paging identity, kept even when its projection is too
   // large to retain, so its epoch and revision stay stable across reads.
   type Identity = Pick<
@@ -273,7 +283,11 @@ export function createSessionProjectionCache(
       while (identities.size > (limits.quests ?? 256))
         identities.delete(identities.keys().next().value!);
       quests.delete(key);
-      quests.set(key, { signature: value.signature, quest: projection.quest });
+      quests.set(key, {
+        signature: value.signature,
+        quest: projection.quest,
+        usage_stop: projection.usage_stop,
+      });
       while (quests.size > (limits.quests ?? 256))
         quests.delete(quests.keys().next().value!);
       remove(key);
@@ -306,21 +320,32 @@ export function createSessionProjectionCache(
     }
     return entries;
   }
+  /**
+   * What Town and Board show at the agent's desk: its quest and its
+   * usage-limit stop, reading the transcript only when it changed.
+   */
+  const desk = async (
+    resolved: AgentSessionResolved,
+  ): Promise<{ quest: Quest | null; usage_stop: AgentUsageStop | null }> => {
+    const file = resolved.file;
+    if (!file) throw new Error("Session file unavailable");
+    const key = `${sessionKey(resolved)}:${file.path}`;
+    const known = quests.get(key);
+    const stat = known && (await files.statFile(file.path));
+    if (known && stat && known.signature === signature({ ...file, ...stat }))
+      return { quest: known.quest, usage_stop: known.usage_stop };
+    const { projection } = await load(resolved);
+    return { quest: projection.quest, usage_stop: projection.usage_stop };
+  };
   return {
     invalidate,
     async get(resolved: AgentSessionResolved) {
       return (await load(resolved)).projection;
     },
+    desk,
     /** The session's quest, reading the transcript only when it changed. */
     async quest(resolved: AgentSessionResolved) {
-      const file = resolved.file;
-      if (!file) throw new Error("Session file unavailable");
-      const key = `${sessionKey(resolved)}:${file.path}`;
-      const known = quests.get(key);
-      const stat = known && (await files.statFile(file.path));
-      if (known && stat && known.signature === signature({ ...file, ...stat }))
-        return known.quest;
-      return (await load(resolved)).projection.quest;
+      return (await desk(resolved)).quest;
     },
     /** The page before an entry, for scrolling back past the window. */
     async older(

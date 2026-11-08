@@ -186,8 +186,12 @@ export function townLookFor(identity: string): TownLook {
 }
 
 export type TownDirection = "down" | "up" | "left" | "right";
-/** `scratch`: seated, scratching its head with one hand (confused). */
-export type TownPose = "stand" | "sit" | "scratch" | "carry";
+/**
+ * `scratch`: seated, scratching its head with one hand (confused).
+ * `slump`: seated with its head sunk into its shoulders and its arms hanging
+ * (out of fuel: stopped on its usage limit).
+ */
+export type TownPose = "stand" | "sit" | "scratch" | "carry" | "slump";
 
 const NAVY = "#1f2a44";
 const NAVY_DARK = "#141c30";
@@ -198,13 +202,18 @@ const HEADSET = "#30343c";
 const SCARF = "#d9644a";
 
 function drawCharacter(
-  R: Rect,
+  paint: Rect,
   look: TownLook,
   dir: TownDirection,
   frame: number,
   pose: TownPose,
   blink: boolean,
 ) {
+  // Slumped, the head (every row above the neck) sinks two rows.
+  const R: Rect =
+    pose === "slump"
+      ? (x, y, w, h, color) => paint(x, y < 7 ? y + 2 : y, w, h, color)
+      : paint;
   const { skin, hair, shirt, pants, style } = look;
   const outfit = look.outfit ?? "shirt";
   const accessory = look.accessory ?? "none";
@@ -219,7 +228,7 @@ function drawCharacter(
   const shoe = "#2b2433";
   const eye = "#231d2b";
   const cap = townShade(shirt, -0.42);
-  const seated = pose === "sit" || pose === "scratch";
+  const seated = pose === "sit" || pose === "scratch" || pose === "slump";
   if (dir !== "right") {
     if (outfit === "dress") {
       R(2, 12, 8, 3, top);
@@ -261,6 +270,11 @@ function drawCharacter(
       R(2, 10, 1, 1, skin);
       R(10, 4, 1, 5, sd);
       R(10, 2, 2, 2, skin);
+    } else if (pose === "slump") {
+      R(1, 8, 1, 4, top);
+      R(10, 8, 1, 4, sd);
+      R(1, 12, 1, 1, skin);
+      R(10, 12, 1, 1, skin);
     } else if (pose === "sit") {
       R(1, 8, 1, 2, top);
       R(10, 8, 1, 2, sd);
@@ -517,6 +531,24 @@ export const townBubble = (draw: (R: Rect) => void, width = 11) =>
     draw(R);
   });
 
+/** Out of fuel: an empty red fuel can beside a small clock. */
+export const TOWN_FUEL_BUBBLE_WIDTH = 15;
+export function townFuelPaint(R: Rect) {
+  const can = "#c43d3d";
+  R(1, 3, 5, 6, can);
+  R(2, 2, 2, 1, can);
+  R(4, 1, 2, 1, "#6b7a8f");
+  R(2, 4, 3, 3, "#f3d9c8");
+  R(2, 7, 3, 1, "#7d2424");
+  const clock = "#4f6a8f";
+  R(9, 2, 3, 1, clock);
+  R(8, 3, 1, 3, clock);
+  R(12, 3, 1, 3, clock);
+  R(9, 6, 3, 1, clock);
+  R(10, 3, 1, 2, clock);
+  R(11, 4, 1, 1, clock);
+}
+
 export function buildTownSprites() {
   const tableOf = (W: number, w: string) =>
     townSprite(W, 32, (R) => {
@@ -770,6 +802,7 @@ export function buildTownSprites() {
         ] as const)
           R(x, y, 1, 2, "#2f9e55");
       }),
+      fuel: bubble(townFuelPaint, TOWN_FUEL_BUBBLE_WIDTH),
       idle: bubble((R) => {
         R(3, 4, 5, 4, "#8a5a3c");
         R(8, 5, 1, 2, "#8a5a3c");

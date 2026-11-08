@@ -20,6 +20,7 @@ import {
 } from "./TownRoomPlaque";
 import { TownDeskTitle } from "./TownDeskTitle";
 import { TownStepBubble } from "./TownStepBubble";
+import { TownFuelMark } from "./TownFuelMark";
 import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
 import { TownPostOffice } from "./TownPostOffice";
@@ -759,6 +760,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                       paneId: device.paneRef.nativeId,
                                     })
                                   : null;
+                              const usageStop = device?.agentKey
+                                ? model.agents.get(device.agentKey)?.usageStop
+                                : undefined;
                               return device ? (
                                 <Fragment key={device.key}>
                                   <span
@@ -783,6 +787,16 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                         selectedKey === device.agentKey ||
                                         selectedKey === desk.key
                                       }
+                                      renderer={renderer}
+                                      pennants={pennants}
+                                    />
+                                  ) : null}
+                                  {usageStop ? (
+                                    <TownFuelMark
+                                      stop={usageStop}
+                                      agentKey={device.agentKey!}
+                                      top={slot.top}
+                                      x={slot.chairX + 7}
                                       renderer={renderer}
                                       pennants={pennants}
                                     />

@@ -6,6 +6,7 @@ import {
   type DeskIdentity,
 } from "../../../shared/deskState";
 import type { BridgeControlMsg, ConnectionStatus } from "../api";
+import { townScaleRuntime } from "./town/townScaleRuntime";
 
 type Client = {
   call(method: string, params?: Record<string, unknown>): Promise<unknown>;
@@ -113,7 +114,10 @@ let users = 0;
  * marking work reviewed in Needs you, Town or Desk clears it everywhere.
  */
 export function sharedDeskStore() {
-  return (shared ??= new WorldDeskStore(bridge));
+  // The Town scale scene keeps its own record: its hosts are synthetic.
+  return (shared ??= new WorldDeskStore(
+    townScaleRuntime()?.deskClient ?? bridge,
+  ));
 }
 
 /** Keep the shared store observing while any view uses it. */

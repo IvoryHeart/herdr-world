@@ -4,9 +4,14 @@
  * World already has (agent activity, today's usage, linked pull requests,
  * quests and harnesses) and never moves an agent or changes state.
  *
- * Pure: `townLensView` turns a lens and its facts into a mark per room, desk
+ * Pure: `lensView` turns a lens and its facts into a mark per room, desk
  * and agent, each with a legend swatch and its value in words. A missing
  * number is never drawn as zero: it is "no data", with its own look.
+ *
+ * Town and Board read the same marks: a room is a Herdr workspace (Board's
+ * workspace card), a desk a tab (Board's tab card) and an agent its pane.
+ * `townLensView` reads Town's presented places; Board builds its own
+ * (board/boardLens.ts) with the same keys, so one fact reads the same.
  */
 
 import type { WorkItem } from "../../../../shared/worldSources";
@@ -57,16 +62,44 @@ export function townLensStep(lens: TownLensId, step: 1 | -1): TownLensId {
   return TOWN_LENSES[(at + step + count) % count]!;
 }
 
+/** An agent as a lens reads it: its key is its World leaf ID. */
+export type LensAgent = Pick<
+  OfficeAgent,
+  "key" | "nodeId" | "roomKey" | "semanticStatus" | "stale" | "harness"
+>;
+
+/** A desk (a Herdr tab), keyed as Town keys it (officeDeskKey). */
+export type LensDesk = Pick<
+  OfficeDesk,
+  "key" | "tabRef" | "occupantAgentKey"
+> & {
+  agents: readonly LensAgent[];
+  /** Its panes, agents and plain shells. */
+  panes: number;
+};
+
+/** A room (a Herdr workspace), keyed by its World space ID. */
+export type LensRoom = Pick<OfficeRoom, "key" | "workspaceRef"> & {
+  hostLabel: string;
+  /** The desks the view shows. */
+  desks: readonly LensDesk[];
+  /** Every agent of the room, at a shown desk or not. */
+  agents: readonly LensAgent[];
+};
+
+/** The places a view shows, which a lens reads. */
+export type LensPlaces = { rooms: readonly LensRoom[] };
+
 /** Whatever World knows that a lens may show. */
 export type TownLensFacts = {
   /** Epoch ms, for ages. */
   now: number;
   /** When the agent last worked (epoch ms), when World knows. */
-  activityAt(agent: OfficeAgent): number | undefined;
+  activityAt(agent: LensAgent): number | undefined;
   /** Today's usage for a room (workspace) or desk (tab). */
   economy(place: TownUsagePlace): TownPlaceEconomy;
   /** The desk's linked work item, as its badge shows it. */
-  work(desk: OfficeDesk): WorkItem | undefined;
+  work(desk: LensDesk): WorkItem | undefined;
   quest(agentKey: string): TownQuestMark | undefined;
 };
 
@@ -138,7 +171,7 @@ export function townIdleSwatch(ms: number): number {
 }
 
 /** An agent's idle time: 0 while it works; undefined when unknown. */
-function idleOf(agent: OfficeAgent, facts: TownLensFacts): number | undefined {
+function idleOf(agent: LensAgent, facts: TownLensFacts): number | undefined {
   if (agent.semanticStatus === "working" && !agent.stale) return 0;
   const at = facts.activityAt(agent);
   return at === undefined ? undefined : Math.max(0, facts.now - at);
@@ -392,31 +425,40 @@ function tally<T extends string>(
 
 /* ---------- The view ---------- */
 
-type Places = {
-  rooms: OfficeRoom[];
-  deskAgents: Map<string, OfficeAgent[]>;
-  roomAgents: Map<string, OfficeAgent[]>;
-};
-
-function places(model: TownModel): Places {
-  const deskAgents = new Map<string, OfficeAgent[]>();
-  for (const desk of model.desks.values())
-    deskAgents.set(
-      desk.key,
-      desk.paneDevices.flatMap((device) => {
-        const agent = device.agentKey
-          ? model.agents.get(device.agentKey)
-          : undefined;
-        return agent ? [agent] : [];
-      }),
-    );
+/** Town's presented rooms and desks, and every agent of those rooms. */
+export function townLensPlaces(model: TownModel): LensPlaces {
   const roomAgents = new Map<string, OfficeAgent[]>();
   for (const agent of model.agents.values()) {
     const list = roomAgents.get(agent.roomKey);
     if (list) list.push(agent);
     else roomAgents.set(agent.roomKey, [agent]);
   }
-  return { rooms: [...model.rooms.values()], deskAgents, roomAgents };
+  return {
+    rooms: [...model.rooms.values()].map((room) => ({
+      key: room.key,
+      workspaceRef: room.workspaceRef,
+      hostLabel: model.hosts.get(room.hostKey)?.displayLabel ?? room.hostKey,
+      agents: roomAgents.get(room.key) ?? [],
+      desks: room.desks.flatMap((shown) => {
+        const desk = model.desks.get(shown.key);
+        if (!desk) return [];
+        return [
+          {
+            key: desk.key,
+            tabRef: desk.tabRef,
+            occupantAgentKey: desk.occupantAgentKey,
+            panes: desk.paneDevices.length,
+            agents: desk.paneDevices.flatMap((device) => {
+              const agent = device.agentKey
+                ? model.agents.get(device.agentKey)
+                : undefined;
+              return agent ? [agent] : [];
+            }),
+          },
+        ];
+      }),
+    })),
+  };
 }
 
 const plural = (count: number, one: string) =>
@@ -428,16 +470,30 @@ export function townLensView(
   model: TownModel,
   facts: TownLensFacts,
 ): TownLensView | null {
+  return lens === "attention"
+    ? null
+    : lensView(lens, townLensPlaces(model), facts);
+}
+
+/** The marks for one lens over a view's rooms, desks and agents. */
+export function lensView(
+  lens: TownLensId,
+  places: LensPlaces,
+  facts: TownLensFacts,
+): TownLensView | null {
   if (lens === "attention") return null;
-  const { rooms, deskAgents, roomAgents } = places(model);
+  const { rooms } = places;
+  const roomAgents = new Map(rooms.map((room) => [room.key, room.agents]));
+  const deskAgents = new Map(
+    rooms.flatMap((room) => room.desks.map((desk) => [desk.key, desk.agents])),
+  );
+  const desks = new Map(
+    rooms.flatMap((room) => room.desks.map((desk) => [desk.key, desk])),
+  );
   const roomMarks = new Map<string, TownLensMark>();
   const deskMarks = new Map<string, TownLensMark>();
   const agentMarks = new Map<string, TownLensMark>();
-  const desksOf = (room: OfficeRoom) =>
-    room.desks.flatMap((desk) => {
-      const shown = model.desks.get(desk.key);
-      return shown ? [shown] : [];
-    });
+  const desksOf = (room: LensRoom) => room.desks;
   const view = (
     swatches: readonly TownLensSwatch[],
     note?: string,
@@ -540,9 +596,7 @@ export function townLensView(
       const missing = new Set<string>();
       for (const room of rooms)
         if (roomSpend.marks.get(room.key)?.swatch === "no-data")
-          missing.add(
-            model.hosts.get(room.hostKey)?.displayLabel ?? room.hostKey,
-          );
+          missing.add(room.hostLabel);
       const scale =
         by === "cost"
           ? "Today's estimated cost, against the costliest place."
@@ -592,7 +646,7 @@ export function townLensView(
             quest ? questMark(quest) : { swatch: null, words: "No quest" },
           );
         }
-      const shares = (agents: readonly OfficeAgent[]) =>
+      const shares = (agents: readonly LensAgent[]) =>
         agents.flatMap((agent) => {
           const quest = facts.quest(agent.key);
           return quest ? [townQuestShare(quest)] : [];
@@ -615,8 +669,11 @@ export function townLensView(
       for (const room of rooms) {
         const known = shares(roomAgents.get(room.key) ?? []);
         if (!known.length) continue;
+        // Summed in one order, so every view of the room rounds alike.
         const mean =
-          known.reduce((sum, share) => sum + share, 0) / known.length;
+          [...known]
+            .sort((a, b) => a - b)
+            .reduce((sum, share) => sum + share, 0) / known.length;
         roomMarks.set(room.key, {
           swatch: questSwatch(mean),
           short: `${Math.round(mean * 100)}%`,
@@ -662,9 +719,8 @@ export function townLensView(
         };
       };
       for (const [deskKey, agents] of deskAgents) {
-        const desk = model.desks.get(deskKey);
         if (!agents.length) {
-          if (desk?.paneDevices.length)
+          if (desks.get(deskKey)?.panes)
             deskMarks.set(deskKey, {
               swatch: HARNESSES.indexOf("shell"),
               words: HARNESS_NAMES.shell,
@@ -677,7 +733,7 @@ export function townLensView(
         const agents = roomAgents.get(room.key) ?? [];
         if (agents.length)
           roomMarks.set(room.key, mixed(agents.map(townHarnessOf)));
-        else if (desksOf(room).some((desk) => desk.paneDevices.length))
+        else if (desksOf(room).some((desk) => desk.panes))
           roomMarks.set(room.key, {
             swatch: HARNESSES.indexOf("shell"),
             words: "Plain shells only",

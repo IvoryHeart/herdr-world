@@ -217,8 +217,11 @@ hosts stay usable.
    their terminal or mark that completion reviewed, then join idle agents at
    the bar in the building's bottom corner. When the queue is full, the rest
    crowd the lobby and grumble, then nap on the floor after about 90 seconds;
-   the front of the crowd takes the next free spot. These locations visualize
-   status; they do not move the underlying pane or change its host. To keep
+   the front of the crowd takes the next free spot. An agent out of fuel (its
+   harness hit a usage limit) stays slumped at its desk under an empty fuel
+   can and a clock showing when the limit resets; hover its table for the
+   full words. These
+   locations visualize status; they do not move the underlying pane or change its host. To keep
    reception for what matters now, press its sign (the **!** **?** **✓**
    marks) and untick a mark, for example **✓** Done: those agents stay at
    their desks with their mark, and reception shows `✓ N at desks · find`.
@@ -258,7 +261,16 @@ hosts stay usable.
    for you, what finished and what merged while you were away. Each line
    opens **Needs you** at that item, which carries a "new" dot (the merged
    line opens **Needs you** itself); **✕** clears
-   the recap. Answer a question from its offered
+   the recap. Each time you come back (World opening, or its page
+   back on screen after 30 minutes or more hidden), the **Town Master**, the
+   small figure beside the board, greets you with one card: when you were
+   last here, the same since-you-left lines and, when a newer World release
+   is out, a **See update** button that opens **Menu** at its update entry.
+   Board shows the card at its hub beside the bin, Desk at its summary, and
+   a phone as a sheet with **Back**. It waits while Chat, **Needs you** or
+   another window covers its place (on a phone, while any is open). Close it with **✕**, Escape or a tap elsewhere;
+   tap the figure to see it again, and untick **Show this on start** (or
+   switch off **Menu → Town Master greeting**) to stop it. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound
@@ -583,6 +595,8 @@ and open its terminal or Inspector without losing its workspace context.
    Town always opens without a lens; your browser remembers the last one for
    `L` and **Lenses**.
 
+Board has the same lenses: see [Board](#board).
+
 **You are done when:** you can find the coldest room and the desk with a
 failing pull request, and return to Town as usual.
 
@@ -604,6 +618,8 @@ text. It works for any agent you open from Town, Board or Desk.
 2. Check what the agent is doing now. The Now bar shows its status circle
    (hover for the word: blue working, yellow needs you, green done, grey
    idle), the task from its terminal title and how long it has been at it.
+   An agent stopped on its usage limit shows a red dot and, for example,
+   `Usage limit reached · resets 15:00 (Codex)`, as its Town table does.
    The tool call running now sits at the end of the conversation with its
    own timer. **Stop**, or Esc pressed twice, interrupts Claude Code, Codex
    or Pi; Chat never stops an agent by itself.
@@ -903,6 +919,21 @@ on your phone and desktop.
    Cancelling the drag or dropping on empty board sends no move. If moving the
    pane would close its old room, Board asks for confirmation first. Strings
    to that pane follow it.
+   Select a workspace for Town's room actions in its bar: **Rename…** and
+   **Close…** use Town's dialogs (closing asks first, because its terminals
+   end). **Herdr order ‹ Earlier / Later ›** in a workspace's or tab's bar
+   moves the room among its host's rooms, or the tab among its room's tabs,
+   in Herdr's own order, so Town's buildings and desks and Spaces follow.
+   Dragging a card and Tidy still arrange only the Board.
+   Rest the mouse on an agent's tab or pane row for a peek, as in Town: its
+   latest Chat message, the question it is asking with answer buttons, and
+   **Mark reviewed** for a finished agent (which also sends it on from Town's
+   reception). On a phone, select the agent's tab and press **Preview** in its
+   bar; a finished agent's bar also offers **Mark reviewed** directly. An
+   agent counts as finished when Herdr reports it done, or idle after a turn
+   World saw end, as in Town and Needs you. To try these without touching
+   your hosts, open World with `?scene=town-scale`: its synthetic hosts take
+   every one of these actions in the page.
 
 9. Press the labelled **Work** pill, first in Board's bottom-right controls:
    if an Inspector fills the phone screen, close it with **X** or **Back** first.
@@ -940,15 +971,25 @@ on your phone and desktop.
    If Work shows **Set up Jira** or says no source is connected, open
    **Settings → Sources**: sign
    in to GitHub with `gh auth login` as the user that runs World, or add your
-   Jira site, account email and an API token there.
+   Jira site, account email and an API token there. A tab whose agent works on
+   a pull request or ticket also shows its desk badge beside the tab's name,
+   such as `#42 ✓`; tap it as in Town.
+10. Press **Lenses** beside Work (on a phone, in **⋮**), or press `L`: Board
+   shows Town's [lenses](#town-lenses) with the same legend at its top left.
+   Each workspace card reads as its Town room, each tab as its desk and each
+   pane row as its agent: the reading sits on a tag along the card's top edge
+   and colours its outline, and cards with nothing to show step back. Hover,
+   focus or tap a card to read it in the legend; **‹ ›**, `L` and `Shift+L`
+   step, **✕** or Escape leaves. After 30 minutes or more away, Board's top
+   left also shows Town's **Since you left** recap.
 
 After Herdr restarts, Board cannot prove that a workspace or agent is the one a
 string was made with, so it draws those strings dashed and asks once per host:
 **Keep** or **Detach**. A string whose target closed waits in **Needs a home**
 (a separate **Needs a home · n** control), where you can re-attach its note or discard
 the string; notes always stay. At zero or when space is tight, the action remains
-in **⋮ → Needs a home (n)**. On phones, **Tidy** is in **⋮**, and Fit then the zoom
-buttons move there as needed; **Work** keeps its text and the controls stay on one
+in **⋮ → Needs a home (n)**. On phones, **Tidy** is in **⋮**, and **Lenses**, Fit
+then the zoom buttons move there as needed; **Work** keeps its text and the controls stay on one
 row. If Board misbehaves, describe the steps that led
 there in a bug report.
 
