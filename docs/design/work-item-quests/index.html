@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Work-item quests · concept prototype</title>
+<!--
+  Work-item quests (#510): a clickable concept prototype for owner approval.
+  Self-contained: no build step, no network, synthetic data only. Open this
+  file in a browser. The URL hash keeps the state, for example
+  #s=ci&v=board&q=41 (scenario, view, open quest). See proposal.md.
+-->
+<style>
+:root {
+  /* Town's palette (web/src/world/town/townAsks.css, townQuest.css). */
+  --page: #151a22;
+  --panel: rgba(17, 21, 29, 0.96);
+  --solid: #11151d;
+  --edge: #090c11;
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #f1efe6;
+  --muted: #a9b2a4;
+  --accent: #ffd166;
+  --work: #6fc3ff;
+  --wait: #ffb547;
+  --done: #7be08f;
+  --btn: #273141;
+  --btn-on: #3a4459;
+  --pixel: "Pixelify Sans", "Press Start 2P", ui-monospace, monospace;
+  --sans: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page); color: var(--text); font: 14px/1.4 var(--sans); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Controls: scenario and view. */
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--solid); position: sticky; top: 0; z-index: 10; }
+.bar h1 { margin: 0; font: 600 15px/1.2 var(--sans); }
+.bar h1 small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.seg > span { color: var(--muted); font-size: 12px; margin-right: 2px; }
+.seg button { min-height: 32px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--btn); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--btn-on); border-color: var(--accent); }
+.concept { padding: 2px 8px; border: 1px dashed var(--accent); border-radius: 999px; color: var(--accent); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; padding: 14px; align-items: start; }
+@media (max-width: 960px) { main { grid-template-columns: 1fr; } .bar, .quest { position: static; } }
+.stage { min-width: 0; }
+.view[hidden] { display: none; }
+.hint { color: var(--muted); font-size: 12px; margin: 8px 2px 0; }
+
+/* Town (concept): an SVG room drawn in Town's pixel style. */
+.town-frame { position: relative; border-radius: 10px; overflow: hidden; border: 2px solid var(--edge); background: #3f7a35; }
+.town-frame svg { display: block; width: 100%; height: auto; }
+.town-frame .concept { position: absolute; right: 10px; top: 10px; background: rgba(17,21,29,.85); }
+#town text { font-family: var(--pixel); }
+.hit { cursor: pointer; }
+.hit:focus { outline: none; }
+.hit:focus-visible .ring, .hit:hover .ring { stroke: var(--accent); stroke-width: 2; }
+.ring { fill: none; stroke: transparent; }
+.holder-mark { animation: bob 1.2s steps(2) infinite; }
+@keyframes bob { 50% { transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .holder-mark { animation: none; } }
+
+/* Board (concept): a group frame with room and work-item cards. */
+.board { position: relative; min-height: 420px; padding: 34px 18px 18px; border: 1px dashed rgba(111,195,255,.45); border-radius: 14px; background: radial-gradient(circle, rgba(255,255,255,.06) 1px, transparent 1px) 0 0 / 18px 18px, #1b211f; }
+.board-tag { position: absolute; top: -12px; left: 14px; padding: 2px 10px; border: 1px solid rgba(111,195,255,.6); border-radius: 999px; background: #1b211f; color: var(--work); font-size: 12px; }
+.board .concept { position: absolute; right: 12px; top: 8px; }
+.board-cards { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.card { width: 300px; max-width: 100%; border: 1px solid var(--line); border-left: 3px solid var(--q); border-radius: 8px; background: #222a27; text-align: left; padding: 0; cursor: pointer; }
+.card:hover { border-color: var(--q); }
+.card-head { display: flex; gap: 6px; align-items: center; padding: 7px 10px 2px; }
+.card-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-kind { color: var(--muted); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.card-body { padding: 2px 10px 8px; font-size: 12px; }
+.card-now { color: var(--muted); margin: 4px 0; }
+.card-now strong { color: var(--text); font-weight: 500; }
+.card-row { display: flex; gap: 6px; align-items: center; padding: 3px 0; border-top: 1px solid var(--line); }
+.card-row .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--q); flex: none; }
+.room-card { --q: var(--muted); width: 200px; cursor: default; }
+
+/* Chat (concept): one agent's Chat window with its compact quest row. */
+.chat { max-width: 640px; border: 1px solid var(--line); border-radius: 10px; background: var(--solid); overflow: hidden; }
+.chat-head { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.chat-head .who { font-weight: 600; }
+.chat-head .where { color: var(--muted); font-size: 12px; }
+.chat-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.chat-tabs button { min-height: 30px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--btn); cursor: pointer; font-size: 12px; }
+.chat-tabs button[aria-pressed="true"] { border-color: var(--accent); background: var(--btn-on); }
+.chat-body { padding: 4px 12px 12px; }
+.msg { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #1a212c; font-size: 13px; }
+.msg.user { background: #24304a; }
+.msg .meta { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+.step-card { margin: 6px 0 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; font: 12px/1.4 ui-monospace, monospace; color: var(--muted); }
+
+/* Quest log (World's QuestLog / QuestChip look, web/src/components/QuestLog.css). */
+.quest-chip { display: inline-flex; flex: none; align-items: center; gap: 3px; padding: 0 5px; border: 1px solid currentcolor; border-radius: 999px; color: var(--q); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 16px; white-space: nowrap; background: none; }
+button.quest-chip { cursor: pointer; }
+.bar-q { height: 6px; margin: 6px 0 2px; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,.1); }
+.bar-q > span { display: block; height: 100%; background: var(--q); transition: width .3s ease; }
+.qrow { margin: 6px 0 0; padding: 0 8px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--panel); }
+.qrow-line { display: flex; gap: 6px; align-items: center; min-height: 32px; width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.qrow-line .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qrow-line .c { color: var(--muted); font-variant-numeric: tabular-nums; }
+.qrow-up { border-top: 1px dashed var(--line); font-size: 12px; }
+.qrow-up .up { color: var(--q); font-weight: 600; }
+.flag { color: var(--accent); }
+
+/* The quest window: the opened work-item quest. */
+.quest { position: sticky; top: 70px; border: 1px solid var(--line); border-left: 3px solid var(--q); border-radius: 10px; background: var(--panel); padding: 10px 12px 12px; }
+.quest-empty { color: var(--muted); }
+.quest h2 { display: flex; gap: 6px; align-items: baseline; margin: 0; font-size: 15px; }
+.quest h2 .t { flex: 1; }
+.quest h2 .c { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.quest .kind { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.status { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--q); color: #11151d; font-size: 11px; font-weight: 600; }
+.why { margin: 8px 0 0; padding: 6px 8px; border: 1px solid var(--wait); border-radius: 6px; background: rgba(255,181,71,.1); font-size: 13px; }
+.why b { color: var(--wait); }
+.quest h3 { margin: 12px 0 2px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.quest h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.steps { margin: 0; padding: 0; list-style: none; }
+.steps li { display: grid; grid-template-columns: 1.1em 1fr; gap: 0 6px; padding: 3px 0; }
+.steps .m { text-align: center; }
+.steps .src { grid-column: 2; color: var(--muted); font-size: 11px; }
+.steps .is-done { color: var(--muted); }
+.steps .is-done .m { color: var(--done); }
+.steps .is-active { font-weight: 600; }
+.steps .is-active .m { color: var(--work); }
+.steps .is-blocked { font-weight: 600; }
+.steps .is-blocked .m { color: var(--wait); }
+.held { grid-column: 2; justify-self: start; margin-top: 2px; padding: 0 6px; border: 1px solid currentcolor; border-radius: 999px; font-size: 11px; font-weight: 500; color: var(--work); }
+.is-blocked .held { color: var(--wait); }
+.none-note { margin: 4px 0 0; color: var(--muted); font-size: 12px; font-style: italic; }
+.seats { margin: 0; padding: 0; list-style: none; }
+.seats li { padding: 4px 0; border-top: 1px solid var(--line); }
+.seats li.hl { background: rgba(255,209,102,.08); }
+.seat-line { display: flex; gap: 6px; align-items: center; width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.seat-line .who { flex: 1; }
+.seat-line .who small { color: var(--muted); }
+.sub { margin: 4px 0 0 18px; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+.sub .up { color: var(--q); }
+.reads { margin: 12px 0 0; color: var(--muted); font-size: 11px; }
+.q-active { --q: var(--work); }
+.q-blocked { --q: var(--wait); }
+.q-done { --q: var(--done); }
+.q-pending { --q: var(--muted); }
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>Work-item quests <small>Concept prototype for #510 · synthetic data · no product code</small></h1>
+  <div class="seg" role="group" aria-label="Scenario for item #41" id="scenarios"><span>Item #41:</span></div>
+  <div class="seg" role="group" aria-label="View" id="views"><span>View:</span></div>
+</header>
+<main>
+  <div class="stage">
+    <section class="view" id="view-town" aria-label="Town">
+      <div class="town-frame">
+        <svg id="town" viewBox="0 0 640 330" shape-rendering="crispEdges" role="group" aria-label="Lantern room with two work-item tables"></svg>
+        <span class="concept">Concept only · not Town art</span>
+      </div>
+      <p class="hint">Each table is a work item. Click its pennant to open the item's quest. The small pennants are the agents' own quests (#282); they link up to the table's quest. ▾ marks the seat holding the current step. Item #43 has no acceptance section.</p>
+    </section>
+    <section class="view" id="view-board" aria-label="Board" hidden>
+      <div class="board">
+        <span class="board-tag">● atlas</span>
+        <span class="concept">Concept only</span>
+        <div class="board-cards" id="board"></div>
+      </div>
+      <p class="hint">Work-item cards carry the same quest chip and progress as Town. A seat's own quest chip (↑) opens the item quest it belongs to.</p>
+    </section>
+    <section class="view" id="view-chat" aria-label="Chat" hidden>
+      <div class="chat" id="chat"></div>
+      <p class="hint">An agent's quest row names the work item it belongs to. Click the ↑ line to open the item's quest.</p>
+    </section>
+  </div>
+  <aside class="quest" id="quest" aria-live="polite"></aside>
+</main>
+<script>
+"use strict";
+// ---- Synthetic records. Every name, number and time here is invented. ----
+
+const SEATS = {
+  worker: { role: "worker", harness: "claude" },
+  reviewer: { role: "reviewer", harness: "codex" },
+  fixer: { role: "fixer", harness: "codex" },
+  checker: { role: "checker", harness: "claude" },
+  you: { role: "you", harness: "" },
+};
+const seatName = (k) => (k === "you" ? "you" : `${SEATS[k].role} · ${SEATS[k].harness}`);
+
+// Delivery steps follow the crew lifecycle; each names the record it is read from.
+const DELIVERY = [
+  { id: "ready", text: "Ready", src: "label crew:ready" },
+  { id: "claimed", text: "Claimed", src: "label crew:working · worker run" },
+  { id: "pr", text: "PR opened", src: "PR that says Closes #N" },
+  { id: "review", text: "Review", src: "PR reviews · crew:review, crew:fixing" },
+  { id: "ci", text: "CI", src: "PR checks · Delivery checks · crew:ci" },
+  { id: "try", text: "Ready to try", src: "label crew:try" },
+  { id: "merged", text: "Merged", src: "PR merged · issue closed" },
+];
+
+// Step states per scenario: [status, note, holder]. Unlisted steps are pending.
+const D = (s, note = "", holder = null) => [s, note, holder];
+
+const ITEMS = {
+  41: {
+    n: 41,
+    title: "Desk lamps dim when idle",
+    short: "LAMPS DIM WHEN IDLE",
+    pr: 42,
+    acceptance: [
+      { id: "a1", text: "An idle desk's lamp dims after five idle minutes" },
+      { id: "a2", text: "The lamp brightens as soon as its agent works again" },
+    ],
+    scenarios: {
+      active: {
+        label: "Active",
+        steps: {
+          ready: D("done", "09:12"), claimed: D("done", "09:14 · worker · claude"),
+          pr: D("done", "10:02"),
+          a1: D("done", "confirmed in review round 1"),
+          a2: D("pending", "not met in round 1: 2 findings"),
+          review: D("active", "Round 1: 2 blocking findings · fixing", "fixer"),
+        },
+        seats: {
+          worker: q("Build lamp dimming", "Checklist from TodoWrite", ["Read the mandate", "Add the idle timer", "Dim the lamp sprite", "Test the timer", "Open the PR"], 5),
+          reviewer: q("Review PR #42 against the mandate", "Plan from update_plan", ["Read the mandate", "Read the diff", "Run the focused tests", "Post the review"], 4),
+          fixer: q("Fix 2 review findings", "Plan from update_plan", ["Reset the timer on input", "Keep the lamp lit while asking"], 1),
+        },
+      },
+      owner: {
+        label: "Blocked: your answer",
+        why: "Open question for you: “Should lamps dim on the phone layout too?”",
+        steps: {
+          ready: D("done", "09:12"), claimed: D("done", "09:14 · worker · claude"),
+          pr: D("blocked", "crew:blocked · the worker asked one question on the issue", "you"),
+        },
+        seats: {
+          worker: q("Build lamp dimming", "Checklist from TodoWrite", ["Read the mandate", "Add the idle timer", "Dim the lamp sprite", "Test the timer", "Open the PR"], 1, true),
+        },
+      },
+      ci: {
+        label: "Blocked on CI",
+        why: "CI failed: Delivery checks › unit (web), 1 failing test. A fixer starts next (CI fix 1 of 2).",
+        steps: {
+          ready: D("done", "09:12"), claimed: D("done", "09:14 · worker · claude"),
+          pr: D("done", "10:02"),
+          a1: D("done", "confirmed in review round 1"), a2: D("done", "confirmed by the checker"),
+          review: D("done", "Round 1: 2 findings → fixed → checked"),
+          ci: D("blocked", "Delivery checks failed · unit (web)", "fixer"),
+        },
+        seats: {
+          worker: q("Build lamp dimming", "Checklist from TodoWrite", ["Read the mandate", "Add the idle timer", "Dim the lamp sprite", "Test the timer", "Open the PR"], 5),
+          reviewer: q("Review PR #42 against the mandate", "Plan from update_plan", ["Read the mandate", "Read the diff", "Run the focused tests", "Post the review"], 4),
+          fixer: q("Fix 2 review findings", "Plan from update_plan", ["Reset the timer on input", "Keep the lamp lit while asking"], 2),
+          checker: q("Check the fix commits", "Checklist from TodoWrite", ["Read commits since review", "Run the focused tests"], 2),
+        },
+      },
+      finding: {
+        label: "Blocked: finding",
+        why: "Blocking finding after the fix: the checker found the lamp state overwrites a saved desk layout (possible data loss). It comes to you.",
+        steps: {
+          ready: D("done", "09:12"), claimed: D("done", "09:14 · worker · claude"),
+          pr: D("done", "10:02"),
+          a1: D("done", "confirmed in review round 1"),
+          a2: D("pending", "not confirmed: checker blocked"),
+          review: D("blocked", "Round 1: 2 findings → fixed → checker blocks 1", "you"),
+        },
+        seats: {
+          worker: q("Build lamp dimming", "Checklist from TodoWrite", ["Read the mandate", "Add the idle timer", "Dim the lamp sprite", "Test the timer", "Open the PR"], 5),
+          reviewer: q("Review PR #42 against the mandate", "Plan from update_plan", ["Read the mandate", "Read the diff", "Run the focused tests", "Post the review"], 4),
+          fixer: q("Fix 2 review findings", "Plan from update_plan", ["Reset the timer on input", "Keep the lamp lit while asking"], 2),
+          checker: q("Check the fix commits", "Checklist from TodoWrite", ["Read commits since review", "Run the focused tests"], 2, true),
+        },
+      },
+      try: {
+        label: "Ready to try",
+        steps: {
+          ready: D("done", "09:12"), claimed: D("done", "09:14 · worker · claude"),
+          pr: D("done", "10:02"),
+          a1: D("done", "confirmed in review round 1"), a2: D("done", "confirmed by the checker"),
+          review: D("done", "Round 1: 2 findings → fixed → checked"),
+          ci: D("done", "Delivery checks passed"),
+          try: D("done", "the preview is up"),
+          merged: D("active", "try the preview, then merge or comment", "you"),
+        },
+        seats: "allDone",
+      },
+      done: {
+        label: "Done",
+        steps: {
+          ready: D("done", "09:12"), claimed: D("done", "09:14 · worker · claude"),
+          pr: D("done", "10:02"),
+          a1: D("done", "confirmed in review round 1"), a2: D("done", "confirmed by the checker"),
+          review: D("done", "Round 1: 2 findings → fixed → checked"),
+          ci: D("done", "Delivery checks passed"),
+          try: D("done", "the preview was up"),
+          merged: D("done", "merged by you · issue closed"),
+        },
+        seats: "allDone",
+      },
+    },
+  },
+  43: {
+    n: 43,
+    title: "Bus stop sign wording",
+    short: "BUS STOP SIGN",
+    pr: 44,
+    acceptance: null,
+    fixed: {
+      steps: {
+        ready: D("done", "11:30"), claimed: D("done", "11:31 · worker · claude"),
+        pr: D("done", "11:58"),
+        review: D("active", "Round 1 in progress", "reviewer"),
+      },
+      seats: {
+        worker: q("Reword the bus stop sign", "Plan from update_plan", ["Find the sign text", "Reword it", "Open the PR"], 3),
+        reviewer: q("Review PR #44 against the mandate", "Checklist from TodoWrite", ["Read the mandate", "Read the diff", "Post the review"], 1),
+      },
+    },
+  },
+};
+
+/** An agent's own quest (#282 shape): title, source, steps and how many are done. */
+function q(title, from, steps, done, blocked = false) {
+  return { title, from, steps, done, blocked };
+}
+
+// ---- The read model: one quest per work item, from its records (no LLM). ----
+
+function questOf(n, scenario) {
+  const item = ITEMS[n];
+  const sc = n === 41 ? item.scenarios[scenario] : item.fixed;
+  let seats = sc.seats;
+  if (seats === "allDone") seats = { ...item.scenarios.ci.seats };
+  const defs = [...(item.acceptance || []).map((a) => ({ ...a, src: "issue ## Acceptance checkbox", group: "acceptance" })),
+    ...DELIVERY.map((d) => ({ ...d, group: "delivery" }))];
+  const steps = defs.map((d) => {
+    const [status, note, holder] = sc.steps[d.id] || ["pending", "", null];
+    const text = d.id === "pr" && status === "done" ? `PR #${item.pr} opened` : d.text;
+    return { ...d, text, status, note, holder };
+  });
+  const done = steps.filter((s) => s.status === "done").length;
+  const status = done === steps.length ? "done" : steps.some((s) => s.status === "blocked") ? "blocked" : "active";
+  const current = steps.find((s) => s.holder) || null;
+  return { n, title: item.title, short: item.short, steps, done, total: steps.length, status, why: sc.why || null, current, seats, noAcceptance: !item.acceptance };
+}
+
+// ---- State, kept in the URL hash so a view can be linked. ----
+
+const state = { s: "active", v: "town", q: null, seat: null, chat: "fixer" };
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (ITEMS[41].scenarios[p.get("s")]) state.s = p.get("s");
+  if (["town", "board", "chat"].includes(p.get("v"))) state.v = p.get("v");
+  if (ITEMS[p.get("q")]) state.q = Number(p.get("q"));
+}
+function writeHash() {
+  const p = new URLSearchParams({ s: state.s, v: state.v });
+  if (state.q) p.set("q", state.q);
+  history.replaceState(null, "", `#${p}`);
+}
+function open(n, seat = null) {
+  state.q = n;
+  state.seat = seat;
+  render();
+  const panel = document.getElementById("quest");
+  panel.focus({ preventScroll: true });
+  // On a narrow screen the quest sits below the view: bring it into sight.
+  if (matchMedia("(max-width: 960px)").matches) panel.scrollIntoView({ block: "start" });
+}
+
+// ---- Rendering helpers ----
+
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const MARK = { done: "✓", active: "▸", blocked: "!", pending: "·" };
+const WORD = { active: "In progress", blocked: "Blocked", done: "Complete" };
+const COLOR = { active: "#6fc3ff", blocked: "#ffb547", done: "#7be08f", pending: "#a9b2a4" };
+const seatStatus = (sq) => (sq.blocked ? "blocked" : sq.done >= sq.steps.length ? "done" : "active");
+const pct = (d, t) => `${Math.round((d / t) * 100)}%`;
+function onActivate(el, fn) {
+  el.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } });
+}
+
+// ---- Controls ----
+
+function renderControls() {
+  const sEl = document.getElementById("scenarios");
+  const vEl = document.getElementById("views");
+  sEl.querySelectorAll("button").forEach((b) => b.remove());
+  vEl.querySelectorAll("button").forEach((b) => b.remove());
+  for (const [key, sc] of Object.entries(ITEMS[41].scenarios)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = sc.label;
+    b.setAttribute("aria-pressed", String(state.s === key));
+    b.onclick = () => { state.s = key; render(); };
+    sEl.append(b);
+  }
+  for (const v of ["town", "board", "chat"]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = v[0].toUpperCase() + v.slice(1);
+    b.setAttribute("aria-pressed", String(state.v === v));
+    b.onclick = () => { state.v = v; render(); };
+    vEl.append(b);
+  }
+  for (const v of ["town", "board", "chat"]) document.getElementById(`view-${v}`).hidden = state.v !== v;
+}
+
+// ---- Town (concept): a room with two work-item tables, drawn in SVG. ----
+
+function px(x, y, w, h, fill, extra = "") { return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" ${extra}/>`; }
+
+function person(x, y, hair, shirt, skin = "#e8b48a") {
+  return px(x + 2, y, 8, 3, hair) + px(x + 2, y + 3, 8, 6, skin) + px(x + 2, y + 3, 2, 3, hair) +
+    px(x + 4, y + 5, 1, 1, "#1b1b1b") + px(x + 7, y + 5, 1, 1, "#1b1b1b") +
+    px(x, y + 9, 12, 8, shirt) + px(x + 3, y + 17, 2, 3, "#2d3142") + px(x + 7, y + 17, 2, 3, "#2d3142");
+}
+
+function laptop(x, y) { return px(x, y, 14, 9, "#2b3445") + px(x + 2, y + 2, 10, 5, "#5cc8ff") + px(x - 2, y + 9, 18, 2, "#9aa3b5"); }
+
+const SEAT_LOOK = {
+  worker: ["#3b2a1f", "#5aa86b"], reviewer: ["#1d1d2b", "#c95b8c"],
+  fixer: ["#b5651d", "#d9a520"], checker: ["#6b4b2a", "#7e6fd8"],
+};
+
+function agentPennant(x, y, n, seat, sq) {
+  const st = seatStatus(sq);
+  const c = COLOR[st];
+  const label = `Quest: ${sq.title}, ${sq.done}/${sq.steps.length}, ${seatName(seat)}. Part of #${n}`;
+  return `<g class="hit" tabindex="0" role="button" aria-label="${esc(label)}" data-open="${n}" data-seat="${seat}">
+    <title>${esc(label)}</title>
+    <rect class="ring" x="${x - 3}" y="${y - 3}" width="34" height="27" rx="3"/>
+    ${px(x, y, 2, 21, "#e8dcc0")}
+    <polygon points="${x + 2},${y + 1} ${x + 15},${y + 1} ${x + 11},${y + 6} ${x + 15},${y + 11} ${x + 2},${y + 11}" fill="${c}" stroke="#090c11" stroke-width="1"/>
+    ${px(x + 4, y + 14, 22, 7, "#11161d", `stroke="${c}" stroke-width="1"`)}
+    ${px(x + 5, y + 15, Math.round((20 * Math.min(sq.done, sq.steps.length)) / sq.steps.length), 5, c)}
+  </g>`;
+}
+
+function itemTable(ox, oy, quest, seatsAt) {
+  const c = COLOR[quest.status];
+  let s = "";
+  let marks = "";
+  // Agents behind the table (top row) and in front of it (bottom row).
+  for (const [seat, [dx, row]] of Object.entries(seatsAt)) {
+    const sq = quest.seats[seat];
+    const look = SEAT_LOOK[seat];
+    const x = ox + dx;
+    const y = row === "top" ? oy - 4 : oy + 64;
+    if (!sq) {
+      // An empty chair: the seat has not run yet.
+      s += px(x + 1, y + 10, 10, 10, "#5b4636") + px(x + 1, y + 8, 10, 3, "#6d5442");
+      continue;
+    }
+    s += px(x - 3, y + 10, 18, 12, "#5b4636");
+    s += person(x, y, look[0], look[1]);
+    if (quest.current && quest.current.holder === seat)
+      marks += `<g class="holder-mark"><polygon points="${x + 1},${y - 12} ${x + 11},${y - 12} ${x + 6},${y - 6}" fill="${c}" stroke="#090c11"/></g>`;
+    s += `<text x="${x + 6}" y="${row === "top" ? y - 15 : y + 32}" text-anchor="middle" font-size="7" fill="#f1efe6" stroke="#090c11" stroke-width="2" paint-order="stroke">${SEATS[seat].role}</text>`;
+    s += agentPennant(x + 16, row === "top" ? y - 6 : y + 2, quest.n, seat, sq);
+  }
+  // The table: a wooden top, a front apron and legs, laptops for seats that ran.
+  s += px(ox - 10, oy + 16, 190, 44, "#090c11", 'opacity=".25"');
+  s += px(ox - 12, oy + 12, 190, 30, "#8a5a33") + px(ox - 12, oy + 12, 190, 3, "#a8743f");
+  s += px(ox - 12, oy + 42, 190, 12, "#5e3b20");
+  s += px(ox - 8, oy + 54, 6, 8, "#4a2e18") + px(ox + 168, oy + 54, 6, 8, "#4a2e18");
+  for (const [seat, [dx, row]] of Object.entries(seatsAt)) {
+    if (quest.seats[seat]) s += laptop(ox + dx - 1, row === "top" ? oy + 15 : oy + 29);
+  }
+  // The work item's pennant: a tall flag on the table, its progress and plaque.
+  const fx = ox + 140, fy = oy - 46;
+  const label = `Work-item quest #${quest.n}: ${quest.title}, ${quest.done} of ${quest.total} steps, ${WORD[quest.status]}`;
+  s += `<g class="hit" tabindex="0" role="button" aria-label="${esc(label)}" data-open="${quest.n}">
+    <title>${esc(label)}</title>
+    <rect class="ring" x="${fx - 6}" y="${fy - 4}" width="58" height="70" rx="4"/>
+    ${px(fx, fy, 3, 60, "#e8dcc0")}${px(fx - 3, fy + 57, 9, 3, "#3a2a1c")}
+    <polygon points="${fx + 3},${fy + 1} ${fx + 40},${fy + 1} ${fx + 30},${fy + 11} ${fx + 40},${fy + 21} ${fx + 3},${fy + 21}" fill="${c}" stroke="#090c11" stroke-width="1.5"/>
+    <text x="${fx + 8}" y="${fy + 15}" font-size="9" font-weight="700" fill="#11151d">#${quest.n}</text>
+    ${px(fx + 6, fy + 26, 40, 9, "#11161d", `stroke="${c}" stroke-width="1.5"`)}
+    ${px(fx + 7.5, fy + 27.5, (37 * quest.done) / quest.total, 6, c)}
+    <text x="${fx + 26}" y="${fy + 45}" text-anchor="middle" font-size="8" fill="#f1efe6" stroke="#090c11" stroke-width="2.5" paint-order="stroke">${quest.done}/${quest.total}</text>
+  </g>`;
+  // The seat holding the current step, drawn over the table.
+  s += marks;
+  // A plaque on the table's apron names the item.
+  s += px(ox + 4, oy + 43, 126, 10, "#2a1d12", 'stroke="#d9a520" stroke-width="1"');
+  s += `<text x="${ox + 8}" y="${oy + 51}" font-size="7" fill="#ffd166">#${quest.n} ${esc(quest.short)}</text>`;
+  return s;
+}
+
+function renderTown() {
+  const q41 = questOf(41, state.s);
+  const q43 = questOf(43, state.s);
+  const svg = document.getElementById("town");
+  let s = `<defs>
+    <pattern id="brick" width="24" height="12" patternUnits="userSpaceOnUse">
+      ${px(0, 0, 24, 12, "#7a5a44")}${px(0, 5, 24, 1, "#6a4c38")}${px(0, 11, 24, 1, "#6a4c38")}${px(11, 0, 1, 5, "#6a4c38")}${px(23, 6, 1, 5, "#6a4c38")}
+    </pattern>
+    <pattern id="tile" width="16" height="16" patternUnits="userSpaceOnUse">
+      ${px(0, 0, 16, 16, "#e9e6dc")}${px(0, 0, 8, 8, "#d8d4c8")}${px(8, 8, 8, 8, "#d8d4c8")}
+    </pattern>
+  </defs>`;
+  // Grass, building wall, windows, floor and the room's rug.
+  s += px(0, 0, 640, 330, "#4f8a3c");
+  for (let i = 0; i < 18; i++) s += px(12 + i * 36, 6 + (i % 3) * 3, 10, 10, "#2f6b34") + px(16 + i * 36, 16 + (i % 3) * 3, 2, 4, "#5b3b22");
+  s += px(14, 30, 612, 292, "#090c11") + px(18, 34, 604, 284, "url(#brick)");
+  s += px(18, 34, 604, 26, "url(#tile)");
+  for (let i = 0; i < 9; i++) s += px(40 + i * 66, 38, 22, 12, "#9ec9e8", 'stroke="#2b3445"');
+  s += px(36, 74, 568, 228, "#3f7f5a") + px(36, 74, 568, 228, "none", 'stroke="#2d5e41" stroke-width="4"');
+  // Room plaque, as on Town's rooms.
+  s += px(52, 64, 150, 20, "#3a2a1c", 'stroke="#d9a520" stroke-width="2" rx="3"');
+  s += `<circle cx="64" cy="74" r="5" fill="#7be08f" stroke="#090c11"/><text x="74" y="78" font-size="10" font-weight="700" fill="#f1efe6" letter-spacing="1">LANTERN · 2 ITEMS</text>`;
+  s += itemTable(110, 140, q41, { worker: [10, "top"], reviewer: [60, "top"], fixer: [10, "bottom"], checker: [60, "bottom"] });
+  s += itemTable(380, 140, q43, { worker: [10, "top"], reviewer: [60, "top"] });
+  // Plants at the corners.
+  for (const [x, y] of [[44, 280], [586, 280], [586, 90]]) s += px(x, y + 8, 10, 8, "#b5651d") + px(x - 2, y, 14, 9, "#2f8a3c");
+  svg.innerHTML = s;
+  svg.querySelectorAll("[data-open]").forEach((g) => onActivate(g, () => open(Number(g.dataset.open), g.dataset.seat || null)));
+}
+
+// ---- Board (concept) ----
+
+function chip(sq, label) {
+  const st = sq.status || seatStatus(sq);
+  const d = sq.done, t = sq.total ?? sq.steps.length;
+  return `<span class="quest-chip q-${st}" aria-label="${esc(label || `Quest ${d}/${t}`)}"><span aria-hidden="true">⚑</span>${d}/${t}</span>`;
+}
+
+function renderBoard() {
+  const el = document.getElementById("board");
+  let h = `<div class="card room-card" aria-label="Room lantern"><div class="card-head"><span class="dot" style="--q:#7be08f"></span><b>lantern</b><span class="card-kind">room</span></div><div class="card-body"><div class="card-now">2 work items · 6 seats</div></div></div>`;
+  for (const n of [41, 43]) {
+    const qq = questOf(n, state.s);
+    const cur = qq.current;
+    h += `<div role="button" tabindex="0" class="card q-${qq.status}" data-open="${n}" aria-label="Work item #${n}, quest ${qq.done} of ${qq.total}, ${WORD[qq.status]}">
+      <div class="card-head"><span class="dot"></span><b>#${n} ${esc(qq.title)}</b>${chip(qq)}</div>
+      <div class="card-body">
+        <span class="card-kind">work item · quest</span>
+        <div class="bar-q"><span style="width:${pct(qq.done, qq.total)}"></span></div>
+        <div class="card-now">${qq.status === "done" ? "<strong>Merged</strong>" : cur ? `now: <strong>${esc(cur.text)}</strong> · ${esc(seatName(cur.holder))}` : ""}${qq.noAcceptance ? " · delivery steps only" : ""}</div>
+        ${Object.entries(qq.seats).map(([seat, sq]) => `<div class="card-row" data-seat="${seat}"><span class="dot q-${seatStatus(sq)}"></span><span class="who">${esc(seatName(seat))} · ${esc(sq.title)}</span>${chip(sq, `${seatName(seat)} quest ${sq.done}/${sq.steps.length}, part of #${n}`)}<span aria-hidden="true" style="color:var(--muted)">↑</span></div>`).join("")}
+      </div>
+    </div>`;
+  }
+  el.innerHTML = h;
+  el.querySelectorAll(".card[data-open]").forEach((c) => {
+    c.addEventListener("click", (e) => {
+      const row = e.target.closest("[data-seat]");
+      open(Number(c.dataset.open), row ? row.dataset.seat : null);
+    });
+    c.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(Number(c.dataset.open)); }
+    });
+  });
+}
+
+// ---- Chat (concept) ----
+
+const CHAT_LINES = {
+  worker: [["user", "Mandate #41: Desk lamps dim when idle. Build it, open a PR, write the result file."], ["agent", "Reading the mandate and Town's desk drawing.", "Read web/…/townDesks.ts"], ["agent", "PR #42 is open.", "Bash gh pr create …"]],
+  reviewer: [["user", "Review PR #42 against mandate #41. Block only on correctness, security, data loss or scope."], ["agent", "Criterion 1 is met. Criterion 2 is not: two blocking findings.", "Review posted on PR #42"]],
+  fixer: [["user", "Fix the blocking findings on PR #42 (round 1)."], ["agent", "Resetting the idle timer on input first.", "Edit web/…/townLamps.ts"]],
+  checker: [["user", "Check the commits since the last review on PR #42."], ["agent", "Running the focused tests on the fix.", "Bash bun run test …"]],
+};
+
+function renderChat() {
+  const el = document.getElementById("chat");
+  const qq = questOf(41, state.s);
+  const seats = Object.keys(qq.seats);
+  if (!seats.includes(state.chat)) state.chat = seats[seats.length - 1];
+  const seat = state.chat;
+  const sq = qq.seats[seat];
+  const st = seatStatus(sq);
+  el.innerHTML = `
+    <div class="chat-head"><span class="flag" aria-hidden="true">●</span><span class="who">${esc(seatName(seat))}</span><span class="where">crew-41 · lantern</span><span class="concept" style="margin-left:auto">Concept only</span></div>
+    <div class="chat-tabs" role="group" aria-label="Seat">${seats.map((k) => `<button type="button" data-seat="${k}" aria-pressed="${k === seat}">${esc(seatName(k))}</button>`).join("")}</div>
+    <div class="chat-body">
+      <section class="qrow q-${st}" aria-label="Quest">
+        <button type="button" class="qrow-line" id="seat-quest" aria-expanded="false"><span class="flag" aria-hidden="true">⚑</span><span class="t">${esc(sq.title)}</span><span class="c">· ${sq.done}/${sq.steps.length}</span></button>
+        <ol class="sub" id="seat-steps" hidden>${sq.steps.map((t, i) => `<li>${i < sq.done ? "✓" : i === sq.done ? (sq.blocked ? "!" : "▸") : "·"} ${esc(t)}</li>`).join("")}<li style="font-size:11px">${esc(sq.from)}</li></ol>
+        <button type="button" class="qrow-line qrow-up q-${qq.status}" id="up"><span class="up" aria-hidden="true">↑</span><span class="t">Part of <b>#41 ${esc(qq.title)}</b></span><span class="quest-chip q-${qq.status}">⚑ ${qq.done}/${qq.total}</span></button>
+      </section>
+      ${CHAT_LINES[seat].map(([who, text, card]) => `<div class="msg ${who}"><div class="meta">${who === "user" ? "dispatcher" : esc(seatName(seat))}</div>${esc(text)}${card ? `<div class="step-card">${esc(card)}</div>` : ""}</div>`).join("")}
+    </div>`;
+  el.querySelectorAll(".chat-tabs button").forEach((b) => (b.onclick = () => { state.chat = b.dataset.seat; render(); }));
+  const head = el.querySelector("#seat-quest");
+  head.onclick = () => {
+    const list = el.querySelector("#seat-steps");
+    list.hidden = !list.hidden;
+    head.setAttribute("aria-expanded", String(!list.hidden));
+  };
+  el.querySelector("#up").onclick = () => open(41, seat);
+}
+
+// ---- The quest window ----
+
+function stepItem(s) {
+  return `<li class="is-${s.status}"><span class="m" aria-hidden="true">${MARK[s.status]}</span><span>${esc(s.text)}${s.note ? ` <span style="font-weight:400;color:var(--muted)">— ${esc(s.note)}</span>` : ""}</span>
+    <span class="src">from ${esc(s.src)}</span>
+    ${s.holder ? `<span class="held">${s.holder === "you" ? "waiting on you" : `held by ${esc(seatName(s.holder))}`}</span>` : ""}</li>`;
+}
+
+function renderQuest() {
+  const el = document.getElementById("quest");
+  el.tabIndex = -1;
+  if (!state.q) {
+    el.className = "quest q-pending";
+    el.innerHTML = `<p class="quest-empty">Click a table's pennant in Town, a work-item card on Board or the ↑ line in Chat to open its quest.</p>`;
+    return;
+  }
+  const qq = questOf(state.q, state.s);
+  el.className = `quest q-${qq.status}`;
+  const acc = qq.steps.filter((s) => s.group === "acceptance");
+  const del = qq.steps.filter((s) => s.group === "delivery");
+  el.innerHTML = `
+    <div class="kind">Work-item quest · <span class="status">${WORD[qq.status]}</span></div>
+    <h2><span class="flag" style="color:var(--q)" aria-hidden="true">⚑</span><span class="t">#${qq.n} ${esc(qq.title)}</span><span class="c">${qq.done}/${qq.total}</span></h2>
+    <div class="bar-q" role="progressbar" aria-valuemin="0" aria-valuemax="${qq.total}" aria-valuenow="${qq.done}" aria-label="${qq.done} of ${qq.total} steps done"><span style="width:${pct(qq.done, qq.total)}"></span></div>
+    ${qq.why ? `<p class="why"><b>Blocked.</b> ${esc(qq.why)}</p>` : ""}
+    <h3>Acceptance <small>· from the issue</small></h3>
+    ${acc.length ? `<ol class="steps">${acc.map(stepItem).join("")}</ol>` : `<p class="none-note">The issue has no ## Acceptance section, so the quest shows delivery steps only.</p>`}
+    <h3>Delivery <small>· from labels, PR, reviews and checks</small></h3>
+    <ol class="steps">${del.map(stepItem).join("")}</ol>
+    <h3>On it <small>· each agent's own quest, linked up to this one</small></h3>
+    <ul class="seats">${Object.entries(qq.seats).map(([seat, sq]) => {
+      const st = seatStatus(sq);
+      const openSeat = state.seat === seat;
+      return `<li class="${openSeat ? "hl" : ""}"><button type="button" class="seat-line" data-seat="${seat}" aria-expanded="${openSeat}">
+        <span class="quest-chip q-${st}"><span aria-hidden="true">⚑</span>${sq.done}/${sq.steps.length}</span>
+        <span class="who">${esc(seatName(seat))} <small>· ${esc(sq.title)}</small></span></button>
+        ${openSeat ? `<ol class="sub">${sq.steps.map((t, i) => `<li>${i < sq.done ? "✓" : i === sq.done ? (sq.blocked ? "!" : "▸") : "·"} ${esc(t)}</li>`).join("")}<li style="font-size:11px">${esc(sq.from)} · <span class="up">↑ part of #${qq.n}</span></li></ol>` : ""}</li>`;
+    }).join("")}</ul>
+    <p class="reads">Read from GitHub and the crew's records only: the issue body, crew labels, the PR, its reviews and its checks. No LLM. Synthetic data.</p>`;
+  el.querySelectorAll(".seat-line").forEach((b) => (b.onclick = () => { state.seat = state.seat === b.dataset.seat ? null : b.dataset.seat; render(); }));
+}
+
+function render() {
+  renderControls();
+  renderTown();
+  renderBoard();
+  renderChat();
+  renderQuest();
+  writeHash();
+}
+
+readHash();
+render();
+</script>
+</body>
+</html>

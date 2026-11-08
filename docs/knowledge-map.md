@@ -12,6 +12,10 @@ rules across every surface (shell, Town, Board, Desk, Spaces, windows, trays,
 dialogs and phone), see the [World style guide](design/style-guide.md);
 it separates shipping facts, seven owner-approved design directions and remaining
 detailed proposals. Token and component adoption follows in separate PRs.
+Work-item quests (#510), one quest per issue assembled from its acceptance
+criteria and crew delivery records, are a design prototype awaiting owner
+approval: read the [proposal](design/work-item-quests/proposal.md) and open
+its [clickable mock](design/work-item-quests/index.html). Nothing in it is built.
 [Current OpenSpec specs](../openspec/specs/) describe maintained product
 behavior; source and tests show its implementation. [Active changes](../openspec/changes/)
 hold deltas and decisions at different delivery stages. Check their task state with
