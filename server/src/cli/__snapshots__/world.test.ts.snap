@@ -5,12 +5,36 @@ exports[`--skill prints the agent guide 1`] = `
 
 Herdr World shows your Herdr panes as Town desks and Board cards. These
 commands let you arrange them, ask the owner questions and report results.
+Install this guide for your harness with the operator's explicit command,
+herdr-world integration install <harness>. It does not start World or Herdr.
 Run them inside your Herdr pane: World reads HERDR_PANE_ID and checks that
 you really run in that pane. Without a pane, or in a pane World cannot
 check, your changes are marked unverified. Board changes have history and
 conditional undo. Groups keep the latest 128 changes with the sender claim
 and its reported/inferred basis (unknown when absent), including deletion;
 this recent attribution is not a complete audit and has no CLI undo.
+
+## Start here: communicate your work
+
+- Ask when you need a decision: herdr-world ask "Which option?" --owner-only
+  --options a,b --wait. The owner answers at reception in World. Keep the
+  returned ask ID; herdr-world ask get ID retrieves a saved answer later.
+- Report a finished or blocked task: herdr-world result --task TASK-42
+  "What changed and what was verified" --status done --pr 12. Use blocked
+  or failed honestly. Results are durable reports; result ls lists them.
+- Say what you are doing now: herdr-world task-summary "Checking the login fix".
+  This sets an expiring label for your exact current Herdr agent session,
+  shown on your desk/card. Keep it under 80 characters and omit secrets.
+  The default lifetime is 15 minutes; --ttl-ms changes it (up to 24 hours).
+  Report again when the task changes; it expires automatically, with no
+  --clear command. It needs HERDR_PANE_ID or --pane ID and talks to Herdr.
+- After starting a child pane, run herdr-world stamp CHILD_PANE PARENT_PANE,
+  or have the child run herdr-world spawned-by PARENT_PANE. This records
+  display-only parentage so World groups the team; it grants no authority.
+  Stamp and task-summary accept --session NAME for a separate Herdr session.
+
+ask and result use the running local World service. task-summary and stamp
+write pane metadata through Herdr; they do not require the World service.
 
 ## Examples
 
@@ -31,6 +55,8 @@ this recent attribution is not a complete audit and has no CLI undo.
     herdr-world ask withdraw q-example
     herdr-world ask withdraw --key task:7:stuck
     herdr-world result --task FM-42 "Fixed the login race" --pr 12 --status done
+    herdr-world task-summary "Verifying the login fix"
+    herdr-world stamp w1:p4 w1:p3
     herdr-world history --actor w1:p2
     herdr-world undo c-lq3x9-4
     herdr-world pod create Chat
@@ -96,6 +122,8 @@ Targets are on your own host; add --connection ID for another one.
          uncertain pane sends must never auto-replay.
   result --task ID "SUMMARY" [--pr N] [--status done|blocked|failed]
   result ls [--task ID]
+  task-summary "TEXT" [--pane ID] [--ttl-ms MS] [--session NAME]
+         short, expiring current-task label for the exact Herdr agent session
   spawned-by PARENT_PANE   stamp your pane as spawned by PARENT_PANE
          (display-only Herdr pane metadata, so no --herdr)
   stamp CHILD_PANE PARENT_PANE

@@ -1142,6 +1142,16 @@ belongs to Herdr and uses Town's move gestures or guarded CLI moves.
 
 ### Agent CLI (`herdr-world --skill`)
 
+Install the release's guide with `herdr-world integration install claude`
+(or `codex`, `pi`, or another [Herdr harness](./docs/harness-integrations.md)).
+Start a new harness session to discover the `herdr-world` skill.
+Installation is explicit, local to the host, and needs no running World service.
+`integration status [harness]` lists the state, version and path;
+`integration uninstall <harness>` removes it. Codex, Pi and Kimi share
+`~/.agents/skills/herdr-world/SKILL.md`; removing one also removes it for
+the other two, which the command names. OMP, Letta and MastraCode report
+unsupported. See [paths and overrides](./docs/harness-integrations.md).
+
 Agents change World objects themselves from their pane, through the running
 World service. `herdr-world --skill` prints the guide; commands answer in JSON
 when piped, with stable exit codes:
@@ -1185,6 +1195,9 @@ when piped, with stable exit codes:
   reports permanent withdrawal refusals once for the owner to answer.
 - `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
   `result ls`: task results kept by World, instead of terminal scraping.
+- `task-summary "…" [--ttl-ms MS]`: a short label for the current Herdr agent
+  session, expiring after 15 minutes by default. `stamp CHILD_PANE PARENT_PANE`
+  records parentage directly in Herdr; both accept `--session NAME`.
 - `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It
   is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
   it names is the child's claim.

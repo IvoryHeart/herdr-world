@@ -1000,6 +1000,16 @@ work.
 
 <a id="agent-cli"></a>
 
+To have a harness discover the guide automatically, run
+`herdr-world integration install claude` on the host where it runs, then
+start a new Claude Code session. Use `codex` or `pi` for those harnesses.
+The harness's configuration folder must already exist; World creates its
+skill folder if needed. `herdr-world integration status` lists every Herdr
+harness with its state and path, without installing anything.
+`herdr-world integration uninstall codex` removes the file shared by Codex,
+Pi and Kimi and names the other two. OMP, Letta and MastraCode show
+`unsupported`. See [all paths and overrides](./harness-integrations.md).
+
 Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
 to colour and pin its card, group with the agent that started it, report a
 task result, or ask you a question (`herdr-world ask "Ship it?" --options
@@ -1013,6 +1023,12 @@ that asking occupant's retained question without creating another one.
 takes back a recorded Board change. A change marked **unverified** came from a process
 World could not place in the pane it named, or from a terminal that named no
 pane.
+
+An agent can publish its current activity with
+`herdr-world task-summary "Verifying the login fix"`. The label belongs to
+that exact Herdr session and expires after 15 minutes by default; use
+`result --task TASK-42 "Verified the fix" --status done` for a durable result.
+The guide also teaches `stamp CHILD_PANE PARENT_PANE` to group spawned agents.
 
 Use `herdr-world pod create Chat` to create a crew Group, then
 `herdr-world pod add Chat agent://connection-a/builder` to add an agent's

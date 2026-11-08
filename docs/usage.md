@@ -1,5 +1,9 @@
 # Harness usage data
 
+The [World harness skill](harness-integrations.md) teaches agents to ask questions
+and report work. Installing that skill does not collect usage or install a
+subscription-limits tap; the sources below are unchanged.
+
 World collects token usage on demand from supported harness session files by
 default. The service owns the numeric records; Town and Board can both read
 `world.usage.get`. Town's expenses boards read it: the city billboard (today
