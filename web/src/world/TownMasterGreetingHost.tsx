@@ -35,7 +35,7 @@ export function TownMasterGreetingHost({
   const { mobile } = useLayoutPreferences();
   const here = lastHere(state.visit, presence.away);
   const placed = mobile || Boolean(state.anchor?.isConnected);
-  const step = greetingStep(state, { covered, placed, here });
+  const step = greetingStep(state, { covered, placed });
   useEffect(() => {
     if (step === "show") greeting.show();
     else if (step === "step-aside") greeting.stepAside();

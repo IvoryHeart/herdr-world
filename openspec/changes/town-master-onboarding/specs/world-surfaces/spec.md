@@ -22,8 +22,9 @@ outside it. It SHALL NOT draw over an open window or sheet such as Chat or
 Needs you: a greeting due while one is open SHALL wait until none is.
 
 **Show this on start** at the card's foot and its setting SHALL be one value
-kept per browser. The owner's very first visit on a browser, with no last time
-known, SHALL have no greeting.
+kept per browser. Turning it off SHALL also stop a greeting that is waiting
+for a window to close. Every visit SHALL greet, the very first on a browser
+too; with no last time known, the hello SHALL leave the time out.
 
 #### Scenario: Greeted on return
 

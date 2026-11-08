@@ -50,6 +50,8 @@ export class TownMasterGreeting {
     anchor: null,
   };
   #hiddenAt: number | null = null;
+  /** The figure opened the card: it comes back after stepping aside. */
+  #byFigure = false;
 
   constructor(deps: GreetingDeps) {
     this.#deps = deps;
@@ -66,6 +68,7 @@ export class TownMasterGreeting {
 
   /** A visit begins; its greeting waits to be shown if Show this on start is on. */
   visit(visit: GreetingVisit) {
+    this.#byFigure = false;
     this.#set({ visit, open: false, pending: this.#deps.showOnStart() });
   }
 
@@ -82,9 +85,14 @@ export class TownMasterGreeting {
       this.visit({ from: hiddenAt, before: hiddenAt });
   }
 
-  /** Uncovered and placed: the visit's pending greeting opens. */
+  /**
+   * Uncovered and placed: the visit's pending greeting opens, unless Show
+   * this on start was turned off while it waited.
+   */
   show() {
-    if (this.#state.pending) this.#set({ open: true, pending: false });
+    if (!this.#state.pending) return;
+    const open = this.#byFigure || this.#deps.showOnStart();
+    this.#set({ open, pending: false });
   }
 
   /** A window or sheet opened over the place: wait until it closes. */
@@ -94,12 +102,14 @@ export class TownMasterGreeting {
 
   /** ✕, Escape, Back, a press outside, or a line taken. */
   close() {
+    this.#byFigure = false;
     if (this.#state.open || this.#state.pending)
       this.#set({ open: false, pending: false });
   }
 
   /** The figure: opens the card again, or closes it. */
   toggle() {
+    this.#byFigure = !this.#state.open;
     this.#set({ open: !this.#state.open, pending: false });
   }
 
@@ -115,20 +125,15 @@ export class TownMasterGreeting {
 
 /**
  * What the greeting does now: open a waiting greeting once nothing covers
- * its place and the last time here is known (the very first visit has
- * none; the welcome owns it), or step aside when a window or sheet opens
- * over it.
+ * its place, or step aside when a window or sheet opens over it. Every
+ * visit greets, the very first too (its hello has no last time).
  */
 export function greetingStep(
   state: Pick<GreetingSnapshot, "open" | "pending">,
-  {
-    covered,
-    placed,
-    here,
-  }: { covered: boolean; placed: boolean; here: number | null },
+  { covered, placed }: { covered: boolean; placed: boolean },
 ): "show" | "step-aside" | null {
   if (state.open) return covered ? "step-aside" : null;
-  return state.pending && !covered && placed && here !== null ? "show" : null;
+  return state.pending && !covered && placed ? "show" : null;
 }
 
 /**

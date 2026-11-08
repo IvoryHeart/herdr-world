@@ -373,8 +373,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       else openInBackground(id, view);
     },
   );
-  // The Town Master never greets over an open window or sheet.
+  // The Town Master never greets over an open window or sheet, nor over
+  // the welcome that asks for a first connection.
   const greetingCovered =
+    (connectionSelection.connections.length === 0 &&
+      inspectorConversations.length === 0) ||
     needsYouOpen ||
     visibleFloatingInspectors.length > 0 ||
     Boolean(contextRailInspector) ||

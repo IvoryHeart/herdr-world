@@ -116,7 +116,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     until they close. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
     or switch **Menu → Town Master greeting**, to stop it on this browser.
-    Your very first visit has no greeting.
+    Your very first visit is greeted too, without a last time.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
     A queued agent without a Herdr name is labelled with its room rather than
