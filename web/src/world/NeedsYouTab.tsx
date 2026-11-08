@@ -22,6 +22,7 @@ import type { WorldDeskStore } from "./deskStateStore";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import {
   closeNeedsYou,
+  itemName,
   needsYouCount,
   needsYouItems,
   needsYouLeafKey,
@@ -32,7 +33,7 @@ import {
   type NeedsYouItem,
   type NeedsYouState,
 } from "./needsYou";
-import { itemName, NeedsYouMessage } from "./NeedsYouItem";
+import { NeedsYouMessage } from "./NeedsYouItem";
 import { askAttachmentUpload } from "./askAttachments";
 import { preloadWorkspaceInspector } from "./inspectorPreload";
 import { sharedPresence, useOwnerPresence } from "./presence";

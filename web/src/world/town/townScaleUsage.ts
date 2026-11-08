@@ -1,4 +1,7 @@
 import type { WorldUsageSnapshot } from "../../../../shared/usage";
+// Keep the small economy fixture in the existing usage chunk rather than
+// adding a separate asset for these testing-only reads.
+import { usageFixture } from "../testing/usageFixture";
 import { townScaleSceneRequested } from "./townScaleScene";
 import {
   townScaleDeskTokens,
@@ -24,7 +27,6 @@ export function townScaleUsageClient(
   };
 }
 async function townScaleUsage(observedAt: number): Promise<WorldUsageSnapshot> {
-  const { usageFixture } = await import("../testing/usageFixture");
   const { townScaleConnections } = await import("./townScaleScene");
   const hosts = townScaleConnections();
   const rows = hosts.flatMap((host) =>

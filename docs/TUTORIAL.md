@@ -217,8 +217,11 @@ hosts stay usable.
    their terminal or mark that completion reviewed, then join idle agents at
    the bar in the building's bottom corner. When the queue is full, the rest
    crowd the lobby and grumble, then nap on the floor after about 90 seconds;
-   the front of the crowd takes the next free spot. These locations visualize
-   status; they do not move the underlying pane or change its host. To keep
+   the front of the crowd takes the next free spot. An agent out of fuel (its
+   harness hit a usage limit) stays slumped at its desk under an empty fuel
+   can and a clock showing when the limit resets; hover its table for the
+   full words. These
+   locations visualize status; they do not move the underlying pane or change its host. To keep
    reception for what matters now, press its sign (the **!** **?** **✓**
    marks) and untick a mark, for example **✓** Done: those agents stay at
    their desks with their mark, and reception shows `✓ N at desks · find`.
@@ -262,7 +265,16 @@ hosts stay usable.
    for you, what finished and what merged while you were away. Each line
    opens **Needs you** at that item, which carries a "new" dot (the merged
    line opens **Needs you** itself); **✕** clears
-   the recap. Answer a question from its offered
+   the recap. Each time you come back (World opening, or its page
+   back on screen after 30 minutes or more hidden), the **Town Master**, the
+   small figure beside the board, greets you with one card: when you were
+   last here, the same since-you-left lines and, when a newer World release
+   is out, a **See update** button that opens **Menu** at its update entry.
+   Board shows the card at its hub beside the bin, Desk at its summary, and
+   a phone as a sheet with **Back**. It waits while Chat, **Needs you** or
+   another window covers its place (on a phone, while any is open). Close it with **✕**, Escape or a tap elsewhere;
+   tap the figure to see it again, and untick **Show this on start** (or
+   switch off **Menu → Town Master greeting**) to stop it. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound
@@ -610,6 +622,8 @@ text. It works for any agent you open from Town, Board or Desk.
 2. Check what the agent is doing now. The Now bar shows its status circle
    (hover for the word: blue working, yellow needs you, green done, grey
    idle), the task from its terminal title and how long it has been at it.
+   An agent stopped on its usage limit shows a red dot and, for example,
+   `Usage limit reached · resets 15:00 (Codex)`, as its Town table does.
    The tool call running now sits at the end of the conversation with its
    own timer. **Stop**, or Esc pressed twice, interrupts Claude Code, Codex
    or Pi; Chat never stops an agent by itself.

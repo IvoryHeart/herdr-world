@@ -1,0 +1,181 @@
+/*
+ * The Town Master (TownMasterCard.tsx): the figure beside the town board
+ * and its greeting card. Shell tokens; the title uses Town's sign lettering.
+ */
+
+/* Beside the town board (townBoard.css: left 16px, 236px wide). */
+.town-master-figure {
+  position: absolute;
+  left: 260px;
+  top: 16px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.45));
+}
+.town-master-figure:hover,
+.town-master-figure:focus-visible,
+.town-master-figure[aria-expanded="true"] {
+  background: rgba(30, 22, 14, 0.55);
+}
+.town-master-figure canvas,
+.town-master-greeting canvas {
+  image-rendering: pixelated;
+  flex: none;
+}
+
+.town-master-greeting {
+  position: fixed;
+  z-index: 120;
+  display: grid;
+  gap: 8px;
+  width: min(300px, calc(100vw - 16px));
+  padding: 10px 12px 12px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  animation: town-master-greeting-in 0.2s ease-out;
+}
+.town-master-greeting header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.town-master-greeting h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  font:
+    700 12px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: var(--text-strong);
+}
+.town-master-greeting p {
+  margin: 0;
+}
+.town-master-greeting-hello {
+  color: var(--text-strong);
+}
+.town-master-greeting-recap {
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  border-radius: 6px;
+}
+.town-master-greeting h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.town-master-greeting ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.town-master-greeting li button,
+.town-master-greeting-update button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.town-master-greeting li button:hover,
+.town-master-greeting li button:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.town-master-greeting-update {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.town-master-greeting-update button {
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--border));
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+.town-master-greeting footer label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Phones: a sheet from the bottom, with Back. */
+.town-master-greeting.is-sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Above the Needs you sheet (125); menus stay above it. */
+  z-index: 126;
+  width: auto;
+  padding: 4px 16px calc(16px + env(safe-area-inset-bottom, 0px)) 4px;
+  border-width: 1px 0 0;
+  border-radius: 14px 14px 0 0;
+  font-size: 14px;
+}
+.town-master-greeting.is-sheet > :not(header) {
+  margin-left: 12px;
+}
+.town-master-greeting.is-sheet li button {
+  min-height: 36px;
+}
+.town-master-greeting-back {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .town-master-figure {
+    display: none;
+  }
+}
+
+@keyframes town-master-greeting-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-master-greeting {
+    animation: none;
+  }
+}

@@ -259,3 +259,10 @@
     animation: none;
   }
 }
+
+/* An out-of-fuel agent's reset, on its table's card (townOutOfFuel.ts). */
+.town-place-fuel {
+  margin: 0;
+  font-size: 11px;
+  color: #ffb08a;
+}

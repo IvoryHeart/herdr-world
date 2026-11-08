@@ -103,6 +103,22 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     which opens **Needs you**. Calm motion shows it without animation. The
     service remembers your last sighting in memory; after a service restart,
     each browser's own last sighting decides.
+  - **Town Master greeting**: each visit (World opening, or its page coming
+    back on screen after 30 minutes or more hidden), the Town Master, a small
+    figure beside the town board, opens one card: hello with the time you
+    were last here, the same **Since you left** lines as the board sign (each
+    opens **Needs you** at its item; "Nothing new since you left." when there
+    are none) and, when World's update check reports a newer release, one
+    line whose **See update** opens **Menu** at its update entry (the greeting
+    never installs anything). Board opens it at its hub beside the bin and
+    Desk at its summary; a phone shows it as a sheet with **Back**. It never
+    opens over an open window or sheet such as Chat or **Needs you**: on a
+    phone it waits until they close; on a wide screen it waits only while one
+    lies over the figure or the card's place, so an intent window or Chat
+    docked on the other side does not hold it back. **✕**, Escape, Back or a press outside closes it; tap
+    the figure to open it again. Untick **Show this on start** at its foot,
+    or switch **Menu → Town Master greeting**, to stop it on this browser.
+    Your very first visit is greeted too, without a last time.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
     A queued agent without a Herdr name is labelled with its room rather than
@@ -183,6 +199,22 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     crowd stands still, still grumbling or napping. An agent whose state is
     unknown sits at its desk scratching its head under a purple `??` instead
     of dozing.
+  - An agent that stopped because its harness hit a subscription or usage
+    limit is **out of fuel**: it stays slumped at its own desk, head sunk and
+    arms hanging, under an empty red fuel can and a small clock with the
+    reset time beside it. Zoomed in, that mark stands in front of the room's
+    plate and the seat name tags, so neither hides it. It never
+    walks to reception, the bar or the call rail, since there is nothing to
+    answer. World reads the stop from the harness's own records, never the
+    terminal: Codex's rate-limit snapshot (`rate_limit_reached_type`) or its
+    usage-limit error in the session log, and Claude Code's usage-limit
+    refusal in its transcript. Its table's card says, for example,
+    `Usage limit reached · resets 15:00 (Codex)`, or `Usage limit reached
+    (Claude)` when the record has no reset time. Room plaques
+    (`1 of 4 agents active: 1 working, 0 waiting on you, 3 out of fuel`), the
+    Town board and the Summary's hosts and rooms count out-of-fuel agents on
+    their own; they are not active. The state clears by itself once the
+    reset time passes or the agent works again.
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right. A matching road runs down the left
     of each row's first building, so the town is bounded by roads on both
@@ -288,6 +320,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     conversation; expand it for objectives.
     Chat's Now status uses a small circle with a status tooltip and screen-reader
     text: blue working ring, yellow needs-you mark, green done tick, grey idle dot.
+    An agent out of fuel has a red dot, and the Now bar reads the same words
+    as Town's table card, such as `Usage limit reached · resets 15:00 (Codex)`,
+    until the limit resets or the agent works again.
   - Chat reuses Terminal's full **Compose** editor, attachments and harness
     command palette, with a separate conversation draft. Enter adds a line;
     Ctrl+Enter, Cmd+Enter or the paper-plane button sends. Type `/` or use

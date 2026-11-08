@@ -1,5 +1,9 @@
 import type { WorldUsageSnapshot } from "../../../../shared/usage";
-import type { UsageFixtureRow } from "../testing/usageFixture";
+import {
+  usageFixture,
+  USAGE_FIXTURE_PRICES,
+  type UsageFixtureRow,
+} from "../testing/usageFixture";
 import { townScaleUsageClient } from "./townScaleUsage";
 
 /** Explicit, one-load testing switch. Normal reads and settings are untouched. */
@@ -32,9 +36,6 @@ export async function townEconomyPreview(
   snapshot: WorldUsageSnapshot,
   mode: string,
 ) {
-  const { usageFixture, USAGE_FIXTURE_PRICES } = await import(
-    "../testing/usageFixture"
-  );
   const owners = [
     ...new Map(snapshot.sources.map((s) => [s.connection_id, s])).values(),
   ];

@@ -1,3 +1,4 @@
+import type { AgentUsageStop } from "../../../shared/usageStop";
 import type { WorldAgentStatus } from "./worldObject";
 
 export type OfficeQualifiedTarget = {
@@ -29,6 +30,11 @@ export type OfficeAgent = {
   harness?: string;
   taskSummary?: string;
   semanticStatus: WorldAgentStatus;
+  /**
+   * Set when Town shows the agent out of fuel: it stopped on a usage limit
+   * (town/townOutOfFuel.ts), and its status is presented as idle.
+   */
+  usageStop?: AgentUsageStop;
   stateLabels: Partial<Record<WorldAgentStatus, string>>;
   focused: boolean;
   destination: OfficeAgentDestination;

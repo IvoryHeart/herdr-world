@@ -146,6 +146,15 @@ other `rate_limits` fields are dropped on the transcript host; malformed or
 future-dated windows are ignored. World never calls a provider API, reads
 credentials or types `/usage` into a pane.
 
+Separately from these host-level limits, each agent's own session can end
+with a usage-limit stop: Codex's `rate_limit_reached_type` or usage-limit
+error in its rollout, or Claude Code's limit refusal in its transcript (the
+older `Claude AI usage limit reached|<time>` text counts too). The agent read
+model (`agent_quest.list` and Chat's conversation) returns it as `usage_stop`
+(`harness`, `at`, `resets_at` or null) while its reset is ahead and nothing
+newer from the agent follows; Town shows that agent out of fuel (see
+FEATURES.md).
+
 Town shows these as fuel gauges on the board sign and per host in the Summary;
 see FEATURES.md. The board re-reads them every 30 seconds while it is shown,
 so a new reading reaches the sign within about a minute. A harness reported as `unsupported` appears on the sign as

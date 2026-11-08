@@ -23,7 +23,18 @@ describe("View preferences", () => {
       townCalm: true,
       townOpens: "chat",
       townMaster: "firstmate",
+      townGreeting: true,
     });
+  });
+
+  test("the Town Master's greeting is on unless it was turned off", () => {
+    const read = (townGreeting: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townGreeting })))
+        .townGreeting;
+    expect(DEFAULT_OFFICE_PREFERENCES.townGreeting).toBe(true);
+    expect(read(false)).toBe(false);
+    expect(read(true)).toBe(true);
+    expect(read("no")).toBe(true);
   });
 
   test("Town opens Chat unless Terminal was chosen", () => {
@@ -76,6 +87,7 @@ describe("View preferences", () => {
       townCalm: false,
       townOpens: "terminal",
       townMaster: "",
+      townGreeting: false,
     });
     expect(storage.value).toEqual({
       key: OFFICE_PREFERENCES_KEY,
@@ -84,6 +96,7 @@ describe("View preferences", () => {
         townCalm: false,
         townOpens: "terminal",
         townMaster: "",
+        townGreeting: false,
       }),
     });
   });

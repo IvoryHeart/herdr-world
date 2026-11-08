@@ -148,3 +148,28 @@ test("without a session fingerprint a failed read keeps nothing", async () => {
   await read;
   expect(titleOf(reads)).toBeNull();
 });
+
+test("a usage-limit stop is read with the quest, without one, and ends with the next read", async () => {
+  const { client, pending } = fakeClient();
+  const reads = new AgentQuestReads(() => client);
+  const stop = { harness: "codex" as const, at: 1, resets_at: 2 };
+  const first = reads.read([leaf("L1")]);
+  pending[0]!({ quests: [entry({ quest: null, usage_stop: stop })] });
+  expect(await first).toEqual({ changed: true, working: false });
+  expect(reads.quests().size).toBe(0);
+  expect(reads.stops().get("leaf-1")).toEqual(stop);
+  // A session found only by guessing may be another agent's.
+  const guessed = reads.read([leaf("L1")]);
+  pending[1]!({
+    quests: [
+      entry({ quest: null, usage_stop: stop, session_binding: "guessed" }),
+    ],
+  });
+  expect(await guessed).toEqual({ changed: true, working: false });
+  expect(reads.stops().size).toBe(0);
+  const again = reads.read([leaf("L1")]);
+  pending[2]!({ quests: [entry({ quest: quest("Next"), usage_stop: null })] });
+  expect(await again).toEqual({ changed: true, working: false });
+  expect(reads.stops().size).toBe(0);
+  expect(titleOf(reads)).toBe("Next");
+});
