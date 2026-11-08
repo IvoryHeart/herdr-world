@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import {
   nextTownFinished,
+  TownFinishedTracker,
   townTrackedAgents,
   withTownFinished,
 } from "./townFinished";
@@ -119,4 +120,61 @@ test("finishes are tracked for every agent of a presented room", () => {
     new Set(),
   );
   expect([...step.finished]).toEqual(["a16"]);
+});
+
+const officeOf = (
+  rooms: string[],
+  agents: Record<string, [room: string, status: string]>,
+) =>
+  ({
+    rooms: rooms.map((key) => ({ key })),
+    roster: Object.entries(agents).map(([key, [roomKey, semanticStatus]]) => ({
+      agent: { key, roomKey, semanticStatus },
+    })),
+  }) as unknown as HerdrOfficeProjection;
+
+test("Board sees a finish Town observed before the switch (#787)", () => {
+  const tracker = new TownFinishedTracker();
+  // Town is open while the agent works, then closes; Board opens on it idle.
+  tracker.observe(officeOf(["room"], { a: ["room", "working"] }));
+  tracker.observe(officeOf(["room"], { a: ["room", "idle"] }));
+  expect([...tracker.get()]).toEqual(["a"]);
+  // The same tracker, fed by the other view, keeps it.
+  tracker.observe(officeOf(["room"], { a: ["room", "idle"] }));
+  expect([...tracker.get()]).toEqual(["a"]);
+});
+
+test("a finish seen working by Town and idle by Board is a finish (#787)", () => {
+  const tracker = new TownFinishedTracker();
+  tracker.observe(officeOf(["room"], { a: ["room", "working"] }));
+  // Town unmounts; Board's first observation sees the agent idle.
+  tracker.observe(officeOf(["room"], { a: ["room", "idle"] }));
+  expect([...tracker.get()]).toEqual(["a"]);
+});
+
+test("an agent outside the presented rooms keeps its finish until it leaves", () => {
+  const tracker = new TownFinishedTracker();
+  // Town presents the selected room; Board, without that selection, does not.
+  tracker.observe(officeOf(["sel"], { a: ["sel", "working"] }));
+  tracker.observe(officeOf(["sel"], { a: ["sel", "idle"] }));
+  tracker.observe(officeOf(["other"], { a: ["sel", "idle"] }));
+  expect([...tracker.get()]).toEqual(["a"]);
+  tracker.observe(officeOf(["other"], {}));
+  expect([...tracker.get()]).toEqual([]);
+});
+
+test("a status kept for an unpresented agent counts when it is presented again", () => {
+  const step = nextTownFinished(
+    new Map([["a", "working"]]),
+    [],
+    new Set<string>(),
+    () => new Set(["a"]),
+  );
+  expect(step.statuses.get("a")).toBe("working");
+  const next = nextTownFinished(
+    step.statuses,
+    agents({ a: "idle" }),
+    step.finished,
+  );
+  expect([...next.finished]).toEqual(["a"]);
 });

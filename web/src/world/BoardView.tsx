@@ -121,6 +121,16 @@ import { boardAppearanceStyle } from "./board/boardAppearance";
 import { useBoardAppearance } from "./board/useBoardAppearance";
 import { nextBoardAttention } from "./board/boardAttention";
 import { BoardStatusSummary } from "./board/BoardStatusSummary";
+import {
+  BoardAgentNowLine,
+  BoardSummary,
+  BoardWorkspaceEconomy,
+  BoardZoneFacts,
+} from "./board/BoardFacts";
+import { useBoardFacts } from "./board/useBoardFacts";
+import { TownStepStore } from "./town/townStepStore";
+import { useTownStepReads } from "./town/useTownStepReads";
+import { townScaleSceneRequested } from "./town/townScaleScene";
 import { useBoardPaneMoves } from "./board/useBoardPaneMoves";
 import type { BoardPaneMove } from "./board/boardPaneMove";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
@@ -517,6 +527,19 @@ export default function BoardView({
   const quests = useAgentQuests(shownWorld.leaves);
   const asks = useWorldAsks();
   const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
+  // Town's facts (#787): its counts, finishes and reviews, by host and agent.
+  const facts = useBoardFacts(shownWorld);
+  const hostFacts = useMemo(
+    () => new Map(facts.summary.hosts.map((host) => [host.connectionId, host])),
+    [facts.summary.hosts],
+  );
+  // Working agents' current steps, read as Town reads them for its bubbles;
+  // `?scene=town-scale` shows the scene's synthetic ones.
+  const [steps] = useState(() => new TownStepStore());
+  const [stepScene] = useState(() =>
+    townScaleSceneRequested(window.location.search),
+  );
+  useTownStepReads(steps, shownWorld.leaves, stepScene);
   // A large board's first render is only the frame; its cards follow in a
   // transition, which yields to input while it builds.
   const [built, setBuilt] = useState(
@@ -586,6 +609,29 @@ export default function BoardView({
     });
   }, [pinnedKeys]);
   useEffect(() => () => publishBoardCardPins(null), []);
+  // Steps are read for working agents on the tab cards drawn now: none in
+  // the overview, which hides tabs, nor in folded workspaces.
+  const stepKeys = useMemo(() => {
+    if (far) return NO_IDS;
+    const tabs =
+      model.workspaces.length + model.tabs.length > CULL_ABOVE
+        ? renderKeys
+          ? model.tabs.filter((tab) => renderKeys.has(tab.key))
+          : []
+        : model.tabs;
+    const keys: string[] = [];
+    for (const tab of tabs) {
+      if (collapsed.has(tab.workspaceKey)) continue;
+      // The same rows the card draws, including a selected pane promoted
+      // into them.
+      for (const pane of tab.panes.length > 1
+        ? rowsOf(tab, selectedId)
+        : tab.panes)
+        if (pane.isAgent && pane.status === "working") keys.push(pane.leaf.id);
+    }
+    return keys;
+  }, [far, model, renderKeys, collapsed, selectedId]);
+  useEffect(() => steps.want(stepKeys), [steps, stepKeys]);
   const [query, setQuery] = useState("");
   const [workOpen, setWorkOpen] = useState(false);
   const workButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1804,7 +1850,8 @@ export default function BoardView({
   /* ---------- Pointer input ---------- */
   /** What a pointer landed on; null for controls and text being edited. */
   function classify(target: HTMLElement): GestureTarget | null {
-    if (target.closest("[contenteditable='true'], .work-lens")) return null;
+    if (target.closest("[contenteditable='true'], .work-lens, .board-facts"))
+      return null;
     if (
       target.closest("button, input, a, label") &&
       !target.closest(".board-card")
@@ -2264,8 +2311,9 @@ export default function BoardView({
   }
 
   const onWheel = useCallback((event: WheelEvent) => {
-    // The Work lens scrolls its own columns.
-    if ((event.target as Element | null)?.closest?.(".work-lens")) return;
+    // The Work lens and the summary scroll their own content.
+    if ((event.target as Element | null)?.closest?.(".work-lens, .board-facts"))
+      return;
     event.preventDefault();
     camGoal.current = null;
     panVelocity.current = null;
@@ -3375,7 +3423,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .board-facts",
             )
           )
             return;
@@ -3426,6 +3474,7 @@ export default function BoardView({
                     onColor={setZoneColor}
                   />
                   {host.label}
+                  <BoardZoneFacts host={hostFacts.get(host.connectionId)} />
                   {host.stale ? (
                     <ConnectionRecoveryBanner
                       connectionId={host.connectionId}
@@ -3532,6 +3581,12 @@ export default function BoardView({
                     title="Drag to string this to a note or card"
                   />
                   <div className="board-counts">{workspaceCounts(space)}</div>
+                  <BoardWorkspaceEconomy
+                    connectionId={space.connectionId}
+                    generation={space.generation}
+                    nativeId={space.nativeId}
+                    worldId={space.space.id}
+                  />
                   <div className="board-sum" aria-hidden="true">
                     {space.squares.length > (culling ? 0 : 64) ? (
                       <BoardStatusSummary
@@ -3669,11 +3724,18 @@ export default function BoardView({
                           {row.isAgent && quests.get(row.leaf.id) ? (
                             <QuestChip quest={quests.get(row.leaf.id)!} />
                           ) : null}
-                          <span className="board-pane-state">
-                            {row.isAgent
-                              ? STATUS_LABEL[row.status]
-                              : "terminal"}
-                          </span>
+                          {row.isAgent ? (
+                            <BoardAgentNowLine
+                              leaf={row.leaf}
+                              status={row.status}
+                              presented={facts.presented.get(row.leaf.id)}
+                              steps={steps}
+                              className="board-pane-state"
+                              fallback={STATUS_LABEL[row.status]}
+                            />
+                          ) : (
+                            <span className="board-pane-state">terminal</span>
+                          )}
                         </div>
                       ))}
                       {hidden > 0 ? (
@@ -3693,6 +3755,15 @@ export default function BoardView({
                       {pane
                         ? paneLine(pane, tab.status)
                         : STATUS_LABEL[tab.status]}
+                      {pane?.isAgent ? (
+                        <BoardAgentNowLine
+                          leaf={pane.leaf}
+                          status={pane.status}
+                          presented={facts.presented.get(pane.leaf.id)}
+                          steps={steps}
+                          className="board-now-inline"
+                        />
+                      ) : null}
                     </div>
                   )}
                   {pane?.leaf.appearance?.status ? (
@@ -4119,6 +4190,16 @@ export default function BoardView({
             ))}
           </div>
         ) : null}
+        <BoardSummary
+          summary={facts.summary}
+          onSelectAgent={(id) => {
+            const tab = model.tabs.find((entry) =>
+              entry.panes.some((pane) => pane.leaf.id === id),
+            );
+            if (tab) focusWorkspace(tab.workspaceKey);
+            onSelect(id);
+          }}
+        />
         <BoardControls
           appearance={appearance}
           onAppearance={changeAppearance}
