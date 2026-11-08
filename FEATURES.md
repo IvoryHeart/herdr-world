@@ -173,10 +173,34 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (the role holder from **Menu → Sounds**, else the agent named in **Menu →
     Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
-    **Needs you** with its count, **Summary**, **Profiles** and **New room**
-    (disabled with the reason when no room can be created). Arrow keys, Home
-    and End move around the ring; Escape, a press outside, the centre **✕** or
-    **Back** on a phone closes it.
+    **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
+    **New room** (disabled with the reason when no room can be created). Arrow
+    keys, Home and End move around the ring; Escape, a press outside, the
+    centre **✕** or **Back** on a phone closes it.
+  - **Lenses** colour the whole map by one fact, as strategy games' map
+    overlays do, so you see at a glance where it is high or low. Turn one on
+    from the town center's **Lenses** or with `L` (`Shift+L` steps back); the
+    Town board sign (on a phone, the summary chip) becomes the lens's legend:
+    its name (press it to choose a lens), **‹ ›** to step, **✕** to leave, the
+    scale, and the reading of the place under the pointer, keyboard focus or
+    last tap. Town dims; at home and building zoom each room's floor takes its
+    room's colour, with the room's name and short reading at building zoom;
+    at room and desk zoom each desk and seated agent carries its own.
+    **Idle time** runs from under 5 minutes (warm) to 8 hours and more (cold)
+    since each agent last worked; a room shows its coldest quarter.
+    **Spend** is today's estimated cost per room and desk (by tokens when
+    some usage is unpriced), from the same usage as the expenses boards; a
+    host or place without a reading is hatched **No data**, never zero.
+    **Pull requests** colours desks with a linked pull request as failing,
+    ready, waiting, draft or merged, from the same links as the desk badge;
+    a room shows its most urgent. **Quests** shows each agent's quest
+    progress; **Harness** shows Claude, Codex, Pi, other agents and plain
+    shells. Desks and agents with nothing to show stay plain. Screen readers
+    hear each place's reading in its name. A lens changes only how Town is
+    drawn: taps open what they always do, nothing moves, Escape or **✕**
+    returns Town exactly as it was, and Town always opens in **Attention**
+    (Town as usual). The browser remembers the last lens for `L` and
+    **Lenses**. With `?scene=town-scale` every lens has synthetic data.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
