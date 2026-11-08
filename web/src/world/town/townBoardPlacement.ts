@@ -7,7 +7,8 @@
  *
  * A board that would cover something slides sideways, the least it can,
  * while at least a third of it stays over its own building; failing that,
- * it hangs below what it would cover, onto the street before its building.
+ * it hangs lower, below what it would cover (a fixed thing or a board placed
+ * before it), onto the street before its building, and slides there too.
  */
 
 import { TOWN_CITY_BOARD_GAP, townCityBoardScale } from "./townCenter";
@@ -76,23 +77,23 @@ export function townPlaceBoards(
         block.x1 + gap - (board.x - board.w / 2),
       ]),
     ].sort((a, b) => Math.abs(a) - Math.abs(b));
+    // Failing that, lower: below each thing in its way, the least first,
+    // then beside what is in the way there. Below everything nothing is.
+    const top = board.y - board.h;
+    const drops = [
+      ...new Set([
+        0,
+        ...blocks.map((block) => block.y1 + gap - top).filter((d) => d > 0),
+      ]),
+    ].sort((a, b) => a - b);
     let offset: TownBoardOffset | undefined;
-    for (const dx of shifts)
-      if (fits(box({ dx, dy: 0 }))) {
-        offset = { dx, dy: 0 };
-        break;
-      }
-    if (!offset) {
-      // Below the fixed things over its door, onto the street.
-      const standing = box({ dx: 0, dy: 0 });
-      const under = Math.max(
-        standing.y0,
-        ...fixed
-          .filter((block) => overlaps(standing, block))
-          .map((block) => block.y1 + gap),
-      );
-      offset = { dx: 0, dy: under - standing.y0 };
-    }
+    search: for (const dy of drops)
+      for (const dx of shifts)
+        if (fits(box({ dx, dy }))) {
+          offset = { dx, dy };
+          break search;
+        }
+    offset ??= { dx: 0, dy: drops[drops.length - 1]! };
     offsets.set(board.key, offset);
     placed.push(box(offset));
   }
@@ -164,15 +165,36 @@ export class TownBoardPlacement {
             });
           }
           this.requestFrame();
+          const heights = this.heights();
+          const key = [...heights].join(";");
+          if (key === this.heightsKey) return;
+          this.heightsKey = key;
+          this.view?.boardsResized(heights);
         })
       : null;
+  private heightsKey = "";
 
-  /** Asks the renderer for a frame when a board is added or resized. */
+  /**
+   * Asks the renderer for a frame when a board is added or resized, and
+   * tells the scene camera when the reception boards' heights change, so
+   * the home view keeps them whole.
+   */
   constructor(
     private readonly renderer: {
       current: { invalidate(reason: string): void } | null;
     },
+    private readonly view?: {
+      boardsResized(heights: Map<string, number>): void;
+    },
   ) {}
+
+  /** The reception boards' heights in screen pixels, by host. */
+  heights() {
+    const heights = new Map<string, number>();
+    for (const [hostKey, node] of this.receptions)
+      heights.set(hostKey, Math.ceil(this.size(node).h));
+    return heights;
+  }
 
   private requestFrame() {
     this.renderer.current?.invalidate("board-size");

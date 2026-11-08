@@ -415,7 +415,7 @@ export function TownCanvas({
         rendererRef.current?.invalidate("building-sign"),
       ),
   );
-  const [boards] = useState(() => new TownBoardPlacement(rendererRef));
+  const [boards] = useState(() => new TownBoardPlacement(rendererRef, view));
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
       latest.current.onHover?.(

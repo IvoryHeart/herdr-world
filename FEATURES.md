@@ -145,7 +145,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     reception. At every zoom the reception boards keep clear of the town
     center, the post office, the billboard and each other: a board that would
     cover one slides aside the least it can while staying over its building,
-    else it hangs below the center onto the first street.
+    else it hangs lower, below the center or the board in its way.
   - Town's **post office** stands on the first street left of the town
     center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
     review or assigned to you) as parcels in its sorting yard, ready to merge
@@ -195,8 +195,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with a clock, a columned portico, banners and wings, whose front steps
     open straight onto the street's pavement. Buildings stand side by side
     below it with only the normal streets between them. Wide windows open
-    Town framed on the billboard above the center down to the buildings'
-    street, centred, with the park below off-screen. Phones open Town with
+    Town framed on the billboard above the center and the reception boards
+    down to the buildings' street, centred, every board whole, with the park
+    below off-screen. Phones open Town with
     it at the top and the first building under it; on a short screen the view keeps
     the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,
