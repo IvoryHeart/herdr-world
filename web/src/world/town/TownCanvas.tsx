@@ -414,12 +414,8 @@ export function TownCanvas({
 
   const levelRef = useRef<TownLevel>("overview");
   const [layers] = useState(() => new TownBuildingLayers());
-  const [signs] = useState(
-    () =>
-      new TownBuildingSigns(() =>
-        rendererRef.current?.invalidate("building-sign"),
-      ),
-  );
+  const signFrame = () => rendererRef.current?.invalidate("building-sign");
+  const [signs] = useState(() => new TownBuildingSigns(signFrame));
   const [boards] = useState(() => new TownBoardPlacement(rendererRef, view));
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
