@@ -15,6 +15,10 @@ import {
 } from "../../herdrOfficeProjection";
 import { EMPTY_OFFICE_OBSERVABILITY } from "../../officeObservability";
 import { townScaleConnections } from "../../town/townScaleScene";
+import { useState } from "react";
+import { TownStepStore } from "../../town/townStepStore";
+import { useTownStepReads } from "../../town/useTownStepReads";
+import type { WorldLeafObject } from "../../worldObject";
 import "../../../styles/tokens.css";
 import "../../../styles/base.css";
 import "../../world.css";
@@ -68,7 +72,11 @@ async function settle(limit = 6000) {
     calm = s.flying || s.transitioning || s.walking ? 0 : calm + 1;
     if (calm >= 30) break;
   }
-  return { level: stats().level, zoom: stats().zoom };
+  return {
+    level: stats().level,
+    zoom: stats().zoom,
+    bubbles: document.querySelectorAll(".town-step").length,
+  };
 }
 
 function click(label: string) {
@@ -87,6 +95,22 @@ function percentile(values: number[], p: number) {
   );
 }
 
+/** `?steps=off` measures the town without thought bubbles. */
+const withSteps = new URLSearchParams(location.search).get("steps") !== "off";
+
+/** The scene's working agents show synthetic steps, as on `?scene=town-scale`. */
+function SceneSteps({
+  leaves,
+  children,
+}: {
+  leaves: readonly WorldLeafObject[];
+  children: (steps: TownStepStore | undefined) => React.ReactNode;
+}) {
+  const [store] = useState(() => new TownStepStore());
+  useTownStepReads(store, withSteps ? leaves : [], true);
+  return children(withSteps ? store : undefined);
+}
+
 const scale = {
   ready: (async () => {
     const world = buildWorldObject(townScaleConnections(), "scene-atlas");
@@ -98,18 +122,23 @@ const scale = {
     );
     createRoot(document.getElementById("root")!).render(
       <div className="town-stage" style={{ position: "fixed", inset: 0 }}>
-        <TownCanvas
-          projection={projection}
-          selectedKey={null}
-          completionSeenKeys={new Set()}
-          conversationTargets={[]}
-          onSelect={noAction}
-          onActivateAgent={noAction}
-          onActivateRoom={noAction}
-          roomActions={roomActions}
-          selectedRoomKey={null}
-          observability={EMPTY_OFFICE_OBSERVABILITY}
-        />
+        <SceneSteps leaves={world.leaves}>
+          {(steps) => (
+            <TownCanvas
+              projection={projection}
+              steps={steps}
+              selectedKey={null}
+              completionSeenKeys={new Set()}
+              conversationTargets={[]}
+              onSelect={noAction}
+              onActivateAgent={noAction}
+              onActivateRoom={noAction}
+              roomActions={roomActions}
+              selectedRoomKey={null}
+              observability={EMPTY_OFFICE_OBSERVABILITY}
+            />
+          )}
+        </SceneSteps>
       </div>,
     );
     while (!window.__HERDR_TOWN_RENDERER__?.ready) await frame();

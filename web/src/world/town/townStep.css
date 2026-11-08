@@ -1,0 +1,99 @@
+/* Town's thought bubbles (TownStepBubble): a working agent's current step
+   over its head at its seat, from the room level. The bubble stands on the
+   agent's head: a top seat's head is at the table's back edge, a bottom
+   seat's (seen from behind) just below the table top. It never moves or
+   bobs, and takes no pointer, so the agent beneath still opens its peek. */
+.town-step {
+  /* Screen pixels per art pixel at the room level, as the canvas's status
+     bubbles; at the desk level it follows the zoom, so it stays at its desk. */
+  --step-scale: calc(2 * var(--iz));
+  position: absolute;
+  top: -4px;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  gap: 1px;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translate(-50%, -100%) scale(var(--step-scale));
+  transform-origin: 50% 100%;
+}
+.town-step:not([data-top]) {
+  top: 32px;
+}
+.town-world[data-level="room"] .town-step,
+.town-world[data-level="desk"] .town-step {
+  display: flex;
+}
+.town-world[data-level] .town-step[data-away] {
+  display: none;
+}
+.town-world[data-level="desk"] .town-step {
+  --step-scale: max(1, calc(1.4 * var(--iz)));
+}
+/* At the desk level a top seat's name tag sits over its head: the bubble
+   stands on the tag. */
+.town-world[data-level="desk"] .town-step[data-top] {
+  top: -10px;
+}
+
+.town-step-glyph {
+  flex: none;
+  width: 13px;
+  height: 14px;
+  image-rendering: pixelated;
+}
+
+/* A step that has run long for its kind shows its time in amber. */
+.town-step-age {
+  flex: none;
+  align-self: flex-start;
+  padding: 0 2px;
+  font:
+    700 6px / 1.25 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  color: #1f1606;
+  background: #ffb547;
+  border: 1px solid #1c1722;
+  border-radius: 2px;
+}
+
+/* The task and step in words, from the desk level or on the selected desk:
+   two short lines beside the glyph, as short as Chat's Now bar. */
+.town-step-words {
+  display: none;
+  flex-direction: column;
+  min-width: 0;
+  /* Within the desk's width at the desk level. */
+  max-width: calc(52px / var(--step-scale));
+  padding: 0 2px;
+  font:
+    600 5px / 1.2 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  color: #1c1722;
+  background: #fffaf0;
+  border: 1px solid #1c1722;
+  border-radius: 2px;
+}
+.town-world[data-level="desk"] .town-step-words,
+.town-step[data-selected] .town-step-words {
+  display: flex;
+}
+/* Zoomed out to the room, only the selected desk has words: a little room
+   beyond its desk. */
+.town-world[data-level="room"] .town-step[data-selected] .town-step-words {
+  max-width: 80px;
+}
+.town-world[data-level="room"] .town-step[data-selected] {
+  z-index: 2;
+}
+.town-step-task,
+.town-step-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.town-step-label {
+  color: #5d6574;
+}

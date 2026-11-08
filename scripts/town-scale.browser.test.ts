@@ -10,6 +10,7 @@ test.skipIf(process.env.TOWN_SCALE !== "1")(
       chrome: process.env.CHROME_BIN,
       directory: process.env.TOWN_SCALE_OUTPUT ?? ".agents/town-scale",
       gpu: process.env.HERDR_WORLD_TEST_GPU === "1",
+      steps: process.env.TOWN_SCALE_STEPS !== "off",
     });
   },
   10 * 60_000,
