@@ -1,23 +1,29 @@
-/* Every building's + Add room slot: a dashed ghost room where its next room
-   would stand, in the desk "+" slots' language. World-sized, so it never
-   spills past its own floor at any zoom. */
+/* Every building's + Add room doorway: just left of the bar, in its rows
+   against the bottom wall, framed like the building's front door. World-sized,
+   so it never spills past its own place at any zoom. */
 .town-world .town-add-room {
   position: absolute;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 0;
-  color: rgba(241, 239, 230, 0.85);
-  background: rgba(255, 255, 255, 0.06);
-  border: 3px dashed rgba(255, 255, 255, 0.45);
-  border-radius: 8px;
+  gap: 2px;
+  padding: 0 2px;
+  color: #f1efe6;
+  background: #22180f;
+  border: 4px solid #4a3a30;
+  border-top-width: 6px;
+  border-bottom: 0;
+  border-radius: 0;
+  box-shadow:
+    inset 0 2px 0 #6d5a4a,
+    0 3px 0 rgba(0, 0, 0, 0.2);
   font:
-    700 22px / 1 "Pixelify Sans",
+    700 17px / 1 "Pixelify Sans",
     ui-monospace,
     monospace;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
+  letter-spacing: 0.02em;
+  text-align: center;
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
@@ -36,14 +42,13 @@
 .town-add-room:hover:not(:disabled),
 .town-add-room:focus-visible {
   color: #ffd166;
-  background: rgba(255, 209, 102, 0.18);
+  background: #3a2a18;
   border-color: #ffd166;
 }
 
 .town-add-room:disabled {
   cursor: not-allowed;
   color: rgba(241, 239, 230, 0.45);
-  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .town-add-room:disabled svg {

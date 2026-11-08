@@ -138,6 +138,10 @@ export class TownNavigation {
       for (let y = building.counter.y - 1; y <= building.counter.y + 1; y += 1)
         this.block(x, y);
     for (const plant of building.plants) this.block(plant.x, plant.y);
+    // The Add room doorway beside the bar is not floor.
+    const door = building.addRoom;
+    for (let y = door.y; y < door.y + door.h; y += 1)
+      for (let x = door.x; x < door.x + door.w; x += 1) this.block(x, y);
     for (const room of building.rooms)
       for (const cell of room.cells) if (cell.deskKey) this.blockCell(cell);
   }
@@ -312,7 +316,7 @@ export type TownActorWorld = {
 
 /** Everything a building's navigation grid is built from. */
 export function townNavigationKey(building: TownBuilding) {
-  const { x, y, w, h, lounge, counter, plants, rooms } = building;
+  const { x, y, w, h, lounge, counter, addRoom, plants, rooms } = building;
   const desks = rooms.flatMap((room) =>
     room.cells.filter((cell) => cell.deskKey).map((cell) => [cell.x, cell.y]),
   );
@@ -323,6 +327,7 @@ export function townNavigationKey(building: TownBuilding) {
     h,
     [lounge.x, lounge.y, lounge.bar.x, lounge.bar.y, lounge.bar.w],
     [counter.x, counter.y, counter.w],
+    [addRoom.x, addRoom.y, addRoom.w, addRoom.h],
     plants.map((plant) => [plant.x, plant.y]),
     desks,
   ]);
