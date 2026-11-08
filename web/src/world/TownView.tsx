@@ -77,6 +77,7 @@ import {
 } from "./officePreferences";
 import { worldNodeOpenView } from "./worldInspectorSelection";
 import { useTownCenter } from "./town/useTownCenter";
+import { TownMasterFigure } from "./TownMasterCard";
 import { TownHerdrSetupOffer, TownNoHosts } from "./WorldStatus";
 import {
   TownRoomDialogs,
@@ -865,6 +866,7 @@ export default function TownView({
         {toastsView}
         <div className="town-stage">
           <TownHerdrSetupOffer world={world} aggregate={aggregate} />
+          <TownMasterFigure />
           <TownCanvas
             trace={trace}
             projection={office}

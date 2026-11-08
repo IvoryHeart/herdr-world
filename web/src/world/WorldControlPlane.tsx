@@ -32,8 +32,10 @@ import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
-import { NeedsYouHost } from "./NeedsYouTab";
+import { NeedsYouHost, useNeedsYouState } from "./NeedsYouTab";
 import { usePresenceWatch } from "./presence";
+import { useGreetingWatch } from "./townMasterGreeting";
+import { TownMasterGreetingHost } from "./TownMasterGreetingHost";
 import { launchedWorldLeaf } from "./worldTerminalPresentation";
 import { worldNodeOpenView } from "./worldInspectorSelection";
 import WorldIntentProfile from "./WorldIntentProfile";
@@ -114,6 +116,8 @@ function AgentDialogs({
   useChimeHost();
   // Last seen and returns for "Since you left", whichever view is open.
   usePresenceWatch();
+  // Visits for the Town Master's greeting.
+  useGreetingWatch();
   // A launched agent or login terminal opens once World's snapshot shows it.
   const [pendingOpen, setPendingOpen] = useState<{
     connectionId: string;
@@ -298,6 +302,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   } = useWorldVisualActions(controller);
   const colorChoice = useTerminalColorChoices();
   const deskPins = useDeskPins();
+  const needsYouOpen = useNeedsYouState().open;
   const inspectorTab = (conversation: WorldInspectorConversation) =>
     conversation.tabId
       ? {
@@ -368,6 +373,13 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       else openInBackground(id, view);
     },
   );
+  // The Town Master never greets over an open window or sheet.
+  const greetingCovered =
+    needsYouOpen ||
+    visibleFloatingInspectors.length > 0 ||
+    Boolean(contextRailInspector) ||
+    showSelectionProfile ||
+    panels.length > 0;
   return (
     <main
       className="world-control-plane"
@@ -378,6 +390,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         world={aggregateWorld}
         onOpenNode={(nodeId) => void openNodeById(nodeId)}
       />
+      {active && (view === "town" || view === "board" || view === "desk") ? (
+        <TownMasterGreetingHost
+          world={presentedWorld}
+          covered={greetingCovered}
+        />
+      ) : null}
       <WorldBin
         always={view === "town" || view === "board"}
         bus={view === "town"}

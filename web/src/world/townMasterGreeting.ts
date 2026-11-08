@@ -1,0 +1,219 @@
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+import type { AgentLook } from "../../../shared/agentProfile";
+import { worldLocalStorage } from "../browserStorage";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
+  type OfficePreferences,
+} from "./officePreferences";
+import { sharedPresence } from "./presence";
+import { AWAY_MS, type AwayWindow } from "./sinceYouLeft";
+
+/**
+ * The Town Master's greeting (onboarding O1): one card per visit with hello,
+ * "since you left" and update news. A visit is World opening, or the page
+ * coming back on screen after being hidden for 30 minutes or more. The card
+ * opens once per visit, never over an open window or sheet: covered, it
+ * waits until uncovered. **Show this on start** (on by default) is kept per
+ * browser, like the since-you-left ✕.
+ */
+
+export type GreetingVisit = {
+  /** The visit began after this time (epoch ms). */
+  from: number;
+  /** When the owner was last here before the visit, if known. */
+  before: number | null;
+};
+
+export type GreetingSnapshot = {
+  open: boolean;
+  /** This visit's greeting has not been shown yet. */
+  pending: boolean;
+  visit: GreetingVisit | null;
+  /** Where the card opens on wide screens: the figure or a summary card. */
+  anchor: HTMLElement | null;
+};
+
+export type GreetingDeps = {
+  now(): number;
+  showOnStart(): boolean;
+};
+
+export class TownMasterGreeting {
+  #deps: GreetingDeps;
+  #listeners = new Set<() => void>();
+  #state: GreetingSnapshot = {
+    open: false,
+    pending: false,
+    visit: null,
+    anchor: null,
+  };
+  #hiddenAt: number | null = null;
+
+  constructor(deps: GreetingDeps) {
+    this.#deps = deps;
+  }
+
+  get = () => this.#state;
+
+  subscribe = (listener: () => void) => {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  };
+
+  /** A visit begins; its greeting waits to be shown if Show this on start is on. */
+  visit(visit: GreetingVisit) {
+    this.#set({ visit, open: false, pending: this.#deps.showOnStart() });
+  }
+
+  /** The page went off screen. */
+  hidden() {
+    this.#hiddenAt ??= this.#deps.now();
+  }
+
+  /** The page came back on screen: a new visit after 30 minutes or more. */
+  visible() {
+    const hiddenAt = this.#hiddenAt;
+    this.#hiddenAt = null;
+    if (hiddenAt !== null && this.#deps.now() - hiddenAt >= AWAY_MS)
+      this.visit({ from: hiddenAt, before: hiddenAt });
+  }
+
+  /** Uncovered and placed: the visit's pending greeting opens. */
+  show() {
+    if (this.#state.pending) this.#set({ open: true, pending: false });
+  }
+
+  /** A window or sheet opened over the place: wait until it closes. */
+  stepAside() {
+    if (this.#state.open) this.#set({ open: false, pending: true });
+  }
+
+  /** ✕, Escape, Back, a press outside, or a line taken. */
+  close() {
+    if (this.#state.open || this.#state.pending)
+      this.#set({ open: false, pending: false });
+  }
+
+  /** The figure: opens the card again, or closes it. */
+  toggle() {
+    this.#set({ open: !this.#state.open, pending: false });
+  }
+
+  anchor(element: HTMLElement | null) {
+    if (this.#state.anchor !== element) this.#set({ anchor: element });
+  }
+
+  #set(patch: Partial<GreetingSnapshot>) {
+    this.#state = { ...this.#state, ...patch };
+    for (const listener of this.#listeners) listener();
+  }
+}
+
+/**
+ * What the greeting does now: open a waiting greeting once nothing covers
+ * its place and the last time here is known (the very first visit has
+ * none; the welcome owns it), or step aside when a window or sheet opens
+ * over it.
+ */
+export function greetingStep(
+  state: Pick<GreetingSnapshot, "open" | "pending">,
+  {
+    covered,
+    placed,
+    here,
+  }: { covered: boolean; placed: boolean; here: number | null },
+): "show" | "step-aside" | null {
+  if (state.open) return covered ? "step-aside" : null;
+  return state.pending && !covered && placed && here !== null ? "show" : null;
+}
+
+/**
+ * When the owner was last here: the start of a return that began in this
+ * visit (it knows other devices too), else the visit's own last seen.
+ */
+export function lastHere(
+  visit: GreetingVisit | null,
+  away: AwayWindow | null,
+): number | null {
+  if (!visit) return null;
+  if (away && away.at > visit.from) return away.since;
+  return visit.before;
+}
+
+/** The Town Master's look: Town's sprites, a captain with a badge. */
+export const TOWN_MASTER_LOOK: AgentLook = Object.freeze({
+  skin: "#d9a066",
+  hair: "#3b2a1e",
+  hair_style: "short",
+  outfit: "captain",
+  shirt: "#2d4a6b",
+  pants: "#253244",
+  accessory: "badge",
+});
+
+let shared: TownMasterGreeting | null = null;
+
+/** The page's greeting; World opening is its first visit. */
+export function sharedGreeting() {
+  if (shared) return shared;
+  shared = new TownMasterGreeting({
+    now: () => Date.now(),
+    showOnStart: () => readOfficePreferences(worldLocalStorage).townGreeting,
+  });
+  shared.visit({
+    from: Date.now() - performance.now(),
+    before: sharedPresence().lastSeenBefore,
+  });
+  return shared;
+}
+
+/** Tests start from no greeting. */
+export function resetGreetingForTest(greeting: TownMasterGreeting | null) {
+  shared = greeting;
+}
+
+export function useGreeting(greeting = sharedGreeting()) {
+  return useSyncExternalStore(greeting.subscribe, greeting.get, greeting.get);
+}
+
+/** Watches the page coming back on screen while World runs. */
+export function useGreetingWatch() {
+  useEffect(() => {
+    const greeting = sharedGreeting();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") greeting.visible();
+      else greeting.hidden();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+}
+
+/** A ref for the element the card opens at in this view. */
+export function useGreetingAnchor() {
+  return useCallback(
+    (element: HTMLElement | null) => sharedGreeting().anchor(element),
+    [],
+  );
+}
+
+/** Show this on start: the one per-browser value, also in Menu. */
+export function setGreetingOnStart(on: boolean): OfficePreferences {
+  const next = writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townGreeting: on,
+  });
+  window.dispatchEvent(
+    new CustomEvent<OfficePreferences>(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT, {
+      detail: next,
+    }),
+  );
+  return next;
+}
+
+/** Opens World's Menu at its update control (ConfigMenu listens). */
+export const WORLD_OPEN_UPDATE_MENU_EVENT = "herdr-world:open-update-menu";

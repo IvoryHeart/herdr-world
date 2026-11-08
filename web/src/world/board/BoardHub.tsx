@@ -26,6 +26,7 @@ import {
   summaryAction,
   townMasterAction,
 } from "../town/useTownCenter";
+import { useGreetingAnchor } from "../townMasterGreeting";
 import type { WorldObject, WorldSpaceObject } from "../worldObject";
 import "./boardHub.css";
 
@@ -152,6 +153,8 @@ export function BoardHub({
   onNewWorkspace(): void;
 }) {
   const holder = useAgentProfiles().document?.town_master ?? null;
+  // The Town Master's greeting opens at the hub on wide screens.
+  const greetingAnchor = useGreetingAnchor();
   const actions = boardHubActions({
     world,
     selectedId,
@@ -166,7 +169,7 @@ export function BoardHub({
         message: text,
       }),
   });
-  return <BoardHubDock actions={actions} />;
+  return <BoardHubDock actions={actions} anchorRef={greetingAnchor} />;
 }
 
 /**
@@ -175,8 +178,10 @@ export function BoardHub({
  */
 export function BoardHubDock({
   actions,
+  anchorRef,
 }: {
   actions: readonly TownCenterAction[];
+  anchorRef?: (element: HTMLElement | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -237,7 +242,12 @@ export function BoardHubDock({
   const Launch = quick("launch");
   const Master = quick("master");
   return (
-    <div className="board-hub" role="group" aria-label="Town center">
+    <div
+      ref={anchorRef}
+      className="board-hub"
+      role="group"
+      aria-label="Town center"
+    >
       {button(Launch, <Plus size={18} aria-hidden="true" />)}
       {button(Master, <Master.icon size={16} aria-hidden="true" />)}
       <button
