@@ -2413,7 +2413,7 @@ async function run() {
       0,
     "rooms with free spots need a new seat action",
   );
-  // Every live building ends with one + Add room slot, which takes a tap from
+  // Every live building has one + Add room doorway by its bar, which takes a tap from
   // the overview in; the floating New room button is gone.
   const liveBuildings = [
     ...host.querySelectorAll(".town-building-layer:not([data-stale])"),
@@ -2426,12 +2426,12 @@ async function run() {
             '.town-add-room[aria-label^="Add room to "]',
           ).length === 1,
       ),
-    "every live building needs one Add room slot",
+    "every live building needs one Add room doorway",
   );
   check(
     getComputedStyle(host.querySelector(".town-add-room")!).visibility ===
       "visible",
-    "the Add room slot shows at the overview",
+    "the Add room doorway shows at the overview",
   );
   check(
     !host.querySelector('[aria-label="New room"]'),

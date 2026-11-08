@@ -4,9 +4,10 @@ import type { TownRoomActions } from "./townRoomActions";
 import "./townAddRoom.css";
 
 /**
- * A building's + Add room slot: a dashed ghost room where its next room
- * would stand (townLayout's addRoom). It creates a room on that building's
- * host, as the town center's New room does, and the room takes its place.
+ * A building's + Add room doorway, just left of its bar (townLayout's
+ * addRoom). It stays there whatever the rooms do, and creates a room on that
+ * building's host, as the town center's New room does; the room opens where
+ * rooms go.
  */
 export function TownAddRoom({
   building,
@@ -34,7 +35,7 @@ export function TownAddRoom({
       style={{ left: x * T, top: y * T, width: w * T, height: h * T }}
       onClick={() => roomActions.onAddRoom(building.hostKey, selectedRoomKey)}
     >
-      <Plus size={28} strokeWidth={3} aria-hidden="true" />
+      <Plus size={26} strokeWidth={3} aria-hidden="true" />
       <span>Add room</span>
     </button>
   );

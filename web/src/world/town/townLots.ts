@@ -21,6 +21,15 @@ export const LOBBY_HEIGHT = 7;
 export const SOFA_CORNER = 12;
 /** The bar's widest: the sofa corner, then a short counter with three stools. */
 const BAR_WIDTH = SOFA_CORNER + 8;
+/**
+ * Every building's + Add room doorway: this many tiles wide, one tile left of
+ * the bar, in the bar's rows. Its place follows only the bar, never the rooms.
+ */
+export const ADD_ROOM_WIDTH = 5;
+/** Tiles between the Add room doorway and the bar. */
+const ADD_ROOM_GAP = 1;
+/** The bar's leftmost x: the doorway still fits inside the left wall. */
+const MIN_BAR_X = 2 + ADD_ROOM_WIDTH + ADD_ROOM_GAP;
 const MIN_BUILDING_WIDTH = 38;
 /** A phone's one-column building: the bar, counter and queue still fit. */
 const MIN_PHONE_BUILDING_WIDTH = 26;
@@ -43,10 +52,13 @@ const minWidthOf = (shape: TownShape) =>
     : MIN_BUILDING_WIDTH;
 
 /**
- * A building's size and bar from its room columns (`width`: the tiles the
- * columns take). The bar sits in the bottom corner under the last room
- * column, 12-20 tiles back from its right end; other columns may run down to
- * the bottom wall.
+ * A building's size, bar and + Add room doorway from its room columns
+ * (`width`: the tiles the columns take). The bar sits in the bottom corner
+ * under the last room column, 12-20 tiles back from its right end, and the
+ * doorway just left of it: a bar too near the left wall for the doorway
+ * gives up stools, down to its sofa corner, then moves right. Columns over
+ * the bar or the doorway end above them; other columns may run down to the
+ * bottom wall.
  */
 export function townFloor(
   spans: readonly TownColumnSpan[],
@@ -56,20 +68,22 @@ export function townFloor(
   const w = Math.max(width, minWidthOf(shape));
   const last = spans.filter((span) => span.x1 > span.x0).pop();
   const right = last ? Math.min(last.x1 + 1, w - 2) : w - 2;
-  const left = Math.max(2, last ? last.x0 - 1 : 2);
+  const left = Math.max(MIN_BAR_X, last ? last.x0 - 1 : 2);
   const barWidth = Math.min(BAR_WIDTH, Math.max(SOFA_CORNER, right - left));
-  const barX = right - barWidth;
+  // Every shape's narrowest floor holds the doorway and a sofa corner.
+  const barX = Math.max(MIN_BAR_X, right - barWidth);
+  const addRoomX = barX - ADD_ROOM_GAP - ADD_ROOM_WIDTH;
   const bottomOf = (over: boolean) =>
     Math.max(
       ROOM_TOP,
       ...spans
         .filter(
-          (span) => (span.x0 < barX + barWidth && span.x1 > barX) === over,
+          (span) => (span.x0 < barX + barWidth && span.x1 > addRoomX) === over,
         )
         .map((span) => span.bottom),
     );
   const h = Math.max(bottomOf(true) + LOBBY_HEIGHT, bottomOf(false));
-  return { w, h, barX, barWidth };
+  return { w, h, barX, barWidth, addRoomX };
 }
 
 /**
