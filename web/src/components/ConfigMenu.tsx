@@ -26,6 +26,7 @@ import {
   Bug,
   Shirt,
   Volume2,
+  Hand,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
@@ -59,6 +60,7 @@ import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
 import { useLayer } from "../layerStack";
 import { DEVTOOLS } from "../world/devtools/flag";
+import { WORLD_OPEN_UPDATE_MENU_EVENT } from "../world/townMasterGreeting";
 import { requestTrace, traceRemembered } from "../world/devtools/trace";
 
 const ConfigurationDialog = lazyWithReload("configuration", () =>
@@ -214,6 +216,21 @@ export function ConfigMenu({
   // A layer on the shared stack: Escape, a press outside (the terminal
   // included) and Back close it, and focus returns to what had it.
   useLayer(open, () => setOpen(false), { element: () => ref.current });
+  // The Town Master's update line opens the menu at its update control.
+  useEffect(() => {
+    const onOpenUpdate = () => {
+      setExpanded(true);
+      setOpen(true);
+      window.requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLElement>(".config-update-item")
+          ?.scrollIntoView({ block: "nearest" }),
+      );
+    };
+    window.addEventListener(WORLD_OPEN_UPDATE_MENU_EVENT, onOpenUpdate);
+    return () =>
+      window.removeEventListener(WORLD_OPEN_UPDATE_MENU_EVENT, onOpenUpdate);
+  }, []);
 
   const updateOfficePreferences = (patch: Partial<OfficePreferences>) => {
     const next = writeOfficePreferences(worldLocalStorage, {
@@ -449,6 +466,35 @@ export function ConfigMenu({
                     <span />
                   </button>
                 </div>
+                <div className="config-preference-row">
+                  <span className="config-item-icon">
+                    <Hand size={15} />
+                  </span>
+                  <div className="config-item-copy">
+                    <strong>Town Master greeting</strong>
+                    <span>
+                      Hello and what changed since you left, on each visit (Show
+                      this on start)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Town Master greeting"
+                    aria-checked={officePreferences.townGreeting}
+                    className={
+                      "settings-switch" +
+                      (officePreferences.townGreeting ? " is-on" : "")
+                    }
+                    onClick={() =>
+                      updateOfficePreferences({
+                        townGreeting: !officePreferences.townGreeting,
+                      })
+                    }
+                  >
+                    <span />
+                  </button>
+                </div>
                 {DEVTOOLS ? (
                   <div className="config-preference-row">
                     <span className="config-item-icon">
@@ -581,6 +627,7 @@ export function ConfigMenu({
                 />
                 <ConfigMenuItem
                   icon={<Download size={15} />}
+                  className="config-update-item"
                   label={
                     updateAvailable
                       ? s.updateInstalling

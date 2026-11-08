@@ -1,0 +1,61 @@
+/* A tired agent's sweat drop by its head (TownTiredMark). It scales with
+   the town like the agent, kept legible when zoomed out, and never takes
+   the pointer, so hovering the agent still opens its peek. */
+.town-tired {
+  position: absolute;
+  /* A bottom seat's agent sits behind the desk; its head is above its feet. */
+  top: 40px;
+  display: none;
+  width: 6px;
+  height: 9px;
+  margin-left: 6px;
+  pointer-events: none;
+  transform: scale(clamp(1, var(--iz), 2.5));
+  transform-origin: 0 100%;
+}
+.town-tired-top {
+  /* Beside the head of a top seat's agent, which faces the viewer. */
+  top: -6px;
+}
+.town-world[data-level="town"] .town-tired,
+.town-world[data-level="room"] .town-tired,
+.town-world[data-level="desk"] .town-tired {
+  display: block;
+}
+.town-world[data-level] .town-tired[data-away] {
+  display: none;
+}
+.town-tired i {
+  position: absolute;
+  left: 0.5px;
+  bottom: 0.5px;
+  width: 5px;
+  height: 5px;
+  background: #8fd8ff;
+  border-radius: 0 50% 50% 50%;
+  box-shadow:
+    0 0 0 1px #090c11,
+    inset 1px 1px 0 #e8f7ff;
+  transform: rotate(45deg);
+  animation: town-tired-drip 2.4s ease-in infinite;
+}
+@keyframes town-tired-drip {
+  0%,
+  45% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  90% {
+    opacity: 0;
+    translate: 0 3px;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .town-tired i {
+    animation: none;
+  }
+}

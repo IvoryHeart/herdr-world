@@ -240,7 +240,7 @@ export function useLensView(
     return () => window.clearInterval(timer);
   }, [on, store]);
   useEffect(() => {
-    if (lens !== "spend" || scene) return;
+    if (lens !== "spend") return;
     store.request();
     const timer = window.setInterval(() => store.request(), USAGE_REFRESH_MS);
     return () => window.clearInterval(timer);
@@ -267,7 +267,10 @@ export function useLensView(
           work: (desk) => work?.get(desk.key),
           quest: (key) => quests.get(key),
         };
-    return lensView(lens, shown, facts);
+    return lensView(lens, shown, {
+      ...facts,
+      economy: (place) => townPlaceEconomy(townUsageCurrent(usage, now), place),
+    });
   }, [lens, shown, scene, usage, now, work, quests, activityAt]);
 }
 

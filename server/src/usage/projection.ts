@@ -20,11 +20,24 @@ export type LimitObservation = {
   /** A refusal: the limit is used up until `resets_at`; `windows` is empty. */
   reached?: { window_minutes: number | null; resets_at: number };
 };
+/**
+ * How full the session's context is: the newest main-thread response's
+ * prompt size (input plus cached tokens), with the window the harness
+ * reported, if it reported one. Numbers only.
+ */
+export type ContextObservation = {
+  at: number;
+  model: string;
+  used_tokens: number;
+  /** The model's window as the harness reported it (Codex), else null. */
+  window_tokens: number | null;
+};
 export type SessionUsage = {
   session: string;
   partial: boolean;
   rows: NumericUsageRow[];
   limits: LimitObservation | null;
+  context: ContextObservation | null;
 };
 
 /** Self-contained: the exact same function runs on the transcript's SSH host.
@@ -50,6 +63,7 @@ export function createUsageProjection(
     partial = false;
   let previous: UsageTokens | null = null;
   let limits: LimitObservation | null = null;
+  let latestContext: ContextObservation | null = null;
   const cumulativeStates = new Map<string, number>();
   const object = (v: any): RecordValue =>
     v && typeof v === "object" && !Array.isArray(v) ? v : {};
@@ -135,6 +149,26 @@ export function createUsageProjection(
         reached: { window_minutes: minutes, resets_at: resets * 1000 },
       };
   };
+  // The newest response's prompt is what the session carries into its next
+  // turn. An invalid or future observation is ignored, never guessed.
+  const observeContext = (
+    at: number,
+    name: any,
+    used: number,
+    window: any = null,
+  ) => {
+    if (!Number.isFinite(at) || at > now + 300_000 || used <= 0) return;
+    if (latestContext && at < latestContext.at) return;
+    latestContext = {
+      at,
+      model: identifier(name) || "unknown",
+      used_tokens: used,
+      window_tokens:
+        Number.isSafeInteger(window) && window > 0 && window <= 1e8
+          ? window
+          : null,
+    };
+  };
   const remember = (id: any, at: number, name: any, tokens: UsageTokens) => {
     if (
       typeof id !== "string" ||
@@ -177,6 +211,18 @@ export function createUsageProjection(
         if (!p.info) return;
         const info = object(p.info),
           u = object(info.total_token_usage);
+        const latest = object(info.last_token_usage);
+        // Codex counts cached input inside input_tokens.
+        if (
+          Number.isSafeInteger(latest.input_tokens) &&
+          latest.input_tokens <= 1e12
+        )
+          observeContext(
+            time(r.timestamp),
+            model,
+            latest.input_tokens,
+            info.model_context_window,
+          );
         if (!Object.keys(u).length) {
           partial = true;
           return;
@@ -230,26 +276,45 @@ export function createUsageProjection(
         if (r.type === "assistant") claudeRefusal(r, m);
         if (r.type !== "assistant" || !m.usage) return;
         const u = object(m.usage);
-        remember(m.id, time(r.timestamp), m.model, {
+        const tokens = {
           input: count(u.input_tokens),
           cache_read: count(u.cache_read_input_tokens, true),
           cache_write: count(u.cache_creation_input_tokens, true),
           output: count(u.output_tokens),
           reasoning: 0,
-        });
+        };
+        remember(m.id, time(r.timestamp), m.model, { ...tokens });
+        // A subagent's (sidechain) prompt is its own context, not the session's.
+        if (
+          r.isSidechain !== true &&
+          !r.isApiErrorMessage &&
+          m.model !== "<synthetic>"
+        )
+          observeContext(
+            time(r.timestamp),
+            m.model,
+            tokens.input + tokens.cache_read + tokens.cache_write,
+          );
         return;
       }
       if (harness === "pi") {
         if (r.type === "session" && identifier(r.id)) session = hash(r.id);
         if (r.type !== "message" || m.role !== "assistant" || !m.usage) return;
         const u = object(m.usage);
-        remember(r.id, time(m.timestamp ?? r.timestamp), m.model, {
+        const tokens = {
           input: count(u.input),
           cache_read: count(u.cacheRead, true),
           cache_write: count(u.cacheWrite, true),
           output: count(u.output),
           reasoning: 0,
-        });
+        };
+        const at = time(m.timestamp ?? r.timestamp);
+        remember(r.id, at, m.model, { ...tokens });
+        observeContext(
+          at,
+          m.model,
+          tokens.input + tokens.cache_read + tokens.cache_write,
+        );
         return;
       }
       if (harness === "gemini") {
@@ -275,6 +340,8 @@ export function createUsageProjection(
           output: output + thought,
           reasoning: thought,
         });
+        // Gemini's input already includes its cached tokens.
+        observeContext(time(record.timestamp), record.model, input + tool);
       }
     } catch {
       partial = true;
@@ -304,6 +371,7 @@ export function createUsageProjection(
           [...cumulativeStates],
           previous,
           limits,
+          latestContext,
           model,
           session,
           partial,
@@ -346,6 +414,7 @@ export function createUsageProjection(
         partial,
         rows: [...rows.values()],
         limits: current?.reached && answeredAt > current.at ? null : current,
+        context: latestContext,
       };
     },
   };

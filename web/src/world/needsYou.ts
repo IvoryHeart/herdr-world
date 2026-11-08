@@ -1,6 +1,6 @@
 import { worldLocalStorage } from "../browserStorage";
 import { askLeaves } from "./worldAskTargets";
-import type { WorldAsk } from "./worldAsks";
+import { askerName, type WorldAsk } from "./worldAsks";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 
 /**
@@ -13,6 +13,15 @@ export type NeedsYouItem =
   | { kind: "asks"; key: string; ask: WorldAsk; leaf: WorldLeafObject | null }
   | { kind: "needs"; key: string; leaf: WorldLeafObject }
   | { kind: "done"; key: string; leaf: WorldLeafObject };
+
+/** An agent's name as Chat titles it: its Herdr name, else its label. */
+export const leafName = (leaf: WorldLeafObject) => leaf.agentName ?? leaf.label;
+export const itemName = (item: NeedsYouItem) =>
+  item.leaf
+    ? leafName(item.leaf)
+    : item.kind === "asks"
+      ? askerName(item.ask)
+      : "";
 
 /** The item key for an agent, so openers can show the window at it. */
 export const needsYouLeafKey = (leafId: string) => `leaf:${leafId}`;

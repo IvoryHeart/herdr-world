@@ -4,6 +4,7 @@ import { Check, FolderTree, SquareTerminal } from "lucide-react";
 import type { ManagedWindowControls } from "../world/windows/WindowControls";
 import type { WorkspaceInspectorContext } from "../workspaceResource";
 import { AgentIcon } from "./AgentIcon";
+import { ContextFillBar } from "./ContextFillBar";
 import { ColorSwatches } from "./ColorSwatch";
 import { agentName } from "./agentDisplayName";
 import { middleEllipsis } from "./middleEllipsis";
@@ -45,6 +46,10 @@ export function WorkspaceInspectorAgentIdentity({
       ) : null}
     </span>
   ) : null;
+  // The context fill is a bar under the icon; its reading joins the label.
+  const fill = context.contextFill ?? null;
+  const fillBar = fill ? <ContextFillBar fill={fill} variant="edge" /> : null;
+  const reading = fill ? ` · ${fill.text}` : "";
   const icon = context.appearanceAvatar ? (
     <AppearanceAvatar id={context.appearanceAvatar} />
   ) : context.portrait ? (
@@ -73,11 +78,12 @@ export function WorkspaceInspectorAgentIdentity({
               type="button"
               className="workspace-inspector-agent-avatar is-settings"
               style={avatarColour(terminalColor)}
-              aria-label={`Appearance for ${name}, ${context.stateLabel}`}
-              title={`${context.stateLabel} · terminal appearance`}
+              aria-label={`Appearance for ${name}, ${context.stateLabel}${reading}`}
+              title={`${context.stateLabel}${reading} · terminal appearance`}
             >
               {icon}
               {badge}
+              {fillBar}
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -106,10 +112,11 @@ export function WorkspaceInspectorAgentIdentity({
       ) : (
         <span
           className="workspace-inspector-agent-avatar"
-          title={context.stateLabel}
+          title={`${context.stateLabel}${reading}`}
         >
           {icon}
           {badge}
+          {fillBar}
         </span>
       )}
       <span

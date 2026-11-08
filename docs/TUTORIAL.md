@@ -238,6 +238,10 @@ hosts stay usable.
    clear of the town center, the post office and each other: one that would
    cover them moves aside over its building, or lower, under what is in
    its way.
+   **Today** uses UTC; **7 days** includes today. The Town board's **Economy
+   today · UTC · harness logs** shows the same Today figures and pricing rule.
+   Building totals add up to the city. **Unattributed (included)** is part of
+   those totals, not another charge; a detail limit never lowers totals.
    Without a price table they show tokens and "no price table"; a host whose
    logs cannot be read says "no data", never 0. On a phone, tap the coin
    signs to open them. With the GitHub source signed in, the **post office**
@@ -261,7 +265,16 @@ hosts stay usable.
    for you, what finished and what merged while you were away. Each line
    opens **Needs you** at that item, which carries a "new" dot (the merged
    line opens **Needs you** itself); **✕** clears
-   the recap. Answer a question from its offered
+   the recap. Each time you come back (World opening, or its page
+   back on screen after 30 minutes or more hidden), the **Town Master**, the
+   small figure beside the board, greets you with one card: when you were
+   last here, the same since-you-left lines and, when a newer World release
+   is out, a **See update** button that opens **Menu** at its update entry.
+   Board shows the card at its hub beside the bin, Desk at its summary, and
+   a phone as a sheet with **Back**. It waits while Chat, **Needs you** or
+   another window covers its place (on a phone, while any is open). Close it with **✕**, Escape or a tap elsewhere;
+   tap the figure to see it again, and untick **Show this on start** (or
+   switch off **Menu → Town Master greeting**) to stop it. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound
@@ -832,6 +845,17 @@ on your phone and desktop.
    **Status colours…** and **Help**. Surface and status choices stay in this
    browser; they do not change the card colours shared across your devices.
    Reset status colours to use the chosen surface's defaults again.
+   The chip at the top left counts what Town's board counts: busy, waiting,
+   done (finished, not yet reviewed) and quiet agents on every host. Tap it for
+   the **Board summary**: the counts, expenses today and over 7 days, each
+   harness's limits with how long ago they were read, the finished work you
+   have not reviewed (tap one to show it on the board) and each host's line.
+   Escape or the chip closes it; on a phone the summary scrolls within the
+   screen. Each host zone's name carries that host's counts, expenses and
+   limits, each workspace card its usage today and over 7 days, and each
+   agent's tab or pane row what it is doing now: its running step and time
+   (amber once it has run long), **Not reviewed** or **Reviewed** for a
+   finish, or how long it has been idle. The numbers are Town's own.
    An agent's card shows a ⚑ chip with its quest progress, such as 2/5; hover
    the chip for the quest and its current step.
    The round **+** on a workspace's right edge (shown on hover or selection)

@@ -1,0 +1,194 @@
+/* Town's facts on Board (#787): the summary, zone and card lines. No motion. */
+
+.board-facts {
+  position: absolute;
+  z-index: 5;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 84px);
+  color: var(--board-ink);
+  font-size: 13px;
+  pointer-events: none;
+}
+.board-facts > * {
+  pointer-events: auto;
+}
+.board-facts-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 999px;
+  background: var(--board-card);
+  box-shadow: var(--board-shadow);
+  color: var(--board-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.board-facts-chip [data-status="working"],
+.board-facts-counts [data-status="working"] dd {
+  color: var(--s-working);
+}
+.board-facts-chip [data-status="blocked"],
+.board-facts-counts [data-status="blocked"] dd {
+  color: var(--s-blocked);
+}
+.board-facts-chip [data-status="done"],
+.board-facts-counts [data-status="done"] dd {
+  color: var(--s-done);
+}
+.board-facts-chip [data-status="idle"],
+.board-facts-counts [data-status="idle"] dd {
+  color: var(--board-soft);
+}
+.board-facts-panel {
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 24px));
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 10px 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 12px;
+  background: var(--board-card);
+  box-shadow: var(--board-shadow);
+}
+.board-facts-panel section + section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--board-line);
+}
+.board-facts-panel h3 {
+  margin: 0 0 4px;
+  color: var(--board-soft);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.board-facts-counts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 0;
+  text-align: center;
+}
+.board-facts-counts dt {
+  color: var(--board-soft);
+  font-size: 11.5px;
+}
+.board-facts-counts dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+.board-facts-note {
+  margin: 4px 0 0;
+  color: var(--board-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.board-facts-note:empty {
+  display: none;
+}
+.board-facts-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 0;
+}
+.board-facts-line span {
+  color: var(--board-soft);
+}
+.board-facts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+.board-facts-list li[data-low] {
+  color: var(--s-blocked);
+}
+.board-facts-list li[data-stale] {
+  color: var(--board-soft);
+}
+.board-facts-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--board-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.board-facts-list small,
+.board-facts-host-line {
+  display: block;
+  color: var(--board-soft);
+  font-size: 12px;
+}
+
+/* A host zone's facts, beside its name. */
+.board-zone-facts {
+  display: inline-flex;
+  gap: 10px;
+  color: var(--board-soft);
+  font-size: 12px;
+  font-weight: 400;
+}
+.board-zone-facts [data-stale] {
+  opacity: 0.7;
+}
+.board-far .board-zone-facts {
+  font-size: 30px;
+  gap: 24px;
+}
+
+/* A workspace card's usage. */
+.board-economy {
+  margin-top: 2px;
+  color: var(--board-soft);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+.board-far .board-economy {
+  font-size: 22px;
+}
+
+/* What an agent is doing now, at the end of a tab card's line or as a pane
+   row's state; amber once its step has run long. */
+.board-now {
+  font-weight: 400;
+}
+.board-now-inline::before {
+  content: " · ";
+}
+.board-pane-state.board-now {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-now[data-long] {
+  color: var(--s-blocked);
+  font-weight: 700;
+}

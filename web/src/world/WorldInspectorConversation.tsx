@@ -70,6 +70,7 @@ import {
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
 import { townPortrait } from "./town/townSprites";
+import { useAgentContextFill } from "./agentContextFill";
 import {
   loadedWorkspaceInspector,
   registerWorkspaceInspectorLoader,
@@ -195,6 +196,16 @@ function InspectorResources({
     "world-inspector",
   );
   const appearance = useAppearanceDocument();
+  // An agent window's context fill, under its icon in the bar.
+  const contextFill = useAgentContextFill(
+    conversation.context.kind === "agent" && conversation.paneId
+      ? {
+          connectionId: conversation.connectionId,
+          generation: conversation.runtimeGeneration,
+          paneId: conversation.paneId,
+        }
+      : null,
+  );
   const { workspaces, panes, tabs, status, catalogueReady } = useStoreSelector(
     (snapshot) => ({
       workspaces: snapshot.workspaces,
@@ -883,6 +894,7 @@ function InspectorResources({
                         portrait: townPortrait(conversation.nodeId),
                       }
                     : conversation.context),
+                  contextFill: presentationStale ? null : contextFill,
                   tabName:
                     tabs.find((tab) => tab.tab_id === conversation.tabId)
                       ?.label ??

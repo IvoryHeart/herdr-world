@@ -1,3 +1,4 @@
+import type { AgentContextFill } from "./world/agentContextFill";
 import type { ReviewAnnotation } from "./annotations";
 import { getShortcutSnapshot } from "./shortcutPreferences";
 import { matchesShortcut, type ShortcutBindings } from "./shortcutBindings";
@@ -26,6 +27,8 @@ export interface WorkspaceInspectorContext {
   statusTone?: string;
   /** An image of the agent, drawn by the host view in place of its icon. */
   portrait?: string;
+  /** How full the agent's context is, as a bar under its icon. */
+  contextFill?: AgentContextFill | null;
 }
 const DEFAULT_INSPECTOR_VIEWS: readonly InspectorView[] = [
   "files",

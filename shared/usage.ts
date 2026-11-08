@@ -55,7 +55,14 @@ export type UsageTotal = {
 export type UsageRollup = UsageTotal &
   UsageTarget & {
     level: "host" | "workspace" | "tab" | "pane";
+    /** Host usage without a current room, computed before detail limits. */
+    unattributed?: UsageTotal;
   };
+export type UsageSummary = {
+  total: UsageTotal;
+  unattributed: UsageTotal;
+  rollups: UsageRollup[];
+};
 export type WorldUsageSnapshot = {
   version: 1;
   incarnation: string;
@@ -63,6 +70,11 @@ export type WorldUsageSnapshot = {
   window: { kind: "today" | "7d"; from: number; until: number };
   retention_days: 7;
   truncated: boolean;
+  /** Detail rows/rollups omitted for transport; summary totals are unaffected. */
+  details_truncated?: boolean;
+  price_table_version?: string | null;
+  /** Today's projection from this same read, supplied with a seven-day read. */
+  today?: UsageSummary;
   entities: UsageEntity[];
   sources: UsageSource[];
   total: UsageTotal;
@@ -70,6 +82,11 @@ export type WorldUsageSnapshot = {
   rollups: UsageRollup[];
   /** Subscription limits per host and harness, independent of `window`. */
   limits: UsageLimit[];
+  /**
+   * How full each attributed agent's context is, independent of `window`.
+   * Absent from older services.
+   */
+  contexts?: UsageContext[];
   telemetry: {
     role: "comparison";
     included_in_totals: false;
@@ -78,6 +95,24 @@ export type WorldUsageSnapshot = {
     observed_at: number;
     total_tokens: number;
   };
+};
+
+/**
+ * One agent pane's current session: the newest response's prompt (input plus
+ * cached tokens) against its model's window. Only panes with a unique current
+ * session match appear; `window_tokens` is null when the model is unknown.
+ */
+export type UsageContext = {
+  connection_id: string;
+  connection_generation: number;
+  workspace_id: string;
+  tab_id: string;
+  pane_id: string;
+  harness: string;
+  model: string;
+  used_tokens: number;
+  window_tokens: number | null;
+  observed_at: number;
 };
 
 /** One subscription window: its length, how much is used and when it resets. */

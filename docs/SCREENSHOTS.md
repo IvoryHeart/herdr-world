@@ -66,8 +66,10 @@ The advisory [Town golden images workflow](../.github/workflows/town-golden.yml)
 compares the production `TownCanvas` (Pixi scene and DOM overlays) with five stored
 PNGs on PR changes and main pushes. It is separate from required Delivery checks.
 The fixture contains only synthetic hosts, four rooms, sixteen desks and mixed
-working, blocked, finished and idle agents. It does not start World or Herdr,
-contact a runtime, or capture a user's browser. The surrounding World shell, rail,
+working, blocked, finished and idle agents. Its usage read is synthetic and
+carries only context readings: two agents at 90% and 95% look tired at their
+desks (a sweat drop), and the expense boards show no data. It does not start
+World or Herdr, contact a runtime, or capture a user's browser. The surrounding World shell, rail,
 Inspector, gestures and runtime effects retain their existing tests.
 
 The fixture fixes its random seed, wall clock, 16 ms frame clock, dark theme,
