@@ -1,0 +1,158 @@
+/* Town's edge arrows, the Next pulse and its label (TownEdgeArrows.tsx).
+   Marks use Town's state colours: --town-wait (!), the ask blue (?) and
+   --town-done (✓), always with the mark's glyph. */
+
+.town-edge-arrows {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.town-edge-arrow {
+  --edge-mark: var(--town-wait, #ffb547);
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 6px;
+  transform: translate(-50%, -50%);
+  color: var(--town-ink, #2a1a04);
+  background: var(--edge-mark);
+  border: 2px solid var(--town-edge, #090c11);
+  border-radius: 17px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  font:
+    800 14px / 1 "Rubik",
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    left 0.12s ease,
+    top 0.12s ease;
+}
+
+.town-edge-arrow[data-mark="asks"] {
+  --edge-mark: #6ca9ee;
+}
+
+.town-edge-arrow[data-mark="done"] {
+  --edge-mark: var(--town-done, #7be08f);
+}
+
+.town-edge-arrow:hover {
+  filter: brightness(1.08);
+}
+
+.town-edge-arrow:focus-visible {
+  outline: 2px solid var(--town-text, #f1efe6);
+  outline-offset: 2px;
+}
+
+/* A triangle on the arrow's rim, turned towards what it points at. */
+.town-edge-arrow-tip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 9px solid var(--town-edge, #090c11);
+  transform: translate(-50%, -50%) rotate(var(--angle)) translateX(24px);
+  transform-origin: 50% 50%;
+}
+
+.town-edge-arrow-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A brief ring on the agent an arrow or Next went to (world pixels). */
+.town-pulse {
+  --edge-mark: var(--town-wait, #ffb547);
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--edge-mark);
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(var(--iz));
+  pointer-events: none;
+  animation: town-pulse 0.5s ease-out 3 both;
+}
+
+.town-pulse[data-mark="asks"] {
+  --edge-mark: #6ca9ee;
+}
+
+.town-pulse[data-mark="done"] {
+  --edge-mark: var(--town-done, #7be08f);
+}
+
+@keyframes town-pulse {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(calc(var(--iz) * 0.5));
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(calc(var(--iz) * 1.6));
+  }
+}
+
+/* Next's position, "2 of 7 · N next", briefly at the top of the map. */
+.town-next-label {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  color: var(--town-text, #f1efe6);
+  background: var(--town-panel, rgba(17, 21, 29, 0.94));
+  border: 2px solid var(--town-edge, #090c11);
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+  animation: town-next-label-in 0.18s ease-out;
+}
+
+.town-next-label[hidden] {
+  display: none;
+}
+
+@keyframes town-next-label-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+}
+
+@media (max-width: 640px) {
+  .town-edge-arrow {
+    min-width: 44px;
+    height: 44px;
+    border-radius: 22px;
+  }
+  .town-edge-arrow-tip {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateX(29px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-edge-arrow {
+    transition: none;
+  }
+  .town-pulse {
+    display: none;
+  }
+  .town-next-label {
+    animation: none;
+  }
+}

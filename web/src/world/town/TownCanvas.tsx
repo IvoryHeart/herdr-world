@@ -19,6 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import type { RoomPins } from "./townModel";
+import { useTownStepWants, type TownStepStore } from "./useTownStepWants";
 import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
@@ -55,6 +56,7 @@ import { townCalls } from "./TownRail";
 import {
   createTownRenderer,
   nextTownTask,
+  townRendererFailed,
   type TownRendererHandle,
 } from "./townRenderer";
 import {
@@ -82,6 +84,8 @@ import {
 } from "./townReceptionFilter";
 import "./townBoard.css";
 import "./townTeams.css";
+import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";
+import { useTownEdgeNav, type TownNeedsYouOrder } from "./useTownEdgeNav";
 import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
 import type { OfficeAgent } from "../officeProjectionTypes";
 
@@ -111,6 +115,7 @@ export function TownCanvas({
   onFindHeld,
   onActivateAsk,
   quests = NO_QUESTS,
+  steps,
   conversationTargets,
   onSelect,
   onActivateAgent,
@@ -134,8 +139,11 @@ export function TownCanvas({
   chrome = NO_CHROME,
   trace = NO_TRACE,
   centerActions,
+  needsYouOrder,
   activityAt,
 }: {
+  /** Needs you's items in order for N: item key and agent leaf ID, if any. */
+  needsYouOrder?: TownNeedsYouOrder;
   /** When an agent last worked (its leaf's activity), for the Idle time lens. */
   activityAt?: (agent: OfficeAgent) => number | undefined;
   /** The town center's radial menu; without it the center only shows. */
@@ -186,6 +194,8 @@ export function TownCanvas({
   onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
+  /** Working agents' steps, as thought bubbles (useTownStepWants). */
+  steps?: TownStepStore;
   conversationTargets: readonly WorldConversationAnchorTarget[];
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
@@ -319,6 +329,7 @@ export function TownCanvas({
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
+  const stepWants = useTownStepWants(steps, () => latest.current, rendererRef);
   const current = {
     chrome,
     calm,
@@ -335,6 +346,8 @@ export function TownCanvas({
     arrivingKeys,
     receptionHeldKeys,
     quests,
+    steps,
+    needsYouOrder,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -428,6 +441,8 @@ export function TownCanvas({
     | ((event: PointerEvent, roomKey: string, press: TownRoomPress) => boolean)
     | null
   >(null);
+  // Arrows to what needs you off screen, and N for the next one.
+  const edge = useTownEdgeNav(current, view, rendererRef, hostRef);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
     // The canvas and its targets show this camera until the next frame, so
     // presses are hit-tested against it (view.drawn).
@@ -437,6 +452,7 @@ export function TownCanvas({
     if (moved) reaimCarry.current?.();
     const layer = worldRef.current;
     hud.drew(camera, level, latest.current.layout);
+    stepWants.want(camera, level);
     if (layer) {
       const tx = camera.viewport.width / 2 - camera.x * camera.z;
       const ty = camera.viewport.height / 2 - camera.y * camera.z;
@@ -459,6 +475,7 @@ export function TownCanvas({
     }
     hud.framed();
     ring.place();
+    edge.frameArrows(camera, level);
     // Inspected agents walk under a still camera, so their lines follow every
     // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
     if (posed || latest.current.conversationTargets.length > 0)
@@ -496,6 +513,7 @@ export function TownCanvas({
     awayKeys: latest.current.awayKeys,
     arrivingKeys: latest.current.arrivingKeys,
     heldKeys: latest.current.receptionHeldKeys,
+    stepGlyph: latest.current.steps?.hasGlyph,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -548,16 +566,7 @@ export function TownCanvas({
       })
       .catch((error: unknown) => {
         if (disposed) return;
-        if (DEVTOOLS)
-          traceRef.current.record("error", {
-            where: "renderer",
-            message: String(error),
-          });
-        if (window.__HERDR_TOWN_RENDERER__)
-          window.__HERDR_TOWN_RENDERER__.lastError =
-            error instanceof Error
-              ? error.message.slice(0, 160)
-              : "renderer failed";
+        townRendererFailed(error, traceRef.current);
         setFailure(true);
       });
     const observer = new ResizeObserver(() => {
@@ -614,6 +623,7 @@ export function TownCanvas({
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
+    steps,
     calm,
   ]);
 
@@ -950,11 +960,14 @@ export function TownCanvas({
             targets={lens.targets}
             deskBadges={deskBadges}
             quests={quests}
+            steps={steps}
             renderer={rendererRef}
             pennants={pennants.current}
           />
         </TownHudContext.Provider>
+        <TownPulseRing pulse={edge.pulse} />
       </div>
+      <TownEdgeOverlay edge={edge} />
       <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
         <TownBoard
           counts={summary.counts}

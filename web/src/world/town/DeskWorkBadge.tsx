@@ -81,10 +81,13 @@ const PHONE = 640;
 export function BadgePopover({
   anchor,
   onClose,
+  label = "Pull request",
   children,
 }: {
   anchor: { current: HTMLElement | null };
   onClose(): void;
+  /** The dialog's name. */
+  label?: string;
   children: React.ReactNode;
 }) {
   const panel = useRef<HTMLDivElement | null>(null);
@@ -143,7 +146,7 @@ export function BadgePopover({
       ref={panel}
       className="town-badge-popover"
       role="dialog"
-      aria-label="Pull request"
+      aria-label={label}
       data-placed={placed ? "" : undefined}
     >
       {children}

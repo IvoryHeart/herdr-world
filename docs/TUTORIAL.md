@@ -184,7 +184,15 @@ hosts stay usable.
    a country lane, and carries on to the edges of the window however far you
    zoom out or pan; it looks the same after a reload, and only the land next to
    a growing building changes. Drag the background to pan, or use arrow keys
-   when the scene has focus. Tap a room to zoom in. Large towns may initially
+   when the scene has focus. Tap a room to zoom in. Zoomed into a room or
+   desk, an arrow on the view's edge points at each agent that needs you out
+   of sight, with its mark (**!**, **?** or **✓**) and a count when several
+   lie the same way, such as `! 3`; click or tap it to travel there and see
+   the agent's mark pulse. On a desktop, press **N** to visit the next thing
+   that needs you, in Needs you's order: the camera moves to the agent, Needs
+   you opens at it and a label counts "1 of 7 · N next". **Shift+N** goes
+   back. With nothing waiting, **N** says "Nothing needs you". Rebind both
+   under **Town** in Keyboard shortcuts. Large towns may initially
    show roofs; zoom in to see room summaries and desks. Phones stack buildings
    vertically. Room nameplates fit their rooms: long names end in an ellipsis;
    hover the name for its full text. The colour, active/total agent count and
@@ -228,7 +236,12 @@ hosts stay usable.
    those totals, not another charge; a detail limit never lowers totals.
    Without a price table they show tokens and "no price table"; a host whose
    logs cannot be read says "no data", never 0. On a phone, tap the coin
-   signs to open them. For the
+   signs to open them. With the GitHub source signed in, the **post office**
+   left of the town center, on the first street, holds your open pull requests as parcels,
+   ready to merge first; its sign counts ready, failing and waiting. Hover a
+   parcel for its title and state and tap it for the pull request card with
+   **Merge…**; a merged parcel is carried off. On a phone, tap the post box
+   sign on the town center. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex and Claude
    subscription window is left (amber and **low** under 15 %). A reading more
@@ -308,6 +321,13 @@ hosts stay usable.
    or `/loop`) shows a swallowtail pennant beside its seat, with a progress
    bar when the quest has steps; tap the pennant to see **Quest** and its
    title.
+   Working agents show a thought bubble over their heads with a glyph for
+   what they are doing now: editing, running tests or a command, reading
+   code, browsing the web, thinking, or waiting on a subagent. A step that
+   has run unusually long shows its time in amber, such as **14m**. Zoom to a
+   desk, or select it, to read what the agent is doing now and the step in
+   words, such as **Run the login tests · tests 3m**. Zoomed out further,
+   the bubbles go.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the

@@ -7,6 +7,9 @@
  *
  *   TOWN_SCALE=1 CHROME_BIN=… bun run test scripts/town-scale.browser.test.ts
  *
+ * TOWN_SCALE_STEPS=off measures it without the working agents' thought
+ * bubbles, for comparison.
+ *
  * HERDR_WORLD_TEST_GPU=1 renders with the hardware GPU instead of SwiftShader.
  */
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
@@ -37,6 +40,8 @@ export async function runTownScale(options: {
   chrome: string;
   directory: string;
   gpu?: boolean;
+  /** False measures the town without its thought bubbles. */
+  steps?: boolean;
 }) {
   const directory = resolve(options.directory);
   await mkdir(directory, { recursive: true });
@@ -114,7 +119,9 @@ export async function runTownScale(options: {
           source:
             'window.scaleLoaded = new Promise(r => addEventListener("load", r, { once: true }));',
         });
-        await command("Page.navigate", { url: server.url.href });
+        await command("Page.navigate", {
+          url: server.url.href + (options.steps === false ? "?steps=off" : ""),
+        });
         const evaluate = async (expression: string) => {
           const result = await command("Runtime.evaluate", {
             expression,
@@ -176,7 +183,12 @@ export async function runTownScale(options: {
         await cdp.command("Target.closeTarget", { targetId });
       }
     }
-    const report = { browser: version, gpu: options.gpu ?? false, receipts };
+    const report = {
+      browser: version,
+      gpu: options.gpu ?? false,
+      steps: options.steps !== false,
+      receipts,
+    };
     await Bun.write(
       join(directory, "report.json"),
       JSON.stringify(report, null, 2) + "\n",

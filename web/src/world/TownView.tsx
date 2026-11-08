@@ -1,4 +1,7 @@
 import { AnswerOutboxContext } from "./town/answerOutbox";
+import { TownStepStore } from "./town/townStepStore";
+import { useTownStepReads } from "./town/useTownStepReads";
+import { townScaleSceneRequested } from "./town/townScaleScene";
 import { askingKeysForWorld } from "./worldAskTargets";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentQuests } from "./agentQuests";
@@ -90,9 +93,18 @@ import { townDeskAgentKey } from "./town/townOpen";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
-import { reviewedAgentKeys, useReviewedWork } from "./useReviewedWork";
+import {
+  awaitsReviewNow,
+  reviewedAgentKeys,
+  useReviewedWork,
+} from "./useReviewedWork";
 import { useShownReport } from "./shownReport";
-import { needsYouLeafKey, offerNeedsYouOutbox, openNeedsYou } from "./needsYou";
+import {
+  needsYouItems,
+  needsYouLeafKey,
+  offerNeedsYouOutbox,
+  openNeedsYou,
+} from "./needsYou";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
 
@@ -357,6 +369,13 @@ export default function TownView({
   const summonedKeys = useMemo(() => new Set(summoned.keys()), [summoned]);
   // Each agent's quest, marked over its desk by agent key.
   const agentQuests = useAgentQuests(world.leaves);
+  // Working agents' current steps, read only for those Town shows at the
+  // room or desk level; `?scene=town-scale` shows synthetic ones.
+  const [townSteps] = useState(() => new TownStepStore());
+  const [stepScene] = useState(() =>
+    townScaleSceneRequested(window.location.search),
+  );
+  useTownStepReads(townSteps, world.leaves, stepScene);
   // A Town agent's key is its leaf ID, so the marks come straight from the
   // quests (a dense town's roster is large).
   const questMarks = useMemo(
@@ -716,30 +735,20 @@ export default function TownView({
     }
     selectOfficeKey(key);
   };
-  useEffect(() => {
-    const keydown = (event: KeyboardEvent) => {
-      // A key sent to the document or window has no element target.
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        (target &&
-          (target.isContentEditable ||
-            ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
-            target.closest(".xterm")))
-      )
-        return;
-      if (event.key === "n" || event.key === "N") {
-        const next = nextCall(null);
-        if (!next) return;
-        event.preventDefault();
-        openAgent(next.agent.key);
-      }
-    };
-    window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
-  });
+  /**
+   * Needs you's items in its order for Town's N, read when it is pressed so
+   * the service's stop notices do not re-render Town.
+   */
+  const needsYouOrder = () =>
+    needsYouItems(
+      latestWorld.current,
+      townSummary.summary.asks,
+      awaitsReviewNow(),
+    ).map((item) => ({
+      itemKey: item.key,
+      leafId: item.leaf?.id ?? null,
+      mark: item.kind,
+    }));
   /** The peeked agent's desk colour: its terminal's, shared across World. */
   const peekDeskColor = (agentKey: string) => {
     const deskKey = office.paneRoster.find(
@@ -890,6 +899,7 @@ export default function TownView({
             // A letter at reception: its question in Needs you.
             onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}
+            steps={townSteps}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
             onActivateAgent={openReply}
@@ -929,6 +939,7 @@ export default function TownView({
             calm={preferences.townCalm}
             chrome={TOWN_CHROME}
             centerActions={townCenter}
+            needsYouOrder={needsYouOrder}
             activityAt={activityAt}
             roomActions={{
               onToggleFold: toggleRoomFold,
