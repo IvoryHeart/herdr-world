@@ -21,3 +21,6 @@ regenerated: the pinned capture did not start in this environment.
 | GitHub signed out: closed, no parcels, no counts | [signed-out](signed-out.png) |
 | More than the yard holds: the "+N" pile | [pile](pile.png) |
 | Phone: the folded sign's list | [phone-folded](phone-folded.png) |
+
+After the owner's phone review the folded sign's envelope became the red
+pillar box painted by the house door; `phone-folded.png` predates that change.

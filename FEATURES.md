@@ -161,7 +161,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     post office is closed and says to connect GitHub in **Sources**, with no
     parcels and no counts; when a refresh fails it keeps the last list as
     unknown and says GitHub is out of date. On a phone it folds to a sign on
-    the town center's right wing, in view at home zoom (coloured ready,
+    the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
     failing and waiting counts) that opens the parcels as a list. For trying it without real pull
     requests, open World with `?townPostFixture` (synthetic pull requests in
     every state; ten seconds later the first ready one merges),

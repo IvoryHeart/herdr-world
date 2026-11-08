@@ -227,7 +227,7 @@ hosts stay usable.
    in the park left of the plaza holds your open pull requests as parcels,
    ready to merge first; its sign counts ready, failing and waiting. Hover a
    parcel for its title and state and tap it for the pull request card with
-   **Merge…**; a merged parcel is carried off. On a phone, tap the envelope
+   **Merge…**; a merged parcel is carried off. On a phone, tap the post box
    sign on the town center. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex and Claude

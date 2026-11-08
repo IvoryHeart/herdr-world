@@ -1,6 +1,5 @@
 import { memo, useEffect, useRef, useState, type FocusEvent } from "react";
 import { createPortal } from "react-dom";
-import { Mail } from "lucide-react";
 import type { WorldSourcesSnapshot } from "../../../../shared/worldSources";
 import {
   Popover,
@@ -433,6 +432,11 @@ function ParcelList({
   );
 }
 
+/** The red pillar box painted by the house door, as the folded sign's mark. */
+function PostBox() {
+  return <span className="town-post-box" aria-hidden="true" />;
+}
+
 /**
  * On a narrow town: a sign on the town center's right wing, inside a phone's
  * home view (townPostFoldAt), opening the post office as a list, or how to
@@ -465,7 +469,7 @@ function FoldedSign({
           onPointerDown={(event) => event.stopPropagation()}
           onFocus={onFocus}
         >
-          <Mail size={12} aria-hidden="true" />
+          <PostBox />
           {office.status === "open" && !office.stale ? (
             <span className="town-post-fold-counts">
               {(["ready", "failing", "waiting"] as const).map((state) => (
@@ -487,6 +491,7 @@ function FoldedSign({
         aria-label="Post office"
       >
         <header className="town-post-popover-title">
+          <PostBox />
           <span>POST OFFICE</span>
         </header>
         <p className="town-post-popover-counts">{townPostSignText(office)}</p>

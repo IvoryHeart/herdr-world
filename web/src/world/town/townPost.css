@@ -355,6 +355,55 @@
   outline-offset: 2px;
 }
 
+/*
+ * The pillar box by the house door (townPostPaint.ts), drawn small: a red
+ * post with a dark cap, a letter slot, a gold plate and a dark foot. It marks
+ * the folded sign, so a phone's town shows a post office, not an envelope.
+ */
+.town-post-box {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 17px;
+  margin: 0 1px 2px;
+  background:
+    linear-gradient(#8a1418 0 3px, transparent 3px),
+    linear-gradient(90deg, #ec5a5f 0 2px, transparent 2px), #d4252b;
+  border: 1px solid #1c1722;
+  border-radius: 5px 5px 1px 1px;
+  box-shadow: 0 2px 0 #2a1a1a;
+  image-rendering: pixelated;
+}
+
+/* The letter slot. */
+.town-post-box::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 5px;
+  width: 6px;
+  height: 2px;
+  background: #1c1722;
+}
+
+/* The gold collection plate. */
+.town-post-box::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 9px;
+  width: 4px;
+  height: 3px;
+  background: #e8c75a;
+}
+
+.town-post-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .town-post-fold-counts {
   display: inline-flex;
   gap: 3px;

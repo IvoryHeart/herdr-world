@@ -242,6 +242,8 @@ if (process.env.TOWN_POST_DOM !== "1") {
     expect(fold.getAttribute("aria-label")).toBe(
       "Post office: 1 ready to merge, 0 failing, 0 waiting, 1 draft. Open",
     );
+    // A pillar box marks the folded sign, as one stands by the house door.
+    expect(fold.querySelector(".town-post-box")).not.toBeNull();
     await office.close();
   });
 }
