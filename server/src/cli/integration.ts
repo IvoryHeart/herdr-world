@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   type CliCommand,
+  type CliRuntime,
   displayPath,
   EXIT_FAILURE,
   EXIT_OK,
@@ -60,10 +61,13 @@ HERDR_WORLD_INTEGRATION_VERSION=${WORLD_SKILL_VERSION}
 ${WORLD_SKILL}`;
 }
 
-function installedState(file: string, id: string) {
+function installedState(
+  file: string,
+  id: string,
+): Pick<WorldIntegrationStatus, "state" | "version"> {
   const info = stat(file);
-  if (!info) return "not installed";
-  if (!info.isFile()) return "outdated";
+  if (!info) return { state: "not_installed" };
+  if (!info.isFile()) return { state: "outdated" };
   const contents = readFileSync(file, "utf8");
   const ids = [
     ...contents.matchAll(/^HERDR_WORLD_INTEGRATION_ID=([^\r\n]+)\r?$/gm),
@@ -75,9 +79,126 @@ function installedState(file: string, id: string) {
   const valid =
     ids.length === 1 && ids[0]![1] === id && Number.isSafeInteger(version);
   return valid
-    ? `${version >= WORLD_SKILL_VERSION ? "current" : "outdated"} (v${version})`
-    : "outdated";
+    ? {
+        state: version >= WORLD_SKILL_VERSION ? "current" : "outdated",
+        version,
+      }
+    : { state: "outdated" };
 }
+
+export type WorldIntegrationState =
+  | "current"
+  | "outdated"
+  | "not_installed"
+  | "unsupported";
+
+/** One harness's World skill, as the CLI and Settings report it. */
+export interface WorldIntegrationStatus {
+  harness: WorldHarness;
+  state: WorldIntegrationState;
+  /** The installed version, when its marker is valid. */
+  version?: number;
+  available_version: number;
+  /** Home-relative skill file; absent when unsupported. */
+  path?: string;
+  reason?: string;
+  /** Other harnesses that read, and lose on removal, the same file. */
+  shared_with: WorldHarness[];
+}
+
+const UNSUPPORTED_REASON = "no documented skill folder";
+
+export function isWorldHarness(name: unknown): name is WorldHarness {
+  return WORLD_HARNESSES.includes(name as WorldHarness);
+}
+
+export function worldIntegrationStatus(
+  harness: WorldHarness,
+  runtime: CliRuntime,
+): WorldIntegrationStatus {
+  const paths = integrationPaths(harness, runtime);
+  const base = { harness, available_version: WORLD_SKILL_VERSION };
+  if (!paths)
+    return {
+      ...base,
+      state: "unsupported",
+      reason: UNSUPPORTED_REASON,
+      shared_with: [],
+    };
+  return {
+    ...base,
+    ...installedState(paths.file, paths.id),
+    path: displayPath(paths.file, runtime),
+    shared_with: SHARED_HARNESSES.includes(harness)
+      ? SHARED_HARNESSES.filter((other) => other !== harness)
+      : [],
+  };
+}
+
+function supportedPaths(harness: WorldHarness, runtime: CliRuntime) {
+  const paths = integrationPaths(harness, runtime);
+  if (!paths)
+    throw new Error(`${harness}: unsupported (${UNSUPPORTED_REASON})`);
+  return paths;
+}
+
+/** Writes the release's skill for one harness; the CLI and Settings share it. */
+export function installWorldIntegration(
+  harness: WorldHarness,
+  runtime: CliRuntime,
+) {
+  const paths = supportedPaths(harness, runtime);
+  let configured = false;
+  try {
+    configured = statSync(paths.config).isDirectory();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (!configured)
+    throw new Error(
+      `${displayPath(paths.config, runtime)} does not exist. Run ${harness} first to create its configuration folder.`,
+    );
+  requireRegular(paths.folder, true);
+  requireRegular(paths.file);
+  mkdirSync(paths.folder, { recursive: true });
+  const temporary = join(paths.folder, `.SKILL.md-${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, skillFile(paths.id), {
+      flag: "wx",
+      mode: 0o644,
+    });
+    renameSync(temporary, paths.file);
+  } finally {
+    if (stat(temporary)) unlinkSync(temporary);
+  }
+}
+
+/** Removes World's skill file, and its folder when empty. */
+export function uninstallWorldIntegration(
+  harness: WorldHarness,
+  runtime: CliRuntime,
+) {
+  const paths = supportedPaths(harness, runtime);
+  requireRegular(paths.folder, true);
+  requireRegular(paths.file);
+  if (stat(paths.file)) unlinkSync(paths.file);
+  try {
+    rmdirSync(paths.folder);
+  } catch (error) {
+    if (
+      !["ENOENT", "ENOTEMPTY", "EEXIST"].includes(
+        (error as NodeJS.ErrnoException).code ?? "",
+      )
+    )
+      throw error;
+  }
+}
+
+const SHARED_LABELS: Partial<Record<WorldHarness, string>> = {
+  codex: "Codex",
+  pi: "Pi",
+  kimi: "Kimi",
+};
 
 export const integrationCommand: CliCommand = {
   name: "integration",
@@ -100,80 +221,37 @@ removing any of them removes that file for all three. No service is required.`,
     const [action, name] = positionals;
     if (!["install", "uninstall", "status"].includes(action ?? ""))
       throw new UsageError("expected install, uninstall or status");
-    if (
-      (!name && action !== "status") ||
-      (name && !WORLD_HARNESSES.includes(name as WorldHarness))
-    )
+    if ((!name && action !== "status") || (name && !isWorldHarness(name)))
       throw new UsageError(
         name ? `unknown harness: ${name}` : "missing harness",
       );
     let exit = EXIT_OK;
     for (const harness of name ? [name as WorldHarness] : WORLD_HARNESSES) {
-      const paths = integrationPaths(harness, context.runtime);
-      if (!paths) {
-        context.log(`${harness}: unsupported (no documented skill folder)`);
+      const status = worldIntegrationStatus(harness, context.runtime);
+      if (status.state === "unsupported") {
+        context.log(`${harness}: unsupported (${status.reason})`);
         if (action !== "status") exit = EXIT_FAILURE;
         continue;
       }
-      const path = displayPath(paths.file, context.runtime);
       if (action === "install") {
-        let configured = false;
-        try {
-          configured = statSync(paths.config).isDirectory();
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        }
-        if (!configured)
-          throw new Error(
-            `${displayPath(paths.config, context.runtime)} does not exist. Run ${harness} first to create its configuration folder.`,
-          );
-        requireRegular(paths.folder, true);
-        requireRegular(paths.file);
-        mkdirSync(paths.folder, { recursive: true });
-        const temporary = join(paths.folder, `.SKILL.md-${randomUUID()}.tmp`);
-        try {
-          writeFileSync(temporary, skillFile(paths.id), {
-            flag: "wx",
-            mode: 0o644,
-          });
-          renameSync(temporary, paths.file);
-        } finally {
-          if (stat(temporary)) unlinkSync(temporary);
-        }
-        context.log(`${harness}: installed (${path})`);
+        installWorldIntegration(harness, context.runtime);
+        context.log(`${harness}: installed (${status.path})`);
       } else if (action === "uninstall") {
-        requireRegular(paths.folder, true);
-        requireRegular(paths.file);
-        if (stat(paths.file)) unlinkSync(paths.file);
-        try {
-          rmdirSync(paths.folder);
-        } catch (error) {
-          if (
-            !["ENOENT", "ENOTEMPTY", "EEXIST"].includes(
-              (error as NodeJS.ErrnoException).code ?? "",
-            )
-          )
-            throw error;
-        }
-        context.log(`${harness}: uninstalled (${path})`);
-        if (SHARED_HARNESSES.includes(harness)) {
-          const labels: Record<string, string> = {
-            codex: "Codex",
-            pi: "Pi",
-            kimi: "Kimi",
-          };
+        uninstallWorldIntegration(harness, context.runtime);
+        context.log(`${harness}: uninstalled (${status.path})`);
+        if (status.shared_with.length > 0)
           context.log(
-            `The shared file is also removed for ${SHARED_HARNESSES.filter(
-              (other) => other !== harness,
-            )
-              .map((other) => labels[other])
+            `The shared file is also removed for ${status.shared_with
+              .map((other) => SHARED_LABELS[other])
               .join(" and ")}.`,
           );
-        }
-      } else
-        context.log(
-          `${harness}: ${installedState(paths.file, paths.id)} (${path})`,
-        );
+      } else {
+        const label =
+          status.state === "not_installed" ? "not installed" : status.state;
+        const version =
+          status.version === undefined ? "" : ` (v${status.version})`;
+        context.log(`${harness}: ${label}${version} (${status.path})`);
+      }
     }
     return exit;
   },

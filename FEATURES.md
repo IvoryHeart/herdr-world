@@ -1202,6 +1202,10 @@ Installation is explicit, local to the host, and needs no running World service.
 `~/.agents/skills/herdr-world/SKILL.md`; removing one also removes it for
 the other two, which the command names. OMP, Letta and MastraCode report
 unsupported. See [paths and overrides](./docs/harness-integrations.md).
+**Menu → Configuration → Integrations** shows the same state and path as a
+**World skill** line under each Herdr harness on World's own host, with
+Install, Update and Uninstall buttons that run the CLI's installer; uninstalling
+a shared file confirms which harnesses lose it first.
 
 Agents change World objects themselves from their pane, through the running
 World service. `herdr-world --skill` prints the guide; commands answer in JSON

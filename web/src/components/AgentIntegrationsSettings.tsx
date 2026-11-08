@@ -7,6 +7,11 @@ import {
   useConnectionClient,
 } from "../useConnectionClient";
 import { focusIfUnchanged } from "./dialogFocus";
+import {
+  useWorldIntegrations,
+  WorldIntegrationRow,
+} from "./WorldIntegrationRow";
+import { worldHarnessFor, type WorldIntegration } from "../worldIntegrations";
 import "./AgentIntegrationsSettings.css";
 
 import {
@@ -60,6 +65,13 @@ export function AgentIntegrationsSettings({
   const destination = sshDestination
     ? `${connectionLabel} (${sshDestination})`
     : connectionLabel;
+  // World's skill rows cover World's own host; SSH hosts are a later slice.
+  const labelFor = (harness: string) =>
+    items?.find((item) => worldHarnessFor(item.target) === harness)?.label ??
+    harness;
+  const world = useWorldIntegrations(!sshDestination, labelFor);
+  const worldRow = (harness: string) =>
+    world.items?.find((item) => item.harness === harness);
 
   const load = useCallback(async () => {
     const request = ++sequence.current;
@@ -217,6 +229,23 @@ export function AgentIntegrationsSettings({
   const unavailable = (items ?? []).filter(
     (item) => !item.available && item.state === "not_installed",
   );
+  const worldDisabled = world.busy !== null;
+  const renderWorld = (row: WorldIntegration | undefined) =>
+    row ? (
+      <WorldIntegrationRow
+        item={row}
+        label={labelFor}
+        disabled={worldDisabled}
+        onChange={(item, action) => void world.change(item, action)}
+      />
+    ) : null;
+  // World harnesses Herdr did not report (or all, when Herdr's list failed).
+  const worldOnly = loading
+    ? []
+    : (world.items ?? []).filter(
+        (row) =>
+          !items?.some((item) => worldHarnessFor(item.target) === row.harness),
+      );
   const renderList = (list: AgentIntegration[]) => (
     <ul className="agent-integrations-list">
       {list.map((item) => (
@@ -299,6 +328,7 @@ export function AgentIntegrationsSettings({
               </button>
             ) : null}
           </div>
+          {renderWorld(worldRow(worldHarnessFor(item.target)))}
         </li>
       ))}
     </ul>
@@ -337,7 +367,10 @@ export function AgentIntegrationsSettings({
           title="Refresh integrations"
           aria-disabled={disabled}
           onClick={() => {
-            if (!pendingChanges.has(scope) && !disabled) void load();
+            if (!pendingChanges.has(scope) && !disabled) {
+              void load();
+              void world.load();
+            }
           }}
         >
           <RefreshCw size={16} aria-hidden="true" />
@@ -361,6 +394,23 @@ export function AgentIntegrationsSettings({
           </span>
         </div>
       ) : null}
+      {world.busy || world.message || world.error ? (
+        <div
+          role={world.error ? "alert" : "status"}
+          className={
+            world.error ? "configuration-error" : "agent-integrations-status"
+          }
+        >
+          {world.busy
+            ? "Applying World skill change..."
+            : (world.error ?? world.message)}
+        </div>
+      ) : null}
+      {sshDestination ? (
+        <p className="configuration-scope">
+          World skill rows are available for the local host only.
+        </p>
+      ) : null}
       {items?.length === 0 ? (
         <p className="configuration-scope">
           No agent integrations reported by Herdr.
@@ -374,6 +424,23 @@ export function AgentIntegrationsSettings({
           </summary>
           {renderList(unavailable)}
         </details>
+      ) : null}
+      {worldOnly.length > 0 ? (
+        <ul
+          className="agent-integrations-list agent-integrations-world-only"
+          aria-label="World skills for harnesses Herdr did not list"
+        >
+          {worldOnly.map((row) => (
+            <li key={row.harness} data-state={row.state}>
+              <AgentIcon agent={row.harness} />
+              <div className="agent-integrations-copy">
+                <strong>{row.harness}</strong>
+              </div>
+              <div />
+              {renderWorld(row)}
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   );

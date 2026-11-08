@@ -72,6 +72,20 @@ override `CODEX_HOME`, for example. If running any Herdr command, also pass
 `herdr --session <unique-test-name>`; HOME alone does not isolate Herdr.
 Do not launch World or connect tests to an owner's running services.
 
-This slice adds no Settings controls, Claude limits tap, SSH installation or
-automatic upgrade step. [The approved design](../openspec/changes/world-harness-integration/design.md)
+## Settings
+
+**Menu → Configuration → Integrations** shows a **World skill** line under each
+of Herdr's harness rows when the selected connection is World's local host:
+its state (Current, Outdated, Not installed, or Unsupported with the reason),
+its path, and **Install**, **Update** or **Uninstall**. The buttons call
+`world.integration.install|uninstall`, which run the same installer as the CLI
+in the World service user's environment, so the row always matches
+`herdr-world integration status`. `world.integration.list` reads the rows.
+These verbs are browser-only: agent-originated calls are refused. Codex, Pi
+and Kimi rows show the shared file; uninstalling from any of them first
+confirms which other harnesses lose it. **Refresh** rereads both Herdr's and
+World's rows. SSH connections show no World rows yet.
+
+This slice adds no Claude limits tap, SSH installation or automatic upgrade
+step. [The approved design](../openspec/changes/world-harness-integration/design.md)
 tracks those follow-ups.

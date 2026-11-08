@@ -197,6 +197,12 @@ window.confirm = (message) => {
   confirmations.push(String(message));
   return confirmChange;
 };
+// World's own skill rows (world.integration.*) have focused DOM tests.
+const bridgeCall = bridge.call.bind(bridge);
+bridge.call = ((method: string, ...rest: unknown[]) =>
+  method.startsWith("world.integration.")
+    ? Promise.resolve({ integrations: [] })
+    : bridgeCall(method, ...(rest as []))) as typeof bridge.call;
 bridge.onEvent = (listener) => {
   listeners.add(listener);
   return () => {

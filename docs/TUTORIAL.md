@@ -1034,6 +1034,13 @@ harness with its state and path, without installing anything.
 Pi and Kimi and names the other two. OMP, Letta and MastraCode show
 `unsupported`. See [all paths and overrides](./harness-integrations.md).
 
+You can do the same from the browser: **Menu → Configuration → Integrations**
+shows a **World skill** line under each harness, with its state, path and
+**Install**, **Update** or **Uninstall**. The buttons run the same installer on
+World's own host and ask for confirmation first; uninstalling Codex, Pi or
+Kimi names the other two that lose the shared file. SSH connections show no
+World skill lines yet.
+
 Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
 to colour and pin its card, group with the agent that started it, report a
 task result, or ask you a question (`herdr-world ask "Ship it?" --options
