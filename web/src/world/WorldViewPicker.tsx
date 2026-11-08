@@ -22,6 +22,7 @@ export function WorldViewPicker({
   onSelect,
   onExitZen,
   extra,
+  search,
 }: {
   view: WorldView;
   mobile: boolean;
@@ -29,30 +30,44 @@ export function WorldViewPicker({
   onExitZen: () => void;
   /** Beside the views, such as the Needs you counter. */
   extra?: ReactNode;
+  /**
+   * The view's search, which lives in the hidden topbar otherwise: beside the
+   * views on desktop, and in the bottom corner opposite the views on a phone.
+   */
+  search?: ReactNode;
 }) {
+  const searchSlot = search ? (
+    <div className={`world-zen-search${mobile ? " is-phone" : ""}`}>
+      {search}
+    </div>
+  ) : null;
   if (!mobile)
     return (
-      <div className="world-view-picker" role="group" aria-label="World view">
-        {extra}
-        {WORLD_VIEW_DESTINATIONS.map(({ view: destination, label, Icon }) => (
-          <button
-            key={destination}
-            type="button"
-            aria-pressed={destination === view}
-            aria-label={label}
-            title={label}
-            onClick={() => {
-              if (destination !== view) onSelect(destination);
-            }}
-          >
-            <Icon size={14} aria-hidden />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
+      <>
+        {searchSlot}
+        <div className="world-view-picker" role="group" aria-label="World view">
+          {extra}
+          {WORLD_VIEW_DESTINATIONS.map(({ view: destination, label, Icon }) => (
+            <button
+              key={destination}
+              type="button"
+              aria-pressed={destination === view}
+              aria-label={label}
+              title={label}
+              onClick={() => {
+                if (destination !== view) onSelect(destination);
+              }}
+            >
+              <Icon size={14} aria-hidden />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </>
     );
   return (
     <>
+      {searchSlot}
       {extra ? <div className="world-view-picker-extra">{extra}</div> : null}
       <PhoneViewPicker view={view} onSelect={onSelect} onExitZen={onExitZen} />
     </>

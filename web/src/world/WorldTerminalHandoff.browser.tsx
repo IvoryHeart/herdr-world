@@ -902,6 +902,19 @@ async function run() {
     worldLocalStorage.getItem("zenMode.world") === null,
     "World's default Zen was stored as if the user had chosen it",
   );
+  // Zen parks the topbar off screen, so Town's search sits in the Zen dock,
+  // in sight, and moves back to the topbar when Zen ends.
+  await until(() => {
+    const zenSearch = document.querySelector<HTMLInputElement>(
+      '.zen-dock .world-zen-search input[placeholder="Search Town"]',
+    );
+    const rect = zenSearch?.getBoundingClientRect();
+    return Boolean(rect && rect.width > 100 && rect.top >= 0);
+  }, "Town's search in sight beside the views in Zen");
+  check(
+    !document.querySelector('.topbar input[placeholder="Search Town"]'),
+    "Town's search stayed in the hidden topbar during Zen",
+  );
   document.querySelector<HTMLButtonElement>(".zen-dock .zen-island")?.click();
   await until(
     () => document.querySelector(".app")?.classList.contains("zen") === false,
@@ -910,6 +923,12 @@ async function run() {
   check(
     worldLocalStorage.getItem("zenMode.world") === "0",
     "leaving Zen did not keep World's Zen choice",
+  );
+  await until(
+    () =>
+      document.querySelector('.topbar input[placeholder="Search Town"]') !==
+      null,
+    "Town's search back in the topbar after Zen",
   );
   await until(() => {
     const seat = document.querySelector<HTMLButtonElement>(

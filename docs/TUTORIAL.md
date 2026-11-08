@@ -454,14 +454,17 @@ remain visible but cannot accept operations. Use search and the Hosts filter to
 narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
 
-Town's search finds where things are. Type part of a room, table or agent
+Town's search finds where things are. In World's default full-screen (Zen)
+layout the search box hangs from the top edge beside the view buttons; with
+the bars shown it sits in the top bar. Type part of a room, table or agent
 name, or words from an agent's task, in any order: the matches light up on
 the map, the rest of Town dims a little, and the result line says how many
 there are and how many are off-screen. Each result names its type, its place
 (`host › room › table`) and status, and a task match shows the words it found.
 Click a result, or press **Down** to pick one and **Enter**: the camera
 travels there and the result pulses. Click it or press **Enter** again to
-open it. On a phone, tap the search icon, type, and tap a result. Press
+open it. On a phone, tap the search button in the bottom-right corner, type, and tap a
+result. Press
 **Escape**, tap **✕** or empty the box, and Town goes back to how it was.
 
 A quiet **?** at reception means an agent has asked you a question with

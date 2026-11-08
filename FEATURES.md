@@ -451,7 +451,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is admitted. Search and Hosts
     use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
-  - **Search shows where things are.** Typing in Town's search lights up the
+  - **Search shows where things are.** Town's search box hangs from the top
+    edge beside the view buttons in Zen, World's default, and sits in the top
+    bar when the bars are shown; on a phone in Zen it is the search button in
+    the bottom-right corner. Typing in Town's search lights up the
     matching buildings, rooms, tables and agents on the map and dims the rest
     of Town a little; the camera stays put. The result line counts matches and
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a

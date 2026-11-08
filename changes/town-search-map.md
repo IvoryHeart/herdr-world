@@ -4,7 +4,9 @@
   tables and agents light up on the map, the rest dims a little, and the
   result line counts matches off-screen. Choosing a result moves the camera
   to it and pulses it; choosing it again opens it. Escape returns Town to how
-  it was.
+  it was. In Zen, World's default, the search box hangs beside the view
+  buttons at the top, or is a corner button on a phone, instead of hiding
+  with the top bar.
 
 ### Changed
 
