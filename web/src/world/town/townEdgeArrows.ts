@@ -194,7 +194,9 @@ export function townEdgeArrows(
   const rect = townEdgeVisibleRect(camera.viewport);
   const cx = (rect.left + rect.right) / 2;
   const cy = (rect.top + rect.bottom) / 2;
-  const place = (angle: number) => edgePoint(rect, angle);
+  // Arrows sit where they draw, clear of the chrome, before they merge: two
+  // arrows the chrome pushed to one spot then merge rather than overlap.
+  const place = (angle: number) => avoid(edgePoint(rect, angle), rect, keepOut);
   let groups: Group[] = [];
   for (const target of targets) {
     const at = townEdgeScreen(camera, target.x, target.y);
@@ -251,7 +253,6 @@ export function townEdgeArrows(
       };
       for (const member of members) counts[member.mark] += 1;
       const keys = members.map((member) => member.key);
-      const at = avoid(group, rect, keepOut);
       return {
         id: [...keys].sort().join(" "),
         mark: members[0]!.mark,
@@ -259,8 +260,8 @@ export function townEdgeArrows(
         count: members.length,
         keys,
         hostKeys: [...new Set(members.map((member) => member.hostKey))],
-        x: at.x,
-        y: at.y,
+        x: group.x,
+        y: group.y,
         angle: group.angle,
         compass: townCompass(group.angle),
       };

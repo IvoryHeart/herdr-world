@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   TOWN_EDGE_MARGIN,
+  TOWN_EDGE_MERGE,
   townCompass,
   townEdgeArrowLabel,
   townEdgeArrows,
@@ -134,6 +135,42 @@ test("arrows keep out of the Town board and the zoom group", () => {
     moved!.y + TOWN_EDGE_MARGIN > board.top &&
     moved!.y - TOWN_EDGE_MARGIN < board.bottom;
   expect(inside).toBe(false);
+});
+
+test("arrows the chrome pushes to one spot merge instead of overlapping", () => {
+  // Two buildings' agents up and to the left, both under the Town board.
+  const view: TownEdgeCamera = {
+    ...camera,
+    viewport: {
+      width: 1000,
+      height: 600,
+      inset: { top: 16, right: 72, bottom: 16, left: 16 },
+    },
+  };
+  const board = { left: 16, top: 16, right: 252, bottom: 200 };
+  const arrows = townEdgeArrows(
+    [
+      at("a", -1500, -1000, "needs", "west"),
+      at("b", -1000, -1000, "asks", "north"),
+    ],
+    view,
+    "room",
+    [board],
+  );
+  for (const [i, a] of arrows.entries())
+    for (const b of arrows.slice(i + 1))
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(
+        TOWN_EDGE_MERGE,
+      );
+  expect(arrows.reduce((sum, arrow) => sum + arrow.count, 0)).toBe(2);
+  for (const arrow of arrows) {
+    const under =
+      arrow.x + TOWN_EDGE_MARGIN > board.left &&
+      arrow.x - TOWN_EDGE_MARGIN < board.right &&
+      arrow.y + TOWN_EDGE_MARGIN > board.top &&
+      arrow.y - TOWN_EDGE_MARGIN < board.bottom;
+    expect(under).toBe(false);
+  }
 });
 
 test("an arrow names what waits, where, and the way", () => {

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useLayoutPreferences } from "../../layoutPreferences";
 import { formatShortcut, matchesShortcut } from "../../shortcutBindings";
 import { getShortcutSnapshot } from "../../shortcutPreferences";
+import { sharedDeskStore } from "../deskStateStore";
 import { openNeedsYou } from "../needsYou";
 import { townWorldAnchor } from "./scene/townHud";
 import type { TownSceneCamera } from "./scene/townSceneCamera";
@@ -25,9 +26,12 @@ import {
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import type { TownModel } from "./townModel";
 import {
+  townEdgeMarked,
   townKeyIgnored,
+  townNeedsYouAgentKey,
   townNextLabel,
   townNextStep,
+  type TownEdgeMarked,
   type TownNextCursor,
 } from "./townNext";
 import { townReceptionMark } from "./townReceptionFilter";
@@ -41,6 +45,7 @@ export type TownNeedsYouOrder = () => readonly {
 }[];
 
 const NO_ARROWS: readonly TownEdgeArrow[] = [];
+const NO_MARKED: readonly TownEdgeMarked[] = [];
 /** Reception's marks as edge marks. */
 const EDGE_MARK = { blocked: "needs", ask: "asks", done: "done" } as const;
 
@@ -66,9 +71,10 @@ export function useTownEdgeNav({
   hostRef: RefObject<HTMLElement | null>;
 }) {
   // Agents with a mark (! ? ✓) as Town draws them; reviewed work is already
-  // idle in Town's projection. Edge arrows point at those off screen.
+  // idle in Town's projection. Edge arrows point at those off screen, and at
+  // finished work Needs you lists for review (edgeMarked below).
   const marked = useMemo(() => {
-    const list: { key: string; mark: TownEdgeMark; hostKey: string }[] = [];
+    const list: TownEdgeMarked[] = [];
     for (const agent of model.agents.values()) {
       if (agent.stale) continue;
       const mark = townReceptionMark(
@@ -120,6 +126,45 @@ export function useTownEdgeNav({
         }
       : null;
   };
+  /**
+   * Town's marks plus finished work awaiting review in the shared review
+   * state, as Needs you lists it: Town marks a finish only when it saw the
+   * agent busy, so after a reload such work is idle in Town. Read on drawn
+   * frames, not rendered, so stop notices do not re-render Town; computed
+   * again when the review records, Town or the time window change.
+   */
+  const reviewCache = useRef<{
+    state: unknown;
+    model: TownModel | null;
+    marked: readonly TownEdgeMarked[];
+    bucket: number;
+    list: readonly TownEdgeMarked[];
+  }>({ state: null, model: null, marked: [], bucket: -1, list: [] });
+  const edgeMarked = () => {
+    const { model: m, marked: own, needsYouOrder: order } = latest.current;
+    const state = sharedDeskStore().get();
+    const bucket = Math.floor(Date.now() / 5000);
+    const cache = reviewCache.current;
+    if (
+      cache.state === state &&
+      cache.model === m &&
+      cache.marked === own &&
+      cache.bucket === bucket
+    )
+      return cache.list;
+    const list = townEdgeMarked(own, order?.() ?? [], m.agents);
+    reviewCache.current = { state, model: m, marked: own, bucket, list };
+    return list;
+  };
+  const arrowsShown = useRef(false);
+  // A review record that changes while arrows show asks for a frame.
+  useEffect(
+    () =>
+      sharedDeskStore().subscribe(() => {
+        if (arrowsShown.current) rendererRef.current?.invalidate("edge-arrows");
+      }),
+    [rendererRef],
+  );
   const [arrowStore] = useState(() => new TownEdgeArrowStore());
   const keepOut = useRef<{ at: number; rects: TownEdgeRect[] }>({
     at: -Infinity,
@@ -153,8 +198,9 @@ export function useTownEdgeNav({
     camera: TownRendererHandle["camera"],
     level: TownLevel,
   ) => {
-    const list = latest.current.marked;
-    if (!townEdgeArrowsShown(level) || !list.length) {
+    arrowsShown.current = townEdgeArrowsShown(level);
+    const list = arrowsShown.current ? edgeMarked() : NO_MARKED;
+    if (!list.length) {
       arrowStore.set(NO_ARROWS);
       return;
     }
@@ -191,7 +237,7 @@ export function useTownEdgeNav({
   };
   const goToArrow = (arrow: TownEdgeArrow) => {
     const key = arrow.keys[0];
-    const mark = latest.current.marked.find((agent) => agent.key === key);
+    const mark = edgeMarked().find((agent) => agent.key === key);
     if (key) goToAgent(key, mark?.mark ?? arrow.mark);
   };
   const buildingLabel = (hostKey: string) =>
@@ -227,15 +273,10 @@ export function useTownEdgeNav({
     }
     nextCursor.current = step;
     const item = order[step.index]!;
-    const m = latest.current.model;
-    const agentKey =
-      item.leafId === null
-        ? null
-        : m.agents.has(item.leafId)
-          ? item.leafId
-          : ([...m.agents.values()].find(
-              (agent) => agent.nodeId === item.leafId,
-            )?.key ?? null);
+    const agentKey = townNeedsYouAgentKey(
+      latest.current.model.agents,
+      item.leafId,
+    );
     if (agentKey) goToAgent(agentKey, item.mark);
     openNeedsYou(item.itemKey);
     const { preset, platform } = getShortcutSnapshot();

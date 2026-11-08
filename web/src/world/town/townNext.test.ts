@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { townKeyIgnored, townNextLabel, townNextStep } from "./townNext";
+import {
+  townEdgeMarked,
+  townKeyIgnored,
+  townNeedsYouAgentKey,
+  townNextLabel,
+  townNextStep,
+} from "./townNext";
 
 const items = ["ask:1", "leaf:blocked", "leaf:done"];
 
@@ -66,4 +72,44 @@ test("Town's keys stay silent while typing, in a terminal or a menu", () => {
   expect(townKeyIgnored(element("BUTTON"))).toBe(false);
   expect(townKeyIgnored(null)).toBe(false);
   expect(townKeyIgnored({})).toBe(false);
+});
+
+const agents = new Map(
+  [
+    { key: "a", nodeId: "leaf-a", hostKey: "north" },
+    { key: "b", nodeId: "leaf-b", hostKey: "south" },
+    { key: "c", nodeId: "leaf-c", hostKey: "south", stale: true },
+  ].map((agent) => [agent.key, agent] as const),
+);
+
+test("a Needs you item finds its Town agent by key or node ID", () => {
+  expect(townNeedsYouAgentKey(agents, "a")).toBe("a");
+  expect(townNeedsYouAgentKey(agents, "leaf-b")).toBe("b");
+  expect(townNeedsYouAgentKey(agents, "elsewhere")).toBeNull();
+  expect(townNeedsYouAgentKey(agents, null)).toBeNull();
+});
+
+test("finished work awaiting review gets an arrow though Town shows it idle", () => {
+  // After a reload Town never saw b busy, so b has no mark in Town; Needs
+  // you still lists its unreviewed stop.
+  const own = [{ key: "a", mark: "needs" as const, hostKey: "north" }];
+  const order = [
+    { leafId: "leaf-a", mark: "needs" as const },
+    { leafId: "leaf-b", mark: "done" as const },
+    { leafId: "leaf-c", mark: "done" as const },
+    { leafId: null, mark: "asks" as const },
+  ];
+  expect(townEdgeMarked(own, order, agents)).toEqual([
+    { key: "a", mark: "needs", hostKey: "north" },
+    { key: "b", mark: "done", hostKey: "south" },
+  ]);
+  // Town's own mark wins; reviewed work (not in Needs you) gets none.
+  expect(
+    townEdgeMarked(
+      [{ key: "b", mark: "asks", hostKey: "south" }],
+      [{ leafId: "leaf-b", mark: "done" }],
+      agents,
+    ),
+  ).toEqual([{ key: "b", mark: "asks", hostKey: "south" }]);
+  expect(townEdgeMarked([], [], agents)).toEqual([]);
 });
