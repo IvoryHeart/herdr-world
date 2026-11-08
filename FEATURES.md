@@ -234,6 +234,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     returns Town exactly as it was, and Town always opens in **Attention**
     (Town as usual). The browser remembers the last lens for `L` and
     **Lenses**. With `?scene=town-scale` every lens has synthetic data.
+    Board offers the same lenses over its cards (see Board below).
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
@@ -704,6 +705,21 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     outside or **Back** on a phone closes it. Board's controls leave the hub
     and bin room on their row, folding into Board's **⋯** menu as needed.
     The bin itself works as before.
+  - **Lenses**, **Since you left** and pull request badges work on Board as
+    in Town, from the same facts. **Lenses** in Board's controls (in its
+    **⋯** menu when the row is short of room, as on a phone) or `L`
+    (`Shift+L` back) opens Town's legend at Board's top left: each workspace
+    card takes its room's reading, each tab card its desk's and each agent's
+    pane row its agent's, on a tag along the card's top edge and in its
+    outline; cards with nothing to show step back. Hover, focus or tap a
+    card to read it in the legend; Escape or **✕** leaves the lens, and the
+    browser remembers the last lens for Town and Board alike. After a return
+    of 30 minutes or more, the same **Since you left** recap as Town's board
+    sign stands at Board's top left. A tab whose agent has a linked pull
+    request or ticket shows Town's desk badge (`#123 ✓`, `#123 ✗`, `#123 ●`
+    or `ABC-12`) beside its name; for one of your open pull requests, tap it
+    for the pull request card. With `?scene=town-scale` the lenses and badges
+    have synthetic data, and `?awaySince=120` pretends you left two hours ago.
   - **Next** cycles waiting agents and shared questions placed on their panes,
     including shell questions, while skipping stale hosts and shells without
     questions. It stays reachable in the Board menu when the controls need more space.
@@ -1006,8 +1022,8 @@ each source's state, switch it off or configure it.
   pull request it reported with
   `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
   (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
-  on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
-  lens names it on the card. Town's post office shows every open pull
+  on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), its Board tab
+  card shows the same badge, and Board's Work lens names it on the card. Town's post office shows every open pull
   request for you as a parcel, including those whose agent has gone. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
