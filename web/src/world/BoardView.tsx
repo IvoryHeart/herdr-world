@@ -143,6 +143,7 @@ import {
 } from "./terminalColor";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
+import { useBoardSearch } from "./board/useBoardSearch";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
@@ -157,6 +158,7 @@ import {
 import { inheritedColorKey } from "../../../shared/terminalColor";
 import { aimAtBin } from "./bin/binDrop";
 import { putAgentInBin } from "./bin/WorldBin";
+import { keyTakenByViewSearch } from "./viewSearchShortcut";
 import {
   groupTerminals,
   terminalsAreGrouped,
@@ -595,7 +597,6 @@ export default function BoardView({
     });
   }, [pinnedKeys]);
   useEffect(() => () => publishBoardCardPins(null), []);
-  const [query, setQuery] = useState("");
   const [workOpen, setWorkOpen] = useState(false);
   const workButtonRef = useRef<HTMLButtonElement | null>(null);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
@@ -3129,6 +3130,7 @@ export default function BoardView({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
+        keyTakenByViewSearch(event) ||
         (event.target as HTMLElement | null)?.closest?.(
           "input, textarea, [contenteditable='true']",
         )
@@ -3172,28 +3174,8 @@ export default function BoardView({
   };
 
   /* ---------- Search ---------- */
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return null;
-    const hit = new Set<string>();
-    for (const tab of model.tabs) {
-      const text = [
-        tab.label,
-        ...tab.panes.map(
-          (pane) => `${pane.leaf.label} ${pane.leaf.agentLabel ?? ""}`,
-        ),
-      ]
-        .join(" ")
-        .toLowerCase();
-      if (text.includes(q)) {
-        hit.add(tab.key);
-        hit.add(tab.workspaceKey);
-      }
-    }
-    for (const space of model.workspaces)
-      if (space.label.toLowerCase().includes(q)) hit.add(space.key);
-    return hit;
-  }, [model, query]);
+  const search = useBoardSearch(world, model, onSelect);
+  const { matches } = search;
 
   const selectedKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -3315,24 +3297,7 @@ export default function BoardView({
   };
   togglePinRef.current = togglePin;
 
-  const toolbar = (
-    <WorldViewToolbar
-      viewLabel="Board"
-      query={query}
-      onQueryChange={setQuery}
-      resultLabel={
-        matches
-          ? matches.size
-            ? `${matches.size} matches`
-            : "No matches"
-          : undefined
-      }
-      onSubmit={() => {
-        const first = model.tabs.find((tab) => matches?.has(tab.key));
-        if (first) selectCard(first.key, model);
-      }}
-    />
-  );
+  const toolbar = <WorldViewToolbar viewLabel="Board" {...search.toolbar} />;
 
   const ref = useMemo(
     () => createBoardCardRefs(cardEls.current, () => resizes.current),
@@ -3344,8 +3309,17 @@ export default function BoardView({
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       {/* Search covers everything observed, including what the board leaves
-          out, as in the other views. */}
-      <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+          out, as in the other views. The board fills the view, so the
+          results float over its top edge rather than under the board. */}
+      {search.open ? (
+        <div className="board-search-results">
+          <WorldSearchResults
+            world={world}
+            onSelect={onSelect}
+            {...search.results}
+          />
+        </div>
+      ) : null}
       {paneMoves.dialog}
       <div
         ref={boardRef}

@@ -683,6 +683,76 @@ describe("terminal copy shortcuts", () => {
   });
 });
 
+test("view search takes / and Ctrl+F, or Cmd+F on a Mac, outside text", () => {
+  expect(linux()["view.search"]).toEqual(["Slash", "Ctrl+F"]);
+  expect(defaultShortcutBindings("windows")["view.search"]).toEqual([
+    "Slash",
+    "Ctrl+F",
+  ]);
+  expect(defaultShortcutBindings("mac")["view.search"]).toEqual([
+    "Slash",
+    "Meta+F",
+  ]);
+  expect(
+    matchesShortcut(event({ key: "/", code: "Slash" }), "view.search", linux()),
+  ).toBe(true);
+  expect(
+    matchesShortcut(
+      event({ key: "f", code: "KeyF", ctrlKey: true }),
+      "view.search",
+      linux(),
+    ),
+  ).toBe(true);
+  // It never acts in a text field or terminal, so plain keys stay assignable
+  // to it, and only to it.
+  expect(validateShortcutKeys("view.search", ["Slash", "Shift+7"])).toEqual([
+    "Slash",
+    "Shift+7",
+  ]);
+  expect(() => validateShortcutKeys("panes.search", ["Slash"])).toThrow();
+  // A file preview's own Ctrl+F stays its own; a workspace shortcut collides.
+  expect(shortcutConflicts("view.search", ["Ctrl+F"], linux())).toEqual([]);
+  expect(shortcutConflicts("view.search", ["Ctrl+Alt+K"], linux())).toContain(
+    "command.menu",
+  );
+});
+
+test("older presets gain view search without replacing saved keys", () => {
+  for (const base of ["mac", "windows", "linux"] as const) {
+    const defaults = defaultShortcutBindings(base);
+    const bindings: Partial<ShortcutBindings> = { ...defaults };
+    delete bindings["view.search"];
+    expect(
+      validateShortcutPreset({ ...preset(), base, bindings }).bindings,
+    ).toEqual(defaults);
+  }
+});
+
+test("an unmodified punctuation key is the character it types", () => {
+  // German layout: "/" is Shift+7, and the physical Slash key types "-".
+  expect(
+    matchesShortcut(
+      event({ key: "/", code: "Digit7", shiftKey: true }),
+      "view.search",
+      linux(),
+    ),
+  ).toBe(true);
+  expect(
+    matchesShortcut(event({ key: "-", code: "Slash" }), "view.search", linux()),
+  ).toBe(false);
+  expect(
+    shortcutFromEvent(event({ key: "/", code: "Digit7", shiftKey: true })),
+  ).toBe("Slash");
+  // "?" is no named key, so US Shift+/ still records as the key it is.
+  expect(
+    shortcutFromEvent(event({ key: "?", code: "Slash", shiftKey: true })),
+  ).toBe("Shift+Slash");
+  // With Ctrl, Alt or Meta the physical key still addresses the shortcut.
+  expect(
+    shortcutFromEvent(event({ key: "-", code: "Slash", ctrlKey: true })),
+  ).toBe("Ctrl+Slash");
+});
+
 describe("Town's Next keys", () => {
   test("N and Shift+N are Town actions any preset can rebind", () => {
     for (const platform of ["mac", "windows", "linux"] as const) {

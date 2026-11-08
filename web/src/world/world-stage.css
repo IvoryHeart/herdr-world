@@ -1,10 +1,19 @@
+/* Below the phone's topbar; Zen parks the topbar, so there it takes the top. */
+body {
+  --world-search-overlay-top: calc(52px + env(safe-area-inset-top, 0px));
+}
+body:has(.app.zen) {
+  --world-search-overlay-top: calc(8px + env(safe-area-inset-top, 0px));
+}
 .world-view-search-overlay {
   position: fixed;
   z-index: 1000;
-  top: calc(52px + env(safe-area-inset-top, 0px));
+  top: var(--world-search-overlay-top, 52px);
   right: calc(8px + env(safe-area-inset-right, 0px));
   left: calc(8px + env(safe-area-inset-left, 0px));
   height: 42px;
+  /* Opaque, so nothing beneath shows through the box. */
+  background: var(--panel, #202331);
   box-shadow: 0 12px 28px rgb(0 0 0 / 42%);
 }
 

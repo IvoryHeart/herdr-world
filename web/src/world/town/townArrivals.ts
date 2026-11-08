@@ -223,7 +223,8 @@ export function townArrivalPath(
       const bottom = roads[down ? street + 1 : street]!;
       const side = nearest(
         layout.verticalRoads.filter(
-          (road) => road.y0 === top + ROAD_GAP && road.y1 === bottom,
+          (road) =>
+            !road.edge && road.y0 === top + ROAD_GAP && road.y1 === bottom,
         ),
       );
       if (!side) return null;
