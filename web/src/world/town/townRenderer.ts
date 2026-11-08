@@ -29,7 +29,7 @@ import { createTownTopology } from "./townRendererTopology";
 import type { TownSceneFrame, TownSceneState } from "./scene/townSceneDiff";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
-import { DEVTOOLS } from "../devtools/flag";
+import { DEVTOOLS, type ViewTrace } from "../devtools/flag";
 
 import {
   TownActors,
@@ -134,6 +134,18 @@ const kindOf = (agent: OfficeAgent) => {
 /** Yield to the browser so pending input runs before the next setup step. */
 export const nextTownTask = () =>
   new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+
+/**
+ * Record a renderer that failed to start: in the devtools trace (development
+ * builds only) and for browser checks.
+ */
+export function townRendererFailed(error: unknown, trace: ViewTrace) {
+  if (DEVTOOLS)
+    trace.record("error", { where: "renderer", message: String(error) });
+  if (window.__HERDR_TOWN_RENDERER__)
+    window.__HERDR_TOWN_RENDERER__.lastError =
+      error instanceof Error ? error.message.slice(0, 160) : "renderer failed";
+}
 
 export async function createTownRenderer(
   element: HTMLElement,

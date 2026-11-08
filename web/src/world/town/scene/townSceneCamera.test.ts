@@ -580,3 +580,47 @@ test("a saved home view is framed again for the view it returns to", () => {
   expect(again.view.atHome()).toBe(true);
   expect(again.camera.z).toBe(again.camera.limits!.home);
 });
+
+test("going to an agent glides at the zoom it has, zooming into its room from afar", () => {
+  const { view, layout, viewport, camera, reasons } = setup();
+  view.attach(camera, layout, viewport);
+  const rooms = layout.buildings[0]!.rooms;
+  const room = rooms[rooms.length - 1]!;
+  const point = { x: (room.x + 2) * T, y: (room.y + 2) * T };
+  // At room zoom: a level glide, the zoom unchanged.
+  camera.jumpTo(0, 0, camera.limits!.desk * 1.1);
+  view.level = "desk";
+  const z = camera.z;
+  reasons.length = 0;
+  expect(view.goTo(point, room, false)).toBeGreaterThan(0);
+  expect(camera.flying).toBe(true);
+  expect(reasons).toEqual(["go-to"]);
+  settle(camera);
+  const focus = camera.focusPoint();
+  const centre = camera.toWorld(focus.x, focus.y);
+  expect(camera.z).toBeCloseTo(z);
+  expect(centre.x).toBeCloseTo(point.x, 0);
+  expect(centre.y).toBeCloseTo(point.y, 0);
+  // Out at the whole town: it zooms in to the room.
+  view.fitAll(layout);
+  settle(camera);
+  view.level = "town";
+  view.goTo(point, room, false);
+  settle(camera);
+  expect(camera.z).toBeGreaterThanOrEqual(camera.limits!.card);
+});
+
+test("under calm or reduced motion, going to an agent jumps there", () => {
+  const { view, layout, viewport, camera } = setup();
+  view.attach(camera, layout, viewport);
+  view.level = "room";
+  const room = layout.buildings[0]!.rooms[0]!;
+  const point = { x: (room.x + 1) * T, y: (room.y + 1) * T };
+  expect(view.goTo(point, room, true)).toBe(0);
+  expect(camera.flying).toBe(false);
+  const focus = camera.focusPoint();
+  expect(camera.toWorld(focus.x, focus.y).x).toBeCloseTo(point.x, 0);
+  camera.reducedMotion = true;
+  expect(view.goTo({ x: point.x + 40, y: point.y }, room, false)).toBe(0);
+  expect(camera.flying).toBe(false);
+});
