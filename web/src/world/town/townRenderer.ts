@@ -5,7 +5,10 @@ import {
   createTownBlink,
   createTownScreenResolver,
 } from "./townAmbient";
-import { drawTownSelectionEffects } from "./townSelectionEffects";
+import {
+  drawTownSelectionEffects,
+  type TownSearchPulseClock,
+} from "./townSelectionEffects";
 /**
  * Pixi renderer for the Office town.
  *
@@ -29,7 +32,7 @@ import { createTownTopology } from "./townRendererTopology";
 import type { TownSceneFrame, TownSceneState } from "./scene/townSceneDiff";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
-import { DEVTOOLS } from "../devtools/flag";
+import { DEVTOOLS, type ViewTrace } from "../devtools/flag";
 
 import {
   TownActors,
@@ -111,6 +114,9 @@ export type TownRendererHandle = {
   destroy(): void;
 };
 
+/** How often a frame that only fills in the ground renders (see `forced`). */
+const TOWN_FILL_RENDER_MS = 100;
+
 const BLOCK_COLORS: Record<string, number> = {
   working: 0x6fc3ff,
   blocked: 0xffb547,
@@ -131,6 +137,18 @@ const kindOf = (agent: OfficeAgent) => {
 /** Yield to the browser so pending input runs before the next setup step. */
 export const nextTownTask = () =>
   new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+
+/**
+ * Record a renderer that failed to start: in the devtools trace (development
+ * builds only) and for browser checks.
+ */
+export function townRendererFailed(error: unknown, trace: ViewTrace) {
+  if (DEVTOOLS)
+    trace.record("error", { where: "renderer", message: String(error) });
+  if (window.__HERDR_TOWN_RENDERER__)
+    window.__HERDR_TOWN_RENDERER__.lastError =
+      error instanceof Error ? error.message.slice(0, 160) : "renderer failed";
+}
 
 export async function createTownRenderer(
   element: HTMLElement,
@@ -205,6 +223,7 @@ export async function createTownRenderer(
   stats.reducedMotion = motion.matches;
 
   const world = new Container();
+  const landLayer = new Container();
   const groundLayer = new Container();
   const sceneLayer = new Container();
   sceneLayer.sortableChildren = true;
@@ -213,7 +232,14 @@ export async function createTownRenderer(
   // Drag effects sit above the scene and survive a scene rebuild.
   const dragLayer = new Container();
   const puffLayer = new Graphics();
-  world.addChild(groundLayer, sceneLayer, fxLayer, dragLayer, puffLayer);
+  world.addChild(
+    landLayer,
+    groundLayer,
+    sceneLayer,
+    fxLayer,
+    dragLayer,
+    puffLayer,
+  );
   app.stage.addChild(world, screenLayer);
 
   let model: TownModel | null = null;
@@ -245,6 +271,16 @@ export async function createTownRenderer(
   /** A topology change waits for a whole frame (townTransition.ts). */
   let topologyPending = false;
   let transitioning = false;
+  /**
+   * Each render redraws the whole window, land included. While the ground
+   * only fills in behind an otherwise still scene, one render per painted
+   * chunk multiplied that cost on a zoomed-out town, so those frames paint
+   * on and render at most every TOWN_FILL_RENDER_MS. Anything else wanting
+   * a frame (`forced`) renders it, as does the frame that finds nothing left
+   * to paint.
+   */
+  let lastRender = -Infinity;
+  let forced = true;
 
   const themeFor = (hostKey: string): TownHostTheme =>
     townHostTheme(
@@ -256,9 +292,22 @@ export async function createTownRenderer(
     townChosenCarpet(model?.placeColors.rooms.get(roomKey));
 
   let dimDirty = true;
+  /** A search's matches and pulse, drawn with the selection (townSearch.ts). */
+  const searchFx = {
+    actorPosition: (key: string) => {
+      const actor = actors.actors.get(key);
+      return actor && actor.mode !== "out"
+        ? { x: actor.x, y: actor.y, seated: actor.mode === "seat" }
+        : null;
+    },
+    roofAlpha: (hostKey: string) =>
+      topology.byHost.get(hostKey)?.roofAlpha ?? 1,
+    pulseClock: { seq: null, start: 0 } as TownSearchPulseClock,
+  };
   const topology = createTownTopology({
     camera,
     sprites,
+    landLayer,
     groundLayer,
     sceneLayer,
     stats,
@@ -396,7 +445,8 @@ export async function createTownRenderer(
                 lookOf(info.agent.key),
                 top ? "down" : "up",
                 typing,
-                scratching ? "scratch" : "sit",
+                // Out of fuel: slumped at the desk until the limit resets.
+                info.agent.usageStop ? "slump" : scratching ? "scratch" : "sit",
                 // Idle agents doze with their eyes closed.
                 top &&
                   (resting(info.agent) ||
@@ -518,6 +568,7 @@ export async function createTownRenderer(
   const frameReasons = new Set<string>();
   let lastTraced = "";
   const request = (reason: string) => {
+    forced = true;
     if (reason !== "capture") onInvalidate?.(reason);
     if (DEVTOOLS && onTrace) frameReasons.add(reason);
     frames?.request("state");
@@ -553,9 +604,8 @@ export async function createTownRenderer(
       Math.round(camera.viewport.width / 2 - camera.x * camera.z),
       Math.round(camera.viewport.height / 2 - camera.y * camera.z),
     );
-    const materializing = topology.materialize(
-      topologyPending || transitioning,
-    );
+    const urgent = topologyPending || transitioning;
+    const materializing = topology.materialize(urgent);
     if (dimDirty) {
       dimDirty = false;
       updateDim();
@@ -586,13 +636,32 @@ export async function createTownRenderer(
       camera,
       clock,
       ambient,
+      searchFx,
     );
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);
-    app.renderer.render(app.stage);
+    const animated = !camera.reducedMotion && !state.calm;
+    const onlyFilling =
+      materializing &&
+      !urgent &&
+      !forced &&
+      !cameraMoved &&
+      !roofsMoving &&
+      !actorsMoved &&
+      !camera.flying &&
+      !transitioning &&
+      !dragging &&
+      // Animation due now renders, unless typing has paused it.
+      !(animated && frames?.motionAllowed && ambient.next === clock);
+    forced = false;
+    if (!onlyFilling || now - lastRender >= TOWN_FILL_RENDER_MS) {
+      app.renderer.render(app.stage);
+      lastRender = now;
+    }
     onDrawn?.(materializing);
     stats.level = level;
     stats.zoom = camera.z;
+    stats.camera = { x: camera.x, y: camera.y, ...camera.bounds };
     stats.flying = camera.flying;
     stats.transitioning = transitioning || camera.gliding;
     stats.buildingsDrawn = topology.buildings.length;
@@ -617,7 +686,6 @@ export async function createTownRenderer(
       materializing ||
       transitioning ||
       dragging;
-    const animated = !camera.reducedMotion && !state.calm;
     const next = moving
       ? "state"
       : animated && ambient.next === clock
@@ -631,6 +699,7 @@ export async function createTownRenderer(
       ambientTimer = setTimeout(
         () => {
           ambientTimer = null;
+          forced = true;
           frames?.request(wakeAt === motionAt ? "motion" : "state");
         },
         Math.max(1, (wakeAt - clock) * 1000 - 16),

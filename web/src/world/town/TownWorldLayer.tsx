@@ -12,13 +12,18 @@ import { TownBuildingSign } from "./TownBuildingSign";
 import type { TownBuildingSigns } from "./townBuildingSigns";
 import type { TownRoomActions } from "./TownCanvas";
 import { ReceptionEntry, portrait } from "./TownReceptionEntry";
+import { townRoomCardMeta } from "./townNameplates";
 import {
   TownRoomOverviewSummary,
   TownRoomPlaque,
   type TownPlaceCardContent,
 } from "./TownRoomPlaque";
 import { TownDeskTitle } from "./TownDeskTitle";
+import { TownStepBubble } from "./TownStepBubble";
+import { TownFuelMark } from "./TownFuelMark";
+import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
+import { TownPostOffice } from "./TownPostOffice";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
@@ -43,6 +48,10 @@ import type { TownReceptionTakes } from "./townReceptionFilter";
 import { TownReceptionHeldTag, TownReceptionSign } from "./TownReceptionSign";
 import type { TownRendererHandle } from "./townRenderer";
 import type { TownBuildingLayers } from "./townBuildingLayers";
+import {
+  TOWN_RECEPTION_LIFT,
+  type TownBoardPlacement,
+} from "./townBoardPlacement";
 import type { TownTarget } from "./townTargets";
 import { townWallPath, type TownTeams } from "./townTeams";
 import type { TownVisible } from "./townVisibleHosts";
@@ -60,6 +69,13 @@ export type TownRoomPress =
   | "card-name"
   | "plaque-name"
   | "plaque-move";
+
+/** A room card's or name's press, passed to the town beneath it. */
+export type TownRoomCardPress = (
+  event: PointerEvent,
+  roomKey: string,
+  press: TownRoomPress,
+) => boolean;
 
 export const TownTeamsLayer = memo(function TownTeamsLayer({
   teams,
@@ -135,10 +151,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   targets,
   deskBadges,
   quests,
+  steps,
   renderer,
   pennants,
   signs,
   layers,
+  boards,
   summary,
   openDeskKey,
   openReceptionKey,
@@ -157,6 +175,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   signs: TownBuildingSigns;
   /** Moves each building's layer with its building (townBuildingLayers.ts). */
   layers: TownBuildingLayers;
+  /** Keeps the reception boards and the billboard off what they'd cover. */
+  boards: TownBoardPlacement;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
   /** Agents the reception filter keeps at their desks (townReceptionFilter). */
@@ -178,6 +198,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
   /** Quests by agent key, as pennants at their seats. */
   quests: ReadonlyMap<string, TownQuestMark>;
+  /** Working agents' current steps, as thought bubbles at their seats. */
+  steps?: TownStepStore;
   /** Tells a pennant whether its agent is seated. */
   renderer: { readonly current: TownRendererHandle | null };
   pennants: Set<HTMLElement>;
@@ -194,11 +216,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
    * hold over a desk lifts it, a drag or hold on a name carries the room, a
    * tap on a card zooms the room. False when the town cannot take it.
    */
-  onRoomCardPress?(
-    event: PointerEvent,
-    roomKey: string,
-    press: TownRoomPress,
-  ): boolean;
+  onRoomCardPress?: TownRoomCardPress;
   onFocusTarget(target: TownTarget): void;
 }) {
   // A card press the town took ends as the town's tap; only keyboard
@@ -257,9 +275,10 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     <>
       <TownCityBillboard
         center={layout.center}
-        street={layout.roads[0] ?? layout.center.street}
         folded={folded}
+        boardRef={boards.cityRef}
       />
+      <TownPostOffice layout={layout} renderer={renderer} />
       {layout.buildings.map((building) => {
         if (!visible.hosts.has(building.hostKey)) return null;
         const host = model.hosts.get(building.hostKey);
@@ -355,13 +374,15 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               </div>
             </TownBuildingSign>
             <div
+              ref={boards.receptionRef(building.hostKey)}
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
               data-stale={host?.stale || undefined}
               data-open={building.hostKey === openReceptionKey || undefined}
               style={{
-                // The board stands in the yard above the front door.
+                // The board stands in the yard above the front door, moved
+                // off the town center and other boards (townBoardPlacement).
                 left: (building.entryX + 0.5) * T,
-                top: building.y * T - 18,
+                top: building.y * T - TOWN_RECEPTION_LIFT,
               }}
               role="group"
               aria-label={`${host?.displayLabel ?? "Host"} reception, ${queue.length} waiting`}
@@ -412,6 +433,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       <ReceptionEntry
                         key={agent.key}
                         agent={agent}
+                        room={model.rooms.get(agent.roomKey)?.displayLabel}
+                        desk={
+                          agent.deskKey
+                            ? model.desks.get(agent.deskKey)?.displayLabel
+                            : undefined
+                        }
                         asking={askingKeys.has(agent.key)}
                         since={blockedSince.get(agent.key) ?? now}
                         now={now}
@@ -632,8 +659,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                           </span>
                         ) : null}
                         <span className="town-room-card-meta">
-                          {c.desks} desks · {c.working} working
-                          {overflow ? ` · +${overflow} more` : ""}
+                          {townRoomCardMeta(c, overflow)}
                         </span>
                         <span className="town-room-card-bar" aria-hidden="true">
                           {(
@@ -722,6 +748,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                               const quest = device?.agentKey
                                 ? quests.get(device.agentKey)
                                 : undefined;
+                              const usageStop = device?.agentKey
+                                ? model.agents.get(device.agentKey)?.usageStop
+                                : undefined;
                               return device ? (
                                 <Fragment key={device.key}>
                                   <span
@@ -731,6 +760,35 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                   >
                                     {device.displayLabel}
                                   </span>
+                                  {steps &&
+                                  device.agentKey &&
+                                  !askingKeys.has(device.agentKey) &&
+                                  model.agents.get(device.agentKey)
+                                    ?.semanticStatus === "working" ? (
+                                    <TownStepBubble
+                                      steps={steps}
+                                      hud={hud}
+                                      agentKey={device.agentKey}
+                                      top={slot.top}
+                                      x={slot.chairX + 7}
+                                      selected={
+                                        selectedKey === device.agentKey ||
+                                        selectedKey === desk.key
+                                      }
+                                      renderer={renderer}
+                                      pennants={pennants}
+                                    />
+                                  ) : null}
+                                  {usageStop ? (
+                                    <TownFuelMark
+                                      stop={usageStop}
+                                      agentKey={device.agentKey!}
+                                      top={slot.top}
+                                      x={slot.chairX + 7}
+                                      renderer={renderer}
+                                      pennants={pennants}
+                                    />
+                                  ) : null}
                                   {quest ? (
                                     <TownQuestPennant
                                       quest={quest}

@@ -30,7 +30,7 @@ import { stopChrome } from "../web/src/browserChrome";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const film = join(root, "site/film");
 const poster = join(root, "site/assets/herdr-world-film-poster.jpg");
-const POSTER_AT = 20.1;
+const POSTER_AT = 32.4;
 
 const { values } = parseArgs({
   options: {

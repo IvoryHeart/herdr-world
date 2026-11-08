@@ -18,7 +18,7 @@ const fixture = join(root, "web/src/world/testing/town-golden");
 const goldenDirectory = join(fixture, "images");
 
 /** A request/event connection; every operation has a deadline, never a status loop. */
-class Cdp {
+export class Cdp {
   private next = 0;
   private pending = new Map<
     number,
@@ -79,7 +79,7 @@ class Cdp {
   }
 }
 
-async function endpoint(stream: ReadableStream<Uint8Array>) {
+export async function endpoint(stream: ReadableStream<Uint8Array>) {
   const reader = stream.getReader();
   const ready = Promise.withResolvers<string>();
   const timer = setTimeout(

@@ -25,6 +25,9 @@
 .agent-chat-state-circle.is-working {
   color: var(--blue);
 }
+.agent-chat-state-circle.is-fuel {
+  color: var(--red, #c43d3d);
+}
 .agent-chat-state-circle:is(.is-done, .is-blocked) .agent-chat-state-glyph {
   width: 14px;
   height: 14px;

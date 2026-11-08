@@ -87,6 +87,92 @@
   width: 100%;
   margin: 0;
 }
+.world-search-results nav {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.world-search-result {
+  min-width: 0;
+  max-width: 340px;
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 8px;
+  text-align: left;
+}
+.world-search-result[aria-current="true"] {
+  border-color: var(--accent, #79a6ff);
+  box-shadow: inset 0 0 0 1px var(--accent, #79a6ff);
+}
+.world-search-result > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-search-result-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.world-search-result-kind {
+  flex: 0 0 auto;
+  color: var(--muted, #9da7b4);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.world-search-result-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.world-search-result-stale,
+.world-search-result-place,
+.world-search-result-excerpt {
+  color: var(--muted, #9da7b4);
+  font-size: 11px;
+}
+.world-search-result-excerpt mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  color: var(--text, #edf2f7);
+  background: var(--accent-soft, rgb(121 166 255 / 24%));
+}
+/* The phone's search is one opaque sheet: the box, and its results hanging
+   just below it over the top of the view, with the count once, beneath the
+   box. The view keeps its place underneath, so the map stays in sight. */
+body:has(> .world-view-search-overlay) .world-search-results {
+  position: fixed;
+  z-index: 999;
+  top: calc(var(--world-search-overlay-top, 52px) + 46px);
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  max-height: min(240px, calc(var(--app-viewport-height, 100dvh) * 0.4));
+  padding: 6px;
+  border: 1px solid var(--border, #343942);
+  border-radius: 7px;
+  background: var(--panel, #202331);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 42%);
+}
+body:has(> .world-view-search-overlay) .world-search-results p {
+  color: var(--muted, #9da7b4);
+  font-size: 11px;
+}
+body:has(> .world-view-search-overlay) .world-search-result {
+  max-width: none;
+  flex-basis: 100%;
+}
+body:has(.world-search-results)
+  > .world-view-search-overlay
+  .world-view-toolbar-results {
+  display: none;
+}
 .world-outside-filter {
   position: absolute;
   bottom: 4px;

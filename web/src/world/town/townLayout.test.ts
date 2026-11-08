@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { townLandscape } from "./townLandscape";
 import {
   layoutTown,
   TOWN_DEFAULT_RENDERED_DESKS,
@@ -16,7 +17,7 @@ import {
   type TownLayout,
 } from "./townLayout";
 import {
-  TOWN_ADD_ROOM_SLOT,
+  townRoomTidy,
   townRoomNeighbor,
   townRoomPlacement,
   townRoomsMoved,
@@ -417,7 +418,6 @@ test("layout is deterministic for the same input", () => {
   const input = town({ a: [3, 9], b: [1, 1, 1, 1] });
   const one = layoutTown(input, "wide").layout;
   const two = layoutTown(input, "wide").layout;
-  expect(one.trees).toEqual(two.trees);
   expect(Buffer.from(one.ground)).toEqual(Buffer.from(two.ground));
 });
 
@@ -724,6 +724,56 @@ test("every building has roads on at least three sides", () => {
     }
 });
 
+test("a road runs down each side of the town, matching street to street", () => {
+  for (const shape of Object.values(TOWN_SHAPES))
+    for (const hosts of [{ a: [3] }, ...HOST_SETS]) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const { width, ground } = layout;
+      const at = (x: number, y: number) => ground[y * width + x];
+      const land = townLandscape(layout);
+      const streets = [...layout.roads].sort((a, b) => a - b);
+      for (let row = 1; row < streets.length; row += 1) {
+        const y0 = streets[row - 1]! + ROAD_BAND;
+        const y1 = streets[row]!;
+        const lots = layout.buildings
+          .filter((b) => b.y >= y0 && b.y < y1)
+          .sort((a, b) => a.x - b.x);
+        const first = lots[0]!;
+        const last = lots[lots.length - 1]!;
+        const sides = layout.verticalRoads.filter(
+          (v) => v.y0 === y0 && v.y1 === y1,
+        );
+        const leftRoad = sides.find((v) => v.x + ROAD_BAND === first.x);
+        const rightRoad = sides.find((v) => v.x === last.x + last.w);
+        expect(leftRoad?.edge).toBe(true);
+        expect(rightRoad?.edge).toBeUndefined();
+        // Nothing stands left of the left road but land.
+        expect(Math.min(...sides.map((v) => v.x))).toBe(leftRoad!.x);
+        // The same pavement, carriageway and pavement, from the street above
+        // to the street below, as the right road.
+        for (const road of [leftRoad!, rightRoad!]) {
+          for (let y = y0; y < y1; y += 1) {
+            expect([y, at(road.x, y), at(road.x + 4, y)]).toEqual([
+              y,
+              TownGround.walk,
+              TownGround.walk,
+            ]);
+            for (let x = road.x + 1; x < road.x + 4; x += 1)
+              expect(at(x, y)).toBe(TownGround.road);
+            expect(land.objectAt(road.x + 2, y)).toBeNull();
+          }
+          for (let x = road.x; x < road.x + ROAD_BAND; x += 1) {
+            expect(at(x, y0 - 2)).toBe(TownGround.road);
+            expect(at(x, y1 + 2)).toBe(TownGround.road);
+          }
+        }
+        // The landscape starts beyond it: grass ground right outside.
+        for (let y = y0; y < y1; y += 1)
+          expect(at(leftRoad!.x - 1, y)).toBe(TownGround.grass);
+      }
+    }
+});
+
 test("the town center stands at the top, just across the first street", () => {
   for (const shape of Object.values(TOWN_SHAPES))
     for (const hosts of [...HOST_SETS, {}]) {
@@ -767,13 +817,10 @@ test("the town center stands at the top, just across the first street", () => {
             lamp.x >= center.x - 1 &&
             lamp.x <= center.x + center.w,
         ).toBe(false);
-      for (const tree of layout.trees)
-        expect(
-          tree.x >= center.x - 1 &&
-            tree.x <= center.x + center.w &&
-            tree.y >= center.y - 1 &&
-            tree.y <= center.street,
-        ).toBe(false);
+      const land = townLandscape(layout);
+      for (let y = center.y - 1; y <= center.street; y += 1)
+        for (let x = center.x - 1; x <= center.x + center.w; x += 1)
+          expect(land.objectAt(x, y)).toBeNull();
     }
 });
 
@@ -842,15 +889,17 @@ test("front doors open onto the street above and bar doors onto the one below", 
 });
 
 test("rooms clear of the bar reach the bottom; the bar stays under its own column", () => {
-  // Two columns: the tall left one runs down beside the bar, which sits
-  // under the short right one without making the building taller.
-  const { layout } = layoutTown(town({ a: [24, 4] }), TOWN_SHAPES.wide);
+  // Two columns: the tall left one runs down beside the bar and its Add room
+  // doorway, which sit under the wide right one without making the building
+  // taller.
+  const { layout } = layoutTown(town({ a: [100, 24] }), TOWN_SHAPES.wide);
   const building = layout.buildings[0]!;
   const [tall, short] = building.rooms;
   const bottom = building.y + building.h;
   expect(tall!.x + tall!.w).toBeLessThanOrEqual(building.lounge.x);
   expect(tall!.y + tall!.h).toBe(bottom - 2);
   expect(short!.y + short!.h).toBeLessThanOrEqual(building.lounge.y);
+  expect(tall!.x + tall!.w).toBeLessThan(building.addRoom.x);
   expect(building.lounge.y + building.lounge.h).toBe(bottom - 1);
   expect(
     building.barDoorX >= building.lounge.x &&
@@ -874,21 +923,27 @@ test("the bar sits beneath the last room column in every shape and size", () => 
     ]) {
       const { layout } = layoutTown(town({ a: rooms }), shape);
       const building = layout.buildings[0]!;
-      const { lounge } = building;
-      // The Add room slot is the building's last room, so it counts too.
-      const placed = [...building.rooms, building.addRoom];
+      const { lounge, rooms: placed } = building;
       const wall = building.x + building.w - 2;
       expect(lounge.w).toBeGreaterThanOrEqual(12);
       expect(lounge.w).toBeLessThanOrEqual(20);
       expect(lounge.spots.length).toBeGreaterThanOrEqual(12);
       expect(lounge.spots.length).toBeLessThanOrEqual(15);
+      // With no rooms, the bar keeps the bottom-right corner.
+      if (!placed.length) expect(lounge.x + lounge.w).toBe(wall);
+      if (!placed.length) continue;
       const lastX = Math.max(...placed.map((room) => room.x));
       const column = placed.filter((room) => room.x === lastX);
       const columnRight = Math.max(...column.map((room) => room.x + room.w));
       // Under the column, not beside it, and below its lowest room; its right
-      // end is the column's (the right wall when no floor is spare).
+      // end is the column's (the right wall when no floor is spare), unless
+      // the Add room doorway by the left wall pushed a sofa-corner bar right
+      // (a wider bar gives up stools for it instead).
       expect(lounge.x).toBeLessThan(columnRight);
-      expect(lounge.x + lounge.w).toBe(Math.min(columnRight + 1, wall));
+      if (lounge.x + lounge.w !== Math.min(columnRight + 1, wall)) {
+        expect(building.addRoom.x).toBe(building.x + 2);
+        expect(lounge.w).toBe(12);
+      }
       for (const room of column)
         expect(room.y + room.h).toBeLessThanOrEqual(lounge.y);
     }
@@ -926,19 +981,21 @@ function ordered(input: TownInput, order: readonly string[]): TownInput {
 }
 
 /**
- * Every room of every building, and its + Add room slot, stands clear of the
- * others, inside its walls.
+ * Every room of every building stands clear of the others, inside its walls,
+ * and clear of the bar and the + Add room doorway beside it.
  */
 function expectClear(layout: TownLayout) {
   for (const building of layout.buildings) {
-    const rooms = [...building.rooms, building.addRoom];
+    expectAddRoomBesideBar(building);
+    const rooms = building.rooms;
     for (const room of rooms) {
       expect(room.x).toBeGreaterThanOrEqual(building.x + 2);
       expect(room.y).toBeGreaterThanOrEqual(building.y + 9);
       expect(room.x + room.w).toBeLessThanOrEqual(building.x + building.w - 2);
       expect(room.y + room.h).toBeLessThanOrEqual(building.y + building.h - 2);
-      // The bar stays clear of every room.
+      // The bar and the Add room doorway stay clear of every room.
       expect(overlaps(room, building.lounge)).toBe(false);
+      expect(overlaps(room, building.addRoom)).toBe(false);
       for (const other of rooms)
         if (other !== room)
           expect(
@@ -1140,6 +1197,20 @@ test("a move, not a reflow: saved spots or the workspace order changed", () => {
   expect(townRoomsMoved(placed.layout, again.layout)).toBe(false);
 });
 
+/**
+ * A building's + Add room doorway: one tile left of the bar, in its rows
+ * under the counter, inside the left wall, and clear of the facade below.
+ */
+function expectAddRoomBesideBar(building: TownLayout["buildings"][number]) {
+  const { addRoom, lounge } = building;
+  expect(addRoom.x + addRoom.w + 1).toBe(lounge.x);
+  expect(addRoom.y).toBe(lounge.y + 1);
+  expect(addRoom.y + addRoom.h).toBe(lounge.y + lounge.h);
+  expect(addRoom.y + addRoom.h).toBeLessThan(building.y + building.h);
+  expect(addRoom.x).toBeGreaterThanOrEqual(building.x + 2);
+  expect(overlaps(addRoom, lounge)).toBe(false);
+}
+
 /** The input with one more room on `hostKey`: a new workspace, one tab. */
 function withNewRoom(input: TownInput, hostKey: string, key: string) {
   const order = input.rooms.filter((room) => room.hostKey === hostKey).length;
@@ -1149,44 +1220,47 @@ function withNewRoom(input: TownInput, hostKey: string, key: string) {
   };
 }
 
-test("a new room is as wide as the Add room slot, and no shorter", () => {
-  for (const shape of Object.values(TOWN_SHAPES)) {
-    const { layout } = layoutTown(town({ a: [1] }), shape);
-    const room = layout.buildings[0]!.rooms[0]!;
-    expect(room.w).toBe(TOWN_ADD_ROOM_SLOT.w);
-    expect(room.h).toBeGreaterThanOrEqual(TOWN_ADD_ROOM_SLOT.h);
-  }
+/** Where a building's Add room doorway stands, from its bar's corner. */
+const doorwayAtBar = (layout: TownLayout, hostKey: string) => {
+  const { addRoom, lounge } = layout.buildings.find(
+    (b) => b.hostKey === hostKey,
+  )!;
+  return { ...addRoom, x: addRoom.x - lounge.x, y: addRoom.y - lounge.y };
+};
+
+test("every building's Add room doorway stands just left of its bar", () => {
+  for (const shape of Object.values(TOWN_SHAPES))
+    for (const rooms of [[], [1], [3], [24], [100], [24, 4], [4, 100]]) {
+      const { layout } = layoutTown(town({ a: rooms, b: [2, 2] }), shape);
+      expectClear(layout);
+    }
 });
 
-test("every building's Add room slot is where its next room opens", () => {
+test("the Add room doorway stays beside the bar as rooms open, move and tidy", () => {
   for (const shape of Object.values(TOWN_SHAPES)) {
     let input = town({ a: [3, 15, 1], b: [], c: [24, 2, 2, 2, 7] });
     let live = layoutTown(input, shape);
+    const at = (hostKey: string) => doorwayAtBar(live.layout, hostKey);
+    const fixed = at("a");
     for (let added = 0; added < 4; added += 1)
       for (const hostKey of ["a", "b", "c"]) {
-        expectClear(live.layout);
-        const before = live.layout.buildings.find(
-          (b) => b.hostKey === hostKey,
-        )!;
-        const slot = {
-          x: before.addRoom.x - before.x,
-          y: before.addRoom.y - before.y,
-          w: before.addRoom.w,
-        };
-        const key = `${hostKey}/new-${added}`;
-        input = withNewRoom(input, hostKey, key);
+        input = withNewRoom(input, hostKey, `${hostKey}/new-${added}`);
         live = layoutTown(input, shape, live.memory);
-        const after = live.layout.buildings.find((b) => b.hostKey === hostKey)!;
-        const room = after.rooms.find((r) => r.key === key)!;
-        // The new room stands where the slot was, in its building (which
-        // may itself move on the street), and the slot moves on.
-        expect({
-          x: room.x - after.x,
-          y: room.y - after.y,
-          w: room.w,
-        }).toEqual(slot);
-        expect(overlaps(after.addRoom, room)).toBe(false);
+        expectClear(live.layout);
+        expect(at(hostKey)).toEqual(fixed);
       }
+    // Move a room to the bottom left, by the doorway, then tidy.
+    const moved = townRoomPlacement(
+      live.layout,
+      "a",
+      new Map([["a/room-0", { x: 2, y: 200 }]]),
+    )!;
+    live = layoutTown(input, shape, live.memory, undefined, moved.spots);
     expectClear(live.layout);
+    expect(at("a")).toEqual(fixed);
+    const tidy = townRoomTidy(live.layout, "a")!;
+    live = layoutTown(input, shape, live.memory, undefined, tidy.spots);
+    expectClear(live.layout);
+    expect(at("a")).toEqual(fixed);
   }
 });

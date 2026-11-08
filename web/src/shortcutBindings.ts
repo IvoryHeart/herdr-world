@@ -30,6 +30,7 @@ const base = {
   "panes.recent": ["Ctrl+Alt+J"],
   "plugin.herdrFloat.toggle": ["Ctrl+Alt+F"],
   "panes.search": ["Alt+K"],
+  "view.search": ["Slash", "Ctrl+F"],
   "tab.create": ["Ctrl+Alt+T"],
   "tab.close": ["Ctrl+Alt+W"],
   "tab.previous": ["Alt+Shift+ArrowLeft"],
@@ -75,6 +76,9 @@ const base = {
   "annotation.submit": ["Ctrl+Enter"],
   "annotations.copy": ["Ctrl+Shift+C"],
   "annotations.prefill": ["Ctrl+Enter"],
+  // Town has no text entry: its keys are plain letters, ignored while typing.
+  "town.next": ["N"],
+  "town.previous": ["Shift+N"],
 };
 export type ShortcutNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type ShortcutId =
@@ -149,6 +153,7 @@ export function defaultShortcutBindings(
       "terminal.paste": ["Meta+V"],
       "terminal.link": ["Meta+Click"],
       "preview.search": ["Meta+F"],
+      "view.search": ["Slash", "Meta+F"],
       "preview.selectAll": ["Meta+A"],
       "composer.send": ["Meta+Enter"],
       "annotation.submit": ["Meta+Enter"],
@@ -219,6 +224,24 @@ export function normalizeShortcut(value: string): string | null {
   );
 }
 
+const keySymbols: Record<string, string> = {
+  Minus: "-",
+  Equal: "=",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Semicolon: ";",
+  Quote: "'",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Backquote: "`",
+};
+
+const symbolKeys = new Map(
+  Object.entries(keySymbols).map(([name, symbol]) => [symbol, name]),
+);
+
 export type ShortcutEvent = Pick<
   KeyboardEvent,
   "key" | "ctrlKey" | "altKey" | "metaKey" | "shiftKey"
@@ -246,6 +269,13 @@ export function shortcutFromEvent(event: ShortcutEvent): string | null {
       event.key.toUpperCase() !== codeKey
     )
       return null;
+  }
+  // A punctuation key typed without Ctrl, Alt or Meta is the character it
+  // types, wherever the layout puts it: "/" is Shift+7 on a German keyboard,
+  // whose physical Slash key types "-".
+  if (!event.ctrlKey && !event.altKey && !event.metaKey) {
+    const symbol = symbolKeys.get(event.key);
+    if (symbol) return symbol;
   }
   let key = event.key;
   // Modifier-produced characters (Option+1, Shift+2) still address the same key.
@@ -276,20 +306,6 @@ export function matchesShortcut(
   return key !== null && bindings[id].includes(key);
 }
 
-const keySymbols: Record<string, string> = {
-  Minus: "-",
-  Equal: "=",
-  BracketLeft: "[",
-  BracketRight: "]",
-  Backslash: "\\",
-  Semicolon: ";",
-  Quote: "'",
-  Comma: ",",
-  Period: ".",
-  Slash: "/",
-  Backquote: "`",
-};
-
 export function formatShortcut(
   binding: string,
   platform: ShortcutPlatform,
@@ -313,6 +329,7 @@ export function formatShortcut(
 }
 
 export function shortcutScope(id: ShortcutId): string {
+  if (id.startsWith("town.")) return "town";
   if (id.startsWith("command.") && id !== "command.menu") return "command";
   if (
     id === "terminal.focus" ||
@@ -320,7 +337,7 @@ export function shortcutScope(id: ShortcutId): string {
     id === "annotations.toggle"
   )
     return "global";
-  if (/^(terminal|preview|composer|annotation|annotations)\./.test(id))
+  if (/^(terminal|preview|composer|annotation|annotations|view)\./.test(id))
     return id.split(".")[0];
   return "global";
 }
@@ -368,7 +385,12 @@ export function validateShortcutKeys(id: ShortcutId, keys: unknown): string[] {
       throw new Error(
         "Use a modified Click for terminal links and keyboard keys for other actions.",
       );
+    // View search acts only outside terminals and text fields, so a plain
+    // key such as "/" leaves typing available. Town's keys work only in Town,
+    // never while typing, so they may be plain letters, as Desk's J and K are.
     if (
+      id !== "view.search" &&
+      shortcutScope(id) !== "town" &&
       !/^(Ctrl|Alt|Meta)\+/.test(key) &&
       !/^(Shift\+)?(F\d+|PageUp|PageDown|Home|End|Insert|Delete|Enter|Backspace|Arrow\w+)$/.test(
         key,

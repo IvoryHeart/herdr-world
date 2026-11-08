@@ -1,4 +1,5 @@
 import { prepareTownEdgeDrop } from "./townEdgeScroll.browser";
+import { checkTownEdgeArrows } from "./townEdgeArrows.browser";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
 import { checkTownBuildingSigns } from "./townBuildingSigns.browser";
 import { checkTownReceptionFilter } from "./townReceptionFilter.browser";
@@ -1369,6 +1370,7 @@ async function run() {
       desk(selectedDeskId) !== undefined,
       "preferred room admission displaced the selected desk",
     );
+    await checkTownEdgeArrows({ host, check, waitFor });
     // A repeated request moving again, and no replay once its room leaves
     // and returns, are scene rules (scene/townSceneCamera.test.ts).
     setWorld(worldFor(base.connections.slice(0, -1)));
@@ -2413,7 +2415,7 @@ async function run() {
       0,
     "rooms with free spots need a new seat action",
   );
-  // Every live building ends with one + Add room slot, which takes a tap from
+  // Every live building has one + Add room doorway by its bar, which takes a tap from
   // the overview in; the floating New room button is gone.
   const liveBuildings = [
     ...host.querySelectorAll(".town-building-layer:not([data-stale])"),
@@ -2426,12 +2428,12 @@ async function run() {
             '.town-add-room[aria-label^="Add room to "]',
           ).length === 1,
       ),
-    "every live building needs one Add room slot",
+    "every live building needs one Add room doorway",
   );
   check(
     getComputedStyle(host.querySelector(".town-add-room")!).visibility ===
       "visible",
-    "the Add room slot shows at the overview",
+    "the Add room doorway shows at the overview",
   );
   check(
     !host.querySelector('[aria-label="New room"]'),
@@ -3838,6 +3840,7 @@ async function run() {
     const gaps = diagnostics.topologyGaps;
     const transitions = diagnostics.transitions;
     const crossfades = diagnostics.crossfades;
+    const reused = diagnostics.groundReused;
     const buildings = diagnostics.layout!.buildings;
     let followed = false;
     const watch = new MutationObserver(() => {
@@ -3891,6 +3894,12 @@ async function run() {
     check(
       followed,
       "no building's plaques glided with it when a host turned off and on",
+    );
+    // Ground chunks away from the change keep their painting (their plan,
+    // the land generated there included, is unchanged).
+    check(
+      diagnostics.groundReused > reused,
+      "no unchanged ground chunk was kept when a host turned off and on",
     );
     check(
       [...host.querySelectorAll<HTMLElement>(".town-building-layer")].every(

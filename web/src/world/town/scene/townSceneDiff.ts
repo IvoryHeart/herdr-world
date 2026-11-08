@@ -7,6 +7,7 @@
 
 import type { TownLayout } from "../townLayout";
 import type { TownModel } from "../townModel";
+import type { TownSearchLight } from "../townSearch";
 import {
   townActorDirty,
   townActorKeys,
@@ -39,9 +40,13 @@ export type TownSceneState = {
    * outside their front door until they reach it (townArrivals.ts).
    */
   arrivingKeys?: ReadonlySet<string>;
+  /** Whether an agent shows a step bubble (TownStepBubble): no typing dots. */
+  stepGlyph?: (agentKey: string) => boolean;
   /** Building currently held open (for example while moving a desk). */
   openHostKey: string | null;
   calm: boolean;
+  /** A search's matches, lit on a slightly dimmed town (townSearch.ts). */
+  search?: TownSearchLight | null;
 };
 
 export type TownSceneDirty = {

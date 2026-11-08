@@ -172,14 +172,18 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
         if (!agent || actor.mode === "out") continue;
         const status = agent.semanticStatus;
         const near = level === "room" || level === "desk";
-        const chatting = townAgentChatting(
-          agent.key,
-          clock,
-          level,
-          status,
-          actor.mode,
-          !state.calm && !camera.reducedMotion,
-        );
+        // A working agent's step bubble (TownStepBubble) replaces its
+        // typing dots.
+        const chatting =
+          !state.stepGlyph?.(agent.key) &&
+          townAgentChatting(
+            agent.key,
+            clock,
+            level,
+            status,
+            actor.mode,
+            !state.calm && !camera.reducedMotion,
+          );
         const mood = actors.mood(actor);
         const kind = townBubbleKind(
           status,
@@ -190,6 +194,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           chatting,
           Math.floor(clock * 3),
           mood,
+          Boolean(agent.usageStop),
         );
         let headX = actor.x;
         let headY = actor.y - 20 * TOWN_AGENT_SCALE;
@@ -220,7 +225,8 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           near &&
           status === "working" &&
           actor.mode === "seat" &&
-          !state.askingKeys?.has(agent.key)
+          !state.askingKeys?.has(agent.key) &&
+          !state.stepGlyph?.(agent.key)
         ) {
           const phase = clock * 0.35 + (townHash(agent.key) % 97) / 97;
           const fraction = phase - Math.floor(phase);
@@ -241,6 +247,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           (kind === "blocked" ||
             kind === "ask" ||
             kind === "done" ||
+            kind === "fuel" ||
             mood !== null) &&
           !near
             ? 2

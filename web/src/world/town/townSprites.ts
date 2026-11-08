@@ -186,8 +186,12 @@ export function townLookFor(identity: string): TownLook {
 }
 
 export type TownDirection = "down" | "up" | "left" | "right";
-/** `scratch`: seated, scratching its head with one hand (confused). */
-export type TownPose = "stand" | "sit" | "scratch" | "carry";
+/**
+ * `scratch`: seated, scratching its head with one hand (confused).
+ * `slump`: seated with its head sunk into its shoulders and its arms hanging
+ * (out of fuel: stopped on its usage limit).
+ */
+export type TownPose = "stand" | "sit" | "scratch" | "carry" | "slump";
 
 const NAVY = "#1f2a44";
 const NAVY_DARK = "#141c30";
@@ -198,13 +202,18 @@ const HEADSET = "#30343c";
 const SCARF = "#d9644a";
 
 function drawCharacter(
-  R: Rect,
+  paint: Rect,
   look: TownLook,
   dir: TownDirection,
   frame: number,
   pose: TownPose,
   blink: boolean,
 ) {
+  // Slumped, the head (every row above the neck) sinks two rows.
+  const R: Rect =
+    pose === "slump"
+      ? (x, y, w, h, color) => paint(x, y < 7 ? y + 2 : y, w, h, color)
+      : paint;
   const { skin, hair, shirt, pants, style } = look;
   const outfit = look.outfit ?? "shirt";
   const accessory = look.accessory ?? "none";
@@ -219,7 +228,7 @@ function drawCharacter(
   const shoe = "#2b2433";
   const eye = "#231d2b";
   const cap = townShade(shirt, -0.42);
-  const seated = pose === "sit" || pose === "scratch";
+  const seated = pose === "sit" || pose === "scratch" || pose === "slump";
   if (dir !== "right") {
     if (outfit === "dress") {
       R(2, 12, 8, 3, top);
@@ -261,6 +270,11 @@ function drawCharacter(
       R(2, 10, 1, 1, skin);
       R(10, 4, 1, 5, sd);
       R(10, 2, 2, 2, skin);
+    } else if (pose === "slump") {
+      R(1, 8, 1, 4, top);
+      R(10, 8, 1, 4, sd);
+      R(1, 12, 1, 1, skin);
+      R(10, 12, 1, 1, skin);
     } else if (pose === "sit") {
       R(1, 8, 1, 2, top);
       R(10, 8, 1, 2, sd);
@@ -474,6 +488,67 @@ export const TOWN_KIND_LOGOS: Record<string, string> = {
 export type TownStaticSprites = ReturnType<typeof buildTownSprites>;
 
 /** Build every non-character sprite once. */
+const tree = (c1: string, c2: string, c3: string, c4: string) =>
+  townSprite(
+    32,
+    42,
+    (R, D) => {
+      R(13, 28, 6, 13, "#6b4a2f");
+      R(13, 28, 2, 13, "#86603e");
+      D(16, 17, 13, c1);
+      D(10, 19, 8, c2);
+      D(22, 20, 8, c2);
+      D(15, 12, 9, c3);
+      D(11, 9, 5, c4);
+      D(21, 12, 4, c3);
+      R(9, 7, 2, 1, townShade(c4, 0.3));
+      R(19, 9, 1, 1, townShade(c4, 0.3));
+    },
+    "#1b2a1f",
+  );
+
+let trees: readonly TownCanvas[] | null = null;
+/** The town's broadleaf trees (two greens and a blossom), drawn once. */
+export function townTrees() {
+  trees ??= [
+    tree("#2e6a39", "#357a40", "#428f48", "#5aa857"),
+    tree("#2a5f3a", "#2f6e44", "#3a8150", "#4f9a5c"),
+    tree("#8a4a6a", "#a5587c", "#c7739a", "#e7a2bf"),
+  ];
+  return trees;
+}
+
+/** A status bubble over an agent's head, its tail pointing down. */
+export const townBubble = (draw: (R: Rect) => void, width = 11) =>
+  townSprite(width, 12, (R) => {
+    const w = "#fffaf0";
+    const tail = (width - 1) / 2;
+    R(1, 0, width - 2, 10, w);
+    R(0, 1, width, 8, w);
+    R(tail - 1, 10, 3, 1, w);
+    R(tail, 11, 1, 1, w);
+    R(1, 9, width - 2, 1, "#e3dac8");
+    draw(R);
+  });
+
+/** Out of fuel: an empty red fuel can beside a small clock. */
+export const TOWN_FUEL_BUBBLE_WIDTH = 15;
+export function townFuelPaint(R: Rect) {
+  const can = "#c43d3d";
+  R(1, 3, 5, 6, can);
+  R(2, 2, 2, 1, can);
+  R(4, 1, 2, 1, "#6b7a8f");
+  R(2, 4, 3, 3, "#f3d9c8");
+  R(2, 7, 3, 1, "#7d2424");
+  const clock = "#4f6a8f";
+  R(9, 2, 3, 1, clock);
+  R(8, 3, 1, 3, clock);
+  R(12, 3, 1, 3, clock);
+  R(9, 6, 3, 1, clock);
+  R(10, 3, 1, 2, clock);
+  R(11, 4, 1, 1, clock);
+}
+
 export function buildTownSprites() {
   const tableOf = (W: number, w: string) =>
     townSprite(W, 32, (R) => {
@@ -502,35 +577,7 @@ export function buildTownSprites() {
       R(6, 2, 2, 2, logo);
       R(1, 5, 12, 2, "#3a404b");
     });
-  const bubble = (draw: (R: Rect) => void, width = 11) =>
-    townSprite(width, 12, (R) => {
-      const w = "#fffaf0";
-      const tail = (width - 1) / 2;
-      R(1, 0, width - 2, 10, w);
-      R(0, 1, width, 8, w);
-      R(tail - 1, 10, 3, 1, w);
-      R(tail, 11, 1, 1, w);
-      R(1, 9, width - 2, 1, "#e3dac8");
-      draw(R);
-    });
-  const tree = (c1: string, c2: string, c3: string, c4: string) =>
-    townSprite(
-      32,
-      42,
-      (R, D) => {
-        R(13, 28, 6, 13, "#6b4a2f");
-        R(13, 28, 2, 13, "#86603e");
-        D(16, 17, 13, c1);
-        D(10, 19, 8, c2);
-        D(22, 20, 8, c2);
-        D(15, 12, 9, c3);
-        D(11, 9, 5, c4);
-        D(21, 12, 4, c3);
-        R(9, 7, 2, 1, townShade(c4, 0.3));
-        R(19, 9, 1, 1, townShade(c4, 0.3));
-      },
-      "#1b2a1f",
-    );
+  const bubble = townBubble;
   return {
     table,
     tableSmall,
@@ -633,11 +680,6 @@ export function buildTownSprites() {
       R(7, 13, 2, 2, "#d9644a");
       R(1, 24, 10, 2, "#b9c0c6");
     }),
-    trees: [
-      tree("#2e6a39", "#357a40", "#428f48", "#5aa857"),
-      tree("#2a5f3a", "#2f6e44", "#3a8150", "#4f9a5c"),
-      tree("#8a4a6a", "#a5587c", "#c7739a", "#e7a2bf"),
-    ],
     bush: townSprite(
       18,
       12,
@@ -760,6 +802,7 @@ export function buildTownSprites() {
         ] as const)
           R(x, y, 1, 2, "#2f9e55");
       }),
+      fuel: bubble(townFuelPaint, TOWN_FUEL_BUBBLE_WIDTH),
       idle: bubble((R) => {
         R(3, 4, 5, 4, "#8a5a3c");
         R(8, 5, 1, 2, "#8a5a3c");

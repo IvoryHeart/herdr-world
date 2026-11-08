@@ -18,6 +18,8 @@ import {
   type TownLayout,
 } from "./townLayout";
 import { paintTownCenter } from "./townCenterPaint";
+import { townPostLot } from "./townPost";
+import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
   paintTownFacade,
   paintTownInterior,
@@ -120,22 +122,8 @@ export function townOutdoor(
     outdoor.addChild(sprite);
     return sprite;
   };
-  // Trees, lamps and benches join the scene with the ground chunk under them.
+  // Lamps, bushes and benches join the scene with the ground chunk under them.
   const outdoorItems: TownOutdoorItem[] = [];
-  for (const tree of layout.trees)
-    outdoorItems.push({
-      x: tree.x * T,
-      y: tree.y * T,
-      place: () => {
-        const sprite = add(
-          sprites.trees[tree.variant]!,
-          tree.x * T + 8,
-          tree.y * T + 14,
-          tree.y * T + 14,
-        );
-        sprite.anchor.set(17 / 34, 43 / 44);
-      },
-    });
   for (const lamp of layout.lamps)
     outdoorItems.push({
       x: lamp.x * T,
@@ -196,6 +184,12 @@ export function townOutdoor(
     center.y * T,
     (center.y + center.h) * T,
   );
+  // The post office left of the center: its house, its yard on the street.
+  const post = townPostLot(layout);
+  if (post) {
+    add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
+    add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
+  }
   return outdoorItems;
 }
 

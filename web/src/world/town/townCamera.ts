@@ -3,7 +3,14 @@
  * Pure state so the renderer, the DOM world layer and tests share one model.
  */
 
+import {
+  TOWN_CITY_BOARD_GAP,
+  TOWN_CITY_BOARD_HEIGHT,
+  TOWN_CITY_BOARD_SCALE,
+  townCityBoardScale,
+} from "./townCenter";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
+import { TOWN_RECEPTION_LIFT } from "./townBoardPlacement";
 import { townEase } from "./townTransition";
 
 export type TownViewport = {
@@ -44,12 +51,74 @@ export function townHostsWidth(layout: TownLayout) {
   return Math.min(layout.width, right + 6);
 }
 
+/** Reception boards' measured heights in screen pixels, by host. */
+export type TownBoardHeights = ReadonlyMap<string, number>;
+
+/**
+ * What a wide town's first view frames, in world pixels: from the city
+ * billboard above the town center and the reception boards above the
+ * buildings' doors down to the street under the last row of buildings,
+ * leaving the park below off-screen. The boards keep their screen size, so
+ * their tops depend on the zoom.
+ */
+export function townHomeSpan(
+  layout: TownLayout,
+  boards: TownBoardHeights = new Map(),
+) {
+  const board = layout.center.y * TOWN_TILE - TOWN_CITY_BOARD_GAP;
+  const bottom = layout.roads[layout.roads.length - 1]! * TOWN_TILE;
+  // Where each reception board stands, before it moves off what it would
+  // cover: it only ever moves sideways or down.
+  const receptions = layout.buildings.flatMap((building) => {
+    const h = boards.get(building.hostKey);
+    return h ? [{ foot: building.y * TOWN_TILE - TOWN_RECEPTION_LIFT, h }] : [];
+  });
+  return {
+    /** The billboard's foot, just above the center's flag. */
+    board,
+    bottom,
+    receptions,
+    top: (z: number) =>
+      Math.min(
+        board - TOWN_CITY_BOARD_HEIGHT * townCityBoardScale(z),
+        ...receptions.map(({ foot, h }) => foot - h / z),
+      ),
+  };
+}
+
+/** The largest zoom at which the home span fits `height` screen pixels. */
+function homeSpanZoom(
+  layout: TownLayout,
+  height: number,
+  boards: TownBoardHeights,
+) {
+  const { board, bottom, receptions } = townHomeSpan(layout, boards);
+  // A reception board keeps its screen size: it takes a fixed height above
+  // its foot.
+  const fits = receptions
+    .filter(({ foot, h }) => h < height && foot < bottom)
+    .map(({ foot, h }) => (height - h) / (bottom - foot));
+  const below = bottom - board;
+  // While the billboard keeps its screen size, it takes a fixed height.
+  const z = (height - TOWN_CITY_BOARD_HEIGHT) / below;
+  if (z * TOWN_CITY_BOARD_SCALE.max >= 1 && z * TOWN_CITY_BOARD_SCALE.min <= 1)
+    return Math.min(z, ...fits);
+  // Past its limits, it scales with the town.
+  const scale =
+    z * TOWN_CITY_BOARD_SCALE.max < 1
+      ? TOWN_CITY_BOARD_SCALE.max
+      : TOWN_CITY_BOARD_SCALE.min;
+  return Math.min(height / (below + TOWN_CITY_BOARD_HEIGHT * scale), ...fits);
+}
+
 /** Above this many rooms, the default wide view shows roofs instead of cards. */
 export const TOWN_OVERVIEW_ROOMS = 48;
 
 export function townZoomLimits(
   layout: TownLayout,
   viewport: TownViewport,
+  /** Measured reception boards, framed in the first view. */
+  boards: TownBoardHeights = new Map(),
 ): TownZoomLimits {
   const usableWidth = Math.max(
     160,
@@ -66,19 +135,23 @@ export function townZoomLimits(
     ) * 0.98;
   const narrow = layout.formFactor === "narrow";
   const widest = Math.max(1, ...layout.buildings.map((b) => b.w));
-  // Wide screens open on the hosts' buildings and the town center above
-  // them; the verge beyond stays just off-screen; ALL shows it.
+  // Wide screens open on the hosts' buildings, the town center above them
+  // and its billboard above that; the verge and the park beyond stay just
+  // off-screen; ALL shows them.
   const hosts = townHostsWidth(layout);
+  const desk = narrow ? 1.05 : 1.3;
+  // A large window still opens short of desk level, where the boards are
+  // put away.
   const home = narrow
     ? (usableWidth - 12) / ((widest + 2) * TOWN_TILE)
     : Math.max(
         all,
         Math.min(
           usableWidth / (hosts * TOWN_TILE),
-          usableHeight / (layout.height * TOWN_TILE),
+          homeSpanZoom(layout, usableHeight, boards),
+          (desk * 0.9) / 0.98,
         ) * 0.98,
       );
-  const desk = narrow ? 1.05 : 1.3;
   const card = narrow ? Math.max(0.5, home * 1.35) : 0.62;
   // A town too large for readable room cards opens at roof level; zooming in
   // past this point shows the cards of the buildings on screen.
@@ -181,6 +254,8 @@ export class TownCamera {
   };
   bounds = { width: 1, height: 1 };
   limits: TownZoomLimits | null = null;
+  /** The reception boards as measured, which the home view keeps whole. */
+  boardHeights: TownBoardHeights = new Map();
   reducedMotion = false;
   calm = false;
 
@@ -190,7 +265,7 @@ export class TownCamera {
       width: layout.width * TOWN_TILE,
       height: layout.height * TOWN_TILE,
     };
-    this.limits = townZoomLimits(layout, viewport);
+    this.limits = townZoomLimits(layout, viewport, this.boardHeights);
     this.z = this.clampZoom(this.z);
     this.targetZ = this.clampZoom(this.targetZ);
     this.clampPosition();

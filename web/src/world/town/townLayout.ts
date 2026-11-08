@@ -9,7 +9,9 @@
  */
 
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
+import { townPostLotBeside } from "./townPostLot";
 import {
+  ADD_ROOM_WIDTH,
   LOBBY_HEIGHT,
   MARGIN,
   ROAD_GAP,
@@ -18,11 +20,10 @@ import {
   TOWN_FACADE,
   townFloor,
   townPlaceLots,
-  YARD,
+  type TownVerticalRoad,
 } from "./townLots";
 import {
   NO_ROOM_SPOTS,
-  TOWN_ADD_ROOM_SLOT,
   townArrangeRooms,
   townRanksOutOfOrder,
   townRoomSpans,
@@ -199,16 +200,15 @@ export type TownBuilding = {
   /** Reception counter tiles (left x, row y, width). */
   counter: { x: number; y: number; w: number };
   /**
-   * The + Add room slot: where the building's next room would stand
-   * (TOWN_ADD_ROOM_SLOT), kept clear of its rooms like one of them.
+   * The + Add room doorway: just left of the bar, in its rows, against the
+   * bottom wall. It moves only with the bar, never with the rooms, and rooms
+   * stay clear of it as of the bar (townFloor).
    */
   addRoom: { x: number; y: number; w: number; h: number };
   queue: TownSpot[];
   plants: TownPoint[];
   rooms: TownRoom[];
 };
-
-export type TownTree = TownPoint & { variant: number; seed: number };
 
 export type TownLayout = {
   formFactor: TownFormFactor;
@@ -226,10 +226,11 @@ export type TownLayout = {
   roads: number[];
   /**
    * A road right of every lot, from the street above it (y0, the row under
-   * that street) to the street below (y1, that street's row): every lot has
-   * roads on at least three sides.
+   * that street) to the street below (y1, that street's row), and an `edge`
+   * road down the left of each row's first lot: every lot has roads on at
+   * least three sides, and the town on both.
    */
-  verticalRoads: { x: number; y0: number; y1: number }[];
+  verticalRoads: TownVerticalRoad[];
   /**
    * The town center: at the top, across the first street from the
    * buildings, centred over the first row (townLots.ts).
@@ -240,7 +241,6 @@ export type TownLayout = {
   benches: TownPoint[];
   lamps: TownPoint[];
   bushes: TownPoint[];
-  trees: TownTree[];
   /** Desk key to room key and cell index. */
   deskCells: ReadonlyMap<string, { roomKey: string; cellIndex: number }>;
   /** The saved room spots the town was laid out with (townRoomPlace.ts). */
@@ -374,22 +374,12 @@ function placeRoomDesks(
   return { memory: { cells }, overflow, cols, rows };
 }
 
-function mulberry32(seed: number) {
-  let a = seed | 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 type DraftBuilding = Omit<
   TownBuilding,
   "x" | "y" | "roadY" | "rooms" | "addRoom"
 > & {
-  /** The Add room slot's spot, tiles from the building's corner. */
-  addRoom: { rx: number; ry: number; w: number; h: number };
+  /** The Add room doorway's left edge, tiles from the building's corner. */
+  addRoomX: number;
   rooms: (Omit<TownRoom, "x" | "y" | "cells"> & {
     deskFold?: "folded" | "expanded";
     rx: number;
@@ -442,36 +432,28 @@ function draftBuilding(
   // column it was given while the scene is live (a new one joins the
   // shortest), so a room that grows moves only the rooms below it in its own
   // column. A building whose rooms were reordered (a room moved in Spaces or
-  // Herdr) is stacked afresh, as a reload would show it. The Add room slot
-  // goes last, as the next room would, and the floor makes room for it.
-  const slot = TOWN_ADD_ROOM_SLOT;
-  const withSlot = [...placed, slot];
-  const addRoom = { rx: 0, ry: 0, w: slot.w, h: slot.h };
+  // Herdr) is stacked afresh, as a reload would show it.
   const arranged = placed.some((room) => spots.has(room.key))
-    ? townArrangeRooms(withSlot, spots)
+    ? townArrangeRooms(placed, spots)
     : null;
   let spans: ReturnType<typeof townStackRooms>["spans"];
   let x: number;
   if (arranged) {
-    ({ spans, width: x } = townRoomSpans(withSlot, arranged));
+    ({ spans, width: x } = townRoomSpans(placed, arranged));
     placed.forEach((room, index) => {
       const spot = arranged.get(room.key)!;
       room.rx = spot.x;
       room.ry = spot.y;
       nextMemory.get(room.key)!.rank = index;
     });
-    const spot = arranged.get(slot.key)!;
-    addRoom.rx = spot.x;
-    addRoom.ry = spot.y;
   } else {
     const reordered = townRanksOutOfOrder(
       placed.map((room) => memory.get(room.key)?.rank),
     );
     const stacked = townStackRooms(
-      withSlot,
+      placed,
       shape.roomColumns,
-      (room) =>
-        reordered || room === slot ? undefined : memory.get(room.key)?.column,
+      (room) => (reordered ? undefined : memory.get(room.key)?.column),
       ROOM_TOP,
     );
     ({ spans, width: x } = stacked);
@@ -482,10 +464,8 @@ function draftBuilding(
       room.rx = stacked.positions[index]!.rx;
       room.ry = stacked.positions[index]!.ry;
     });
-    addRoom.rx = stacked.positions[placed.length]!.rx;
-    addRoom.ry = stacked.positions[placed.length]!.ry;
   }
-  const { w, h, barX, barWidth } = townFloor(spans, x, shape);
+  const { w, h, barX, barWidth, addRoomX } = townFloor(spans, x, shape);
   const barY = h - LOBBY_HEIGHT;
   const doorX = Math.floor(w / 2);
   const bar = { x: barX, y: barY, w: barWidth, h: LOBBY_HEIGHT - 1 };
@@ -511,7 +491,7 @@ function draftBuilding(
     queue: [],
     plants: [],
     rooms: placed,
-    addRoom,
+    addRoomX,
   };
 }
 
@@ -722,11 +702,12 @@ export function layoutTown(
       roadY: draft.roadY,
       lounge,
       counter: { x: bx + draft.counter.x, y: lobbyY + 1, w: draft.counter.w },
+      // In the bar's rows under its counter, down to the bottom wall.
       addRoom: {
-        x: bx + draft.addRoom.rx,
-        y: by + draft.addRoom.ry,
-        w: draft.addRoom.w,
-        h: draft.addRoom.h,
+        x: bx + draft.addRoomX,
+        y: lounge.y + 1,
+        w: ADD_ROOM_WIDTH,
+        h: lounge.h - 1,
       },
       queue: QUEUE_OFFSETS.map((offset) => ({
         x: doorX - 1 + offset,
@@ -749,7 +730,12 @@ export function layoutTown(
   const court = townCenterForecourt(center);
   strip(court.x0, court.y0, court.x1, court.y1, TownGround.plaza);
 
-  const plaza = { x: Math.floor(width / 2), y: lastRoad + ROAD_GAP + 6 };
+  // Centred on the town before it shifted for the post office's lawn, and
+  // shifted with it (townLots.ts).
+  const plaza = {
+    x: lots.shift + Math.floor((width - lots.shift) / 2),
+    y: lastRoad + ROAD_GAP + 6,
+  };
   for (let ty = plaza.y - 5; ty <= plaza.y + 5; ty += 1)
     for (let tx = plaza.x - 8; tx <= plaza.x + 8; tx += 1)
       if (((tx - plaza.x) / 8) ** 2 + ((ty - plaza.y) / 5.2) ** 2 <= 1)
@@ -760,60 +746,24 @@ export function layoutTown(
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
+  const post = formFactor === "narrow" ? null : townPostLotBeside(center);
   const lamps: TownPoint[] = [];
+  // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
-    for (let tx = 6; tx < width - 4; tx += 11) {
+    for (let tx = 6 + (lots.shift % 11); tx < width - 4; tx += 11) {
       if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
       // The center stands on this pavement and brings its own lamps.
       const underCenter =
         ry === center.street && tx >= center.x - 1 && tx <= center.x + center.w;
       if (underCenter) continue;
+      // The post office's yard fronts it too (townPostLot.ts).
+      const underPost =
+        post &&
+        ry === center.street &&
+        tx >= post.x - 1 &&
+        tx <= post.x + post.w;
+      if (underPost) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
-    }
-
-  const random = mulberry32(42);
-  const trees: TownTree[] = [];
-  const treeAt = new Set<number>();
-  const nearBuilding = (tx: number, ty: number) =>
-    (tx >= center.x - 2 &&
-      tx <= center.x + center.w + 1 &&
-      ty >= center.y - 2 &&
-      ty <= center.street) ||
-    buildings.some(
-      (b) =>
-        tx >= b.x - 2 &&
-        tx <= b.x + b.w + 1 &&
-        ty >= b.y - 3 &&
-        ty <= b.y + b.h + TOWN_FACADE + YARD,
-    );
-  const clearAround = (tx: number, ty: number) => {
-    for (let dy = -1; dy <= 1; dy += 1)
-      for (let dx = -1; dx <= 1; dx += 1) {
-        const type = get(tx + dx, ty + dy);
-        if (type !== -1 && type !== TownGround.grass) return false;
-      }
-    return true;
-  };
-  for (let ty = 1; ty < height; ty += 1)
-    for (let tx = 0; tx < width; tx += 1) {
-      const edge = tx < 2 || ty < 2 || tx > width - 3 || ty > height - 3;
-      if (random() > (edge ? 0.42 : 0.07)) continue;
-      if (!clearAround(tx, ty) || nearBuilding(tx, ty)) continue;
-      if (Math.hypot((tx - plaza.x) / 1.2, (ty - plaza.y) * 1.25) < 10)
-        continue;
-      const spacing = edge ? 1.8 : 3.2;
-      let crowded = false;
-      for (let dy = -3; dy <= 3 && !crowded; dy += 1)
-        for (let dx = -3; dx <= 3 && !crowded; dx += 1)
-          if (
-            treeAt.has((ty + dy) * width + tx + dx) &&
-            Math.hypot(dx, dy) < spacing
-          )
-            crowded = true;
-      if (crowded) continue;
-      const variant = random() < 0.12 ? 2 : random() < 0.5 ? 1 : 0;
-      trees.push({ x: tx, y: ty, variant, seed: random() * 10 });
-      treeAt.add(ty * width + tx);
     }
 
   const deskCells = new Map<string, { roomKey: string; cellIndex: number }>();
@@ -843,7 +793,6 @@ export function layoutTown(
       ],
       lamps,
       bushes,
-      trees,
       deskCells,
       ...(roomSpots.size ? { roomSpots } : {}),
     },

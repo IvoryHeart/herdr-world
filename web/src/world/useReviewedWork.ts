@@ -56,6 +56,26 @@ export const awaitsReview = (
   !isReviewedStop(leaf, record);
 
 /**
+ * Needs you's review test as of now, read from the store once: for a caller
+ * that orders the items on demand (Town's Next) without re-rendering on
+ * every stop the service observes.
+ */
+export function awaitsReviewNow(
+  store: Pick<WorldDeskStore, "get"> = sharedDeskStore(),
+  now = Date.now(),
+) {
+  const state = store.get();
+  const records = new Map(
+    (state.verified ? state.records : []).map((record) => [
+      deskKey(record),
+      record,
+    ]),
+  );
+  return (leaf: WorldLeafObject) =>
+    awaitsReview(leaf, records.get(deskKey(deskIdentity(leaf))), now);
+}
+
+/**
  * Marks an agent's finished work reviewed; true once the service saved it.
  * A caller that showed one stop's report marks that stop, not a newer one;
  * otherwise the current stop, read from the store at the moment of marking.

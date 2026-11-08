@@ -14,7 +14,8 @@
  * changes. An agent whose mark its reception does not take (held, see
  * townReceptionFilter.ts) stays seated at its desk with its mark. An agent at a pinned desk never goes to the lounge: it leaves its
  * desk only to wait at reception (blocked, or finished and not yet seen), and
- * walks straight back once seen. Movement never delays operational state,
+ * walks straight back once seen. An agent out of fuel (stopped on its usage
+ * limit, townOutOfFuel.ts) stays slumped at its desk. Movement never delays operational state,
  * and every actor keeps its agent key, so its exact pane target is unchanged
  * wherever it stands. An agent in the bin (away) walks out of its building's
  * front door and is drawn outside by the bus layer until it is put back.
@@ -138,6 +139,10 @@ export class TownNavigation {
       for (let y = building.counter.y - 1; y <= building.counter.y + 1; y += 1)
         this.block(x, y);
     for (const plant of building.plants) this.block(plant.x, plant.y);
+    // The Add room doorway beside the bar is not floor.
+    const door = building.addRoom;
+    for (let y = door.y; y < door.y + door.h; y += 1)
+      for (let x = door.x; x < door.x + door.w; x += 1) this.block(x, y);
     for (const room of building.rooms)
       for (const cell of room.cells) if (cell.deskKey) this.blockCell(cell);
   }
@@ -312,7 +317,7 @@ export type TownActorWorld = {
 
 /** Everything a building's navigation grid is built from. */
 export function townNavigationKey(building: TownBuilding) {
-  const { x, y, w, h, lounge, counter, plants, rooms } = building;
+  const { x, y, w, h, lounge, counter, addRoom, plants, rooms } = building;
   const desks = rooms.flatMap((room) =>
     room.cells.filter((cell) => cell.deskKey).map((cell) => [cell.x, cell.y]),
   );
@@ -323,6 +328,7 @@ export function townNavigationKey(building: TownBuilding) {
     h,
     [lounge.x, lounge.y, lounge.bar.x, lounge.bar.y, lounge.bar.w],
     [counter.x, counter.y, counter.w],
+    [addRoom.x, addRoom.y, addRoom.w, addRoom.h],
     plants.map((plant) => [plant.x, plant.y]),
     desks,
   ]);
@@ -587,6 +593,8 @@ export class TownActors {
       else if (crowd !== undefined) goal = { kind: "crowd", slot: crowd };
       else if (
         agent.semanticStatus === "idle" &&
+        // Out of fuel: it slumps at its desk until its limit resets.
+        !agent.usageStop &&
         !this.summoned.has(actor.key) &&
         !this.asking.has(actor.key) &&
         !model.deskPins.has(seat.deskKey)

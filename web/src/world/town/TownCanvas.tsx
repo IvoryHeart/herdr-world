@@ -4,10 +4,11 @@ import { TownBoard } from "./TownBoard";
 import {
   TownTeamsLayer,
   TownWorldLayer,
-  type TownRoomPress,
+  type TownRoomCardPress,
 } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
 import { TownBuildingLayers } from "./townBuildingLayers";
+import { TownBoardPlacement } from "./townBoardPlacement";
 import {
   useCallback,
   useEffect,
@@ -19,12 +20,12 @@ import {
   type ReactNode,
 } from "react";
 import type { RoomPins } from "./townModel";
+import { useTownStepWants, type TownStepStore } from "./useTownStepWants";
 import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
-import { EllipsisVertical } from "lucide-react";
-import { useMobileControls } from "../../components/MobileControls";
+import { TownZoomControls } from "./TownZoomControls";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type {
   WorldCanvasAnchor,
@@ -56,6 +57,7 @@ import { townCalls } from "./TownRail";
 import {
   createTownRenderer,
   nextTownTask,
+  townRendererFailed,
   type TownRendererHandle,
 } from "./townRenderer";
 import {
@@ -82,7 +84,12 @@ import {
   type TownReceptionTakes,
 } from "./townReceptionFilter";
 import "./townBoard.css";
+import { useTownCanvasSearch } from "./useTownCanvasSearch";
 import "./townTeams.css";
+import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";
+import { useTownEdgeNav, type TownNeedsYouOrder } from "./useTownEdgeNav";
+import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
+import type { OfficeAgent } from "../officeProjectionTypes";
 
 export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
 import type { TownRoomActions } from "./townRoomActions";
@@ -110,6 +117,7 @@ export function TownCanvas({
   onFindHeld,
   onActivateAsk,
   quests = NO_QUESTS,
+  steps,
   conversationTargets,
   onSelect,
   onActivateAgent,
@@ -133,7 +141,15 @@ export function TownCanvas({
   chrome = NO_CHROME,
   trace = NO_TRACE,
   centerActions,
+  search,
+  needsYouOrder,
+  activityAt,
 }: {
+  search?: Parameters<typeof useTownCanvasSearch>[0];
+  /** Needs you's items in order for N: item key and agent leaf ID, if any. */
+  needsYouOrder?: TownNeedsYouOrder;
+  /** When an agent last worked (its leaf's activity), for the Idle time lens. */
+  activityAt?: (agent: OfficeAgent) => number | undefined;
   /** The town center's radial menu; without it the center only shows. */
   centerActions?: readonly TownCenterAction[];
   /** Which terminals know each other (world/relations.ts). */
@@ -182,6 +198,8 @@ export function TownCanvas({
   onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
+  /** Working agents' steps, as thought bubbles (useTownStepWants). */
+  steps?: TownStepStore;
   conversationTargets: readonly WorldConversationAnchorTarget[];
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
@@ -300,10 +318,24 @@ export function TownCanvas({
     () => latest.current.layout.center,
     !!centerActions?.length,
   );
+  // Lenses (TownLenses.tsx): Town opens in Attention, Town as usual.
+  const lens = useTownLenses(model, {
+    projection,
+    sources,
+    quests,
+    activityAt,
+    targets,
+    centerActions,
+    shell: shellRef,
+    ringOpen: ring.open,
+  });
   /** A table whose card a touch tap opened; touch has no hover to open it. */
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
+  const searchScene = { model, layout, view, ready, failure, calm };
+  const searching = useTownCanvasSearch(search, rendererRef, searchScene);
+  const stepWants = useTownStepWants(steps, () => latest.current, rendererRef);
   const current = {
     chrome,
     calm,
@@ -320,6 +352,8 @@ export function TownCanvas({
     arrivingKeys,
     receptionHeldKeys,
     quests,
+    steps,
+    needsYouOrder,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -380,12 +414,9 @@ export function TownCanvas({
 
   const levelRef = useRef<TownLevel>("overview");
   const [layers] = useState(() => new TownBuildingLayers());
-  const [signs] = useState(
-    () =>
-      new TownBuildingSigns(() =>
-        rendererRef.current?.invalidate("building-sign"),
-      ),
-  );
+  const signFrame = () => rendererRef.current?.invalidate("building-sign");
+  const [signs] = useState(() => new TownBuildingSigns(signFrame));
+  const [boards] = useState(() => new TownBoardPlacement(rendererRef, view));
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
       latest.current.onHover?.(
@@ -409,10 +440,9 @@ export function TownCanvas({
    * Passes a room card's or name's press to the town beneath it
    * (TownWorldLayer): a press on a name can carry the room.
    */
-  const roomCardPress = useRef<
-    | ((event: PointerEvent, roomKey: string, press: TownRoomPress) => boolean)
-    | null
-  >(null);
+  const roomCardPress = useRef<TownRoomCardPress | null>(null);
+  // Arrows to what needs you off screen, and N for the next one.
+  const edge = useTownEdgeNav(current, view, rendererRef, hostRef);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
     // The canvas and its targets show this camera until the next frame, so
     // presses are hit-tested against it (view.drawn).
@@ -420,14 +450,17 @@ export function TownCanvas({
     // A camera that moved under a still carry (an edge pan, an arrow key)
     // puts something else under it: the target follows what is now drawn.
     if (moved) reaimCarry.current?.();
+    if (moved) searching.countOffscreen();
     const layer = worldRef.current;
     hud.drew(camera, level, latest.current.layout);
+    stepWants.want(camera, level);
     if (layer) {
       const tx = camera.viewport.width / 2 - camera.x * camera.z;
       const ty = camera.viewport.height / 2 - camera.y * camera.z;
       layer.style.transform = `translate(${tx}px, ${ty}px) scale(${camera.z})`;
       layer.style.setProperty("--z", String(camera.z));
       layer.style.setProperty("--iz", String(1 / camera.z));
+      boards.place(camera.z, latest.current.layout);
       if (levelRef.current !== level) {
         levelRef.current = level;
         layer.dataset.level = level;
@@ -444,6 +477,7 @@ export function TownCanvas({
     }
     hud.framed();
     ring.place();
+    edge.frameArrows(camera, level);
     // Inspected agents walk under a still camera, so their lines follow every
     // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
     if (posed || latest.current.conversationTargets.length > 0)
@@ -481,8 +515,10 @@ export function TownCanvas({
     awayKeys: latest.current.awayKeys,
     arrivingKeys: latest.current.arrivingKeys,
     heldKeys: latest.current.receptionHeldKeys,
+    stepGlyph: latest.current.steps?.hasGlyph,
     openHostKey: null,
     calm: latest.current.calm,
+    search: searching.lit.current,
   });
 
   useEffect(() => {
@@ -533,16 +569,7 @@ export function TownCanvas({
       })
       .catch((error: unknown) => {
         if (disposed) return;
-        if (DEVTOOLS)
-          traceRef.current.record("error", {
-            where: "renderer",
-            message: String(error),
-          });
-        if (window.__HERDR_TOWN_RENDERER__)
-          window.__HERDR_TOWN_RENDERER__.lastError =
-            error instanceof Error
-              ? error.message.slice(0, 160)
-              : "renderer failed";
+        townRendererFailed(error, traceRef.current);
         setFailure(true);
       });
     const observer = new ResizeObserver(() => {
@@ -599,7 +626,9 @@ export function TownCanvas({
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
+    steps,
     calm,
+    searching.light,
   ]);
 
   // Re-report after any render, so anchors World cleared come back. World
@@ -811,26 +840,15 @@ export function TownCanvas({
     if (view.key(event.key)) event.preventDefault();
   };
 
-  /**
-   * The zoom buttons step between whole town, one building, one room and one
-   * desk, choosing whatever is nearest the centre of the screen. The current
-   * step is read from the zoom, so pinching and wheel zoom mix freely.
-   */
-  const shellControls = useMobileControls();
-  const ownsShellControls = shellControls !== null;
-  useEffect(() => {
-    if (!ownsShellControls) return;
-    document.documentElement.dataset.townControls = "";
-    return () => {
-      delete document.documentElement.dataset.townControls;
-    };
-  }, [ownsShellControls]);
   const stepZoom = (direction: 1 | -1) => {
     if (rendererRef.current)
       view.stepZoom(direction, latest.current.layout, viewport());
   };
 
-  const focusTarget = (target: TownTarget) => view.focusTarget(target);
+  const focusTarget = (target: TownTarget) => {
+    lens.focus(target.key);
+    view.focusTarget(target);
+  };
 
   const zoomToRoomKey = (roomKey: string) =>
     view.zoomToRoom(latest.current.layout, roomKey);
@@ -861,8 +879,17 @@ export function TownCanvas({
         className="town-world"
         ref={worldRef}
         data-level="overview"
+        data-lens={lens.view?.lens}
         aria-hidden={!ready}
       >
+        {lens.view ? (
+          <TownLensLayer
+            view={lens.view}
+            model={model}
+            layout={layout}
+            shownRooms={visible.tagRooms}
+          />
+        ) : null}
         <TownCenterSign
           center={layout.center}
           open={ring.open}
@@ -901,6 +928,7 @@ export function TownCanvas({
             visible={visible}
             signs={signs}
             layers={layers}
+            boards={boards}
             onHoverEntry={hoverEntry}
             selectedKey={selectedKey}
             blockedSince={blockedSince}
@@ -934,57 +962,32 @@ export function TownCanvas({
               roomCardPress.current?.(event, roomKey, press) ?? false
             }
             onFocusTarget={focusTarget}
-            targets={targets}
+            targets={lens.targets}
             deskBadges={deskBadges}
             quests={quests}
+            steps={steps}
             renderer={rendererRef}
             pennants={pennants.current}
           />
         </TownHudContext.Provider>
+        <TownPulseRing pulse={edge.pulse} />
       </div>
-      <TownBoard
-        counts={summary.counts}
-        observability={observability}
-        onOpenSummary={onOpenSummary}
-        sinceYouLeft={sinceYouLeft}
+      <TownEdgeOverlay edge={edge} />
+      <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
+        <TownBoard
+          counts={summary.counts}
+          observability={observability}
+          onOpenSummary={onOpenSummary}
+          sinceYouLeft={sinceYouLeft}
+        />
+      </TownLensBoard>
+      <TownZoomControls
+        onStep={stepZoom}
+        onAll={() => view.fitAll(latest.current.layout)}
       />
-      <div className="town-zoom" role="group" aria-label="Camera">
-        <button type="button" aria-label="Zoom in" onClick={() => stepZoom(1)}>
-          +
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          onClick={() => stepZoom(-1)}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          className="town-zoom-all"
-          aria-label="Show the whole town"
-          onClick={() => view.fitAll(latest.current.layout)}
-        >
-          ALL
-        </button>
-        {shellControls ? (
-          // The shell's More menu joins the camera group on the phone, so
-          // Town has one set of floating controls.
-          <button
-            type="button"
-            className="town-zoom-more"
-            aria-label="More options"
-            aria-haspopup="menu"
-            aria-expanded={shellControls.moreOpen}
-            onClick={shellControls.toggleMore}
-          >
-            <EllipsisVertical size={18} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-      {ring.open && centerActions?.length ? (
+      {ring.open && lens.ringActions ? (
         <TownCenterMenu
-          actions={centerActions}
+          actions={lens.ringActions}
           viewportWidth={hostRef.current?.clientWidth ?? 0}
           place={ring.place}
           onClose={ring.close}

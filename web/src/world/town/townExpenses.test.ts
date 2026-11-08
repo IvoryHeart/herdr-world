@@ -11,6 +11,7 @@ import {
   townUsd,
 } from "./townExpenses";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
+import { TOWN_CITY_BOARD_GAP } from "./townCenter";
 import {
   TOWN_USAGE_MAX_AGE_MS,
   TownUsageStore,
@@ -252,12 +253,15 @@ test("the boards render the figures, rooms and what they leave out", async () =>
   const billboard = renderToStaticMarkup(
     createElement(TownCityBillboard, {
       center,
-      street: 7,
       folded: false,
       stores: () => today,
     }),
   );
   expect(billboard).toContain("CITY EXPENSES");
+  // It stands above the center's flag (its foot), never over the building.
+  expect(billboard).toContain(
+    `left:${(40 + 34 / 2) * 16}px;top:${14 * 16 - TOWN_CITY_BOARD_GAP}px`,
+  );
   expect(billboard).toContain('aria-pressed="true">Today</button>');
   expect(billboard).toContain('aria-pressed="false">7 days</button>');
   expect(billboard).toMatch(
@@ -358,7 +362,6 @@ test("a read kept through failed refreshes goes stale, and never past UTC midnig
   const billboard = renderToStaticMarkup(
     createElement(TownCityBillboard, {
       center,
-      street: 7,
       folded: false,
       stores: () => store,
     }),

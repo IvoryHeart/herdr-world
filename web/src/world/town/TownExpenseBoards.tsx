@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { Coins } from "lucide-react";
 import {
   Popover,
@@ -7,7 +7,7 @@ import {
 } from "../../components/ui/popover";
 import { formatOfficeUsage } from "../officeObservability";
 import { TOWN_TILE as T } from "./townLayout";
-import type { TownCenterLot } from "./townCenter";
+import { TOWN_CITY_BOARD_GAP, type TownCenterLot } from "./townCenter";
 import {
   townUsageStore,
   type TownUsageStore,
@@ -72,6 +72,7 @@ function Board({
   sign,
   className,
   style,
+  boardRef,
   children,
 }: {
   folded: boolean;
@@ -82,11 +83,14 @@ function Board({
   sign: string;
   className: string;
   style?: CSSProperties;
+  /** The unfolded board, measured to keep other boards off it. */
+  boardRef?: Ref<HTMLElement>;
   children: ReactNode;
 }) {
   if (!folded)
     return (
       <section
+        ref={boardRef}
         className={`town-expenses ${className}`}
         style={style}
         role="group"
@@ -154,27 +158,29 @@ const signText = (expenses: TownCityExpenses | TownHostExpenses) => {
 
 /**
  * The city expenses billboard: the whole World's tokens and estimated cost,
- * today or over 7 days. It stands by the first street across from the town
- * center, or on a phone, where the center tops the stacked town, folds to a
+ * today or over 7 days. It stands on the lawn above the town center, never
+ * over it, or on a phone, where the center tops the stacked town, folds to a
  * sign in the center's empty corner beside its tower.
  */
 export function TownCityBillboard({
   center,
-  street,
   folded,
+  boardRef,
   stores = townUsageStore,
 }: {
   center: TownCenterLot;
-  /** The top row of the street the billboard stands beside. */
-  street: number;
   folded: boolean;
+  boardRef?: Ref<HTMLElement>;
   stores?: (span: TownUsageWindow) => TownUsageStore;
 }) {
   const [span, setSpan] = useState<TownUsageWindow>("today");
   const expenses = townCityExpenses(useTownExpensesUsage(stores(span)));
   const style = folded
     ? { left: (center.x + 4) * T, top: (center.y + 2) * T }
-    : { left: (center.x + center.w / 2) * T, top: street * T - 4 };
+    : {
+        left: (center.x + center.w / 2) * T,
+        top: center.y * T - TOWN_CITY_BOARD_GAP,
+      };
   return (
     <Board
       folded={folded}
@@ -183,6 +189,7 @@ export function TownCityBillboard({
       sign={signText(expenses)}
       className="town-expenses-city"
       style={style}
+      boardRef={boardRef}
     >
       <header className="town-expenses-title">
         <span>CITY EXPENSES</span>

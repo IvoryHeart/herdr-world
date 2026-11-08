@@ -63,13 +63,18 @@ release requirement and is not inferred from PixiJS or any neighboring asset.
 The Town view draws only original pixel art generated at load time from compact
 definitions in `web/src/world/town/townSprites.ts` and `townPaint.ts`: ground,
 roads, buildings, furniture, speech bubbles and characters, whose appearance is
-derived from each agent's key. It ships no image files and no third-party art.
+derived from each agent's key. The land around the town (woods, gardens, ponds,
+paths) is generated from a fixed seed by `townLandscape.ts` and drawn by
+`townLandscapePaint.ts` in the same way. It ships no image files and no third-party art.
 
 The website film draws its Town scenes, characters and finale parade with the
 same code: `site/film/town-art.ts` re-exports `townLayout.ts`, `townPaint.ts`,
-`townSprites.ts` and the terminal colour palette, and `bun run build:site` bundles
-them into `film/town-art.js`. The film's other pictures (terminals, Board cards,
-Chat and the phone) are canvas drawing in `site/film/index.html`, and the Herdr
+`townSprites.ts`, the town center's painting, the agents' indoor routes and
+lobby crowd spots (`townActors.ts`), arrival walks (`townArrivals.ts`), bus
+stops (`townBus.ts`) and the terminal colour palette, and `bun run build:site`
+bundles them into `film/town-art.js`. The film's other pictures (terminals,
+Board cards, Chat, Town's boards and signs, the bus and the phone) are canvas
+drawing in `site/film/index.html`, and the Herdr
 logo is the project's own. The film therefore carries no third-party art; its
 fonts are listed in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). The film's
 video (`bun run film:render`) is recorded from this same canvas and score, so it adds

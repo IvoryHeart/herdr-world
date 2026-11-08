@@ -22,6 +22,10 @@ export type TownRendererDiagnostics = {
   sceneRenders: number;
   /** Single buildings baked again after their colours, pins or desks changed. */
   buildingBakes: number;
+  /** Ground chunks painted (the town and the generated land around it). */
+  groundPainted: number;
+  /** Painted ground chunks kept through a layout change: their plan was unchanged. */
+  groundReused: number;
   /** Buildings that glided, faded in or faded out after a topology change. */
   transitions: number;
   /**
@@ -48,6 +52,11 @@ export type TownRendererDiagnostics = {
   lastError: string | null;
   level: TownLevel | null;
   zoom: number;
+  /**
+   * The drawn camera centre and the bounds it is clamped to, in world pixels;
+   * the scale report's pan reverses before an edge (townScale).
+   */
+  camera: { x: number; y: number; width: number; height: number };
   /** True until the current camera flight reaches its target. */
   flying: boolean;
   /**
@@ -109,6 +118,8 @@ export function diagnostics(): TownRendererDiagnostics {
     frames: 0,
     sceneRenders: 0,
     buildingBakes: 0,
+    groundPainted: 0,
+    groundReused: 0,
     transitions: 0,
     crossfades: 0,
     topologyGaps: 0,
@@ -122,6 +133,7 @@ export function diagnostics(): TownRendererDiagnostics {
     lastError: null,
     level: null,
     zoom: 1,
+    camera: { x: 0, y: 0, width: 1, height: 1 },
     flying: false,
     transitioning: false,
     buildingsDrawn: 0,
