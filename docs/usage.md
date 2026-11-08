@@ -155,6 +155,9 @@ so a new reading reaches the sign within about a minute. A harness reported as `
 
 Town reads `world.usage.get` for its boards (`web/src/world/town/townExpenses.ts`):
 
+Economy amounts use the bundled JetBrains Mono font with tabular digits on the
+city, reception, room/table and Town boards, including compact phone signs.
+
 - All Town economy figures share one seven-day service observation, including
   its today projection. The Town board's **Economy today · UTC · harness logs**
   uses exactly the city board's Today total and local price-table rule. The

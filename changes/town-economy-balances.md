@@ -8,3 +8,6 @@
   In the `town-scale` preview, use synthetic usage for every economy reader,
   including reception, city, room and table cards, the Spend lens and Town board;
   label it as test data instead of mixing live totals with synthetic buildings.
+- Use clear, tabular digits for Town economy amounts, including city and
+  reception expenses, room and table cards, and compact phone signs, so 5 is
+  distinguishable from S and 8.
