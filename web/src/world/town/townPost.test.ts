@@ -6,7 +6,9 @@ import type {
   WorldSourceStatus,
 } from "../../../../shared/worldSources";
 import { fixturePullRequest } from "../testing/pullRequestFixture";
+import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { townBusRoute } from "./townBus";
+import { TownCamera } from "./townCamera";
 import { townLandscape } from "./townLandscape";
 import {
   layoutTown,
@@ -19,6 +21,7 @@ import {
 import {
   TOWN_POST_SLOTS,
   TOWN_POST_YARD_ROWS,
+  townPostFoldAt,
   townPostLot,
   townPostOffice,
   townPostReserve,
@@ -254,6 +257,36 @@ test("a narrow town folds the post office to a sign: no lot", () => {
   const { layout } = layoutTown(town({ a: [2] }), TOWN_SHAPES.phone);
   expect(townPostLot(layout)).toBeNull();
 });
+
+test.each([
+  ["one single-desk room", town({ a: [1] }), 390, 844],
+  ["three single-desk rooms", town({ a: [1, 1, 1] }), 390, 844],
+  ["three single-desk rooms, small phone", town({ a: [1, 1, 1] }), 360, 640],
+  ["a tall building", town({ a: [6, 4, 3, 2] }), 390, 844],
+] as const)(
+  "the folded sign stands inside a phone's home view (%s)",
+  (_, input, width, height) => {
+    const { layout } = layoutTown(input, TOWN_SHAPES.phone);
+    const viewport = townViewport(width, height, { left: 0, right: 0 });
+    const camera = new TownCamera();
+    camera.viewport = viewport;
+    new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
+    const at = townPostFoldAt(layout.center);
+    const sign = camera.toScreen(at.x, at.y);
+    // The sign keeps its screen size near home zoom (--iz): about 100 by
+    // 30 pixels around its point, all of it inside the chrome's insets.
+    const { inset } = viewport;
+    expect(sign.x - 50).toBeGreaterThanOrEqual(inset.left);
+    expect(sign.x + 50).toBeLessThanOrEqual(width - inset.right);
+    expect(sign.y - 15).toBeGreaterThanOrEqual(inset.top);
+    expect(sign.y + 15).toBeLessThanOrEqual(height - inset.bottom);
+    // On the center's front, clear of its plaque and doors in the middle.
+    const center = layout.center;
+    expect(at.x).toBeLessThan((center.x + center.w) * T);
+    expect(at.x - 50).toBeGreaterThan((center.x + center.w / 2) * T + 24);
+    expect(at.y).toBeLessThan((center.y + center.h) * T);
+  },
+);
 
 test("the yard's slots fit its planks, the trolley's end kept clear", () => {
   const last = townPostSlot(TOWN_POST_SLOTS - 1);

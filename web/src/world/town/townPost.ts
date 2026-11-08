@@ -9,7 +9,8 @@ import type {
   WorkItem,
   WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
-import type { TownLayout } from "./townLayout";
+import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
+import { TOWN_TILE, type TownLayout } from "./townLayout";
 
 /**
  * Town's post office (#760): a projection of the GitHub source's open pull
@@ -288,6 +289,19 @@ export function townPostLot(layout: TownLayout): TownPostLot | null {
     w: TOWN_POST_WIDTH,
     walkY: plaza.y,
     yardY: plaza.y + 1,
+  };
+}
+
+/**
+ * Where a narrow town's folded post office sign hangs, in world pixels: on
+ * the town center's right wing, under its windows and level with the doors.
+ * A phone's home view keeps the center from just above its plaque down, so
+ * the sign stays in view there; the roofs and tower above it are cropped.
+ */
+export function townPostFoldAt(center: TownCenterLot) {
+  return {
+    x: (center.x + center.w) * TOWN_TILE - 60,
+    y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 40,
   };
 }
 

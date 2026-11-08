@@ -16,6 +16,7 @@ import {
   TOWN_POST_SLOTS,
   TOWN_POST_YARD_ROWS,
   townPostCountParts,
+  townPostFoldAt,
   townPostLabel,
   townPostLot,
   townPostName,
@@ -187,13 +188,10 @@ export const TownPostOffice = memo(function TownPostOffice({
     )
       return;
     const lot = townPostLot(layout);
-    if (!lot) return;
-    handle.camera.flyTo(
-      (lot.x + lot.w / 2) * T,
-      lot.walkY * T,
-      handle.camera.z,
-      0.4,
-    );
+    const at = lot
+      ? { x: (lot.x + lot.w / 2) * T, y: lot.walkY * T }
+      : townPostFoldAt(layout.center);
+    handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
   };
   const card =
@@ -213,7 +211,12 @@ export const TownPostOffice = memo(function TownPostOffice({
   if (!lot)
     return (
       <>
-        <FoldedSign center={layout.center} office={office} onOpen={openCard} />
+        <FoldedSign
+          center={layout.center}
+          office={office}
+          onOpen={openCard}
+          onFocus={reveal}
+        />
         {card}
       </>
     );
@@ -431,21 +434,24 @@ function ParcelList({
 }
 
 /**
- * On a narrow town: a sign in the town center's empty corner right of its
- * tower (the city billboard's sign stands left of it), opening the post
- * office as a list, or how to connect GitHub.
+ * On a narrow town: a sign on the town center's right wing, inside a phone's
+ * home view (townPostFoldAt), opening the post office as a list, or how to
+ * connect GitHub.
  */
 function FoldedSign({
   center,
   office,
   onOpen,
+  onFocus,
 }: {
   center: TownCenterLot;
   office: Office;
   onOpen(key: string, anchor: HTMLElement | null): void;
+  onFocus(event: FocusEvent<HTMLElement>): void;
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement | null>(null);
+  const at = townPostFoldAt(center);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -453,13 +459,11 @@ function FoldedSign({
           ref={trigger}
           type="button"
           className="town-post-fold"
-          style={{
-            left: (center.x + center.w - 4) * T,
-            top: (center.y + 2) * T,
-          }}
+          style={{ left: at.x, top: at.y }}
           aria-label={`Post office: ${spoken(office)}. Open`}
           title="Post office"
           onPointerDown={(event) => event.stopPropagation()}
+          onFocus={onFocus}
         >
           <Mail size={12} aria-hidden="true" />
           {office.status === "open" && !office.stale ? (

@@ -160,9 +160,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     list. With the GitHub source off, signed out or not yet answered, the
     post office is closed and says to connect GitHub in **Sources**, with no
     parcels and no counts; when a refresh fails it keeps the last list as
-    unknown and says GitHub is out of date. On a phone it folds to a sign in
-    the town center's right corner (coloured ready, failing and waiting
-    counts) that opens the parcels as a list. For trying it without real pull
+    unknown and says GitHub is out of date. On a phone it folds to a sign on
+    the town center's right wing, in view at home zoom (coloured ready,
+    failing and waiting counts) that opens the parcels as a list. For trying it without real pull
     requests, open World with `?townPostFixture` (synthetic pull requests in
     every state; ten seconds later the first ready one merges),
     `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
