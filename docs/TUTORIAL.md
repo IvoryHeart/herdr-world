@@ -232,7 +232,12 @@ hosts stay usable.
    center, shows the whole World, with **Today** and **7 days** buttons.
    Without a price table they show tokens and "no price table"; a host whose
    logs cannot be read says "no data", never 0. On a phone, tap the coin
-   signs to open them. For the
+   signs to open them. With the GitHub source signed in, the **post office**
+   left of the town center, on the first street, holds your open pull requests as parcels,
+   ready to merge first; its sign counts ready, failing and waiting. Hover a
+   parcel for its title and state and tap it for the pull request card with
+   **Merge…**; a merged parcel is carried off. On a phone, tap the post box
+   sign on the town center. For the
    whole picture, the Town board counts every building's agents, quiet ones
    included. Its **FUEL** gauges show how much of each Codex and Claude
    subscription window is left (amber and **low** under 15 %). A reading more

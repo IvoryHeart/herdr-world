@@ -143,6 +143,30 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
     reception.
+  - Town's **post office** stands on the first street left of the town
+    center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
+    review or assigned to you) as parcels in its sorting yard, ready to merge
+    first. Its sign counts them without hovering, such as "2 ready · 1
+    failing · 3 waiting", adding unknown and draft when there are some. A
+    parcel's tag shows its state: green ready to merge, red CI failing on its
+    head, amber waiting (for CI, a review, a fix or GitHub), a grey crate for
+    unknown and a pale letter for a draft. It reads the GitHub source and the
+    pull request card's merge rules, so stale or partial detail is unknown,
+    never ready. Hover or focus a parcel for "#123 title", its repository and
+    its state in words; tap it for the same pull request card the desk badge
+    opens (**Details**, **Merge…** and the rest). A merged parcel is carried
+    off the yard (with calm or reduced motion it just goes); a closed one
+    fades. More than the yard holds make a "+N" pile that opens the rest as a
+    list. With the GitHub source off, signed out or not yet answered, the
+    post office is closed and says to connect GitHub in **Sources**, with no
+    parcels and no counts; when a refresh fails it keeps the last list as
+    unknown and says GitHub is out of date. On a phone it folds to a sign on
+    the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
+    failing and waiting counts) that opens the parcels as a list. For trying it without real pull
+    requests, open World with `?townPostFixture` (synthetic pull requests in
+    every state; ten seconds later the first ready one merges),
+    `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
+    the page drops the parameter at once and only the post office uses it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -936,7 +960,8 @@ each source's state, switch it off or configure it.
   `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
   (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
-  lens names it on the card. A link holds only for the agent session and
+  lens names it on the card. Town's post office shows every open pull
+  request for you as a parcel, including those whose agent has gone. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
   per check), each explicitly attributed rev agent's latest `RESULT #N: …`
