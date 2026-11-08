@@ -326,13 +326,13 @@ export function TownCanvas({
     targets,
     centerActions,
     shell: shellRef,
-    ringOpen: ring.open,
+    escapeTaken: ring.open || !!search?.search,
   });
   /** A table whose card a touch tap opened; touch has no hover to open it. */
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
-  const searchScene = { model, layout, view, ready, failure, calm };
+  const searchScene = { model, layout, view, ready, failure, calm, lens };
   const searching = useTownCanvasSearch(search, rendererRef, searchScene);
   const stepWants = useTownStepWants(steps, () => latest.current, rendererRef);
   const current = {
@@ -452,7 +452,7 @@ export function TownCanvas({
     // A camera that moved under a still carry (an edge pan, an arrow key)
     // puts something else under it: the target follows what is now drawn.
     if (moved) reaimCarry.current?.();
-    if (moved) searching.countOffscreen();
+    searching.drew(moved);
     const layer = worldRef.current;
     hud.drew(camera, level, latest.current.layout);
     stepWants.want(camera, level);
@@ -850,7 +850,6 @@ export function TownCanvas({
     lens.focus(target.key);
     view.focusTarget(target);
   };
-
   const zoomToRoomKey = (roomKey: string) =>
     view.zoomToRoom(latest.current.layout, roomKey);
   // A request waits for renderer setup and its admitted layout, then runs once.
@@ -889,6 +888,7 @@ export function TownCanvas({
             model={model}
             layout={layout}
             shownRooms={visible.tagRooms}
+            search={searching}
           />
         ) : null}
         <TownCenterSign

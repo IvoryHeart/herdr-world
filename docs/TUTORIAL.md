@@ -580,6 +580,8 @@ and open its terminal or Inspector without losing its workspace context.
 3. Zoom into a room: each desk and agent carries its own colour. Hover, focus
    or tap one and the legend says its value in words, such as "Idle 3 h 12 m",
    "~$1.40 today" or "#123 CI failing". Taps open what they always do.
+   Search with a lens on and the matches are outlined over its colours;
+   Escape ends the search and keeps the lens.
 4. Press **✕** or Escape: Town is back exactly as it was, at the same place.
    Town always opens without a lens; your browser remembers the last one for
    `L` and **Lenses**.

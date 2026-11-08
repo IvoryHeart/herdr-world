@@ -65,6 +65,8 @@ function drawTownSearch(
             .rect(room.x * T, room.y * T, room.w * T, room.h * T)
             .fill(SEARCH_DIM);
   }
+  // Under a lens, its layer draws the marks above the lens's tints.
+  if (search.overLens) return;
   const width = 2 / Math.max(0.35, camera.z) + 0.5;
   for (const key of search.keys) {
     const rect = townSearchRect(key, model, layout, actorPosition);
