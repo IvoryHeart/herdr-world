@@ -82,7 +82,7 @@ import {
 } from "./townReceptionFilter";
 import "./townBoard.css";
 import "./townTeams.css";
-import { TownEdgeArrows, TownNextLabel, TownPulseRing } from "./TownEdgeLayer";
+import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";
 import { useTownEdgeNav, type TownNeedsYouOrder } from "./useTownEdgeNav";
 import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
 import type { OfficeAgent } from "../officeProjectionTypes";
@@ -139,10 +139,7 @@ export function TownCanvas({
   needsYouOrder,
   activityAt,
 }: {
-  /**
-   * Needs you's items in its order, read when N is pressed: each item's key
-   * and its agent's leaf ID (Town's agent key), if it has one.
-   */
+  /** Needs you's items in order for N: item key and agent leaf ID, if any. */
   needsYouOrder?: TownNeedsYouOrder;
   /** When an agent last worked (its leaf's activity), for the Idle time lens. */
   activityAt?: (agent: OfficeAgent) => number | undefined;
@@ -444,9 +441,7 @@ export function TownCanvas({
     calm,
     needsYouOrder,
     view,
-    rendererRef,
-    shellRef,
-    hostRef,
+    refs: { renderer: rendererRef, shell: shellRef, host: hostRef },
   });
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
     // The canvas and its targets show this camera until the next frame, so
@@ -977,12 +972,7 @@ export function TownCanvas({
         </TownHudContext.Provider>
         <TownPulseRing pulse={edge.pulse} />
       </div>
-      <TownEdgeArrows
-        store={edge.arrowStore}
-        buildingLabel={edge.buildingLabel}
-        onGo={edge.goToArrow}
-      />
-      <TownNextLabel text={edge.nextText} />
+      <TownEdgeOverlay edge={edge} />
       <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
         <TownBoard
           counts={summary.counts}

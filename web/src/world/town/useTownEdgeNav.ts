@@ -56,9 +56,7 @@ export function useTownEdgeNav({
   calm,
   needsYouOrder,
   view,
-  rendererRef,
-  shellRef,
-  hostRef,
+  refs: { renderer: rendererRef, shell: shellRef, host: hostRef },
 }: {
   model: TownModel;
   layout: TownLayout;
@@ -66,9 +64,12 @@ export function useTownEdgeNav({
   calm: boolean;
   needsYouOrder: TownNeedsYouOrder | undefined;
   view: TownSceneCamera;
-  rendererRef: RefObject<TownRendererHandle | null>;
-  shellRef: RefObject<HTMLElement | null>;
-  hostRef: RefObject<HTMLElement | null>;
+  /** The canvas renderer, Town's shell (for chrome to keep out of) and host. */
+  refs: {
+    renderer: RefObject<TownRendererHandle | null>;
+    shell: RefObject<HTMLElement | null>;
+    host: RefObject<HTMLElement | null>;
+  };
 }) {
   // Agents with a mark (! ? ✓) as Town draws them; reviewed work is already
   // idle in Town's projection. Edge arrows point at those off screen, and at

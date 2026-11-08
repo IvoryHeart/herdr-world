@@ -124,3 +124,26 @@ export function TownNextLabel({ text }: { text: string }) {
     </div>
   );
 }
+
+/** The edge arrows and Next's label, laid over the Town view. */
+export function TownEdgeOverlay({
+  edge,
+}: {
+  edge: {
+    arrowStore: TownEdgeArrowStore;
+    buildingLabel: (hostKey: string) => string;
+    goToArrow: (arrow: TownEdgeArrow) => void;
+    nextText: string;
+  };
+}) {
+  return (
+    <>
+      <TownEdgeArrows
+        store={edge.arrowStore}
+        buildingLabel={edge.buildingLabel}
+        onGo={edge.goToArrow}
+      />
+      <TownNextLabel text={edge.nextText} />
+    </>
+  );
+}
