@@ -191,21 +191,36 @@ export function townSpendWords(
 }
 
 /**
- * Marks for places of one kind, scaled against the costliest of them: by
- * estimated cost when every place with usage is priced, else by tokens.
+ * The unit every spend colour uses: estimated cost when every place with
+ * usage, of every kind, is priced, else tokens. Rooms and desks share one
+ * unit so the one legend is true at every zoom.
+ */
+export function townSpendUnit(
+  ...kinds: readonly ReadonlyMap<string, TownPlaceEconomy>[]
+): "cost" | "tokens" {
+  return kinds.every((economies) =>
+    [...economies.values()].every(
+      (economy) =>
+        economy.status !== "ready" ||
+        (economy.price === "priced" && economy.costUsd !== null),
+    ),
+  )
+    ? "cost"
+    : "tokens";
+}
+
+/**
+ * Marks for places of one kind, scaled against the costliest of them in
+ * `by` (by default, their own common unit, see townSpendUnit).
  * Recorded zero usage is "None"; a missing reading is no data, never zero.
  */
 export function townSpendMarks(
   economies: ReadonlyMap<string, TownPlaceEconomy>,
+  by: "cost" | "tokens" = townSpendUnit(economies),
 ): { marks: Map<string, TownLensMark>; by: "cost" | "tokens" } {
   const ready = [...economies.values()].filter(
     (economy) => economy.status === "ready",
   );
-  const by = ready.every(
-    (economy) => economy.price === "priced" && economy.costUsd !== null,
-  )
-    ? "cost"
-    : "tokens";
   const amount = (economy: Extract<TownPlaceEconomy, { status: "ready" }>) =>
     by === "cost" ? (economy.costUsd ?? 0) : economy.tokens;
   const top = Math.max(0, ...ready.map(amount));
@@ -509,8 +524,11 @@ export function townLensView(
             facts.economy({ kind: "desk", target: desk.tabRef }),
           );
       }
-      const roomSpend = townSpendMarks(roomEconomies);
-      const deskSpend = townSpendMarks(deskEconomies);
+      // One unit for rooms and desks: a desk folded out of view can hold
+      // the room's only unpriced usage, and the legend names one scale.
+      const by = townSpendUnit(roomEconomies, deskEconomies);
+      const roomSpend = townSpendMarks(roomEconomies, by);
+      const deskSpend = townSpendMarks(deskEconomies, by);
       for (const [key, mark] of roomSpend.marks) roomMarks.set(key, mark);
       for (const [key, mark] of deskSpend.marks) deskMarks.set(key, mark);
       const missing = new Set<string>();
@@ -520,7 +538,7 @@ export function townLensView(
             model.hosts.get(room.hostKey)?.displayLabel ?? room.hostKey,
           );
       const scale =
-        roomSpend.by === "cost"
+        by === "cost"
           ? "Today's estimated cost, against the costliest place."
           : "Today's tokens, against the busiest place.";
       return view(
@@ -558,10 +576,15 @@ export function townLensView(
       );
     }
     case "quests": {
+      // Every agent gets its own mark, so one without a quest never reads
+      // as its desk, which may show a teammate's quest.
       for (const agents of roomAgents.values())
         for (const agent of agents) {
           const quest = facts.quest(agent.key);
-          if (quest) agentMarks.set(agent.key, questMark(quest));
+          agentMarks.set(
+            agent.key,
+            quest ? questMark(quest) : { swatch: null, words: "No quest" },
+          );
         }
       const shares = (agents: readonly OfficeAgent[]) =>
         agents.flatMap((agent) => {
@@ -575,7 +598,7 @@ export function townLensView(
           deskKey,
           agents.length === 1 || known.length === 1
             ? agentMarks.get(
-                agents.find((agent) => agentMarks.has(agent.key))!.key,
+                agents.find((agent) => facts.quest(agent.key))!.key,
               )!
             : {
                 swatch: questSwatch(Math.min(...known)),

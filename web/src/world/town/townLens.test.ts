@@ -19,6 +19,7 @@ import {
   townQuestShare,
   townRoomIdle,
   townSpendMarks,
+  townSpendUnit,
   type TownLensFacts,
   type TownLensId,
 } from "./townLens";
@@ -195,6 +196,82 @@ test("the scale scene gives every lens a varied map", () => {
     for (const mark of [...view.rooms.values(), ...view.desks.values()])
       expect(mark.words.length).toBeGreaterThan(0);
   }
+});
+
+test("rooms and desks share one spend unit, so the one legend is true", () => {
+  // A folded desk's unpriced usage makes the room unpriced while every shown
+  // desk is priced: desks must scale by tokens too, as the legend says.
+  const rooms = new Map<string, TownPlaceEconomy>([
+    ["room", ready(10_100 + 5_000, null)],
+  ]);
+  const desks = new Map<string, TownPlaceEconomy>([
+    ["cheap-busy", ready(10_000, 1)],
+    ["dear-quiet", ready(100, 10)],
+  ]);
+  expect(townSpendUnit(desks)).toBe("cost");
+  const by = townSpendUnit(rooms, desks);
+  expect(by).toBe("tokens");
+  const { marks } = townSpendMarks(desks, by);
+  expect(marks.get("cheap-busy")?.swatch).toBe(4);
+  expect(marks.get("dear-quiet")?.swatch).toBe(1);
+  expect(townSpendUnit(new Map([["a", ready(5, 1)]]))).toBe("cost");
+});
+
+test("in the scene, rooms and desks use the unit the legend names", () => {
+  const model = scaleModel();
+  const facts = scaleFacts(model);
+  const rooms = new Map<string, TownPlaceEconomy>();
+  const desks = new Map<string, TownPlaceEconomy>();
+  for (const room of model.rooms.values()) {
+    rooms.set(
+      room.key,
+      facts.economy({ kind: "room", target: room.workspaceRef }),
+    );
+    for (const desk of room.desks)
+      desks.set(desk.key, facts.economy({ kind: "desk", target: desk.tabRef }));
+  }
+  const view = townLensView("spend", model, facts)!;
+  const by = townSpendUnit(rooms, desks);
+  expect(view.note).toContain(
+    by === "cost" ? "estimated cost" : "Today's tokens",
+  );
+  const { marks } = townSpendMarks(desks, by);
+  for (const [key, mark] of view.desks)
+    expect(mark.swatch).toBe(marks.get(key)!.swatch);
+});
+
+test("an agent without a quest never reads a deskmate's quest", () => {
+  const model = scaleModel();
+  const base = scaleFacts(model);
+  // Find a desk with two seated agents; give only the first one a quest.
+  const seated = new Map<string, string[]>();
+  for (const [agentKey, seat] of model.agentSeats)
+    seated.set(seat.deskKey, [...(seated.get(seat.deskKey) ?? []), agentKey]);
+  const [deskKey, [withQuest, without]] = [...seated].find(
+    ([, agents]) => agents.length >= 2,
+  )! as [string, string[]];
+  const quest = {
+    title: "Green the nightly build",
+    progress: "4/5",
+    done: 4,
+    total: 5,
+    status: "active" as const,
+  };
+  const facts: TownLensFacts = {
+    ...base,
+    quest: (key) => (key === withQuest ? quest : undefined),
+  };
+  const view = townLensView("quests", model, facts)!;
+  expect(view.desks.get(deskKey)?.words).toContain("Green the nightly build");
+  expect(view.agents.get(without!)).toEqual({
+    swatch: null,
+    words: "No quest",
+  });
+  const label = model.agents.get(without!)!.displayLabel;
+  expect(townLensReadout(view, model, without!)).toBe(`${label}: No quest`);
+  expect(townLensReadout(view, model, withQuest!)).toBe(
+    `${model.agents.get(withQuest!)!.displayLabel}: Quest 4/5: Green the nightly build`,
+  );
 });
 
 test("spend in the scene: one host has no data, named, never zero", () => {
