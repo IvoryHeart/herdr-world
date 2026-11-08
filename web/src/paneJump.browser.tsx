@@ -450,7 +450,14 @@ async function run() {
         "Blur dismissal stole the user's new focus",
       );
       await focusTerminal();
-      await key("k", "KeyK", platform === "mac" ? 4 : 3);
+      // Cmd+K / Ctrl+K stays a terminal key; the Alt variant opens the box.
+      await key("k", "KeyK", platform === "mac" ? 4 : 2);
+      await key("k", "KeyK", platform === "mac" ? 4 : 2, "keyUp");
+      check(
+        !document.querySelector(".command-popover"),
+        `${platform}: the plain command key was taken from the terminal`,
+      );
+      await key("k", "KeyK", platform === "mac" ? 5 : 3);
       await until(() => document.querySelector(".command-popover"));
       check(
         !search(),

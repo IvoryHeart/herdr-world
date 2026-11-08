@@ -71,6 +71,7 @@ import { closeTopLayer } from "../layerStack";
 import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldViewPicker } from "./WorldViewPicker";
+import { withWorldViews } from "./worldCommandBox";
 import { NeedsYouCounter } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
 import { WorldControlPlane } from "./WorldControlPlane";
@@ -423,7 +424,11 @@ export default function WorldFoundationApp() {
           )}
           onZenActiveChange={setZenActive}
           topbarPortal={topbarPortal}
-          visualActionExtension={visualActionExtension}
+          visualActionExtension={withWorldViews(
+            visualActionExtension,
+            view,
+            setView,
+          )}
           connectionControl={
             <HostsControl
               connections={conversationConnections}
