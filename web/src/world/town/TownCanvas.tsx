@@ -56,6 +56,7 @@ import { townCalls } from "./TownRail";
 import {
   createTownRenderer,
   nextTownTask,
+  townRendererFailed,
   type TownRendererHandle,
 } from "./townRenderer";
 import {
@@ -346,6 +347,7 @@ export function TownCanvas({
     receptionHeldKeys,
     quests,
     steps,
+    needsYouOrder,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -440,15 +442,7 @@ export function TownCanvas({
     | null
   >(null);
   // Arrows to what needs you off screen, and N for the next one.
-  const edge = useTownEdgeNav({
-    model,
-    layout,
-    askingKeys,
-    calm,
-    needsYouOrder,
-    view,
-    refs: { renderer: rendererRef, shell: shellRef, host: hostRef },
-  });
+  const edge = useTownEdgeNav(current, view, rendererRef, hostRef);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
     // The canvas and its targets show this camera until the next frame, so
     // presses are hit-tested against it (view.drawn).
@@ -572,16 +566,7 @@ export function TownCanvas({
       })
       .catch((error: unknown) => {
         if (disposed) return;
-        if (DEVTOOLS)
-          traceRef.current.record("error", {
-            where: "renderer",
-            message: String(error),
-          });
-        if (window.__HERDR_TOWN_RENDERER__)
-          window.__HERDR_TOWN_RENDERER__.lastError =
-            error instanceof Error
-              ? error.message.slice(0, 160)
-              : "renderer failed";
+        townRendererFailed(error, traceRef.current);
         setFailure(true);
       });
     const observer = new ResizeObserver(() => {

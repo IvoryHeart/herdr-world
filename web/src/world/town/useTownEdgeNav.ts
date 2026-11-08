@@ -49,28 +49,28 @@ const NO_MARKED: readonly TownEdgeMarked[] = [];
 /** Reception's marks as edge marks. */
 const EDGE_MARK = { blocked: "needs", ask: "asks", done: "done" } as const;
 
-export function useTownEdgeNav({
-  model,
-  layout,
-  askingKeys,
-  calm,
-  needsYouOrder,
-  view,
-  refs: { renderer: rendererRef, shell: shellRef, host: hostRef },
-}: {
-  model: TownModel;
-  layout: TownLayout;
-  askingKeys: ReadonlySet<string>;
-  calm: boolean;
-  needsYouOrder: TownNeedsYouOrder | undefined;
-  view: TownSceneCamera;
-  /** The canvas renderer, Town's shell (for chrome to keep out of) and host. */
-  refs: {
-    renderer: RefObject<TownRendererHandle | null>;
-    shell: RefObject<HTMLElement | null>;
-    host: RefObject<HTMLElement | null>;
-  };
-}) {
+/**
+ * For the canvas's current state, its camera, its renderer and its host (whose
+ * parent, Town's shell, holds the chrome arrows keep out of).
+ */
+export function useTownEdgeNav(
+  {
+    model,
+    layout,
+    askingKeys,
+    calm,
+    needsYouOrder,
+  }: {
+    model: TownModel;
+    layout: TownLayout;
+    askingKeys: ReadonlySet<string>;
+    calm: boolean;
+    needsYouOrder: TownNeedsYouOrder | undefined;
+  },
+  view: TownSceneCamera,
+  rendererRef: RefObject<TownRendererHandle | null>,
+  hostRef: RefObject<HTMLElement | null>,
+) {
   // Agents with a mark (! ? ✓) as Town draws them; reviewed work is already
   // idle in Town's projection. Edge arrows point at those off screen, and at
   // finished work Needs you lists for review (edgeMarked below).
@@ -174,8 +174,8 @@ export function useTownEdgeNav({
   /** The Town board and the zoom group, which arrows keep out of. */
   const edgeKeepOut = () => {
     const now = performance.now();
-    const shell = shellRef.current;
     const host = hostRef.current;
+    const shell = host?.parentElement;
     if (now - keepOut.current.at < 500 || !shell || !host)
       return keepOut.current.rects;
     const origin = host.getBoundingClientRect();
