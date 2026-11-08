@@ -86,7 +86,13 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
     act(() => root.render(createElement(Probe)));
     const input = () =>
       element.querySelector<HTMLInputElement>("input[type=search]")!;
-    const type = (value: string) =>
+    // Typing starts where a user does: the search icon, then the box.
+    const type = (value: string) => {
+      act(() =>
+        element
+          .querySelector<HTMLButtonElement>('button[aria-label="Search Board"]')
+          ?.click(),
+      );
       act(() => {
         const field = input();
         const setter = Object.getOwnPropertyDescriptor(
@@ -96,8 +102,11 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
         setter.call(field, value);
         field.dispatchEvent(new window.Event("input", { bubbles: true }));
       });
+    };
     const key = (target: HTMLElement, name: string) =>
       act(() => {
+        // Keys go where the cursor is.
+        target.focus();
         target.dispatchEvent(
           new KeyboardEvent("keydown", {
             key: name,
@@ -158,11 +167,11 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
     board.type("login");
     expect(board.rows().length).toBe(1);
     board.key(board.rows()[0]!, "Escape");
-    expect(board.input().value).toBe("");
+    expect(board.input()).toBeNull();
     expect(board.rows().length).toBe(0);
     board.type("login");
     board.key(board.input(), "Escape");
-    expect(board.input().value).toBe("");
+    expect(board.input()).toBeNull();
     board.unmount();
   });
 }

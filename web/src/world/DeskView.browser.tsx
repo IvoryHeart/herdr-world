@@ -466,8 +466,21 @@ async function run() {
     "Desk metadata never writes browser storage",
   );
 
+  // Desk's search rests as an icon that unfolds with the cursor in it.
+  check(
+    !document.querySelector(".desk-search input"),
+    "Desk's search is an open box rather than its icon",
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Search Desk"]')
+    ?.click();
+  await settle(50);
   // Search narrows the Desk to matching agents.
   const search = document.querySelector<HTMLInputElement>(".desk-search input");
+  check(
+    document.activeElement === search,
+    "Desk's search icon did not put the cursor in the search",
+  );
   const setValue = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
     "value",
