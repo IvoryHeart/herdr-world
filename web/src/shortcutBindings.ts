@@ -75,6 +75,9 @@ const base = {
   "annotation.submit": ["Ctrl+Enter"],
   "annotations.copy": ["Ctrl+Shift+C"],
   "annotations.prefill": ["Ctrl+Enter"],
+  // Town has no text entry: its keys are plain letters, ignored while typing.
+  "town.next": ["N"],
+  "town.previous": ["Shift+N"],
 };
 export type ShortcutNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type ShortcutId =
@@ -313,6 +316,7 @@ export function formatShortcut(
 }
 
 export function shortcutScope(id: ShortcutId): string {
+  if (id.startsWith("town.")) return "town";
   if (id.startsWith("command.") && id !== "command.menu") return "command";
   if (
     id === "terminal.focus" ||
@@ -368,7 +372,10 @@ export function validateShortcutKeys(id: ShortcutId, keys: unknown): string[] {
       throw new Error(
         "Use a modified Click for terminal links and keyboard keys for other actions.",
       );
+    // Town's keys work only in Town, never while typing, so they may be
+    // plain letters, as Desk's J and K are.
     if (
+      shortcutScope(id) !== "town" &&
       !/^(Ctrl|Alt|Meta)\+/.test(key) &&
       !/^(Shift\+)?(F\d+|PageUp|PageDown|Home|End|Insert|Delete|Enter|Backspace|Arrow\w+)$/.test(
         key,

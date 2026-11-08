@@ -231,7 +231,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
     attention choices move into the window's ellipsis menu.
     Tapping an agent or its table, activating it (double-click,
-    **Shift+Enter**), **Chat about this** in Needs you, **N** and **Next** open that window on
+    **Shift+Enter**), **Chat about this** in Needs you and **Next** open that window on
     **Chat**: the conversation's latest 200 entries, which scroll inside the
     window, with **Jump to latest** when you have scrolled back (counting new
     agent messages until you reach the bottom) and the
@@ -362,7 +362,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - **+**, **−** and **ALL** navigate between town, building, room and desk
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
-    **Town calm motion** reduces ambient animation. Room actions support
+    **Town calm motion** reduces ambient animation.
+  - Zoomed into a room or desk, every agent that needs you outside the view
+    gets an arrow on the view's edge pointing at it, with its mark (**!**,
+    **?** or **✓**); arrows pointing the same way or at one building merge
+    with a count, such as `! 3`. Click or tap one and the camera glides there
+    and the agent's mark pulses (under calm or reduced motion it jumps, with
+    no pulse). On a desktop, **N** moves the camera to the next thing that
+    needs you in Needs you's order and opens Needs you at it, with a brief
+    "2 of 7 · N next"; **Shift+N** goes back, and after you answer one, **N**
+    goes on from there. Both keys are Town actions in Keyboard shortcuts and
+    stay silent while you type. Neither answers, reviews or moves anything.
+  - Room actions support
     workspace/tab creation and room management on the captured host. Every
     building has a **+ Add room** doorway just left of its bar (just **+** at
     the room-card zoom), which stays put when rooms open, close, move or are
