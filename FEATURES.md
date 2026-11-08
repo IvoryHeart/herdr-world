@@ -733,7 +733,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tab or pane row opens a peek like Town's (latest Chat message, its
     question and answer buttons, **Mark reviewed**, **Open**); on a phone,
     **Preview** in the tab's bar opens it, and a finished agent's bar offers
-    **Mark reviewed**.
+    **Mark reviewed** (done, or idle after a turn World saw end, as Town
+    counts it). The `?scene=town-scale` preview's synthetic hosts take all of
+    these actions in the page, so they can be tried without real hosts.
   - Drag a tab onto another workspace of its host to move it (asks first).
     On phones, hold a card still before dragging; adding a second finger switches
     to pinch zoom without committing a move. Settling pauses while you type in

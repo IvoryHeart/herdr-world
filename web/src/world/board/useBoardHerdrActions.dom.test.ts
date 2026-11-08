@@ -120,6 +120,8 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
           tabs: [
             { label: "build", panes: [["done"]] },
             { label: "docs", panes: [["working"]] },
+            { label: "fixed", panes: [["idle"]] },
+            { label: "rested", panes: [["idle"]] },
           ],
         },
         { label: "Beta", tabs: [{ label: "shell", panes: [["idle", false]] }] },
@@ -138,13 +140,37 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
       observed_stop_id: "stop-1",
       opened_at: null,
     };
+    // Herdr reports a finished turn as idle once seen: an idle agent whose
+    // turn the service saw end recently waits for review too, as Town and
+    // Needs you count it; one that stopped long ago does not.
+    const stopped = (tab: number, at: number, id: string) => {
+      const leaf = model.tabs[tab]!.panes[0]!.leaf;
+      return {
+        connection_id: leaf.connectionId,
+        connection_generation: leaf.generation,
+        terminal_id: leaf.terminalId,
+        agent_session_fingerprint: null,
+        reviewed_stop: null as string | null,
+        stopped_at: at,
+        observed_stop_id: id,
+        opened_at: null,
+      };
+    };
+    const fixedRecord = stopped(2, Date.now() - 60_000, "stop-fixed");
+    const restedRecord = stopped(3, Date.now() - 24 * 3_600_000, "stop-old");
     const deskCalls: [string, Record<string, unknown> | undefined][] = [];
     const deskStore = new WorldDeskStore({
       call: async (method, params) => {
         deskCalls.push([method, params]);
-        if (method === "world.desk.review")
-          record.reviewed_stop = String(params?.stop_id);
-        return { revision: deskCalls.length, records: [record] };
+        const marked = [record, fixedRecord, restedRecord].find(
+          (candidate) => candidate.terminal_id === params?.terminal_id,
+        );
+        if (method === "world.desk.review" && marked)
+          marked.reviewed_stop = String(params?.stop_id);
+        return {
+          revision: deskCalls.length,
+          records: [record, fixedRecord, restedRecord],
+        };
       },
       onControl: () => () => {},
       onStatus: () => () => {},
@@ -215,7 +241,11 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
 
     const alpha = boardKey("local", "w1");
     const build = model.tabs[0]!.key;
-    await act(async () => root.render(h(Harness, { keys: [alpha, build] })));
+    const fixed = model.tabs[2]!.key;
+    const rested = model.tabs[3]!.key;
+    await act(async () =>
+      root.render(h(Harness, { keys: [alpha, build, fixed, rested] })),
+    );
     await settle();
 
     // A room: Town's rename and close, and its place in Herdr's order.
@@ -273,6 +303,16 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
     // The reviewed record ends the offer, as it ends Town's reception.
     expect(buttons(build)).not.toContain("Mark reviewed");
     expect(notices[notices.length - 1]).toBe("agent's work reviewed");
+
+    // An idle agent that finished a turn recently: Mark reviewed, as Town
+    // presents it at reception; one idle since long ago: no offer.
+    expect(buttons(fixed)).toContain("Mark reviewed");
+    expect(buttons(rested)).not.toContain("Mark reviewed");
+    await press(fixed, "Mark reviewed");
+    expect(deskCalls[deskCalls.length - 1]?.[1]).toMatchObject({
+      terminal_id: fixedRecord.terminal_id,
+      reviewed: true,
+    });
 
     await act(async () => root.unmount());
   });

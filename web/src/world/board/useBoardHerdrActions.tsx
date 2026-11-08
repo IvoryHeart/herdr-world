@@ -30,6 +30,7 @@ import { sharedDeskStore, type WorldDeskStore } from "../deskStateStore";
 import { useSystemBack } from "../../systemBack";
 import { markReviewed, useReviewedWork } from "../useReviewedWork";
 import { townPaneIdentity } from "../town/townChat";
+import type { WorldLeafObject } from "../worldObject";
 import type { BoardDocumentStore } from "./boardDocument";
 import {
   boardKey,
@@ -101,6 +102,46 @@ export function swappedRoomSpots(
   return spots;
 }
 
+/**
+ * Mark reviewed for an agent's finished work, shown while it waits for
+ * review as Town and Needs you count it: done, or idle after a turn the
+ * service saw end. It reads the reviewed record itself, so the service's
+ * stop notices re-render only this button, not the Board.
+ */
+function BoardMarkReviewed({
+  leaf,
+  name,
+  deskStore,
+  notify,
+}: {
+  leaf: WorldLeafObject;
+  name: string;
+  deskStore: WorldDeskStore;
+  notify: Notify;
+}) {
+  const work = useReviewedWork(deskStore);
+  if (!work.toReview(leaf, Date.now())) return null;
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        void markReviewed(deskStore, leaf)
+          .catch(() => false)
+          .then((saved) =>
+            notify(
+              saved ? "ok" : "error",
+              saved
+                ? `${name}'s work reviewed`
+                : `Could not save the review mark for ${name}. Try again when the connection is ready.`,
+            ),
+          )
+      }
+    >
+      Mark reviewed
+    </button>
+  );
+}
+
 export function useBoardHerdrActions({
   model,
   selectedId,
@@ -120,7 +161,6 @@ export function useBoardHerdrActions({
   /** The one reviewed record; World's shared Desk store by default. */
   deskStore?: WorldDeskStore;
 }) {
-  const work = useReviewedWork(deskStore, false);
   const [dialog, setDialog] = useState<RoomDialog | null>(null);
   const [moving, setMoving] = useState(false);
   const [peek, setPeek] = useState<Peek | null>(null);
@@ -347,8 +387,6 @@ export function useBoardHerdrActions({
     const home = model.workspaceByKey.get(tab.workspaceKey);
     const pane = boardBarPane(tab, selectedId);
     const agent = pane?.isAgent ? pane : undefined;
-    const reviewable =
-      agent && agent.status === "done" && !work.reviewed(agent.leaf);
     return (
       <>
         {agent ? (
@@ -371,24 +409,13 @@ export function useBoardHerdrActions({
             Preview
           </button>
         ) : null}
-        {reviewable ? (
-          <button
-            type="button"
-            onClick={() =>
-              void markReviewed(deskStore, agent.leaf)
-                .catch(() => false)
-                .then((saved) =>
-                  notify(
-                    saved ? "ok" : "error",
-                    saved
-                      ? `${boardAgentName(agent)}'s work reviewed`
-                      : `Could not save the review mark for ${boardAgentName(agent)}. Try again when the connection is ready.`,
-                  ),
-                )
-            }
-          >
-            Mark reviewed
-          </button>
+        {agent ? (
+          <BoardMarkReviewed
+            leaf={agent.leaf}
+            name={boardAgentName(agent)}
+            deskStore={deskStore}
+            notify={notify}
+          />
         ) : null}
         {home && tab.actionable && !tab.stale
           ? orderButtons(home.tabKeys, tab.key, "tab", (step) =>

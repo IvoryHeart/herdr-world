@@ -12,7 +12,7 @@ import { AgentLatestMessage } from "../AgentHoverCard";
 import { agentStateWord } from "../agentMarks";
 import { sharedDeskStore, type WorldDeskStore } from "../deskStateStore";
 import { useShownReport } from "../shownReport";
-import { markReviewed } from "../useReviewedWork";
+import { markReviewed, useReviewedWork } from "../useReviewedWork";
 import {
   sendTownReply,
   townChoices,
@@ -56,7 +56,11 @@ export function BoardPeek({
   const { leaf, name, where, canReply, anchor } = target;
   const status = leaf.stale ? "unknown" : leaf.status;
   const blocked = status === "blocked";
-  const done = status === "done";
+  // Finished work waiting for review, as Town and Needs you count it: done,
+  // or idle after a turn the service saw end.
+  const work = useReviewedWork(deskStore);
+  const done =
+    status === "done" || (!leaf.stale && work.toReview(leaf, Date.now()));
   // The screen is read only for a waiting agent's question and answers.
   const screen = useTownScreen(leaf, blocked, 2_000);
   // The report shown and its stop: Mark reviewed names only that stop.
@@ -110,7 +114,7 @@ export function BoardPeek({
   return (
     <div
       ref={card}
-      className={`board-peek board-s-${status}`}
+      className={`board-peek board-s-${done ? "done" : status}`}
       role="dialog"
       aria-label={`${name} peek`}
       data-leaf={leaf.id}
@@ -132,7 +136,9 @@ export function BoardPeek({
         <div>
           <b>{name}</b>
           <small>
-            {leaf.stale ? "Offline · last known state" : agentStateWord(status)}
+            {leaf.stale
+              ? "Offline · last known state"
+              : agentStateWord(done ? "done" : status)}
             {" · "}
             {where}
           </small>

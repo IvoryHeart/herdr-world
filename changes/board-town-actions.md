@@ -5,3 +5,6 @@
   Town and Spaces follow, while dragging still arranges only the Board), Mark
   reviewed on a finished agent, and a peek at an agent (hover, or Preview on a
   phone) with its latest Chat message, its question and answer buttons.
+- The `?scene=town-scale` preview's synthetic hosts now take Town's and
+  Board's room actions, peeks, answers and review marks in the page, so they
+  can be tried without real hosts.

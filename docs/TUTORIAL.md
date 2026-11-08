@@ -886,7 +886,11 @@ on your phone and desktop.
    latest Chat message, the question it is asking with answer buttons, and
    **Mark reviewed** for a finished agent (which also sends it on from Town's
    reception). On a phone, select the agent's tab and press **Preview** in its
-   bar; a finished agent's bar also offers **Mark reviewed** directly.
+   bar; a finished agent's bar also offers **Mark reviewed** directly. An
+   agent counts as finished when Herdr reports it done, or idle after a turn
+   World saw end, as in Town and Needs you. To try these without touching
+   your hosts, open World with `?scene=town-scale`: its synthetic hosts take
+   every one of these actions in the page.
 
 9. Press the labelled **Work** pill, first in Board's bottom-right controls:
    if an Inspector fills the phone screen, close it with **X** or **Back** first.

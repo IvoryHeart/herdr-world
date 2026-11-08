@@ -8,6 +8,7 @@
 
 import { bridge } from "../api";
 import { operationalStore } from "../store";
+import { townScaleRuntime } from "./town/townScaleRuntime";
 import { deskReorderIndex } from "../../../shared/tabOrder";
 import type { Tab, Workspace } from "../types";
 
@@ -146,9 +147,12 @@ async function reorderTab(
     connectionId: owner.connectionId,
     runtimeGeneration: owner.generation,
   };
-  const operations = operationalStore(runtime);
-  const observed = operations.get();
-  if (observed.lastRefresh > 0 && !observed.tabMoveSupported)
+  // The Town scale scene's hosts are page-local: the service has no store
+  // for them.
+  const scene = townScaleRuntime()?.client(owner.connectionId) ?? null;
+  const operations = scene ? null : operationalStore(runtime);
+  const observed = operations?.get();
+  if (observed && observed.lastRefresh > 0 && !observed.tabMoveSupported)
     return TAB_MOVE_UNSUPPORTED;
   const listed = (await bridge
     .connection(owner.connectionId, owner.generation)
@@ -170,13 +174,18 @@ async function reorderTab(
     return CHANGED("The room") as HerdrTabOrderOutcome;
   if (insertIndex === null)
     return { status: "moved", tab_id: tabId, workspace_id: workspaceId };
-  const result = await operations.moveTab(tabId, insertIndex);
+  const result = operations
+    ? await operations.moveTab(tabId, insertIndex)
+    : await scene!.call("tab.move", {
+        tab_id: tabId,
+        insert_index: insertIndex,
+      });
   if (result !== undefined)
     return { status: "moved", tab_id: tabId, workspace_id: workspaceId };
   return {
     status: "refused",
     reason: "tab_move",
-    message: operations.get().error ?? "Herdr did not reorder the tab.",
+    message: operations?.get().error ?? "Herdr did not reorder the tab.",
   };
 }
 

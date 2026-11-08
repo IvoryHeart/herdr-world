@@ -6,6 +6,11 @@
 
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
 import { store } from "../store";
+import { townScaleRuntime } from "./town/townScaleRuntime";
+
+/** The Town scale scene's own host, which the service does not know. */
+const sceneClient = (connectionId: string) =>
+  townScaleRuntime()?.client(connectionId) ?? null;
 
 /** The rename or close dialog being shown, and the room it names. */
 export type RoomRenameCloseDialog = {
@@ -37,11 +42,20 @@ export async function renameRoom(
   const value = label.trim();
   if (!value || value === from) return;
   try {
-    await store.renameQualifiedWorkspace(
-      { connectionId: room.connectionId, runtimeGeneration: room.generation },
-      room.workspaceId,
-      value,
-    );
+    const scene = sceneClient(room.connectionId);
+    await (scene
+      ? scene.call("workspace.rename", {
+          workspace_id: room.workspaceId,
+          label: value,
+        })
+      : store.renameQualifiedWorkspace(
+          {
+            connectionId: room.connectionId,
+            runtimeGeneration: room.generation,
+          },
+          room.workspaceId,
+          value,
+        ));
   } catch (cause) {
     reportFailure("Room rename", cause);
   }
@@ -50,10 +64,16 @@ export async function renameRoom(
 /** Close a room: its running terminal sessions end. */
 export async function closeRoom(room: RoomRenameCloseTarget) {
   try {
-    await store.closeQualifiedWorkspace(
-      { connectionId: room.connectionId, runtimeGeneration: room.generation },
-      room.workspaceId,
-    );
+    const scene = sceneClient(room.connectionId);
+    await (scene
+      ? scene.call("workspace.close", { workspace_id: room.workspaceId })
+      : store.closeQualifiedWorkspace(
+          {
+            connectionId: room.connectionId,
+            runtimeGeneration: room.generation,
+          },
+          room.workspaceId,
+        ));
   } catch (cause) {
     reportFailure("Room close", cause);
   }
