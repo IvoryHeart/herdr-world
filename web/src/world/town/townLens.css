@@ -76,10 +76,35 @@
   box-shadow: inset 0 0 0 1px rgba(241, 239, 230, 0.18);
 }
 
+/* A place with several categories (harnesses): a stripe each, by share,
+   under the label, desks and seats. */
+.town-lens-room[data-mark="mix"]::before,
+.town-lens-desk[data-mark="mix"]::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: var(--lens-mix);
+  border-radius: inherit;
+  opacity: 0.62;
+}
+
+.town-lens-room[data-mark="mix"] {
+  box-shadow: inset 0 0 0 2px rgba(241, 239, 230, 0.55);
+}
+
+.town-lens-desk[data-mark="mix"] {
+  box-shadow: 0 0 0 2px rgba(241, 239, 230, 0.55);
+}
+
 /* Room and desk zoom: desks and agents carry their own colour. */
 .town-world[data-level="room"] .town-lens-room[data-mark],
 .town-world[data-level="desk"] .town-lens-room[data-mark] {
   background: color-mix(in srgb, var(--lens, transparent) 14%, transparent);
+}
+
+.town-world[data-level="room"] .town-lens-room[data-mark="mix"]::before,
+.town-world[data-level="desk"] .town-lens-room[data-mark="mix"]::before {
+  opacity: 0.14;
 }
 
 .town-lens-desk,

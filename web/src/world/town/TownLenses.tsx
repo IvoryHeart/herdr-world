@@ -304,16 +304,33 @@ export function townLensTargets(
 }
 
 const markData = (mark: TownLensMark | undefined) =>
-  mark === undefined || mark.swatch === null
-    ? "none"
-    : mark.swatch === "no-data"
-      ? "no-data"
-      : "value";
+  mark?.mix
+    ? "mix"
+    : mark === undefined || mark.swatch === null
+      ? "none"
+      : mark.swatch === "no-data"
+        ? "no-data"
+        : "value";
+
+/** A mixed place's stripes: one band per category, as wide as its share. */
+function mixStripes(view: TownLensView, mix: NonNullable<TownLensMark["mix"]>) {
+  const total = mix.reduce((sum, part) => sum + part.count, 0);
+  let at = 0;
+  const bands = mix.map((part) => {
+    const from = (at / total) * 100;
+    at += part.count;
+    const color = view.swatches[part.swatch]!.color;
+    return `${color} ${from.toFixed(2)}% ${((at / total) * 100).toFixed(2)}%`;
+  });
+  return `linear-gradient(90deg, ${bands.join(", ")})`;
+}
 
 const markStyle = (view: TownLensView, mark: TownLensMark | undefined) =>
-  typeof mark?.swatch === "number"
-    ? ({ "--lens": view.swatches[mark.swatch]!.color } as React.CSSProperties)
-    : undefined;
+  mark?.mix
+    ? ({ "--lens-mix": mixStripes(view, mark.mix) } as React.CSSProperties)
+    : typeof mark?.swatch === "number"
+      ? ({ "--lens": view.swatches[mark.swatch]!.color } as React.CSSProperties)
+      : undefined;
 
 /**
  * The lens's tints in Town's world layer, under every sign and card: the

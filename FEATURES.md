@@ -195,7 +195,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     ready, waiting, draft or merged, from the same links as the desk badge;
     a room shows its most urgent. **Quests** shows each agent's quest
     progress; **Harness** shows Claude, Codex, Pi, other agents and plain
-    shells. Desks and agents with nothing to show stay plain. Screen readers
+    shells, and a room or desk with several harnesses is striped by each
+    one's share. Desks and agents with nothing to show stay plain. Screen readers
     hear each place's reading in its name. A lens changes only how Town is
     drawn: taps open what they always do, nothing moves, Escape or **✕**
     returns Town exactly as it was, and Town always opens in **Attention**

@@ -531,7 +531,8 @@ and open its terminal or Inspector without losing its workspace context.
    worked: who have you forgotten?), **Spend** (today's cost per room and
    desk; hatched **No data** where a host has no reading, never zero), **Pull
    requests** (failing, ready, waiting, draft or merged), **Quests** and
-   **Harness**.
+   **Harness** (a room with several harnesses is striped by each one's
+   share).
 3. Zoom into a room: each desk and agent carries its own colour. Hover, focus
    or tap one and the legend says its value in words, such as "Idle 3 h 12 m",
    "~$1.40 today" or "#123 CI failing". Taps open what they always do.

@@ -82,6 +82,12 @@ export type TownLensMark = {
   words: string;
   /** Rooms: the reading in a few characters, for the room's label. */
   short?: string;
+  /**
+   * A place holding several categories (a room with Claude and Codex
+   * agents): each swatch's share, most first, drawn as stripes so no place
+   * reads as one category it is not. `swatch` is then null.
+   */
+  mix?: readonly { swatch: number; count: number }[];
 };
 
 export type TownLensView = {
@@ -377,7 +383,7 @@ function tally<T extends string>(
       right - left || order.indexOf(a) - order.indexOf(b),
   );
   return {
-    top: ranked[0]?.[0],
+    ranked,
     words: ranked
       .map(([value, count]) => `${count} ${name(value)}`)
       .join(" · "),
@@ -628,16 +634,31 @@ export function townLensView(
             words: HARNESS_NAMES[harness],
           });
         }
-      const mixed = (harnesses: TownHarness[]) => {
-        const { top, words } = tally(
+      // A room or desk can hold several harnesses: one harness gets its
+      // colour; several get a stripe each, by share, never the majority's.
+      const mixed = (harnesses: TownHarness[]): TownLensMark => {
+        const { ranked, words } = tally(
           harnesses,
           HARNESSES,
           (h) => HARNESS_NAMES[h],
         );
+        if (ranked.length === 1)
+          return {
+            swatch: HARNESSES.indexOf(ranked[0]![0]),
+            words,
+            short: HARNESS_NAMES[ranked[0]![0]],
+          };
         return {
-          swatch: HARNESSES.indexOf(top ?? "shell"),
+          swatch: null,
           words,
-          short: HARNESS_NAMES[top ?? "shell"],
+          short:
+            ranked.length === 2
+              ? ranked.map(([h]) => HARNESS_NAMES[h]).join(" + ")
+              : `${ranked.length} harnesses`,
+          mix: ranked.map(([h, count]) => ({
+            swatch: HARNESSES.indexOf(h),
+            count,
+          })),
         };
       };
       for (const [deskKey, agents] of deskAgents) {
@@ -665,7 +686,7 @@ export function townLensView(
       }
       return view(
         HARNESS_SWATCHES,
-        "A room or desk shows its most common harness.",
+        "A room or desk with several harnesses is striped by each one's share.",
       );
     }
   }

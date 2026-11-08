@@ -167,6 +167,41 @@ test("quests and harnesses map to their scales", () => {
   expect(townHarnessOf({})).toBe("other");
 });
 
+test("a room with several harnesses shows each one's share, not the majority's", () => {
+  const model = scaleModel();
+  const view = townLensView("harness", model, scaleFacts(model))!;
+  let mixedRooms = 0;
+  for (const room of model.rooms.values()) {
+    const agents = [...model.agents.values()].filter(
+      (agent) => agent.roomKey === room.key,
+    );
+    if (!agents.length) continue;
+    const kinds = new Set(agents.map(townHarnessOf));
+    const mark = view.rooms.get(room.key)!;
+    if (kinds.size === 1) {
+      expect(mark.mix).toBeUndefined();
+      expect(typeof mark.swatch).toBe("number");
+      continue;
+    }
+    mixedRooms++;
+    // No single harness colour stands for the whole room.
+    expect(mark.swatch).toBeNull();
+    expect(mark.mix!.length).toBe(kinds.size);
+    expect(mark.mix!.reduce((sum, part) => sum + part.count, 0)).toBe(
+      agents.length,
+    );
+    for (const kind of kinds)
+      expect(mark.words).toContain(
+        `${agents.filter((agent) => townHarnessOf(agent) === kind).length} `,
+      );
+  }
+  // The scale scene mixes harnesses, so the stripes are exercised.
+  expect(mixedRooms).toBeGreaterThan(0);
+  // Each agent still carries its own harness.
+  for (const agent of model.agents.values())
+    expect(typeof view.agents.get(agent.key)!.swatch).toBe("number");
+});
+
 test("L steps through every lens and wraps to Attention", () => {
   let lens: TownLensId = "attention";
   const seen: TownLensId[] = [];
