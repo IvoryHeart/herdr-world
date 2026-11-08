@@ -234,7 +234,11 @@ let secondHostGeneration = 3;
 let rejectNextWorldSnapshot = false;
 let ambiguousAgentWorktrees = false;
 let staleNextWorldSnapshot = false;
-let omitNextWorldTopology = false;
+// Omits tabs and panes from every World snapshot until the test has seen
+// the omission and clears it. A one-shot omission raced back-to-back
+// refreshes: a queued or scheduled refresh restored the panes before the
+// test observed the omitted snapshot.
+let omitWorldTopology = false;
 let siblingObservationGate: Promise<void> | null = null;
 let navigationMode: "shared" | "browser-local" = "browser-local";
 const initialTerminalAttach = Promise.withResolvers<void>();
@@ -409,8 +413,7 @@ let client: ConnectionClient = {
       }
       const stale = staleNextWorldSnapshot;
       staleNextWorldSnapshot = false;
-      const omitTopology = omitNextWorldTopology;
-      omitNextWorldTopology = false;
+      const omitTopology = omitWorldTopology;
       const observation = {
         revision: worldRevision,
         observed_at: Date.now(),
@@ -1685,12 +1688,13 @@ async function run() {
   focusedPaneId = "builder-pane";
   worldRevision++;
   await store.refresh();
-  omitNextWorldTopology = true;
+  omitWorldTopology = true;
   await worldRuntimeStore.refresh();
   await until(
     () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
     "notification target omitted from aggregate",
   );
+  omitWorldTopology = false;
   window.dispatchEvent(
     new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
       detail: {
@@ -1901,12 +1905,13 @@ async function run() {
     () => Boolean(agentTarget("Builder")),
     "notification return to Town",
   );
-  omitNextWorldTopology = true;
+  omitWorldTopology = true;
   await worldRuntimeStore.refresh();
   await until(
     () => !agentTarget("Reviewer"),
     "omitted notification target committed to the rendered overview",
   );
+  omitWorldTopology = false;
   replaceNotificationSessionOnSnapshot = true;
   const snapshotsBeforeReplacement = calls.filter(
     ({ method }) => method === "world.snapshot",
@@ -2119,7 +2124,7 @@ async function run() {
     () => worldRuntimeStore.get().connections[0]?.actionable === true,
     "selected World host observation recovered",
   );
-  omitNextWorldTopology = true;
+  omitWorldTopology = true;
   await worldRuntimeStore.refresh();
   await until(
     () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
@@ -2131,6 +2136,7 @@ async function run() {
       .length === 2,
     "healthy aggregate observation hid tabs still present in focused Herdr state",
   );
+  omitWorldTopology = false;
   await worldRuntimeStore.refresh();
   await until(
     () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 2,
