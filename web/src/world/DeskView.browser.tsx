@@ -466,8 +466,21 @@ async function run() {
     "Desk metadata never writes browser storage",
   );
 
+  // Desk's search rests as an icon that unfolds with the cursor in it.
+  check(
+    !document.querySelector(".desk-search input"),
+    "Desk's search is an open box rather than its icon",
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Search Desk"]')
+    ?.click();
+  await settle(50);
   // Search narrows the Desk to matching agents.
   const search = document.querySelector<HTMLInputElement>(".desk-search input");
+  check(
+    document.activeElement === search,
+    "Desk's search icon did not put the cursor in the search",
+  );
   const setValue = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
     "value",
@@ -483,9 +496,21 @@ async function run() {
     !card("alpha") && !!card("gamma"),
     `search narrows To review to gamma (visible: ${visible()}, query: ${search?.value})`,
   );
-  setValue?.call(search, "");
-  search?.dispatchEvent(new Event("input", { bubbles: true }));
+  // The query keeps the box open after a click elsewhere on the Desk, and
+  // Escape there still clears it and folds it to its icon.
+  card("gamma")?.focus();
+  await settle(50);
+  check(
+    document.querySelector<HTMLInputElement>(".desk-search input")?.value ===
+      "gamma",
+    "Desk's search folded with a query in it",
+  );
+  press(card("gamma")!, "Escape");
   await settle(150);
+  check(
+    !document.querySelector(".desk-search input") && !!card("alpha"),
+    `Escape on the Desk did not clear and fold its search (visible: ${visible()})`,
+  );
 
   // Agents lists every agent, including reviewed ones.
   tab("Agents")?.click();

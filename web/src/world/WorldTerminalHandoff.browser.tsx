@@ -100,6 +100,23 @@ function enterSearch(input: HTMLInputElement, value: string) {
   )?.set?.call(input, value);
   input.dispatchEvent(new InputEvent("input", { bubbles: true }));
 }
+/** A view's desktop search, unfolded from its icon as a click does. */
+async function openViewSearch(scope: string, label: string) {
+  const selector = `${scope} input[placeholder="Search ${label}"]`;
+  const open = document.querySelector<HTMLInputElement>(selector);
+  if (open) open.focus();
+  else
+    document
+      .querySelector<HTMLButtonElement>(
+        `${scope} button[aria-label="Search ${label}"]`,
+      )
+      ?.click();
+  await until(
+    () => document.activeElement?.matches(selector),
+    `${label}'s search unfolding with the cursor in it`,
+  );
+  return document.querySelector<HTMLInputElement>(selector)!;
+}
 let renderError: unknown = null;
 window.addEventListener("error", (event) => {
   if (event.error) renderError = event.error;
@@ -913,16 +930,37 @@ async function run() {
     "World's default Zen was stored as if the user had chosen it",
   );
   // Zen parks the topbar off screen, so Town's search sits in the Zen dock,
-  // in sight, and moves back to the topbar when Zen ends.
+  // in sight, and moves back to the topbar when Zen ends. It rests as an
+  // icon and unfolds into the box.
   await until(() => {
-    const zenSearch = document.querySelector<HTMLInputElement>(
-      '.zen-dock .world-zen-search input[placeholder="Search Town"]',
+    const rect = document
+      .querySelector<HTMLElement>(
+        '.zen-dock .world-zen-search button[aria-label="Search Town"]',
+      )
+      ?.getBoundingClientRect();
+    return Boolean(rect && rect.width > 0 && rect.top >= 0);
+  }, "Town's search icon in sight beside the views in Zen");
+  {
+    const zenSearch = await openViewSearch(
+      ".zen-dock .world-zen-search",
+      "Town",
     );
-    const rect = zenSearch?.getBoundingClientRect();
-    return Boolean(rect && rect.width > 100 && rect.top >= 0);
-  }, "Town's search in sight beside the views in Zen");
+    await until(
+      () => zenSearch.getBoundingClientRect().width > 100,
+      () =>
+        `Town's unfolded search too narrow in Zen: ${zenSearch.getBoundingClientRect().width}`,
+    );
+    zenSearch.blur();
+    await until(
+      () =>
+        document.querySelector(
+          '.zen-dock .world-zen-search button[aria-label="Search Town"]',
+        ),
+      "Town's empty search folding back to its icon",
+    );
+  }
   check(
-    !document.querySelector('.topbar input[placeholder="Search Town"]'),
+    !document.querySelector('.topbar [aria-label="Search Town"]'),
     "Town's search stayed in the hidden topbar during Zen",
   );
   document.querySelector<HTMLButtonElement>(".zen-dock .zen-island")?.click();
@@ -936,7 +974,7 @@ async function run() {
   );
   await until(
     () =>
-      document.querySelector('.topbar input[placeholder="Search Town"]') !==
+      document.querySelector('.topbar button[aria-label="Search Town"]') !==
       null,
     "Town's search back in the topbar after Zen",
   );
@@ -1231,16 +1269,25 @@ async function run() {
     "shell Actions was replaced, clipped, or missing its native commands and extensions",
   );
   check(
-    (document
-      .querySelector<HTMLElement>(".world-view-toolbar-search input")
-      ?.getBoundingClientRect().width ?? 0) >= 180 &&
-      !topbarDetails?.querySelector(
-        ".world-selected-host, .world-stale-count",
-      ) &&
+    !topbarDetails?.querySelector(".world-selected-host, .world-stale-count") &&
       topbarDetails?.title.includes("spaces") === true,
-    `top-bar summary counts returned or crowded search: ${JSON.stringify({ searchWidth: document.querySelector<HTMLElement>(".world-view-toolbar-search input")?.getBoundingClientRect().width, statusWidth: topbarDetails?.getBoundingClientRect().width, counts: !!topbarDetails?.querySelector(".world-selected-host, .world-stale-count"), title: topbarDetails?.title, viewport: window.innerWidth, controlWidth: topbarDetails?.parentElement?.getBoundingClientRect().width })}`,
+    `top-bar summary counts returned: ${JSON.stringify({ statusWidth: topbarDetails?.getBoundingClientRect().width, counts: !!topbarDetails?.querySelector(".world-selected-host, .world-stale-count"), title: topbarDetails?.title, viewport: window.innerWidth, controlWidth: topbarDetails?.parentElement?.getBoundingClientRect().width })}`,
   );
   await setShellActionsOpen(false);
+  {
+    // Unfolded, the topbar's search keeps a usable width beside the summary.
+    const topbarSearch = await openViewSearch(".topbar", "Town");
+    await until(
+      () => topbarSearch.getBoundingClientRect().width >= 180,
+      () =>
+        `top-bar summary crowded search: ${JSON.stringify({ searchWidth: topbarSearch.getBoundingClientRect().width, statusWidth: topbarDetails?.getBoundingClientRect().width, viewport: window.innerWidth })}`,
+    );
+    topbarSearch.blur();
+    await until(
+      () => document.querySelector('.topbar button[aria-label="Search Town"]'),
+      "Town's empty topbar search folding back to its icon",
+    );
+  }
   check(
     document
       .querySelector(".world-control-plane")
@@ -1407,9 +1454,7 @@ async function run() {
   );
   // Board fills its stage, so its search results float over it, in sight
   // and taking a click, rather than drawn under the board.
-  const boardSearch = document.querySelector<HTMLInputElement>(
-    'input[placeholder="Search Board"]',
-  )!;
+  const boardSearch = await openViewSearch("", "Board");
   enterSearch(boardSearch, "Builder");
   const boardResultRow = () =>
     document.querySelector<HTMLElement>(
@@ -1969,9 +2014,7 @@ async function run() {
         ?.classList.contains("has-inspector"),
     "close shared navigator Inspector",
   );
-  const officeSearch = document.querySelector<HTMLInputElement>(
-    'input[placeholder="Search Town"]',
-  )!;
+  const officeSearch = await openViewSearch("", "Town");
   enterSearch(officeSearch, "Local");
   const submitTownSearch = () =>
     officeSearch

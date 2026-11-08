@@ -497,8 +497,9 @@ narrow the work you are following. The **Town calm motion** setting reduces
 ambient animation.
 
 Town's search finds where things are. In World's default full-screen (Zen)
-layout the search box hangs from the top edge beside the view buttons; with
-the bars shown it sits in the top bar. Type part of a room, table or agent
+layout the search hangs from the top edge beside the view buttons; with the
+bars shown it sits in the top bar. On a desktop it rests as a search icon:
+click it to unfold the search box with the cursor in it. Type part of a room, table or agent
 name, or words from an agent's task, in any order: the matches light up on
 the map, the rest of Town dims a little, and the result line says how many
 there are and how many are off-screen. Each result names its type, its place
@@ -509,8 +510,11 @@ open it. On a phone, tap the search button in the bottom-right corner, type, and
 result: the box opens at the top of the screen with its results in one panel
 just below it, and the map stays in sight underneath. Press
 **Escape**, tap **✕** or empty the box, and Town goes back to how it was.
-Press **/** or **Ctrl+F** (**Cmd+F** on a Mac) to put the cursor in the search
-of Town, Board or Desk without reaching for the mouse. In a terminal, the Chat
+On a desktop, **Escape** also folds the box back into its icon, and so does
+clicking away from an empty box; while a query is in it, the box stays open.
+Press **/** or **Ctrl+F** (**Cmd+F** on a Mac) to unfold the search of Town,
+Board or Desk with the cursor in it, without reaching for the mouse; the icon's
+tooltip names these keys. In a terminal, the Chat
 composer or another text field those keys keep doing what they do there. Change
 them under **Search the current view** in Settings → Shortcuts.
 
@@ -879,8 +883,8 @@ on your phone and desktop.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
-   Type in **Search Board** (beside the view buttons in Zen, in the top bar
-   otherwise) to keep matching cards lit and dim the rest; the results float
+   Click the **Search Board** icon (beside the view buttons in Zen, in the top
+   bar otherwise), or press **/**, and type to keep matching cards lit and dim the rest; the results float
    over the top of the board. **Down** and **Up** pick a result, **Enter** or
    a click selects it, and **Escape** ends the search.
 3. Drag a workspace and its tabs follow; cards settle within about a second.

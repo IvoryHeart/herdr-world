@@ -86,7 +86,13 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
     act(() => root.render(createElement(Probe)));
     const input = () =>
       element.querySelector<HTMLInputElement>("input[type=search]")!;
-    const type = (value: string) =>
+    // Typing starts where a user does: the search icon, then the box.
+    const type = (value: string) => {
+      act(() =>
+        element
+          .querySelector<HTMLButtonElement>('button[aria-label="Search Board"]')
+          ?.click(),
+      );
       act(() => {
         const field = input();
         const setter = Object.getOwnPropertyDescriptor(
@@ -96,8 +102,11 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
         setter.call(field, value);
         field.dispatchEvent(new window.Event("input", { bubbles: true }));
       });
+    };
     const key = (target: HTMLElement, name: string) =>
       act(() => {
+        // Keys go where the cursor is.
+        target.focus();
         target.dispatchEvent(
           new KeyboardEvent("keydown", {
             key: name,
@@ -158,11 +167,40 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
     board.type("login");
     expect(board.rows().length).toBe(1);
     board.key(board.rows()[0]!, "Escape");
-    expect(board.input().value).toBe("");
+    expect(board.input()).toBeNull();
     expect(board.rows().length).toBe(0);
     board.type("login");
     board.key(board.input(), "Escape");
-    expect(board.input().value).toBe("");
+    expect(board.input()).toBeNull();
+    board.unmount();
+  });
+
+  test("after a click on the board, Escape still ends the search", () => {
+    const board = mount();
+    const surface = document.createElement("div");
+    surface.className = "board";
+    surface.tabIndex = -1;
+    board.element.append(surface);
+    board.type("login");
+    // The query keeps the box open when the cursor leaves it.
+    act(() => surface.focus());
+    expect(board.input()?.value).toBe("login");
+    board.key(surface, "Escape");
+    expect(board.input()).toBeNull();
+    expect(board.rows().length).toBe(0);
+    // A key something else took, such as a carried pane, keeps the search.
+    board.type("login");
+    act(() => surface.focus());
+    act(() => {
+      const event = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
+      event.preventDefault();
+      surface.dispatchEvent(event);
+    });
+    expect(board.input()?.value).toBe("login");
     board.unmount();
   });
 }
