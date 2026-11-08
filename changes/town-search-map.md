@@ -6,7 +6,8 @@
   to it and pulses it; choosing it again opens it. Escape returns Town to how
   it was. In Zen, World's default, the search box hangs beside the view
   buttons at the top, or is a corner button on a phone, instead of hiding
-  with the top bar.
+  with the top bar. On a phone, the search box and its results open as one
+  panel at the top of the screen, with the count shown once.
 
 ### Changed
 

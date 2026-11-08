@@ -46,6 +46,8 @@
   width: 100%;
   border: 0;
   outline: 0;
+  /* The box's own border shows focus; no second ring inside it. */
+  box-shadow: none;
   color: inherit;
   background: transparent;
   font: inherit;

@@ -480,12 +480,24 @@ there are and how many are off-screen. Each result names its type, its place
 Click a result, or press **Down** to pick one and **Enter**: the camera
 travels there and the result pulses. Click it or press **Enter** again to
 open it. On a phone, tap the search button in the bottom-right corner, type, and tap a
-result. Press
+result: the box opens at the top of the screen with its results in one panel
+just below it, and the map stays in sight underneath. Press
 **Escape**, tap **✕** or empty the box, and Town goes back to how it was.
 Press **/** or **Ctrl+F** (**Cmd+F** on a Mac) to put the cursor in the search
 of Town, Board or Desk without reaching for the mouse. In a terminal, the Chat
 composer or another text field those keys keep doing what they do there. Change
 them under **Search the current view** in Settings → Shortcuts.
+
+To find or do anything from any view, press **Ctrl+K** (**Cmd+K** on a Mac)
+to open the command box. Type `harbor` and it lists what Town's search would
+find, each with its status mark and place; **Down** and **Enter**, or a click,
+select one as clicking it in Town does. The same box creates rooms, tabs and
+agents, acts on the selected agent and goes to Board, Desk or Spaces. In Zen
+the **⌘** button beside the view buttons opens it too; on a phone, tap the
+corner view button and then **Find or act**. In a terminal, the Chat composer
+or a text field, Ctrl+K and Cmd+K keep their meaning there; press
+**Ctrl+Alt+K** (**Cmd+Option+K** on a Mac) instead.
+**Escape** or the same key closes the box.
 
 A quiet **?** at reception means an agent has asked you a question with
 `herdr-world ask`. The question also arrives as a Herdr notification, which
@@ -1134,7 +1146,8 @@ modify the same checkout; use chapter 3 for parallel changes.
 
 ### 2.1 Find the terminal you want to control
 
-Open the command menu to search workspaces, files, tabs, panes, and agents;
+Open the command menu (**Ctrl+K**, **Cmd+K** on a Mac) to search workspaces,
+files, tabs, panes, and agents;
 enter `README.md` to open a project-relative path. Defaults differ by platform:
 use [Keyboard Shortcuts](../FEATURES.md#keyboard-shortcuts) or interface menus.
 
