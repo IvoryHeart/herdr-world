@@ -21,8 +21,10 @@ export function townBubbleKind(
 ) {
   if (mood === "grumble") return "curse";
   if (mood === "nap") return "sleep";
-  // Out of fuel says so at every distance a waiting agent does.
-  if (fuel) return "fuel";
+  // Out of fuel says so at every distance a waiting agent does. From the
+  // room level the seat's DOM mark (TownFuelMark) shows it instead, above
+  // the room's plate and the seat tags that cover the canvas.
+  if (fuel) return level === "room" || level === "desk" ? null : "fuel";
   if (status === "blocked") return "blocked";
   if (asking) return "ask";
   if (status === "done" && !seen) return "done";

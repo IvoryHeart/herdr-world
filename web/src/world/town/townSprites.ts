@@ -531,6 +531,24 @@ export const townBubble = (draw: (R: Rect) => void, width = 11) =>
     draw(R);
   });
 
+/** Out of fuel: an empty red fuel can beside a small clock. */
+export const TOWN_FUEL_BUBBLE_WIDTH = 15;
+export function townFuelPaint(R: Rect) {
+  const can = "#c43d3d";
+  R(1, 3, 5, 6, can);
+  R(2, 2, 2, 1, can);
+  R(4, 1, 2, 1, "#6b7a8f");
+  R(2, 4, 3, 3, "#f3d9c8");
+  R(2, 7, 3, 1, "#7d2424");
+  const clock = "#4f6a8f";
+  R(9, 2, 3, 1, clock);
+  R(8, 3, 1, 3, clock);
+  R(12, 3, 1, 3, clock);
+  R(9, 6, 3, 1, clock);
+  R(10, 3, 1, 2, clock);
+  R(11, 4, 1, 1, clock);
+}
+
 export function buildTownSprites() {
   const tableOf = (W: number, w: string) =>
     townSprite(W, 32, (R) => {
@@ -784,22 +802,7 @@ export function buildTownSprites() {
         ] as const)
           R(x, y, 1, 2, "#2f9e55");
       }),
-      // Out of fuel: an empty red fuel can beside a small clock.
-      fuel: bubble((R) => {
-        const can = "#c43d3d";
-        R(1, 3, 5, 6, can);
-        R(2, 2, 2, 1, can);
-        R(4, 1, 2, 1, "#6b7a8f");
-        R(2, 4, 3, 3, "#f3d9c8");
-        R(2, 7, 3, 1, "#7d2424");
-        const clock = "#4f6a8f";
-        R(9, 2, 3, 1, clock);
-        R(8, 3, 1, 3, clock);
-        R(12, 3, 1, 3, clock);
-        R(9, 6, 3, 1, clock);
-        R(10, 3, 1, 2, clock);
-        R(11, 4, 1, 1, clock);
-      }, 15),
+      fuel: bubble(townFuelPaint, TOWN_FUEL_BUBBLE_WIDTH),
       idle: bubble((R) => {
         R(3, 4, 5, 4, "#8a5a3c");
         R(8, 5, 1, 2, "#8a5a3c");

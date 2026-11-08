@@ -209,7 +209,8 @@ hosts stay usable.
    crowd the lobby and grumble, then nap on the floor after about 90 seconds;
    the front of the crowd takes the next free spot. An agent out of fuel (its
    harness hit a usage limit) stays slumped at its desk under an empty fuel
-   can and a clock; hover its table for when the limit resets. These
+   can and a clock showing when the limit resets; hover its table for the
+   full words. These
    locations visualize status; they do not move the underlying pane or change its host. To keep
    reception for what matters now, press its sign (the **!** **?** **✓**
    marks) and untick a mark, for example **✓** Done: those agents stay at

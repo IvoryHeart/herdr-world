@@ -211,6 +211,8 @@ test("a stop ends by itself once its reset time passes", () => {
 });
 
 test("an agent out of fuel shows an empty fuel can and a clock at every distance", () => {
+  // Zoomed out, the canvas draws it; from the room level the seat's DOM mark
+  // (TownFuelMark) does, above the room's plate and the seat tags.
   expect(
     townBubbleKind(
       "idle",
@@ -227,7 +229,8 @@ test("an agent out of fuel shows an empty fuel can and a clock at every distance
   expect(townBubbleKind("idle", false, false, "room", "seat", false, 0)).toBe(
     "sleep",
   );
-  expect(
-    townBubbleKind("idle", false, false, "desk", "seat", false, 0, null, true),
-  ).toBe("fuel");
+  for (const level of ["room", "desk"])
+    expect(
+      townBubbleKind("idle", false, false, level, "seat", false, 0, null, true),
+    ).toBeNull();
 });

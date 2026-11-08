@@ -1,0 +1,57 @@
+/* An out-of-fuel agent's mark over its seat (TownFuelMark), from the room
+   level, placed as the step bubbles are (townStep.css). It stands above the
+   room's plate (2) and the seat tags, so neither hides it, and below an open
+   place card (6). */
+.town-fuel-mark {
+  --fuel-scale: calc(2 * var(--iz));
+  position: absolute;
+  top: -4px;
+  z-index: 3;
+  display: none;
+  align-items: center;
+  gap: 1px;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translate(-50%, -100%) scale(var(--fuel-scale));
+  transform-origin: 50% 100%;
+}
+.town-fuel-mark:not([data-top]) {
+  top: 32px;
+}
+.town-world[data-level="room"] .town-fuel-mark,
+.town-world[data-level="desk"] .town-fuel-mark {
+  display: flex;
+}
+.town-world[data-level] .town-fuel-mark[data-away] {
+  display: none;
+}
+.town-world[data-level="desk"] .town-fuel-mark {
+  --fuel-scale: max(1, calc(1.4 * var(--iz)));
+}
+/* At the desk level a top seat's name tag sits over its head: the mark
+   stands on the tag. */
+.town-world[data-level="desk"] .town-fuel-mark[data-top] {
+  top: -10px;
+}
+
+.town-fuel-mark-glyph {
+  flex: none;
+  width: 15px;
+  height: 12px;
+  image-rendering: pixelated;
+}
+
+/* The clock's reset time, in the step bubble's long-step tag. */
+.town-fuel-mark-time {
+  flex: none;
+  align-self: flex-start;
+  padding: 0 2px;
+  font:
+    700 6px / 1.25 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  color: #fffaf0;
+  background: #c43d3d;
+  border: 1px solid #1c1722;
+  border-radius: 2px;
+}

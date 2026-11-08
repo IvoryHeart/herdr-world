@@ -152,7 +152,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     of dozing.
   - An agent that stopped because its harness hit a subscription or usage
     limit is **out of fuel**: it stays slumped at its own desk, head sunk and
-    arms hanging, under an empty red fuel can and a small clock. It never
+    arms hanging, under an empty red fuel can and a small clock with the
+    reset time beside it. Zoomed in, that mark stands in front of the room's
+    plate and the seat name tags, so neither hides it. It never
     walks to reception, the bar or the call rail, since there is nothing to
     answer. World reads the stop from the harness's own records, never the
     terminal: Codex's rate-limit snapshot (`rate_limit_reached_type`) or its
