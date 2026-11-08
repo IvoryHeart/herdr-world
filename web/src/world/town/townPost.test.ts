@@ -29,6 +29,7 @@ import {
   townPostSlot,
   townPostState,
 } from "./townPost";
+import { MARGIN, ROAD_GAP } from "./townLots";
 import { TOWN_POST_ROOM } from "./townPostLot";
 import {
   townPostFixtureMerged,
@@ -261,8 +262,12 @@ test("making room for the post office moves nothing as the town grows", () => {
   expect(townPostLot(layout)!.x).toBe(layout.center.x - shift);
   expect(townPostLot(layout)!.x).toBeGreaterThanOrEqual(3);
   const b = layout.buildings[0]!;
-  expect(b.x).toBe(3 + shift);
-  expect(layout.verticalRoads[0]!.x).toBe(b.x + b.w);
+  // The road down the town's left side stands left of the building, the
+  // lot's columns left of that road.
+  expect(b.x).toBe(MARGIN + ROAD_GAP + shift);
+  const [edge, side] = layout.verticalRoads;
+  expect(edge).toMatchObject({ x: b.x - ROAD_GAP, edge: true });
+  expect(side!.x).toBe(b.x + b.w);
   expect(layout.plaza.x).toBe(shift + Math.floor((layout.width - shift) / 2));
   // A town that grows a building keeps its first one where it stood; its
   // center, centred over the wider row, takes the post office with it.
