@@ -3,6 +3,7 @@ import { boardControlsLayout, type BoardControl } from "./boardControlsLayout";
 
 const widths: Record<BoardControl, number> = {
   work: 72,
+  lens: 76,
   next: 64,
   home: 132,
   zoomOut: 44,
@@ -14,9 +15,10 @@ const widths: Record<BoardControl, number> = {
 const layout = (available: number, count = 3, phone = true) =>
   boardControlsLayout({ available, widths, count, phone, gap: 2, chrome: 10 });
 
-test("Work and Next lead; phone Tidy is in overflow and detached notes keep their own action", () => {
-  expect(layout(480).inline).toEqual([
+test("Work, Lenses and Next lead; phone Tidy is in overflow and detached notes keep their own action", () => {
+  expect(layout(556).inline).toEqual([
     "work",
+    "lens",
     "next",
     "home",
     "zoomOut",
@@ -24,19 +26,21 @@ test("Work and Next lead; phone Tidy is in overflow and detached notes keep thei
     "zoomIn",
     "menu",
   ]);
-  expect(layout(480).overflow).toEqual(["tidy"]);
-  expect(layout(366).inline).toEqual([
+  expect(layout(556).overflow).toEqual(["tidy"]);
+  expect(layout(444).inline).toEqual([
     "work",
+    "lens",
     "next",
     "zoomOut",
     "fit",
     "zoomIn",
     "menu",
   ]);
-  expect(layout(366).overflow).toEqual(["home", "tidy"]);
+  expect(layout(444).overflow).toEqual(["home", "tidy"]);
   expect(layout(800, 0).overflow).toEqual(["home", "tidy"]);
   expect(layout(800, 3, false).inline).toEqual([
     "work",
+    "lens",
     "next",
     "home",
     "zoomOut",
@@ -47,10 +51,27 @@ test("Work and Next lead; phone Tidy is in overflow and detached notes keep thei
   ]);
 });
 
-test("overflow removes note chip, then Fit, then zoom in/out, while Work always keeps its slot", () => {
-  expect(layout(250).overflow).toEqual(["home", "tidy", "fit", "zoomIn"]);
+test("overflow removes note chip, then Lenses, then Fit, then zoom in/out, while Work always keeps its slot", () => {
+  // Without Lenses, the phone row keeps the controls it always had.
+  expect(layout(366).inline).toEqual([
+    "work",
+    "next",
+    "zoomOut",
+    "fit",
+    "zoomIn",
+    "menu",
+  ]);
+  expect(layout(366).overflow).toEqual(["home", "lens", "tidy"]);
+  expect(layout(250).overflow).toEqual([
+    "home",
+    "lens",
+    "tidy",
+    "fit",
+    "zoomIn",
+  ]);
   expect(layout(200).overflow).toEqual([
     "home",
+    "lens",
     "tidy",
     "fit",
     "zoomIn",
@@ -74,8 +95,8 @@ test("every action remains reachable exactly once and the single row fits every 
         expect(result.inline[0]).toBe("work");
         expect(result.inline[result.inline.length - 1]).toBe("menu");
         const all = [...result.inline, ...result.overflow];
-        expect(new Set(all).size).toBe(8);
-        expect(all).toHaveLength(8);
+        expect(new Set(all).size).toBe(9);
+        expect(all).toHaveLength(9);
         const occupied =
           result.inline.reduce((sum, control) => sum + widths[control], 10) +
           (result.inline.length - 1) * 2;

@@ -560,6 +560,8 @@ and open its terminal or Inspector without losing its workspace context.
    Town always opens without a lens; your browser remembers the last one for
    `L` and **Lenses**.
 
+Board has the same lenses: see [Board](#board).
+
 **You are done when:** you can find the coldest room and the desk with a
 failing pull request, and return to Town as usual.
 
@@ -913,15 +915,25 @@ on your phone and desktop.
    If Work shows **Set up Jira** or says no source is connected, open
    **Settings → Sources**: sign
    in to GitHub with `gh auth login` as the user that runs World, or add your
-   Jira site, account email and an API token there.
+   Jira site, account email and an API token there. A tab whose agent works on
+   a pull request or ticket also shows its desk badge beside the tab's name,
+   such as `#42 ✓`; tap it as in Town.
+10. Press **Lenses** beside Work (on a phone, in **⋮**), or press `L`: Board
+   shows Town's [lenses](#town-lenses) with the same legend at its top left.
+   Each workspace card reads as its Town room, each tab as its desk and each
+   pane row as its agent: the reading sits on a tag along the card's top edge
+   and colours its outline, and cards with nothing to show step back. Hover,
+   focus or tap a card to read it in the legend; **‹ ›**, `L` and `Shift+L`
+   step, **✕** or Escape leaves. After 30 minutes or more away, Board's top
+   left also shows Town's **Since you left** recap.
 
 After Herdr restarts, Board cannot prove that a workspace or agent is the one a
 string was made with, so it draws those strings dashed and asks once per host:
 **Keep** or **Detach**. A string whose target closed waits in **Needs a home**
 (a separate **Needs a home · n** control), where you can re-attach its note or discard
 the string; notes always stay. At zero or when space is tight, the action remains
-in **⋮ → Needs a home (n)**. On phones, **Tidy** is in **⋮**, and Fit then the zoom
-buttons move there as needed; **Work** keeps its text and the controls stay on one
+in **⋮ → Needs a home (n)**. On phones, **Tidy** is in **⋮**, and **Lenses**, Fit
+then the zoom buttons move there as needed; **Work** keeps its text and the controls stay on one
 row. If Board misbehaves, describe the steps that led
 there in a bug report.
 
