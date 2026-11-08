@@ -373,11 +373,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       else openInBackground(id, view);
     },
   );
-  // The Town Master never greets over an open window or sheet, nor over
-  // the welcome that asks for a first connection.
-  const greetingCovered =
-    (connectionSelection.connections.length === 0 &&
-      inspectorConversations.length === 0) ||
+  // The Town Master never greets over the welcome that asks for a first
+  // connection, nor over an open window or sheet (TownMasterGreetingHost).
+  const greetingHeld =
+    connectionSelection.connections.length === 0 &&
+    inspectorConversations.length === 0;
+  const greetingWindowsOpen =
     needsYouOpen ||
     visibleFloatingInspectors.length > 0 ||
     Boolean(contextRailInspector) ||
@@ -396,7 +397,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       {active && (view === "town" || view === "board" || view === "desk") ? (
         <TownMasterGreetingHost
           world={presentedWorld}
-          covered={greetingCovered}
+          held={greetingHeld}
+          windowsOpen={greetingWindowsOpen}
         />
       ) : null}
       <WorldBin

@@ -19,7 +19,9 @@ second inbox. This change records the Town Master's onboarding; later slices
   World's update check reports a newer release, leading to Menu's update entry.
 - A visit is World opening, or the page coming back on screen after being
   hidden for 30 minutes or more. The greeting never opens over an open window
-  or sheet; it waits until uncovered.
+  or sheet; it waits until uncovered. On wide screens only a window over the
+  figure or the card's place covers it; on phones any open window or sheet
+  does.
 - **Show this on start** at the card's foot and **Menu → Town Master
   greeting** are one per-browser value, like the since-you-left ✕.
 

@@ -246,7 +246,7 @@ hosts stay usable.
    is out, a **See update** button that opens **Menu** at its update entry.
    Board shows the card at its hub beside the bin, Desk at its summary, and
    a phone as a sheet with **Back**. It waits while Chat, **Needs you** or
-   another window is open. Close it with **✕**, Escape or a tap elsewhere;
+   another window covers its place (on a phone, while any is open). Close it with **✕**, Escape or a tap elsewhere;
    tap the figure to see it again, and untick **Show this on start** (or
    switch off **Menu → Town Master greeting**) to stop it. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and

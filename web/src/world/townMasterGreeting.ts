@@ -149,6 +149,75 @@ export function lastHere(
   return visit.before;
 }
 
+type Box = Pick<DOMRect, "left" | "top" | "right" | "bottom">;
+type Size = { width: number; height: number };
+
+const MARGIN = 8;
+
+/**
+ * Where the card opens beside its anchor: below it when it fits, else above,
+ * kept on screen.
+ */
+export function greetingPlacement(
+  anchor: Pick<DOMRect, "left" | "top" | "bottom">,
+  card: Size,
+  viewport: Size,
+) {
+  const left = Math.max(
+    MARGIN,
+    Math.min(anchor.left, viewport.width - card.width - MARGIN),
+  );
+  const below = anchor.bottom + MARGIN;
+  const top =
+    below + card.height <= viewport.height - MARGIN
+      ? below
+      : Math.max(MARGIN, anchor.top - MARGIN - card.height);
+  return { left, top };
+}
+
+/** The card's size before it has been measured (townMasterCard.css). */
+export const GREETING_CARD_ESTIMATE: Size = Object.freeze({
+  width: 300,
+  height: 280,
+});
+
+/**
+ * Open windows and sheets on wide screens: agent windows such as Chat,
+ * panels, the context rail (an intent or docked window) and Needs you.
+ */
+export const GREETING_COVERS =
+  ".world-managed-window, .world-context-rail, .needs-you-tab";
+
+/**
+ * Whether an open window or sheet lies over the greeting's place: its anchor
+ * and the card where it opens. A window docked or floating elsewhere on a
+ * wide screen leaves the place free, so the greeting still opens.
+ */
+export function greetingCovered(
+  anchor: Box,
+  card: Size,
+  viewport: Size,
+  covers: readonly Box[],
+) {
+  const { left, top } = greetingPlacement(anchor, card, viewport);
+  const place: Box[] = [
+    anchor,
+    { left, top, right: left + card.width, bottom: top + card.height },
+  ];
+  return covers.some(
+    (cover) =>
+      cover.right > cover.left &&
+      cover.bottom > cover.top &&
+      place.some(
+        (box) =>
+          box.left < cover.right &&
+          cover.left < box.right &&
+          box.top < cover.bottom &&
+          cover.top < box.bottom,
+      ),
+  );
+}
+
 /** The Town Master's look: Town's sprites, a captain with a badge. */
 export const TOWN_MASTER_LOOK: AgentLook = Object.freeze({
   skin: "#d9a066",

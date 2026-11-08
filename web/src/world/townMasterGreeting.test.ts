@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { greetingPlacement } from "./TownMasterCard";
 import {
+  greetingCovered,
+  greetingPlacement,
   greetingStep,
   lastHere,
   TownMasterGreeting,
@@ -132,4 +133,31 @@ test("the greeting waits while a window or sheet is open, and for its place", ()
     greetingStep({ open: true, pending: false }, { ...ready, covered: true }),
   ).toBe("step-aside");
   expect(greetingStep({ open: true, pending: false }, ready)).toBeNull();
+});
+
+test("on a wide screen only a window over the figure or its card holds the greeting back", () => {
+  const figure = { left: 260, top: 16, right: 300, bottom: 56 };
+  const card = { width: 300, height: 280 };
+  const viewport = { width: 1600, height: 900 };
+  const box = (left: number, top: number, width: number, height: number) => ({
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+  });
+  // An intent window or Chat docked on the right leaves the place free.
+  expect(
+    greetingCovered(figure, card, viewport, [box(948, 12, 640, 876)]),
+  ).toBe(false);
+  // A closed context rail measures nothing.
+  expect(greetingCovered(figure, card, viewport, [box(0, 0, 0, 0)])).toBe(
+    false,
+  );
+  // Over the card's place (below the figure), or over the figure itself.
+  expect(
+    greetingCovered(figure, card, viewport, [box(400, 200, 500, 400)]),
+  ).toBe(true);
+  expect(greetingCovered(figure, card, viewport, [box(0, 0, 320, 900)])).toBe(
+    true,
+  );
 });

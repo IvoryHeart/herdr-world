@@ -19,7 +19,10 @@ On wide screens the card SHALL open from the Town Master's figure beside the
 Town board, at the hub in Board and at the summary in Desk; on phones it SHALL
 be a sheet with Back. The card SHALL close with ✕, Escape, Back or a press
 outside it. It SHALL NOT draw over an open window or sheet such as Chat or
-Needs you: a greeting due while one is open SHALL wait until none is.
+Needs you: a greeting due while one covers its place SHALL wait until none
+does. On phones any open window or sheet SHALL cover it; on wide screens only
+one over the figure or anchor, or over where the card opens, SHALL cover it,
+so a window docked or floating elsewhere SHALL NOT hold the greeting back.
 
 **Show this on start** at the card's foot and its setting SHALL be one value
 kept per browser. Turning it off SHALL also stop a greeting that is waiting
@@ -35,9 +38,16 @@ too; with no last time known, the hello SHALL leave the time out.
 
 #### Scenario: A window is open
 
-- **WHEN** a visit starts while Chat or Needs you is open
+- **WHEN** a visit starts while Chat or Needs you is open over the greeting's
+  place, or any window or sheet is open on a phone
 - **THEN** no greeting covers it
-- **AND** the greeting opens once nothing is open
+- **AND** the greeting opens once nothing covers its place
+
+#### Scenario: A window elsewhere
+
+- **WHEN** a visit starts on a wide screen while an intent window or Chat is
+  docked away from the Town Master and the card's place
+- **THEN** the greeting opens beside the Town Master as usual
 
 #### Scenario: Turned off
 

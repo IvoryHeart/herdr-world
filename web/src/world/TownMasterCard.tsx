@@ -12,6 +12,7 @@ import { ProfileSprite } from "./ProfileSprite";
 import { leftAt, type SinceYouLeftLine } from "./sinceYouLeft";
 import { useSinceYouLeft } from "./town/TownSinceYouLeft";
 import {
+  greetingPlacement,
   setGreetingOnStart,
   sharedGreeting,
   TOWN_MASTER_LOOK,
@@ -185,29 +186,6 @@ export function TownMasterGreetingCard({
       </footer>
     </section>
   );
-}
-
-const MARGIN = 8;
-
-/**
- * Where the card opens beside its anchor: below it when it fits, else above,
- * kept on screen.
- */
-export function greetingPlacement(
-  anchor: Pick<DOMRect, "left" | "top" | "bottom">,
-  card: { width: number; height: number },
-  viewport: { width: number; height: number },
-) {
-  const left = Math.max(
-    MARGIN,
-    Math.min(anchor.left, viewport.width - card.width - MARGIN),
-  );
-  const below = anchor.bottom + MARGIN;
-  const top =
-    below + card.height <= viewport.height - MARGIN
-      ? below
-      : Math.max(MARGIN, anchor.top - MARGIN - card.height);
-  return { left, top };
 }
 
 function useGreetingPlacement(

@@ -112,8 +112,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     line whose **See update** opens **Menu** at its update entry (the greeting
     never installs anything). Board opens it at its hub beside the bin and
     Desk at its summary; a phone shows it as a sheet with **Back**. It never
-    opens over an open window or sheet such as Chat or **Needs you**: it waits
-    until they close. **✕**, Escape, Back or a press outside closes it; tap
+    opens over an open window or sheet such as Chat or **Needs you**: on a
+    phone it waits until they close; on a wide screen it waits only while one
+    lies over the figure or the card's place, so an intent window or Chat
+    docked on the other side does not hold it back. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
     or switch **Menu → Town Master greeting**, to stop it on this browser.
     Your very first visit is greeted too, without a last time.
