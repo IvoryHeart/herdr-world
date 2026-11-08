@@ -41,6 +41,7 @@ import {
   useTownUsage,
 } from "./townPlaceUsage";
 import type { TownQuestMark } from "./townQuestPennant";
+import { TownLensSearch, type TownLensSearchSource } from "./TownLensSearch";
 import { townScaleLensFacts } from "./townScaleLens";
 import { townScaleSceneRequested } from "./townScaleScene";
 import type { TownTarget } from "./townTargets";
@@ -146,14 +147,17 @@ export function withLensAction(
     : [...actions.slice(0, at + 1), action, ...actions.slice(at + 1)];
 }
 
-/** `L` steps lenses (Shift+L back); Escape leaves one. Typing never does. */
+/**
+ * `L` steps lenses (Shift+L back); Escape leaves one, unless something open
+ * over the lens takes it (the town center's ring, a search). Typing never.
+ */
 export function useTownLensKeys(
   state: TownLensState,
   shell: { readonly current: HTMLElement | null },
-  ringOpen: boolean,
+  escapeTaken: boolean,
 ) {
-  const latest = useRef({ state, ringOpen });
-  latest.current = { state, ringOpen };
+  const latest = useRef({ state, escapeTaken });
+  latest.current = { state, escapeTaken };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (
@@ -178,11 +182,11 @@ export function useTownLensKeys(
         target === document.body ||
         !!(shell.current && shell.current.contains(target));
       if (!inTown || document.querySelector(".modal-backdrop")) return;
-      const { state, ringOpen } = latest.current;
+      const { state, escapeTaken } = latest.current;
       if (event.key === "l" || event.key === "L") {
         event.preventDefault();
         state.cycle(event.shiftKey ? -1 : 1);
-      } else if (event.key === "Escape" && state.shown && !ringOpen) {
+      } else if (event.key === "Escape" && state.shown && !escapeTaken) {
         event.preventDefault();
         state.close();
       }
@@ -337,19 +341,22 @@ const markStyle = (view: TownLensView, mark: TownLensMark | undefined) =>
 /**
  * The lens's tints in Town's world layer, under every sign and card: the
  * town dimmed, each room's floor in its aggregate colour, and, in rooms on
- * screen, each desk and seated agent in its own. Taps pass to the town.
+ * screen, each desk and seated agent in its own; over them, a search's
+ * marks. Taps pass to the town.
  */
 export function TownLensLayer({
   view,
   model,
   layout,
   shownRooms,
+  search,
 }: {
   view: TownLensView;
   model: TownModel;
   layout: TownLayout;
   /** Rooms on screen at room zoom (the HUD's tag rooms). */
   shownRooms: ReadonlySet<string>;
+  search?: TownLensSearchSource;
 }) {
   return (
     <div className="town-lens" data-lens={view.lens} aria-hidden="true">
@@ -427,6 +434,9 @@ export function TownLensLayer({
           );
         }),
       )}
+      {search ? (
+        <TownLensSearch search={search} model={model} layout={layout} />
+      ) : null}
     </div>
   );
 }
@@ -556,18 +566,21 @@ export function useTownLenses(
     targets,
     centerActions,
     shell,
-    ringOpen,
+    escapeTaken,
     ...facts
   }: Parameters<typeof useTownLensView>[2] & {
     targets: readonly TownTarget[];
     centerActions?: readonly TownCenterAction[];
     shell: { readonly current: HTMLElement | null };
-    /** The town center's ring takes Escape while it is open. */
-    ringOpen: boolean;
+    /**
+     * The town center's ring, or a search, is open and takes Escape: ending
+     * a search returns to the lens.
+     */
+    escapeTaken: boolean;
   },
 ) {
   const state = useTownLensState();
-  useTownLensKeys(state, shell, ringOpen);
+  useTownLensKeys(state, shell, escapeTaken);
   const view = useTownLensView(state.lens, model, facts);
   /** The accessible target focused last, read in the legend. */
   const [focused, setFocused] = useState<string | null>(null);

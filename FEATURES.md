@@ -200,8 +200,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     hear each place's reading in its name. A lens changes only how Town is
     drawn: taps open what they always do, nothing moves, Escape or **✕**
     returns Town exactly as it was, and Town always opens in **Attention**
-    (Town as usual). The browser remembers the last lens for `L` and
-    **Lenses**. With `?scene=town-scale` every lens has synthetic data.
+    (Town as usual). A search with a lens on outlines its matches over the
+    lens's colours, and ending it returns to the lens. The browser remembers
+    the last lens for `L` and **Lenses**. With `?scene=town-scale` every lens
+    has synthetic data.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;
