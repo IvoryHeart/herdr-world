@@ -37,11 +37,11 @@ export type TownCanvasSearchProps = {
 
 export function useTownCanvasSearch(
   props: TownCanvasSearchProps | undefined,
+  renderer: RefObject<TownRendererHandle | null>,
   {
     model,
     layout,
     view,
-    renderer,
     ready,
     failure,
     calm,
@@ -49,7 +49,6 @@ export function useTownCanvasSearch(
     model: TownModel;
     layout: TownLayout;
     view: TownSceneCamera;
-    renderer: RefObject<TownRendererHandle | null>;
     ready: boolean;
     failure: boolean;
     calm: boolean;
@@ -60,6 +59,9 @@ export function useTownCanvasSearch(
     () => (search ? townSearchLight(model, search.keys, search.chosen) : null),
     [model, search],
   );
+  /** The light for frames drawn outside React's render. */
+  const lit = useRef(light);
+  lit.current = light;
   const latest = useRef({
     search,
     model,
@@ -131,5 +133,5 @@ export function useTownCanvasSearch(
     else unmapped?.(chosen.key);
   }, [view, renderer, ready, failure, searching, chosen]);
 
-  return { light, countOffscreen };
+  return { light, lit, countOffscreen };
 }

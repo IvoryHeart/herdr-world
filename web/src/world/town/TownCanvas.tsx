@@ -140,7 +140,6 @@ export function TownCanvas({
   search,
   activityAt,
 }: {
-  /** A search's matches to light up, and the one to show (#159). */
   search?: Parameters<typeof useTownCanvasSearch>[0];
   /** When an agent last worked (its leaf's activity), for the Idle time lens. */
   activityAt?: (agent: OfficeAgent) => number | undefined;
@@ -327,18 +326,10 @@ export function TownCanvas({
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
-  const searching = useTownCanvasSearch(search, {
-    model,
-    layout,
-    view,
-    renderer: rendererRef,
-    ready,
-    failure,
-    calm,
-  });
+  const searchScene = { model, layout, view, ready, failure, calm };
+  const searching = useTownCanvasSearch(search, rendererRef, searchScene);
   const stepWants = useTownStepWants(steps, () => latest.current, rendererRef);
   const current = {
-    searchLight: searching.light,
     chrome,
     calm,
     model,
@@ -521,7 +512,7 @@ export function TownCanvas({
     stepGlyph: latest.current.steps?.hasGlyph,
     openHostKey: null,
     calm: latest.current.calm,
-    search: latest.current.searchLight,
+    search: searching.lit.current,
   });
 
   useEffect(() => {
