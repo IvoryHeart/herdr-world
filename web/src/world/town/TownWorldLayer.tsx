@@ -47,6 +47,10 @@ import type { TownReceptionTakes } from "./townReceptionFilter";
 import { TownReceptionHeldTag, TownReceptionSign } from "./TownReceptionSign";
 import type { TownRendererHandle } from "./townRenderer";
 import type { TownBuildingLayers } from "./townBuildingLayers";
+import {
+  TOWN_RECEPTION_LIFT,
+  type TownBoardPlacement,
+} from "./townBoardPlacement";
 import type { TownTarget } from "./townTargets";
 import { townWallPath, type TownTeams } from "./townTeams";
 import type { TownVisible } from "./townVisibleHosts";
@@ -144,6 +148,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   pennants,
   signs,
   layers,
+  boards,
   summary,
   openDeskKey,
   openReceptionKey,
@@ -162,6 +167,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   signs: TownBuildingSigns;
   /** Moves each building's layer with its building (townBuildingLayers.ts). */
   layers: TownBuildingLayers;
+  /** Keeps the reception boards and the billboard off what they'd cover. */
+  boards: TownBoardPlacement;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
   /** Agents the reception filter keeps at their desks (townReceptionFilter). */
@@ -264,8 +271,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     <>
       <TownCityBillboard
         center={layout.center}
-        street={layout.roads[0] ?? layout.center.street}
         folded={folded}
+        boardRef={boards.cityRef}
       />
       <TownPostOffice layout={layout} renderer={renderer} />
       {layout.buildings.map((building) => {
@@ -363,13 +370,15 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               </div>
             </TownBuildingSign>
             <div
+              ref={boards.receptionRef(building.hostKey)}
               className={`town-reception${queue.length ? " town-reception-busy" : ""}`}
               data-stale={host?.stale || undefined}
               data-open={building.hostKey === openReceptionKey || undefined}
               style={{
-                // The board stands in the yard above the front door.
+                // The board stands in the yard above the front door, moved
+                // off the town center and other boards (townBoardPlacement).
                 left: (building.entryX + 0.5) * T,
-                top: building.y * T - 18,
+                top: building.y * T - TOWN_RECEPTION_LIFT,
               }}
               role="group"
               aria-label={`${host?.displayLabel ?? "Host"} reception, ${queue.length} waiting`}

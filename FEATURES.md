@@ -127,7 +127,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
   - Town shows what the crew spends. The **City expenses** billboard stands
-    by the top street across from the town center: the whole World's tokens
+    on the lawn above the town center, never over it: the whole World's tokens
     and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a
     **Today** / **7 days** toggle. Each building's reception board ends with
     its **Expenses today**: the host's tokens and cost and its three
@@ -142,7 +142,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
     center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
-    reception.
+    reception. At every zoom the reception boards keep clear of the town
+    center, the post office, the billboard and each other: a board that would
+    cover one slides aside the least it can while staying over its building,
+    else it hangs below the center onto the first street.
   - Town's **post office** stands on the first street left of the town
     center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
     review or assigned to you) as parcels in its sorting yard, ready to merge
@@ -191,7 +194,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     street from the buildings and centred over their first row: a domed hall
     with a clock, a columned portico, banners and wings, whose front steps
     open straight onto the street's pavement. Buildings stand side by side
-    below it with only the normal streets between them. Phones open Town with
+    below it with only the normal streets between them. Wide windows open
+    Town framed on the billboard above the center down to the buildings'
+    street, centred, with the park below off-screen. Phones open Town with
     it at the top and the first building under it; on a short screen the view keeps
     the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,

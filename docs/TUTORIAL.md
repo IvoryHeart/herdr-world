@@ -178,8 +178,10 @@ hosts stay usable.
    [lenses](#town-lenses)), **Profiles** the agent profiles and **New
    room** creates a room. Arrow keys move around the ring; Escape, a tap
    outside, the centre **✕** or **Back** on a phone closes it.
-2. Use **+** and **−** to move between town, building, room and desk detail;
-   **ALL** shows the whole town. Zoomed out, the land around it is generated
+2. On a wide window Town opens framed on the billboard, the town center and
+   every building, centred. Use **+** and **−** to move between town,
+   building, room and desk detail; **ALL** (or **−** from that first view)
+   shows the whole town. Zoomed out, the land around it is generated
    woods, meadows, gardens, ponds and footpaths, with each street running on as
    a country lane, and carries on to the edges of the window however far you
    zoom out or pan; it looks the same after a reload, and only the land next to
@@ -228,8 +230,11 @@ hosts stay usable.
    desks the boards are put away: tap the reception lobby to bring its board
    and sign back. Each reception board ends with the building's **Expenses
    today**: that host's tokens and estimated cost and its three costliest
-   rooms; the **City expenses** billboard by the top street, beside the town
-   center, shows the whole World, with **Today** and **7 days** buttons.
+   rooms; the **City expenses** billboard on the lawn above the town center
+   shows the whole World, with **Today** and **7 days** buttons. Boards keep
+   clear of the town center, the post office and each other: one that would
+   cover them moves aside over its building, or under the center onto the
+   street.
    Without a price table they show tokens and "no price table"; a host whose
    logs cannot be read says "no data", never 0. On a phone, tap the coin
    signs to open them. With the GitHub source signed in, the **post office**

@@ -3,6 +3,12 @@
  * Pure state so the renderer, the DOM world layer and tests share one model.
  */
 
+import {
+  TOWN_CITY_BOARD_GAP,
+  TOWN_CITY_BOARD_HEIGHT,
+  TOWN_CITY_BOARD_SCALE,
+  townCityBoardScale,
+} from "./townCenter";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import { townEase } from "./townTransition";
 
@@ -44,6 +50,39 @@ export function townHostsWidth(layout: TownLayout) {
   return Math.min(layout.width, right + 6);
 }
 
+/**
+ * What a wide town's first view frames, in world pixels: from the city
+ * billboard above the town center down to the street under the last row of
+ * buildings, leaving the park below off-screen. The billboard keeps its
+ * screen size, so its top depends on the zoom.
+ */
+export function townHomeSpan(layout: TownLayout) {
+  const board = layout.center.y * TOWN_TILE - TOWN_CITY_BOARD_GAP;
+  const bottom = layout.roads[layout.roads.length - 1]! * TOWN_TILE;
+  return {
+    /** The billboard's foot, just above the center's flag. */
+    board,
+    bottom,
+    top: (z: number) => board - TOWN_CITY_BOARD_HEIGHT * townCityBoardScale(z),
+  };
+}
+
+/** The largest zoom at which the home span fits `height` screen pixels. */
+function homeSpanZoom(layout: TownLayout, height: number) {
+  const { board, bottom } = townHomeSpan(layout);
+  const below = bottom - board;
+  // While the billboard keeps its screen size, it takes a fixed height.
+  const z = (height - TOWN_CITY_BOARD_HEIGHT) / below;
+  if (z * TOWN_CITY_BOARD_SCALE.max >= 1 && z * TOWN_CITY_BOARD_SCALE.min <= 1)
+    return z;
+  // Past its limits, it scales with the town.
+  const scale =
+    z * TOWN_CITY_BOARD_SCALE.max < 1
+      ? TOWN_CITY_BOARD_SCALE.max
+      : TOWN_CITY_BOARD_SCALE.min;
+  return height / (below + TOWN_CITY_BOARD_HEIGHT * scale);
+}
+
 /** Above this many rooms, the default wide view shows roofs instead of cards. */
 export const TOWN_OVERVIEW_ROOMS = 48;
 
@@ -66,19 +105,23 @@ export function townZoomLimits(
     ) * 0.98;
   const narrow = layout.formFactor === "narrow";
   const widest = Math.max(1, ...layout.buildings.map((b) => b.w));
-  // Wide screens open on the hosts' buildings and the town center above
-  // them; the verge beyond stays just off-screen; ALL shows it.
+  // Wide screens open on the hosts' buildings, the town center above them
+  // and its billboard above that; the verge and the park beyond stay just
+  // off-screen; ALL shows them.
   const hosts = townHostsWidth(layout);
+  const desk = narrow ? 1.05 : 1.3;
+  // A large window still opens short of desk level, where the boards are
+  // put away.
   const home = narrow
     ? (usableWidth - 12) / ((widest + 2) * TOWN_TILE)
     : Math.max(
         all,
         Math.min(
           usableWidth / (hosts * TOWN_TILE),
-          usableHeight / (layout.height * TOWN_TILE),
+          homeSpanZoom(layout, usableHeight),
+          (desk * 0.9) / 0.98,
         ) * 0.98,
       );
-  const desk = narrow ? 1.05 : 1.3;
   const card = narrow ? Math.max(0.5, home * 1.35) : 0.62;
   // A town too large for readable room cards opens at roof level; zooming in
   // past this point shows the cards of the buildings on screen.

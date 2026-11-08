@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../../herdrOfficeProjection";
-import { TownCamera, townHostsWidth } from "../townCamera";
+import { TownCamera, townHomeSpan, townHostsWidth } from "../townCamera";
 import { townCenterEmblem } from "../townCenter";
 import {
   TOWN_FACADE,
@@ -99,7 +99,7 @@ test("a wide town opens at home: every building, centred", () => {
           (townHostsWidth(layout) * T) / 2,
           (camera.focusPoint().x - viewport.inset.left) / camera.z,
         ),
-    (layout.height * T) / 2,
+    (townHomeSpan(layout).top(camera.z) + townHomeSpan(layout).bottom) / 2,
   );
   expect(centre.x).toBeCloseTo(camera.focusPoint().x);
   expect(centre.y).toBeCloseTo(camera.focusPoint().y);
@@ -112,6 +112,53 @@ test("a wide town opens at home: every building, centred", () => {
   expect(sign.y).toBeLessThan(viewport.height - viewport.inset.bottom);
   expect(view.atHome()).toBe(true);
   expect(reasons).toEqual(["home"]);
+});
+
+test("a wide town opens framed on the billboard, the whole center and every building", () => {
+  const rooms = { a: working(4), b: working(3), c: working(2), d: working(4) };
+  for (const [size, hosts] of [
+    [{ width: 1512, height: 982 }, 2],
+    [{ width: 1512, height: 982 }, 3],
+    [{ width: 2560, height: 1440 }, 2],
+    [{ width: 1280, height: 800 }, 1],
+  ] as const) {
+    const projection = townOf(
+      Object.fromEntries(
+        Array.from({ length: hosts }, (_, i) => [`h${i}`, rooms]),
+      ),
+    );
+    const { view, layout, viewport, camera } = setup(
+      size,
+      new Map(),
+      projection,
+    );
+    view.attach(camera, layout, viewport);
+    // Short of desk level, where the boards are put away.
+    expect(camera.z).toBeLessThan(camera.limits!.desk);
+    const span = townHomeSpan(layout);
+    const top = camera.toScreen(0, span.top(camera.z)).y;
+    const bottom = camera.toScreen(0, span.bottom).y;
+    // The billboard's top and the buildings' street are on screen, the span
+    // centred between them: nothing is cut off at the top.
+    expect(top).toBeGreaterThanOrEqual(-0.01);
+    expect(bottom).toBeLessThanOrEqual(viewport.height + 0.01);
+    expect(top + bottom).toBeCloseTo(viewport.height);
+    // The whole town center stands under the billboard's foot.
+    const center = layout.center;
+    expect(camera.toScreen(0, span.board).y).toBeLessThan(
+      camera.toScreen(0, center.y * T).y,
+    );
+    for (const building of layout.buildings) {
+      const left = camera.toScreen(building.x * T, building.y * T);
+      const right = camera.toScreen(
+        (building.x + building.w) * T,
+        (building.y + building.h) * T,
+      );
+      expect(left.x).toBeGreaterThanOrEqual(-0.01);
+      expect(right.x).toBeLessThanOrEqual(viewport.width + 0.01);
+      expect(right.y).toBeLessThanOrEqual(bottom);
+    }
+  }
 });
 
 test("a phone opens at home: the town center on top, the first building under it", () => {
@@ -276,23 +323,21 @@ test("zoom in steps from home to a building, a room and a desk, then zooms", () 
   ]);
   // Zoom out from the desk comes back step by step, through home.
   reasons.length = 0;
-  for (let step = 0; step < 4; step += 1) {
+  for (let step = 0; step < 3; step += 1) {
     view.stepZoom(-1, layout, viewport);
     settle(camera);
   }
   expect(camera.z).toBeCloseTo(limits.home);
-  // Room, building, home; then home again, as a wide town has no whole step.
-  expect(reasons).toEqual([
-    "zoom-step",
-    "zoom-step",
-    "home",
-    "zoom-step",
-    "home",
-  ]);
-  // A wide town has no step out past home: zoom out frames home again.
-  reasons.length = 0;
+  expect(reasons).toEqual(["zoom-step", "zoom-step", "home", "zoom-step"]);
+  // Home leaves the park and the lawn off-screen, so one more step shows
+  // the whole town, and zoom out stays there.
+  expect(limits.all).toBeLessThan(limits.home * 0.93);
   view.stepZoom(-1, layout, viewport);
-  expect(reasons).toEqual(["home"]);
+  settle(camera);
+  expect(camera.z).toBeCloseTo(limits.all);
+  view.stepZoom(-1, layout, viewport);
+  settle(camera);
+  expect(camera.z).toBeCloseTo(limits.all);
 });
 
 const target = (x: number, y: number): TownTarget => ({
