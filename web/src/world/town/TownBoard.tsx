@@ -4,15 +4,21 @@ import {
   formatOfficeCost,
   formatOfficeModelNames,
   formatOfficeUsage,
-  type OfficeObservability,
 } from "../officeObservability";
 import type {
   TownPlaceSummary,
   TownSummary,
   TownSummaryCounts,
 } from "./townSummary";
-import type { TownPlaceEconomy } from "./townPlaceUsage";
-import { townPriceNote } from "./townExpenses";
+import type { TownPlaceEconomy, TownUsageStore } from "./townPlaceUsage";
+import {
+  townPriceNote,
+  townCityExpenses,
+  townExpenseText,
+  townCoverageNotes,
+  townCostText,
+  useTownExpensesUsage,
+} from "./townExpenses";
 import {
   townFuelGauges,
   townFuelNotes,
@@ -32,18 +38,17 @@ import {
  */
 export function TownBoard({
   counts,
-  observability,
+  usageStore,
   onOpenSummary,
   sinceYouLeft,
 }: {
   counts: TownSummary["counts"];
-  observability: OfficeObservability;
+  usageStore?: TownUsageStore;
   onOpenSummary?: () => void;
   /** "Since you left" after a return: on the sign, and under the phone chip. */
   sinceYouLeft?: { board: ReactNode; chip: ReactNode };
 }) {
-  const available =
-    observability.health !== "unavailable" && observability.sourceCount > 0;
+  const expenses = townCityExpenses(useTownExpensesUsage(usageStore));
   // Phones show a compact chip; it opens the full board in place.
   const [open, setOpen] = useState(false);
   const closeOnEscape = (event: React.KeyboardEvent) => {
@@ -119,19 +124,35 @@ export function TownBoard({
           {counts.outOfFuel ? ` · ${counts.outOfFuel} out of fuel` : ""}
         </p>
         <TownBoardEconomy
-          {...(available
-            ? {
-                cost: formatOfficeCost(observability.totalCostUsd),
-                detail: `${formatOfficeUsage(observability.totalUsage)} tokens${
-                  observability.models.length
-                    ? ` · ${formatOfficeModelNames(observability.models)}`
-                    : ""
-                }`,
-              }
-            : {
-                detail:
-                  "No cost data. Configure a metrics provider in settings.",
-              })}
+          label={
+            expenses.status === "ready" && expenses.coverage.testData
+              ? "ECONOMY TODAY · UTC · TEST DATA"
+              : "ECONOMY TODAY · UTC · HARNESS LOGS"
+          }
+          cost={
+            expenses.status === "ready" && expenses.total.price === "priced"
+              ? (townCostText(expenses.total) ?? undefined)
+              : undefined
+          }
+          detail={
+            expenses.status === "ready"
+              ? [
+                  expenses.total.price === "priced"
+                    ? `${formatOfficeUsage(expenses.total.tokens)} tokens`
+                    : townExpenseText(expenses.total),
+                  ...townCoverageNotes(
+                    expenses.coverage,
+                    expenses.unattributed,
+                  ),
+                ].join(" · ")
+              : expenses.status === "loading"
+                ? "Reading usage…"
+                : expenses.status === "stale"
+                  ? "Usage is out of date."
+                  : expenses.status === "no-data"
+                    ? "No usage data from hosts."
+                    : "Usage unavailable"
+          }
         />
         <TownFuel gauges={gauges} notes={notes} now={now} />
       </div>
@@ -191,13 +212,14 @@ const PLACE_ECONOMY: Record<
   stale: "Usage is out of date: it could not be refreshed.",
   none: "No usage recorded here today.",
   "no-data": "No usage data from this host.",
+  limited:
+    "Place detail limited; usage is included in city and building totals.",
 };
 
 /**
  * A room's or table's card: the Town board without its agents list, for
  * that place. The agent numbers are its part of the Town summary; the
- * economy numbers are today's harness usage there (townPlaceUsage.ts), since
- * the board's metrics provider has no places in it.
+ * economy numbers are today's harness usage there (townPlaceUsage.ts).
  */
 export function TownPlaceSummaryCard({
   place,

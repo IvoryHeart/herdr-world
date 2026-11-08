@@ -35,7 +35,14 @@ const measured = (): ConcurrentWork => ({
 
 test("the measured dense workload is within every ceiling", () => {
   expect(concurrentWorkViolations(measured(), 1440)).toEqual([]);
-  const stage = { ...snapshot, ...boardHosts, "board.project": 1 };
+  // Board keeps Town's rooms prepared for Town's facts (#787).
+  const stage = {
+    ...snapshot,
+    ...boardHosts,
+    "board.project": 1,
+    "office.room-prepare": 32_768,
+    "office.room-project": 128,
+  };
   expect(
     workViolations(
       { initial: stage, refresh: stage },

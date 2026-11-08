@@ -215,6 +215,8 @@ const ECONOMY_MISSING: Record<
   unavailable: "Usage unavailable",
   stale: "Usage out of date",
   "no-data": "No usage data from this host",
+  limited:
+    "Place detail limited; usage is included in city and building totals.",
 };
 
 /** A ready place's spend in words: "~$1.40 today · 210.0k tokens". */

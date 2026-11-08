@@ -1,7 +1,10 @@
 import { useNow } from "../handoffs";
-import { needsYouItems, openNeedsYou } from "../needsYou";
-import { itemName } from "../NeedsYouItem";
-import { sharedPresence, useOwnerPresence } from "../presence";
+import { itemName, needsYouItems, openNeedsYou } from "../needsYou";
+import {
+  sharedPresence,
+  useOwnerPresence,
+  type OwnerReturn,
+} from "../presence";
 import {
   awayFor,
   leftAt,
@@ -15,6 +18,31 @@ import type { WorldObject } from "../worldObject";
 import { useWorldSources } from "../worldSources";
 
 /**
+ * The board sign's "Since you left": the latest return not cleared with ✕,
+ * and its lines (none without one). The Town Master's greeting shows the
+ * same lines.
+ */
+export function useSinceYouLeft(
+  world: Pick<WorldObject, "leaves" | "nodeById">,
+): { away: OwnerReturn | null; lines: SinceYouLeftLine[]; now: number } {
+  const presence = useOwnerPresence();
+  const asks = useWorldAsks(sharedAsksStore());
+  const work = useReviewedWork();
+  const sources = useWorldSources();
+  const now = useNow(30_000);
+  const away = presence.dismissed ? null : presence.away;
+  if (!away) return { away, lines: [], now };
+  const lines = sinceYouLeft({
+    window: away,
+    items: needsYouItems(world, asks, (leaf) => work.toReview(leaf, now)),
+    stoppedAt: work.stoppedAt,
+    name: itemName,
+    sources: sources.items,
+  });
+  return { away, lines, now };
+}
+
+/**
  * "Since you left" on the Town board sign (and, on phones, one line under
  * the summary chip) after a return of 30 minutes or more. Each line opens
  * Needs you at the item it names; ✕ clears only the recap.
@@ -26,21 +54,8 @@ export function TownSinceYouLeft({
   world: Pick<WorldObject, "leaves" | "nodeById">;
   variant: "board" | "chip";
 }) {
-  const presence = useOwnerPresence();
-  const asks = useWorldAsks(sharedAsksStore());
-  const work = useReviewedWork();
-  const sources = useWorldSources();
-  const now = useNow(30_000);
-  const away = presence.dismissed ? null : presence.away;
-  if (!away) return null;
-  const lines = sinceYouLeft({
-    window: away,
-    items: needsYouItems(world, asks, (leaf) => work.toReview(leaf, now)),
-    stoppedAt: work.stoppedAt,
-    name: itemName,
-    sources: sources.items,
-  });
-  if (!lines.length) return null;
+  const { away, lines, now } = useSinceYouLeft(world);
+  if (!away || !lines.length) return null;
   const left = leftAt(away.since, now);
   if (variant === "chip") {
     const first = lines.find((line) => line.itemKey);

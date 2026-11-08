@@ -135,16 +135,12 @@
 
 .town-expenses-headline {
   margin: 0;
-  white-space: nowrap;
   color: #a9b2a4;
 }
 
 .town-expenses-headline b {
-  font:
-    700 12px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
+  font-size: 12px;
+  font-weight: 600;
   color: #f1efe6;
 }
 
@@ -205,6 +201,23 @@
 .town-expenses-sign:focus-visible {
   outline: 2px solid #ffd166;
   outline-offset: 2px;
+}
+
+/* Keep amounts legible: the pixel display face makes 5, S and 8 too alike.
+   Target the sign's text so the world button reset cannot restore that face.
+   These selectors also cover the phone's portalled expense panels. */
+.town-expenses-headline b,
+.town-expenses-rooms b,
+.town-expenses-more,
+.town-expenses-notes,
+.town-expenses-window button,
+.town-expenses-sign span {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.town-expenses-sign span {
+  font-weight: 600;
 }
 
 .town-world .town-expenses-sign.town-expenses-city {

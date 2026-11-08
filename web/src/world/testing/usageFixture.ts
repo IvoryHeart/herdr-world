@@ -95,6 +95,9 @@ function usageRollups(entities: readonly UsageEntity[]): UsageRollup[] {
   return [...groups.values()].map(({ target, rows }) => ({
     ...target,
     ...usageTotal(rows),
+    ...(target.level === "host"
+      ? { unattributed: usageTotal(rows.filter((e) => !e.workspace_id)) }
+      : {}),
   }));
 }
 
@@ -127,6 +130,8 @@ export type UsageFixtureRow = {
   model?: string;
   /** Uncached input; cache reads and output default to realistic shares. */
   input: number;
+  day?: string;
+  cacheWrite?: number;
   cacheRead?: number;
   output?: number;
   state?: UsageState;
@@ -149,7 +154,7 @@ function entity(
   const tokens: UsageTokens = {
     input: row.input,
     cache_read: row.cacheRead ?? row.input * 6,
-    cache_write: Math.round(row.input / 4),
+    cache_write: row.cacheWrite ?? Math.round(row.input / 4),
     output: row.output ?? Math.round(row.input / 3),
     reasoning: 0,
   };
@@ -167,7 +172,7 @@ function entity(
     pane_id: stale ? null : (row.pane ?? null),
     harness: row.harness ?? "claude",
     model,
-    day,
+    day: row.day ?? day,
     tokens,
     total_tokens: tokenTotal(tokens),
     responses: 12,
@@ -206,6 +211,7 @@ export function usageFixture({
     window: { kind: window, from, until: observedAt },
     retention_days: 7,
     truncated,
+    price_table_version: prices?.version ?? null,
     entities,
     sources: sources.map((source) => ({
       connection_id: source.connection,

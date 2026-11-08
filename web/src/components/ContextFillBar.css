@@ -1,0 +1,47 @@
+/* An agent's context fill (ContextFillBar): a slim needs bar that turns
+   amber past 70% and red once the agent looks tired. */
+.context-fill {
+  --context-fill: #5cc8ff;
+}
+.context-fill[data-level="low"] {
+  --context-fill: #ffb547;
+}
+.context-fill[data-level="tired"] {
+  --context-fill: #ff6b5b;
+}
+.context-fill i {
+  display: block;
+  height: 100%;
+  background: var(--context-fill);
+  border-radius: inherit;
+}
+
+.context-fill-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  margin-right: 2px;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.context-fill-track {
+  width: 34px;
+  height: 5px;
+  overflow: hidden;
+  background: rgba(127, 127, 127, 0.28);
+  border-radius: 3px;
+}
+
+/* Under the agent's icon in the window bar, clear of its state badge. */
+.context-fill-edge {
+  position: absolute;
+  left: 1px;
+  right: 11px;
+  bottom: -6px;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(127, 127, 127, 0.28);
+  border-radius: 2px;
+  pointer-events: none;
+}

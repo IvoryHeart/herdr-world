@@ -54,6 +54,9 @@ export type TownExpenseCoverage = {
   stale: boolean;
   /** Hosts with no readable harness: no data, not zero. */
   noDataHosts: number;
+  /** Detail is bounded separately; totals still include all collected rows. */
+  detailsLimited?: boolean;
+  testData?: boolean;
 };
 
 export type TownExpenseRoom = {
@@ -93,11 +96,15 @@ export type TownHostExpenses =
 /** A reception's expenses list its three costliest rooms. */
 export const TOWN_TOP_ROOMS = 3;
 
-function figure(total: UsageTotal, counted: readonly UsageEntity[]) {
+function figure(
+  total: UsageTotal,
+  counted: readonly UsageEntity[],
+  tableVersion?: string | null,
+) {
   return {
     tokens: total.total_tokens,
     costUsd: total.estimated_cost_usd,
-    price: townUsagePrice(total.estimated_cost_usd, counted),
+    price: townUsagePrice(total.estimated_cost_usd, counted, tableVersion),
     records: total.records,
   } satisfies TownExpenseTotal;
 }
@@ -151,6 +158,11 @@ function coverage(
       sources.some((s) => s.state === "stale") ||
       entities.some((e) => e.state === "stale"),
     noDataHosts,
+    ...(snapshot.details_truncated ? { detailsLimited: true } : {}),
+    ...(snapshot.incarnation === "town-economy-preview" ||
+    snapshot.incarnation === "town-scale"
+      ? { testData: true }
+      : {}),
   };
 }
 
@@ -176,10 +188,11 @@ export function townCityExpenses(state: TownCurrentUsage): TownCityExpenses {
   return {
     status: "ready",
     window: snapshot.window.kind,
-    total: figure(snapshot.total, counted),
+    total: figure(snapshot.total, counted, snapshot.price_table_version),
     unattributed: figure(
       snapshot.unattributed,
       counted.filter((e) => !e.pane_id),
+      snapshot.price_table_version,
     ),
     coverage: coverage(snapshot, () => true),
   };
@@ -243,6 +256,7 @@ export function townHostExpenses(
       total: figure(
         rollup,
         counted.filter((e) => e.workspace_id === rollup.workspace_id),
+        snapshot.price_table_version,
       ),
     }));
   // By cost when every room is priced, else by tokens: a null cost is not
@@ -252,10 +266,18 @@ export function townHostExpenses(
   return {
     status: "ready",
     window: snapshot.window.kind,
-    total: host ? figure(host, counted) : entityFigure([]),
+    total: host
+      ? figure(host, counted, snapshot.price_table_version)
+      : entityFigure([]),
     rooms: rooms.slice(0, TOWN_TOP_ROOMS),
     moreRooms: Math.max(0, rooms.length - TOWN_TOP_ROOMS),
-    unattributed: entityFigure(entities.filter((e) => !e.workspace_id)),
+    unattributed: host?.unattributed
+      ? figure(
+          host.unattributed,
+          counted.filter((e) => !e.workspace_id),
+          snapshot.price_table_version,
+        )
+      : entityFigure(entities.filter((e) => !e.workspace_id)),
     coverage: {
       ...coverage(snapshot, owns),
       partial:
@@ -301,9 +323,14 @@ export function townCoverageNotes(
   unattributed: TownExpenseTotal,
 ) {
   const notes: string[] = [];
+  if (coverage.testData) notes.push("TEST DATA · synthetic economy");
   if (unattributed.records)
-    notes.push(`${formatOfficeUsage(unattributed.tokens)} unattributed`);
+    notes.push(
+      `${formatOfficeUsage(unattributed.tokens)} unattributed (included)`,
+    );
   if (coverage.partial) notes.push("partial");
+  if (coverage.detailsLimited)
+    notes.push("detail list limited; totals include all collected usage");
   if (coverage.stale) notes.push("stale data left out");
   if (coverage.noDataHosts)
     notes.push(

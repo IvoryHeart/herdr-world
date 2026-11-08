@@ -137,7 +137,14 @@ function retainHiddenTown() {
     ),
   );
 }
+const nativeNow = performance.now.bind(performance);
+let budgetElapsed = 0;
 const fixture = {
+  exhaustMaterializationBudget(enabled: boolean) {
+    performance.now = enabled
+      ? () => nativeNow() + (budgetElapsed += 6)
+      : nativeNow;
+  },
   retainHiddenTown,
   removeAssets() {
     host

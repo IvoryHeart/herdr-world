@@ -90,6 +90,7 @@ test("spend never draws a missing number as zero", () => {
       ["reading", { status: "loading" }],
       ["old", { status: "stale" }],
       ["failed", { status: "unavailable" }],
+      ["limited", { status: "limited" }],
     ]),
   );
   expect(marks.get("top")).toEqual({
@@ -104,9 +105,12 @@ test("spend never draws a missing number as zero", () => {
     words: "No usage today",
     short: "0",
   });
-  for (const key of ["host", "reading", "old", "failed"])
+  for (const key of ["host", "reading", "old", "failed", "limited"])
     expect(marks.get(key)?.swatch).toBe("no-data");
   expect(marks.get("host")?.words).toBe("No usage data from this host");
+  expect(marks.get("limited")?.words).toBe(
+    "Place detail limited; usage is included in city and building totals.",
+  );
 });
 
 test("spend scales by tokens when any place is unpriced, and says so", () => {
