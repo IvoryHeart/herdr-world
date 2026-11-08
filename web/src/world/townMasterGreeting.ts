@@ -181,6 +181,16 @@ export function resetGreetingForTest(greeting: TownMasterGreeting | null) {
   shared = greeting;
 }
 
+/**
+ * Browser suites that mount World but do not test the greeting: no visit
+ * greets, so the card never sits over what they press.
+ */
+export function quietGreetingForTest() {
+  resetGreetingForTest(
+    new TownMasterGreeting({ now: () => Date.now(), showOnStart: () => false }),
+  );
+}
+
 export function useGreeting(greeting = sharedGreeting()) {
   return useSyncExternalStore(greeting.subscribe, greeting.get, greeting.get);
 }

@@ -19,6 +19,10 @@ import { WorldLoader, WORLD_LOADER_LONGER_MS } from "./WorldLoader";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
+import { quietGreetingForTest } from "./townMasterGreeting";
+
+// The Town Master's greeting would sit over what these checks press.
+quietGreetingForTest();
 
 const failures: string[] = [];
 window.addEventListener("error", (event) =>

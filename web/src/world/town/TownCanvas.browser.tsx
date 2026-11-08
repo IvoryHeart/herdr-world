@@ -1448,17 +1448,19 @@ async function run() {
       if (pair) {
         const [from, onto] = pair;
         const roomPress = (type: string, x: number, y: number) =>
-          host.querySelector("canvas")!.parentElement!.dispatchEvent(
-            new PointerEvent(type, {
-              bubbles: true,
-              pointerId: 41,
-              pointerType: "mouse",
-              button: 0,
-              buttons: type === "pointerup" ? 0 : 1,
-              clientX: x,
-              clientY: y,
-            }),
-          );
+          host
+            .querySelector(".town-canvas-host canvas")!
+            .parentElement!.dispatchEvent(
+              new PointerEvent(type, {
+                bubbles: true,
+                pointerId: 41,
+                pointerType: "mouse",
+                button: 0,
+                buttons: type === "pointerup" ? 0 : 1,
+                clientX: x,
+                clientY: y,
+              }),
+            );
         const wall = from.getBoundingClientRect();
         const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
         const before = moves.length;
@@ -3022,7 +3024,8 @@ async function run() {
   );
   // A touch hold lifts a desk; a second finger turns it into a pinch and
   // drops the drag cleanly.
-  const canvasHost = host.querySelector("canvas")!.parentElement!;
+  const canvasHost = host.querySelector(".town-canvas-host canvas")!
+    .parentElement!;
   const heldDesk = [
     ...host.querySelectorAll<HTMLElement>(
       '.world-semantic-target[data-kind="desk"]',
@@ -3617,7 +3620,8 @@ async function run() {
     // The town takes its shape from its container: phones and portrait
     // screens stack buildings and rooms grow downward; wide screens use
     // columns of rooms on one street.
-    const stage = host.querySelector("canvas")!.parentElement!;
+    const stage = host.querySelector(".town-canvas-host canvas")!
+      .parentElement!;
     const expected = townShapeFor(stage.clientWidth, stage.clientHeight);
     const shown = diagnostics.layout!;
     check(

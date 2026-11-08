@@ -64,6 +64,10 @@ import {
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
 } from "../workspaceResource";
+import { quietGreetingForTest } from "./townMasterGreeting";
+
+// The Town Master's greeting would sit over what these checks press.
+quietGreetingForTest();
 
 const failures: string[] = [];
 const calls: Array<{

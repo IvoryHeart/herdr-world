@@ -52,6 +52,10 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "./world.css";
+import { quietGreetingForTest } from "./townMasterGreeting";
+
+// The Town Master's greeting would sit over what these checks press.
+quietGreetingForTest();
 
 const failures: string[] = [];
 window.addEventListener("error", (event) => {
