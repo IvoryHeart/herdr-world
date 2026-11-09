@@ -687,8 +687,13 @@ function InspectorResources({
   const presentationStale =
     status !== "connected" ||
     !catalogueReady ||
-    !baseConnectionClient.isCurrent() ||
-    Boolean(worktree.view?.selected && !worktree.view.target);
+    !baseConnectionClient.isCurrent();
+  // A worktree being re-read (its binding changed) holds only the views that
+  // read it: Files, Changes and Commits. Chat and Terminal stay live; on Chat
+  // nothing re-reads the worktree until one of those views opens.
+  const worktreeStale = Boolean(
+    worktree.view?.selected && !worktree.view.target,
+  );
   const loadingShell = (
     <InspectorLoadingShell
       title={conversation.label}
@@ -916,6 +921,7 @@ function InspectorResources({
                 }}
                 agentWorktree={worktree.view}
                 presentationStale={presentationStale}
+                worktreeStale={worktreeStale}
               />
             ) : (
               loadingShell

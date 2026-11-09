@@ -5,7 +5,14 @@ import {
   type ConnectionClientScope,
 } from "../useConnectionClient";
 import { resourcePresentationClient } from "../resourcePresentationClient";
-import { useId, useRef, useMemo, useContext, type ReactNode } from "react";
+import {
+  useId,
+  useRef,
+  useMemo,
+  useContext,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   Activity,
   FileText,
@@ -222,6 +229,48 @@ export function AgentWorktreeGate({
       <button type="button" onClick={onChoose}>
         Choose a worktree
       </button>
+    </div>
+  );
+}
+
+/**
+ * One Inspector view that reads the agent's worktree: Files, Changes or
+ * Commits. While the worktree is re-read (`held`), it keeps its last
+ * presentation and takes no input. Chat and Terminal never wait on the
+ * worktree (#837); `retain` is the whole Inspector's disconnected hold.
+ */
+export function AgentWorktreeResource({
+  className,
+  style,
+  view,
+  retain,
+  held,
+  onChoose,
+  children,
+}: {
+  className: string;
+  style?: CSSProperties;
+  view?: AgentWorktreeView;
+  retain: boolean;
+  held: boolean;
+  onChoose(): void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      ref={(element) => {
+        element?.toggleAttribute("inert", held);
+      }}
+      className={className}
+      style={style}
+    >
+      <AgentWorktreeGate
+        view={view}
+        retainPresentation={retain || held}
+        onChoose={onChoose}
+      >
+        {children}
+      </AgentWorktreeGate>
     </div>
   );
 }
