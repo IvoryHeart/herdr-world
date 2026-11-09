@@ -1,4 +1,67 @@
 import { connectTownReceptionFilter } from "./townReceptionSetting";
+import { TownCamera } from "./townCamera";
+import { TownSceneCamera } from "./scene/townSceneCamera";
+
+// DIAGNOSTIC (#817): every camera call during the desk-level zoom, with its caller.
+const diag: string[] = [];
+let diagOn = false;
+const short = (value: unknown): string => {
+  if (typeof value === "number") return value.toFixed(3);
+  if (value && typeof value === "object") {
+    const v = value as Record<string, unknown>;
+    if ("width" in v && "height" in v)
+      return `${short(v.width)}x${short(v.height)}${"inset" in v ? JSON.stringify(v.inset) : ""}`;
+    if ("buildings" in v) return "layout";
+    return JSON.stringify(value).slice(0, 120);
+  }
+  return String(value);
+};
+const callers = () =>
+  (new Error().stack ?? "")
+    .split("\n")
+    .slice(3, 9)
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^at /, "")
+        .replace(/ \(http[^)]*\)/, ""),
+    )
+    .join(" < ");
+function patch(proto: object, names: string[], label: string) {
+  const target = proto as Record<string, (...args: unknown[]) => unknown>;
+  for (const name of names) {
+    const original = target[name]!;
+    target[name] = function (
+      this: { z?: number; camera?: { z: number } | null; limits?: unknown },
+      ...args: unknown[]
+    ) {
+      if (diagOn) {
+        const z = this.z ?? this.camera?.z;
+        diag.push(
+          `${performance.now().toFixed(0)} ${label}.${name}(${args.map(short).join(",")}) z=${short(z)} <- ${callers()}`,
+        );
+      }
+      return original.apply(this, args);
+    };
+  }
+}
+patch(TownCamera.prototype, ["flyTo", "jumpTo", "setZoom", "zoomAt"], "cam");
+patch(
+  TownSceneCamera.prototype,
+  [
+    "attach",
+    "boardsResized",
+    "frameHome",
+    "reframe",
+    "follow",
+    "focusTarget",
+    "roomFocus",
+    "stepZoom",
+    "fitAll",
+    "key",
+  ],
+  "scene",
+);
 
 /**
  * The reception filter's visibility rule in the real Town scene (#501): with
@@ -185,13 +248,35 @@ async function filterAtDeskLevel(
   ) => Promise<void>,
 ) {
   await waitFor(() => filter() === null, "Escape did not close the filter");
+  diagOn = true;
+  const canvasHost = host.querySelector<HTMLElement>(".town-canvas-host");
+  const toolbar = document.querySelector<HTMLElement>(".world-view-toolbar");
+  const snap = (tag: string) =>
+    diag.push(
+      `${performance.now().toFixed(0)} ${tag}: level ${renderer.level} zoom ${renderer.zoom.toFixed(3)} frames ${renderer.frames} ${renderer.flying ? "flying" : "resting"} host ${canvasHost?.clientWidth}x${canvasHost?.clientHeight} window ${innerWidth}x${innerHeight} toolbar ${toolbar?.getBoundingClientRect().height} focus ${(document.activeElement as HTMLElement | null)?.className || document.activeElement?.tagName} hasFocus ${document.hasFocus()}`,
+    );
+  snap("start");
+  let sampling = true;
+  let lastLevel = "";
+  const sample = () => {
+    if (!sampling) return;
+    const now = `${renderer.level}/${renderer.zoom.toFixed(2)}`;
+    if (now !== lastLevel) {
+      lastLevel = now;
+      snap("frame");
+    }
+    requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
   for (let into = 0; into < 8 && renderer.level !== "desk"; into += 1) {
     const frames = renderer.frames;
+    snap(`click ${into}`);
     host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
     await waitFor(
       () => renderer.frames > frames && !renderer.flying,
       "zooming in to desks never settled",
     );
+    snap(`settled ${into}`);
   }
   // One building's board, found by name: off-screen buildings drop theirs.
   const name = `${sign().getAttribute("aria-label")!.split(" reception takes")[0]} reception takes`;
@@ -206,8 +291,14 @@ async function filterAtDeskLevel(
   };
   await waitFor(
     () => renderer.level === "desk" && board() !== null && !shown(),
-    `the reception board is still up at ${renderer.level} level`,
+    () => {
+      sampling = false;
+      snap("timeout");
+      return `the reception board is still up at ${renderer.level} level\nDIAG\n${diag.slice(-160).join("\n")}`;
+    },
   );
+  sampling = false;
+  diagOn = false;
   const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
   // The lobby floor starts two tiles under the back wall, 18 px below the
   // board's foot: its bottom row, clear of the queue, where the camera has
