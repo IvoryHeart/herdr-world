@@ -626,10 +626,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     another text field; the browser's own find stays closed. Change the keys
     under **Search the current view** in Settings → Shortcuts.
   See the [Town exercise](./docs/TUTORIAL.md#town).
-- **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
+- **Reuse existing Herdr on first install.** A fresh standalone install and the Homebrew launcher keep
   the runtime's existing version and owner. Only a missing Herdr is installed;
   Homebrew does this on first normal local World launch, without a forced Herdr
   formula or Intel source build. Explicit runtime upgrades remain available.
+- **Finish installer upgrades.** Replacing an existing standalone World executable
+  upgrades Herdr and refreshes detected harness integrations and the installed
+  World plugin through the same path as `herdr-world update`, then restarts the
+  matching running systemd or launchd World service. Output reports the Herdr
+  and integration results (updated or current) and whether the service restarted
+  or why it did not.
+  `HERDR_WORLD_SKIP_HERDR=1` skips Herdr and its integration/plugin changes while
+  keeping the World restart. `herdr-world rollback` restores the previous World
+  binary, leaving Herdr and integrations as they are.
 - **Per-host Herdr identity.** **Manage connections → Check version again**
   reads the selected card's running server version and protocol. Compatibility
   expires after one minute; failed or disconnected checks remain unknown.
@@ -1227,14 +1236,28 @@ belongs to Herdr and uses Town's move gestures or guarded CLI moves.
 
 ### Agent CLI (`herdr-world --skill`)
 
-Install the release's guide with `herdr-world integration install claude`
-(or `codex`, `pi`, or another [Herdr harness](./docs/harness-integrations.md)).
+Every standalone installer run and `herdr-world update` discovers supported
+harnesses by their existing config folders and installs or refreshes the release's
+World guide (plus Claude's limits tap). This also runs when World is already
+current; `update --check` is read-only. Per-harness output says what was installed,
+updated, skipped or failed and gives `herdr-world integration uninstall <harness>`.
+`HERDR_WORLD_SKIP_INTEGRATIONS=1` keeps these manual, independently of
+`HERDR_WORLD_SKIP_HERDR=1`. A conflict or failure is reported and other harnesses
+continue; an installed World update and its service restart still complete.
+Use `herdr-world integration sync` to retry discovery, or install manually with
+`herdr-world integration install claude` (or `codex`, `pi`, or another
+[Herdr harness](./docs/harness-integrations.md)).
 Start a new harness session to discover the `herdr-world` skill.
-Installation is explicit, local to the host, and needs no running World service.
+Installation is local to the host and needs no running World service.
+It never overwrites an unmarked or wrong-ID user skill, nor creates a missing
+harness config folder. Unreadable or unsafe files fail without replacement.
 `integration status [harness]` lists the state, version and path;
-`integration uninstall <harness>` removes it. Codex, Pi and Kimi share
+`integration uninstall <harness>` removes it and records a persistent preference,
+even if already absent. Later installs and updates keep it removed until explicit
+CLI or Settings install reenables it. Codex, Pi and Kimi share
 `~/.agents/skills/herdr-world/SKILL.md`; removing one also removes it for
-the other two, which the command names. OMP, Letta and MastraCode report
+the other two, which the command names; their removal preference is also shared.
+OMP, Letta and MastraCode report
 unsupported. See [paths and overrides](./docs/harness-integrations.md).
 **Menu → Configuration → Integrations** shows the same state and path as a
 **World skill** line under each Herdr harness on World's own host, with
@@ -1947,7 +1970,7 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 - Manage a user service from the CLI; check releases and run checksum-verified
   one-click standalone updates under a supported supervisor. Probe `/health` or
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
-- Keep Herdr on the version this World release verified: installs and updates
+- Keep Herdr on the version this World release verified: installer replacements and updates
   bring Herdr, the Codex/Claude/Pi harness integrations and the Herdr World plugin up to
   date, and **Menu → Runtime → Upgrade Herdr** (or **Update Herdr integrations**)
   appears when something is behind. A running server keeps its panes through a

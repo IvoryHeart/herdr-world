@@ -269,11 +269,27 @@ terminal context still apply; do not treat clipboard delivery as pane isolation.
 
 On Linux or macOS:
 
-The published 0.2.7 standalone script installs or upgrades Herdr to its verified
-release and refreshes harness integrations and the plugin. To leave your Herdr
-untouched, add `HERDR_WORLD_SKIP_HERDR=1` before `sh` in the command below.
-Homebrew already installs Herdr only when missing; the matching standalone fix
-is merged in source for a future release.
+A fresh standalone install keeps existing Herdr and installs it only when missing.
+Rerun the installer to upgrade: like `herdr-world update`, it upgrades Herdr,
+refreshes its harness integrations and installed World plugin, then restarts the
+running World service using that executable (systemd on Linux, launchd on macOS).
+Output reports updated or current components and whether the service restarted,
+or why it did not. Restart an unmanaged World process yourself.
+
+Put `HERDR_WORLD_SKIP_HERDR=1` before `sh` to leave Herdr and its integrations/plugin
+alone while still restarting World. To undo the World replacement, run
+`herdr-world rollback`; this leaves Herdr and integrations as they are.
+
+Every standalone installer run and `herdr-world update` also discovers supported
+harness configuration folders and installs or refreshes World's skill for each
+one, including Claude's chained limits tap. Output names each harness and its
+removal command. Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` before `sh` below (or
+before `herdr-world update`) to keep World's integrations manual. This is
+independent of `HERDR_WORLD_SKIP_HERDR`: neither option implies the other.
+`herdr-world integration uninstall <harness>` keeps an integration removed on
+later installs and updates, until you explicitly install it again. User-owned
+skills are refused and Claude's previous status line is chained and restored on
+uninstall. See [integration paths, shared skills and isolated checks](harness-integrations.md).
 
 ```bash
 curl -fsSL \
@@ -419,8 +435,8 @@ continues to use the same World profiles, settings, token, and browser namespace
 **Published 0.2.7:** the downloaded standalone installer runs
 `herdr-world herdr upgrade --install`, including upgrades of an older unmanaged
 Herdr and integration/plugin refresh. Set `HERDR_WORLD_SKIP_HERDR=1` to skip that
-step. Homebrew already uses missing-only setup. The source installer behavior
-described below is merged but has not shipped in a standalone release yet.
+step. Homebrew uses missing-only setup. The 0.3.0 installer behavior is described
+below.
 
 Each Herdr World release verifies one Herdr release (currently 0.9.5) and pins its
 SHA-256 checksums. Missing-only bootstrap installs the runtime without configuring
@@ -460,18 +476,15 @@ reopening are separate; this setup behavior does not verify macOS login recovery
 
 When it runs:
 
-- **Standalone installer in source** (`install-herdr-world.sh`): after installing World it runs
-  a read-only Herdr status check, then uses the Unix `--install --only-if-missing`
-  operation when the selected World binary supports it. Pinned older releases
-  use the same checksum/version-verified compatibility bootstrap as Homebrew,
-  without passing unsupported options or calling an unrestricted upgrade.
-  A reachable Herdr server is reused even when its executable is not discoverable.
-  A selected local entry must be a regular executable file before installation
-  reports success. A runtime appearing during download is preserved by atomic publication.
-  Existing versions and installation owners are preserved. Set
-  `HERDR_WORLD_SKIP_HERDR=1` to install only World. A Herdr problem prints a warning
-  and leaves World installed. Fresh installs leave harness integrations and the
-  plugin to `herdr-world herdr upgrade` (or **Runtime → Update Herdr integrations**).
+- **Fresh standalone install**: checks Herdr and installs it only if missing.
+  Run `herdr-world herdr upgrade` afterwards to set up its harness integrations
+  and plugin, or choose **Runtime → Update Herdr integrations**.
+- **Standalone installer replacing World**: finishes the same Herdr upgrade and
+  World service restart as `herdr-world update`, including for a pinned release
+  candidate. Output names each integration's result and gives retry commands
+  for incomplete steps. `HERDR_WORLD_SKIP_HERDR=1` skips Herdr and its
+  integrations/plugin; the World restart still runs. Windows users continue
+  to download a release or upgrade through npm.
 - **`herdr-world update` and the in-app update**: once the new World is in place, the
   new release runs the Herdr step, even when it keeps the same Herdr version, because
   the harness integrations and the plugin follow the World release. In the browser it

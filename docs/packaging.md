@@ -5,8 +5,14 @@ assets plus version, lineage and licence material. They do not contain Herdr, a 
 Roamgate application or the retired Rust bridge. Instead the executable pins one
 verified Herdr release (`server/src/herdr/release.ts`: version, per-platform package
 checksums and the checksum of Herdr's Windows `install.ps1`). The standalone
-installer installs Herdr only when absent; explicit World updates retain their
-separate Herdr upgrade step. The Homebrew Formula has no mandatory Herdr formula
+installer installs Herdr only when absent on a fresh World install. Replacing an
+existing World executable uses the CLI update finalization to upgrade Herdr and
+its integrations, then restart the matching running managed World service. The
+Herdr opt-out still permits the World restart. Every standalone installer run and
+World update separately discovers configured harnesses and refreshes World's own
+skills and Claude limits tap through `integration sync`, using the new executable
+after replacement. `HERDR_WORLD_SKIP_INTEGRATIONS=1` skips this step independently
+of the Herdr opt-out; explicit integration removals stay removed. The Homebrew Formula has no mandatory Herdr formula
 dependency and never exports a second Herdr executable. Its launcher reuses an
 existing Herdr, or installs the verified prebuilt release on first normal startup
 when missing, outside the keg. This avoids source builds on Intel Macs. See

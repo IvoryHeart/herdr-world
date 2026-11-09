@@ -6,8 +6,9 @@ github_repository="IvoryHeart/herdr-world"
 custom_release_base="${HERDR_WORLD_RELEASE_BASE_URL-}"
 install_dir="${HERDR_WORLD_INSTALL_DIR-$HOME/.local/bin}"
 requested_version="${HERDR_WORLD_VERSION-}"
-# Set to 1 to install only herdr-world, leaving Herdr and its integrations alone.
+# Set to 1 to skip Herdr setup/upgrades and its integration/plugin changes.
 skip_herdr="${HERDR_WORLD_SKIP_HERDR-}"
+# HERDR_WORLD_SKIP_INTEGRATIONS=1 independently keeps World's integrations manual.
 
 fail() {
   printf 'Herdr World installer: %s\n' "$*" >&2
@@ -221,6 +222,23 @@ case ":${PATH:-}:" in
   ;;
 esac
 
+# A replacement finishes through the newly installed release's update path.
+# Probe support because this script can also install older, pinned releases.
+if [ -n "$backup" ] || [ -n "$legacy_launcher_target" ]; then
+  update_help="$("$target" update --help 2>/dev/null)" || update_help=""
+  case "$update_help" in
+  *--finish-install*)
+    if ! HERDR_WORLD_SKIP_HERDR="$skip_herdr" "$target" update --finish-install; then
+      fail "World is installed, but finishing the upgrade failed; run \`$target update --finish-install\` to retry (preserve HERDR_WORLD_SKIP_HERDR=1 if set)."
+    fi
+    exit 0
+    ;;
+  *)
+    printf 'This World release cannot finish installer upgrades automatically. Restart any running herdr-world process, then run `%s herdr upgrade` to refresh Herdr and its integrations.\n' "$target"
+    ;;
+  esac
+fi
+
 # Generated from the shared Unix bootstrap and verified runtime metadata.
 # Regenerate with: bun scripts/herdr-bootstrap.ts
 # BEGIN generated Herdr compatibility bootstrap
@@ -314,3 +332,17 @@ if [ "$skip_herdr" != "1" ]; then
     esac
   fi
 fi
+
+# Use the release's integration code, including its discovery, safety and removal
+# preferences. Older pinned releases may not offer automatic World integrations.
+integration_help="$("$target" integration --help 2>/dev/null)" || integration_help=""
+case "$integration_help" in
+*'integration sync'*)
+  if ! "$target" integration sync; then
+    printf 'World integrations were not fully installed; run `%s integration sync` to retry.\n' "$target" >&2
+  fi
+  ;;
+*)
+  printf 'This World release does not support automatic World integrations.\n'
+  ;;
+esac
