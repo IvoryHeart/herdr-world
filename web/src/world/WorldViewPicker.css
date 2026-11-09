@@ -181,6 +181,16 @@
 .world-zen-search .world-view-toolbar-host {
   flex: 1 1 auto;
 }
+/* A folded search is only its icon, so the panel hugs it. */
+.world-zen-search:not(.is-phone):has(.world-view-search-toggle) {
+  width: auto;
+}
+.world-zen-search .world-view-search-toggle {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
+}
 .world-zen-search .world-view-toolbar-search {
   height: 26px;
 }

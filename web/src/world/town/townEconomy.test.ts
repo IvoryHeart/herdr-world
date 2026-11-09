@@ -239,7 +239,11 @@ test("Town boards share one observation across windows, refreshes, prices and a 
       expect(html).toContain("1.2M tokens");
     } else expect(html).toContain(townExpenseText(city.total));
     expect(html).toContain("TEST DATA");
-    expect(html).toContain("unattributed (included)");
+    // The caveats are one short line; unattributed usage is explained in
+    // its tooltip, not printed on the board.
+    expect(html).toContain("<span>TEST DATA");
+    expect(html).toContain("tokens unattributed: usage not tied to");
+    expect(html).not.toContain("unattributed (included)");
     // All consumers observe the same stable state object for React subscriptions.
     expect(today.get()).toBe(today.get());
   }

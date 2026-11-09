@@ -38,7 +38,7 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
       configurable: true,
       writable: true,
     });
-  const { act, createElement } = await import("react");
+  const { act, createElement, useState } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { getShortcutSnapshot, selectShortcutPreset, updateShortcut } =
     await import("../shortcutPreferences");
@@ -69,19 +69,34 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     const element = document.createElement("div");
     document.body.append(element);
     const root = createRoot(element);
-    act(() =>
-      root.render(
-        createElement(WorldViewToolbar, {
-          viewLabel: "Town",
-          query: "",
-          onQueryChange: () => {},
-        }),
-      ),
-    );
+    function Town() {
+      const [query, setQuery] = useState("");
+      return createElement(WorldViewToolbar, {
+        viewLabel: "Town",
+        query,
+        onQueryChange: setQuery,
+        onClear: () => setQuery(""),
+      });
+    }
+    act(() => root.render(createElement(Town)));
     const input = () =>
       document.querySelector<HTMLInputElement>("input[type=search]");
+    const icon = () =>
+      element.querySelector<HTMLButtonElement>(
+        'button[aria-label="Search Town"]',
+      );
     return {
       input,
+      icon,
+      type: (value: string) =>
+        act(() => {
+          const field = input()!;
+          Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            "value",
+          )!.set!.call(field, value);
+          field.dispatchEvent(new Event("input", { bubbles: true }));
+        }),
       focused: () => document.activeElement === input(),
       unmount: () => {
         act(() => root.unmount());
@@ -94,7 +109,7 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     const town = mount();
     expect(press(document.body, "/")).toBe(true);
     expect(town.focused()).toBe(true);
-    town.input()!.blur();
+    act(() => town.input()!.blur());
     const button = document.createElement("button");
     document.body.append(button);
     button.focus();
@@ -102,6 +117,38 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     expect(press(button, "f")).toBe(true);
     expect(town.focused()).toBe(true);
     button.remove();
+    town.unmount();
+  });
+
+  test("on desktop the search rests as an icon and unfolds into the box", () => {
+    const town = mount();
+    expect(town.input()).toBeNull();
+    expect(town.icon()!.title).toMatch(/^Search Town \(\/ or (Ctrl|Cmd)\+F\)$/);
+    act(() => town.icon()!.click());
+    expect(town.icon()).toBeNull();
+    expect(town.focused()).toBe(true);
+    // Empty, it folds back when the cursor leaves.
+    act(() => town.input()!.blur());
+    expect(town.input()).toBeNull();
+    expect(town.icon()).not.toBeNull();
+    // A query keeps it open after the cursor leaves.
+    expect(press(document.body, "/")).toBe(true);
+    town.type("harbor");
+    act(() => town.input()!.blur());
+    expect(town.input()!.value).toBe("harbor");
+    // Escape empties it and folds it, leaving the cursor on the icon.
+    act(() => town.input()!.focus());
+    act(() => {
+      town.input()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(town.input()).toBeNull();
+    expect(document.activeElement).toBe(town.icon());
     town.unmount();
   });
 
@@ -143,7 +190,7 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     const town = mount();
     const after = view("after");
     window.addEventListener("keydown", after);
-    updateShortcut("view.search", ["J"]);
+    act(() => updateShortcut("view.search", ["J"]));
     const pressJ = (key: string) => {
       const event = new KeyboardEvent("keydown", {
         key,
@@ -158,11 +205,11 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     pressJ("j");
     expect(town.focused()).toBe(true);
     expect(seen).toEqual([]);
-    town.input()!.blur();
+    act(() => town.input()!.blur());
     // Other keys still reach the view.
     pressJ("k");
     expect(seen).toEqual(["before k", "after k"]);
-    selectShortcutPreset("auto");
+    act(() => selectShortcutPreset("auto"));
     window.removeEventListener("keydown", before);
     window.removeEventListener("keydown", after);
     town.unmount();
@@ -175,7 +222,7 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     expect(press(document.body, "/")).toBe(true);
     expect(town.input()).not.toBeNull();
     expect(town.focused()).toBe(true);
-    town.input()!.blur();
+    act(() => town.input()!.blur());
     // Pressed again while it is open, it returns the cursor to it.
     expect(press(document.body, "f")).toBe(true);
     expect(town.focused()).toBe(true);

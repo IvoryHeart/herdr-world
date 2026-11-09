@@ -177,6 +177,64 @@
   color: #a9b2a4;
 }
 
+/* The one caveat line (TownExpenseCaveats.tsx): a few words and an info
+   mark; hovering shows the explanations, tapping opens them. */
+.town-expenses-caveats {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-height: 20px;
+  max-width: 100%;
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: help;
+  pointer-events: auto;
+}
+
+.town-expenses-caveats span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.town-expenses-caveats svg {
+  flex: none;
+  opacity: 0.8;
+}
+
+.town-expenses-caveats:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+/* Doubled to outrank `.town-world button { font: inherit }` (town.css). */
+.town-expenses-caveats.town-expenses-notes,
+.town-expenses-caveats.town-board-economy-caveats {
+  font:
+    10px "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: #a9b2a4;
+}
+
+.town-expenses-caveats.town-board-economy-caveats {
+  font-size: 11px;
+  color: #c9b79a;
+}
+
+.town-expenses-explain {
+  margin: 0;
+  max-width: 260px;
+  padding-left: 22px;
+  list-style: disc;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 /* Folded: a wooden plate that opens the board. */
 .town-expenses-sign {
   display: inline-flex;
@@ -210,6 +268,7 @@
 .town-expenses-rooms b,
 .town-expenses-more,
 .town-expenses-notes,
+.town-expenses-explain,
 .town-expenses-window button,
 .town-expenses-sign span {
   font-family: "JetBrains Mono", ui-monospace, monospace;
