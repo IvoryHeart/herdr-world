@@ -8,7 +8,7 @@ import type { RunProcessWithCodeTimeout } from "../workspace/file-types";
  * Claude agent it passes per-launch settings (`--settings`) whose status line
  * is this tap: it records the numbers for the usage collector, then runs the
  * user's own status line command, if any, with the same input and its output
- * unchanged. The user's settings files are only read, never written.
+ * unchanged. The integration installer also registers it for host-wide sessions.
  */
 
 /** The tap keeps its newest reading in ~/.cache/herdr-world/claude-status-line.json. */
@@ -156,7 +156,10 @@ export function claudeStatusLineTap(
     }
   // The user's own status line, by Claude Code's precedence below the flag:
   // local project, shared project, then user settings.
-  const config = env.CLAUDE_CONFIG_DIR?.trim() || path.join(home, ".claude");
+  const configured = env.CLAUDE_CONFIG_DIR?.trim();
+  const config = configured?.startsWith("~")
+    ? path.join(home, configured.slice(1).replace(/^[/\\]/, ""))
+    : configured || path.join(home, ".claude");
   for (const file of [
     path.join(local, ".claude", "settings.local.json"),
     path.join(project, ".claude", "settings.json"),
@@ -169,7 +172,31 @@ export function claudeStatusLineTap(
       continue;
     }
     if (!("statusLine" in settings)) continue;
-    const line = object(settings.statusLine);
+    let line = object(settings.statusLine);
+    if (
+      file === path.join(config, "settings.json") &&
+      typeof line.command === "string" &&
+      line.command.includes("herdr-world-claude-tap")
+    ) {
+      try {
+        const saved = JSON.parse(
+          fs.readFileSync(
+            path.join(config, "herdr-world", "claude-status-line.json"),
+            "utf8",
+          ),
+        );
+        if (
+          saved.version === 1 &&
+          JSON.parse(saved.installed).statusLine.command === line.command
+        )
+          line =
+            saved.before === null
+              ? {}
+              : object(JSON.parse(saved.before).statusLine);
+      } catch {
+        /* Missing or damaged backup: never recurse. */
+      }
+    }
     return line.type === "command" &&
       typeof line.command === "string" &&
       line.command.trim() &&

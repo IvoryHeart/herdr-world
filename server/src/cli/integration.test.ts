@@ -51,7 +51,7 @@ test("status lists exactly Herdr's harnesses and writes nothing", async () => {
   expect(readdirSync(cli.home)).toEqual([]);
 });
 
-test("every supported harness round trips without touching Herdr or settings", async () => {
+test("every supported harness round trips preserving Herdr and restoring settings", async () => {
   cli = createTestCli();
   for (const [name, path] of Object.entries(paths)) {
     if (!path) {
