@@ -8,7 +8,10 @@ import {
   paneBinding,
 } from "./herdr-conversation";
 import type { Conversation } from "./conversation";
-import { localAgentSessionFiles } from "./session-file-access";
+import {
+  localAgentSessionFiles,
+  type AgentSessionFileAccess,
+} from "./session-file-access";
 import { createSessionProjectionCache } from "./session-projection-cache";
 import { createAgentSessionResolverContext } from "./session-resolver";
 import type { HerdrCall } from "./session-types";
@@ -436,11 +439,17 @@ function herdr(agent: Record<string, unknown> | null, prompts: unknown[] = []) {
 
 function source(
   call: HerdrCall,
-  options: { remote?: boolean; platform?: string } = {},
+  options: {
+    remote?: boolean;
+    platform?: string;
+    files?: AgentSessionFileAccess;
+  } = {},
 ) {
-  const files = options.remote
-    ? { ...localAgentSessionFiles, remote: true }
-    : localAgentSessionFiles;
+  const files =
+    options.files ??
+    (options.remote
+      ? { ...localAgentSessionFiles, remote: true }
+      : localAgentSessionFiles);
   return createHerdrConversationSource({
     herdrCall: call,
     files,
@@ -894,49 +903,73 @@ describe("quests", () => {
     ]);
   });
 
-  test("a usage-limit stop comes with the quest and the conversation until its reset", async () => {
-    const dir = await mkdtemp(join(root, "quest-"));
-    const path = join(dir, "session.jsonl");
-    const refusal = (resetsAt: number) =>
-      JSON.stringify({
-        type: "assistant",
-        timestamp: "2026-10-22T10:00:02Z",
-        isApiErrorMessage: true,
-        error: "rate_limit",
-        apiError: "usage_limit_reached",
-        apiErrorParams: { rate_limit_info: { resetsAt } },
-        message: {
-          model: "<synthetic>",
-          content: [{ type: "text", text: "SYNTHETIC" }],
+  test.each(["conversation", "quests"] as const)(
+    "a usage-limit stop clears after a same-metadata rewrite, reading %s first",
+    async (firstRead) => {
+      const dir = await mkdtemp(join(root, "quest-"));
+      const path = join(dir, "session.jsonl");
+      const refusal = (resetsAt: number) =>
+        JSON.stringify({
+          type: "assistant",
+          timestamp: "2026-10-22T10:00:02Z",
+          isApiErrorMessage: true,
+          error: "rate_limit",
+          apiError: "usage_limit_reached",
+          apiErrorParams: { rate_limit_info: { resetsAt } },
+          message: {
+            model: "<synthetic>",
+            content: [{ type: "text", text: "SYNTHETIC" }],
+          },
+        });
+      const resets = Math.floor(Date.now() / 1000) + 3600;
+      await writeFile(path, `${todo("in_progress")}\n${refusal(resets)}\n`);
+      const initial = await localAgentSessionFiles.statFile(path);
+      expect(initial).not.toBeNull();
+      // Filesystems can give rapid same-size writes identical mtime and ctime,
+      // even at nanosecond precision. Force that collision without a timing race.
+      const files: AgentSessionFileAccess = {
+        ...localAgentSessionFiles,
+        async statFile(candidate) {
+          const file = await localAgentSessionFiles.statFile(candidate);
+          return (
+            file && {
+              ...file,
+              mtimeMs: initial!.mtimeMs,
+              changeToken: initial!.changeToken,
+            }
+          );
         },
-      });
-    const resets = Math.floor(Date.now() / 1000) + 3600;
-    await writeFile(path, `${todo("in_progress")}\n${refusal(resets)}\n`);
-    const chat = source(
-      herdr(
-        pane("claude", {
-          source: "herdr:claude",
-          agent: "claude",
-          kind: "path",
-          value: path,
-        }),
-      ),
-    );
-    const stop = {
-      harness: "claude" as const,
-      at: Date.parse("2026-10-22T10:00:02Z"),
-      resets_at: resets * 1000,
-    };
-    expect((await chat.read({ pane_id: "w1:p1" })).usage_stop).toEqual(stop);
-    expect((await chat.quests())[0]?.usage_stop).toEqual(stop);
-    // Once the reset has passed, the stop no longer holds.
-    await writeFile(
-      path,
-      `${todo("in_progress")}\n${refusal(resets - 7200)}\n`,
-    );
-    expect((await chat.read({ pane_id: "w1:p1" })).usage_stop).toBeNull();
-    expect((await chat.quests())[0]?.usage_stop).toBeNull();
-  });
+      };
+      const chat = source(
+        herdr(
+          pane("claude", {
+            source: "herdr:claude",
+            agent: "claude",
+            kind: "path",
+            value: path,
+          }),
+        ),
+        { files },
+      );
+      const stop = {
+        harness: "claude" as const,
+        at: Date.parse("2026-10-22T10:00:02Z"),
+        resets_at: resets * 1000,
+      };
+      expect((await chat.read({ pane_id: "w1:p1" })).usage_stop).toEqual(stop);
+      expect((await chat.quests())[0]?.usage_stop).toEqual(stop);
+      // Once the reset has passed, the stop no longer holds.
+      await writeFile(
+        path,
+        `${todo("in_progress")}\n${refusal(resets - 7200)}\n`,
+      );
+      expect(await files.statFile(path)).toEqual(initial);
+      if (firstRead === "quests")
+        expect((await chat.quests())[0]?.usage_stop).toBeNull();
+      expect((await chat.read({ pane_id: "w1:p1" })).usage_stop).toBeNull();
+      expect((await chat.quests())[0]?.usage_stop).toBeNull();
+    },
+  );
 
   test("a bulk read lists agents once instead of asking for each pane", async () => {
     const dir = await mkdtemp(join(root, "quest-"));

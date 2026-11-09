@@ -163,6 +163,44 @@ describe("bounded cache payload estimation", () => {
 });
 
 describe("session projection cache and history revisions", () => {
+  test("local content validates cache hits and same-metadata rewrites advance history", async () => {
+    const f = fixture();
+    f.files.remote = false;
+    f.set([message("one")]);
+    const original = { ...f.resolved.file! };
+    const stat = spyOn(f.files, "statFile").mockImplementation(async () => ({
+      ...original,
+    }));
+    try {
+      const cache = createSessionProjectionCache(f.files);
+      const first = await cache.history(f.resolved, undefined);
+      expect(f.reads).toBe(1);
+      expect(await cache.get(f.resolved)).toBe(first.projection);
+      expect(
+        (await cache.history(f.resolved, first.update.cursor)).update,
+      ).toMatchObject({
+        mode: "delta",
+        upserts: [],
+        cursor: first.update.cursor,
+      });
+      expect(f.reads).toBe(3);
+
+      f.set([message("two")]);
+      expect(f.resolved.file!.size).toBe(original.size);
+      f.resolved.file = original;
+      const next = await cache.history(f.resolved, first.update.cursor);
+      expect(delta(next.update).upserts.map((entry) => entry.text)).toEqual([
+        "two",
+      ]);
+      expect(next.projection).not.toBe(first.projection);
+      expect(await cache.get(f.resolved)).toBe(next.projection);
+      // Validation and projection share one read, including after a rewrite.
+      expect(f.reads).toBe(5);
+    } finally {
+      stat.mockRestore();
+    }
+  });
+
   test("coalesces history, summary, preview and ATIF; unchanged refresh never reads again", async () => {
     const f = fixture();
     f.set([message("hello")]);
