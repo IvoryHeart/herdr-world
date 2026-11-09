@@ -28,6 +28,7 @@ import {
 } from "./integration-paths";
 import { WORLD_SKILL } from "./world-skill";
 import { changeClaudeTap, claudeTapCurrent } from "./integration-claude";
+import { setIntegrationDisabled } from "./integration-preferences";
 
 export const WORLD_SKILL_VERSION = 1;
 
@@ -152,6 +153,17 @@ function supportedPaths(harness: WorldHarness, runtime: CliRuntime) {
   return paths;
 }
 
+function requireManagedSkill(
+  paths: NonNullable<ReturnType<typeof integrationPaths>>,
+) {
+  requireRegular(paths.folder, true);
+  requireRegular(paths.file);
+  const installed = installedState(paths.file, paths.id);
+  if (installed.state !== "not_installed" && installed.version === undefined)
+    throw new Error(`refusing skill not managed by World: ${paths.file}`);
+  return installed.state !== "not_installed";
+}
+
 /** Writes the release's skill for one harness; the CLI and Settings share it. */
 export function installWorldIntegration(
   harness: WorldHarness,
@@ -168,8 +180,7 @@ export function installWorldIntegration(
     throw new Error(
       `${displayPath(paths.config, runtime)} does not exist. Run ${harness} first to create its configuration folder.`,
     );
-  requireRegular(paths.folder, true);
-  requireRegular(paths.file);
+  const existed = requireManagedSkill(paths);
   if (harness === "claude") changeClaudeTap(paths.config, "install", runtime);
   mkdirSync(paths.folder, { recursive: true });
   const temporary = join(paths.folder, `.SKILL.md-${randomUUID()}.tmp`);
@@ -182,6 +193,8 @@ export function installWorldIntegration(
   } finally {
     if (stat(temporary)) unlinkSync(temporary);
   }
+  setIntegrationDisabled(paths.id, runtime, false);
+  return existed ? "updated" : "installed";
 }
 
 /** Removes World's skill file, and its folder when empty. */
@@ -190,8 +203,9 @@ export function uninstallWorldIntegration(
   runtime: CliRuntime,
 ) {
   const paths = supportedPaths(harness, runtime);
-  requireRegular(paths.folder, true);
-  requireRegular(paths.file);
+  requireManagedSkill(paths);
+  // Persist intent before removing files, including an already absent skill.
+  setIntegrationDisabled(paths.id, runtime, true);
   if (harness === "claude") changeClaudeTap(paths.config, "uninstall", runtime);
   if (stat(paths.file)) unlinkSync(paths.file);
   try {
@@ -215,16 +229,19 @@ const SHARED_LABELS: Partial<Record<WorldHarness, string>> = {
 export const integrationCommand: CliCommand = {
   name: "integration",
   summary: "install, remove or check the World skill for an agent harness",
-  actions: ["install", "uninstall", "status"],
+  actions: ["install", "uninstall", "status", "sync"],
   help: () => `Usage: herdr-world integration install|uninstall <harness>
        herdr-world integration status [<harness>]
+       herdr-world integration sync
 
 Harnesses: ${WORLD_HARNESSES.join(", ")}
 
 Installs the release's World skill on this host, plus Claude's chained limits tap.
 The harness's config
 folder must already exist. Codex, Pi and Kimi share ~/.agents/skills/herdr-world/SKILL.md;
-removing any of them removes that file for all three. No service is required.`,
+removing any of them removes that file for all three. No service is required.
+Installers and updates use sync to discover config folders and refresh integrations.
+HERDR_WORLD_SKIP_INTEGRATIONS=1 skips sync. Uninstall stays removed until explicit install.`,
   async run(args, context) {
     if (wantsHelp(args)) {
       context.log(integrationCommand.help());
@@ -232,6 +249,11 @@ removing any of them removes that file for all three. No service is required.`,
     }
     const { positionals } = parseCommandArgs(args, {}, 2);
     const [action, name] = positionals;
+    if (action === "sync") {
+      if (name) throw new UsageError("sync takes no harness argument");
+      const { syncWorldIntegrations } = await import("./integration-sync");
+      return syncWorldIntegrations(context);
+    }
     if (!["install", "uninstall", "status"].includes(action ?? ""))
       throw new UsageError("expected install, uninstall or status");
     if ((!name && action !== "status") || (name && !isWorldHarness(name)))
@@ -246,8 +268,6 @@ removing any of them removes that file for all three. No service is required.`,
         if (action !== "status") exit = EXIT_FAILURE;
         continue;
       }
-      // Mutations never read the existing file: an unreadable SKILL.md is
-      // still replaced or removed, as the installer itself allows.
       const path = displayPath(paths.file, context.runtime);
       if (action === "install") {
         installWorldIntegration(harness, context.runtime);

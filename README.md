@@ -125,9 +125,15 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
    integrations and installed World plugin, then restarts the running World
    service using that executable (systemd on Linux, launchd on macOS). Output
    reports updated or current components and whether World restarted.
-   Put `HERDR_WORLD_SKIP_HERDR=1` before `sh` to skip Herdr and integration/plugin
+   Put `HERDR_WORLD_SKIP_HERDR=1` before `sh` to skip Herdr and its integration/plugin
    changes while still restarting World. `herdr-world rollback` restores the
    previous World binary; it leaves Herdr and integrations as they are.
+   Every installer run and
+   `herdr-world update` also discovers configured harnesses and installs or
+   refreshes [World's skills and Claude limits tap](./docs/harness-integrations.md).
+   Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` to keep these manual, independently of
+   the Herdr opt-out. `herdr-world integration uninstall <harness>` keeps that
+   integration removed on later installs and updates; explicit install reenables it.
 3. On Linux/macOS standalone installs, add `~/.local/bin` to `PATH`. Run
    `herdr-world` (or `herdr-world.exe` from an extracted Windows archive) and open
    the printed URL.

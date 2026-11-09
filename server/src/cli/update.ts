@@ -26,6 +26,7 @@ import {
 } from "./command";
 import { readServiceSetup } from "./service-context";
 import { finishUpdate, restartServiceUsing } from "./update-finish";
+import { syncWorldIntegrations } from "./integration-sync";
 
 export interface UpdateDependencies {
   runProcess?: RunProcessWithCodeTimeout;
@@ -52,6 +53,9 @@ running managed service that uses this executable is restarted afterwards.
 
 The installer uses --finish-install after replacing an existing executable;
 HERDR_WORLD_SKIP_HERDR=1 skips Herdr and its integrations in that mode.
+Every update also discovers harness config folders and installs or refreshes
+World's skills and Claude limits tap, even if World is already current.
+HERDR_WORLD_SKIP_INTEGRATIONS=1 leaves these manual. Uninstall stays removed.
 
 HERDR_WORLD_UPDATE_BASE_URL selects a mirror (from the shell, else the service
 config). To install a specific version, rerun the installer with
@@ -149,7 +153,7 @@ export function createUpdateCommand(
       }
       if (!available) {
         context.log(`herdr-world ${context.version} is up to date.`);
-        return EXIT_OK;
+        return syncWorldIntegrations(context);
       }
       if (!isStandaloneBinary(runtime)) {
         context.error(

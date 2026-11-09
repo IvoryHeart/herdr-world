@@ -13,6 +13,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { shQuote } from "../server/src/utils/process-utils";
 import { renderStandaloneBootstrap } from "./herdr-bootstrap";
 import {
   VERIFIED_HERDR_VERSION,
@@ -58,6 +60,17 @@ function createInstallerFixture(checksumName?: string, version = "9.8.7") {
     binary,
     `#!/bin/sh
 [ "\${1:-}" = "--version" ] && { echo "${product} ${version}"; exit 0; }
+if [ -n "\${WORLD_INTEGRATION_FIXTURE:-}" ]; then
+  exec ${shQuote(process.execPath)} "$WORLD_INTEGRATION_FIXTURE" "$@"
+fi
+if [ "$*" = "integration --help" ]; then
+  if [ "${version}" != 0.2.7 ]; then echo 'integration sync'; fi
+  exit 0
+fi
+if [ "$*" = "integration sync" ]; then
+  echo "$* skip=\${HERDR_WORLD_SKIP_INTEGRATIONS:-}" >> "$WORLD_INTEGRATION_LOG"
+  exit "\${INTEGRATION_STEP_CODE:-0}"
+fi
 if [ "$*" = "update --help" ]; then
   if [ "${version}" = 0.2.7 ]; then echo 'update [--check]'; else echo 'update --finish-install'; fi
   exit 0
@@ -175,6 +188,7 @@ cp "$FIXTURE_DIR/\${url##*/}" "$out"
     binary,
     runtimeDir: join(root, "runtime"),
     calls: join(root, "calls"),
+    integrationLog: join(root, "world-integrations.log"),
   };
 }
 
@@ -203,6 +217,8 @@ function runInstaller(
       HERDR_WORLD_INSTALL_DIR: fixture.installDir,
       HERDR_WORLD_VERSION: "",
       HERDR_WORLD_SKIP_HERDR: undefined,
+      HERDR_WORLD_SKIP_INTEGRATIONS: undefined,
+      WORLD_INTEGRATION_LOG: fixture.integrationLog,
       HERDR_STEP_LOG: fixture.herdrStepLog,
       HERDR_CALL_LOG: fixture.calls,
       ...environment,
@@ -227,6 +243,105 @@ test("standalone compatibility code stays identical to the canonical verified bo
 });
 
 describe("release installer", () => {
+  test.each(["", "1"])(
+    "fresh install delegates World discovery even when Herdr is skipped (integration opt-out=%s)",
+    (skip) => {
+      const fixture = createInstallerFixture();
+      const result = runInstaller(fixture, undefined, {
+        HERDR_WORLD_SKIP_HERDR: "1",
+        HERDR_WORLD_SKIP_INTEGRATIONS: skip,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(fixture.integrationLog, "utf8")).toBe(
+        `integration sync skip=${skip}\n`,
+      );
+      expect(existsSync(fixture.herdrStepLog)).toBe(false);
+    },
+  );
+
+  test("reports a World integration failure without undoing World installation", () => {
+    const fixture = createInstallerFixture();
+    const result = runInstaller(fixture, undefined, {
+      HERDR_WORLD_SKIP_HERDR: "1",
+      INTEGRATION_STEP_CODE: "1",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "World integrations were not fully installed",
+    );
+    expect(existsSync(join(fixture.installDir, "herdr-world"))).toBe(true);
+  });
+
+  test("throwaway HOME: installer discovers Claude/Codex/Pi, refreshes skills and update preserves uninstall", async () => {
+    const fixture = createInstallerFixture();
+    const entry = join(fixture.root, "world-cli.ts");
+    writeFileSync(
+      entry,
+      `
+import { runCli } from ${JSON.stringify(fileURLToPath(new URL("../server/src/cli/index.ts", import.meta.url)))};
+import { defaultCliContext } from ${JSON.stringify(fileURLToPath(new URL("../server/src/cli/command.ts", import.meta.url)))};
+const context = defaultCliContext("9.8.7");
+context.runtime.execPath = process.env.HERDR_WORLD_INSTALL_DIR + "/herdr-world";
+context.runtime.env = { HOME: process.env.HOME, HERDR_WORLD_SKIP_HERDR: "1" };
+context.runCommand = () => { throw new Error("fixture must not operate services"); };
+context.captureCommand = () => { throw new Error("fixture must not query services"); };
+process.exit(await runCli(process.argv.slice(2), context));
+`,
+    );
+    for (const folder of [".claude", ".codex", ".pi/agent"])
+      mkdirSync(join(fixture.root, folder), { recursive: true });
+    const settings = join(fixture.root, ".claude/settings.json");
+    const before =
+      '{ "statusLine": {"type":"command","command":"cat"}, "hooks":{"keep":true} }\n';
+    writeFileSync(settings, before);
+    const environment = {
+      HERDR_WORLD_SKIP_HERDR: "1",
+      WORLD_INTEGRATION_FIXTURE: entry,
+    };
+    const installed = runInstaller(fixture, undefined, environment);
+    expect(installed.exitCode).toBe(0);
+    for (const name of ["claude", "codex", "pi"])
+      expect(installed.stdout.toString()).toContain(
+        `${name}: installed World's integration`,
+      );
+    const shared = join(fixture.root, ".agents/skills/herdr-world/SKILL.md");
+    const claude = join(fixture.root, ".claude/skills/herdr-world/SKILL.md");
+    for (const file of [shared, claude])
+      writeFileSync(
+        file,
+        readFileSync(file, "utf8").replace("VERSION=1", "VERSION=0"),
+      );
+    const upgraded = runInstaller(fixture, undefined, environment);
+    expect(upgraded.exitCode).toBe(0);
+    for (const name of ["claude", "codex", "pi"])
+      expect(upgraded.stdout.toString()).toContain(
+        `${name}: updated World's integration`,
+      );
+    const command = (args: string[]) =>
+      Bun.spawn([join(fixture.installDir, "herdr-world"), ...args], {
+        env: {
+          ...process.env,
+          HOME: fixture.root,
+          HERDR_WORLD_INSTALL_DIR: fixture.installDir,
+          ...environment,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    for (const name of ["claude", "codex"]) {
+      const removed = command(["integration", "uninstall", name]);
+      expect(await removed.exited).toBe(0);
+    }
+    const updated = command(["update", "--finish-install"]);
+    const output = await new Response(updated.stdout).text();
+    expect(await updated.exited).toBe(0);
+    for (const name of ["claude", "codex", "pi"])
+      expect(output).toContain(`${name}: skipped (previously uninstalled`);
+    expect(existsSync(shared)).toBe(false);
+    expect(existsSync(claude)).toBe(false);
+    expect(readFileSync(settings, "utf8")).toBe(before);
+  });
+
   test.each(["", "1"])(
     "an existing World installation finishes through the new binary (skip Herdr=%s)",
     (skip) => {

@@ -24,7 +24,13 @@ function fakeHerdr(code = 0) {
     calls,
     runProcess: async (argv: string[]) => {
       calls.push(argv);
-      return { code, stdout: herdrOutput, stderr: code ? "plugin failed" : "" };
+      return argv[1] === "integration"
+        ? {
+            code: 0,
+            stdout: "claude: updated World's integration.",
+            stderr: "",
+          }
+        : { code, stdout: herdrOutput, stderr: code ? "plugin failed" : "" };
     },
   };
 }
@@ -54,7 +60,7 @@ describe("installer update finalization", () => {
       cli = createTestCli({
         runtime: { platform },
         runCommand: () => {
-          expect(fake.calls).toHaveLength(1);
+          expect(fake.calls).toHaveLength(2);
           return 0;
         },
         captureCommand: () => ({ code: 0, stdout: "\tstate = running\n" }),
@@ -67,10 +73,12 @@ describe("installer update finalization", () => {
       ).toBe(0);
       expect(fake.calls).toEqual([
         [cli.context.runtime.execPath, "herdr", "upgrade"],
+        [cli.context.runtime.execPath, "integration", "sync"],
       ]);
       expect(cli.output).toEqual(
         expect.arrayContaining([
           ...herdrOutput.split("\n"),
+          "claude: updated World's integration.",
           "Restarted the service.",
         ]),
       );
@@ -164,6 +172,27 @@ describe("installer update finalization", () => {
     expect(cli.output).toContain("Restarted the service.");
   });
 
+  test("an integration failure reports retry guidance and still restarts World", async () => {
+    cli = createTestCli({ runCommand: () => 0 });
+    service("linux");
+    const fake = fakeHerdr();
+    expect(
+      await createUpdateCommand({
+        runProcess: async (argv) =>
+          argv[1] === "integration"
+            ? {
+                code: 1,
+                stdout: "",
+                stderr: "claude: skill not managed by World",
+              }
+            : fake.runProcess(argv),
+      }).run(["--finish-install"], cli.context),
+    ).toBe(0);
+    expect(cli.output).toContain("claude: skill not managed by World");
+    expect(cli.output.join("\n")).toContain("integration sync` to retry");
+    expect(cli.output).toContain("Restarted the service.");
+  });
+
   test.each(["--check", "--json"])(
     "rejects %s with finalization before running any step",
     async (flag) => {
@@ -185,7 +214,9 @@ describe("installer update finalization", () => {
     expect(
       await createUpdateCommand(fake).run(["--finish-install"], cli.context),
     ).toBe(0);
-    expect(fake.calls).toHaveLength(0);
+    expect(fake.calls).toEqual([
+      [cli.context.runtime.execPath, "integration", "sync"],
+    ]);
     expect(cli.output.join("\n")).toContain("HERDR_WORLD_SKIP_HERDR=1");
     expect(cli.output).toContain("Restarted the service.");
   });

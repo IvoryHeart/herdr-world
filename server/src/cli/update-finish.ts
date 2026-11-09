@@ -77,7 +77,7 @@ export async function finishUpdate(
 ): Promise<number> {
   if (skipHerdr) {
     context.log(
-      "Skipped Herdr and integration/plugin upgrades (HERDR_WORLD_SKIP_HERDR=1).",
+      "Skipped Herdr and its integration/plugin upgrades (HERDR_WORLD_SKIP_HERDR=1).",
     );
   } else {
     // The new release declares its verified Herdr; let it bring Herdr, the
@@ -100,5 +100,22 @@ export async function finishUpdate(
       );
     }
   }
+  // Run the newly installed release so its embedded skill and tap are used.
+  const integrations = await runProcess(
+    [context.runtime.execPath, "integration", "sync"],
+    60_000,
+  ).catch((error: unknown) => ({
+    code: EXIT_FAILURE,
+    stdout: "",
+    stderr: `World integration setup failed: ${(error as Error).message}`,
+  }));
+  for (const line of `${integrations.stdout}\n${integrations.stderr}`.split(
+    "\n",
+  ))
+    if (line.trim()) context.log(line.trimEnd());
+  if (integrations.code !== 0)
+    context.log(
+      "World integrations were not fully installed; run `herdr-world integration sync` to retry.",
+    );
   return restartServiceUsing(context, context.runtime.execPath);
 }

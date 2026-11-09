@@ -1,10 +1,25 @@
 # World skills for agent harnesses
 
-`herdr-world integration install <harness>` installs the release's
+Every standalone installer run (fresh or upgrade) and `herdr-world update`
+discovers supported harnesses by their existing configuration folders and installs
+or refreshes World's integrations. This also happens when World is already up to
+date. Discovery uses the paths and overrides below; it never launches a harness
+or creates a missing harness configuration folder. Each detected harness gets a
+plain installed, updated, skipped or failed report, with the removal command.
+
+Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` for manual-only management, alongside
+`HERDR_WORLD_SKIP_HERDR=1` when desired. The options are independent: skipping
+Herdr still installs World's integrations; skipping World's integrations still
+allows Herdr's upgrades. Set the variable on each installer or update invocation
+you want to skip. `update --check` remains read-only. Pinned older World releases
+without automatic integration support print that limitation.
+
+`herdr-world integration install <harness>` manually installs the release's
 `herdr-world --skill` guide as `herdr-world/SKILL.md` in that harness's user
 skill folder. It teaches `ask`, `result`, `task-summary` and `stamp` to an agent
 that has never used World. Start a new harness session after installing.
 Installation needs no running World or Herdr service. Nothing installs at startup.
+`herdr-world integration sync` reruns the automatic discovery and refresh step.
 
 ```sh
 herdr-world integration status
@@ -13,10 +28,23 @@ herdr-world integration status claude
 herdr-world integration uninstall claude
 ```
 
+Uninstall records a persistent removal preference. Later installers, updates and
+`integration sync` leave that integration removed; explicit `integration install`
+(or **Install** in Settings) reenables it. Codex, Pi and Kimi share both their
+skill and this preference: uninstalling any one keeps the group removed, and
+explicitly installing any one reenables the group. Preferences live in
+`~/.config/herdr-world/integrations/<skill-id>.disabled` (on Windows,
+`%APPDATA%/herdr-world/integrations/`). Use the install command to reenable;
+there is no need to edit these files. Uninstalling an already absent integration
+also records the preference.
+
 Status prints `<harness>: <state> (<path or reason>)`: `current (v1)`,
 `outdated (v0)`, `not installed` or `unsupported`. A missing or invalid marker
 is `outdated` without a version. A valid marker at or above this release's
-version is current. Reinstall replaces the World file atomically; uninstall
+version is current. Install and uninstall refuse an existing skill without a
+valid World marker for that skill's ID, preserving user-owned files; discovery
+reports the conflict and continues with other harnesses. Reinstall replaces a
+managed World file atomically; uninstall
 removes it and its empty `herdr-world/` directory, preserving other files and
 the parent `skills/` directory. Claude also registers the limits tap below.
 An unreadable file fails with an error rather than pretending it is absent.
@@ -38,9 +66,9 @@ what changed, what is current and any failures. Put `HERDR_WORLD_SKIP_HERDR=1`
 before `sh` in the installer command to skip these changes; World still restarts
 its matching running service.
 
-The World skill above is installed separately: rerun
-`herdr-world integration install <harness>` to refresh it, or
-`herdr-world integration uninstall <harness>` to remove it.
+World's own skills and Claude limits tap are refreshed automatically as described
+above, independently of the Herdr opt-out. Use
+`herdr-world integration uninstall <harness>` to keep one removed.
 `herdr-world rollback` restores only World, leaving Herdr and its
 integrations in place.
 
@@ -123,6 +151,34 @@ override `CODEX_HOME`, for example. If running any Herdr command, also pass
 `herdr --session <unique-test-name>`; HOME alone does not isolate Herdr.
 Do not launch World or connect tests to an owner's running services.
 
+From a checkout with dependencies installed, run this safe installer exercise:
+
+```sh
+bun run test scripts/install-herdr-world.test.ts
+```
+
+Look for **throwaway HOME: installer discovers Claude/Codex/Pi, refreshes skills
+and update preserves uninstall**. It performs these steps automatically, without
+requiring file edits or a running service:
+
+1. Create a throwaway HOME with fake Claude, Codex and Pi configuration folders
+   and a synthetic Claude status line. Ignore inherited harness-root overrides.
+2. Run the installer against a local fake release archive that delegates to the
+   real integration CLI. Check that it reports **installed** for all three and
+   writes Claude's skill and tap plus the shared Codex/Pi skill.
+3. Make the fixture's skills outdated, rerun the installer, and check **updated**
+   reports for all three and refreshed skill markers.
+4. Run `integration uninstall claude` and `integration uninstall codex`, then
+   `update --finish-install`. Check **skipped (previously uninstalled)** for all
+   three, absent skills and exact restoration of the synthetic status line.
+
+The fixture disables service commands and skips Herdr. Separate tests in the same
+command check the installer delegation with each opt-out setting. The exercise
+deletes its temporary HOME on completion. For a browser inspection after an
+automatic install on a disposable host, open **Menu → Configuration → Integrations**
+and select World's local connection: the installed **World skill** rows show
+**Current**, and **Uninstall** uses the same persistent removal preference.
+
 ## Settings
 
 **Menu → Configuration → Integrations** shows a **World skill** line under each
@@ -140,6 +196,4 @@ World's rows. SSH connections show no World rows yet. The Claude row's
 [limits tap](#claude-limits-tap), as the CLI does, and the row shows Outdated
 when the skill is current but the tap is not.
 
-World skill installation and updates remain manual and local.
-[The approved design](../openspec/changes/world-harness-integration/design.md)
-tracks SSH installation and automatic skill updates.
+SSH installation remains a follow-up in [the integration design](../openspec/changes/world-harness-integration/design.md).
