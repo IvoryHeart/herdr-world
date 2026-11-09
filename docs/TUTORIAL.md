@@ -520,6 +520,17 @@ tooltip names these keys. In a terminal, the Chat
 composer or another text field those keys keep doing what they do there. Change
 them under **Search the current view** in Settings → Shortcuts.
 
+To find or do anything from any view, press **Ctrl+K** (**Cmd+K** on a Mac)
+to open the command box. Type `harbor` and it lists what Town's search would
+find, each with its status mark and place; **Down** and **Enter**, or a click,
+select one as clicking it in Town does. The same box creates rooms, tabs and
+agents, acts on the selected agent and goes to Board, Desk or Spaces. In Zen
+the **⌘** button beside the view buttons opens it too; on a phone, tap the
+corner view button and then **Find or act**. In a terminal, the Chat composer
+or a text field, Ctrl+K and Cmd+K keep their meaning there; press
+**Ctrl+Alt+K** (**Cmd+Option+K** on a Mac) instead.
+**Escape** or the same key closes the box.
+
 A quiet **?** at reception means an agent has asked you a question with
 `herdr-world ask`. The question also arrives as a Herdr notification, which
 reaches Herdr and, when you enabled them, your phone notifications. It stays
@@ -601,6 +612,8 @@ and open its terminal or Inspector without losing its workspace context.
 3. Zoom into a room: each desk and agent carries its own colour. Hover, focus
    or tap one and the legend says its value in words, such as "Idle 3 h 12 m",
    "~$1.40 today" or "#123 CI failing". Taps open what they always do.
+   Search with a lens on and the matches are outlined over its colours;
+   Escape ends the search and keeps the lens.
 4. Press **✕** or Escape: Town is back exactly as it was, at the same place.
    Town always opens without a lens; your browser remembers the last one for
    `L` and **Lenses**.
@@ -1205,7 +1218,8 @@ modify the same checkout; use chapter 3 for parallel changes.
 
 ### 2.1 Find the terminal you want to control
 
-Open the command menu to search workspaces, files, tabs, panes, and agents;
+Open the command menu (**Ctrl+K**, **Cmd+K** on a Mac) to search workspaces,
+files, tabs, panes, and agents;
 enter `README.md` to open a project-relative path. Defaults differ by platform:
 use [Keyboard Shortcuts](../FEATURES.md#keyboard-shortcuts) or interface menus.
 

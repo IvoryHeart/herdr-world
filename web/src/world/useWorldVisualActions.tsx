@@ -26,6 +26,7 @@ import {
   type VisualRouteAction,
   type VisualRouteActionTarget,
 } from "./visualRouteActions";
+import { WORLD_COMMAND_PLACEHOLDER, worldFindGroup } from "./worldCommandBox";
 import { focusWorldNode } from "./worldInspectorSelection";
 import { type WorldInspectorController } from "./useWorldInspectorController";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
@@ -50,6 +51,7 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
     setIntentError,
     selected,
     applySelection,
+    selectNode,
   } = controller;
 
   const shellActionContext = useRef({
@@ -62,6 +64,7 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
     onGoToSpaces,
     watchlistVerified: watchlist.verified,
     watchlistRecords: watchlist.records,
+    selectNode,
   });
   shellActionContext.current = {
     selected,
@@ -73,6 +76,7 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
     onGoToSpaces,
     watchlistVerified: watchlist.verified,
     watchlistRecords: watchlist.records,
+    selectNode,
   };
   const runVisualResource = useCallback(
     (target: VisualRouteActionTarget, action: VisualRouteAction) => {
@@ -424,6 +428,14 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
           }
         : undefined,
       captureKey: resolved.node && target ? JSON.stringify(target) : null,
+      // Choosing what the box found selects it, as clicking it in the view.
+      find: (search) =>
+        worldFindGroup(
+          world,
+          search,
+          (nodeId) => void shellActionContext.current.selectNode(nodeId),
+        ),
+      placeholder: WORLD_COMMAND_PLACEHOLDER,
       groups: [
         { heading: "Create", actions: creationActions },
         { heading: "Visual selection", actions: targetActions },
