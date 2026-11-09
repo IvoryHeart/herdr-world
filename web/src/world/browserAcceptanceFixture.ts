@@ -1,3 +1,4 @@
+import { parseObservationBase } from "../../../server/src/world/observation-v1";
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 
 export class InputDriver {
@@ -110,6 +111,10 @@ export function createDenseSnapshotFixture({
   return {
     service,
     hostCount: ids.length,
+    async snapshot(params?: unknown) {
+      const base = parseObservationBase(params);
+      return service.observation.reply(await service.snapshot(params), base);
+    },
     startStalledAttentionRefresh() {
       attention = true;
       service.invalidate("alpha");
