@@ -8,7 +8,7 @@ import { bridge, type HerdrEventMsg } from "./api";
 import { ConfigMenu } from "./components/ConfigMenu";
 import type { AgentIntegration } from "./components/AgentIntegrationsSettings";
 import { GlobalTooltip } from "./components/GlobalTooltip";
-import { __storeTesting, store } from "./store";
+import { __storeTesting, OperationalContext, store } from "./store";
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -278,6 +278,9 @@ bridge.connection = (id) => {
     },
   };
 };
+// A World view wraps the menu in its selection's context, or in an empty one
+// when nothing is selected.
+let worldViewContext: OperationalContext | null = null;
 function Harness() {
   const [theme, setTheme] = useState<"light" | "dark" | "system">("dark");
   const [scale, setScale] = useState(
@@ -295,31 +298,33 @@ function Harness() {
     `calc(90dvh / ${scale / 100})`,
   );
   return (
-    <ConfigMenu
-      onShowShortcuts={() => {}}
-      theme={theme}
-      accentColor="blue"
-      blackBackground={false}
-      onBlackBackgroundChange={() => {}}
-      uiScale={scale}
-      terminalFontName=""
-      onTerminalFontNameChange={() => {}}
-      terminalFontScale={100}
-      onTerminalFontScaleChange={() => {}}
-      zenMode={false}
-      mobileTerminalShortcuts={[[], []]}
-      mobileTerminalSideShortcuts={[]}
-      terminalThemeSelection={{ dark: "default", light: "default" }}
-      customTerminalThemes={[]}
-      onThemeChange={setTheme}
-      onAccentColorChange={() => {}}
-      onUiScaleChange={setScale}
-      onZenModeChange={() => {}}
-      onMobileTerminalShortcutsChange={() => {}}
-      onMobileTerminalSideShortcutsChange={() => {}}
-      onTerminalThemeSelectionChange={() => {}}
-      onCustomTerminalThemesChange={() => {}}
-    />
+    <OperationalContext.Provider value={worldViewContext}>
+      <ConfigMenu
+        onShowShortcuts={() => {}}
+        theme={theme}
+        accentColor="blue"
+        blackBackground={false}
+        onBlackBackgroundChange={() => {}}
+        uiScale={scale}
+        terminalFontName=""
+        onTerminalFontNameChange={() => {}}
+        terminalFontScale={100}
+        onTerminalFontScaleChange={() => {}}
+        zenMode={false}
+        mobileTerminalShortcuts={[[], []]}
+        mobileTerminalSideShortcuts={[]}
+        terminalThemeSelection={{ dark: "default", light: "default" }}
+        customTerminalThemes={[]}
+        onThemeChange={setTheme}
+        onAccentColorChange={() => {}}
+        onUiScaleChange={setScale}
+        onZenModeChange={() => {}}
+        onMobileTerminalShortcutsChange={() => {}}
+        onMobileTerminalSideShortcutsChange={() => {}}
+        onTerminalThemeSelectionChange={() => {}}
+        onCustomTerminalThemesChange={() => {}}
+      />
+    </OperationalContext.Provider>
   );
 }
 let render = () => {};
@@ -1528,6 +1533,46 @@ async function run() {
       document.activeElement === button("Menu"),
     "Escape did not close and restore focus",
   );
+  // Open Configuration from a World view: with nothing selected, and with a
+  // selection on another host at a runtime generation that is not current.
+  // Integrations still loads the active connection it names.
+  for (const context of [
+    { connectionId: "", runtimeGeneration: -1 },
+    { connectionId: "beta", runtimeGeneration: 99 },
+  ]) {
+    worldViewContext = context;
+    flushSync(render);
+    const before = integrationLists("alpha");
+    click("Menu");
+    click("Configuration");
+    await waitFor(() => !!document.querySelector(".configuration-modal"));
+    click("Integrations");
+    await waitFor(
+      () =>
+        document.querySelectorAll(".agent-integrations-list li").length === 4 &&
+        button("Refresh integrations").getAttribute("aria-disabled") ===
+          "false",
+    );
+    check(
+      !document.querySelector('[role="alert"]') &&
+        !/Waiting for Herdr|Reconnecting/.test(
+          document.querySelector(".agent-integrations-settings")!.textContent!,
+        ) &&
+        integrationLists("alpha") === before + 1 &&
+        document
+          .querySelector(".agent-integrations-settings")!
+          .textContent!.includes("Local test"),
+      `Integrations opened from a World view (${JSON.stringify(context)}) did not load the active connection`,
+    );
+    click(
+      document.documentElement.dataset.layout === "mobile"
+        ? "Close Configuration"
+        : "Done",
+    );
+    await waitFor(() => !document.querySelector(".configuration-modal"));
+  }
+  worldViewContext = null;
+  flushSync(render);
   if (mobile) {
     for (const tab of [
       "Appearance",

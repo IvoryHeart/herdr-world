@@ -12,3 +12,7 @@
   connection's Herdr runtime changes, instead of saying the host is no longer
   available. It suggests updating Herdr only when Herdr refuses the
   integration methods.
+- Configuration opened from Town, Board or another World view uses the
+  active connection it names. Integrations and Connection settings no longer
+  stay stuck waiting for Herdr when nothing is selected or the selection is
+  on another host.
