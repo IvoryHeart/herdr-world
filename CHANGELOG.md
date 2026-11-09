@@ -9,6 +9,960 @@ prepared.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-09
+
+### Added
+
+- Bring in Roamgate v0.8.8: configurable agent launches from mobile shells and
+  a History Chat message box with image uploads and explicit confirmation when an
+  agent is busy or unknown, including Codex.
+- Town shows a thought bubble over each working agent once you zoom into a
+  room: a glyph for the step it runs now (editing, tests, a command, reading
+  code, the web, thinking, or a subagent), with its time in amber when the
+  step has run unusually long. At the desk level, or on the selected desk,
+  the bubble adds what the agent is doing now and the step in words, such
+  as `Run the login tests · tests 3m`: the running step's own detail, its
+  plan item in progress or its latest request, not a session's first
+  topic. Steps come from what Chat's Now bar reads, for Claude Code, Codex
+  and Pi, and only for agents on screen.
+- The Town Master greets you on each visit to World: a small figure beside
+  the town board opens one card with when you were last here, the same
+  **Since you left** lines as the board sign (each opens **Needs you**) and,
+  when a newer release is out, a **See update** line that opens **Menu** at
+  its update entry. Board opens it at its hub and Desk at its summary; phones
+  show a sheet with **Back**. It never opens over Chat, **Needs you** or
+  another window; one docked elsewhere on a wide screen does not hold it back. **Show this on start** (on by default, also
+  **Menu → Town Master greeting**) turns it off on this browser.
+- While anything needs you, World's browser tab reads `(N) Herdr World` and
+  its icon carries a small badge with the number (`9+` above nine), in every
+  view and while the tab is in the background. An installed World shows the
+  number on its app icon where the system supports app badges.
+  **Menu → Count on tab and app icon** turns it off for this browser.
+- Snap a World window to the right or left edge at its normal docked width with
+  **⋯ → Fit right** or **Fit left**, instead of half the screen. It uses 520 px
+  (at most half the screen) or the width you last dragged a docked window to,
+  works in Town, Board, Desk and Spaces, and is in **Actions** for a custom
+  shortcut.
+- Town shows each agent's context fill like a needs bar: a slim bar with the
+  percent in the peek and under the icon in the agent's window, read from
+  Claude, Codex, Pi and Gemini logs against the model's context window. At
+  85% or more an agent shows a sweat drop at its desk. Agents without a
+  reading show no bar. `world.usage.get` reports it as `contexts`.
+- Deliver new verified agent questions’ saved answers to their original Chat
+  session without requiring `--wait`. Town Summary’s Outbox keeps pending,
+  unconfirmed and not-sent deliveries reachable, with explicit same-session
+  Send again or Dismiss. Changed sessions are skipped; answers remain available
+  through `ask get`.
+- `herdr-world ask` also alerts you through the asking pane's Herdr, so a
+  question reaches Herdr's toasts, every connected World and phone
+  notifications even with no World tab open. An ask nobody was alerted to
+  exits 6 (`not_delivered`) with its recorded ID, and one World could not
+  record still sends the alert, names the failure and exits 1.
+- `HERDR_WORLD_DATA_DIR` gives a World instance its own data folder.
+- Standalone installs and World updates discover configured harnesses and install
+  or refresh World's skills and Claude limits tap, reporting each harness and how
+  to remove its integration. Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` to keep these
+  manual. Explicitly uninstalled integrations stay removed on later updates,
+  including the shared Codex/Pi/Kimi skill; user-owned skills are preserved.
+- Board's Next control opens the next pane that needs you, including shared
+  shell questions, and keeps its place after an answer. Its menu now offers
+  Whiteboard and Blackboard surfaces, separate status colours and Help.
+- Drag a pane row or a single-pane tab's grip onto another tab on the same host
+  to move just that pane, including with touch hold; cancelling sends no move,
+  and closing the old room requires confirmation.
+- Board has a hub beside its bin with the town center's actions: **+**
+  launches a new agent (in the selected card's workspace when it can), the
+  crown opens the Town master's Chat, and **⋯** opens a menu with **New
+  agent**, **Town master**, **Needs you**, **Summary** (Town, with its
+  summary open), **Profiles** and **New workspace**. Escape, a tap outside
+  or **Back** on a phone closes it. Board's controls keep clear of the hub.
+- Board shows Town's lenses (Idle time, Spend, Pull requests, Quests and
+  Harness) over its cards, from the same facts: press **Lenses** in Board's
+  controls or `L`. Board also shows Town's **Since you left** recap after a
+  return, and each tab's pull request or ticket badge, as on Town's desks.
+- Board offers Town's actions on a selected card: rename and close a room with
+  Town's dialogs, move a room or tab earlier or later in Herdr's own order (so
+  Town and Spaces follow, while dragging still arranges only the Board), Mark
+  reviewed on a finished agent, and a peek at an agent (hover, or Preview on a
+  phone) with its latest Chat message, its question and answer buttons.
+- The `?scene=town-scale` preview's synthetic hosts now take Town's and
+  Board's room actions, peeks, answers and review marks in the page, so they
+  can be tried without real hosts.
+- Show Town's facts on Board: a summary chip with Busy, Waiting, Done and
+  Quiet counts that opens expenses today and over 7 days, harness limits with
+  the reading's age, unreviewed finishes and each host; host zones and
+  workspace cards carry their counts, expenses and limits, and agent cards
+  show the running step (amber when long), review state or idle time.
+- Complete Claude Code and Codex command menus such as `/model` and `/permissions` in Chat: a menu card shows the options, the cursor, the menu's keys and any text field, checks each key against that menu and session, and follows each step until the menu closes.
+- Press the Terminal's key controls (arrows, Esc, Tab, Enter, Ctrl keys) from Chat's **⋮** menu on desktop and phone, sent only to the session Chat shows.
+- Chat never types into an open harness menu: while a menu is open, Send is disabled and the service refuses a message or command, since typed text would go into the menu as keys. A slash command sent while the agent is busy shows that it is waiting for the agent, and the same command is not queued twice.
+
+- Retrying a slash command after a definite native refusal works; unreadable or older observations keep a busy command reserved and its waiting notice intact.
+
+- SSH Chat keeps ordinary text sendable after an assistant quotes terminal instructions, including when the browser supplies the delivery baseline; open menus and unreadable screens still refuse input.
+
+- Chat refuses text on partial boxed questions and blank-padded menus, checks that the terminal/state still matches its screen observation, and accepts quoted instructions with Claude's message prefix.
+
+- Claude Code's `/model` menu card also shows on a phone-width terminal, where Claude wraps the menu's key line onto two rows.
+- When an actual terminal row read shows it is too small to read the current session's command menu, Chat explains this and offers **Open Terminal**. Unknown or stale observations do not produce a size claim; menu and send authority stay unchanged.
+- Installing the Claude World integration now chains your existing status line
+  through the limits tap, so Claude sessions started outside World update Fuel.
+  Reinstall avoids double wrapping; uninstall restores the original setting and
+  preserves intervening edits, while malformed settings are left untouched.
+- Show a Claude gauge beside Codex on the Town board's **FUEL** row and in the
+  Summary: how much of the Claude subscription's 5-hour and weekly limits is
+  left, with reset times. Claude agents started from World's launcher get a
+  per-launch status line tap that records these numbers and then shows your
+  own status line unchanged; your Claude settings files are never edited.
+  It appears within about a minute of the agent's first answer. When Claude
+  refuses work at its limit, the gauge reads **reached, resets …**.
+- Chat answers Claude's folder-trust question before its session starts: the
+  card shows **No, exit** and **Yes, I trust this folder**, and a click is
+  checked against the same question and Claude process before each key.
+  For pre-approved tool grants, **No, continue without these permissions**
+  continues Claude without those grants instead of exiting.
+- World's command box: press `Cmd+K` on a Mac or `Ctrl+K` elsewhere in Town,
+  Board or Desk, type, and it finds buildings, rooms, tables, agents and
+  terminals as the views' search does, with status marks and places. Enter
+  selects one as clicking it in the view does. It also goes to another view
+  and keeps every action the Actions menu had. In Zen a **⌘** button beside
+  the view buttons opens it; on a phone, **Find or act** in the corner view
+  menu.
+- Keep owner questions at Town reception with a quiet question mark, also shown
+  in Board and Desk. New verified asks chime, show a toast and raise an OS notice
+  with an action for the original asking seat.
+- Let verified askers deduplicate causes and withdraw questions once they clear.
+  Crew owner notices now use the existing World question ledger and read answers
+  back to the watcher.
+- Recover and retire asks after lost CLI replies, re-arm recurring causes after
+  a lost withdrawal reply, and explain permanent withdrawal refusals once.
+  Shell questions take reception priority over finished agents. Keyed CLI repeats
+  retain their answer state and withdrawal output names the preserved answer.
+- Preserve answer acknowledgements through held or out-of-scope causes and
+  uncertain withdrawals. Keep historical owner notices quiet and distinguish
+  missing keyed asks from confirmed withdrawals.
+- Expand a Desk host summary to reveal and open an agent outside the Hosts filter,
+  with the destination host named explicitly and existing Inspectors preserved.
+  Host controls stay visible beside a reading pane and wrap below the counts
+  on phones. Cached, unavailable or replaced agents explain why they cannot open.
+- Read bounded agent token usage from Claude Code, Codex, Pi and Gemini session
+  files through qualified local and SSH connections, with shared World usage
+  records, attribution, source health and optional local price-table estimates.
+  Recovered counters and copied transcripts count once; incomplete or changing
+  claims remain host-level, and cancelled or oversized reads release owned resources.
+  Reuse bounded host-local parser caches for incremental reads. Old Codex trees
+  use bounded metadata discovery for recent activity; incomplete identity evidence
+  never establishes a unique title-prefix match. Verified file handles, retryable
+  offsets and owned reader failures preserve containment and cache recovery.
+- Manage Teams and Pods with `herdr-world group` and `pod`/`team` aliases,
+  explicit role transfers and promotion, ordered Now lists and recent sender attribution.
+  Read Herdr Rooms/Desks through the same Group vocabulary; `--herdr` membership
+  moves show the complete effect first and report observed outcomes, preserving
+  chosen desk colours and spawn-parent colour inheritance.
+- Import a Pod crew table once with explicit confirmation and address mappings;
+  render World's current roster as Markdown without file synchronization.
+- Open Actions → Groups for a panel roster and detail with kind filters,
+  member/role management, linked PR cards, Now and recent attribution; stale
+  confirmations refresh the roster without changing membership.
+- Set Team/Pod Focus or Mute without copying member preferences; agent bells
+  and mobile Attention menus distinguish inherited Default from explicit Watch;
+  agent bells explain the winning claim.
+  Focus follows current resolved members, with unchanged reception counts.
+- Read Pod status, Now and source-qualified PR warnings in Town Summary;
+  tap a row to open or restore its Groups detail without changing reception counts.
+- A window for a multi-pane tab, such as a review round, starts its title with
+  a drawing of the tab's split. Tap it to open a map of the real layout, then
+  tap a pane to show that agent's Chat or terminal in the same window. The
+  agent that needs you is marked in yellow, and Herdr's own focus stays put.
+- Let owners park crew watched pull requests with the `on-hold` label and see them in crew status.
+- Attach files and screenshots to an answer in **Needs you**: the paperclip in
+  the answer field (or a paste or drop) uploads each file as a removable chip
+  with a thumbnail, and the answer ends with `Attached files:` and the stored
+  paths, which the asker receives and `herdr-world ask get` shows.
+- **Needs you** is a tab on the left of every view, opened from the **Needs
+  you** counter in the top bar (in the view picker in Zen and on a phone). It
+  sits beside the view on wide screens, over it on narrower ones and full
+  screen with **Back** on a phone, and stays open or closed per device. Each
+  question, blocked agent and finished task is a short message from its agent
+  with its quick reply in place: options or a typed answer and **Dismiss**,
+  the agent's own question answered as Chat does, or **Mark reviewed**.
+  **Chat about this** opens the agent's Chat, and hovering the agent's name
+  (or **ⓘ**) shows its card. Town's reception letters, Desk's **Answer** and
+  a Board card's **!**/**✓** badge open it at that item, every time, even
+  after you turn the page. **✉ Outbox** at its foot opens Town's Summary at
+  saved answers to check.
+- Add negotiated observation v1 service replies: callers can retain unchanged
+  hosts using generation-qualified tokens, with complete recovery after a service restart.
+- When the local Herdr connection is failing and no host is ready, Town offers
+  the existing **Set up Herdr** card to install or start Herdr after you
+  confirm.
+- Dismiss any open owner question from Town's **Needs you** list or Summary. It
+  closes without an answer, `ask --wait` returns `dismissed`, and the crew
+  watcher does not ask again while that cause holds.
+- Use the service account's Claude Code CLI with Ranger, show a workspace or session
+  in the asking window, and schedule tasks over all authorized workspaces.
+- Read local Oh My Pi and directory-inferred Pi history, follow Claude continuation
+  and queued messages, and fetch appended SSH transcript bytes within World bounds.
+- Add service-owned local and reverse SSH forwarding with qualified runtime ownership,
+  bounded discovery and cleanup; web controls follow in the web/mobile integration part.
+- Refresh Roamgate source through `2b16e991` after v0.8.13 for the web: an
+  **All servers** Spaces list, Pane Search across servers and numbered tab chips
+  with agent status, all read from World's shared observation.
+- Choose where each repository's worktrees go, create worktrees in repositories
+  without an `origin`, and set commands that create or remove worktrees on the
+  workspace's host. World's navigator shows the worktree actions on desktop and
+  phone; a stale host leaves them inert.
+- Read agent replies aloud in History Chat, with an on-device voice unless you
+  choose another.
+- Draw PDFs with PDF.js on phones and other browsers without a PDF viewer; it
+  loads only when such a browser opens a PDF.
+- Add a black background for the dark theme, an opt-in macOS Option-as-Alt
+  setting for terminals and opt-in browser latency samples (`?debugLatency`).
+- Preserve the provenance of agent status, session and pull request link observations
+  in backend read models. Conflicting reports coexist, source outages retain their
+  evidence, and action authority keeps its existing fresh source checks.
+- Edit the native tab name, shared colour and status, and individual pane avatars
+  from terminal title bars on desktop and phone. Board, Town, Desk and Spaces
+  show the same choices, with field-specific resets and visible save failures.
+- Town's board sign shows **Since you left** after 30 minutes or more away:
+  new questions and blocked agents, finished work to review and merged pull
+  requests, each line opening Needs you at that item, where new arrivals
+  carry a "new" dot. On a phone it is one line under the summary chip.
+- Notice when a long-open tab runs a different build than the service now
+  serves, with **Reload** and **Later**. **Menu** shows the tab's build and,
+  when they differ, the served build.
+- Town reception overflow: when a reception queue is full, the remaining
+  waiting or finished agents crowd the lobby in queue order, grumbling with a
+  `#@!` bubble, and nap on the floor after about 90 seconds. A freed queue
+  spot goes to the front of the crowd. Calm motion holds the crowd still.
+- Town plays a new agent's arrival when World confirms its start: it steps
+  out at the town center (or at the bus stop nearest its room when started
+  elsewhere), walks to its building, goes in and sits at its desk, and a
+  sparkle and its name fade over it. Several starts at once arrive one after
+  another; reloads, failed starts and agents already in Town play nothing.
+  With reduced motion the agent appears at its desk with a fading highlight.
+- Open Town with `?scene=town-scale` to see a synthetic town at full scale: 3
+  hosts, 24 rooms, 312 desks and 291 agents in every state. The report
+  `docs/design/town-at-scale.md` shows how it reads at each zoom.
+- Put an agent in the bin by dragging it onto the bin icon in Town or Board (or
+  a Town bus stop), or from its window's **⋯** menu in Town, Board or Desk. In
+  Town it walks to the London bus stop nearest its room, where a countdown board
+  shows the time to the next bus; a red double-decker
+  comes every four minutes, slows to each stop, waits about ten seconds, and
+  closes its riders' agents only once it has left the screen. Tap the bus to
+  stop it; closing the tray it opens lets it go on. The **Bin** tray shows who is waiting and the time to the next bus,
+  with **Put back** (until the bus has left, even after boarding) and
+  **Close now**. A pinned desk or tab keeps its last agent, and
+  restarting World closes nothing that was waiting.
+- Town has a town center: a domed hall at the top of the map, centred above
+  the first street, replacing the reserved town-hall lot. Tap it (or its
+  **Town center** plaque) for a ring of actions: **New agent**, **Town
+  master**, **Needs you**, **Summary**, **Profiles** and **New room**. Escape,
+  a tap outside, the centre **✕** or **Back** on a phone closes it.
+- Town shows arrows at the view's edge to agents that need you out of sight
+  when zoomed into a room or desk, with their mark and a count; click or tap
+  one to travel there. On a desktop, **N** and **Shift+N** step the camera
+  through what needs you in Needs you's order and open Needs you at each item;
+  both keys can be rebound under **Town** in Keyboard shortcuts.
+- Town shows what the crew spends: a City expenses billboard by the top
+  street beside the town center (today or 7 days), and each building's
+  reception board shows the host's expenses today and its costliest rooms, from harness usage. Missing, partial, stale and unpriced figures say
+  so ("no data", "partial", "no price table") instead of showing zero, and
+  figures that can no longer be refreshed read "out of date". On a
+  phone they fold to signs that open on a tap.
+- Show Codex subscription limits as fuel gauges on the Town board: each window
+  (for example 5 h and week) with the percent left, amber and "low" under 15 %,
+  and reset time, age and source on hover, focus or tap. The phone chip adds
+  the lowest percent left. Claude reads "not available" on the board, and the
+  Town summary lists each host's windows and says why Claude limits are not
+  available. `world.usage.get` gains `limits`, read
+  from Codex session logs on local and SSH hosts.
+- Town's land is generated around the buildings: woods, meadows, hedged
+  gardens and orchards, ponds and footpaths, with each street running on as a
+  country lane. The land fills the whole view at every zoom and pan, with no
+  plain green border. It is the same on every reload and changes only next to
+  a building that grows.
+- Town lenses: the town center's **Lenses** or `L` colours every room and
+  desk by one fact (idle time, today's spend, linked pull requests, quests or
+  harness), with a legend in the Town board's place, the value in words on
+  hover, focus or tap, and a hatched "no data" look that is never drawn as
+  zero. Escape or ✕ returns Town as it was.
+- Move whole rooms in Town: drag a room by the Move handle in its plaque's
+  card, by its name or by its wall (on a phone, drag the handle or touch and
+  hold the name or wall) and drop it anywhere in its building, or use the
+  card's Move before and Move after arrows. Its tables and agents go with it,
+  rooms in its way move down, the building fits itself to its rooms, outlines
+  show where every room will stand, and Escape puts it back. World saves the
+  arrangement, so a reload and every device show it, and Herdr's workspace
+  order follows the rooms' reading order, so Spaces matches.
+- Escape puts back any desk, agent or room being carried in Town.
+- Show agents that stopped on a subscription or usage limit as out of fuel in
+  Town: slumped at their desks under an empty fuel can and a clock showing the
+  reset time, in front of the room's plate and name tags, never at reception. Their table's card and Chat's Now bar say when the limit resets
+  (for example `Usage limit reached · resets 15:00 (Codex)`), and room
+  plaques, the Town board and the Summary count them on their own. World reads
+  the stop from Codex's session log and Claude Code's transcript, and the state
+  clears once the reset passes or the agent works again.
+- Hover a Town room's nameplate, or a table or its nameplate, for its card:
+  the Town board's numbers for that place, without its agents list: busy,
+  waiting, done, quiet and its agents, then its economy today (estimated
+  cost, tokens and models from harness usage). A room's card also holds
+  Rename and Close, so one hover shows them all. Zoomed out, where room names
+  are too small to point at, hovering anywhere over a room shows the same
+  room numbers under its card. On a phone, tap the nameplate; the first
+  tap on a table opens its card, and a second tap opens the table.
+- Town has a post office on the first street, left of the town center: your open pull
+  requests, including those whose agent has gone, as parcels in its sorting
+  yard, ready to merge first, with counts on its sign. Tap a parcel for the
+  pull request card the desk badge opens; a merged one is carried off. It is
+  closed, with no parcels or counts, until the GitHub source is connected,
+  and on a phone it folds to a sign on the town center.
+- Choose which agents each Town reception takes. Press a reception's sign
+  (**!** **?** **✓**) to untick Needs you, Asks you or Done for that building,
+  or tick **Apply to all buildings** for every building. Agents that reception leaves out stay seated
+  at their own desks with their mark, and reception shows a tag such as
+  `✓ 4 at desks · find`: **find** opens the first of them and **Next ›**
+  steps through the rest. **Reset to default** brings everyone back. Counts,
+  Board, Desk and Needs you are unchanged, and World keeps the filter for
+  every browser and device. Zoomed in to desks, tap a reception lobby to
+  bring its board and sign back.
+- Town's search shows where its matches are: matching buildings, rooms,
+  tables and agents light up on the map, the rest dims a little, and the
+  result line counts matches off-screen. Choosing a result moves the camera
+  to it and pulses it; choosing it again opens it. Escape returns Town to how
+  it was. In Zen, World's default, the search box hangs beside the view
+  buttons at the top, or is a corner button on a phone, instead of hiding
+  with the top bar. On a phone, the search box and its results open as one
+  panel at the top of the screen, with the count shown once.
+- Tidy rooms in Town: Tidy rooms on a building's sign (or the sparkles button
+  on its reception board) glides all of that building's rooms into neat,
+  gap-free columns in Herdr's workspace order, the arrangement a never-moved building has. World saves it
+  like a room move, so it stays after a reload and Spaces keeps the order;
+  tidying again changes nothing, and Undo in the note puts the rooms back.
+- **/** and **Ctrl+F** (**Cmd+F** on a Mac) put the cursor in the search of
+  Town, Board or Desk, or open the phone's search, without opening the
+  browser's find. Terminals, the Chat composer and text fields keep those
+  keys. Settings → Shortcuts lists them as **Search the current view**.
+- Show a **− Minimize** button in every agent and terminal window header, in
+  Town, Board and Desk and on phones. Minimizing or closing a window leaves its
+  agent and terminal session running.
+- On a phone, a minimized window waits as a chip at the bottom of Town or Board,
+  or at the bottom of the window that is open: one tap restores it, without
+  opening Tabs.
+- Menu → Configuration → Integrations shows World's skill under each Herdr
+  harness on World's own host: state, path, and Install, Update or Uninstall
+  buttons that run the same installer as `herdr-world integration`.
+  Uninstalling the file Codex, Pi and Kimi share names the harnesses that
+  lose it before it runs.
+- Install, check and remove the World skill with `herdr-world integration
+  install|status|uninstall`, using Herdr's harness names. Codex, Pi and Kimi
+  share one file; removal names all affected harnesses. The guide now teaches
+  questions, durable results, expiring task summaries and parent-child stamps.
+
+### Changed
+
+- Document GitHub merged pull request pagination and its 1,000-result provider limit.
+- Give list panels consistent command-picker styling while keeping World's app bar
+  and window restoration. Default Codex launches to pane-scoped `--no-daemon` mode.
+- Town's **+ Add room** is now a doorway in a fixed place in every building,
+  just left of the bar, instead of a dashed slot after the last room. It no
+  longer moves when rooms are added, moved or tidied; rooms keep clear of it.
+- On a desktop, the search of Town, Board and Desk rests as a search icon.
+  Clicking it, or pressing **/** or **Ctrl+F** (**Cmd+F** on a Mac), unfolds
+  the search box with the cursor in it; **Escape**, or clicking away from an
+  empty box, folds it back. A query keeps it open. Phones search as before.
+- One running World owns its data folder: a second World on the same folder
+  stops with a message naming the running one, instead of overwriting its
+  files.
+- The session signing key is always `session-secret.json` in the data folder.
+  A World started with a custom `HERDR_WORLD_SETTINGS_PATH` creates a new key
+  once, so its browsers log in again after the upgrade.
+- Validate browser and agent commands through a service-owned verb registry while
+  preserving existing permissions, acknowledgement flags and confirmation flows.
+  Unknown browser methods are refused before contacting Herdr, and command replies
+  include evidence of admission, durable storage or native dispatch when available.
+- Board's host label is now a heading with the host's name and agent counts,
+  followed by short lines for usage and each harness's limits, instead of one
+  long line that ran past the host's zone.
+- Build and run source checkouts with Bun 1.4.4 or newer; CI and native release
+  builds now use Bun 1.4.4.
+- Chat takes Town's look inside Town's windows, following the style guide:
+  Town's colours and state colours, framed messages with yours in soft gold,
+  raised keys, a soft gold Send and recommended answer, compact tables, no
+  text under 11 px, and 44 px tap targets on phones. The composer's ⋯
+  controls open in the same skin.
+- Expanded or in Zen, Chat now uses the window's width as Terminal does. From
+  900px wide the conversation fills the window (up to 1440px) as rows that
+  name the sender, with the time at the right edge once per run of messages.
+  Prose still wraps at a readable width; tables, code and tool steps use the
+  whole row. A message another live agent typed in as `name: …` shows as that
+  agent's, marked **relayed**. Phones and narrow windows keep bubbles.
+- Scope PR checks to affected tests, contracts and platform inputs, while keeping
+  the complete CI matrix on main and for unknown changes.
+- Split long test and model jobs across runners, retain isolated latency checks,
+  and expose leaf failures before the protected delivery aggregate completes.
+- The command menu's key is `Ctrl+K` on Windows and Linux. In a terminal, the
+  Chat composer or a text field `Ctrl+K` keeps its shell and editor meaning;
+  `Ctrl+Alt+K` opens the menu from there, and from a text field it now opens
+  it too. On a Mac `Cmd+K` likewise stays with a terminal or text field, and
+  `Cmd+Option+K` opens the menu from there. Saved shortcut presets keep their
+  keys.
+- Town's reviewed marks for finished agents are now shared by every browser
+  connected to the same World, so a completion checked on your phone shows as
+  checked on your desktop. World keeps them in memory, so a restart forgets
+  them.
+- Chat's send bubbles and blue ticks now say, on hover, that World does not
+  store them and that they are gone after a restart.
+- The crew watcher starts a PR's review round as soon as a new head is pushed, in parallel with CI; green checks still gate READY and `crew/merge-ready`. When a fix, ci or conflict step is due and the author seat is busy with another PR, it starts a fresh fixer on the author's roster model in the PR's own worktree, which pushes, replies signed `[fixer #N]` and hands the PR to the next round.
+- Share Desk review marks, observed stops and recent opens across browsers of
+  one World service, preserving exact Undo and agent-session scoping. Desk state
+  now lives in bounded service memory and clears when the service restarts.
+- Keep shared review marks consistent across different receipt polling coverage,
+  reject late mutations from replaced sessions, and keep keyboard focus on the
+  next Desk card after marking a stop reviewed.
+- Keep reviewed stops acknowledged after their display times expire, and notice
+  later completed work through native state progress even while World was closed.
+- Refresh receipts for newly detected stops, fence older in-flight reads, and
+  prevent the preceding report from enabling Mark reviewed during refresh.
+- The website film, "Promoted to CEO", now shows World 0.3.0 in 110 seconds:
+  Town's reception on top and the bar, an agent dropped in the bin catching the
+  bus, a new agent hired at the town center walking to its desk, fuel gauges
+  with an agent out of fuel, and expenses boards. New scenes show thought
+  bubbles with each working agent's step, a lens colouring the town by idle
+  time and spend, the post office with a parcel for every pull request, and
+  the Cmd+K command box finding an agent. A 3 AM question is answered from
+  Needs you on a phone. In the morning the Town Master greets you with "Since
+  you left" and N steps through what needs you, ending at a grumbling, napping
+  reception crowd in a 291-agent town. It is still drawn live with Town's own
+  code.
+- Run static checks and affected unit tests for PRs limited to agent tooling and
+  its runbooks, while keeping Delivery checks and protected platform reports.
+- World downloads about 15% less before Town first appears. The Inspector and
+  its file preview now load when an Inspector first opens.
+- Reduce Herdr calls when reading Desk turn receipts while keeping the session replacement fence.
+- By owner decision, the gate retains its pass, review, check and decision history indefinitely while deduplicating identical observation payloads. Automatic expiry and manual clearing are not available; a clearing affordance is deferred. `agent:crew status` reports the gate database size.
+- Needs you items are compact notifications: one header row with the agent's
+  mark, name, place and age, a chat icon (**Open in Chat**, or **Follow up in
+  Chat** for finished work) and **✕**, which dismisses a question or marks
+  finished work reviewed, each kind keeping its own action. Messages show two
+  lines; **more** (or a tap) shows the whole message in place with its links,
+  and **less** shortens it again; keyboard focus entering a clipped message
+  reveals its links. Quick replies (with **Other…** for a typed answer) or one
+  answer field appear only when the agent asked something. The agent's name
+  opens its Chat on every item. Over Town the tab wears Town's look.
+- On a phone outside Zen, **Needs you** in the top bar is an inbox icon with a
+  count badge right after the view's name, like the Hosts icon.
+- Town, Board, Desk, Chat and the phone bar use one set of agent marks and
+  words: • Working, ! Needs you, ? Asks you, ✓ Done, – Idle or Reviewed,
+  ~ No signal and × Offline. Board no longer marks an agent with no signal
+  with **?**, which now always means an owner question.
+- Reviewed is one record: marking finished work reviewed in Town, Desk or
+  Needs you clears it in every view and browser.
+- One vocabulary for the same things: Town's Summary says **Done, not
+  reviewed** and **needs you**, Desk names an agent's **desk** rather than its
+  tab, and Board calls a pane without an agent a **terminal**, as Town does.
+- Refresh World with unchanged-host confirmations and reuse unaffected Town rooms
+  and Board topology. Prepare only the mounted view within its Hosts/watch scope, with complete recovery after
+  a service restart and unchanged host qualification and controls.
+- Keep Desk review marks and recent opens, watchlist pins and checked completions
+  across World restarts. Every browser shares committed state; saved records
+  reappear only after World verifies the same terminal and, where known, session.
+- Align React and React DOM with Roamgate at 19.3.1, fixing their development
+  changed-prop diagnostic traversal so dense Board refreshes no longer stall
+  terminal typing for seconds.
+- Preserve terminal renderer ownership during pane switches and restore minimized
+  Groups windows reliably with React 19.
+- Town, Desk and Needs you now use only the shared Desk review record. Missing
+  stop metadata refreshes before marking and remains retryable when unavailable.
+- Upgrade preserves Desk/watch records and transfers old completion checks only
+  with fresh matching terminal, known session and native completion sequence.
+  Work without session proof may need review once again after upgrade.
+- Keep keyboard shortcuts on the World service so they follow every browser.
+- Start each browser on the connection it last used, keep recently viewed
+  terminal streams warm for quick switches, and keep pull request badges across
+  reloads and reconnects, shown as stale until checked.
+- Reduce idle work across open World browsers by sharing focused observations,
+  agent activity and Desk screen/turn reads in the service. Browser views refresh
+  on changes and recover failed reads without repeatedly re-listing idle hosts.
+  Older services retain the existing refresh timers.
+- Store agent profiles and chimes in the World database, importing existing JSON
+  once after a private backup. Profile edits, terminal import completion and the
+  Town master revision watermark now commit through the single SQLite writer.
+- Store Board notes, strings, appearance, layout, interest and relations in the
+  instance database, importing existing Board JSON once with a private exact-byte
+  backup. Existing Board, Town, Spaces and CLI behavior stays the same.
+- Keep auto-sync last-run status in the World database, importing existing settings
+  history once after a private backup. Background results no longer rewrite
+  schedules or other configuration in the settings file.
+- When part of the app fails to load after a service upgrade, World offers a
+  reload instead of reloading the page by itself and replacing open terminals.
+- Share terminal profile assignments and the Town master across Worlds connected
+  to the same Herdr. Settings follow terminal moves and end with the terminal;
+  legacy assignments migrate once with a backup and preserve newer settings.
+  Master revisions learned during writes survive restarts, and removed
+  connections retire their cached claims while offline hosts stay unresolved.
+- Replace Town's floating **New room** button with a dashed **+ Add room**
+  slot at the end of every building's rooms. It creates a room on that
+  building's host, the new room takes its place, and the slot moves on.
+- Town draws an agent in an unknown state awake and confused at its desk,
+  scratching its head under a purple `??`, instead of dozing like an idle one.
+- Town's room cards keep the room's full name at town zoom. The busy count
+  comes before the desk count, and the waiting badge sits beside the status
+  bar.
+- A reception chip for an agent with no Herdr name shows the agent's room
+  instead of its harness. Its tooltip names the room and desk.
+- Changing a colour or pin in Town redraws only that building, so the rest of
+  the town no longer reappears building by building.
+- Town's **City expenses** billboard stands on the lawn above the town
+  center instead of over it, so the whole town center shows. Reception boards
+  keep clear of the town center, the post office, the billboard and each
+  other at every zoom: a board that would cover one slides aside over its
+  building, or hangs lower, below the center or the board in its way.
+- A wide Town opens framed on the billboard, the reception boards, the town
+  center and every building, centred, however tall the boards grow, with the park below off-screen; **−** from there shows
+  the whole town.
+- Town bus stops show everyone waiting: agents queue along the pavement in
+  joining order, wrapping into a second row, with a **+N** board at the end
+  past that. An agent put back walks home from the queue and the rest step up.
+- Town tables can be picked up at the room-summary zoom, on phones by a
+  press-and-hold even under a room summary, and with the mouse on desktop. A
+  tap on a summary still zooms into its room, and a tap on a table still opens
+  it.
+- Town's town center stands at the top of the town, just across the first
+  street from the buildings and centred over them, its front steps opening
+  straight onto the pavement instead of a deep square, so it is a short move
+  from any room. Buildings stand side by side with only the normal streets between
+  them.
+- **N** in Town no longer opens the next waiting agent's window; it moves the
+  camera to it and opens Needs you at its item.
+- Town's expense boards (the city billboard, each reception, the Town board's
+  Economy and room cards) show at most one short caveat line under a figure,
+  such as "partial · 1 host missing". Hover the line, or tap it on a phone, for
+  the full explanations, including unattributed usage and a limited detail list.
+- A room or table card's Economy today says "no price table" instead of a
+  dash when no cost can be estimated, and "No usage data from this host" when
+  the host's harness logs cannot be read.
+- The bin at the bottom of Town and Board lights up while an agent is dragged,
+  so a phone can drop an agent on it with a short drag wherever Town is
+  scrolled, and Town no longer scrolls while the drag rests on it.
+- Only Town's bin speaks of the bus: on Board and other views it reads
+  "Cleaning up" with the count, and its tray says when they close.
+- While an agent waits for the bus in Town, its seat fades into the carpet
+  and crumbles, so the desk reads as going; a desk whose agents are all
+  binned fades whole. Putting the agent back clears it.
+- An agent put in the bin on Board walks out of its front door to its stop
+  the first time Town shows it, instead of already standing there.
+- Town fuel gauges and the phone chip show "seen <age> ago" once a limit reading
+  is more than 15 minutes old, so an old level no longer looks current.
+- Town buildings put reception at the top, under a front door onto the street
+  above, and a bar in the bottom corner where idle agents rest. Every building
+  has roads on at least three sides, and the last lot on the street grid is
+  reserved for a town hall. Wide screens open on the hosts' buildings; **ALL**
+  shows the whole town.
+- Town has a road down its left side too, matching the one on the right: it
+  runs from the top street to the bottom street left of each row's first
+  building, at every size and on a phone, and the landscape starts beyond it.
+- The Town board's counts use one short word per column, Busy, Waiting, Done
+  and Quiet, so every label sits on one line and the numbers line up; room
+  and table cards use the same labels.
+- Search matches every word in any order and any case in Town, Board and
+  Desk, and each result shows its type, place, status mark and, for a task
+  match, an excerpt with the matched words picked out. Board's results float
+  over the board instead of hiding under it, its count matches the list, and
+  Down, Up, Enter and Escape work there as in Town.
+- Starting an agent or a Terminal from **New agent** keeps the pressed choice
+  marked busy and shows one **Starting …** line that says what World is doing.
+  After 10 seconds of real waiting it reads **Taking longer than usual**; there
+  is no progress bar, and the icon stays still with reduced motion.
+- A new agent window that opens on Terminal before Chat can read the agent now
+  says Chat is not available yet under its header, with **Stay on Terminal**.
+  Waiting announcements remain outside busy content so their updates can be announced.
+- Store agent questions, answers, task results and attention delivery in the
+  instance's private `world.sqlite`, with a backed-up, idempotent JSON import.
+  The service owns ask alerts; interrupted sends retain explicit delivery
+  uncertainty and answers remain available through `ask get` after restart.
+
+### Removed
+
+- Town's Needs you rail. Its questions, waiting agents and Outbox route are in
+  the Needs you tab; Summary still lists and answers questions.
+- Retired the separate completion-check browser APIs. Unresolved old receipts
+  drain privately on confirmed terminal absence or 30 days after upgrade.
+
+### Fixed
+
+- Town rooms resize to fit their remaining desks when tabs close.
+- Update DOMPurify and undici to include Roamgate's security dependency fixes.
+- Keep the last known PR/MR status visible after failed refreshes and resolve the
+  rebasing branch's request while a rebase is paused on detached HEAD. Clear retained
+  status when its host, runtime, workspace, checkout or branch changes.
+- On a phone, a partly expanded Town room's **+**, **» +N** and **«** Fold
+  tiles are each at least 40 pixels square and sit side by side without
+  overlapping, so each is one easy tap.
+- Keep healthy World hosts fresh and actionable while agents animate their
+  terminal titles, including repaints with reordered metadata keys, avoiding
+  Town's repeated **Stale · Reconnect** flicker.
+- Town's **+** (Zoom in) button works at every desktop window size. At some
+  window heights, where the whole town is only a little wider than the home
+  view, each press flew back to home instead of into the nearest building.
+- Refresh Chat and quest usage-limit stops after rapid local transcript rewrites,
+  even when the file size and timestamps are unchanged.
+- Show agents' quests on Town desks and Board cards again. Since a refactor on
+  2026-10-23 the service passed quest reads to Herdr, which refused each one and
+  logged a warning every five seconds per connection.
+- A test run no longer rewrites the installed World's signing key, which made
+  the agent CLI's token stop working and could log browsers out.
+- Recheck CLI authorization when held or queued work reaches dispatch, so stopping
+  the CLI service prevents new effects even while its host remains connected.
+  Finish history/undo records for effects already applied, and restore a Board
+  edit after a rejected history write only if no newer edit superseded it.
+  Classify page-key input and file-manager launches as opaque
+  effects, and PR/link lookups as reads.
+- Keep a large Board in its overview while it opens on a busy device: a frame
+  arriving while the Board builds no longer leaves the overview with no cards
+  shown before placement.
+- Open the Board with one fewer render.
+- Avoid unnecessary Board renders when toolbar measurements leave its controls
+  unchanged, including the initial phone layout.
+- Keep the dense Board's first overview and visible cards stable when an early
+  frame arrives before initial layout placement.
+- Batch status squares in dense rooms and across large boards with many small
+  rooms to keep terminal input responsive, preserving each pane's status and
+  the status-pulse controls.
+- Keep animated Town input responsive in dense snapshots by skipping empty
+  question lookups and yielding automatic Town-master name searches between batches.
+- Keep the Inspector pane map open when a delayed terminal-focus handoff runs
+  after keyboard opening.
+- PR evidence captures wait for the current Town, Board or Desk scene to draw
+  after assets and layout, fence viewport changes, and reject incomplete output.
+- Recover captures after an unresolved asset is removed or replaced, and apply
+  content sanity expectations in populated PR capture consumers.
+- Chat submits a multi-question Claude Code form from its review instead of
+  sending you to the Terminal, confirms the last answer, and lists every
+  question's header with whether it is answered.
+- Focus the message input when opening or returning to Chat, so you can type
+  immediately without clicking the composer.
+- Keep focus in the Desk queue during previews and in another input or newer
+  window when an older Chat loads or its agent session changes.
+- Show and answer numbered Codex question choices in Chat, including prompts detected by Herdr 0.9.5 without Codex hooks.
+- Answer Claude Code text options and plan feedback from Chat with a checked native text destination, while preserving native drafts even after the cursor moves away.
+- Keep text-answer refusals visible after question reloads and wait for asynchronous working or completed-turn evidence before confirming a discussion reply.
+- In Town, Board and Desk, open local source references from Chat in the same
+  Inspector's Files view at the requested line, using its selected agent
+  worktree and host. Unavailable
+  bindings and paths outside that worktree offer an explicit worktree choice.
+- Keep commands and lists linked to their individual source files, while ordinary
+  dotted prose and code identifiers remain text.
+- Apply Chat text size to agent replies as well as user messages.
+- Keep Chat paperclip uploads working when browser sync reconnects while the file
+  chooser is open or between files in a multi-file selection, provided the same
+  conversation and runtime still own the draft. Refuse a changed target before
+  uploading remaining files, retaining completed paths in the original draft.
+  Retire queued dispatch when Chat's owner is replaced, while preserving begun
+  results and explicit Retry after reopening the same conversation.
+- Keep Chat usable when the agent's worktree changes while it works. Chat's
+  message box and its controls no longer stop responding after a while, and
+  Chat no longer says **Disconnected** when it is connected; only Files,
+  Changes and Commits wait, marked **Worktree changed · Showing last
+  observation**, until the worktree is read again.
+- Claude limits no longer jump backwards when several Claude sessions run:
+  within one limit window World keeps the highest reading, and starts fresh
+  when the window resets.
+- Installer and update output says a harness integration was installed when it
+  is new, updated when World changed it, and already current when nothing
+  changed, instead of "updated" for every harness.
+- The installed World skill now says World installs it automatically and how
+  to remove it, instead of asking for an explicit install command.
+- Show Claude's questions whole in Chat and Needs you, from its own record:
+  every question, header, option, description and multi-select, instead of a
+  clipped screen tail. Answer buttons appear only when the terminal shows the
+  same question; otherwise Chat says why and offers the Terminal.
+- Show an unrecognised prompt as the terminal draws it, with the reason Chat
+  does not answer it, keeping the final prompt row in view. Keep history read
+  errors visible beside question cards, and refuse malformed or mismatched
+  transcript questions without discarding their authority checks.
+- Keep folder-trust safety text and warnings visible in Needs you. Refuse
+  clipped folder dialogs and changed literal folder text, preserve paired globs
+  in question matching, and keep failed transcript reads Terminal-only.
+- Cancel pending Desk reveals permanently when leaving the view, unmounting or
+  starting a newer reveal, including queued Inspector admission. Superseded
+  requests leave current agents available to retry without an unavailable error.
+- Keep a reviewable stop for agents already finished when World first sees them,
+  and retain it after the 12-hour display window expires. Current stops no longer
+  disappear at 500 agents; bounded history yields before current metadata.
+- Prevent unknown-session Desk reviews from following a replacement agent or
+  inheriting unproven ownership after restart. Known sessions restore their exact
+  reviewed stop after fresh verification.
+- Preserve current known stops while reconnecting, retain replacement fences
+  across restart, and refuse oversized or malformed native observations without
+  partial current changes or stopping World.
+- Prevent saved answers and owner alerts from sending to a replacement Herdr
+  after World restarts. Preserve possible-send uncertainty and saved history;
+  retrieve saved answers with `herdr-world ask get ID`.
+- Reserve new question, answer, result and history IDs durably so retention and
+  service restarts cannot make an earlier ID available for another record.
+- Keep a tab name or status you start typing when another device's change
+  arrives at the same moment; the draft was replaced by the shared value.
+- Keep the pane map in a window's title open when it is reopened just after
+  picking a pane; the picked terminal's late focus closed it.
+- Check the proposed merge against main's file-size ratchet before pushing,
+  including stacked targets, and validate PR descriptions locally with
+  `bun run check:pr-body <file>`.
+- Keep the GitHub source connected when many pull requests merged in the
+  window: merged history is read fifty at a time, apart from open work,
+  instead of in one request that GitHub stopped with a timeout.
+- Read open pull request searches separately and action details before history.
+  History is bounded to 400 pull requests within the existing minute; an
+  oversized or timed-out history keeps the last complete list and explains
+  how to shorten the merged window. A pull request merged between requests
+  keeps its merged state and date, together with all its roles.
+- Reduce Interest overhead in dense views when there are no effective Focus claims.
+- Keep Group Add, Edit and Roles drafts after conflicting edits, require explicit
+  review before resubmission, and refuse replaced or ambiguously named agent selections.
+- Keep reviewed Room/Desk moves valid across incidental status, focus and revision changes.
+- Preserve live appearance edits when RPC or CLI moves a desk.
+- Preserve appearance edits and resets saved at a move's new destination, and
+  describe whole-Board form conflicts without claiming that the current Group changed.
+- Reuse existing Herdr installations instead of requiring a second Homebrew-owned
+  runtime. Homebrew installs a missing verified prebuilt Herdr on first normal
+  World launch, outside its keg, including on Intel Macs without a source build.
+- The standalone installer now installs Herdr only when missing and leaves existing
+  versions and installation owners unchanged. Explicit upgrades remain available.
+- A failed Homebrew runtime check or download warns and still starts World, keeping
+  SSH profiles and in-app setup available. Fresh standalone installs leave harness
+  integrations and the plugin to an explicit `herdr-world herdr upgrade`.
+- Preserve Herdr even if another installation appears during automatic setup:
+  missing-only bootstrap never upgrades or overwrites an intervening runtime.
+- Keep safe standalone runtime setup when selecting an older World release that
+  lacks the missing-only CLI option. Report broken Herdr links before downloading
+  and preserve the blocking entry for its owner to repair.
+- Validate the selected Herdr file before treating discovery as an installation;
+  preserve unusable entries with repair guidance. Reuse a reachable Herdr server
+  without installing a second copy when its executable is outside the installer's path.
+- Show every pane of a multi-pane tab, such as a review round, in its desktop
+  terminal window. Herdr reports a tab that no client shows at a few cells,
+  with some panes 0 cells tall; World now draws such a tab's split from its
+  ratios instead of showing no layout.
+- Finish standalone installer upgrades by bringing Herdr, detected harness
+  integrations and the installed World plugin up to date, then restarting the
+  matching running World service on Linux and macOS. Report every step and explain
+  skipped restarts; `HERDR_WORLD_SKIP_HERDR=1` still permits the World restart.
+- Retry transient local Herdr connection failures with capped backoff so a runtime
+  that starts after World can recover automatically. Explicit Reconnect remains
+  available, and failed topology stays non-actionable until freshly observed.
+- Reject Markdown link and image URLs that hide unsafe schemes with controls or
+  use mixed slashes to address another origin. Preserve ordinary links and
+  workspace source-file navigation. Adapted from [Roamgate #567](https://github.com/powerfooI/roamgate/pull/567),
+  commit `ded99da2f6ccf8ed3fa85ae29e27011598ec4b04`.
+- Show an empty Chat for a newly started agent without a conversation yet,
+  while retaining errors for missing or unreadable conversation records.
+- Keep New agent progress and outcomes visible above harness checks, and
+  prevent repeated clicks or a startup timeout from creating duplicate agents.
+  A definite failure allows a deliberate retry.
+- Ignore replies from a dismissed New agent window and finish opening a login
+  tab before accepting another start, preserving the active attempt's result.
+- Open agents on Terminal until Chat can show their conversation, including
+  when a session exists but its record is unreadable. Switch to Chat only when
+  it becomes available, unless a view was chosen manually. Show unavailable
+  explanations only in manually selected Chat. Describe startup questions honestly and
+  show plain starting/waiting guidance instead of an installation hint.
+  A replacement terminal or harness cannot inherit the old automatic switch.
+- Keep rapid repeat clicks and taps on a notification’s close button from dismissing
+  a Needs you item or activating another control exposed beneath it.
+- The welcome card names Town, Board, Desk and Spaces instead of retired
+  views, and Town's empty state points to **Hosts → Manage connections**.
+- A ready runtime suppresses Town's local Herdr setup offer even when hidden
+  by the **Hosts** filter.
+- Name the asking agent in the **Needs you** list as Town labels its desk, with
+  **Open agent**, and in the new-ask notification by its Herdr name (else its
+  pane) with the question's first line.
+- Bring an unverified ask to reception, marked unverified, when exactly one
+  local Herdr has the pane it names, instead of leaving it in the list only.
+- Restore browser startup when owner questions load before the application store,
+  while preserving their chime, toast and OS-notification behavior.
+- Explicit Herdr setup now registers future user-service startup even when Herdr
+  is already running, preserving the live server and reporting registration errors.
+  Unusable executable entries are rejected before service registration and preserved
+  for repair.
+- Preserve other hosts' disconnected state and notice revisions while marks commit.
+- Refuse pending Desk/completion commands across observed session replacement,
+  including unknown identities, and let exact Unpin remove unavailable saved
+  watches without deleting a newer replacement.
+- Remove the current shared watch projection when an older exact Unpin names the
+  same saved watch after a runtime change.
+- Enforce legacy-review expiry at the resolving Desk write and retain a receipt
+  when sparse or duplicate metadata cannot name the exact displayed stop,
+  including when opening another report before the next complete observation.
+- Keep Ranger task recovery stable across equivalent configuration key order and
+  reject navigation replies from a retired service or runtime.
+- Preserve dynamic task membership, proposals and run omission notices across
+  restart, and refuse unproven or stale Claude continuation identities.
+- Keep SSH command traffic responsive with private runtime-owned shared connections,
+  bounded background work, keepalives and clear refusal of oversized Herdr requests.
+- Cancel queued SSH commands, workspace Files uploads and terminal uploads when their runtime retires; retain failed-start
+  master ownership until confirmed exit and keep recovery within caller deadlines.
+- Keep file-ignore checks, launcher discovery and integration-version checks on their
+  owning connection when it disconnects.
+- Refresh worktree Git status in the background without overwriting newer host-local
+  updates, and batch untracked-file line counts.
+- Keep Pane Search's selected match when moving through results with arrow keys.
+- Keep unsent Message drafts across a reconnect to the same destination, in
+  memory only.
+- Return clipboard writes from composer-sent commands to the sending browser,
+  send uploaded image paths so Claude Code attaches the image, keep password
+  managers off search fields, and open a plugin popup on its own Space.
+- Retire earlier transcript claims when a Codex title names a different thread,
+  including a transition from a reported session; preserve matching-thread claims
+  under a stale native report. Keep runtime replacement from borrowing a previous
+  terminal's session or checkout.
+- Retain PR-link evidence omitted from a successful truncated GitHub page, while
+  retiring claims when their runtime or connection ends.
+- Keep agent recency current through status transitions and retain the newest
+  timestamp when a list reply races an activity update. Replaced agent sessions
+  never inherit their predecessors' recency.
+- Preserve the same agent session's recency across a World service restart, and
+  ignore pushed activity when the service disables shared acquisition.
+- Keep bound appearance from attaching to a reused Herdr tab or pane ID, and
+  preserve choices through confirmed moves without changing runtime status colours.
+- Keep the latest explicit colour or reset through lost move acknowledgements,
+  whether edited before or after native close cleanup; bind profile colours to newly launched terminals on reused IDs.
+- Reclaim closed terminals' appearance settings from complete current evidence,
+  and discard unsaved phone drafts when their pane moves into a different tab.
+- Retry closed-tab colour and pin cleanup after concurrent Board edits, without
+  removing a replacement tab's settings.
+- Keep an unverified question unplaced when any candidate local Herdr cannot
+  confirm whether it owns the claimed pane.
+- Bound retained payloads while Board edits wait for earlier commits, preserving
+  small metadata updates from dense World observations.
+- Opening World, or an agent's window on Chat, no longer resizes the agents'
+  terminals for every other viewer. A terminal World keeps hidden attached to
+  a pane at 13×1 and shrank it to a sliver, and World's popup watcher shrank
+  every pane to 80×24. Both now attach at the size the session already has,
+  so harness menus such as Claude Code's or Codex's `/model` draw normally and
+  Chat can read them.
+- A terminal another client squeezed (for example an older World page) is
+  never kept that small by World: a hidden terminal uses its last good size
+  instead, and showing or clicking the Terminal view gives the agent its full
+  size back.
+- Show a Town building's stale roof as soon as its host goes stale, instead of
+  after an unrelated change redraws the town.
+- A desk or agent carried in Town over an agent walking past now lands on the
+  room or desk drawn under it. It no longer turns into a reorder in the walker's
+  own room, snaps into a group with the walker's desk, or moves an agent to the
+  walker's desk. An empty chair whose agent is walking elsewhere now selects
+  and drags its pane, not the absent agent.
+- Show a Town desk's agent name when exactly one named agent occupies its tab.
+- Keep Town city and building expenses consistent when many agents produce usage:
+  detail limits preserve totals, seven days includes today, and the Town board's
+  Economy today shares the city board's UTC harness usage and price-table rule.
+  Preserve valid pane attribution during partial log scans and activity-title
+  changes; label unattributed usage as already included in totals.
+  In the `town-scale` preview, use synthetic usage for every economy reader,
+  including reception, city, room and table cards, the Spend lens and Town board;
+  label it as test data instead of mixing live totals with synthetic buildings.
+- Use clear, tabular digits for Town economy amounts, including city and
+  reception expenses, room and table cards, and compact phone signs, so 5 is
+  distinguishable from S and 8.
+- A desk held at the edge of Town to scroll no longer snaps into a group when
+  frames come slowly (a large window on a busy machine). The grouping wait
+  starts only once the desk is held away from the edge.
+- A desk held at the edge of Town to scroll no longer snaps into a group with
+  a desk that scrolls under it; the grouping wait starts once the town stops.
+- Avoid scanning Town's agent and terminal rosters for the Summary when there
+  are no open questions, reducing unnecessary work during dense refreshes.
+- Expanded Town rooms now shrink to fit remaining desks when tabs close while
+  staying expanded.
+- A Town bus stop's countdown now runs to the bus reaching that stop and reads
+  "due" only a few seconds before it pulls in, instead of from the trip's start.
+- An agent put in the bin in Town walks out of its front door and along the
+  pavement to its stop on a phone too, instead of appearing at the stop when
+  its walk indoors took longer than 15 seconds.
+- Stop Town from redrawing covered or off-screen ambient animation. Visible
+  motion keeps its smooth cadence, and static scenes wake when their state changes.
+- Repaint a sleeping Town after GPU context restoration, including when returning
+  from a hidden page.
+- Stop idle Town from re-rendering the whole World page on every animation
+  frame. An idle Town now renders only when its data changes, which saves
+  battery on phones and frees the main thread for input.
+- A Town viewed whole stays whole when it grows, when a panel narrows it, and
+  when you come back to it after a different screen shape.
+- A Town agent that starts walking inside its destination tile now stops at
+  the tile's centre instead of where it stood.
+- A desk carried in Town no longer snaps into a group during a zoom or camera
+  flight when frames come slowly (a large window on a busy machine). The
+  grouping wait starts once the town is still.
+- The Town board counts the whole town: quiet agents now count, and a line
+  gives every agent in every building, so a building whose agents are all
+  quiet no longer goes missing from the board.
+- Keep large Worlds responsive: a refresh no longer rebuilds the focused host's
+  World in the shell's render. Host filters reuse the World's index, Town
+  indexes each room's tabs once and yields inside large rooms, and terminal
+  colours are derived again only when the Board or the hosts change.
+- Town presses land on what the screen shows: a press right after a pan that
+  has not been drawn yet (an arrow key, or the edge scroll while carrying a
+  desk) no longer misses the desk under the finger on a slow device, and a
+  carried desk aims at, and drops on, what is drawn under it while the town
+  scrolls beneath it.
+- Keep Town Reception and lounge agents aligned with their current building after snapshot updates, including updates during a stand-up animation.
+- Town's search reads above a lens: with a lens on, each match is outlined
+  over the lens's colours and the chosen one pulses there, while every other
+  room keeps its lens colour. Escape ends the search and leaves the lens on,
+  as it was before.
+- Keep Town whole when desks, rooms or hosts appear or disappear: the old
+  scene stays drawn until the new one is ready, new buildings fade in, removed
+  ones fade out, moved buildings glide with their plaques, and the camera keeps
+  what you were looking at in place. Reduced motion makes the change instant,
+  still without a blank or half-drawn frame.
+- Town draws one wall around a team's touching tables, bending it around
+  another team's table instead of splitting into a box per table. Separate
+  clusters of one team in a room get a wall each, joined by a connector.
+- Joining a team in Town moves no other table: the dropped table takes a free
+  place touching the table it was dropped on, on the side it came from where
+  it can, so an L built table by table keeps its shape.
+- Keep verified source bindings across service restarts and refuse ambiguous Board
+  note targets while retaining the existing layout, appearance and interest rules.
+- Preserve appearance and interest records when a listing repeats a pane, terminal
+  or known session identity, and prevent split tabs from inheriting an arbitrary
+  earlier appearance identity.
+- Keep Town's window controls at least 40px on touch tablets and without a
+  pointing device, including narrow columns, without overflowing the header.
+- Recover saved World effects with current attempt fences and authorization,
+  preserving uncertain sends, original recipients and operation versions across
+  restart. Owner alerts retain safe retries; saved answers require an explicit
+  owner decision before a possible duplicate send.
+- Configuration → Integrations reloads by itself after World restarts or a
+  connection's Herdr runtime changes, instead of saying the host is no longer
+  available. It suggests updating Herdr only when Herdr refuses the
+  integration methods.
+- Configuration opened from Town, Board or another World view uses the
+  active connection it names. Integrations and Connection settings no longer
+  stay stuck waiting for Herdr when nothing is selected or the selection is
+  on another host.
+
+### Documentation
+
+- Bring the README, tutorial, feature guide and website up to date with 0.2.7.
+  The README gains a "What's new in 0.2.7" summary and a Chat guide link. The
+  tutorial gathers Chat into one **Chat with an agent** section that covers
+  the composer, the Now bar and Stop, tool evidence, receipts and answering
+  prompts, and fixes earlier steps that said Enter sends a message. The website
+  gains a Meet Chat section and says when World installs Herdr.
+- Distinguish the published 0.2.7 standalone install/upgrade behavior and opt-out
+  from Homebrew's missing-only setup and the unreleased source installer fix.
+  Match Chat's Configuration path, transcript-tail tool call and receipt labels.
+- Recapture the README, tutorial and website screenshots for 0.2.7 with real
+  Claude Code agents in disposable workspaces, and add desktop and phone Chat
+  captures in place of the History capture.
+- Rewrite the tutorial for people learning World: eight short chapters of
+  numbered steps that say what to do and what you will see, about a quarter of
+  its former length. Reference detail lives in `FEATURES.md`, and the site
+  build now fails when a tutorial step or the whole tutorial grows past its
+  limits.
+- herdr.world now presents World 0.3.0: how Needs you, thought bubbles, the
+  fuel board and expenses, search, the post office and the bin help you run a
+  crew of agents, with new Town and Board screenshots and sharing images drawn
+  from a synthetic scene by `scripts/site-screenshots.ts`.
+
 ## [0.2.7] - 2026-10-26
 
 ### Added

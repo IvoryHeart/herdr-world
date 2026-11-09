@@ -9,35 +9,29 @@ hosts, see their agents together in Town, Board or Desk, and chat with them,
 start them from profiles, and use independently qualified terminals, files and
 changes on desktop or mobile. **Requires a running Herdr server.**
 
-## What's new in 0.2.7
+## What's new in 0.3.0
 
-- **Chat with each agent.** Opening an agent opens its one window on **Chat**:
-  the conversation from its transcript, tool calls with their diffs and test
-  results, its current task and quest, and a composer with attachments and
-  slash commands. Answer supported permission prompts and Claude Code
-  questions, or **Stop** the agent. See the [Chat guide](./docs/CHAT.md).
-- **Start agents from profiles.** **Actions → New agent** launches Claude Code,
-  Codex or another supported harness from a profile (role, model, permissions,
-  starting brief and Town look) after checking it is installed and logged in.
-- **Hear who needs you.** Chimes say who needs you and why; set each agent to
-  **Watching**, **Muted** or **Focused**.
-- **Teams and agent tools.** Agents started by other agents are grouped with
-  them. The `herdr-world` CLI lets agents pin and colour their cards, report
-  results and ask you questions.
-- **Work beside agents.** Your GitHub pull requests and Jira tickets appear in
-  Board's **Work** lens and on Town desks, with confirmed merge, close and mark
-  ready actions.
-- **A clearer Town.** Rooms follow Spaces' tab order and resize as tabs open or close;
-  expanded rooms stay expanded as they shrink when tabs close, until folded;
-  pin desks, colour hosts, workspaces and terminals, and open **Summary** for
-  everything needing you. Every view opens in Zen.
-- **Herdr setup.** The published 0.2.7 standalone installer installs or upgrades
-  Herdr to the verified release; set `HERDR_WORLD_SKIP_HERDR=1` to leave yours
-  untouched. Homebrew reuses existing Herdr and installs it on first launch only
-  if missing. World updates refresh Herdr's harness integrations and plugin. See
-  [Herdr installation and upgrades](./docs/DEPLOYMENT.md#herdr-installation-and-upgrades).
+- **Find or act.** One command box finds agents, terminals, rooms and buildings,
+  switches views and runs actions. Use **Ctrl+K** (**Cmd+K** on Mac), or
+  **Find or act** in the phone's corner view menu.
+- **See who needs you.** The shared **Needs you** tab gathers questions, blocked
+  agents and finished work. Answer with attachments or mark work reviewed;
+  review marks follow you across views and browsers.
+- **Follow progress and capacity.** Town bubbles and Board cards show current
+  steps. Subscription fuel gauges, expense boards and context indicators help
+  you decide what to delegate next.
+- **Organize busy work.** Search across views, use lenses for spending, idle time,
+  pull requests and quests, move and tidy Town rooms, and keep open pull requests
+  visible at the post office after their agents leave.
+- **Continue across devices.** Saved questions, answers, results and more settings
+  survive restarts and follow the World service across browsers. Minimize windows
+  on phones or dock Chat beside your work on desktop.
+- **Upgrade in one run.** `herdr-world update` restarts the matching running managed
+  World service on Linux/macOS and sets up World skills and Claude usage readings
+  for configured agent tools. Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` to keep that
+  integration setup manual.
 
-Read the [0.2.7 release notes](./docs/releases/v0.2.7.md) for upgrade steps and
+Read the [0.3.0 release notes](./docs/releases/v0.3.0.md) for backup and upgrade steps and
 known limits.
 
 ## Choose your layout
