@@ -78,6 +78,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
     World, and the agent's status line looks as before. When Claude refused
     work at its limit, the gauge reads **reached, resets …** instead of a level.
+    Chat and quests refresh usage stops after local transcript rewrites, including
+    same-size writes whose file timestamps stay unchanged.
     On a phone the compact chip adds the lowest percent left (or **reached**), with the same age when that reading is over 15 minutes old. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,

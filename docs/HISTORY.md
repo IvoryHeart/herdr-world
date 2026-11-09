@@ -47,10 +47,22 @@ is not included in the estimate.
 
 Refresh resolves/stats the session. Path, provider, session, file identity,
 size/mtime, change metadata, and provider descriptors invalidate projections.
+For local JSONL transcripts (including compressed rollouts), refresh also reads
+the content and compares its SHA-256 digest. Same-size rewrites with identical
+timestamps therefore update Chat, quests and usage stops. Unchanged content reuses
+the parsed projection; changed content is parsed from that same read. Only the
+digest is retained, not another transcript copy. SSH reads continue to use the
+remote file metadata to validate cached projections.
 A post-read stat triggers up to three retries on change. Errors invalidate data;
 incomplete JSONL records wait for later changes. This is not a filesystem
-transaction: later writes appear on the next refresh, and coarse metadata may
-miss same-size in-place rewrites.
+transaction: later writes appear on the next refresh. Coarse remote metadata may
+still miss same-size in-place rewrites over SSH.
+
+To try the local rewrite case without a real usage limit, run
+`bun server/src/agent/testing/usage-stop-preview.ts` and open its printed URL.
+Click **Read Chat**, **Rewrite with expired reset**, **Read quests**, then
+**Read Chat**. Both final reads show `usage_stop: null`. This testing-only preview
+uses an in-memory transcript with fixed metadata and no Herdr connection.
 
 ## Codex rollout storage
 

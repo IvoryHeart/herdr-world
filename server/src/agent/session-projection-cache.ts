@@ -1,5 +1,5 @@
 import { sessionWorktreeMetadata } from "./worktree-session";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { AgentSessionFileAccess } from "./session-file-access";
 import type { AgentSessionResolved, SessionFile } from "./session-types";
 import { conversationMessagesFromTrajectory } from "./session-messages";
@@ -37,11 +37,12 @@ export async function readSessionProjection(
   file: SessionFile,
   files: AgentSessionFileAccess,
   fallbackTime = file.createdAtMs ?? file.mtimeMs,
+  text?: string,
 ) {
   const records =
     agent === "agy"
       ? await readAntigravitySessionRecords(file.path)
-      : parseJsonl(await files.readText(file.path));
+      : parseJsonl(text ?? (await files.readText(file.path)));
   const projectionFile = { ...file, mtimeMs: fallbackTime };
   const trajectory = projectAgentTrajectory(agent, projectionFile, records);
   const messages = conversationMessagesFromTrajectory(
@@ -113,7 +114,7 @@ export function estimateRetainedBytes(
   return bytes;
 }
 
-function signature(file: SessionFile) {
+function signature(file: SessionFile, text?: string) {
   return JSON.stringify([
     file.path,
     file.mtimeMs,
@@ -124,6 +125,9 @@ function signature(file: SessionFile) {
     file.createdAtMs,
     file.modelName,
     file.agentVersion,
+    text === undefined
+      ? undefined
+      : createHash("sha256").update(text).digest("hex"),
   ]);
 }
 function sessionKey(resolved: AgentSessionResolved) {
@@ -164,6 +168,25 @@ export function createSessionProjectionCache(
   > & { identity: unknown; size: number; createdAtMs: number | undefined };
   const identities = new Map<string, Identity>();
   let retainedBytes = 0;
+  async function readSnapshot(
+    resolved: AgentSessionResolved,
+    stat?: SessionFile,
+  ) {
+    const file = resolved.file;
+    if (!file) throw new Error("Session file unavailable");
+    const current = stat ?? (await files.statFile(file.path));
+    if (!current)
+      throw new Error("Session file disappeared; refresh to resolve it again");
+    const descriptor = { ...file, ...current };
+    // Local files can be rewritten without any stat field changing. Read once
+    // to validate content, reusing the text if a new projection is needed.
+    const text =
+      !files.remote && resolved.agent !== "agy"
+        ? await files.readText(descriptor.path)
+        : undefined;
+    return { file: descriptor, text, signature: signature(descriptor, text) };
+  }
+  type Snapshot = Awaited<ReturnType<typeof readSnapshot>>;
   function remove(key: string) {
     const old = cache.get(key);
     if (old) retainedBytes -= old.bytes;
@@ -179,7 +202,10 @@ export function createSessionProjectionCache(
     for (const key of pending.keys())
       if (key.startsWith(prefix)) pending.delete(key);
   }
-  async function load(resolved: AgentSessionResolved): Promise<Cached> {
+  async function load(
+    resolved: AgentSessionResolved,
+    initial?: Snapshot,
+  ): Promise<Cached> {
     const file = resolved.file;
     if (!file) throw new Error("Session file unavailable");
     const key = `${sessionKey(resolved)}:${file.path}`;
@@ -189,13 +215,9 @@ export function createSessionProjectionCache(
     const task: Promise<Cached> = (async () => {
       const old = cache.get(key);
       // Re-stat even if resolution came from a provider's descriptor cache.
-      let before = await files.statFile(file.path);
-      if (!before)
-        throw new Error(
-          "Session file disappeared; refresh to resolve it again",
-        );
-      let current = { ...file, ...before };
-      if (old?.signature === signature(current)) {
+      let snapshot = initial ?? (await readSnapshot(resolved));
+      let current = snapshot.file;
+      if (old?.signature === snapshot.signature) {
         if (isCurrent() && cache.get(key) === old) {
           cache.delete(key);
           cache.set(key, old);
@@ -231,13 +253,14 @@ export function createSessionProjectionCache(
           current,
           files,
           fallbackTime,
+          snapshot.text,
         );
         const after = await files.statFile(file.path);
         if (!after) throw new Error("Session file disappeared while reading");
         if (signature({ ...file, ...after }) === signature(current)) break;
         projection = undefined;
-        before = after;
-        current = { ...file, ...before };
+        snapshot = await readSnapshot(resolved, after);
+        current = snapshot.file;
       }
       if (!projection)
         throw new Error(
@@ -247,7 +270,7 @@ export function createSessionProjectionCache(
       // An unretained projection read again unchanged keeps its revision.
       const revision = reset
         ? 1
-        : base!.signature === signature(current)
+        : base!.signature === snapshot.signature
           ? base!.revision
           : base!.revision + 1;
       const versions =
@@ -258,7 +281,7 @@ export function createSessionProjectionCache(
       while (versions.size > 4) versions.delete(versions.keys().next().value!);
       const value: Cached = {
         projection,
-        signature: signature(current),
+        signature: snapshot.signature,
         epoch: reset ? randomUUID() : base!.epoch,
         revision,
         versions,
@@ -322,7 +345,7 @@ export function createSessionProjectionCache(
   }
   /**
    * What Town and Board show at the agent's desk: its quest and its
-   * usage-limit stop, reading the transcript only when it changed.
+   * usage-limit stop, reusing the projection while its source is unchanged.
    */
   const desk = async (
     resolved: AgentSessionResolved,
@@ -331,10 +354,10 @@ export function createSessionProjectionCache(
     if (!file) throw new Error("Session file unavailable");
     const key = `${sessionKey(resolved)}:${file.path}`;
     const known = quests.get(key);
-    const stat = known && (await files.statFile(file.path));
-    if (known && stat && known.signature === signature({ ...file, ...stat }))
+    const snapshot = known ? await readSnapshot(resolved) : undefined;
+    if (known && snapshot && known.signature === snapshot.signature)
       return { quest: known.quest, usage_stop: known.usage_stop };
-    const { projection } = await load(resolved);
+    const { projection } = await load(resolved, snapshot);
     return { quest: projection.quest, usage_stop: projection.usage_stop };
   };
   return {
@@ -343,7 +366,7 @@ export function createSessionProjectionCache(
       return (await load(resolved)).projection;
     },
     desk,
-    /** The session's quest, reading the transcript only when it changed. */
+    /** The session's quest, reusing its unchanged projection. */
     async quest(resolved: AgentSessionResolved) {
       return (await desk(resolved)).quest;
     },
