@@ -16,7 +16,9 @@ export type WindowArrangementCommand =
   | TerminalWindowArrangementPreset
   | "restore"
   | "close-all"
-  | "open-all";
+  | "open-all"
+  | "fit-right"
+  | "fit-left";
 
 export type WindowArrangementControl = {
   windows?: readonly WindowSwitcherEntry[];
@@ -30,6 +32,8 @@ export const WINDOW_ARRANGEMENT_CHOICES: readonly {
   label: string;
   description: string;
   shortcutId?: ShortcutId;
+  /** A placement of the active window: in Actions, not this menu. */
+  actionOnly?: true;
 }[] = [
   {
     command: "single",
@@ -76,6 +80,20 @@ export const WINDOW_ARRANGEMENT_CHOICES: readonly {
     command: "open-all",
     label: "Open all terminal windows",
     description: "Present every terminal on the selected host",
+  },
+  {
+    command: "fit-right",
+    label: "Fit right",
+    description: "Put the active window on the right edge at its normal width",
+    shortcutId: "window.fitRight",
+    actionOnly: true,
+  },
+  {
+    command: "fit-left",
+    label: "Fit left",
+    description: "Put the active window on the left edge at its normal width",
+    shortcutId: "window.fitLeft",
+    actionOnly: true,
   },
 ];
 
@@ -193,53 +211,53 @@ export function WindowArrangementMenu({
               style={position}
               onKeyDown={onMenuKeyDown}
             >
-              {WINDOW_ARRANGEMENT_CHOICES.map(
-                ({ command, label, description, shortcutId }) => {
-                  const reason = control.disabledReasons[command];
-                  const shortcut = shortcutId
-                    ? shortcutLabel(shortcutId)
-                    : "Unassigned";
-                  return (
-                    <button
-                      key={command}
-                      type="button"
-                      role="menuitem"
-                      aria-disabled={!!reason}
-                      className={`window-arrangement-option ${control.activePreset === command ? "is-active" : ""}`}
-                      title={reason ?? description}
-                      onClick={() => {
-                        if (reason) return;
-                        setOpen(false);
-                        control.onSelect(command);
-                        queueMicrotask(() => triggerRef.current?.focus());
-                      }}
-                    >
-                      {command === "restore" || command === "close-all" ? (
-                        <RotateCcw size={19} aria-hidden="true" />
-                      ) : (
-                        <span
-                          className={`window-arrangement-preview is-${command}`}
-                          aria-hidden="true"
-                        >
-                          <i />
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                      )}
-                      <span className="window-arrangement-copy">
-                        <strong>{label}</strong>
-                        <small>{reason ?? description}</small>
+              {WINDOW_ARRANGEMENT_CHOICES.filter(
+                (choice) => !choice.actionOnly,
+              ).map(({ command, label, description, shortcutId }) => {
+                const reason = control.disabledReasons[command];
+                const shortcut = shortcutId
+                  ? shortcutLabel(shortcutId)
+                  : "Unassigned";
+                return (
+                  <button
+                    key={command}
+                    type="button"
+                    role="menuitem"
+                    aria-disabled={!!reason}
+                    className={`window-arrangement-option ${control.activePreset === command ? "is-active" : ""}`}
+                    title={reason ?? description}
+                    onClick={() => {
+                      if (reason) return;
+                      setOpen(false);
+                      control.onSelect(command);
+                      queueMicrotask(() => triggerRef.current?.focus());
+                    }}
+                  >
+                    {command === "restore" || command === "close-all" ? (
+                      <RotateCcw size={19} aria-hidden="true" />
+                    ) : (
+                      <span
+                        className={`window-arrangement-preview is-${command}`}
+                        aria-hidden="true"
+                      >
+                        <i />
+                        <i />
+                        <i />
+                        <i />
                       </span>
-                      {shortcut !== "Unassigned" ? (
-                        <kbd className="window-arrangement-shortcut">
-                          {shortcut}
-                        </kbd>
-                      ) : null}
-                    </button>
-                  );
-                },
-              )}
+                    )}
+                    <span className="window-arrangement-copy">
+                      <strong>{label}</strong>
+                      <small>{reason ?? description}</small>
+                    </span>
+                    {shortcut !== "Unassigned" ? (
+                      <kbd className="window-arrangement-shortcut">
+                        {shortcut}
+                      </kbd>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>,
             document.body,
           )

@@ -994,13 +994,15 @@ function OwnedCommandCombobox({
             key: `arrangement-${command}`,
             icon: <LayoutGrid size={15} />,
             title:
-              command === "close-all"
-                ? "Close all terminal windows"
-                : command === "open-all"
-                  ? "Open all terminal windows"
-                  : command === "restore"
-                    ? "Restore window positions"
-                    : `Arrange windows: ${label}`,
+              command === "fit-right" || command === "fit-left"
+                ? label
+                : command === "close-all"
+                  ? "Close all terminal windows"
+                  : command === "open-all"
+                    ? "Open all terminal windows"
+                    : command === "restore"
+                      ? "Restore window positions"
+                      : `Arrange windows: ${label}`,
             detail: description,
             shortcut: shortcut === "Unassigned" ? undefined : shortcut,
             keywords: ["layout", "tile", "windows", label],

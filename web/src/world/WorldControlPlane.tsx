@@ -241,6 +241,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     compactArrangement,
     managedWindows,
     windowCommand,
+    fitWindowToSide,
     contextRailInspector,
     visibleFloatingInspectorIds,
     visibleFloatingInspectors,
@@ -656,6 +657,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                             id: entry.id,
                             target,
                           }),
+                        onFit: (side) => fitWindowToSide(entry.id, side),
                         onFloat: () =>
                           windowCommand({ type: "float", id: entry.id }),
                         // A panel is a detail of its view: Back closes it.
@@ -877,6 +879,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   target,
                 });
               },
+              onFit: (side) =>
+                fitWindowToSide(worldInspectorWindowId(conversation), side),
               onFloat: () => {
                 rememberTownDock(
                   worldLocalStorage,

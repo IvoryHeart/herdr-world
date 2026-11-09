@@ -99,6 +99,8 @@ function Fixture() {
                       dispatch({ type: "maximize", id: entry.id }),
                     onSnap: (target) =>
                       dispatch({ type: "snap", id: entry.id, target }),
+                    onFit: (side) =>
+                      dispatch({ type: "fit", id: entry.id, side }),
                     onFloat: () => dispatch({ type: "float", id: entry.id }),
                     pin: {
                       pinned: pins[entry.id] ?? false,
@@ -176,6 +178,7 @@ async function checkNarrowTownHeaders() {
     onMinimize() {},
     onMaximize() {},
     onSnap() {},
+    onFit() {},
     onFloat() {},
   };
   // Four Columns on a landscape tablet leave about 256px per window.

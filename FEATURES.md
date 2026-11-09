@@ -1010,7 +1010,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   named `<name>-<harness>` (for example `otter-claude`), shortened in the middle
   past 14 characters, and its state is a badge on its icon: a tick when done, a
   spinner while working, **!** when it needs you and a grey dot when idle. **⋯** holds
-  a minimize shortcut, the snap choices and float. Tapping the location line under the name
+  a minimize shortcut, the snap choices and float. **Fit right** and **Fit left**
+  come first: they put the window against that edge, full height, at its normal
+  docked width (520 px, at most half the screen, or the width you last dragged a
+  docked window's inner edge to) and leave the rest of the view usable; the half
+  and quarter snaps still fill their region. A fitted window keeps its inner-edge
+  resize handle. The same two placements are in **Actions** for the active window
+  and can be given keyboard shortcuts; none are assigned. Phones have no fit
+  choices because windows fill the screen there. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
   Town the window takes the Town look (portrait, pixel name, chunky buttons,
   **‹ Back**), and so does its Chat: Town's colours, framed messages with

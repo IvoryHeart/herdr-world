@@ -1177,7 +1177,11 @@ Board, above the bottom controls and also in Zen: tap the chip once to bring the
 window back. While another window fills the screen, the chips sit in a strip at
 the bottom of that window, below its content, so restoring still takes one tap;
 **Tabs** in the expanded mobile controls also lists windows.
-On desktop, **Arrange windows** can tile or cascade open Inspectors.
+On desktop, **Arrange windows** can tile or cascade open Inspectors. To put one
+window beside the view instead of over half of it, choose **⋯ → Fit right** or
+**Fit left**: the window takes the full height at a readable width (the width you
+last dragged a docked window to), and **Right half** still fills half. Both are
+in **Actions** too, where you can give them a shortcut.
 On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
 when Composer is open. The phone's own Back closes Composer first, then the

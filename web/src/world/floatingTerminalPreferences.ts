@@ -4,7 +4,7 @@ import {
   type FloatingTerminalSize,
 } from "./floatingTerminalGeometry";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
-import type { SnapTarget } from "./windows/windowManager";
+import type { SnapDock, SnapTarget } from "./windows/windowManager";
 
 export const FLOATING_TERMINAL_GEOMETRY_KEY =
   "worldFloatingTerminalGeometry:v1";
@@ -138,9 +138,20 @@ export function readFloatingTerminalDockWidth(
   storage: Pick<Storage, "getItem">,
   id: string,
 ): number | null {
+  return readFloatingTerminalSnapDock(storage, id)?.width ?? null;
+}
+
+/** A left or right dock's own width (a resize or a fit), or null for half. */
+export function readFloatingTerminalSnapDock(
+  storage: Pick<Storage, "getItem">,
+  id: string,
+): SnapDock | null {
   try {
     const saved = parseDocks(storage.getItem(FLOATING_TERMINAL_DOCK_KEY));
-    return saved.find((entry) => entry.id === id)?.width ?? null;
+    const entry = saved.find((candidate) => candidate.id === id);
+    return entry?.width
+      ? { width: entry.width, ...(entry.upToHalf ? { upToHalf: true } : {}) }
+      : null;
   } catch {
     return null;
   }
@@ -150,8 +161,9 @@ export function writeFloatingTerminalDock(
   storage: GeometryStorage,
   id: string,
   dock: FloatingTerminalDock,
-  width?: number,
+  width?: number | SnapDock,
 ) {
+  const own = typeof width === "number" ? { width } : width;
   try {
     const retained = parseDocks(
       storage.getItem(FLOATING_TERMINAL_DOCK_KEY),
@@ -159,9 +171,15 @@ export function writeFloatingTerminalDock(
     storage.setItem(
       FLOATING_TERMINAL_DOCK_KEY,
       JSON.stringify(
-        [...retained, { id, dock, ...(width ? { width } : {}) }].slice(
-          -MAX_SAVED_GEOMETRIES,
-        ),
+        [
+          ...retained,
+          {
+            id,
+            dock,
+            ...(own?.width ? { width: own.width } : {}),
+            ...(own?.width && own.upToHalf ? { upToHalf: true } : {}),
+          },
+        ].slice(-MAX_SAVED_GEOMETRIES),
       ),
     );
   } catch {
@@ -169,15 +187,18 @@ export function writeFloatingTerminalDock(
   }
 }
 
-function parseDocks(
-  raw: string | null,
-): { id: string; dock: FloatingTerminalDock; width?: number }[] {
+function parseDocks(raw: string | null): {
+  id: string;
+  dock: FloatingTerminalDock;
+  width?: number;
+  upToHalf?: boolean;
+}[] {
   if (!raw) return [];
   const value: unknown = JSON.parse(raw);
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate) => {
     if (!candidate || typeof candidate !== "object") return [];
-    const { id, dock, width } = candidate as Record<string, unknown>;
+    const { id, dock, width, upToHalf } = candidate as Record<string, unknown>;
     return typeof id === "string" &&
       id.length > 0 &&
       id.length <= 1_024 &&
@@ -192,10 +213,40 @@ function parseDocks(
             width > 0 &&
             width <= 100_000 &&
             (dock === "left" || dock === "right")
-              ? { width }
+              ? { width, ...(upToHalf === true ? { upToHalf } : {}) }
               : {}),
           },
         ]
       : [];
   });
+}
+
+/**
+ * The width a left or right dock was last dragged to, in any view: "Fit
+ * right" and "Fit left" use it. Null until a dock is resized.
+ */
+export const WINDOW_FIT_WIDTH_KEY = "worldWindowFitWidth:v1";
+
+export function readWindowFitWidth(
+  storage: Pick<Storage, "getItem">,
+): number | null {
+  try {
+    const width = Number(storage.getItem(WINDOW_FIT_WIDTH_KEY));
+    return Number.isFinite(width) && width > 0 && width <= 100_000
+      ? Math.round(width)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeWindowFitWidth(
+  storage: Pick<Storage, "setItem">,
+  width: number,
+) {
+  try {
+    storage.setItem(WINDOW_FIT_WIDTH_KEY, String(Math.round(width)));
+  } catch {
+    // A presentation preference must never prevent window use.
+  }
 }

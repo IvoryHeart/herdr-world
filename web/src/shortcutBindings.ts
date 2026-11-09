@@ -52,6 +52,8 @@ const base = {
   "arrangement.rows": [],
   "arrangement.grid": [],
   "arrangement.restore": [],
+  "window.fitRight": [],
+  "window.fitLeft": [],
   "workspaces.open": ["Ctrl+Alt+O"],
   "files.toggle": ["Ctrl+Alt+E"],
   "diff.toggle": ["Ctrl+Alt+G"],

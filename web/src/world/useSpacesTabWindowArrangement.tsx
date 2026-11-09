@@ -183,6 +183,15 @@ export function useSpacesTabWindowArrangement(active: boolean): {
       dispatch({ type: "arrange", preset: "grid", includeMinimized: true });
       return;
     }
+    if (command === "fit-right" || command === "fit-left") {
+      if (!native && state.activeId)
+        dispatch({
+          type: "fit",
+          id: state.activeId,
+          side: command === "fit-right" ? "right" : "left",
+        });
+      return;
+    }
     if (mobile && command !== "single") return;
     dispatch({ type: "arrange", preset: command });
   };
@@ -210,6 +219,11 @@ export function useSpacesTabWindowArrangement(active: boolean): {
             state.activeId,
           );
     if (reason) disabledReasons[preset] = reason;
+  }
+  for (const command of ["fit-right", "fit-left"] as const) {
+    if (mobile) disabledReasons[command] = "Available in desktop layout.";
+    else if (native || !state.activeId)
+      disabledReasons[command] = "No window is open.";
   }
   if (!state.baseline)
     disabledReasons.restore = "No arranged positions to restore.";
@@ -317,6 +331,8 @@ export function useSpacesTabWindowArrangement(active: boolean): {
                           dispatch({ type: "dismiss", id: entry.id }),
                         onSnap: (target) =>
                           dispatch({ type: "snap", id: entry.id, target }),
+                        onFit: (side) =>
+                          dispatch({ type: "fit", id: entry.id, side }),
                         onFloat: () =>
                           dispatch({ type: "float", id: entry.id }),
                         color,

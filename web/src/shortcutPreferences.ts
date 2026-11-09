@@ -60,6 +60,8 @@ const LATE_SHORTCUT_IDS: ShortcutId[] = [
   "view.search",
   "town.next",
   "town.previous",
+  "window.fitRight",
+  "window.fitLeft",
 ];
 export function validateShortcutPreset(value: unknown): ShortcutPreset {
   if (!value || typeof value !== "object")

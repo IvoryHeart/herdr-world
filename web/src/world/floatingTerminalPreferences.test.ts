@@ -5,8 +5,11 @@ import {
   floatingTerminalGeometryId,
   readFloatingTerminalDock,
   readFloatingTerminalDockWidth,
+  readFloatingTerminalSnapDock,
+  readWindowFitWidth,
   readFloatingTerminalGeometry,
   writeFloatingTerminalDock,
+  writeWindowFitWidth,
   writeFloatingTerminalGeometry,
 } from "./floatingTerminalPreferences";
 
@@ -169,5 +172,39 @@ describe("window docks", () => {
     );
     expect(readFloatingTerminalDockWidth(storage, "b")).toBeNull();
     expect(readFloatingTerminalDockWidth(storage, "c")).toBeNull();
+  });
+
+  test("keep a fit's default width at most half across a reload", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+    };
+    writeFloatingTerminalDock(storage, "a", "left", {
+      width: 520,
+      upToHalf: true,
+    });
+    expect(readFloatingTerminalDock(storage, "a")).toBe("left");
+    expect(readFloatingTerminalSnapDock(storage, "a")).toEqual({
+      width: 520,
+      upToHalf: true,
+    });
+    writeFloatingTerminalDock(storage, "a", "left", { width: 700 });
+    expect(readFloatingTerminalSnapDock(storage, "a")).toEqual({ width: 700 });
+  });
+});
+
+describe("fit width", () => {
+  test("is the width a dock was last dragged to, or null", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+    };
+    expect(readWindowFitWidth(storage)).toBeNull();
+    writeWindowFitWidth(storage, 640.4);
+    expect(readWindowFitWidth(storage)).toBe(640);
+    store.set("worldWindowFitWidth:v1", "nonsense");
+    expect(readWindowFitWidth(storage)).toBeNull();
   });
 });

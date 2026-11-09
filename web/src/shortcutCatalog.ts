@@ -41,6 +41,16 @@ const descriptions: [ShortcutId, string, string][] = [
   ["arrangement.rows", "Arrange windows: Rows", "Window arrangements"],
   ["arrangement.grid", "Arrange windows: Grid", "Window arrangements"],
   ["arrangement.restore", "Restore window positions", "Window arrangements"],
+  [
+    "window.fitRight",
+    "Fit the active window to the right edge",
+    "Window arrangements",
+  ],
+  [
+    "window.fitLeft",
+    "Fit the active window to the left edge",
+    "Window arrangements",
+  ],
   ...SHORTCUT_NUMBERS.map((n): [ShortcutId, string, string] => [
     `tab.${n}`,
     `Switch to tab ${n}`,
