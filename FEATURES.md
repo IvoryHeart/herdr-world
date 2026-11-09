@@ -271,8 +271,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     hear each place's reading in its name. A lens changes only how Town is
     drawn: taps open what they always do, nothing moves, Escape or **✕**
     returns Town exactly as it was, and Town always opens in **Attention**
-    (Town as usual). The browser remembers the last lens for `L` and
-    **Lenses**. With `?scene=town-scale` every lens has synthetic data.
+    (Town as usual). A search with a lens on outlines its matches over the
+    lens's colours, and ending it returns to the lens. The browser remembers
+    the last lens for `L` and **Lenses**. With `?scene=town-scale` every lens
+    has synthetic data.
     Board offers the same lenses over its cards (see Board below).
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
@@ -1061,11 +1063,20 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   complete host list within 20 seconds, marks unfinished host views stale, and
   refreshes them when their observations complete.
 - The **Actions** command menu stays at the right of the top bar in every view
-  (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). Use it for workspace/tab creation,
+  (`Cmd+K` on macOS, `Ctrl+K` elsewhere). Use it for workspace/tab creation,
   window arrangements and the selected target's available resource actions.
   Check the selected host and target before acting. A host, generation or
   observation change invalidates an open target; Actions does not send input
   or assign tasks to an agent.
+- In Town, Board and Desk the command menu is also World's command box. Type
+  and it finds buildings, rooms, tables, agents and terminals as the views'
+  search does, each with its status mark and place (`host › room › table`);
+  **Enter** or a click selects it as clicking it in the view does. It also
+  goes to another view. In Zen it opens from the **⌘** button beside the
+  view buttons; on a phone, from **Find or act** in the corner view menu. In
+  a terminal, the Chat composer or a text field `Ctrl+K` and `Cmd+K` stay
+  shell and editor keys; `Ctrl+Alt+K` (`Cmd+Option+K` on a Mac) opens the box
+  from there.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
@@ -1337,7 +1348,8 @@ root and revalidate its qualified binding before acting.
   in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
   panes before dropping. Overflowing desktop tab strips offer scroll controls.
 - Search workspace, worktree, file, tab, pane, and agent actions in the command
-  menu (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A workspace-relative or
+  menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Cmd+Option+K`/`Ctrl+Alt+K`
+  from a terminal or text field). A workspace-relative or
   absolute path opens the file.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
@@ -1943,7 +1955,7 @@ Common defaults (Linux/Android overrides follow the table):
 
 | Action | macOS / iOS | Windows / Linux / Android |
 | --- | --- | --- |
-| Command menu | `Cmd+K` | `Ctrl+Alt+K` |
+| Command menu | `Cmd+K`; `Cmd+Option+K` in a terminal or text field | `Ctrl+K`; `Ctrl+Alt+K` in a terminal or text field |
 | Sidebar | `Cmd+B` | `Ctrl+Alt+B` |
 | Workspace Inspector | `Cmd+Shift+B` | `Ctrl+Alt+Shift+B` |
 | Expand / restore Inspector (desktop) | `Cmd+Option+Enter` | `Ctrl+Alt+Shift+Enter` |
