@@ -65,8 +65,11 @@ Your shells and agents
    `http://127.0.0.1:8787` and carries a login token.
 4. World opens on **Town**. If Herdr is missing or stopped, Town offers
    **Set up Herdr**; nothing is installed until you confirm.
-5. Open **Spaces** from the view picker at the top, choose your project's
-   workspace and a shell pane, and type `pwd` (`Get-Location` in PowerShell).
+5. Open **Spaces** from the view picker at the top. Choose **+** (New
+   workspace) beside the workspace list, set **Working directory** to your
+   project's folder, and choose **Create**.
+6. Select the new workspace and its shell pane, and type `pwd`
+   (`Get-Location` in PowerShell).
 
 **You are done when:** the terminal shows your project's folder. Get this
 working before you set up remote access.

@@ -317,9 +317,10 @@ The tutorial is for someone learning World: numbered steps that say what to do
 and what they will see, ending with a "You are done when" check. It is not the
 reference. Detail a learner does not need (exceptions, refusals, staleness
 rules, limits, internals) goes in `FEATURES.md`, and the tutorial links there.
-The build fails when one step or paragraph passes 60 words or the tutorial
-passes 6,000 words of prose (`tutorialLimits` in `scripts/pages-content.ts`):
-move detail to `FEATURES.md` rather than raising a limit.
+The build fails when one step (counting all its paragraphs and sub-items) or
+paragraph passes 60 words, or the tutorial passes 6,000 words of prose
+(`tutorialLimits` in `scripts/pages-content.ts`): move detail to `FEATURES.md`
+rather than raising a limit.
 
 ```bash
 bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts

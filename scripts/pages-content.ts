@@ -30,34 +30,56 @@ function proseWords(text: string): number {
   );
 }
 
-/** Measure the tutorial's prose: total words and its longest step or paragraph. */
+/**
+ * Measure the tutorial's prose: total words and its longest block. A block is a
+ * paragraph, or a whole list item with its indented paragraphs and sub-items,
+ * so a step cannot grow into a wall of text by splitting it into paragraphs.
+ */
 export function measureTutorial(markdown: string): TutorialShape {
   const lines = markdown
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/^ *(```|~~~)[^\n]*\n[\s\S]*?^ *\1 *$/gm, "")
-    .split("\n");
+    .split("\n")
+    .map((raw) => raw.replace(/^\s*>\s?/, ""));
+  const item = /^(\s*)(\d+\.|[-*+])\s+/;
   const blocks: string[] = [];
+  // Paragraphs: every list item or heading starts a new one.
   let current: string[] = [];
   const flush = () => {
     if (current.length) blocks.push(current.join(" "));
     current = [];
   };
-  for (const raw of lines) {
-    const line = raw.replace(/^\s*>\s?/, "");
+  for (const line of lines) {
     if (!line.trim()) flush();
-    else if (/^\s*(\d+\.|[-*+])\s|^#|^\s*\|/.test(line)) {
+    else if (item.test(line) || /^#|^\s*\|/.test(line)) {
       flush();
-      current.push(line.replace(/^\s*(\d+\.|[-*+])\s+/, ""));
+      current.push(line.replace(item, ""));
     } else current.push(line);
   }
   flush();
+  // Whole steps: a list item runs until a non-blank line at or left of its marker.
+  const steps: { indent: number; text: string[] }[] = [];
+  for (const line of lines) {
+    const indent = line.length - line.trimStart().length;
+    if (line.trim()) {
+      while (steps.length && indent <= (steps.at(-1)?.indent ?? 0)) {
+        blocks.push(steps.pop()?.text.join(" ") ?? "");
+      }
+    }
+    const marker = item.exec(line);
+    if (marker) {
+      steps.push({ indent: marker[1].length, text: [] });
+    }
+    for (const step of steps) step.text.push(line.replace(item, ""));
+  }
+  for (const step of steps) blocks.push(step.text.join(" "));
   let words = 0;
   let longest = { words: 0, text: "" };
   for (const block of blocks) {
     const count = proseWords(block);
-    words += count;
     if (count > longest.words) longest = { words: count, text: block.trim() };
   }
+  for (const line of lines) words += proseWords(line.replace(item, ""));
   return { words, longest };
 }
 

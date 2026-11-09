@@ -383,6 +383,13 @@ describe("tutorial shape", () => {
     expect(() => checkTutorialShape(markdown)).toThrow(/FEATURES\.md/);
   });
 
+  test("measures a step as a whole, not paragraph by paragraph", () => {
+    const paragraphs = Array.from({ length: 5 }, () => `   ${step(40)}`);
+    const markdown = `# T\n\n1. Step.\n\n${paragraphs.join("\n\n")}\n\n2. Next.\n`;
+    expect(measureTutorial(markdown).longest.words).toBe(201);
+    expect(() => checkTutorialShape(markdown)).toThrow(/201-word step/);
+  });
+
   test("refuses a tutorial over its word budget", () => {
     const paragraph = step(tutorialLimits.blockWords - 10);
     const count =
