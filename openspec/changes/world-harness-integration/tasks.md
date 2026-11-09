@@ -21,11 +21,11 @@ items for the local host. Slices 2 and 3 remain separate.
 
 ## Slice 2: the Claude limits tap
 
-- [ ] Tap script, saved previous `statusLine`, `settings.json` entry; uninstall restores exactly.
-- [ ] Tap chaining rule: World's own script found as `statusLine` runs the saved command.
-- [ ] `claude` status checks script, saved value and entry; a replaced `statusLine` reports `outdated`.
-- [ ] Tests: round trip leaves other keys identical; unparseable settings refused; Herdr's `hooks` entries untouched; output passed through unchanged; runtime missing still runs the user's command.
-- [ ] Docs: subscription limit sources in `docs/usage.md`; `harness-usage` source text.
+- [x] Tap script, saved previous `statusLine`, `settings.json` entry; uninstall restores exactly.
+- [x] Tap chaining rule: World's own script found as `statusLine` runs the saved command.
+- [x] `claude` status checks script, saved value and entry; a replaced `statusLine` reports `outdated`.
+- [x] Tests: round trip leaves other keys identical; unparseable settings refused; Herdr's `hooks` entries untouched; output passed through unchanged; runtime missing still runs the user's command.
+- [x] Docs: subscription limit sources in `docs/usage.md`; `harness-usage` source text.
 
 ## Slice 3: SSH hosts and updates
 

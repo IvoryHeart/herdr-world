@@ -1034,6 +1034,13 @@ harness with its state and path, without installing anything.
 Pi and Kimi and names the other two. OMP, Letta and MastraCode show
 `unsupported`. See [all paths and overrides](./harness-integrations.md).
 
+The Claude install also chains your existing status line through World's limits
+tap, so new Claude sessions outside World update Town's **Fuel** row. Tap **Claude**
+there for its windows and last observation. Uninstall restores your original
+settings exactly when unchanged, or preserves intervening edits while restoring
+the prior status line. Malformed settings are refused. See the
+[tap's recovery and preview guide](./harness-integrations.md#claude-limits-tap).
+
 You can do the same from the browser: **Menu → Configuration → Integrations**
 shows a **World skill** line under each harness, with its state, path and
 **Install**, **Update** or **Uninstall**. The buttons run the same installer on

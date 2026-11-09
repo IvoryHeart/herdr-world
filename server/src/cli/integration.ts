@@ -27,6 +27,7 @@ import {
   type WorldHarness,
 } from "./integration-paths";
 import { WORLD_SKILL } from "./world-skill";
+import { changeClaudeTap, claudeTapCurrent } from "./integration-claude";
 
 export const WORLD_SKILL_VERSION = 1;
 
@@ -101,6 +102,7 @@ export interface WorldIntegrationStatus {
   available_version: number;
   /** Home-relative skill file; absent when unsupported. */
   path?: string;
+  /** Why it is unsupported, or which part besides the skill is outdated. */
   reason?: string;
   /** Other harnesses that read, and lose on removal, the same file. */
   shared_with: WorldHarness[];
@@ -125,9 +127,17 @@ export function worldIntegrationStatus(
       reason: UNSUPPORTED_REASON,
       shared_with: [],
     };
+  let installed: Pick<WorldIntegrationStatus, "state" | "version" | "reason"> =
+    installedState(paths.file, paths.id);
+  if (
+    harness === "claude" &&
+    installed.state === "current" &&
+    !claudeTapCurrent(paths.config, runtime)
+  )
+    installed = { state: "outdated", reason: "Claude limits tap" };
   return {
     ...base,
-    ...installedState(paths.file, paths.id),
+    ...installed,
     path: displayPath(paths.file, runtime),
     shared_with: SHARED_HARNESSES.includes(harness)
       ? SHARED_HARNESSES.filter((other) => other !== harness)
@@ -160,6 +170,7 @@ export function installWorldIntegration(
     );
   requireRegular(paths.folder, true);
   requireRegular(paths.file);
+  if (harness === "claude") changeClaudeTap(paths.config, "install", runtime);
   mkdirSync(paths.folder, { recursive: true });
   const temporary = join(paths.folder, `.SKILL.md-${randomUUID()}.tmp`);
   try {
@@ -181,6 +192,7 @@ export function uninstallWorldIntegration(
   const paths = supportedPaths(harness, runtime);
   requireRegular(paths.folder, true);
   requireRegular(paths.file);
+  if (harness === "claude") changeClaudeTap(paths.config, "uninstall", runtime);
   if (stat(paths.file)) unlinkSync(paths.file);
   try {
     rmdirSync(paths.folder);
@@ -209,7 +221,8 @@ export const integrationCommand: CliCommand = {
 
 Harnesses: ${WORLD_HARNESSES.join(", ")}
 
-Installs only the release's World skill on this host. The harness's config
+Installs the release's World skill on this host, plus Claude's chained limits tap.
+The harness's config
 folder must already exist. Codex, Pi and Kimi share ~/.agents/skills/herdr-world/SKILL.md;
 removing any of them removes that file for all three. No service is required.`,
   async run(args, context) {
@@ -252,7 +265,11 @@ removing any of them removes that file for all three. No service is required.`,
       } else {
         const status = worldIntegrationStatus(harness, context.runtime);
         const label =
-          status.state === "not_installed" ? "not installed" : status.state;
+          status.state === "not_installed"
+            ? "not installed"
+            : status.state === "outdated" && status.reason
+              ? `outdated (${status.reason})`
+              : status.state;
         const version =
           status.version === undefined ? "" : ` (v${status.version})`;
         context.log(`${harness}: ${label}${version} (${path})`);

@@ -1207,6 +1207,12 @@ unsupported. See [paths and overrides](./docs/harness-integrations.md).
 Install, Update and Uninstall buttons that run the CLI's installer; uninstalling
 a shared file confirms which harnesses lose it first.
 
+The Claude install also chains the existing status line through World's limits
+tap. Sessions started outside World update the host's Claude Fuel gauge; the
+previous command keeps its input and output. Reinstall never chains World twice.
+Uninstall restores the original settings bytes when unchanged and preserves later
+user edits. See [settings safety and preview](./docs/harness-integrations.md#claude-limits-tap).
+
 Agents change World objects themselves from their pane, through the running
 World service. `herdr-world --skill` prints the guide; commands answer in JSON
 when piped, with stable exit codes:
