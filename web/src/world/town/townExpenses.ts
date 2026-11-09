@@ -317,7 +317,7 @@ export function townExpenseText(total: TownExpenseTotal) {
     : `${formatOfficeUsage(total.tokens)} tokens · ${cost}`;
 }
 
-/** The notes under a board's figures: what its totals leave out. */
+/** The notes under Board's facts (#787): what its totals leave out. */
 export function townCoverageNotes(
   coverage: TownExpenseCoverage,
   unattributed: TownExpenseTotal,
@@ -338,6 +338,72 @@ export function townCoverageNotes(
     );
   return notes;
 }
+
+/**
+ * One thing a figure leaves out or includes: a few words for the board's one
+ * caveat line (null when it only needs explaining) and the full explanation
+ * for its tooltip.
+ */
+export type TownExpenseCaveat = { short: string | null; explain: string };
+
+const PARTIAL_EXPLAIN =
+  "Partial: a harness was read only in part, or the read was cut short, so the figures may be low.";
+
+/** A place's partial read, as on the expense boards. */
+export const TOWN_PARTIAL_CAVEAT: TownExpenseCaveat = {
+  short: "partial",
+  explain: PARTIAL_EXPLAIN,
+};
+
+/**
+ * What a board's totals leave out or include. `scope` names what usage was
+ * not tied to: the city's unattributed usage has no pane, a host's no room.
+ */
+export function townCoverageCaveats(
+  coverage: TownExpenseCoverage,
+  unattributed: TownExpenseTotal,
+  scope: "pane" | "room",
+) {
+  const caveats: TownExpenseCaveat[] = [];
+  if (coverage.testData)
+    caveats.push({
+      short: "TEST DATA",
+      explain:
+        "Test data: a synthetic economy for this preview, not your harness logs.",
+    });
+  if (coverage.partial) caveats.push(TOWN_PARTIAL_CAVEAT);
+  if (coverage.stale)
+    caveats.push({
+      short: "stale left out",
+      explain:
+        "Stale data left out: numbers that could not be refreshed are not in the totals.",
+    });
+  if (coverage.noDataHosts) {
+    const hosts = `${coverage.noDataHosts} ${coverage.noDataHosts === 1 ? "host" : "hosts"}`;
+    caveats.push({
+      short: `${hosts} missing`,
+      explain: `No data from ${hosts}: harness logs could not be read there. Missing, not zero.`,
+    });
+  }
+  if (unattributed.records)
+    caveats.push({
+      short: null,
+      explain: `${formatOfficeUsage(unattributed.tokens)} tokens unattributed: usage not tied to ${
+        scope === "pane" ? "an agent's pane" : "one of its rooms"
+      }. Already included in the total, not another charge.`,
+    });
+  if (coverage.detailsLimited)
+    caveats.push({
+      short: null,
+      explain:
+        "Detail list limited: fewer entries were listed, but the totals include all collected usage.",
+    });
+  return caveats;
+}
+
+/** The board's one caveat line: a few words each, or "" for none. */
+export const townCaveatLine = (caveats: readonly TownExpenseCaveat[]) =>
+  caveats.flatMap((caveat) => (caveat.short ? [caveat.short] : [])).join(" · ");
 
 export const TOWN_WINDOW_LABEL: Record<TownUsageWindow, string> = {
   today: "Today",
