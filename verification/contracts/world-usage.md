@@ -17,6 +17,10 @@ and verb-policy models continue to supply operation authority.
   never publish a retired collector's fresh result.
 - Source failure preserves explicit stale evidence outside fresh totals; empty
   observations with missing sources do not prove zero spend.
+- Host-wide Claude installation chains a previous status line once, preserving
+  its input/output and restoring unchanged settings bytes (including absence).
+  Reinstallation and removal retain intervening user edits; malformed settings
+  and unsafe recovery files cannot overwrite the user's configuration.
 - A building total is no greater than the city total for the same observation;
   host totals sum to the city. Unattributed is a subtotal, not an added charge.
   Detail/frame clipping cannot reduce collected balances or erase valid bindings
@@ -90,7 +94,13 @@ new platform conformance is claimed.
 - `claude-tap.test.ts`: the tap records only numbers, finds the user's status
   line by Claude Code's precedence without recursing, and as a real program
   passes the same input to it and its output and exit code through unchanged;
-  Claude launches alone get the per-launch settings.
+  Claude launches retain their per-launch settings, including chaining through an installed host-wide tap.
+- `server/src/cli/integration-claude.test.ts`: host-wide installation, update,
+  exact restoration, edited/missing/malformed settings, backup and registration
+  damage, source-span preservation, real script output/exit/input forwarding,
+  per-launch composition and missing-runtime fallback. Direct filesystem and
+  subprocess scenarios exercise this local installation contract; it adds no
+  runtime ordering or authority transitions to the maintained Quint models.
 - `server/src/rpc/usage.test.ts`: real verb admission, window validation, socket
   revocation and absence of default-runtime routing.
 - `server/src/bridge/herdr-client.test.ts`: cancellation destroys the owned
@@ -99,7 +109,7 @@ new platform conformance is claimed.
 Run the complete consumer set with:
 
 ```bash
-bun run test server/src/usage server/src/rpc/usage.test.ts web/src/world/town/townEconomy.test.ts web/src/world/town/townExpenses.test.ts web/src/world/town/townPlaceSummary.test.ts
+bun run test server/src/cli/integration-claude.test.ts server/src/usage server/src/rpc/usage.test.ts web/src/world/town/townEconomy.test.ts web/src/world/town/townExpenses.test.ts web/src/world/town/townPlaceSummary.test.ts
 ```
 
 Existing runtime, service shutdown, OTel and verb consumers remain mandatory.

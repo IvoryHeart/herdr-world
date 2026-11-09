@@ -31,6 +31,8 @@ export type RpcServices = {
   clock: import("../service/ports").Clock;
   bindings?: import("../storage/world-bindings").WorldBindings;
   serviceIncarnation?: string;
+  /** Test seam: the environment World's harness skills resolve against. */
+  worldIntegrationRuntime?: () => import("../cli/command").CliRuntime;
   bindBoardRecipients(
     ops: readonly BoardOp[],
     observed: ReadonlyMap<string, ObservedAgent>,

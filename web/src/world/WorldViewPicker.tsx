@@ -5,7 +5,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { Maximize2 } from "lucide-react";
+import { Command, Maximize2 } from "lucide-react";
+import { openCommandBox } from "../commandBoxKey";
+import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import { useLayer } from "../layerStack";
 import type { WorldView } from "./worldViewRouting";
 import { WORLD_VIEW_DESTINATIONS, worldViewLabel } from "./WorldMobileNav";
@@ -62,6 +64,7 @@ export function WorldViewPicker({
               <span>{label}</span>
             </button>
           ))}
+          <CommandBoxButton />
         </div>
       </>
     );
@@ -163,6 +166,15 @@ function PhoneViewPicker({
           <button
             type="button"
             role="menuitem"
+            // After the menu hands focus back, so the box keeps it.
+            onClick={() => choose(() => window.setTimeout(openCommandBox))}
+          >
+            <Command size={18} aria-hidden />
+            Find or act
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             onClick={() => choose(onExitZen)}
           >
             <Maximize2 size={18} aria-hidden />
@@ -182,5 +194,22 @@ function PhoneViewPicker({
         {CurrentIcon ? <CurrentIcon size={22} aria-hidden /> : null}
       </button>
     </div>
+  );
+}
+
+/** The command box, with its key, beside the views (#782). */
+function CommandBoxButton() {
+  useShortcutPreferences();
+  const title = shortcutTitle("Find or act", "command.menu");
+  return (
+    <button
+      type="button"
+      className="world-view-picker-command"
+      aria-label={title}
+      title={title}
+      onClick={openCommandBox}
+    >
+      <Command size={14} aria-hidden />
+    </button>
   );
 }

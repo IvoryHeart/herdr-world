@@ -520,6 +520,17 @@ tooltip names these keys. In a terminal, the Chat
 composer or another text field those keys keep doing what they do there. Change
 them under **Search the current view** in Settings → Shortcuts.
 
+To find or do anything from any view, press **Ctrl+K** (**Cmd+K** on a Mac)
+to open the command box. Type `harbor` and it lists what Town's search would
+find, each with its status mark and place; **Down** and **Enter**, or a click,
+select one as clicking it in Town does. The same box creates rooms, tabs and
+agents, acts on the selected agent and goes to Board, Desk or Spaces. In Zen
+the **⌘** button beside the view buttons opens it too; on a phone, tap the
+corner view button and then **Find or act**. In a terminal, the Chat composer
+or a text field, Ctrl+K and Cmd+K keep their meaning there; press
+**Ctrl+Alt+K** (**Cmd+Option+K** on a Mac) instead.
+**Escape** or the same key closes the box.
+
 A quiet **?** at reception means an agent has asked you a question with
 `herdr-world ask`. The question also arrives as a Herdr notification, which
 reaches Herdr and, when you enabled them, your phone notifications. It stays
@@ -601,6 +612,8 @@ and open its terminal or Inspector without losing its workspace context.
 3. Zoom into a room: each desk and agent carries its own colour. Hover, focus
    or tap one and the legend says its value in words, such as "Idle 3 h 12 m",
    "~$1.40 today" or "#123 CI failing". Taps open what they always do.
+   Search with a lens on and the matches are outlined over its colours;
+   Escape ends the search and keeps the lens.
 4. Press **✕** or Escape: Town is back exactly as it was, at the same place.
    Town always opens without a lens; your browser remembers the last one for
    `L` and **Lenses**.
@@ -1030,6 +1043,31 @@ work.
 
 <a id="agent-cli"></a>
 
+To have a harness discover the guide automatically, run
+`herdr-world integration install claude` on the host where it runs, then
+start a new Claude Code session. Use `codex` or `pi` for those harnesses.
+The harness's configuration folder must already exist; World creates its
+skill folder if needed. `herdr-world integration status` lists every Herdr
+harness with its state and path, without installing anything.
+`herdr-world integration uninstall codex` removes the file shared by Codex,
+Pi and Kimi and names the other two. OMP, Letta and MastraCode show
+`unsupported`. See [all paths and overrides](./harness-integrations.md).
+
+The Claude install also chains your existing status line through World's limits
+tap, so new Claude sessions outside World update Town's **Fuel** row. Tap **Claude**
+there for its windows and last observation. Uninstall restores your original
+settings exactly when unchanged, or preserves intervening edits while restoring
+the prior status line. Malformed settings are refused. See the
+[tap's recovery and preview guide](./harness-integrations.md#claude-limits-tap).
+
+You can do the same from the browser: **Menu → Configuration → Integrations**
+shows a **World skill** line under each harness, with its state, path and
+**Install**, **Update** or **Uninstall**. The buttons run the same installer on
+World's own host and ask for confirmation first; uninstalling Codex, Pi or
+Kimi names the other two that lose the shared file. SSH connections show no
+World skill lines yet. If World restarts while the panel is open, the panel
+shows **Reconnecting to World...** and then reloads by itself.
+
 Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
 to colour and pin its card, group with the agent that started it, report a
 task result, or ask you a question (`herdr-world ask "Ship it?" --options
@@ -1043,6 +1081,12 @@ that asking occupant's retained question without creating another one.
 takes back a recorded Board change. A change marked **unverified** came from a process
 World could not place in the pane it named, or from a terminal that named no
 pane.
+
+An agent can publish its current activity with
+`herdr-world task-summary "Verifying the login fix"`. The label belongs to
+that exact Herdr session and expires after 15 minutes by default; use
+`result --task TASK-42 "Verified the fix" --status done` for a durable result.
+The guide also teaches `stamp CHILD_PANE PARENT_PANE` to group spawned agents.
 
 Use `herdr-world pod create Chat` to create a crew Group, then
 `herdr-world pod add Chat agent://connection-a/builder` to add an agent's
@@ -1205,7 +1249,8 @@ modify the same checkout; use chapter 3 for parallel changes.
 
 ### 2.1 Find the terminal you want to control
 
-Open the command menu to search workspaces, files, tabs, panes, and agents;
+Open the command menu (**Ctrl+K**, **Cmd+K** on a Mac) to search workspaces,
+files, tabs, panes, and agents;
 enter `README.md` to open a project-relative path. Defaults differ by platform:
 use [Keyboard Shortcuts](../FEATURES.md#keyboard-shortcuts) or interface menus.
 

@@ -274,6 +274,20 @@ export const rpcVerbs = [
   rpc("world.desk.open", "reconcilable", "world"),
   rpc("world.desk.review", "reconcilable", "world"),
   rpc("world.focused.observe", "reconcilable", "world"),
+  // World's skill per harness on the service's host; browser (operator) only.
+  rpc(
+    "world.integration.install",
+    "reconcilable",
+    "world",
+    object({ harness: text }),
+  ),
+  rpc("world.integration.list", "read", "world"),
+  rpc(
+    "world.integration.uninstall",
+    "reconcilable",
+    "world",
+    object({ harness: text }),
+  ),
   // The owner's last sighting across browsers, for "Since you left".
   rpc("world.presence.seen", "reconcilable", "world"),
   rpc("world.profiles.delete", "reconcilable", "world"),

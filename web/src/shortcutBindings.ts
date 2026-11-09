@@ -19,7 +19,9 @@ export function detectShortcutPlatform(
 }
 
 const base = {
-  "command.menu": ["Ctrl+Alt+K"],
+  // Ctrl+K is the command box's key, but in a terminal or text field it stays
+  // a shell and editor key (kill line); Ctrl+Alt+K opens the box from there.
+  "command.menu": ["Ctrl+K", "Ctrl+Alt+K"],
   "shortcuts.show": ["Ctrl+Alt+Shift+K"],
   "sidebar.toggle": ["Ctrl+Alt+B"],
   "inspector.toggle": ["Ctrl+Alt+Shift+B"],
@@ -115,7 +117,8 @@ export function defaultShortcutBindings(
   if (platform === "windows") bindings["terminal.paste"] = ["Ctrl+V"];
   if (platform === "mac")
     Object.assign(bindings, {
-      "command.menu": ["Meta+K"],
+      // Cmd+K stays with a terminal or text field; Cmd+Option+K opens it there.
+      "command.menu": ["Meta+K", "Alt+Meta+K"],
       "shortcuts.show": ["Meta+Shift+K"],
       "sidebar.toggle": ["Meta+B"],
       "inspector.toggle": ["Meta+Shift+B"],
@@ -295,6 +298,14 @@ export function shortcutFromEvent(event: ShortcutEvent): string | null {
       .filter(Boolean)
       .join("+"),
   );
+}
+
+/**
+ * Whether a binding is safe where text is typed: it has Alt, so it is not a
+ * shell or editor key such as Ctrl+K, Ctrl+Shift+K or Cmd+K.
+ */
+export function shortcutLeavesTyping(binding: string) {
+  return /(^|\+)Alt\+/.test(binding);
 }
 
 export function matchesShortcut(

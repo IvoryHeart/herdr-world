@@ -8,6 +8,7 @@ import {
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
 import { handleBinRpc } from "./bin";
+import { handleWorldIntegrationRpc } from "./integration";
 import { ownerPresence } from "./presence";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
@@ -71,6 +72,8 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
+  if (method.startsWith("world.integration."))
+    return handleWorldIntegrationRpc(rpc);
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {

@@ -91,3 +91,20 @@ test("integration list rejects malformed state instead of enabling mutations", (
       "Invalid integration list",
     );
 });
+
+test("only a refused integration method suggests updating Herdr", async () => {
+  const { lacksIntegrationManagement } = await import("../agentIntegrations");
+  for (const message of [
+    "Could not load integrations: unknown method: integration.list",
+    "Could not load integrations: unsupported_method: integration.list",
+    "Install could not be confirmed: invalid_request: unknown variant `integration.install`, expected one of",
+  ])
+    expect(lacksIntegrationManagement(message)).toBe(true);
+  for (const message of [
+    "Could not load integrations: connection runtime generation is unavailable",
+    "Could not load integrations: bridge hello is unavailable",
+    "Uninstall could not be confirmed: Configuration is not writable",
+    "Invalid integration list received.",
+  ])
+    expect(lacksIntegrationManagement(message)).toBe(false);
+});

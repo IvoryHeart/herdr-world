@@ -45,6 +45,7 @@ export function useTownCanvasSearch(
     ready,
     failure,
     calm,
+    lens,
   }: {
     model: TownModel;
     layout: TownLayout;
@@ -52,12 +53,21 @@ export function useTownCanvasSearch(
     ready: boolean;
     failure: boolean;
     calm: boolean;
+    /** Town's lenses: while one is on, its layer draws the marks. */
+    lens: { view: object | null };
   },
 ) {
   const { search = null, onOffscreen, onUnmapped } = props ?? {};
+  const overLens = lens.view !== null;
   const light = useMemo(
-    () => (search ? townSearchLight(model, search.keys, search.chosen) : null),
-    [model, search],
+    () =>
+      search
+        ? {
+            ...townSearchLight(model, search.keys, search.chosen),
+            overLens,
+          }
+        : null,
+    [model, search, overLens],
   );
   /** The light for frames drawn outside React's render. */
   const lit = useRef(light);
@@ -133,5 +143,21 @@ export function useTownCanvasSearch(
     else unmapped?.(chosen.key);
   }, [view, renderer, ready, failure, searching, chosen]);
 
-  return { light, lit, countOffscreen };
+  /** Marks drawn outside the canvas, placed again on each frame it draws. */
+  const followers = useRef(new Set<() => void>()).current;
+  const handles = useRef({
+    /** Each frame: count again when the camera moved; re-place the marks. */
+    drew(moved: boolean) {
+      if (moved) countOffscreen();
+      for (const place of followers) place();
+    },
+    follow(place: () => void) {
+      followers.add(place);
+      return () => void followers.delete(place);
+    },
+    actorPosition: (key: string) =>
+      renderer.current?.actorPosition(key) ?? null,
+  }).current;
+
+  return { light, lit, countOffscreen, ...handles };
 }
