@@ -28,6 +28,26 @@ afterEach(() => {
   }
 });
 
+test("Pages installs locked dependencies before testing, building and rendering the film", () => {
+  const setupIndex = steps.findIndex((step) =>
+    step.uses?.startsWith("oven-sh/setup-bun@"),
+  );
+  const installIndex = steps.findIndex(
+    (step) => step.run === "bun install --frozen-lockfile",
+  );
+  expect(setupIndex).toBeGreaterThan(-1);
+  expect(installIndex).toBeGreaterThan(setupIndex);
+  for (const command of [
+    "bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts",
+    "bun run build:site",
+    "bun run film:render",
+  ]) {
+    expect(steps.findIndex((step) => step.run === command)).toBeGreaterThan(
+      installIndex,
+    );
+  }
+});
+
 test("Pages deploys on main pushes or manual dispatch and checks installer availability", async () => {
   expect(Object.keys(workflow.on).sort()).toEqual([
     "push",
