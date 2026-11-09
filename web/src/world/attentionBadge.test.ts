@@ -103,6 +103,22 @@ describe("the page's title, icon and app badge", () => {
     expect(calls).toEqual(["set 34", "set 33", "set 3", "clear"]);
   });
 
+  test("the first count reconciles a badge left by an earlier run", async () => {
+    // An installed app keeps its badge after its process ends.
+    let appBadge = 5;
+    const navigator = {
+      setAppBadge: async (count: number) => void (appBadge = count),
+      clearAppBadge: async () => void (appBadge = 0),
+    };
+    page(navigator).badge.show(0);
+    await settle();
+    expect(appBadge).toBe(0);
+    appBadge = 5;
+    page(navigator).badge.show(2);
+    await settle();
+    expect(appBadge).toBe(2);
+  });
+
   test("a count that clears while its icon draws leaves the plain icon", async () => {
     const { badge, icons } = page();
     const plain = icons();

@@ -349,6 +349,24 @@ async function tabBadge() {
   );
   flushSync(() => setSwitch(true));
   check(document.title === `(1) ${plain}`, "switch on shows the count again");
+  // Another tab of this browser turns the switch off: only a storage event.
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    tabBadge: false,
+  });
+  flushSync(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: "herdr-world:foundation-v2:officePreferences:v1",
+        storageArea: localStorage,
+      }),
+    ),
+  );
+  check(
+    document.title === plain,
+    `another tab's switch off restores the plain title: ${document.title}`,
+  );
+  flushSync(() => setSwitch(true));
   show([asker]);
   await frame();
   check(

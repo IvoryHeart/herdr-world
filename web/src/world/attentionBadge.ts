@@ -1,6 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { worldLocalStorage } from "../browserStorage";
+import { subscribeLocalStorage, worldLocalStorage } from "../browserStorage";
 import {
+  OFFICE_PREFERENCES_KEY,
   readOfficePreferences,
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
 } from "./officePreferences";
@@ -54,7 +55,9 @@ const BADGE_LINK = "data-attention-badge";
  */
 export function createAttentionBadge(target: AttentionBadgeTarget) {
   const { document, navigator } = target;
-  let shown = 0;
+  // Unknown at first: an installed app keeps its badge after its process
+  // ends, so the first count, 0 included, always sets or clears it.
+  let shown: number | null = null;
   let iconText = "";
   let plainIcons: HTMLLinkElement[] = [];
   const drawn = new Map<string, Promise<string | null>>();
@@ -182,13 +185,19 @@ const sharedBadge = () =>
 
 const readEnabled = () => readOfficePreferences(worldLocalStorage).tabBadge;
 
-const subscribePreferences = (listener: () => void) => {
+/** Menu's switch, from this tab's event or another tab's storage write. */
+export const subscribePreferences = (listener: () => void) => {
   window.addEventListener(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT, listener);
-  return () =>
+  const unsubscribeStorage = subscribeLocalStorage((key) => {
+    if (key === null || key === OFFICE_PREFERENCES_KEY) listener();
+  });
+  return () => {
     window.removeEventListener(
       WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
       listener,
     );
+    unsubscribeStorage();
+  };
 };
 
 /**
