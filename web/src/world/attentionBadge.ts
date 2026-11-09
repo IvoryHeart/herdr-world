@@ -10,7 +10,8 @@ import {
  * The tab title, tab icon and installed app icon carry the Needs you count
  * while World is behind another window: `(3) Herdr World`, a small badge on
  * the icon, and the Badging API's number on the dock or home screen. The
- * count is the top bar's Needs you counter; this module only shows it.
+ * count is the one Needs you lists (preview scenes included); this module
+ * only shows it.
  */
 
 const TITLE_COUNT = /^\((\d+)\)(?: |$)/;
