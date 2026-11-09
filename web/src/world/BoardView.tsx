@@ -135,6 +135,7 @@ import {
   BoardAgentNowLine,
   BoardSummary,
   BoardWorkspaceEconomy,
+  BoardZoneCounts,
   BoardZoneFacts,
 } from "./board/BoardFacts";
 import { useBoardFacts } from "./board/useBoardFacts";
@@ -1208,7 +1209,8 @@ export default function BoardView({
     if (x0 === Infinity) return;
     const pad = farRef.current ? 110 : 70;
     x0 -= pad;
-    y0 -= pad + 40;
+    // Room above the top cards for a host's heading and summary lines.
+    y0 -= pad + (farRef.current ? 140 : 70);
     x1 += pad;
     y1 += pad;
     const vw = el.clientWidth - 24,
@@ -3483,30 +3485,33 @@ export default function BoardView({
                   data-world-node-anchor={host.id}
                   title="Drag to move the whole host"
                 >
-                  <BoardZoneColor
-                    colorKey={hostKey}
-                    hostLabel={host.label}
-                    color={hostColor}
-                    onColor={setZoneColor}
-                  />
-                  {host.label}
-                  <BoardZoneFacts host={hostFacts.get(host.connectionId)} />
-                  {host.stale ? (
-                    <ConnectionRecoveryBanner
-                      connectionId={host.connectionId}
-                      label={host.label}
-                      state={host.connectionState}
+                  <span className="board-zone-heading">
+                    <BoardZoneColor
+                      colorKey={hostKey}
+                      hostLabel={host.label}
+                      color={hostColor}
+                      onColor={setZoneColor}
                     />
-                  ) : (
-                    <button
-                      type="button"
-                      className="board-zone-add"
-                      aria-label={`New workspace on ${host.label}`}
-                      onClick={() => setNewWorkspaceOn(host)}
-                    >
-                      +
-                    </button>
-                  )}
+                    <span className="board-zone-name">{host.label}</span>
+                    <BoardZoneCounts host={hostFacts.get(host.connectionId)} />
+                    {host.stale ? (
+                      <ConnectionRecoveryBanner
+                        connectionId={host.connectionId}
+                        label={host.label}
+                        state={host.connectionState}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="board-zone-add"
+                        aria-label={`New workspace on ${host.label}`}
+                        onClick={() => setNewWorkspaceOn(host)}
+                      >
+                        +
+                      </button>
+                    )}
+                  </span>
+                  <BoardZoneFacts host={hostFacts.get(host.connectionId)} />
                 </div>
               </div>
             );

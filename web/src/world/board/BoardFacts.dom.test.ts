@@ -38,7 +38,10 @@ if (process.env.BOARD_FACTS_DOM !== "1") {
     });
   const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { BoardSummary } = await import("./BoardFacts");
+  const { BoardSummary, BoardZoneCounts, BoardZoneFacts } = await import(
+    "./BoardFacts"
+  );
+  const { townUsageStore } = await import("../town/townPlaceUsage");
   type Summary = Parameters<typeof BoardSummary>[0]["summary"];
 
   const counts = {
@@ -124,6 +127,71 @@ if (process.env.BOARD_FACTS_DOM !== "1") {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(host.querySelector(".board-facts-panel")).toBeNull();
+    act(() => root.unmount());
+  });
+
+  test("a host zone shows a heading with its counts, then short summary lines", () => {
+    const now = Date.now();
+    const limit = (harness: string, windows: number[][]) => ({
+      connection_id: "scene-atlas",
+      connection_generation: 1,
+      harness,
+      state: "available",
+      source: "claude-status-line",
+      observed_at: now,
+      reason: null,
+      reached: null,
+      windows: windows.map(([window_minutes, used_percent]) => ({
+        window_minutes,
+        used_percent,
+        resets_at: null,
+      })),
+    });
+    const usage = townUsageStore("7d") as unknown as {
+      set(state: unknown): void;
+    };
+    usage.set({
+      status: "ready",
+      receivedAt: now,
+      snapshot: {
+        version: 1,
+        observed_at: now,
+        window: { kind: "7d", from: now - 7 * 86_400_000, to: now },
+        rollups: [],
+        entities: [],
+        sources: [],
+        today: { rollups: [] },
+        limits: [
+          limit("claude", [
+            [300, 24],
+            [10080, 22],
+          ]),
+          limit("codex", [[10080, 8]]),
+        ],
+      },
+    });
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const zone = (summary as unknown as { hosts: unknown[] }).hosts[0] as never;
+    act(() =>
+      root.render([
+        createElement(BoardZoneCounts, { key: "counts", host: zone }),
+        createElement(BoardZoneFacts, { key: "facts", host: zone }),
+      ]),
+    );
+    expect(host.querySelector(".board-zone-counts")!.textContent).toBe(
+      "5 busy · 2 waiting · 1 done · 7 quiet",
+    );
+    const lines = [...host.querySelectorAll(".board-zone-facts > span")].map(
+      (line) => line.textContent,
+    );
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/^today .+ · 7 days /);
+    expect(lines[1]).toBe(
+      "Claude 5 h 76% left · week 78% left · seen just now",
+    );
+    expect(lines[2]).toBe("Codex week 92% left · seen just now");
     act(() => root.unmount());
   });
 }
