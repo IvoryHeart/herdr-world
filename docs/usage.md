@@ -222,8 +222,11 @@ city, reception, room/table and Town boards, including compact phone signs.
   window's current figures. A limited detail list says so without reducing totals.
 - A reception's expenses use the connection's newest runtime generation in the read
   and never another connection's numbers.
-- Stale entities stay out of the figures; the board says "stale data left
-  out". A partial source or a truncated read says "partial".
+- Stale entities stay out of the figures; the board says "stale left out". A
+  partial source or a truncated read says "partial", and hosts with no data
+  "1 host missing". Each Town expense figure prints these as one short caveat
+  line; its tooltip (a tap on a phone) explains each in full, including the
+  unattributed subtotal and a limited detail list, which are not printed.
 - A null cost stays null: "no price table" when no counted row has a table
   version, otherwise "some models unpriced".
 - A host with no available or partial source reads "no data", and the city
@@ -327,8 +330,9 @@ The parameter is removed immediately and all expense boards say **TEST DATA**;
 only this page load uses synthetic usage on the connected buildings. With at
 least two connections, City expenses and Economy today show **1.2M tokens**;
 the first two buildings show **900k** and **300k**, and seven days shows **1.8M**.
-With one connection its building shows the full 1.2M. **180k unattributed
-(included)** is a subtotal, and a synthetic stale record stays out of totals.
+With one connection its building shows the full 1.2M. Hover or tap a board's
+caveat line for **180k tokens unattributed**, a subtotal already included,
+and a synthetic stale record stays out of totals.
 This fixture includes cache tokens and Claude/Codex usage; it does not alter
 agents, transcripts, settings or services.
 

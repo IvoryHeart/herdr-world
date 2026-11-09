@@ -155,9 +155,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     boards never show a missing number as zero: without a price table they
     show tokens and say "no price table" (or "some models unpriced"); a host
     whose harness logs cannot be read says "no data"; a quiet host says
-    "none recorded"; and notes name usage tied to no pane or room
-    ("unattributed"), partial reads, stale numbers left out and hosts with no
-    data. The boards re-read usage about once a minute and when the page
+    "none recorded". Each figure has at most one short caveat line, such as
+    "partial · stale left out · 1 host missing"; hovering it, or tapping it on
+    a phone, explains each caveat in full, including usage tied to no pane or
+    room ("unattributed", already in the totals) and a limited detail list. The boards re-read usage about once a minute and when the page
     regains focus; when re-reads fail, the last figures stay for at most five
     minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
     center's corner and each reception's expenses to a sign in its title;
@@ -590,10 +591,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is admitted. Search and Hosts
     use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
-  - **Search shows where things are.** Town's search box hangs from the top
+  - **Search shows where things are.** Town's search hangs from the top
     edge beside the view buttons in Zen, World's default, and sits in the top
     bar when the bars are shown; on a phone in Zen it is the search button in
-    the bottom-right corner. Typing in Town's search lights up the
+    the bottom-right corner. On a desktop the search of Town, Board and Desk
+    rests as a search icon whose tooltip names its keys; a click unfolds the
+    search box with the cursor in it. **Escape**, or leaving an empty box,
+    folds it back into the icon; a query keeps it open. Typing in Town's search lights up the
     matching buildings, rooms, tables and agents on the map and dims the rest
     of Town a little; the camera stays put. The result line counts matches and
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
@@ -605,8 +609,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     and nothing pulses. **Escape** (in the box, on a result or on the map),
     the phone search's **✕** or an empty box ends the search and returns the
     camera to where the search found it. **/** or **Ctrl+F** (**Cmd+F** on a
-    Mac) puts the cursor in the search of Town, Board or Desk, or opens the
-    phone's search, unless you are typing in a terminal, the Chat composer or
+    Mac) unfolds the search of Town, Board or Desk with the cursor in it, or
+    opens the phone's search, unless you are typing in a terminal, the Chat composer or
     another text field; the browser's own find stays closed. Change the keys
     under **Search the current view** in Settings → Shortcuts.
   See the [Town exercise](./docs/TUTORIAL.md#town).

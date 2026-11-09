@@ -11,6 +11,9 @@ import { worldSearchResults, type WorldSearchResult } from "../worldSearch";
 import type { BoardModel } from "./boardModel";
 import { boardSearchMatches } from "./boardSearch";
 
+/** Where Escape ends Board's search: its results and the board. */
+const BOARD_SEARCH_ESCAPE_SCOPE = ".world-search-results, .board";
+
 export function useBoardSearch(
   world: WorldObject,
   model: BoardModel,
@@ -44,13 +47,21 @@ export function useBoardSearch(
     setActive(null);
   };
 
-  // Escape from a result row ends the search too; the box handles its own.
+  // Escape ends the search from its results or the board too, not only from
+  // the search box (which handles its own): a query keeps the box open after
+  // a click on the board. A key something else took, such as putting back a
+  // carried pane, is left alone.
   useEffect(() => {
     if (!open) return;
     const keydown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       const target = event.target instanceof Element ? event.target : null;
-      if (!target?.closest(".world-search-results")) return;
+      if (
+        target &&
+        target !== document.body &&
+        !target.closest(BOARD_SEARCH_ESCAPE_SCOPE)
+      )
+        return;
       event.preventDefault();
       setQuery("");
       setActive(null);
