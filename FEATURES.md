@@ -76,7 +76,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     numbers (over 3 h, or past a reset) read **stale** with no level; with several hosts the board shows the one with the least left.
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
-    World, and the agent's status line looks as before. When Claude refused
+    World, and the agent's status line looks as before. World shows Claude Code's
+    own figure, which can trail claude.ai by about a point. When Claude refused
     work at its limit, the gauge reads **reached, resets …** instead of a level.
     Chat and quests refresh usage stops after local transcript rewrites, including
     same-size writes whose file timestamps stay unchanged.

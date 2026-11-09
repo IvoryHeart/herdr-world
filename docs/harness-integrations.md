@@ -39,8 +39,8 @@ explicitly installing any one reenables the group. Preferences live in
 there is no need to edit these files. Uninstalling an already absent integration
 also records the preference.
 
-Status prints `<harness>: <state> (<path or reason>)`: `current (v1)`,
-`outdated (v0)`, `not installed` or `unsupported`. A missing or invalid marker
+Status prints `<harness>: <state> (<path or reason>)`: `current (v2)`,
+`outdated (v1)`, `not installed` or `unsupported`. A missing or invalid marker
 is `outdated` without a version. A valid marker at or above this release's
 version is current. Install and uninstall refuse an existing skill without a
 valid World marker for that skill's ID, preserving user-owned files; discovery
