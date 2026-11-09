@@ -117,7 +117,10 @@ record the transport teardown analysis and scope. Current L1 ownership lives in
 The [Inspector status row](../web/src/components/WorkspaceInspectorStatus.tsx)
 keeps stale notices clear of the retained Message editor.
 The [real resource-child regression](../web/src/world/WorldInspectorResourceResume.test.ts)
-covers disconnect, delayed worktree readmission and replacement; the
+covers disconnect, delayed worktree readmission and replacement; a
+[stale-worktree Chat regression](../web/src/world/WorldInspectorChatWorktree.test.ts)
+checks that a worktree being re-read holds only Files, Changes and Commits,
+never Chat; the
 [World browser regression](../web/src/world/WorldTerminalHandoff.test.ts) covers
 window, renderer and Message-draft retention. See the
 [visual gallery](reviews/mobile-resume.md) for synthetic viewport evidence.
