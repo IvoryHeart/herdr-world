@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { bridge } from "../../api";
+import { townEconomyPreviewClient } from "./townEconomyPreview";
 import type {
   UsageEntity,
   UsageRollup,
@@ -8,9 +9,7 @@ import type {
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 
 /**
- * A room's or table's economy numbers for its card. The Town board's metrics
- * provider reports whole-town totals by model, with no place in them, so the
- * cards read the service's harness usage (`world.usage.get`, docs/usage.md):
+ * Town's boards and place cards share the service's harness usage (`world.usage.get`, docs/usage.md):
  * today's tokens and estimated cost attributed to each Herdr workspace (a
  * room) and tab (a table), exactly as qualified by connection and generation.
  */
@@ -32,7 +31,15 @@ export type TownUsageState =
 export type TownCurrentUsage = TownUsageState | { status: "stale" };
 
 export type TownPlaceEconomy =
-  | { status: "loading" | "unavailable" | "stale" | "none" | "no-data" }
+  | {
+      status:
+        | "loading"
+        | "unavailable"
+        | "stale"
+        | "none"
+        | "no-data"
+        | "limited";
+    }
   | {
       status: "ready";
       /** Estimated from the operator's price table; null when unpriced. */
@@ -67,9 +74,14 @@ export const townUsageCounted = (entity: UsageEntity) =>
 export function townUsagePrice(
   cost: number | null,
   counted: readonly UsageEntity[],
+  tableVersion?: string | null,
 ): TownUsagePrice {
   if (cost !== null) return "priced";
-  return counted.some((entity) => entity.price_table_version !== null)
+  return (
+    tableVersion !== undefined
+      ? tableVersion !== null
+      : counted.some((entity) => entity.price_table_version !== null)
+  )
     ? "unpriced"
     : "no-table";
 }
@@ -133,23 +145,51 @@ export class TownUsageStore {
     private readonly client: UsageClient,
     readonly clock: () => number = Date.now,
     readonly window: TownUsageWindow = "today",
+    private readonly source?: TownUsageStore,
   ) {}
 
-  subscribe = (listener: () => void) => {
+  subscribe = (listener: () => void): (() => void) => {
+    if (this.source) return this.source.subscribe(listener);
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   };
 
-  get = () => this.state;
+  get = (): TownUsageState => {
+    if (!this.source) return this.state;
+    const state = this.source.get();
+    if (state.status !== "ready") return state;
+    let projected = todayReads.get(state);
+    if (!projected) {
+      const { snapshot } = state;
+      if (!snapshot.today) {
+        projected = { status: "failed" };
+        todayReads.set(state, projected);
+        return projected;
+      }
+      const from = Math.floor(snapshot.observed_at / DAY_MS) * DAY_MS;
+      projected = {
+        ...state,
+        snapshot: {
+          ...snapshot,
+          ...snapshot.today,
+          window: { ...snapshot.window, kind: "today", from },
+          entities: snapshot.entities.filter((e) => Date.parse(e.day) >= from),
+        },
+      };
+      todayReads.set(state, projected);
+    }
+    return projected;
+  };
 
   /**
    * A card opened: read the window's usage, at most once per refresh interval.
    * A failed read keeps the last numbers it had, which readers stop showing
    * once they are too old (`townUsageCurrent`).
    */
-  request() {
+  request(): void {
+    if (this.source) return this.source.request();
     const now = this.clock();
     if (this.pending || now - this.requestedAt < REFRESH_MS) return;
     this.requestedAt = now;
@@ -176,12 +216,20 @@ export class TownUsageStore {
   }
 }
 
+const todayReads = new WeakMap<TownUsageState, TownUsageState>();
 const shared = new Map<TownUsageWindow, TownUsageStore>();
-/** The one store per window that every Town reader shares. */
+/** One seven-day read, with a stable today projection shared by every board. */
 export function townUsageStore(window: TownUsageWindow = "today") {
   let store = shared.get(window);
-  if (!store)
-    shared.set(window, (store = new TownUsageStore(bridge, Date.now, window)));
+  if (!store) {
+    store = new TownUsageStore(
+      window === "7d" ? townEconomyPreviewClient(bridge) : bridge,
+      Date.now,
+      window,
+      window === "today" ? townUsageStore("7d") : undefined,
+    );
+    shared.set(window, store);
+  }
   return store;
 }
 
@@ -297,6 +345,7 @@ export function townPlaceEconomy(
       target.nativeId,
     ),
   );
+  if (!usage && state.snapshot.details_truncated) return { status: "limited" };
   if (!usage || usage.rollup.records === 0)
     return townHostHasData(
       state.snapshot,
@@ -315,13 +364,18 @@ export function townPlaceEconomy(
   return {
     status: "ready",
     costUsd: usage.rollup.estimated_cost_usd,
-    price: townUsagePrice(usage.rollup.estimated_cost_usd, counted),
+    price: townUsagePrice(
+      usage.rollup.estimated_cost_usd,
+      counted,
+      state.snapshot.price_table_version,
+    ),
     tokens: usage.rollup.total_tokens,
     models: [...byModel]
       .sort(([, left], [, right]) => right - left)
       .map(([model]) => model),
     partial:
       state.snapshot.truncated ||
+      !!state.snapshot.details_truncated ||
       usage.entities.some((entity) => entity.state !== "available") ||
       townHostPartial(state.snapshot, target.connectionId, target.generation),
   };

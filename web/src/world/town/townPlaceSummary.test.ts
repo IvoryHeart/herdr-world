@@ -121,13 +121,13 @@ test("the Town board counts every agent in every building, quiet ones too", asyn
     finished: 0,
     quiet: 3,
     unknown: 0,
+    outOfFuel: 0,
     agents: 5,
     buildings: 2,
   });
   const html = renderToStaticMarkup(
     createElement(TownBoard, {
       counts: summary.counts,
-      observability: NO_METRICS,
     }),
   );
   // The lab's quiet agents count on the board, not only the studio's.
@@ -153,6 +153,7 @@ test("a room's and a table's summaries are their parts of the Town summary", asy
     finished: 0,
     quiet: 0,
     unknown: 0,
+    outOfFuel: 0,
     agents: 2,
   });
   expect(
@@ -172,6 +173,7 @@ test("a room's and a table's summaries are their parts of the Town summary", asy
     finished: 0,
     quiet: 0,
     unknown: 0,
+    outOfFuel: 0,
     agents: 1,
   });
   const working = office.roster.find(
@@ -191,6 +193,7 @@ test("a room's and a table's summaries are their parts of the Town summary", asy
     finished: 0,
     quiet: 0,
     unknown: 0,
+    outOfFuel: 0,
     agents: 0,
   });
 });
@@ -432,6 +435,24 @@ test("a place card is the Town board's numbers without its agents list", async (
   expect(html).toContain("2 agents");
   expect(html).toContain("<span>ECONOMY TODAY</span><b>~$2.75</b>");
   expect(html).toContain("11.5k tokens · Opus 4.1 · Sonnet 4.5");
+  expect(html).not.toContain("town-expenses-caveats");
+  // A partial read is one short caveat, explained on hover or tap.
+  const partial = renderToStaticMarkup(
+    createElement(TownPlaceSummaryCard, {
+      place,
+      economy: {
+        status: "ready",
+        costUsd: 2.75,
+        price: "priced",
+        tokens: 11_500,
+        models: [],
+        partial: true,
+      },
+    }),
+  );
+  expect(partial).toContain("<small>11.5k tokens</small>");
+  expect(partial).toContain("<span>partial</span>");
+  expect(partial).toContain('title="Partial: a harness was read only in part');
   // No agents list: the summary window keeps who needs you and what finished.
   expect(html).not.toContain(waiting.agent.displayLabel);
   expect(html).not.toContain("town-summary-item");

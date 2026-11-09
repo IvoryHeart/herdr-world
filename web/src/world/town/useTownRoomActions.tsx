@@ -7,12 +7,11 @@
 
 import { useMemo } from "react";
 import { CreateWorkspaceDialog } from "../../components/CreateWorkspaceDialog";
-import { ConfirmDialog, TextInputDialog } from "../../components/ModalDialogs";
 import {
   creationPendingReason,
   type useCreationProgress,
 } from "../../creationRequests";
-import { connectionSnapshot, endpointCreationReason, store } from "../../store";
+import { connectionSnapshot, endpointCreationReason } from "../../store";
 import { requestAgentLaunch } from "../agentProfiles";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import {
@@ -20,6 +19,11 @@ import {
   officeRoomActionCapabilities,
   type OfficeCreationActionState,
 } from "../officeRoomActions";
+import {
+  closeRoom as closeSharedRoom,
+  renameRoom,
+  RoomRenameCloseDialogs,
+} from "../roomRenameClose";
 import type { WorldObject } from "../worldObject";
 import type { TownRoomActions } from "./TownCanvas";
 
@@ -182,13 +186,11 @@ export function useTownRoomActions({
     if (!room) return false;
     return officeRoomActionCapabilities(world, room)[action];
   };
-  const reportRoomActionFailure = (action: string, cause: unknown) => {
-    store.notify({
-      kind: "error",
-      message: `${action} failed`,
-      detail: cause instanceof Error ? cause.message : String(cause),
-    });
-  };
+  const roomTarget = (room: NonNullable<ReturnType<typeof roomForKey>>) => ({
+    connectionId: room.workspaceRef.connectionId,
+    generation: room.observedGeneration,
+    workspaceId: room.workspaceRef.nativeId,
+  });
   const submitRenameRoom = async (label: string) => {
     if (
       roomDialog?.mode !== "rename" ||
@@ -199,37 +201,13 @@ export function useTownRoomActions({
     const room = roomForKey(roomDialog.roomKey);
     if (!room) return;
     setRoomDialog(null);
-    const value = label.trim();
-    if (value && value !== roomDialog.label) {
-      try {
-        await store.renameQualifiedWorkspace(
-          {
-            connectionId: room.workspaceRef.connectionId,
-            runtimeGeneration: room.observedGeneration,
-          },
-          room.workspaceRef.nativeId,
-          value,
-        );
-      } catch (cause) {
-        reportRoomActionFailure("Room rename", cause);
-      }
-    }
+    await renameRoom(roomTarget(room), roomDialog.label, label);
   };
   const closeRoom = async (roomKey: string) => {
     const room = roomForKey(roomKey);
     if (!room || !canManageRoom(roomKey, "close")) return;
     setRoomDialog(null);
-    try {
-      await store.closeQualifiedWorkspace(
-        {
-          connectionId: room.workspaceRef.connectionId,
-          runtimeGeneration: room.observedGeneration,
-        },
-        room.workspaceRef.nativeId,
-      );
-    } catch (cause) {
-      reportRoomActionFailure("Room close", cause);
-    }
+    await closeSharedRoom(roomTarget(room));
   };
   const roomActions = {
     showCreateSeat,
@@ -337,30 +315,12 @@ export function TownRoomDialogs({
         }
         onClose={() => setDialog(null)}
       />
-      <TextInputDialog
-        open={dialog?.mode === "rename"}
-        title="Rename room"
-        label="Room name"
-        initialValue={dialog?.mode === "rename" ? dialog.label : ""}
-        submitLabel="Rename"
+      <RoomRenameCloseDialogs
+        dialog={dialog?.mode === "create" ? null : dialog}
         onClose={() => setDialog(null)}
-        onSubmit={(label) => void submitRenameRoom(label)}
-      />
-      <ConfirmDialog
-        open={dialog?.mode === "close"}
-        title="Close room"
-        message={
-          dialog?.mode === "close"
-            ? `Close room “${dialog.label}”? Its running terminal sessions will end.`
-            : ""
-        }
-        confirmLabel="Close room"
-        danger
-        onClose={() => setDialog(null)}
-        onConfirm={() => {
-          if (dialog?.mode === "close") {
-            void closeRoom(dialog.roomKey);
-          }
+        onRename={(label) => void submitRenameRoom(label)}
+        onConfirmClose={() => {
+          if (dialog?.mode === "close") void closeRoom(dialog.roomKey);
         }}
       />
     </>

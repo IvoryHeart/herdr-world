@@ -1,3 +1,4 @@
+import type { AgentUsageStop } from "../../../../shared/usageStop";
 import type { Quest } from "../../../../server/src/agent/quest";
 
 // Mirrors the server's conversation read model (server/src/agent/conversation.ts).
@@ -28,6 +29,8 @@ export type Conversation = {
     summary: string | null;
     started_at: string;
   } | null;
+  /** The agent stopped on its usage limit, from its own transcript. */
+  usage_stop?: AgentUsageStop | null;
   status: "ok" | "unavailable";
   unavailable: {
     reason: string;

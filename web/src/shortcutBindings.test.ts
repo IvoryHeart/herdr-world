@@ -682,3 +682,119 @@ describe("terminal copy shortcuts", () => {
     }
   });
 });
+
+test("view search takes / and Ctrl+F, or Cmd+F on a Mac, outside text", () => {
+  expect(linux()["view.search"]).toEqual(["Slash", "Ctrl+F"]);
+  expect(defaultShortcutBindings("windows")["view.search"]).toEqual([
+    "Slash",
+    "Ctrl+F",
+  ]);
+  expect(defaultShortcutBindings("mac")["view.search"]).toEqual([
+    "Slash",
+    "Meta+F",
+  ]);
+  expect(
+    matchesShortcut(event({ key: "/", code: "Slash" }), "view.search", linux()),
+  ).toBe(true);
+  expect(
+    matchesShortcut(
+      event({ key: "f", code: "KeyF", ctrlKey: true }),
+      "view.search",
+      linux(),
+    ),
+  ).toBe(true);
+  // It never acts in a text field or terminal, so plain keys stay assignable
+  // to it, and only to it.
+  expect(validateShortcutKeys("view.search", ["Slash", "Shift+7"])).toEqual([
+    "Slash",
+    "Shift+7",
+  ]);
+  expect(() => validateShortcutKeys("panes.search", ["Slash"])).toThrow();
+  // A file preview's own Ctrl+F stays its own; a workspace shortcut collides.
+  expect(shortcutConflicts("view.search", ["Ctrl+F"], linux())).toEqual([]);
+  expect(shortcutConflicts("view.search", ["Ctrl+Alt+K"], linux())).toContain(
+    "command.menu",
+  );
+});
+
+test("older presets gain view search without replacing saved keys", () => {
+  for (const base of ["mac", "windows", "linux"] as const) {
+    const defaults = defaultShortcutBindings(base);
+    const bindings: Partial<ShortcutBindings> = { ...defaults };
+    delete bindings["view.search"];
+    expect(
+      validateShortcutPreset({ ...preset(), base, bindings }).bindings,
+    ).toEqual(defaults);
+  }
+});
+
+test("an unmodified punctuation key is the character it types", () => {
+  // German layout: "/" is Shift+7, and the physical Slash key types "-".
+  expect(
+    matchesShortcut(
+      event({ key: "/", code: "Digit7", shiftKey: true }),
+      "view.search",
+      linux(),
+    ),
+  ).toBe(true);
+  expect(
+    matchesShortcut(event({ key: "-", code: "Slash" }), "view.search", linux()),
+  ).toBe(false);
+  expect(
+    shortcutFromEvent(event({ key: "/", code: "Digit7", shiftKey: true })),
+  ).toBe("Slash");
+  // "?" is no named key, so US Shift+/ still records as the key it is.
+  expect(
+    shortcutFromEvent(event({ key: "?", code: "Slash", shiftKey: true })),
+  ).toBe("Shift+Slash");
+  // With Ctrl, Alt or Meta the physical key still addresses the shortcut.
+  expect(
+    shortcutFromEvent(event({ key: "-", code: "Slash", ctrlKey: true })),
+  ).toBe("Ctrl+Slash");
+});
+
+describe("Town's Next keys", () => {
+  test("N and Shift+N are Town actions any preset can rebind", () => {
+    for (const platform of ["mac", "windows", "linux"] as const) {
+      const bindings = defaultShortcutBindings(platform);
+      expect(bindings["town.next"]).toEqual(["N"]);
+      expect(bindings["town.previous"]).toEqual(["Shift+N"]);
+    }
+    expect(shortcutScope("town.next")).toBe("town");
+    const n = event({ key: "n", code: "KeyN" });
+    const shiftN = event({ key: "N", code: "KeyN", shiftKey: true });
+    expect(matchesShortcut(n, "town.next", linux())).toBe(true);
+    expect(matchesShortcut(n, "town.previous", linux())).toBe(false);
+    expect(matchesShortcut(shiftN, "town.previous", linux())).toBe(true);
+    expect(matchesShortcut(shiftN, "town.next", linux())).toBe(false);
+    // Ctrl+N is the browser's, never Town's.
+    expect(matchesShortcut({ ...n, ctrlKey: true }, "town.next", linux())).toBe(
+      false,
+    );
+    const bindings = linux();
+    bindings["town.next"] = validateShortcutKeys("town.next", ["Period"]);
+    expect(
+      matchesShortcut(
+        event({ key: ".", code: "Period" }),
+        "town.next",
+        bindings,
+      ),
+    ).toBe(true);
+    expect(matchesShortcut(n, "town.next", bindings)).toBe(false);
+  });
+  test("only Town's actions take plain letters", () => {
+    expect(validateShortcutKeys("town.next", ["J"])).toEqual(["J"]);
+    expect(validateShortcutKeys("town.previous", ["Shift+J"])).toEqual([
+      "Shift+J",
+    ]);
+    expect(() => validateShortcutKeys("tab.next", ["J"])).toThrow();
+  });
+  test("a preset saved before Town's keys gains them", () => {
+    const bindings: Partial<ShortcutBindings> = linux();
+    delete bindings["town.next"];
+    delete bindings["town.previous"];
+    const loaded = validateShortcutPreset({ ...preset(), bindings });
+    expect(loaded.bindings["town.next"]).toEqual(["N"]);
+    expect(loaded.bindings["town.previous"]).toEqual(["Shift+N"]);
+  });
+});

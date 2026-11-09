@@ -166,3 +166,58 @@
   color: var(--text);
   box-shadow: var(--shadow-lg);
 }
+
+/* Zen parks the topbar, so the view's search hangs beside the views. */
+.world-zen-search {
+  width: clamp(200px, 26vw, 340px);
+  display: flex;
+  padding: 3px 4px 4px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+.world-zen-search .world-view-toolbar-host {
+  flex: 1 1 auto;
+}
+/* A folded search is only its icon, so the panel hugs it. */
+.world-zen-search:not(.is-phone):has(.world-view-search-toggle) {
+  width: auto;
+}
+.world-zen-search .world-view-search-toggle {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
+}
+.world-zen-search .world-view-toolbar-search {
+  height: 26px;
+}
+/* Phone: a corner button opposite the views, where the thumb rests. */
+.world-zen-search.is-phone {
+  position: fixed;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 120;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.world-zen-search.is-phone .world-view-search-toggle {
+  width: 52px;
+  min-width: 52px;
+  height: 52px;
+  min-height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-lg);
+  touch-action: manipulation;
+}
+.keyboard-open .world-zen-search.is-phone {
+  display: none;
+}

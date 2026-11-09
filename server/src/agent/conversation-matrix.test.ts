@@ -889,8 +889,53 @@ describe("quests", () => {
           progress: { done: 1, total: 1 },
           set_by: "call_q1",
         }),
+        usage_stop: null,
       },
     ]);
+  });
+
+  test("a usage-limit stop comes with the quest and the conversation until its reset", async () => {
+    const dir = await mkdtemp(join(root, "quest-"));
+    const path = join(dir, "session.jsonl");
+    const refusal = (resetsAt: number) =>
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-10-22T10:00:02Z",
+        isApiErrorMessage: true,
+        error: "rate_limit",
+        apiError: "usage_limit_reached",
+        apiErrorParams: { rate_limit_info: { resetsAt } },
+        message: {
+          model: "<synthetic>",
+          content: [{ type: "text", text: "SYNTHETIC" }],
+        },
+      });
+    const resets = Math.floor(Date.now() / 1000) + 3600;
+    await writeFile(path, `${todo("in_progress")}\n${refusal(resets)}\n`);
+    const chat = source(
+      herdr(
+        pane("claude", {
+          source: "herdr:claude",
+          agent: "claude",
+          kind: "path",
+          value: path,
+        }),
+      ),
+    );
+    const stop = {
+      harness: "claude" as const,
+      at: Date.parse("2026-10-22T10:00:02Z"),
+      resets_at: resets * 1000,
+    };
+    expect((await chat.read({ pane_id: "w1:p1" })).usage_stop).toEqual(stop);
+    expect((await chat.quests())[0]?.usage_stop).toEqual(stop);
+    // Once the reset has passed, the stop no longer holds.
+    await writeFile(
+      path,
+      `${todo("in_progress")}\n${refusal(resets - 7200)}\n`,
+    );
+    expect((await chat.read({ pane_id: "w1:p1" })).usage_stop).toBeNull();
+    expect((await chat.quests())[0]?.usage_stop).toBeNull();
   });
 
   test("a bulk read lists agents once instead of asking for each pane", async () => {

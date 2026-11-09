@@ -74,6 +74,17 @@
   color: #c9b79a;
 }
 
+/* Share the expense boards' readable digits, including room/table cards. */
+.town-board-economy b,
+.town-board-economy small {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.town-board-economy b {
+  font-weight: 600;
+}
+
 .town-board-title {
   display: flex;
   align-items: center;
@@ -247,4 +258,11 @@
   .town-recap-chip {
     animation: none;
   }
+}
+
+/* An out-of-fuel agent's reset, on its table's card (townOutOfFuel.ts). */
+.town-place-fuel {
+  margin: 0;
+  font-size: 11px;
+  color: #ffb08a;
 }

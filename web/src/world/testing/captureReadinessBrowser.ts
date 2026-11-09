@@ -184,6 +184,22 @@ export function registerCaptureReadinessTests() {
           height: 1440,
         });
         expect(resized.receipt.revision).toBeGreaterThan(old.revision);
+        // Exhaust the per-frame work budget after the scene has been baked.
+        // Budget exhaustion alone must not invent pending materialization.
+        await evaluate("captureFixture.exhaustMaterializationBudget(true)");
+        try {
+          const loaded = await captureScene(command, {
+            view: "town",
+            width: 1280,
+            height: 1440,
+            timeoutMs: 5000,
+            content: { selector: "canvas[data-office-canvas]" },
+          });
+          expect(loaded.receipt.revision).toBe(resized.receipt.revision);
+          expect(loaded.sanity.foreground).toBeGreaterThan(0.02);
+        } finally {
+          await evaluate("captureFixture.exhaustMaterializationBudget(false)");
+        }
         // Request-driven captures: all five sizes, the same synthetic topology.
         if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR)
           await captureResumeViewports(

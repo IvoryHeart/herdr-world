@@ -1,4 +1,9 @@
+import type {
+  UsageContext,
+  WorldUsageSnapshot,
+} from "../../../../../shared/usage";
 import type { WorldRuntimeConnection } from "../../runtimeStore";
+import { usageFixture } from "../usageFixture";
 
 /** Bounded synthetic topology: two hosts, four rooms, mixed agents and shells. */
 export function goldenConnections(): WorldRuntimeConnection[] {
@@ -53,4 +58,48 @@ export function goldenConnections(): WorldRuntimeConnection[] {
       snapshot: { workspaces, tabs, panes, agents: [] },
     };
   });
+}
+
+/**
+ * Context readings for the golden town: two agents at 90% and 95% look tired
+ * at their desks (agentContextFill.ts); one at 41% and one on a model with no
+ * known window show nothing at the desk. The rest have no reading.
+ */
+export function goldenUsage(): WorldUsageSnapshot {
+  const snapshot = usageFixture({ rows: [], sources: [], window: "7d" });
+  const reading = (
+    host: number,
+    room: number,
+    tab: number,
+    harness: string,
+    model: string,
+    used: number,
+    window: number | null,
+  ): UsageContext => ({
+    connection_id: `host-${host}`,
+    connection_generation: 1,
+    workspace_id: `host-${host}-room-${room}`,
+    tab_id: `host-${host}-room-${room}-tab-${tab}`,
+    pane_id: `host-${host}-room-${room}-tab-${tab}-pane-0`,
+    harness,
+    model,
+    used_tokens: used,
+    window_tokens: window,
+    observed_at: snapshot.observed_at,
+  });
+  return {
+    ...snapshot,
+    // The shared seven-day read supplies today to the context and economy boards.
+    today: {
+      total: snapshot.total,
+      unattributed: snapshot.unattributed,
+      rollups: snapshot.rollups,
+    },
+    contexts: [
+      reading(0, 0, 0, "claude", "claude-opus-4-5", 180_000, 200_000),
+      reading(0, 0, 1, "codex", "example-codex", 106_000, 258_400),
+      reading(1, 1, 0, "codex", "example-codex", 245_000, 258_400),
+      reading(1, 1, 1, "pi", "example-unknown", 150_000, null),
+    ],
+  };
 }

@@ -141,5 +141,8 @@ export function usageRollups(entities: UsageEntity[]): UsageRollup[] {
   return [...groups.values()].map((group) => ({
     ...group.target,
     ...usageTotal(group.rows),
+    ...(group.target.level === "host"
+      ? { unattributed: usageTotal(group.rows.filter((e) => !e.workspace_id)) }
+      : {}),
   }));
 }

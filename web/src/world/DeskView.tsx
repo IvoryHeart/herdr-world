@@ -49,6 +49,17 @@ import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
 import { DeskOtherHosts } from "./DeskOtherHosts";
+import { useGreetingAnchor } from "./townMasterGreeting";
+import {
+  keyTakenByViewSearch,
+  useViewSearchShortcut,
+} from "./viewSearchShortcut";
+import {
+  useFoldingSearch,
+  usePhoneViewport,
+  useViewSearchTitle,
+} from "./useFoldingSearch";
+import { Search } from "lucide-react";
 export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
 
@@ -259,6 +270,8 @@ export function DeskBoard({
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
 }) {
+  // The Town Master's greeting opens at the summary on wide screens.
+  const greetingAnchor = useGreetingAnchor();
   const now = useNow(10_000);
   const asks = useWorldAsks();
   const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
@@ -297,7 +310,10 @@ export function DeskBoard({
   };
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
-  const searchRef = useRef<HTMLInputElement | null>(null);
+  // On desktop the search rests as an icon; a phone keeps the box.
+  const search = useFoldingSearch(query, !usePhoneViewport());
+  const searchTitle = useViewSearchTitle("Search Desk");
+  useViewSearchShortcut(search.expand);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [fullReports, setFullReports] = useState<Map<string, string>>(
     () => new Map(),
@@ -481,20 +497,8 @@ export function DeskBoard({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (keyTakenByViewSearch(event)) return;
       const target = event.target as HTMLElement | null;
-      // "/" jumps to search from anywhere on the Desk.
-      if (
-        event.key === "/" &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        (target === document.body || rootRef.current?.contains(target)) &&
-        !target?.closest?.("input, textarea, select")
-      ) {
-        event.preventDefault();
-        searchRef.current?.focus();
-        return;
-      }
       if (
         event.key === "Escape" &&
         reading &&
@@ -504,6 +508,19 @@ export function DeskBoard({
         event.preventDefault();
         cancelPreview();
         onCloseReading?.();
+        return;
+      }
+      // A query keeps the search open after a click elsewhere on the Desk;
+      // Escape there still clears it and folds it to its icon.
+      if (
+        event.key === "Escape" &&
+        query &&
+        (target === document.body || rootRef.current?.contains(target)) &&
+        !target?.closest?.("input, textarea, select, [role='dialog']")
+      ) {
+        event.preventDefault();
+        setQuery("");
+        search.fold();
         return;
       }
       if (!order.length) return;
@@ -829,7 +846,11 @@ export function DeskBoard({
       }}
     >
       <header className="desk-top">
-        <div className="desk-summary" aria-label="Attention summary">
+        <div
+          ref={greetingAnchor}
+          className="desk-summary"
+          aria-label="Attention summary"
+        >
           <button
             type="button"
             className={`desk-stat is-needs${needs.length ? " is-hot" : ""}`}
@@ -899,23 +920,37 @@ export function DeskBoard({
               </button>
             ))}
           </div>
-          <label className="desk-search">
-            <span className="desk-search-label">Find</span>
-            <input
-              ref={searchRef}
-              type="search"
-              value={query}
-              placeholder="Agent, workspace, tab, folder or request"
-              aria-label="Find an agent"
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setQuery("");
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-          </label>
+          {search.folded ? (
+            <button
+              ref={search.toggleRef}
+              type="button"
+              className="desk-search-toggle"
+              aria-label="Search Desk"
+              title={searchTitle}
+              onClick={search.expand}
+            >
+              <Search size={16} aria-hidden="true" />
+            </button>
+          ) : (
+            <label className="desk-search" {...search.boxProps}>
+              <span className="desk-search-label">Find</span>
+              <input
+                ref={search.inputRef}
+                type="search"
+                value={query}
+                placeholder="Agent, workspace, tab, folder or request"
+                aria-label="Find an agent"
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setQuery("");
+                    search.fold();
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+          )}
         </div>
       </header>
       {error || stateError ? (

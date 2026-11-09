@@ -18,6 +18,8 @@ export type OfficePreferences = {
    * Town's master, FirstMate), by its name; empty docks none.
    */
   townMaster: string;
+  /** The Town Master greets each visit (Show this on start). */
+  townGreeting: boolean;
 };
 
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
@@ -26,6 +28,7 @@ export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   townCalm: false,
   townOpens: "chat",
   townMaster: "firstmate",
+  townGreeting: true,
 });
 
 export const OFFICE_PREFERENCES_KEY = "officePreferences:v1";
@@ -50,6 +53,7 @@ export function readOfficePreferences(
       townCalm: value.townCalm === true,
       townOpens: value.townOpens === "terminal" ? "terminal" : "chat",
       townMaster: townMasterName(value.townMaster),
+      townGreeting: value.townGreeting !== false,
     };
   } catch {
     return { ...DEFAULT_OFFICE_PREFERENCES };
@@ -69,6 +73,7 @@ export function writeOfficePreferences(
     townCalm: preferences.townCalm === true,
     townOpens: preferences.townOpens === "terminal" ? "terminal" : "chat",
     townMaster: townMasterName(preferences.townMaster),
+    townGreeting: preferences.townGreeting !== false,
   };
   try {
     storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));

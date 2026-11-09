@@ -114,7 +114,8 @@ export function TownRoomPlaque({
   room: OfficeRoom;
   label: string;
   width: number;
-  counts: Pick<TownRoomCounts, "agents" | "working" | "blocked">;
+  counts: Pick<TownRoomCounts, "agents" | "working" | "blocked"> &
+    Partial<Pick<TownRoomCounts, "outOfFuel">>;
   color: PlaceColorChoice | null;
   actions: TownRoomActions;
   /** The room's summary for its card; without it the card holds the actions. */
@@ -141,7 +142,10 @@ export function TownRoomPlaque({
         onNamePress?.(event.nativeEvent, press);
     };
   const active = counts.working + counts.blocked;
-  const activityLabel = `${active} of ${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} active: ${counts.working} working, ${counts.blocked} waiting on you`;
+  // Agents out of fuel are not active: they wait for their limit to reset.
+  const activityLabel = `${active} of ${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} active: ${counts.working} working, ${counts.blocked} waiting on you${
+    counts.outOfFuel ? `, ${counts.outOfFuel} out of fuel` : ""
+  }`;
   return (
     <div
       className="town-room-plaque"

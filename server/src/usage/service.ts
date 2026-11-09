@@ -1,5 +1,6 @@
 import {
   usageLimitExpired,
+  type UsageContext,
   type UsageEntity,
   type UsageLimit,
   type UsageSource,
@@ -10,16 +11,14 @@ import type { ConnectionStatus } from "../connections/types";
 import type { WorldSnapshotResult } from "../world/snapshot";
 import type { OfficeObservabilitySnapshot } from "../world/observability";
 import type { RuntimeUsage } from "./host";
-import {
-  estimateUsage,
-  parseUsagePrices,
-  tokenTotal,
-  usageRollups,
-  usageTotal,
-} from "./totals";
+import { estimateUsage, parseUsagePrices, tokenTotal } from "./totals";
 import { usageDigest } from "./host";
 import type { Scheduler } from "../service/ports";
 import { usageScope } from "./lifetime";
+import { codexIdsFromTitle } from "../agent/session-resolver";
+import { normalizeAgentName } from "../agent/chat-harnesses";
+import { boundUsageDetails, summarizeUsage } from "./summary";
+import { contextWindowTokens } from "./context-window";
 
 import type { HerdrCall } from "../agent/session-types";
 
@@ -72,7 +71,9 @@ const topologyKey = (agents: Record<string, unknown>[]) =>
             a.agent,
             a.agent_session,
             a.terminal_id,
-            a.terminal_title,
+            normalizeAgentName(String(a.agent ?? "")) === "codex"
+              ? codexIdsFromTitle(String(a.terminal_title ?? ""))
+              : null,
             a.pane_id,
             a.tab_id,
             a.workspace_id,
@@ -169,7 +170,7 @@ export class WorldUsageService {
               Array.isArray(current.agents) && current.agents.length > 128;
             if (
               !Array.isArray(current.agents) ||
-              value.truncated ||
+              current.agents.length > 128 ||
               topologyKey(agents) !== topologyKey(current.agents)
             )
               value.bindings = [];
@@ -328,7 +329,8 @@ export class WorldUsageService {
     const telemetry = await this.options.telemetry();
     const entities: UsageEntity[] = [],
       sources: UsageSource[] = [],
-      limits: UsageLimit[] = [];
+      limits: UsageLimit[] = [],
+      contexts: UsageContext[] = [];
     let truncated = statuses.length > 16;
     for (const status of selected) {
       const cached = this.#cache.get(status.id);
@@ -405,12 +407,45 @@ export class WorldUsageService {
           topologyKey(agentsFor(status.id, cached.generation))
           ? value.bindings
           : [];
-      for (const row of value.rows) {
-        if (Date.parse(row.day) < from || Date.parse(row.day) >= now) continue;
-        if (entities.length >= 128) {
+      // A pane's context bar: only a fresh read with a unique current-session
+      // match, the newest when a pane's session has several files.
+      const panes = new Map<string, UsageContext>();
+      for (const context of fresh ? (value.contexts ?? []) : []) {
+        const matches = bindings.filter(
+          (b) =>
+            b.harness === context.harness &&
+            (b.session_key === context.session_key ||
+              (b.file_key !== null && context.file_keys.includes(b.file_key))),
+        );
+        if (matches.length !== 1) continue;
+        const target = matches[0]!;
+        const prior = panes.get(target.pane_id);
+        if (prior && prior.observed_at >= context.at) continue;
+        panes.set(target.pane_id, {
+          connection_id: status.id,
+          connection_generation: cached!.generation,
+          workspace_id: target.workspace_id,
+          tab_id: target.tab_id,
+          pane_id: target.pane_id,
+          harness: context.harness,
+          model: context.model,
+          used_tokens: context.used_tokens,
+          window_tokens: contextWindowTokens(
+            context.model,
+            context.window_tokens,
+          ),
+          observed_at: context.at,
+        });
+      }
+      for (const context of panes.values()) {
+        if (contexts.length >= 256) {
           truncated = true;
           break;
         }
+        contexts.push(context);
+      }
+      for (const row of value.rows) {
+        if (Date.parse(row.day) < from || Date.parse(row.day) >= now) continue;
         const matches = bindings.filter(
           (b) =>
             b.harness === row.harness &&
@@ -461,10 +496,21 @@ export class WorldUsageService {
       truncated,
       entities,
       sources,
-      total: usageTotal(entities),
-      unattributed: usageTotal(entities.filter((e) => !e.pane_id)),
-      rollups: usageRollups(entities),
+      price_table_version: table?.version ?? null,
+      ...summarizeUsage(entities),
+      ...(kind === "7d"
+        ? {
+            today: summarizeUsage(
+              entities.filter(
+                (e) =>
+                  Date.parse(e.day) >=
+                  Math.floor(now / 86_400_000) * 86_400_000,
+              ),
+            ),
+          }
+        : {}),
       limits,
+      contexts,
       telemetry: {
         role: "comparison",
         included_in_totals: false,
@@ -474,19 +520,7 @@ export class WorldUsageService {
         total_tokens: telemetry.totalUsage,
       },
     };
-    // Leave space for the RPC envelope and future shared projection fields.
-    while (
-      Buffer.byteLength(JSON.stringify(response)) > 768 * 1024 &&
-      response.entities.length
-    ) {
-      response.truncated = true;
-      response.entities.pop();
-      response.total = usageTotal(response.entities);
-      response.unattributed = usageTotal(
-        response.entities.filter((e) => !e.pane_id),
-      );
-      response.rollups = usageRollups(response.entities);
-    }
+    boundUsageDetails(response);
     return response;
   }
 }

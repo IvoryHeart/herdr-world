@@ -531,13 +531,18 @@ export function createTownTopology(ctx: TownTopologyContext) {
       budget -= 1;
     }
     let buildingBudget = spent() ? 0 : 1;
+    // A spent budget alone does not mean there are buildings left to bake.
+    let buildingsPending = false;
     pendingBuildings = pendingBuildings.filter((building) => {
       const rect = townBuildingRect(building);
       const motion = pendingMotion.get(building.hostKey);
       const offset = motion && { x: motion.dx, y: motion.dy };
       if (!meets(rect, near, offset)) return true;
       const now = urgent && meets(rect, view, offset);
-      if (!now && buildingBudget <= 0) return true;
+      if (!now && buildingBudget <= 0) {
+        buildingsPending = true;
+        return true;
+      }
       buildBuilding(building);
       if (!now) buildingBudget -= 1;
       return false;
@@ -570,7 +575,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
         }
         pendingPods.set(building.hostKey, remaining);
       }
-    return budget <= 0 || buildingBudget <= 0 || podsPending;
+    return budget <= 0 || buildingsPending || podsPending;
   };
 
   /** What this frame is missing, by the layout (townSceneGaps). */

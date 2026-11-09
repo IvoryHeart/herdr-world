@@ -64,6 +64,10 @@ import {
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
 } from "../workspaceResource";
+import { quietGreetingForTest } from "./townMasterGreeting";
+
+// The Town Master's greeting would sit over what these checks press.
+quietGreetingForTest();
 
 const failures: string[] = [];
 const calls: Array<{
@@ -95,6 +99,23 @@ function enterSearch(input: HTMLInputElement, value: string) {
     "value",
   )?.set?.call(input, value);
   input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+}
+/** A view's desktop search, unfolded from its icon as a click does. */
+async function openViewSearch(scope: string, label: string) {
+  const selector = `${scope} input[placeholder="Search ${label}"]`;
+  const open = document.querySelector<HTMLInputElement>(selector);
+  if (open) open.focus();
+  else
+    document
+      .querySelector<HTMLButtonElement>(
+        `${scope} button[aria-label="Search ${label}"]`,
+      )
+      ?.click();
+  await until(
+    () => document.activeElement?.matches(selector),
+    `${label}'s search unfolding with the cursor in it`,
+  );
+  return document.querySelector<HTMLInputElement>(selector)!;
 }
 let renderError: unknown = null;
 window.addEventListener("error", (event) => {
@@ -215,6 +236,8 @@ const panes: Pane[] = [
   },
 ];
 let notificationSessionId = "reviewer-session";
+/** Reads that returned a swapped-in agent session, which the app refuses. */
+let replacedSessionReads = 0;
 let replaceNotificationSessionAfterRead = false;
 let replaceNotificationSessionOnSnapshot = false;
 let omitNextOperationalTabPanes: string | null = null;
@@ -228,7 +251,11 @@ let secondHostGeneration = 3;
 let rejectNextWorldSnapshot = false;
 let ambiguousAgentWorktrees = false;
 let staleNextWorldSnapshot = false;
-let omitNextWorldTopology = false;
+// Omits tabs and panes from every World snapshot until the test has seen
+// the omission and clears it. A one-shot omission raced back-to-back
+// refreshes: a queued or scheduled refresh restored the panes before the
+// test observed the omitted snapshot.
+let omitWorldTopology = false;
 let siblingObservationGate: Promise<void> | null = null;
 let navigationMode: "shared" | "browser-local" = "browser-local";
 const initialTerminalAttach = Promise.withResolvers<void>();
@@ -380,6 +407,7 @@ let client: ConnectionClient = {
     }
     if (method === "agent_session.get" && !params.agent) {
       const value = notificationSessionId;
+      if (value === "replacement-session") replacedSessionReads += 1;
       if (replaceNotificationSessionAfterRead) {
         notificationSessionId = "replacement-session";
         replaceNotificationSessionAfterRead = false;
@@ -402,8 +430,7 @@ let client: ConnectionClient = {
       }
       const stale = staleNextWorldSnapshot;
       staleNextWorldSnapshot = false;
-      const omitTopology = omitNextWorldTopology;
-      omitNextWorldTopology = false;
+      const omitTopology = omitWorldTopology;
       const observation = {
         revision: worldRevision,
         observed_at: Date.now(),
@@ -902,6 +929,40 @@ async function run() {
     worldLocalStorage.getItem("zenMode.world") === null,
     "World's default Zen was stored as if the user had chosen it",
   );
+  // Zen parks the topbar off screen, so Town's search sits in the Zen dock,
+  // in sight, and moves back to the topbar when Zen ends. It rests as an
+  // icon and unfolds into the box.
+  await until(() => {
+    const rect = document
+      .querySelector<HTMLElement>(
+        '.zen-dock .world-zen-search button[aria-label="Search Town"]',
+      )
+      ?.getBoundingClientRect();
+    return Boolean(rect && rect.width > 0 && rect.top >= 0);
+  }, "Town's search icon in sight beside the views in Zen");
+  {
+    const zenSearch = await openViewSearch(
+      ".zen-dock .world-zen-search",
+      "Town",
+    );
+    await until(
+      () => zenSearch.getBoundingClientRect().width > 100,
+      () =>
+        `Town's unfolded search too narrow in Zen: ${zenSearch.getBoundingClientRect().width}`,
+    );
+    zenSearch.blur();
+    await until(
+      () =>
+        document.querySelector(
+          '.zen-dock .world-zen-search button[aria-label="Search Town"]',
+        ),
+      "Town's empty search folding back to its icon",
+    );
+  }
+  check(
+    !document.querySelector('.topbar [aria-label="Search Town"]'),
+    "Town's search stayed in the hidden topbar during Zen",
+  );
   document.querySelector<HTMLButtonElement>(".zen-dock .zen-island")?.click();
   await until(
     () => document.querySelector(".app")?.classList.contains("zen") === false,
@@ -910,6 +971,12 @@ async function run() {
   check(
     worldLocalStorage.getItem("zenMode.world") === "0",
     "leaving Zen did not keep World's Zen choice",
+  );
+  await until(
+    () =>
+      document.querySelector('.topbar button[aria-label="Search Town"]') !==
+      null,
+    "Town's search back in the topbar after Zen",
   );
   await until(() => {
     const seat = document.querySelector<HTMLButtonElement>(
@@ -1202,16 +1269,25 @@ async function run() {
     "shell Actions was replaced, clipped, or missing its native commands and extensions",
   );
   check(
-    (document
-      .querySelector<HTMLElement>(".world-view-toolbar-search input")
-      ?.getBoundingClientRect().width ?? 0) >= 180 &&
-      !topbarDetails?.querySelector(
-        ".world-selected-host, .world-stale-count",
-      ) &&
+    !topbarDetails?.querySelector(".world-selected-host, .world-stale-count") &&
       topbarDetails?.title.includes("spaces") === true,
-    `top-bar summary counts returned or crowded search: ${JSON.stringify({ searchWidth: document.querySelector<HTMLElement>(".world-view-toolbar-search input")?.getBoundingClientRect().width, statusWidth: topbarDetails?.getBoundingClientRect().width, counts: !!topbarDetails?.querySelector(".world-selected-host, .world-stale-count"), title: topbarDetails?.title, viewport: window.innerWidth, controlWidth: topbarDetails?.parentElement?.getBoundingClientRect().width })}`,
+    `top-bar summary counts returned: ${JSON.stringify({ statusWidth: topbarDetails?.getBoundingClientRect().width, counts: !!topbarDetails?.querySelector(".world-selected-host, .world-stale-count"), title: topbarDetails?.title, viewport: window.innerWidth, controlWidth: topbarDetails?.parentElement?.getBoundingClientRect().width })}`,
   );
   await setShellActionsOpen(false);
+  {
+    // Unfolded, the topbar's search keeps a usable width beside the summary.
+    const topbarSearch = await openViewSearch(".topbar", "Town");
+    await until(
+      () => topbarSearch.getBoundingClientRect().width >= 180,
+      () =>
+        `top-bar summary crowded search: ${JSON.stringify({ searchWidth: topbarSearch.getBoundingClientRect().width, statusWidth: topbarDetails?.getBoundingClientRect().width, viewport: window.innerWidth })}`,
+    );
+    topbarSearch.blur();
+    await until(
+      () => document.querySelector('.topbar button[aria-label="Search Town"]'),
+      "Town's empty topbar search folding back to its icon",
+    );
+  }
   check(
     document
       .querySelector(".world-control-plane")
@@ -1375,6 +1451,38 @@ async function run() {
   check(
     document.querySelector(".sidebar") === sharedNavigator,
     "Board replaced the shared workspace navigator",
+  );
+  // Board fills its stage, so its search results float over it, in sight
+  // and taking a click, rather than drawn under the board.
+  const boardSearch = await openViewSearch("", "Board");
+  enterSearch(boardSearch, "Builder");
+  const boardResultRow = () =>
+    document.querySelector<HTMLElement>(
+      ".board-search-results [data-world-search-result]",
+    );
+  await until(boardResultRow, "Board search results");
+  {
+    const boardResult = boardResultRow()!;
+    const box = boardResult.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    );
+    check(
+      boardResult.contains(hit),
+      `Board search result is covered by ${hit?.tagName}.${hit?.className}`,
+    );
+  }
+  boardSearch.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await until(
+    () => !document.querySelector(".board-search-results"),
+    "Escape ends Board's search",
   );
   viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1625,12 +1733,13 @@ async function run() {
   focusedPaneId = "builder-pane";
   worldRevision++;
   await store.refresh();
-  omitNextWorldTopology = true;
+  omitWorldTopology = true;
   await worldRuntimeStore.refresh();
   await until(
     () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
     "notification target omitted from aggregate",
   );
+  omitWorldTopology = false;
   window.dispatchEvent(
     new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
       detail: {
@@ -1841,16 +1950,18 @@ async function run() {
     () => Boolean(agentTarget("Builder")),
     "notification return to Town",
   );
-  omitNextWorldTopology = true;
+  omitWorldTopology = true;
   await worldRuntimeStore.refresh();
   await until(
     () => !agentTarget("Reviewer"),
     "omitted notification target committed to the rendered overview",
   );
+  omitWorldTopology = false;
   replaceNotificationSessionOnSnapshot = true;
   const snapshotsBeforeReplacement = calls.filter(
     ({ method }) => method === "world.snapshot",
   ).length;
+  const replacedReadsBefore = replacedSessionReads;
   window.dispatchEvent(
     new CustomEvent("herdr-world:visual-notification", {
       detail: {
@@ -1869,6 +1980,13 @@ async function run() {
       notificationSessionId === "replacement-session",
     "notification priority refresh replaced agent session",
   );
+  // The notification checks the session again once the priority refresh
+  // lands. Restoring the fake's session before that read would admit the
+  // notification late and open the Reviewer's Chat over later steps.
+  await until(
+    () => replacedSessionReads > replacedReadsBefore,
+    "notification read the replaced agent session",
+  );
   await settle();
   check(
     !document.querySelector(".workspace-inspector"),
@@ -1876,8 +1994,12 @@ async function run() {
   );
   notificationSessionId = "reviewer-session";
   flushSync(() => floatingPreferenceNavigatorRow()?.click());
+  // The window opens on Terminal and moves to Chat once Chat is readable, so
+  // identify it by its window and selection rather than its terminal layout.
   await until(
-    () => inspectorPane() === "reviewer-pane",
+    () =>
+      reviewerInspectorActive() &&
+      store.get().selectedPaneId === "reviewer-pane",
     "Reviewer Inspector restored after rejected notification",
   );
   document
@@ -1892,15 +2014,22 @@ async function run() {
         ?.classList.contains("has-inspector"),
     "close shared navigator Inspector",
   );
-  const officeSearch = document.querySelector<HTMLInputElement>(
-    'input[placeholder="Search Town"]',
-  )!;
+  const officeSearch = await openViewSearch("", "Town");
   enterSearch(officeSearch, "Local");
-  officeSearch
-    .closest("form")!
-    .dispatchEvent(
-      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
-    );
+  const submitTownSearch = () =>
+    officeSearch
+      .closest("form")!
+      .dispatchEvent(
+        new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+      );
+  // The first Enter shows the result on the map; the second opens it.
+  submitTownSearch();
+  await settle();
+  check(
+    !document.querySelector('.world-selection-panel[data-kind="host"]'),
+    "first Town search Enter only shows the result",
+  );
+  submitTownSearch();
   await until(
     () =>
       document
@@ -2038,7 +2167,7 @@ async function run() {
     () => worldRuntimeStore.get().connections[0]?.actionable === true,
     "selected World host observation recovered",
   );
-  omitNextWorldTopology = true;
+  omitWorldTopology = true;
   await worldRuntimeStore.refresh();
   await until(
     () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
@@ -2050,6 +2179,7 @@ async function run() {
       .length === 2,
     "healthy aggregate observation hid tabs still present in focused Herdr state",
   );
+  omitWorldTopology = false;
   await worldRuntimeStore.refresh();
   await until(
     () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 2,

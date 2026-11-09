@@ -54,6 +54,9 @@ export type TownExpenseCoverage = {
   stale: boolean;
   /** Hosts with no readable harness: no data, not zero. */
   noDataHosts: number;
+  /** Detail is bounded separately; totals still include all collected rows. */
+  detailsLimited?: boolean;
+  testData?: boolean;
 };
 
 export type TownExpenseRoom = {
@@ -93,11 +96,15 @@ export type TownHostExpenses =
 /** A reception's expenses list its three costliest rooms. */
 export const TOWN_TOP_ROOMS = 3;
 
-function figure(total: UsageTotal, counted: readonly UsageEntity[]) {
+function figure(
+  total: UsageTotal,
+  counted: readonly UsageEntity[],
+  tableVersion?: string | null,
+) {
   return {
     tokens: total.total_tokens,
     costUsd: total.estimated_cost_usd,
-    price: townUsagePrice(total.estimated_cost_usd, counted),
+    price: townUsagePrice(total.estimated_cost_usd, counted, tableVersion),
     records: total.records,
   } satisfies TownExpenseTotal;
 }
@@ -151,6 +158,11 @@ function coverage(
       sources.some((s) => s.state === "stale") ||
       entities.some((e) => e.state === "stale"),
     noDataHosts,
+    ...(snapshot.details_truncated ? { detailsLimited: true } : {}),
+    ...(snapshot.incarnation === "town-economy-preview" ||
+    snapshot.incarnation === "town-scale"
+      ? { testData: true }
+      : {}),
   };
 }
 
@@ -176,10 +188,11 @@ export function townCityExpenses(state: TownCurrentUsage): TownCityExpenses {
   return {
     status: "ready",
     window: snapshot.window.kind,
-    total: figure(snapshot.total, counted),
+    total: figure(snapshot.total, counted, snapshot.price_table_version),
     unattributed: figure(
       snapshot.unattributed,
       counted.filter((e) => !e.pane_id),
+      snapshot.price_table_version,
     ),
     coverage: coverage(snapshot, () => true),
   };
@@ -243,6 +256,7 @@ export function townHostExpenses(
       total: figure(
         rollup,
         counted.filter((e) => e.workspace_id === rollup.workspace_id),
+        snapshot.price_table_version,
       ),
     }));
   // By cost when every room is priced, else by tokens: a null cost is not
@@ -252,10 +266,18 @@ export function townHostExpenses(
   return {
     status: "ready",
     window: snapshot.window.kind,
-    total: host ? figure(host, counted) : entityFigure([]),
+    total: host
+      ? figure(host, counted, snapshot.price_table_version)
+      : entityFigure([]),
     rooms: rooms.slice(0, TOWN_TOP_ROOMS),
     moreRooms: Math.max(0, rooms.length - TOWN_TOP_ROOMS),
-    unattributed: entityFigure(entities.filter((e) => !e.workspace_id)),
+    unattributed: host?.unattributed
+      ? figure(
+          host.unattributed,
+          counted.filter((e) => !e.workspace_id),
+          snapshot.price_table_version,
+        )
+      : entityFigure(entities.filter((e) => !e.workspace_id)),
     coverage: {
       ...coverage(snapshot, owns),
       partial:
@@ -295,15 +317,20 @@ export function townExpenseText(total: TownExpenseTotal) {
     : `${formatOfficeUsage(total.tokens)} tokens · ${cost}`;
 }
 
-/** The notes under a board's figures: what its totals leave out. */
+/** The notes under Board's facts (#787): what its totals leave out. */
 export function townCoverageNotes(
   coverage: TownExpenseCoverage,
   unattributed: TownExpenseTotal,
 ) {
   const notes: string[] = [];
+  if (coverage.testData) notes.push("TEST DATA · synthetic economy");
   if (unattributed.records)
-    notes.push(`${formatOfficeUsage(unattributed.tokens)} unattributed`);
+    notes.push(
+      `${formatOfficeUsage(unattributed.tokens)} unattributed (included)`,
+    );
   if (coverage.partial) notes.push("partial");
+  if (coverage.detailsLimited)
+    notes.push("detail list limited; totals include all collected usage");
   if (coverage.stale) notes.push("stale data left out");
   if (coverage.noDataHosts)
     notes.push(
@@ -311,6 +338,72 @@ export function townCoverageNotes(
     );
   return notes;
 }
+
+/**
+ * One thing a figure leaves out or includes: a few words for the board's one
+ * caveat line (null when it only needs explaining) and the full explanation
+ * for its tooltip.
+ */
+export type TownExpenseCaveat = { short: string | null; explain: string };
+
+const PARTIAL_EXPLAIN =
+  "Partial: a harness was read only in part, or the read was cut short, so the figures may be low.";
+
+/** A place's partial read, as on the expense boards. */
+export const TOWN_PARTIAL_CAVEAT: TownExpenseCaveat = {
+  short: "partial",
+  explain: PARTIAL_EXPLAIN,
+};
+
+/**
+ * What a board's totals leave out or include. `scope` names what usage was
+ * not tied to: the city's unattributed usage has no pane, a host's no room.
+ */
+export function townCoverageCaveats(
+  coverage: TownExpenseCoverage,
+  unattributed: TownExpenseTotal,
+  scope: "pane" | "room",
+) {
+  const caveats: TownExpenseCaveat[] = [];
+  if (coverage.testData)
+    caveats.push({
+      short: "TEST DATA",
+      explain:
+        "Test data: a synthetic economy for this preview, not your harness logs.",
+    });
+  if (coverage.partial) caveats.push(TOWN_PARTIAL_CAVEAT);
+  if (coverage.stale)
+    caveats.push({
+      short: "stale left out",
+      explain:
+        "Stale data left out: numbers that could not be refreshed are not in the totals.",
+    });
+  if (coverage.noDataHosts) {
+    const hosts = `${coverage.noDataHosts} ${coverage.noDataHosts === 1 ? "host" : "hosts"}`;
+    caveats.push({
+      short: `${hosts} missing`,
+      explain: `No data from ${hosts}: harness logs could not be read there. Missing, not zero.`,
+    });
+  }
+  if (unattributed.records)
+    caveats.push({
+      short: null,
+      explain: `${formatOfficeUsage(unattributed.tokens)} tokens unattributed: usage not tied to ${
+        scope === "pane" ? "an agent's pane" : "one of its rooms"
+      }. Already included in the total, not another charge.`,
+    });
+  if (coverage.detailsLimited)
+    caveats.push({
+      short: null,
+      explain:
+        "Detail list limited: fewer entries were listed, but the totals include all collected usage.",
+    });
+  return caveats;
+}
+
+/** The board's one caveat line: a few words each, or "" for none. */
+export const townCaveatLine = (caveats: readonly TownExpenseCaveat[]) =>
+  caveats.flatMap((caveat) => (caveat.short ? [caveat.short] : [])).join(" · ");
 
 export const TOWN_WINDOW_LABEL: Record<TownUsageWindow, string> = {
   today: "Today",

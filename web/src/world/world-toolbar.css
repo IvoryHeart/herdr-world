@@ -29,6 +29,21 @@
 }
 .world-view-toolbar-search {
   flex: 1 1 180px;
+  /* Unfolds from the search icon it replaces. */
+  animation: world-view-search-unfold 140ms ease-out;
+}
+@keyframes world-view-search-unfold {
+  from {
+    max-width: 30px;
+  }
+  to {
+    max-width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-view-toolbar-search {
+    animation: none;
+  }
 }
 .world-view-toolbar-search:focus-within,
 .world-view-search-overlay:focus-within {
@@ -46,6 +61,8 @@
   width: 100%;
   border: 0;
   outline: 0;
+  /* The box's own border shows focus; no second ring inside it. */
+  box-shadow: none;
   color: inherit;
   background: transparent;
   font: inherit;

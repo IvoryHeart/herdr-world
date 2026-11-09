@@ -217,6 +217,7 @@ function Fixture() {
                   finished: 0,
                   quiet: 0,
                   unknown: 0,
+                  outOfFuel: 0,
                   agents: 0,
                   buildings: 0,
                 },

@@ -1,3 +1,4 @@
+import type { AgentUsageStop } from "../../../shared/usageStop";
 import type { AtifTrajectory } from "./session-types";
 import { isRecord, stringValue } from "./session-utils";
 
@@ -51,6 +52,11 @@ export type AgentQuest = {
    */
   session_fingerprint: string | null;
   quest: Quest | null;
+  /**
+   * The agent stopped on a subscription or usage limit, from its own
+   * session records, while that stop still holds; null otherwise.
+   */
+  usage_stop?: AgentUsageStop | null;
   /**
    * The quest could not be read just now, for example while the transcript
    * was being written. A browser keeps the last one only for the same

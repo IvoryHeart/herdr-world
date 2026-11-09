@@ -39,10 +39,19 @@ hour.
 - **On a running World or a preview:** open Town with `?scene=town-scale`, for
   example `http://127.0.0.1:8789/?scene=town-scale`. The scene replaces every
   host in that tab until you reload without the parameter, and the Hosts filter
-  is ignored while it is shown. The hosts are synthetic, so opening a terminal,
-  a chat or a move fails with an unknown-connection error. Nothing reaches your
-  Herdr. Answers to `herdr-world ask` questions come from the service, so the
-  scene has none; its asking agents use Herdr's `blocked` status.
+  is ignored while it is shown. The hosts are synthetic and live in the page:
+  Town's and Board's room actions work on them (rename, close, a room's or
+  desk's place in Herdr's order), an agent's peek shows a synthetic latest
+  message, an asking agent shows a question with answer buttons, and finished
+  agents can be marked reviewed. An answered agent works for a few seconds,
+  then finishes its turn as Herdr reports it, idle with a recent stop, and
+  waits for review. Opening a terminal or a chat fails with a plain refusal.
+  Nothing reaches your Herdr or the service, and a reload starts the scene
+  afresh. Answers to `herdr-world ask` questions come from the service, so
+  the scene has none; its asking agents use Herdr's `blocked` status.
+  Its working agents show synthetic current steps in their thought bubbles (a
+  mix of edits, tests, commands, reads and thinking, some long enough for the
+  amber time tag); nothing is read for them.
 - **Captures and frame time:** the opt-in report harness mounts the production
   `TownCanvas` with the scene in headless Chrome. It starts no World or Herdr,
   saves PNGs at each zoom step for a laptop (1512 × 982) and a phone (390 × 844),
@@ -54,6 +63,8 @@ hour.
     bun run test scripts/town-scale.browser.test.ts
   ```
 
+  The captures show the working agents' thought bubbles with the scene's
+  synthetic steps; `TOWN_SCALE_STEPS=off` measures the town without them.
   The outputs go to `.agents/town-scale/` (PNGs and `report.json`). The harness
   is [`scripts/town-scale.ts`](../../scripts/town-scale.ts), and its page is
   [`TownScale.browser.tsx`](../../web/src/world/testing/town-scale/TownScale.browser.tsx).

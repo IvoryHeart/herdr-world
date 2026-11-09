@@ -52,6 +52,10 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "./world.css";
+import { quietGreetingForTest } from "./townMasterGreeting";
+
+// The Town Master's greeting would sit over what these checks press.
+quietGreetingForTest();
 
 const failures: string[] = [];
 window.addEventListener("error", (event) => {
@@ -3218,6 +3222,11 @@ async function run() {
         (method) => method === "focus:beta",
       ).length;
       result.click();
+      // Town's first choice shows the result on the map; the second opens it.
+      if (view === "town") {
+        await frame();
+        result.click();
+      }
       await waitFor(
         () =>
           calls.filter((method) => method === "focus:beta").length >
@@ -3282,6 +3291,10 @@ async function run() {
           `${title} paging lost the later qualified match with colliding labels`,
         );
       laterResult.click();
+      if (view === "town") {
+        await frame();
+        laterResult.click();
+      }
       if (view !== "town")
         await waitFor(
           () =>

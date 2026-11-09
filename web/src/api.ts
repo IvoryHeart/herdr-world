@@ -379,6 +379,8 @@ export class Bridge {
   private helloAcceptedForSocket = false;
   private readonly runtimeGenerations = new Map<string, number>();
   private readonly runtimeLeases = new Map<string, object>();
+  /** Page-local hosts (`?scene=town-scale`), served instead of the service. */
+  synthetic: ((id: string) => ConnectionClient | null) | null = null;
 
   constructor(
     private readonly connectTimeoutMs = CONNECT_TIMEOUT_MS,
@@ -477,6 +479,8 @@ export class Bridge {
     connectionId = this._activeConnectionId,
     serverRuntimeGeneration: number | null = null,
   ): ConnectionClient {
+    const synthetic = this.synthetic?.(connectionId);
+    if (synthetic) return synthetic;
     const generation = this._clientGeneration;
     const transportEpoch = this.transportEpoch;
     const runtimeLease = this.runtimeLeases.get(connectionId);

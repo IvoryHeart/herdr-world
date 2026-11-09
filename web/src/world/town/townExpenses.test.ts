@@ -5,12 +5,14 @@ import type { WorldUsageSnapshot } from "../../../../shared/usage";
 import { townUsageFixture, usageFixture } from "../testing/usageFixture";
 import {
   townCityExpenses,
-  townCoverageNotes,
+  townCaveatLine,
+  townCoverageCaveats,
   townExpenseText,
   townHostExpenses,
   townUsd,
 } from "./townExpenses";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
+import { TOWN_CITY_BOARD_GAP } from "./townCenter";
 import {
   TOWN_USAGE_MAX_AGE_MS,
   TownUsageStore,
@@ -49,11 +51,54 @@ test("the city board shows the service's total, with stale numbers left out", ()
     stale: true,
     noDataHosts: 1,
   });
-  expect(townCoverageNotes(city.coverage, city.unattributed)).toEqual([
-    "45.5k unattributed",
-    "stale data left out",
-    "no data from 1 host",
+  const caveats = townCoverageCaveats(city.coverage, city.unattributed, "pane");
+  // One short line on the board; unattributed usage is included, so it is
+  // only explained.
+  expect(townCaveatLine(caveats)).toBe("stale left out · 1 host missing");
+  expect(caveats.map((caveat) => caveat.explain)).toEqual([
+    "Stale data left out: numbers that could not be refreshed are not in the totals.",
+    "No data from 1 host: harness logs could not be read there. Missing, not zero.",
+    "45.5k tokens unattributed: usage not tied to an agent's pane. Already included in the total, not another charge.",
   ]);
+});
+
+test("every caveat is a few words on the board and explained in full", () => {
+  const caveats = townCoverageCaveats(
+    {
+      partial: true,
+      stale: true,
+      noDataHosts: 2,
+      detailsLimited: true,
+      testData: true,
+    },
+    { tokens: 45_500, costUsd: null, price: "no-table", records: 3 },
+    "room",
+  );
+  const line = townCaveatLine(caveats);
+  expect(line).toBe("TEST DATA · partial · stale left out · 2 hosts missing");
+  // The owner's verbose line (#811) is gone from the board...
+  expect(line).not.toContain("unattributed");
+  expect(line).not.toContain("detail");
+  expect(line).not.toContain("totals");
+  // ...and every explanation stays available.
+  const explanations = caveats.map((caveat) => caveat.explain).join("\n");
+  for (const words of [
+    "Test data",
+    "Partial",
+    "Stale data left out",
+    "No data from 2 hosts",
+    "45.5k tokens unattributed: usage not tied to one of its rooms. Already included",
+    "Detail list limited",
+    "totals include all collected usage",
+  ])
+    expect(explanations).toContain(words);
+  expect(
+    townCoverageCaveats(
+      { partial: false, stale: false, noDataHosts: 0 },
+      { tokens: 0, costUsd: 0, price: "priced", records: 0 },
+      "pane",
+    ),
+  ).toEqual([]);
 });
 
 test("a building's board is its host rollup and its rooms, never levels added together", () => {
@@ -189,9 +234,11 @@ test("missing, partial and failed reads say so instead of zero", () => {
   });
   const host = townHostExpenses(ready(partial), "studio");
   if (host.status !== "ready") throw new Error(host.status);
-  expect(townCoverageNotes(host.coverage, host.unattributed)).toEqual([
-    "partial",
-  ]);
+  expect(
+    townCaveatLine(
+      townCoverageCaveats(host.coverage, host.unattributed, "room"),
+    ),
+  ).toBe("partial");
   const truncated = townCityExpenses(
     ready(
       usageFixture({
@@ -252,18 +299,30 @@ test("the boards render the figures, rooms and what they leave out", async () =>
   const billboard = renderToStaticMarkup(
     createElement(TownCityBillboard, {
       center,
-      street: 7,
       folded: false,
       stores: () => today,
     }),
   );
   expect(billboard).toContain("CITY EXPENSES");
+  // It stands above the center's flag (its foot), never over the building.
+  expect(billboard).toContain(
+    `left:${(40 + 34 / 2) * 16}px;top:${14 * 16 - TOWN_CITY_BOARD_GAP}px`,
+  );
   expect(billboard).toContain('aria-pressed="true">Today</button>');
   expect(billboard).toContain('aria-pressed="false">7 days</button>');
   expect(billboard).toMatch(
     /Today<\/span> · <b>1\.0M tokens · \$[\d.]+ est\.<\/b>/,
   );
-  expect(billboard).toContain("no data from 1 host");
+  // One short caveat line; the explanations are its tooltip and open on a tap.
+  expect(billboard).toContain("<span>stale left out · 1 host missing</span>");
+  expect(billboard).toContain(
+    'aria-label="stale left out · 1 host missing. About these figures"',
+  );
+  expect(billboard).toMatch(
+    /title="Stale data left out: [^"]+\nNo data from 1 host: [^"]+\n45\.5k tokens unattributed: [^"]+"/,
+  );
+  expect(billboard).not.toContain("unattributed (included)");
+  expect(billboard).not.toContain("no data from 1 host");
 
   const board = renderToStaticMarkup(
     createElement(TownReceptionExpenses, {
@@ -283,7 +342,10 @@ test("the boards render the figures, rooms and what they leave out", async () =>
   expect(board).toContain("<span>BETA</span>");
   expect(board).toContain("<span>closed room</span>");
   expect(board).toContain("+1 more room");
-  expect(board).toContain("45.5k unattributed");
+  expect(board).toContain(
+    "45.5k tokens unattributed: usage not tied to one of its rooms.",
+  );
+  expect(board).not.toContain("<span>45.5k");
 
   const missing = renderToStaticMarkup(
     createElement(TownReceptionExpenses, {
@@ -358,7 +420,6 @@ test("a read kept through failed refreshes goes stale, and never past UTC midnig
   const billboard = renderToStaticMarkup(
     createElement(TownCityBillboard, {
       center,
-      street: 7,
       folded: false,
       stores: () => store,
     }),

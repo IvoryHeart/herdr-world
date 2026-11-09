@@ -1,5 +1,5 @@
-/* Expenses (TownExpenseBoards.tsx), in Town's pixel skin: the city billboard by
-   the first street, a dark board in a wooden frame (the plaque's wood) on two
+/* Expenses (TownExpenseBoards.tsx), in Town's pixel skin: the city billboard
+   above the town center, a dark board in a wooden frame (the plaque's wood) on two
    posts, and each building's expenses as a section of its reception board.
    The folded phone sign is a room plaque's wooden plate. Popovers portal out
    of Town, so they use literal colours. */
@@ -14,10 +14,11 @@
     visibility 0.2s;
 }
 
-/* The billboard stands on its world point above the street, keeping a
-   readable size as the town zooms, like the center's plaque. */
+/* The billboard stands on its world point above the center's flag, keeping a
+   readable size as the town zooms within TOWN_CITY_BOARD_SCALE (townCenter.ts),
+   which leaves it room above the center. */
 .town-world .town-expenses-city {
-  transform: translate(-50%, -100%) scale(clamp(0.55, var(--iz), 2.4));
+  transform: translate(-50%, -100%) scale(clamp(0.55, var(--iz), 2));
   transform-origin: 50% 100%;
 }
 
@@ -134,16 +135,12 @@
 
 .town-expenses-headline {
   margin: 0;
-  white-space: nowrap;
   color: #a9b2a4;
 }
 
 .town-expenses-headline b {
-  font:
-    700 12px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
+  font-size: 12px;
+  font-weight: 600;
   color: #f1efe6;
 }
 
@@ -180,6 +177,64 @@
   color: #a9b2a4;
 }
 
+/* The one caveat line (TownExpenseCaveats.tsx): a few words and an info
+   mark; hovering shows the explanations, tapping opens them. */
+.town-expenses-caveats {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-height: 20px;
+  max-width: 100%;
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: help;
+  pointer-events: auto;
+}
+
+.town-expenses-caveats span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.town-expenses-caveats svg {
+  flex: none;
+  opacity: 0.8;
+}
+
+.town-expenses-caveats:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+/* Doubled to outrank `.town-world button { font: inherit }` (town.css). */
+.town-expenses-caveats.town-expenses-notes,
+.town-expenses-caveats.town-board-economy-caveats {
+  font:
+    10px "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: #a9b2a4;
+}
+
+.town-expenses-caveats.town-board-economy-caveats {
+  font-size: 11px;
+  color: #c9b79a;
+}
+
+.town-expenses-explain {
+  margin: 0;
+  max-width: 260px;
+  padding-left: 22px;
+  list-style: disc;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 /* Folded: a wooden plate that opens the board. */
 .town-expenses-sign {
   display: inline-flex;
@@ -204,6 +259,24 @@
 .town-expenses-sign:focus-visible {
   outline: 2px solid #ffd166;
   outline-offset: 2px;
+}
+
+/* Keep amounts legible: the pixel display face makes 5, S and 8 too alike.
+   Target the sign's text so the world button reset cannot restore that face.
+   These selectors also cover the phone's portalled expense panels. */
+.town-expenses-headline b,
+.town-expenses-rooms b,
+.town-expenses-more,
+.town-expenses-notes,
+.town-expenses-explain,
+.town-expenses-window button,
+.town-expenses-sign span {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.town-expenses-sign span {
+  font-weight: 600;
 }
 
 .town-world .town-expenses-sign.town-expenses-city {
