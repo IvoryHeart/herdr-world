@@ -21,18 +21,37 @@ test("discovers configured supported harnesses, installs and refreshes each, and
   for (const name of WORLD_HARNESSES) {
     const paths = integrationPaths(name, cli.context.runtime);
     if (!paths) continue;
-    expect(readFileSync(paths.file, "utf8")).toContain("VERSION=1");
-    expect(cli.output.join("\n")).toContain(`${name}: installed`);
+    expect(readFileSync(paths.file, "utf8")).toContain("VERSION=2");
     expect(cli.output.join("\n")).toContain(
-      `herdr-world integration uninstall ${name}`,
+      `${name}: installed World's integration. Remove: herdr-world integration uninstall ${name}`,
     );
   }
+  // Nothing changed since: no harness claims an update.
+  cli.output.length = 0;
+  expect(await sync()).toBe(0);
+  for (const name of WORLD_HARNESSES)
+    if (integrationPaths(name, cli.context.runtime))
+      expect(cli.output.join("\n")).toContain(
+        `${name}: World's integration is already current.`,
+      );
+  expect(cli.output.join("\n")).not.toMatch(/installed World|updated World/);
+  // Claude's tap alone out of date still updates Claude.
+  const settings = join(cli.home, ".claude", "settings.json");
+  writeFileSync(settings, "{}\n");
+  cli.output.length = 0;
+  expect(await sync()).toBe(0);
+  expect(cli.output.join("\n")).toContain(
+    "claude: updated World's integration",
+  );
+  expect(cli.output.join("\n")).toContain(
+    "codex: World's integration is already current",
+  );
   for (const name of WORLD_HARNESSES) {
     const paths = integrationPaths(name, cli.context.runtime);
     if (paths)
       writeFileSync(
         paths.file,
-        readFileSync(paths.file, "utf8").replace("VERSION=1", "VERSION=0"),
+        readFileSync(paths.file, "utf8").replace("VERSION=2", "VERSION=0"),
       );
   }
   cli.output.length = 0;
@@ -40,8 +59,10 @@ test("discovers configured supported harnesses, installs and refreshes each, and
   for (const name of WORLD_HARNESSES) {
     const paths = integrationPaths(name, cli.context.runtime);
     if (!paths) continue;
-    expect(readFileSync(paths.file, "utf8")).toContain("VERSION=1");
-    expect(cli.output.join("\n")).toContain(`${name}: updated`);
+    expect(readFileSync(paths.file, "utf8")).toContain("VERSION=2");
+    expect(cli.output.join("\n")).toContain(
+      `${name}: updated World's integration`,
+    );
   }
 });
 
@@ -59,7 +80,7 @@ test("no harness creates nothing; opt-out prevents fresh installation and update
   delete cli.context.runtime.env.HERDR_WORLD_SKIP_INTEGRATIONS;
   expect(await sync()).toBe(0);
   const old = readFileSync(skill("codex"), "utf8").replace(
-    "VERSION=1",
+    "VERSION=2",
     "VERSION=0",
   );
   writeFileSync(skill("codex"), old);

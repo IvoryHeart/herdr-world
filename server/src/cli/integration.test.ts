@@ -85,11 +85,11 @@ test("every supported harness round trips preserving Herdr and restoring setting
     );
     expect(text).toEndWith(WORLD_SKILL);
     expect(await runCli(["integration", "status", name], cli.context)).toBe(0);
-    expect(cli.output.at(-1)).toContain(": current (v1)");
+    expect(cli.output.at(-1)).toContain(": current (v2)");
     writeFileSync(
       file,
       text.replace(
-        "HERDR_WORLD_INTEGRATION_VERSION=1",
+        "HERDR_WORLD_INTEGRATION_VERSION=2",
         "HERDR_WORLD_INTEGRATION_VERSION=0",
       ),
     );
@@ -118,7 +118,7 @@ test("missing config refuses without creating a harness home; shared status and 
   for (const name of ["codex", "pi", "kimi"]) {
     await runCli(["integration", "status", name], cli.context);
     expect(cli.output.at(-1)).toBe(
-      `${name}: current (v1) (~/.agents/skills/herdr-world/SKILL.md)`,
+      `${name}: current (v2) (~/.agents/skills/herdr-world/SKILL.md)`,
     );
   }
   await runCli(["integration", "uninstall", "codex"], cli.context);
@@ -201,7 +201,7 @@ test("malformed, wrong-ID and future markers; preserve unrelated files on remova
   await runCli(["integration", "install", "claude"], cli.context);
   writeFileSync(
     file,
-    readFileSync(file, "utf8").replace("VERSION=1", "VERSION=99"),
+    readFileSync(file, "utf8").replace("VERSION=2", "VERSION=99"),
   );
   await runCli(["integration", "status", "claude"], cli.context);
   expect(cli.output.at(-1)).toContain("current (v99)");
@@ -317,6 +317,7 @@ test("skill guide changes require a version bump", () => {
   // Version -> guide digest: append a new version when the guide changes.
   const digests: Record<number, string> = {
     1: "094336333630edbf6ed474d0be6278fe18bf997bd5c2187b3c194925dc0eb43b",
+    2: "d84016adbcd751ff9a029149008afa6938a08e6153a72c6f8964eeb8ab499d74",
   };
   expect(createHash("sha256").update(WORLD_SKILL).digest("hex")).toBe(
     digests[WORLD_SKILL_VERSION]!,

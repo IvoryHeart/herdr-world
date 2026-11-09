@@ -91,7 +91,12 @@ new platform conformance is claimed.
   table, collection locally and through the SSH program, and remote reply
   validation; `service.test.ts` covers unique fresh attribution, unknown
   windows, duplicate claims and failed hosts.
-- `claude-tap.test.ts`: the tap records only numbers, finds the user's status
+- `claude-tap.test.ts`: the tap records only numbers, keeps the highest
+  reading per window when sessions write out of order (a later `resets_at`
+  starts fresh, an earlier one never replaces it) and serializes
+  read-merge-replace under a lock file (an interleaved tap cannot lower it;
+  a waiting tap merges with the holder's commit; a dead tap's lock is
+  cleared and a tap that lost its lock commits nothing), finds the user's status
   line by Claude Code's precedence without recursing, and as a real program
   passes the same input to it and its output and exit code through unchanged;
   Claude launches retain their per-launch settings, including chaining through an installed host-wide tap.

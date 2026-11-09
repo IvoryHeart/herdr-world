@@ -3,8 +3,8 @@ export const WORLD_SKILL = `# herdr-world: change Herdr World from an agent
 
 Herdr World shows your Herdr panes as Town desks and Board cards. These
 commands let you arrange them, ask the owner questions and report results.
-Install this guide for your harness with the operator's explicit command,
-herdr-world integration install <harness>. It does not start World or Herdr.
+World installs this guide automatically; remove it with
+herdr-world integration uninstall <harness>. It does not start World or Herdr.
 Run them inside your Herdr pane: World reads HERDR_PANE_ID and checks that
 you really run in that pane. Without a pane, or in a pane World cannot
 check, your changes are marked unverified. Board changes have history and
