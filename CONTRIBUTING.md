@@ -296,8 +296,9 @@ on every rendering path; do not rely on an unrelated feature being opened.
 
 Every significant change must include the relevant current documentation updates
 in the same PR. Use the [knowledge map](docs/knowledge-map.md) to find affected
-guides: tutorial and features for changed user steps or controls, README for
-first-run changes, deployment/packaging for configuration and distribution, and
+guides: `FEATURES.md` for changed controls and their detail (edge cases, limits,
+refusals), the tutorial only when a learner's steps change, README for first-run
+changes, deployment/packaging for configuration and distribution, and
 architecture or contributor guidance for contracts and workflows. Update current
 specifications when their contracts change; preserve historical evidence.
 
@@ -311,6 +312,14 @@ run the checks below and verify the rendered result.
 Edit `site/` for the landing page; **only `docs/TUTORIAL.md`** for tutorial text.
 `scripts/build-pages.ts` renders into `site/tutorial/index.html`, rewrites
 screenshots/references, and checks built-site links/fragments.
+
+The tutorial is for someone learning World: numbered steps that say what to do
+and what they will see, ending with a "You are done when" check. It is not the
+reference. Detail a learner does not need (exceptions, refusals, staleness
+rules, limits, internals) goes in `FEATURES.md`, and the tutorial links there.
+The build fails when one step or paragraph passes 60 words or the tutorial
+passes 6,000 words of prose (`tutorialLimits` in `scripts/pages-content.ts`):
+move detail to `FEATURES.md` rather than raising a limit.
 
 ```bash
 bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts

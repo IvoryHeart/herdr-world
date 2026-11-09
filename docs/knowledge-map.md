@@ -306,7 +306,7 @@ in [the service](../server/src/assistant/service.ts) and
 [Queue controls](../web/src/components/AssistantQueue.tsx) and
 [bounded Thinking display](../web/src/components/AssistantThinking.tsx) share the
 [workspace-assistant contract](../openspec/specs/workspace-assistant/spec.md);
-[the tutorial](TUTORIAL.md#ranger-steer-or-queue-a-message) describes their use.
+[the tutorial](TUTORIAL.md#ranger) describes their use.
 
 Roamgate transport integration routes through the [service forwarding owner](../server/src/service/forward-service.ts),
 [qualified forwarding RPC](../server/src/bridge/forward-rpc.ts),

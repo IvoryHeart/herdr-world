@@ -1,7 +1,7 @@
 /* Keep tutorial styles scoped so the product landing page remains unchanged. */
 .tutorial-page {
   overflow-x: visible;
-  line-height: 1.85;
+  line-height: 1.7;
 }
 
 .tutorial-header {
@@ -64,12 +64,12 @@
 
 .tutorial-toc ol {
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
 .tutorial-toc a {
   display: block;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-left: 2px solid var(--line);
   border-radius: 0 8px 8px 0;
   color: var(--text-soft);
@@ -82,27 +82,38 @@
   background: var(--panel-raised);
 }
 
-.tutorial-shortcuts {
+/* Sections of the chapter being read; without JavaScript, chapters only. */
+.tutorial-toc ol ol {
+  display: none;
+  gap: 0;
+  margin: 2px 0 8px 12px;
+  font-size: 0.82rem;
+}
+
+.tutorial-toc li:has(> a[aria-current]) > ol {
   display: grid;
-  gap: 8px;
-  margin-block: 28px 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
 }
 
-.tutorial-shortcuts span {
+.tutorial-toc ol ol a {
+  padding: 4px 10px;
+  border-left-color: transparent;
   color: var(--muted);
-  font-size: 0.76rem;
 }
 
-.tutorial-shortcuts a,
+.tutorial-toc ol ol a[aria-current] {
+  border-left-color: var(--blue);
+  background: none;
+}
+
 .tutorial-back {
+  display: block;
+  margin-top: 20px;
   color: var(--blue-bright);
 }
 
 .tutorial-main {
   min-width: 0;
-  max-width: 860px;
+  max-width: 760px;
 }
 
 .tutorial-banner {
@@ -194,7 +205,11 @@
 
 .tutorial-prose li {
   padding-left: 6px;
-  margin-block: 12px;
+  margin-block: 8px;
+}
+
+.tutorial-prose li > :is(ul, ol) {
+  margin-block: 6px;
 }
 
 .tutorial-prose li::marker {
@@ -210,6 +225,19 @@
   border-radius: 0 12px 12px 0;
   background: var(--panel);
   font-size: 0.94rem;
+}
+
+.tutorial-prose .tutorial-done {
+  margin-block: 24px;
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 0 12px 12px 0;
+  background: var(--panel);
+}
+
+.tutorial-prose .tutorial-done strong {
+  color: var(--green);
 }
 
 .tutorial-prose code {
@@ -363,16 +391,6 @@
   .tutorial-sidebar {
     position: static;
     max-height: none;
-  }
-
-  .tutorial-shortcuts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 20px;
-  }
-
-  .tutorial-shortcuts span {
-    width: 100%;
   }
 
   .tutorial-back {
