@@ -34,6 +34,8 @@ import { TownFoldIndicators } from "./TownFoldIndicators";
 import { TownTargets } from "./TownAccessibleTargets";
 import { TownTidyRooms } from "./TownTidyRooms";
 import { TownAddRoom } from "./TownAddRoom";
+import { useTownGroupKeys } from "./useTownGroup";
+import { townGroupRooms } from "./townGroup";
 import type { TownDeskBadge } from "./townBadges";
 import {
   townFoldedActivityLabel,
@@ -224,6 +226,13 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   // A card press the town took ends as the town's tap; only keyboard
   // activation (or an untaken press) zooms through the card's own click.
   const cardPressTaken = useRef(false);
+  // Zoomed out, a room card stands over its agents: it says how many of
+  // them are in the group selection.
+  const groupKeys = useTownGroupKeys()?.keys;
+  const groupRooms = useMemo(
+    () => townGroupRooms(groupKeys, model.agents),
+    [groupKeys, model.agents],
+  );
   // Context fills, for a tired look at nearly full agents' seats.
   const usage = useContextUsage(true);
   const terminalAsksByHost = useMemo(() => {
@@ -626,6 +635,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       <button
                         type="button"
                         className={`town-room-card${c.blocked ? " town-room-card-waiting" : ""}${selectedKey === room.key ? " town-selected" : ""}`}
+                        data-grouped={groupRooms.get(room.key)}
                         style={
                           {
                             "--room-w": `${placed.w * T}px`,
@@ -635,7 +645,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                             touchAction: "none",
                           } as React.CSSProperties
                         }
-                        aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
+                        aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}${groupRooms.get(room.key) ? `, ${groupRooms.get(room.key)} selected` : ""}. Zoom in.`}
                         onPointerDown={(event) => {
                           cardPressTaken.current =
                             onRoomCardPress?.(
@@ -660,6 +670,11 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                         {c.blocked ? (
                           <span className="town-room-card-badge">
                             !{c.blocked}
+                          </span>
+                        ) : null}
+                        {groupRooms.get(room.key) ? (
+                          <span className="town-room-card-group">
+                            {groupRooms.get(room.key)} selected
                           </span>
                         ) : null}
                         <span className="town-room-card-meta">

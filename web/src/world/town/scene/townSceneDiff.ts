@@ -47,6 +47,8 @@ export type TownSceneState = {
   calm: boolean;
   /** A search's matches, lit on a slightly dimmed town (townSearch.ts). */
   search?: TownSearchLight | null;
+  /** Agents in the group selection: each gets a steady ring (townGroup.ts). */
+  groupKeys?: ReadonlySet<string>;
 };
 
 export type TownSceneDirty = {

@@ -4,6 +4,7 @@ import {
   usePlaceCard,
   type TownPlaceCardContent,
 } from "./TownRoomPlaque";
+import { TownGroupSelectButton } from "./TownGroupCard";
 
 /**
  * A table's nameplate and card. Hovering or tapping the table on the canvas
@@ -70,6 +71,10 @@ export function TownDeskTitle({
       </span>
       <div className="town-place-card town-desk-card">
         {opened || shown ? <TownPlaceCardSummary content={card} /> : null}
+        {opened || shown ? (
+          // Select this table's agents; then taps add or remove agents.
+          <TownGroupSelectButton deskKey={deskKey} />
+        ) : null}
       </div>
     </div>
   );

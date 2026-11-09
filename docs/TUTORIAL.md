@@ -251,6 +251,40 @@ pull request.
 
 ## 3. Work with your agents
 
+### Give several agents one order
+
+<a id="town-group-orders"></a>
+
+To try this without touching your agents, open World with
+`?scene=town-scale`: its synthetic agents take every order, and the card
+labels the send results **TEST DATA**.
+
+1. On a desktop, hold **Shift** and drag a box over a room (you can start on
+   its card or a desk). Every agent drawn inside gets a steady cyan ring,
+   wherever it stands; zoomed out, the room card says how many it holds. The
+   Town board sign becomes the command card, for example "7 selected ·
+   3 finished · 2 working · 1 needs you · 1 idle".
+2. **Shift+click** an agent in another building to add it (or a selected one
+   to remove it); the counts follow. A plain drag still pans and a plain
+   click still opens an agent.
+3. Press **Send a message (5 of 7)**: its number is the agents that will get
+   it. Agents with a question are listed as "left out: has a question", as
+   are plain shells and out-of-fuel agents, each with its reason. Type, say,
+   "say hi in one line" and send: each agent shows **sent**, **queued** (it
+   is busy and reads it next) or **refused** with the reason.
+4. Select some finished agents and press **Mark reviewed (N)**: each is
+   listed as reviewed, they leave reception for the bar, and once you clear
+   the selection the board's Done count is N lower.
+5. Press **Show them** to frame every selected agent, then **Clear** or
+   Escape.
+6. On a phone, tap a table to open its card and tap **Select** (an agent's
+   peek offers it too). While the chip reads "N selected", a tap on an agent
+   adds or removes it instead of opening it. Tap the chip for the orders;
+   **Back** clears the selection.
+
+**You are done when:** you can box-select a room, send its agents one
+message and see each agent's result, and clear the selection.
+
 ### Chat with an agent
 
 <a id="chat"></a>

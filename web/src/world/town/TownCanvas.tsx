@@ -89,6 +89,9 @@ import "./townTeams.css";
 import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";
 import { useTownEdgeNav, type TownNeedsYouOrder } from "./useTownEdgeNav";
 import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
+import { townDragGhost } from "./townDragGhost";
+import { useTownGroupCanvas } from "./townGroupCanvas";
+import { TownGroupSign } from "./TownGroupCard";
 import type { OfficeAgent } from "../officeProjectionTypes";
 
 export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
@@ -280,6 +283,7 @@ export function TownCanvas({
     semantics;
   const townBin = useTownBin(model, layout);
   const awayKeys = townBin.away;
+  const group = useTownGroupCanvas(rendererRef, hostRef, view, model, awayKeys);
   const arrivals = useTownArrivals(model, layout, townBin.route);
   const arrivingKeys = arrivals.arriving;
   // A new agent goes to its desk for its welcome, as a summoned one does.
@@ -351,6 +355,7 @@ export function TownCanvas({
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
+    group,
     quests,
     steps,
     needsYouOrder,
@@ -519,6 +524,7 @@ export function TownCanvas({
     openHostKey: null,
     calm: latest.current.calm,
     search: searching.lit.current,
+    groupKeys: latest.current.group.box.keys(),
   });
 
   useEffect(() => {
@@ -629,6 +635,7 @@ export function TownCanvas({
     steps,
     calm,
     searching.light,
+    group.keys,
   ]);
 
   // Re-report after any render, so anchors World cleared come back. World
@@ -643,12 +650,6 @@ export function TownCanvas({
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const ghost = document.createElement("div");
-    ghost.className = "town-drag-ghost";
-    ghost.setAttribute("aria-hidden", "true");
-    const place = (at: { x: number; y: number }) => {
-      ghost.style.transform = `translate(${at.x}px, ${at.y}px)`;
-    };
     const interaction = new TownInteraction({
       clock: townBrowserClock,
       frames: townBrowserFrames,
@@ -663,6 +664,7 @@ export function TownCanvas({
       },
       select: (key) => latest.current.onSelect(key),
       tapCard: (deskKey) => {
+        if (group.box.selecting()) return false;
         const { tappedDesk: open, model: m } = latest.current;
         const roomKey = deskKey ? m.desks.get(deskKey)?.roomKey : undefined;
         // Only a table drawn with its nameplate has a card; a second tap
@@ -699,21 +701,7 @@ export function TownCanvas({
             );
         }
       },
-      ghost: {
-        lift(label, at) {
-          ghost.textContent = label;
-          ghost.dataset.valid = "false";
-          place(at);
-          host.append(ghost);
-        },
-        aim(label, valid, action, at) {
-          ghost.textContent = label;
-          ghost.dataset.valid = String(valid);
-          ghost.dataset.action = action;
-          place(at);
-        },
-        remove: () => ghost.remove(),
-      },
+      ghost: townDragGhost(host),
       held: () => navigator.vibrate?.(12),
       // The bin chip and the bus stops lie over the canvas: a carry over
       // one is dropped in the bin.
@@ -755,6 +743,7 @@ export function TownCanvas({
       } catch {
         // A pointer the browser no longer tracks cannot be captured.
       }
+      if (group.box.down(event, local(event), interaction)) return;
       interaction.down({
         id: event.pointerId,
         at: local(event),
@@ -763,6 +752,7 @@ export function TownCanvas({
       });
     };
     const move = (event: PointerEvent) =>
+      group.box.move(event.pointerId, local(event)) ||
       interaction.move({
         id: event.pointerId,
         at: local(event),
@@ -770,6 +760,7 @@ export function TownCanvas({
         client: { x: event.clientX, y: event.clientY },
       });
     const up = (event: PointerEvent) =>
+      group.box.up(event.pointerId, local(event), event.type !== "pointerup") ||
       interaction.up({
         id: event.pointerId,
         at: local(event),
@@ -795,6 +786,7 @@ export function TownCanvas({
       } catch {
         return false;
       }
+      if (group.box.down(event, local(event), interaction)) return true;
       interaction.down({
         id: event.pointerId,
         at: local(event),
@@ -833,7 +825,7 @@ export function TownCanvas({
       host.removeEventListener("pointerleave", leave);
       host.removeEventListener("wheel", wheel);
     };
-  }, [view, scene, hud, ring.openRing]);
+  }, [view, scene, hud, ring.openRing, group.box]);
 
   const keyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!rendererRef.current || event.target !== event.currentTarget) return;
@@ -973,13 +965,15 @@ export function TownCanvas({
         <TownPulseRing pulse={edge.pulse} />
       </div>
       <TownEdgeOverlay edge={edge} />
-      <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
-        <TownBoard
-          counts={summary.counts}
-          onOpenSummary={onOpenSummary}
-          sinceYouLeft={sinceYouLeft}
-        />
-      </TownLensBoard>
+      <TownGroupSign>
+        <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
+          <TownBoard
+            counts={summary.counts}
+            onOpenSummary={onOpenSummary}
+            sinceYouLeft={sinceYouLeft}
+          />
+        </TownLensBoard>
+      </TownGroupSign>
       <TownZoomControls
         onStep={stepZoom}
         onAll={() => view.fitAll(latest.current.layout)}
