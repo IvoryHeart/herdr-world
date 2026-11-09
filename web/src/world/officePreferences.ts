@@ -20,6 +20,8 @@ export type OfficePreferences = {
   townMaster: string;
   /** The Town Master greets each visit (Show this on start). */
   townGreeting: boolean;
+  /** The tab title and app icon show the Needs you count (this browser). */
+  tabBadge: boolean;
 };
 
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
@@ -29,6 +31,7 @@ export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   townOpens: "chat",
   townMaster: "firstmate",
   townGreeting: true,
+  tabBadge: true,
 });
 
 export const OFFICE_PREFERENCES_KEY = "officePreferences:v1";
@@ -54,6 +57,7 @@ export function readOfficePreferences(
       townOpens: value.townOpens === "terminal" ? "terminal" : "chat",
       townMaster: townMasterName(value.townMaster),
       townGreeting: value.townGreeting !== false,
+      tabBadge: value.tabBadge !== false,
     };
   } catch {
     return { ...DEFAULT_OFFICE_PREFERENCES };
@@ -74,6 +78,7 @@ export function writeOfficePreferences(
     townOpens: preferences.townOpens === "terminal" ? "terminal" : "chat",
     townMaster: townMasterName(preferences.townMaster),
     townGreeting: preferences.townGreeting !== false,
+    tabBadge: preferences.tabBadge !== false,
   };
   try {
     storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));

@@ -32,7 +32,11 @@ import { dockedWidthAfterPlace } from "./windows/windowManager";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
-import { NeedsYouHost, useNeedsYouState } from "./NeedsYouTab";
+import {
+  NeedsYouHost,
+  NeedsYouTabBadge,
+  useNeedsYouState,
+} from "./NeedsYouTab";
 import { usePresenceWatch } from "./presence";
 import { useGreetingWatch } from "./townMasterGreeting";
 import { TownMasterGreetingHost } from "./TownMasterGreetingHost";
@@ -454,6 +458,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
             );
         }}
       />
+      {/* The browser tab and app icon count what Needs you lists, in every
+          view (Spaces too) and in preview scenes. */}
+      <NeedsYouTabBadge world={world} />
       {connectionSelection.connections.length === 0 &&
       inspectorConversations.length === 0 ? (
         <WorldConnectionRequired status={connectionSelection.status} />

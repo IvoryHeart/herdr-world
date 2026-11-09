@@ -22,7 +22,7 @@ const chrome =
     : undefined);
 
 test.skipIf(!chrome)(
-  "Needs you expands, opens its asker and badges the phone counter",
+  "Needs you expands, opens its asker, badges the phone counter and the tab",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "needs-you-card-"));
     const { assets } = await buildWorldBrowserBundle("NeedsYouCard", dir);
@@ -41,7 +41,14 @@ test.skipIf(!chrome)(
         const asset =
           path === "/"
             ? Bun.file(join(dir, "NeedsYouCard/index.html"))
-            : assets.get(path);
+            : path === "/herdr-world-icon-192.png"
+              ? Bun.file(
+                  join(
+                    import.meta.dir,
+                    "../../public/herdr-world-icon-192.png",
+                  ),
+                )
+              : assets.get(path);
         return asset
           ? new Response(asset)
           : new Response("Not found", { status: 404 });

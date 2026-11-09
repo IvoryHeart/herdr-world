@@ -276,7 +276,10 @@ hosts stay usable.
    a phone as a sheet with **Back**. It waits while Chat, **Needs you** or
    another window covers its place (on a phone, while any is open). Close it with **✕**, Escape or a tap elsewhere;
    tap the figure to see it again, and untick **Show this on start** (or
-   switch off **Menu → Town Master greeting**) to stop it. Answer a question from its offered
+   switch off **Menu → Town Master greeting**) to stop it. While anything
+   needs you, World's browser tab reads `(N) Herdr World` and its icon (and
+   an installed World's app icon) shows the number, so you see it from
+   another tab; **Menu → Count on tab and app icon** turns that off. Answer a question from its offered
    options or type a reply. World saves the answer before confirming it, and
    the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
    after a restart. For new asks from a verified local Linux agent with a bound

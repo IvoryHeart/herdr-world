@@ -38,6 +38,7 @@ import { askAttachmentUpload } from "./askAttachments";
 import { preloadWorkspaceInspector } from "./inspectorPreload";
 import { sharedPresence, useOwnerPresence } from "./presence";
 import { arrivedWhileAway } from "./sinceYouLeft";
+import { useAttentionBadge } from "./attentionBadge";
 import "./needsYouTab.css";
 
 /**
@@ -52,8 +53,11 @@ export const useNeedsYouState = () =>
 
 type World = Pick<WorldObject, "leaves" | "nodeById">;
 
-/** Questions and blocked agents, as the counter and the tab count them. */
-function useWaitingCount(world: Pick<WorldObject, "leaves">) {
+/**
+ * Questions and blocked agents, as the counter, the tab and the browser tab
+ * title count them (`needsYouCount` over `needsYouItems`).
+ */
+export function useWaitingCount(world: Pick<WorldObject, "leaves">) {
   const asks = useWorldAsks(sharedAsksStore());
   const blocked = useMemo(
     () =>
@@ -115,6 +119,19 @@ export function NeedsYouCounter({
       <b>{count}</b>
     </button>
   );
+}
+
+/**
+ * The browser tab title, tab icon and installed app icon show the counter's
+ * number in every view, so it is visible while World is behind another tab.
+ */
+export function NeedsYouTabBadge({
+  world,
+}: {
+  world: Pick<WorldObject, "leaves">;
+}) {
+  useAttentionBadge(useWaitingCount(world));
+  return null;
 }
 
 /**

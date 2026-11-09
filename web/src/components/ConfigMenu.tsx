@@ -27,6 +27,7 @@ import {
   Shirt,
   Volume2,
   Hand,
+  Inbox,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
@@ -490,6 +491,35 @@ export function ConfigMenu({
                     onClick={() =>
                       updateOfficePreferences({
                         townGreeting: !officePreferences.townGreeting,
+                      })
+                    }
+                  >
+                    <span />
+                  </button>
+                </div>
+                <div className="config-preference-row">
+                  <span className="config-item-icon">
+                    <Inbox size={15} />
+                  </span>
+                  <div className="config-item-copy">
+                    <strong>Count on tab and app icon</strong>
+                    <span>
+                      The browser tab and installed app show how many things
+                      need you (this browser)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Count on tab and app icon"
+                    aria-checked={officePreferences.tabBadge}
+                    className={
+                      "settings-switch" +
+                      (officePreferences.tabBadge ? " is-on" : "")
+                    }
+                    onClick={() =>
+                      updateOfficePreferences({
+                        tabBadge: !officePreferences.tabBadge,
                       })
                     }
                   >
