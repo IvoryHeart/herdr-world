@@ -9,6 +9,73 @@ prepared.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-09
+
+### Added
+
+- Find agents, rooms and actions from one command box with Ctrl+K or Cmd+K.
+- Gather questions, blocked agents and finished work in the shared Needs you tab.
+- Answer questions with attachments and check saved-answer delivery in the Outbox.
+- Get question alerts and attention counts on browser tabs and supported app icons.
+- Return to a Since you left recap and an optional Town Master greeting.
+- See each agent's current step in Town bubbles and Board cards.
+- Plan work with subscription fuel gauges, reset times and agent context indicators.
+- Track estimated spending by host, room and agent on expense boards.
+- Explore Town and Board through idle time, spending, pull request, quest and harness lenses.
+- Keep open pull requests visible at Town's post office after their agents leave.
+- Move and tidy Town rooms, and choose which agents wait at reception.
+- Clear finished agents through the bin and Town bus, with Put back before closing.
+- Start agents from Town's town center or Board's hub and watch them arrive at their desks.
+- Follow Town's arrows and Next shortcuts to agents that need attention.
+- Manage Teams and Pods, their roles, shared focus and linked pull requests.
+- Use Board's Next control, agent previews, room actions and whiteboard or blackboard surfaces.
+- Answer more Claude and Codex questions, trust prompts and command menus directly in Chat.
+- Read agent replies aloud and preview PDFs on phones without a native viewer.
+- Minimize windows into phone chips or fit them beside your work on desktop.
+- Switch panes through a window's split-layout map or move a pane to another tab.
+- Search panes across hosts and choose where repository worktrees are created.
+- Manage World skills in Configuration → Integrations or from the command line.
+- Set up skills and Claude usage readings automatically on installs and updates, with an opt-out.
+- Give each World instance its own data folder with HERDR_WORLD_DATA_DIR.
+
+### Changed
+
+- Keep questions, answers, results, review marks and more workspace settings across restarts.
+- Share review marks, keyboard shortcuts and more preferences across browsers.
+- Keep terminal profiles and the Town master consistent across connected Worlds.
+- Show clearer host headings, agent counts, usage and limit summaries on Board.
+- Give Chat a roomier desktop layout and consistent Town styling.
+- Match search words in any order, highlight results and keep search easy to reach on phones.
+- Show clearer agent startup progress and open Terminal until Chat is ready.
+- Offer Reload when an upgrade leaves an old browser tab open.
+- Restart the matching managed service on Linux and macOS after standalone upgrades.
+- Report installed, updated and already-current integrations clearly.
+- Reuse existing local installations and offer setup when none is ready.
+- Load World faster and reduce background work and phone battery use.
+
+### Fixed
+
+- Keep Claude limit readings from moving backwards while several sessions run.
+- Keep large Towns and Boards responsive, complete and stable during refreshes.
+- Keep Town dragging, grouping, zooming and touch controls aligned with what is visible.
+- Resize rooms when desks close and keep boards, labels and bus queues readable.
+- Preserve terminal sizes and split layouts when opening Chat or another viewer.
+- Keep Chat drafts, uploads and controls usable through reconnects and worktree changes.
+- Show complete questions and warnings, and keep Chat replies aimed at the right conversation.
+- Keep saved answers and review marks from following a replacement agent.
+- Preserve appearance edits and Group drafts when changes arrive from another device.
+- Keep pull request status visible during refresh failures and busy merge history.
+- Recover local connections automatically and keep SSH commands responsive.
+- Keep usage totals, expenses and stale-data notices consistent across views.
+- Restore quest badges and reliable browser startup with saved questions.
+- Refresh integration settings after restarts and use the selected connection.
+- Harden Markdown links and update security dependencies.
+
+### Documentation
+
+- Refresh the website, screenshots and feature guide for 0.3.0.
+- Shorten the tutorial into practical steps for delegating, reviewing and using World on a phone.
+
 ## [0.2.7] - 2026-10-26
 
 ### Added
