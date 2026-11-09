@@ -863,7 +863,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Mark reviewed** (done, or idle after a turn World saw end, as Town
     counts it). The `?scene=town-scale` preview's synthetic hosts take all of
     these actions in the page, so they can be tried without real hosts.
-  - Drag a tab onto another workspace of its host to move it (asks first).
+  - Drag a tab onto another workspace of its host to move it (asks first,
+    with **Don't ask again**; moving a workspace's last tab always asks,
+    because that workspace closes). Strings follow the move.
     On phones, hold a card still before dragging; adding a second finger switches
     to pinch zoom without committing a move. Settling pauses while you type in
     an open terminal.
@@ -1301,7 +1303,8 @@ when piped, with stable exit codes:
   `group show` includes recent sender attribution (128 changes retained globally).
   Room/Desk groups are projected from Herdr. Adding with `--herdr` reuses Town's
   move: Room moves the whole desk and prints every affected agent first; Desk
-  moves one pane. Results report confirmed Done/Partly done/Not done/Unknown
+  moves one pane; `--allow-close-room` also consents to closing the source room
+  when its last desk leaves. Results report confirmed Done/Partly done/Not done/Unknown
   outcomes and locations, with no automatic retry on Unknown.
   `group import FILE --yes` migrates one Pod table atomically and never overwrites
   existing Pods; explicit address mappings handle away or annotated names.
@@ -1341,6 +1344,10 @@ to that exact session, expires with replacement/restart, and its link is labelle
 **Reported PR**. It is evidence rather than a claim of ownership; viewing another
 candidate does not rewrite it. Existing file and Git actions use the selected
 root and revalidate its qualified binding before acting.
+
+If a previewed file becomes unavailable, its preview shows a notice instead of
+closing the window: choose a current worktree or another file, then **Retry
+preview**. Chat and its draft stay open.
 
 ## Workspace, Tab, and Pane Navigation
 
