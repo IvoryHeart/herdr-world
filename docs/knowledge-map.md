@@ -139,6 +139,12 @@ and [hosted acceptance procedure](SCREENSHOTS.md#hosted-stability-and-production
 exercise the capture/failure/restoration path in the opt-in stability job.
 See [initial stability evidence](reviews/town-golden.md) for the reference's bounds.
 
+The website's Town, Board and sharing images come from the
+[site capture](../scripts/site-screenshots.ts) of the production Town and Board
+with a [synthetic site scene](../web/src/world/testing/site-shots/scene.ts)
+([scene tests](../web/src/world/testing/site-shots/scene.test.ts)); see
+[the release set](SCREENSHOTS.md#capture-the-shared-release-set).
+
 [Upstream automation](upstream-automation.md) covers Roamgate release detection,
 frozen integration PRs, independent Codex review, credentials and recovery.
 [Installer upgrade CI](release.md#pre-merge-installer-upgrades) builds proposed merges

@@ -16,11 +16,11 @@ check from your phone.** No Git, SSH, or networking knowledge is needed to start
 > **This static Pages tutorial does not run Herdr or keep terminals alive.**
 > You still need the Herdr World process.
 
-> **New in 0.2.7:** [chat with an agent](#chat) in its one window,
-> [start agents from profiles](#new-agent), [hear who needs you](#chimes),
-> [let agents arrange World](#agent-cli), and follow pull requests in
-> [Board's Work lens](#board). See the
-> [0.2.7 release notes](./releases/v0.2.7.md).
+> **New in 0.3.0:** one **Needs you** list in every view, thought bubbles
+> with each agent's current step, the fuel board and expenses, search and
+> **Ctrl+K** to [find or act](#town), [lenses](#town-lenses), the post office,
+> and the bin and bus to clear finished agents with undo. See the
+> [0.3.0 release candidate notes](./releases/v0.3.0-rc.1.md).
 
 ## 1. Start here: see your own work locally
 
@@ -55,7 +55,7 @@ older World or Roamgate installation.
 
 1. If Herdr is already installed, start it with a trusted project open. See
    [herdr.dev](https://herdr.dev) for setup. If it is not installed, do step 2
-   first: the published 0.2.7 standalone installer installs or upgrades Herdr to
+   first: the published standalone installer installs or upgrades Herdr to
    the verified release. Set `HERDR_WORLD_SKIP_HERDR=1` to leave your Herdr
    untouched. Homebrew reuses existing Herdr and installs a missing runtime on
    first normal World launch; npm and Windows archives leave setup to you.
@@ -594,9 +594,14 @@ closing anything.
 **You are done when:** you can find an agent on the expected host, read its peek,
 and open its terminal or Inspector without losing its workspace context.
 
-![Town with four disposable workspace rooms, one agent waiting at reception and one finished](./images/herdr-world-desktop-town.png)
+![Town with two host buildings, receptions holding waiting and finished agents, the expenses billboard, the fuel board and the post office](./images/herdr-world-desktop-town.png)
+
+![Town zoomed in to the desks, with thought bubbles naming each working agent's step](./images/herdr-world-desktop-town-steps.png)
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
+
+These Town captures show a synthetic crew on two hosts, drawn by World's own
+Town code; every name, cost and step in them is sample data.
 
 ### See one fact across Town: lenses
 
@@ -1033,14 +1038,13 @@ there in a bug report.
 **You are done when:** you can find your workspace card, pin a note and string it
 to the intended workspace or pane. Read the target before using **Send**.
 
-![Board with four workspace cards, terminal tabs and a note strung to an agent](./images/herdr-world-desktop-board.png)
+![Board with one host zone: room cards linked to agent and terminal cards, with steps, a question, finished work and expenses](./images/herdr-world-desktop-board.png)
 
 ![Board close-up of a note strung to an agent](./images/herdr-world-mobile-board.png)
 
-The Town and Board screenshots show disposable projects where real Claude Code
-agents ran small tasks: one is waiting on you and one has finished. The note
-strung to an agent is sample planning text, not a report of completed agent
-work.
+The desktop Board capture shows the same synthetic crew as Town. The phone
+close-up comes from a disposable project in World 0.2.7; the note strung to an
+agent is sample planning text, not a report of completed agent work.
 
 ### Let agents arrange World
 

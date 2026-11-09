@@ -6,16 +6,16 @@
     <meta name="theme-color" content="#080b12" />
     <meta
       name="description"
-      content="Visualize Herdr agent work in Town, Board, Desk and Spaces. Connect local and SSH hosts, browse and chat with their agents together, and open host-owned terminals, files and changes."
+      content="Run a crew of coding agents without losing track. Herdr.World shows every agent on your local and SSH Herdr hosts in one Town: who needs you, what each is doing now, what is finished and how much capacity is left."
     />
     <meta property="og:type" content="website" />
     <meta
       property="og:title"
-      content="Herdr.World - View agent work in Town, Board, Desk and Spaces"
+      content="Herdr.World - Run a crew of coding agents and see who needs you"
     />
     <meta
       property="og:description"
-      content="Visualize Herdr agent work in Town, Board, Desk and Spaces across local and SSH hosts."
+      content="One Town for every coding agent on your local and SSH Herdr hosts: questions, live progress, finished work and remaining capacity at a glance."
     />
     <meta
       property="og:url"
@@ -29,16 +29,16 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Herdr.World - View agent work in Town, Board, Desk and Spaces"
+      content="Herdr.World - Run a crew of coding agents and see who needs you"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Herdr.World - View agent work in Town, Board, Desk and Spaces"
+      content="Herdr.World - Run a crew of coding agents and see who needs you"
     />
     <meta
       name="twitter:description"
-      content="Visualize agent work in Town, Board, Desk and Spaces across local and SSH Herdr hosts."
+      content="One Town for every coding agent on your local and SSH Herdr hosts: questions, live progress, finished work and remaining capacity at a glance."
     />
     <meta
       name="twitter:image"
@@ -49,7 +49,7 @@
     <link rel="icon" type="image/png" sizes="48x48" href="./assets/herdr-world-icon-48.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/herdr-world-icon-180.png" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>Herdr.World - View agent work in Town, Board, Desk and Spaces</title>
+    <title>Herdr.World - Run a crew of coding agents and see who needs you</title>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -57,7 +57,7 @@
         "name": "Herdr.World",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
-        "description": "Visualize Herdr agent work in Town, Board, Desk and Spaces across local and SSH hosts.",
+        "description": "Run a crew of coding agents on local and SSH Herdr hosts and see who needs you, what each agent is doing and what is finished.",
         "url": "https://herdr.world/",
         "downloadUrl": "https://github.com/IvoryHeart/herdr-world/releases/latest",
         "license": "https://opensource.org/license/mit"
@@ -92,6 +92,7 @@
 
         <nav class="primary-nav" id="primary-nav" aria-label="Primary" data-nav>
           <a href="#top">Home</a>
+          <a href="#features">Features</a>
           <a href="#workflow">How it works</a>
           <a href="#mobile">Mobile</a>
           <a href="./tutorial/">Tutorial</a>
@@ -139,7 +140,7 @@
               >Herdr</a
             >
           </div>
-          <h2>Every Herdr host, <span>one shared view.</span></h2>
+          <h2>Run a crew of agents. <span>Know who needs you next.</span></h2>
           <p class="hero-lede">
             <a
               href="https://herdr.dev"
@@ -147,9 +148,11 @@
               rel="noopener noreferrer"
               >Herdr</a
             >
-            keeps the terminals alive. Herdr.World observes local and SSH hosts
-            together in Town, Board and Desk, with Spaces for focused terminal work. Hosts filters the overview while
-            terminals, chats, files and changes retain their owning host.
+            keeps your coding agents alive in real terminals. Herdr.World puts
+            every local and SSH host into one shared view: a town where working
+            agents sit at their desks and show what they are doing, while
+            questions and finished work wait at reception. Every agent is one
+            click from its chat, terminal, files and changes.
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#install">
@@ -208,15 +211,15 @@
                 <source
                   data-hero-source
                   type="image/png"
-                  srcset="./assets/herdr-world-desktop-town.png 1440w"
+                  srcset="./assets/herdr-world-desktop-town.png 1680w"
                   sizes="(max-width: 620px) calc(100vw - 8px), (max-width: 1240px) calc(100vw - 48px), 1180px"
                 />
                 <img
                   data-hero-image
                   src="./assets/herdr-world-desktop-town.png"
-                  alt="Herdr.World Town showing four demo workspace rooms and terminal desks"
-                  width="1440"
-                  height="900"
+                  alt="Town with two host buildings: receptions holding a question and finished work, room desks with working agents, the expenses billboard, the fuel board and the post office"
+                  width="1680"
+                  height="1050"
                   loading="lazy"
                 />
               </picture>
@@ -227,9 +230,9 @@
             <div class="agent-avatar">&gt;_</div>
             <div>
               <strong>codex</strong>
-              <span><i></i> Working</span>
+              <span><i></i> Running the search tests</span>
             </div>
-            <b>18m</b>
+            <b>4m</b>
           </div>
 
           <div class="floating-card task-card" aria-hidden="true">
@@ -237,78 +240,413 @@
               <svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7" /></svg>
             </span>
             <div>
-              <strong>Release checks passed</strong>
-              <span>Session updated just now</span>
+              <strong>Ready to review</strong>
+              <span>billing finished · marked in every view</span>
             </div>
           </div>
         </div>
 
         <div class="hero-proof reveal">
           <div>
-            <strong>One view</strong>
-            <span>Every workspace and recognized agent</span>
+            <strong>One Needs you list</strong>
+            <span>Questions, blocked agents and finished work</span>
           </div>
           <div>
-            <strong>Real terminal</strong>
-            <span>Streaming, scrollback, paste, and links</span>
+            <strong>Live progress</strong>
+            <span>Every working agent's current step</span>
           </div>
           <div>
             <strong>Local or SSH</strong>
-            <span>Supported local and remote hosts</span>
+            <span>Every host in one Town</span>
           </div>
         </div>
       </section>
 
-      <section class="section shell" aria-labelledby="town-guide-title">
-        <div class="section-heading">
+      <section class="section shell stories" id="features" aria-labelledby="features-title">
+        <div class="section-heading reveal">
           <div>
-            <p class="kicker">Meet Town</p>
-            <h2 id="town-guide-title">Know who needs you next.</h2>
+            <p class="kicker">Spend your attention where it helps</p>
+            <h2 id="features-title">More agents, less checking.</h2>
           </div>
-          <p>Town brings your agents into one place. Working agents stay at their
-            desks; agents waiting for your input gather at reception.</p>
+          <p>
+            Running several agents at once should not mean cycling through
+            terminals to find out which one is stuck. World watches them for
+            you and brings the next decision to the front.
+          </p>
         </div>
-        <div class="town-next">
-          <p>Select an agent to open its window on Chat: read its latest
-            messages, answer a question or send a reply. Switch to its terminal,
-            files or changes when you need the full context. Zoom from the whole
-            town to a single desk.</p>
-          <a class="button button-secondary" href="./tutorial/#town">Explore Town &rarr;</a>
+
+        <article class="story reveal">
+          <div class="story-copy">
+            <p class="kicker">Needs you</p>
+            <h3>Answer the agent that is waiting, not the one you happen to be looking at.</h3>
+            <p>
+              Questions, blocked agents and finished work collect in one
+              <strong>Needs you</strong> list in every view, and their agents
+              walk to their building's reception. Answer from the list, attach a
+              file or screenshot, or open Chat. Press <kbd>N</kbd> for the next
+              agent that needs you.
+            </p>
+            <ul class="story-points">
+              <li>Mark finished work reviewed once; the mark follows you across views and browsers.</li>
+              <li>The Town Master greets each visit with <strong>Since you left</strong>.</li>
+              <li>The browser tab and app icon show how many agents need you.</li>
+            </ul>
+            <a class="text-link" href="./tutorial/#town">Explore Town <span aria-hidden="true">&rarr;</span></a>
+          </div>
+          <figure class="story-shot">
+            <a href="./assets/herdr-world-desktop-town.png">
+              <img
+                src="./assets/herdr-world-desktop-town.png"
+                alt="Town overview: each host's reception holds a waiting agent and finished ones, beside the expenses billboard, the post office and the town board's fuel gauges"
+                width="1680"
+                height="1050"
+                loading="lazy"
+                decoding="async"
+              />
+            </a>
+          </figure>
+        </article>
+
+        <article class="story story-reverse reveal">
+          <div class="story-copy">
+            <p class="kicker">Live progress</p>
+            <h3>See what every agent is doing without opening it.</h3>
+            <p>
+              Working agents show their current step in a thought bubble:
+              editing a file, running tests, reading, searching the web or
+              thinking. Zoom in for the detail. A step that runs unusually long
+              turns amber, so a stuck test run stands out before it costs you an
+              hour.
+            </p>
+            <ul class="story-points">
+              <li>Board cards show the same steps, review state and idle time.</li>
+              <li>A sweat drop marks an agent whose context is 85% full or more.</li>
+              <li>Lenses colour Town and Board by idle time, spend, pull requests, quests or tool.</li>
+            </ul>
+            <a class="text-link" href="./tutorial/#town-lenses">Use lenses <span aria-hidden="true">&rarr;</span></a>
+          </div>
+          <figure class="story-shot">
+            <a href="./assets/herdr-world-desktop-town-steps.png">
+              <img
+                src="./assets/herdr-world-desktop-town-steps.png"
+                alt="Town zoomed in to a room: thought bubbles over working agents read editing, tests, command and reading, and a 13-minute command shows in amber"
+                width="1680"
+                height="1050"
+                loading="lazy"
+                decoding="async"
+              />
+            </a>
+          </figure>
+        </article>
+
+        <article class="story reveal">
+          <div class="story-copy">
+            <p class="kicker">Capacity and cost</p>
+            <h3>Plan the next hour around what is left.</h3>
+            <p>
+              The fuel board shows how much of your Claude and Codex
+              subscription windows remains and when each resets. The City
+              expenses billboard and every reception show token use and
+              optional price estimates for Claude Code, Codex, Pi and Gemini.
+              An agent stopped by a usage limit holds an empty fuel can until it
+              can work again.
+            </p>
+            <ul class="story-points">
+              <li>Board's host zones repeat the same counts, expenses and limits.</li>
+              <li>Missing, stale or unpriced readings say so, so you know what a figure is worth.</li>
+            </ul>
+            <a class="text-link" href="./tutorial/#board">Explore Board <span aria-hidden="true">&rarr;</span></a>
+          </div>
+          <figure class="story-shot">
+            <a href="./assets/herdr-world-desktop-board.png">
+              <img
+                src="./assets/herdr-world-desktop-board.png"
+                alt="Board for one host: its zone header lists busy, waiting and done agents, today's and the week's expenses and both fuel gauges; room cards link to agent and terminal cards"
+                width="1680"
+                height="1050"
+                loading="lazy"
+                decoding="async"
+              />
+            </a>
+          </figure>
+        </article>
+      </section>
+
+      <section class="section shell" id="product">
+        <div class="section-heading reveal">
+          <div>
+            <p class="kicker">A control room, not another dashboard</p>
+            <h2>See the work. Steer the work.</h2>
+          </div>
+          <p>
+            Move from a waiting agent to the exact answer, file, diff or
+            terminal without reconstructing context across windows.
+          </p>
+        </div>
+
+        <div class="bento-grid">
+          <article class="bento bento-wide reveal" data-spotlight>
+            <div class="bento-copy">
+              <span class="feature-number">01</span>
+              <h3>Answer agents in Chat.</h3>
+              <p>
+                Chat reads each agent's own transcript: its tool calls, edits
+                and report. Answer Claude Code forms and trust questions, Codex
+                choices and supported command menus with a tap. Saved answers
+                wait in an Outbox you can check.
+              </p>
+              <a href="./tutorial/#chat">
+                Chat with an agent <span aria-hidden="true">&rarr;</span>
+              </a>
+            </div>
+            <div class="agent-stack" aria-hidden="true">
+              <div class="mini-agent active">
+                <span class="mini-icon">C</span>
+                <div>
+                  <strong>codex</strong><small>Running the search tests · 4m</small>
+                </div>
+                <b>Working</b>
+              </div>
+              <div class="mini-agent blocked">
+                <span class="mini-icon">P</span>
+                <div><strong>pi</strong><small>Asks: update the colour tokens?</small></div>
+                <b>Needs you</b>
+              </div>
+              <div class="mini-agent done">
+                <span class="mini-icon">K</span>
+                <div><strong>kimi</strong><small>Release notes drafted</small></div>
+                <b>Done</b>
+              </div>
+            </div>
+          </article>
+
+          <article
+            class="bento bento-terminal reveal reveal-delay"
+            data-spotlight
+          >
+            <div class="terminal-preview find-preview" aria-hidden="true">
+              <div class="find-field"><span>⌘K</span> checkout</div>
+              <div class="find-row is-selected"><i class="dot-working"></i>checkout <small>studio · storefront</small></div>
+              <div class="find-row"><i class="dot-waiting"></i>a11y <small>needs you</small></div>
+              <div class="find-row"><i class="dot-action"></i>Open Board <small>view</small></div>
+            </div>
+            <div class="bento-copy">
+              <span class="feature-number">02</span>
+              <h3>Find or act from one box.</h3>
+              <p>
+                Press <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>⌘</kbd>+<kbd>K</kbd>)
+                to jump to any building, room, agent or terminal, switch views
+                or run an action. Search in Town matches words in any order.
+              </p>
+            </div>
+          </article>
+
+          <article class="bento reveal" data-spotlight>
+            <div class="bento-copy">
+              <span class="feature-number">03</span>
+              <h3>Review without losing the thread.</h3>
+              <p>
+                Inspect changed files, annotate exact lines and send compiled
+                feedback to the agent. The post office keeps your open pull
+                requests in view, ready-to-merge parcels first.
+              </p>
+            </div>
+            <div class="diff-snippet" aria-hidden="true">
+              <div class="diff-file">
+                <span></span>src/session.ts <b>+8 -3</b>
+              </div>
+              <code class="diff-del">- return session.raw;</code>
+              <code class="diff-add">+ return normalize(session);</code>
+              <code class="diff-add">+ notifySubscribers();</code>
+              <div class="annotation-chip">
+                <span>1</span> Keep the raw export path
+              </div>
+            </div>
+          </article>
+
+          <article class="bento bento-worktrees reveal" data-spotlight>
+            <div class="bento-copy">
+              <span class="feature-number">04</span>
+              <h3>Clear finished agents, with undo.</h3>
+              <p>
+                Drag an agent onto the bin or a bus stop. The Town bus collects
+                waiting agents on its round and closes them once it leaves;
+                until then, <strong>Put back</strong> brings any of them home.
+              </p>
+            </div>
+            <div class="diff-snippet bin-preview" aria-hidden="true">
+              <div class="bin-head"><strong>Bin</strong><small>bus leaves in 2:40</small></div>
+              <div class="bin-row"><span>billing</span><b>Put back</b></div>
+              <div class="bin-row"><span>changelog</span><b>Put back</b></div>
+              <div class="bin-close">Close now</div>
+            </div>
+          </article>
         </div>
       </section>
 
-      <section class="section shell" aria-labelledby="board-guide-title">
-        <div class="section-heading">
-          <div>
-            <p class="kicker">Meet Board</p>
-            <h2 id="board-guide-title">Put your notes beside the work.</h2>
+      <section
+        class="section showcase-section"
+        aria-labelledby="showcase-title"
+      >
+        <div class="shell">
+          <div class="section-heading showcase-heading reveal">
+            <div>
+              <p class="kicker">Everything stays connected</p>
+              <h2 id="showcase-title">Context is one click away.</h2>
+            </div>
+            <p>
+              Town, Board, Desk and Spaces show the same agents and share
+              review marks. Chat, terminal, files and changes open in the
+              agent's own window on its own host.
+            </p>
           </div>
-          <p>Hosts are zones, workspaces are cards and tabs sit around them.
-            Keep your own notes alongside the live layout.</p>
-        </div>
-        <div class="town-next">
-          <p>Drag cards, fold a workspace or tidy its layout. String a note to a
-            workspace, tab or exact agent pane; send it only when ready. Use Desk
-            for an attention queue and Spaces for focused terminal work.</p>
-          <a class="button button-secondary" href="./tutorial/#board">Explore Board &rarr;</a>
-        </div>
-      </section>
 
-      <section class="section shell" aria-labelledby="chat-guide-title">
-        <div class="section-heading">
-          <div>
-            <p class="kicker">Meet Chat</p>
-            <h2 id="chat-guide-title">Talk to an agent, not its terminal.</h2>
+          <div class="showcase reveal">
+            <div
+              class="showcase-tabs"
+              role="tablist"
+              aria-label="Product views"
+            >
+              <button
+                type="button"
+                role="tab"
+                id="tab-town"
+                aria-controls="showcase-panel"
+                aria-selected="true"
+                tabindex="0"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-town.png"
+                data-alt="Town with two host buildings, their receptions, rooms of working agents, the expenses billboard, the fuel board and the post office"
+                data-label="Town"
+                data-title="Every host is a building; every agent has a desk."
+                data-copy="Questions and finished work wait at reception. Select any agent to open its window on Chat, then switch to its terminal, files or changes."
+              >
+                <span>01</span> Town
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-steps"
+                aria-controls="showcase-panel"
+                aria-selected="false"
+                tabindex="-1"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-town-steps.png"
+                data-alt="Town zoomed in to the desks, with thought bubbles naming each working agent's step and how long it has run"
+                data-label="Desks"
+                data-title="Zoom in to see each agent's step."
+                data-copy="Thought bubbles name what each agent is doing now and for how long. A long-running step turns amber."
+              >
+                <span>02</span> Desks
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-board"
+                aria-controls="showcase-panel"
+                aria-selected="false"
+                tabindex="-1"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-board.png"
+                data-alt="Board with one host zone: room cards linked to agent and terminal cards showing steps, questions, finished work and expenses"
+                data-label="Board"
+                data-title="Manage the work as a map."
+                data-copy="Hosts are zones, rooms are cards and tabs sit around them. Rename, close or reorder, answer a question, peek at an agent and mark work reviewed without switching views."
+              >
+                <span>03</span> Board
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-spaces"
+                aria-controls="showcase-panel"
+                aria-selected="false"
+                tabindex="-1"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-spaces.png"
+                data-alt="Spaces with a focused workspace and live terminal"
+                data-label="Spaces"
+                data-title="Focus on one workspace."
+                data-copy="Work in live terminal panes, browse files, review changes and chat with agents on the workspace’s owning host. All servers lists every session across your hosts."
+              >
+                <span>04</span> Spaces
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-files"
+                aria-controls="showcase-panel"
+                aria-selected="false"
+                tabindex="-1"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-files.png"
+                data-alt="Board Inspector previewing the Lantern Notes demo guide with its Mermaid diagram"
+                data-label="Files"
+                data-title="Inspect the repository without leaving the agent."
+                data-copy="Browse the agent's workspace, preview Markdown, diagrams, images and PDFs, and keep its terminal, changes and chat in one movable window."
+              >
+                <span>05</span> Files
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-changes"
+                aria-controls="showcase-panel"
+                aria-selected="false"
+                tabindex="-1"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-changes.png"
+                data-alt="Board Inspector showing the README section an agent added"
+                data-label="Changes"
+                data-title="Review changes in their workspace context."
+                data-copy="See changed files and inspect a diff beside the agent that made it. This capture shows the first-run section a Claude Code agent added to a demo README."
+              >
+                <span>06</span> Changes
+              </button>
+            </div>
+
+            <div
+              class="showcase-panel"
+              id="showcase-panel"
+              role="tabpanel"
+              aria-labelledby="tab-town"
+              tabindex="0"
+              data-showcase-panel
+            >
+              <div class="showcase-window">
+                <div class="showcase-topline">
+                  <span><i></i><i></i><i></i></span>
+                  <strong data-showcase-label>Town</strong>
+                  <em>studio + buildbox</em>
+                </div>
+                <a
+                  href="./assets/herdr-world-desktop-town.png"
+                  aria-label="Open the current Herdr.World product screenshot"
+                  data-showcase-link
+                >
+                  <img
+                    src="./assets/herdr-world-desktop-town.png"
+                    alt="Town with two host buildings, their receptions, rooms of working agents, the expenses billboard, the fuel board and the post office"
+                    width="1680"
+                    height="1050"
+                    loading="lazy"
+                    decoding="async"
+                    data-showcase-image
+                  />
+                </a>
+              </div>
+              <div class="showcase-caption" aria-live="polite">
+                <h3 data-showcase-title>
+                  Every host is a building; every agent has a desk.
+                </h3>
+                <p data-showcase-copy>
+                  Questions and finished work wait at reception. Select any
+                  agent to open its window on Chat, then switch to its
+                  terminal, files or changes.
+                </p>
+              </div>
+            </div>
           </div>
-          <p>Chat reads the conversation from the agent's own transcript. See
-            what it is doing now, what each tool call changed, and its quest.</p>
-        </div>
-        <div class="town-next">
-          <p>Reply with attachments and slash commands, answer permission
-            prompts and Claude Code questions from checked options, or stop a
-            turn. Start new agents from profiles, and let chimes tell you who
-            needs you and why.</p>
-          <a class="button button-secondary" href="./tutorial/#chat">Explore Chat &rarr;</a>
         </div>
       </section>
 
@@ -316,15 +654,15 @@
         <div class="install-card reveal" data-spotlight>
           <div class="install-copy">
             <p class="kicker">Ready when the next task starts</p>
-            <h2>Give your agents a window.</h2>
+            <h2>Give your agents a town.</h2>
             <p>
               Choose one installer, then run <code>herdr-world</code> and open the
               URL it prints. Homebrew covers macOS and Linux; npm also covers
               Windows with Node.js 22.14+. The standalone script works on macOS
-              and Linux. The published 0.2.7 script installs or upgrades Herdr to
-              the verified release; set <code>HERDR_WORLD_SKIP_HERDR=1</code> to
-              leave yours untouched. Homebrew reuses existing Herdr and installs
-              it on first launch only if missing. With npm, run
+              and Linux, and installs or upgrades Herdr to the verified release;
+              set <code>HERDR_WORLD_SKIP_HERDR=1</code> to leave yours untouched.
+              Homebrew reuses existing Herdr and installs it on first launch only
+              if missing. With npm, run
               <code>herdr-world herdr upgrade --install</code>.
             </p>
             <div class="install-actions">
@@ -403,290 +741,6 @@
         </div>
       </section>
 
-      <section class="section shell" id="product">
-        <div class="section-heading reveal">
-          <div>
-            <p class="kicker">A control room, not another dashboard</p>
-            <h2>See the work. Steer the work.</h2>
-          </div>
-          <p>
-            Move from a waiting agent to the exact file, diff, or transcript
-            without reconstructing context across terminal windows.
-          </p>
-        </div>
-
-        <div class="bento-grid">
-          <article class="bento bento-wide reveal" data-spotlight>
-            <div class="bento-copy">
-              <span class="feature-number">01</span>
-              <h3>The whole herd, one glance.</h3>
-              <p>
-                Browse workspaces, tabs, panes, and worktrees in one place. Agent
-                status shows who is working, idle, done, or waiting for you.
-              </p>
-              <a
-                href="https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md#agent-awareness-and-session-inspection"
-              >
-                Explore agent awareness <span aria-hidden="true">&rarr;</span>
-              </a>
-            </div>
-            <div class="agent-stack" aria-hidden="true">
-              <div class="mini-agent active">
-                <span class="mini-icon">C</span>
-                <div>
-                  <strong>codex</strong><small>Implementing auth flow</small>
-                </div>
-                <b>Working</b>
-              </div>
-              <div class="mini-agent blocked">
-                <span class="mini-icon">P</span>
-                <div><strong>pi</strong><small>Needs confirmation</small></div>
-                <b>Blocked</b>
-              </div>
-              <div class="mini-agent done">
-                <span class="mini-icon">K</span>
-                <div><strong>kimi</strong><small>Research complete</small></div>
-                <b>Done</b>
-              </div>
-            </div>
-          </article>
-
-          <article
-            class="bento bento-terminal reveal reveal-delay"
-            data-spotlight
-          >
-            <div class="terminal-preview" aria-hidden="true">
-              <div><span class="prompt">$</span> bun run precommit</div>
-              <div class="terminal-muted">format <span>passed</span></div>
-              <div class="terminal-muted">lint <span>passed</span></div>
-              <div class="terminal-muted">typecheck <span>passed</span></div>
-              <div class="terminal-success">All checks passed in 8.4s</div>
-              <div class="terminal-cursor">
-                <span class="prompt">$</span> <i></i>
-              </div>
-            </div>
-            <div class="bento-copy">
-              <span class="feature-number">02</span>
-              <h3>A real terminal in your browser.</h3>
-              <p>
-                Full terminal streaming with split panes, scrollback, multiline
-                paste, clickable links, file previews, and IME-safe input.
-              </p>
-            </div>
-          </article>
-
-          <article class="bento reveal" data-spotlight>
-            <div class="bento-copy">
-              <span class="feature-number">03</span>
-              <h3>Review without losing the thread.</h3>
-              <p>
-                Inspect changed files, annotate exact lines, preview Markdown,
-                and send compiled feedback back to an agent pane.
-              </p>
-            </div>
-            <div class="diff-snippet" aria-hidden="true">
-              <div class="diff-file">
-                <span></span>src/session.ts <b>+8 -3</b>
-              </div>
-              <code class="diff-del">- return session.raw;</code>
-              <code class="diff-add">+ return normalize(session);</code>
-              <code class="diff-add">+ notifySubscribers();</code>
-              <div class="annotation-chip">
-                <span>1</span> Keep the raw export path
-              </div>
-            </div>
-          </article>
-
-          <article class="bento reveal reveal-delay" data-spotlight>
-            <div class="bento-copy">
-              <span class="feature-number">04</span>
-              <h3>Worktrees become a workflow.</h3>
-              <p>
-                Create, open, update, and safely remove linked Git worktrees
-                while preserving the source checkout and its dirty files.
-              </p>
-            </div>
-            <div class="branch-map" aria-hidden="true">
-              <span class="branch-line"></span>
-              <div>
-                <i></i><strong>main</strong><small>source checkout</small>
-              </div>
-              <div>
-                <i></i><strong>feat/agent-radar</strong
-                ><small>3 files changed</small>
-              </div>
-              <div>
-                <i></i><strong>fix/mobile-ime</strong><small>up to date</small>
-              </div>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section
-        class="section showcase-section"
-        aria-labelledby="showcase-title"
-      >
-        <div class="shell">
-          <div class="section-heading showcase-heading reveal">
-            <div>
-              <p class="kicker">Everything stays connected</p>
-              <h2 id="showcase-title">Context is one click away.</h2>
-            </div>
-            <p>
-              Files, changes, terminals, and session history share the same
-              active workspace, so every view starts in the right place.
-            </p>
-          </div>
-
-          <div class="showcase reveal">
-            <div
-              class="showcase-tabs"
-              role="tablist"
-              aria-label="Product views"
-            >
-              <button
-                type="button"
-                role="tab"
-                id="tab-town"
-                aria-controls="showcase-panel"
-                aria-selected="true"
-                tabindex="0"
-                data-showcase-tab
-                data-image="./assets/herdr-world-desktop-town.png"
-                data-alt="Town with four demo workspace rooms, one agent waiting at reception and one finished"
-                data-label="Town"
-                data-title="Explore the town, then open the exact pane."
-                data-copy="Find agents waiting at reception, read their latest messages and open the exact terminal, files or changes."
-              >
-                <span>01</span> Town
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-board"
-                aria-controls="showcase-panel"
-                aria-selected="false"
-                tabindex="-1"
-                data-showcase-tab
-                data-image="./assets/herdr-world-desktop-board.png"
-                data-alt="Board with four workspace cards, terminal tabs and a note strung to an agent"
-                data-label="Board"
-                data-title="Put your notes beside the work."
-                data-copy="Arrange workspace and tab cards, pin notes and string a note to its exact target. Send it to an agent only when you choose."
-              >
-                <span>02</span> Board
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-spaces"
-                aria-controls="showcase-panel"
-                aria-selected="false"
-                tabindex="-1"
-                data-showcase-tab
-                data-image="./assets/herdr-world-desktop-spaces.png"
-                data-alt="Spaces with a focused workspace and live terminal"
-                data-label="Spaces"
-                data-title="Focus on one workspace."
-                data-copy="Work in live terminal panes, browse files, review changes and chat with agents on the workspace’s owning host."
-              >
-                <span>03</span> Spaces
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-files"
-                aria-controls="showcase-panel"
-                aria-selected="false"
-                tabindex="-1"
-                data-showcase-tab
-                data-image="./assets/herdr-world-desktop-files.png"
-                data-alt="Board Inspector previewing the Lantern Notes demo guide with its Mermaid diagram"
-                data-label="Files"
-                data-title="Inspect the repository without leaving the agent."
-                data-copy="Browse the selected workspace and keep its terminal, changes, and agent identity in one movable Inspector."
-              >
-                <span>04</span> Files
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-changes"
-                aria-controls="showcase-panel"
-                aria-selected="false"
-                tabindex="-1"
-                data-showcase-tab
-                data-image="./assets/herdr-world-desktop-changes.png"
-                data-alt="Board Inspector showing the README section an agent added"
-                data-label="Changes"
-                data-title="Review changes in their workspace context."
-                data-copy="See changed files and inspect a diff beside the selected workspace. This capture shows the first-run section a Claude Code agent added to the demo README."
-              >
-                <span>05</span> Changes
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-chat"
-                aria-controls="showcase-panel"
-                aria-selected="false"
-                tabindex="-1"
-                data-showcase-tab
-                data-image="./assets/herdr-world-desktop-chat.png"
-                data-alt="Town with an agent window docked on Chat, showing the agent's report on its README change"
-                data-label="Chat"
-                data-title="Read what the agent did and what it did not verify."
-                data-copy="Chat reads the agent's own transcript: its tool calls, the edit's diff and its report. Reply from the composer, or open Details for the full session record."
-              >
-                <span>06</span> Chat
-              </button>
-            </div>
-
-            <div
-              class="showcase-panel"
-              id="showcase-panel"
-              role="tabpanel"
-              aria-labelledby="tab-town"
-              tabindex="0"
-              data-showcase-panel
-            >
-              <div class="showcase-window">
-                <div class="showcase-topline">
-                  <span><i></i><i></i><i></i></span>
-                  <strong data-showcase-label>Town</strong>
-                  <em>Local / Connected</em>
-                </div>
-                <a
-                  href="./assets/herdr-world-desktop-town.png"
-                  aria-label="Open the current Herdr.World product screenshot"
-                  data-showcase-link
-                >
-                  <img
-                    src="./assets/herdr-world-desktop-town.png"
-                    alt="Town showing demo workspace rooms and terminal desks"
-                    width="1440"
-                    height="900"
-                    loading="lazy"
-                    decoding="async"
-                    data-showcase-image
-                  />
-                </a>
-              </div>
-              <div class="showcase-caption" aria-live="polite">
-                <h3 data-showcase-title>
-                  Explore the town, then open the exact pane.
-                </h3>
-                <p data-showcase-copy>
-                  Find agents waiting at reception, read their latest messages
-                  and open the exact terminal, files or changes.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section class="section shell workflow-section" id="workflow">
         <div class="section-heading reveal">
           <div>
@@ -723,8 +777,9 @@
             <h3>Herdr.World connects locally or over SSH</h3>
             <p>
               Run one World service on your computer. It connects to local or
-              SSH Herdr hosts and serves the browser UI, terminals, files,
-              Git operations, and session records from one origin.
+              SSH Herdr hosts and serves the browser UI from one origin.
+              Hosts filters the overview, while host-owned terminals, files
+              and changes always open on the host that runs them.
             </p>
           </li>
           <li class="workflow-step reveal reveal-delay-two">
@@ -736,8 +791,9 @@
             </div>
             <h3>Your browser becomes the cockpit</h3>
             <p>
-              Open the printed URL from desktop or mobile. Install it as a PWA
-              for a focused, app-like control surface.
+              Open the printed URL from desktop or mobile, or install it as a
+              PWA. Add the World skill so agents ask questions, save results
+              and report their tasks through World.
             </p>
           </li>
         </ol>
@@ -747,28 +803,30 @@
         <div class="shell mobile-layout">
           <div class="mobile-copy reveal">
             <p class="kicker">The control room travels</p>
-            <h2>Designed for the screen you have.</h2>
+            <h2>Answer from wherever you are.</h2>
             <p>
-              Check a blocked agent from the train. Find its host and space,
-              then open the same live terminal without opening your laptop.
+              An agent asks a question while you are away from your desk. Open
+              Town on your phone, see who is waiting, answer in Chat and let it
+              carry on. The terminal is there when you need it.
             </p>
             <ul>
               <li>
-                <span></span>Touch-safe terminal controls and configurable
-                shortcuts
+                <span></span>Needs you, Chat answers and review marks on a phone
               </li>
               <li>
-                <span></span>Responsive file, diff, pane, and session views
+                <span></span>Minimize agent and terminal windows to chips and
+                bring them back with a tap
               </li>
               <li>
-                <span></span>Install Herdr.World as a PWA on desktop or mobile
+                <span></span>Larger touch targets, touch-safe terminal controls and
+                a PWA install
               </li>
             </ul>
             <a
               class="text-link"
-              href="https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md#mobile-and-pwa"
+              href="./tutorial/#workflow"
             >
-              Explore mobile features <span aria-hidden="true">&rarr;</span>
+              Continue from your phone <span aria-hidden="true">&rarr;</span>
             </a>
           </div>
 
@@ -779,10 +837,10 @@
           >
             <figure class="phone phone-left">
               <div class="phone-speaker"></div>
-              <a href="./assets/herdr-world-mobile-board.png">
+              <a href="./assets/herdr-world-mobile-spaces.png">
                 <img
-                  src="./assets/herdr-world-mobile-board.png"
-                  alt="Board close-up of a note strung to an agent"
+                  src="./assets/herdr-world-mobile-spaces.png"
+                  alt="A live terminal on a phone with touch shortcut controls"
                   width="390"
                   height="844"
                   loading="lazy"
@@ -795,7 +853,7 @@
               <a href="./assets/herdr-world-mobile-town.png">
                 <img
                   src="./assets/herdr-world-mobile-town.png"
-                  alt="Herdr.World Town on mobile"
+                  alt="Town on a phone: the studio reception with a waiting agent and today's expenses, above room cards with busy agents"
                   width="390"
                   height="844"
                   loading="lazy"
@@ -830,40 +888,41 @@
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h3" />
             </svg>
-            <h3>Session intelligence</h3>
+            <h3>Agents that report in</h3>
             <p>
-              Chat with tool-call evidence and checked prompt answers, plus
-              raw transcripts and ATIF export for supported agents.
+              Install the World skill for Claude Code, Codex, Pi or Kimi from
+              Integrations. Agents then ask questions, save results and report
+              their tasks through World.
             </p>
           </article>
           <article class="detail-card reveal reveal-delay">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m5 12 4 4L19 6M4 21h16" />
             </svg>
-            <h3>Review annotations</h3>
+            <h3>Picks up where you left off</h3>
             <p>
-              Attach comments to diff lines, source gutters, or rendered
-              Markdown passages.
+              Questions, answers, results, profiles, chimes and Board survive
+              restarts. Review marks and settings follow you across browsers.
             </p>
           </article>
           <article class="detail-card reveal">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 7h16M7 4v6m10-6v6M6 13h4v4H6zM14 13h4v4h-4z" />
             </svg>
-            <h3>Worktree lifecycle</h3>
+            <h3>Worktrees as a workflow</h3>
             <p>
-              Create, open, update, and remove linked worktrees with optional
-              Paseo hooks.
+              Create, open, update and safely remove linked worktrees, placed
+              where your workspace expects them.
             </p>
           </article>
           <article class="detail-card reveal reveal-delay">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 3a9 9 0 1 0 9 9M12 3v9h9M4 19l4-4" />
             </svg>
-            <h3>Remote-ready</h3>
+            <h3>Every server, one list</h3>
             <p>
-              Use SSH profiles for remote Herdr servers while keeping files and
-              Git operations aligned.
+              Use SSH profiles for remote Herdr servers. All servers and
+              cross-server pane search find a session without opening each host.
             </p>
           </article>
         </div>
@@ -896,7 +955,7 @@
         <div class="footer-links">
           <div>
             <strong>Product</strong>
-            <a href="#product">Features</a>
+            <a href="#features">Features</a>
             <a href="#mobile">Mobile &amp; PWA</a>
             <a href="https://github.com/IvoryHeart/herdr-world/releases/latest"
               >Releases</a
@@ -932,7 +991,7 @@
       </div>
       <div class="shell footer-bottom">
         <span>&copy; <span data-year></span> Herdr.World contributors.</span>
-        <span>Real terminals. Clear context. Any screen.</span>
+        <span>Every agent. One town. Any screen.</span>
       </div>
     </footer>
 

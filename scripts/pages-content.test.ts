@@ -10,6 +10,7 @@ import {
   verifySiteReferences,
   versionSiteAssets,
 } from "./pages-content";
+import { siteShots } from "./site-screenshots";
 
 const temporaryDirectories: string[] = [];
 
@@ -236,17 +237,24 @@ describe("Pages references", () => {
     );
     const screenshotPattern = /herdr-world-(?:desktop|mobile)-[a-z-]+\.png/g;
     const screenshots = [...new Set(readme.match(screenshotPattern))].sort();
-    expect(screenshots).toHaveLength(10);
+    expect(screenshots).toHaveLength(11);
     expect([...new Set(build.match(screenshotPattern))].sort()).toEqual(
       screenshots,
     );
-    // The site's phone row has three slots; every desktop view still appears.
+    // Every image the site capture draws is a shared, published screenshot.
+    for (const shot of siteShots) expect(screenshots).toContain(shot.file);
+    // The site's phone row has three slots. Every desktop view appears except
+    // Chat, which still shows the 0.2.7 Town behind its window: the site
+    // shows Chat with the phone capture (docs/SCREENSHOTS.md).
     const siteScreenshots = [...new Set(site.match(screenshotPattern))].sort();
     for (const image of siteScreenshots) expect(screenshots).toContain(image);
     expect(siteScreenshots).toEqual(
-      expect.arrayContaining(
-        screenshots.filter((s) => s.includes("-desktop-")),
-      ),
+      expect.arrayContaining([
+        ...screenshots.filter(
+          (s) => s.includes("-desktop-") && !s.endsWith("-chat.png"),
+        ),
+        "herdr-world-mobile-chat.png",
+      ]),
     );
     for (const source of [site, tutorial, build]) {
       expect(source).not.toMatch(/herdr-studio-(?:desktop|mobile)-/);

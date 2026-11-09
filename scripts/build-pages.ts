@@ -14,6 +14,10 @@ const assetDirectory = join(outputDirectory, "assets");
 
 const assets = [
   ["docs/images/herdr-world-desktop-town.png", "herdr-world-desktop-town.png"],
+  [
+    "docs/images/herdr-world-desktop-town-steps.png",
+    "herdr-world-desktop-town-steps.png",
+  ],
   ["docs/images/herdr-world-mobile-town.png", "herdr-world-mobile-town.png"],
   [
     "docs/images/herdr-world-desktop-board.png",
