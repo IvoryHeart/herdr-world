@@ -61,8 +61,9 @@ export function ReceptionEntry({
       }${grouped ? ", selected" : ""}`}
       title={agent.taskSummary ? `${title}: ${agent.taskSummary}` : title}
       onClick={(event) =>
-        // Shift+click toggles the agent in the group selection (#820).
-        event.shiftKey && group
+        // Shift+click, or a tap while a selection is open, toggles the agent
+        // in the group selection (#820), even when it has a question.
+        group && (event.shiftKey || group.tapToggles())
           ? group.toggle([agent.key])
           : asking
             ? onActivate(agent.key)

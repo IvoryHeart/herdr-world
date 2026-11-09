@@ -30,6 +30,8 @@ import {
   townGroupState,
   townGroupToggle,
   townMessageLeftOut,
+  townOrderReport,
+  type TownGroupResult,
   type TownGroupMember,
   type TownReviewOutcome,
   type TownSendOutcome,
@@ -37,9 +39,6 @@ import {
 import { townReviewAll, townSendAll, townSendOne } from "./townGroupSend";
 
 const NONE: ReadonlySet<string> = new Set();
-
-/** One agent's line in an order's results, kept while the selection lasts. */
-export type TownGroupResult<T> = { key: string; label: string; outcome: T };
 
 export type TownGroup = ReturnType<typeof useTownGroup>;
 
@@ -56,6 +55,8 @@ export const useTownGroupContext = () => useContext(TownGroupContext);
 export type TownGroupKeys = {
   keys: ReadonlySet<string>;
   toggle(keys: readonly string[]): void;
+  /** Whether a tap now toggles rather than opens. */
+  tapToggles(): boolean;
 };
 
 const TownGroupKeysContext = createContext<TownGroupKeys | null>(null);
@@ -128,8 +129,32 @@ export function useTownGroup({
       setKeys((current) => townGroupToggle(current, add)),
     [],
   );
-  const selection = useMemo(() => ({ keys, toggle }), [keys, toggle]);
+  // A tap toggles only for touch (or the phone layout): a mouse click still
+  // opens the agent, and Shift+click is the desktop toggle.
+  const pointer = useRef("mouse");
+  useEffect(() => {
+    const down = (event: PointerEvent) => {
+      pointer.current = event.pointerType;
+    };
+    window.addEventListener("pointerdown", down, true);
+    return () => window.removeEventListener("pointerdown", down, true);
+  }, []);
+  const tapToggles = useCallback(
+    () => keys.size > 0 && (pointer.current !== "mouse" || isMobileLayout()),
+    [keys],
+  );
+  const selection = useMemo(
+    () => ({ keys, toggle, tapToggles }),
+    [keys, toggle, tapToggles],
+  );
+  // Each order's results belong to that order: a newer order of the same
+  // kind (or Clear) retires the older one, whose late outcomes are dropped
+  // rather than written over the newer order's rows.
+  const reviewOrder = useRef({ id: 0 });
+  const sendOrder = useRef({ id: 0 });
   const clear = useCallback(() => {
+    reviewOrder.current.id++;
+    sendOrder.current.id++;
     setKeys(NONE);
     setReview(null);
     setSent(null);
@@ -147,36 +172,12 @@ export function useTownGroup({
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
   }, [open, clear]);
-  // A tap toggles only for touch (or the phone layout): a mouse click still
-  // opens the agent, and Shift+click is the desktop toggle.
-  const pointer = useRef("mouse");
-  useEffect(() => {
-    const down = (event: PointerEvent) => {
-      pointer.current = event.pointerType;
-    };
-    window.addEventListener("pointerdown", down, true);
-    return () => window.removeEventListener("pointerdown", down, true);
-  }, []);
   const framer = useRef<((keys: readonly string[]) => void) | null>(null);
   const leafOf = (agent: OfficeAgent | undefined) =>
     agent ? townLeaf(world, agent.nodeId) : null;
   const orders = townGroupOrders(members);
   const latest = useRef({ agents, world, orders });
   latest.current = { agents, world, orders };
-  const report =
-    <T,>(
-      set: (
-        update: (
-          rows: readonly TownGroupResult<T>[] | null,
-        ) => readonly TownGroupResult<T>[] | null,
-      ) => void,
-    ) =>
-    (key: string, outcome: T) =>
-      set(
-        (rows) =>
-          rows?.map((row) => (row.key === key ? { ...row, outcome } : row)) ??
-          rows,
-      );
   return {
     keys,
     selection,
@@ -200,9 +201,7 @@ export function useTownGroup({
     prune: (onMap: (key: string) => boolean) =>
       setKeys((current) => townGroupPrune(current, onMap)),
     clear,
-    /** Whether a tap now toggles rather than opens. */
-    tapToggles: () =>
-      keys.size > 0 && (pointer.current !== "mouse" || isMobileLayout()),
+    tapToggles,
     /** The agents at a table, for its card's Select and a tap on it. */
     deskAgents: (deskKey: string) =>
       office.paneRoster.flatMap(({ device }) =>
@@ -211,6 +210,10 @@ export function useTownGroup({
     show: () => framer.current?.([...keys]),
     runReview: () => {
       const targets = latest.current.orders.review;
+      const update = townOrderReport<TownReviewOutcome>(
+        reviewOrder.current,
+        setReview,
+      );
       setReview(
         targets.map(({ key, label }) => ({ key, label, outcome: "marking" })),
       );
@@ -220,7 +223,7 @@ export function useTownGroup({
           const leaf = leafOf(latest.current.agents.get(key));
           return leaf ? mark(leaf) : false;
         },
-        report<TownReviewOutcome>(setReview),
+        update,
       );
     },
     send: async (text: string) => {
@@ -228,6 +231,10 @@ export function useTownGroup({
       if (!body) throw new Error("Write a message first.");
       const targets = latest.current.orders.message;
       if (!targets.length) throw new Error("No selected agent can take it.");
+      const update = townOrderReport<TownSendOutcome>(
+        sendOrder.current,
+        setSent,
+      );
       setSent(
         targets.map(({ key, label }) => ({
           key,
@@ -246,7 +253,7 @@ export function useTownGroup({
             body,
           );
         },
-        report<TownSendOutcome>(setSent),
+        update,
       );
     },
   };

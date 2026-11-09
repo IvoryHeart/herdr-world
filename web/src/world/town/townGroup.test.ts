@@ -12,6 +12,7 @@ import {
   townGroupToggle,
   townMessageLeftOut,
   townOrderCount,
+  townOrderReport,
   townSendOutcomeText,
   type TownGroupMember,
   type TownSendOutcome,
@@ -411,4 +412,38 @@ test("zoomed out, each room card counts its chosen agents", () => {
     ],
   );
   expect(townGroupRooms(undefined, agents).size).toBe(0);
+});
+
+test("an overlapping order's late outcome never overwrites the newer order's row", () => {
+  type Rows =
+    | readonly { key: string; label: string; outcome: TownSendOutcome }[]
+    | null;
+  let rows: Rows = null;
+  const set = (update: (rows: Rows) => Rows) => {
+    rows = update(rows);
+  };
+  const order = { id: 0 };
+  const first = townOrderReport<TownSendOutcome>(order, set);
+  rows = [{ key: "a", label: "A", outcome: { status: "sending" } }];
+  const second = townOrderReport<TownSendOutcome>(order, set);
+  rows = [{ key: "a", label: "A", outcome: { status: "sending" } }];
+  second("a", {
+    status: "refused",
+    reason: "it has a question; nothing was sent",
+  });
+  first("a", { status: "sent" });
+  expect(rows).toEqual([
+    {
+      key: "a",
+      label: "A",
+      outcome: {
+        status: "refused",
+        reason: "it has a question; nothing was sent",
+      },
+    },
+  ]);
+  // Clear retires the running order too.
+  order.id++;
+  second("a", { status: "sent" });
+  expect(rows?.[0]?.outcome.status).toBe("refused");
 });

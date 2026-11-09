@@ -277,3 +277,31 @@ export function townGroupRooms(
   }
   return rooms;
 }
+
+/** One agent's line in an order's results, kept while the selection lasts. */
+export type TownGroupResult<T> = { key: string; label: string; outcome: T };
+
+/**
+ * Start an order of one kind and return its per-agent reporter. The order
+ * owns its rows: a newer order of the same kind (or Clear, which bumps
+ * `order.id`) retires it, and its late outcomes are dropped rather than
+ * written over the newer order's rows for the same agent.
+ */
+export function townOrderReport<T>(
+  order: { id: number },
+  set: (
+    update: (
+      rows: readonly TownGroupResult<T>[] | null,
+    ) => readonly TownGroupResult<T>[] | null,
+  ) => void,
+) {
+  const id = ++order.id;
+  return (key: string, outcome: T) => {
+    if (order.id !== id) return;
+    set(
+      (rows) =>
+        rows?.map((row) => (row.key === key ? { ...row, outcome } : row)) ??
+        rows,
+    );
+  };
+}
