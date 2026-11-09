@@ -586,6 +586,10 @@ async function run() {
       bridge.disconnect();
     }
   } else {
+    check(
+      bridge.hello?.capabilities.world_observation_v1 === true,
+      "Acceptance transport omitted production observation negotiation",
+    );
     const runtime = new WorldRuntimeStore(bridge);
     // This fixture owns one mounted surface and its observation store.
     const releaseView = runtime.retainView(view === "board" ? "board" : "town");
@@ -619,6 +623,11 @@ async function run() {
         performance.mark("acceptance-projection-start", {
           detail: { phase: stage },
         });
+      const retained = new Map(
+        runtime
+          .get()
+          .connections.map((host) => [host.connectionId, host.snapshot]),
+      );
       await runtime.refresh();
       check(
         runtime.get().status === "ready",
@@ -634,6 +643,22 @@ async function run() {
         "Actual Bridge lost catalogue roots",
       );
       if (stage === "refresh") {
+        check(
+          runtime.get().serviceIncarnation ===
+            bridge.hello?.service_incarnation &&
+            !!runtime.get().serviceIncarnation,
+          "Refresh lost production observation incarnation",
+        );
+        check(
+          runtime
+            .get()
+            .connections.every(
+              (host) =>
+                host.connectionId === "alpha" ||
+                host.snapshot === retained.get(host.connectionId),
+            ),
+          "Refresh decoded unchanged peer topology again",
+        );
         check(
           runtime.get().connections.filter((connection) => connection.stale)
             .length === (maximumScale ? 2 : 3),
