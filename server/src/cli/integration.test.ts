@@ -190,7 +190,14 @@ test("malformed, wrong-ID and future markers; preserve unrelated files on remova
     writeFileSync(file, marker);
     await runCli(["integration", "status", "claude"], cli.context);
     expect(cli.output.at(-1)).toContain(": outdated");
+    for (const action of ["install", "uninstall"]) {
+      expect(await runCli(["integration", action, "claude"], cli.context)).toBe(
+        1,
+      );
+      expect(readFileSync(file, "utf8")).toBe(marker);
+    }
   }
+  unlinkSync(file);
   await runCli(["integration", "install", "claude"], cli.context);
   writeFileSync(
     file,
@@ -255,7 +262,7 @@ test("refuses symlinked managed folders and files without changing their targets
 });
 
 test.skipIf(process.getuid?.() === 0)(
-  "install and uninstall replace an unreadable skill file without reading it",
+  "install and uninstall refuse an unreadable skill whose ownership cannot be checked",
   async () => {
     cli = createTestCli();
     mkdirSync(join(cli.home, ".claude/skills/herdr-world"), {
@@ -266,17 +273,16 @@ test.skipIf(process.getuid?.() === 0)(
     chmodSync(file, 0o000);
     expect(
       await runCli(["integration", "install", "claude"], cli.context),
-    ).toBe(0);
-    expect(readFileSync(file, "utf8")).toContain("HERDR_WORLD_INTEGRATION_ID=");
-    chmodSync(file, 0o000);
+    ).toBe(1);
     expect(
       await runCli(["integration", "uninstall", "claude"], cli.context),
-    ).toBe(0);
-    expect(existsSync(file)).toBe(false);
+    ).toBe(1);
+    chmodSync(file, 0o600);
+    expect(readFileSync(file, "utf8")).toBe("unreadable");
   },
 );
 
-test("strict command usage; unsupported and absent removal write nothing", async () => {
+test("strict command usage; unsupported removal writes nothing; absent removal persists intent", async () => {
   cli = createTestCli();
   for (const args of [
     [],
@@ -286,9 +292,11 @@ test("strict command usage; unsupported and absent removal write nothing", async
     ["status", "codex", "extra"],
     ["status", "--unknown"],
     ["enable", "claude"],
+    ["sync", "claude"],
   ]) {
     expect(await runCli(["integration", ...args], cli.context)).toBe(2);
   }
+  expect(readdirSync(cli.home)).toEqual([]);
   expect(await runCli(["integration", "--help"], cli.context)).toBe(0);
   for (const name of ["omp", "letta", "mastracode"]) {
     expect(await runCli(["integration", "uninstall", name], cli.context)).toBe(
@@ -298,7 +306,11 @@ test("strict command usage; unsupported and absent removal write nothing", async
   expect(
     await runCli(["integration", "uninstall", "claude"], cli.context),
   ).toBe(0);
-  expect(readdirSync(cli.home)).toEqual([]);
+  expect(
+    existsSync(
+      join(cli.home, ".config/herdr-world/integrations/claude.disabled"),
+    ),
+  ).toBe(true);
 });
 
 test("skill guide changes require a version bump", () => {

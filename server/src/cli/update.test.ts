@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { EXIT_FAILURE, EXIT_OK } from "./command";
 import { createUpdateCommand, rollbackCommand } from "./update";
@@ -38,6 +44,7 @@ function fakeProcess(version: string, installCode = 0) {
 describe("herdr-world update", () => {
   test("--check compares against the latest manifest", async () => {
     cli = createTestCli();
+    mkdirSync(join(cli.home, ".claude"));
     const fake = fakeProcess("1.3.0");
     const code = await createUpdateCommand(fake).run(
       ["--check", "--json"],
@@ -53,6 +60,7 @@ describe("herdr-world update", () => {
     expect(fake.calls[0]).toContain(
       "https://github.com/IvoryHeart/herdr-world/releases/latest/download/herdr-world-linux-x64.update.json",
     );
+    expect(existsSync(join(cli.home, ".claude/settings.json"))).toBe(false);
   });
 
   test("uses a mirror from the service config", async () => {
@@ -86,6 +94,28 @@ describe("herdr-world update", () => {
       "herdr",
       "upgrade",
     ]);
+    expect(fake.calls[3]).toEqual([
+      cli.context.runtime.execPath,
+      "integration",
+      "sync",
+    ]);
+  });
+
+  test("an already current update discovers integrations and honors removal and opt-out", async () => {
+    cli = createTestCli();
+    mkdirSync(join(cli.home, ".codex"));
+    const file = join(cli.home, ".agents/skills/herdr-world/SKILL.md");
+    const command = createUpdateCommand(fakeProcess("1.2.3"));
+    cli.context.runtime.env.HERDR_WORLD_SKIP_INTEGRATIONS = "1";
+    expect(await command.run([], cli.context)).toBe(0);
+    expect(existsSync(file)).toBe(false);
+    delete cli.context.runtime.env.HERDR_WORLD_SKIP_INTEGRATIONS;
+    expect(await command.run([], cli.context)).toBe(0);
+    expect(existsSync(file)).toBe(true);
+    const { uninstallWorldIntegration } = await import("./integration");
+    uninstallWorldIntegration("codex", cli.context.runtime);
+    expect(await command.run([], cli.context)).toBe(0);
+    expect(existsSync(file)).toBe(false);
   });
 
   test("a Herdr upgrade problem leaves the World update in place", async () => {

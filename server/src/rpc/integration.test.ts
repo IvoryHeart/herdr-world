@@ -108,6 +108,13 @@ test("Settings list, install and uninstall run the CLI's installer and match its
     "codex: not installed (~/.agents/skills/herdr-world/SKILL.md)",
   );
 
+  // Settings removal carries the same durable preference as CLI removal.
+  expect(await runCli(["integration", "sync"], cli.context)).toBe(0);
+  expect(existsSync(join(cli.home, ".agents/skills/herdr-world"))).toBe(false);
+  await call("world.integration.install", { harness: "codex" });
+  expect(await runCli(["integration", "sync"], cli.context)).toBe(0);
+  expect(existsSync(join(cli.home, ".agents/skills/herdr-world"))).toBe(true);
+
   await expect(
     call("world.integration.install", { harness: "omp" }),
   ).rejects.toThrow("omp: unsupported");

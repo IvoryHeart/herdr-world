@@ -280,6 +280,17 @@ Put `HERDR_WORLD_SKIP_HERDR=1` before `sh` to leave Herdr and its integrations/p
 alone while still restarting World. To undo the World replacement, run
 `herdr-world rollback`; this leaves Herdr and integrations as they are.
 
+Every standalone installer run and `herdr-world update` also discovers supported
+harness configuration folders and installs or refreshes World's skill for each
+one, including Claude's chained limits tap. Output names each harness and its
+removal command. Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` before `sh` below (or
+before `herdr-world update`) to keep World's integrations manual. This is
+independent of `HERDR_WORLD_SKIP_HERDR`: neither option implies the other.
+`herdr-world integration uninstall <harness>` keeps an integration removed on
+later installs and updates, until you explicitly install it again. User-owned
+skills are refused and Claude's previous status line is chained and restored on
+uninstall. See [integration paths, shared skills and isolated checks](harness-integrations.md).
+
 ```bash
 curl -fsSL \
   https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh \
