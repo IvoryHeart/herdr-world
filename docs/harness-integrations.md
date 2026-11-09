@@ -29,6 +29,21 @@ Codex, Pi and Kimi share one file whose marker ID is `shared`: status for all
 three agrees even if only one harness is configured. Uninstalling any one
 names the other two that also lose the file.
 
+## Herdr integration upgrades
+
+Rerunning the standalone World installer over an existing installation, or running
+`herdr-world update`, upgrades Herdr and refreshes its integrations for detected
+Codex, Claude Code and Pi harnesses, plus the installed World plugin. Output names
+what changed, what is current and any failures. Put `HERDR_WORLD_SKIP_HERDR=1`
+before `sh` in the installer command to skip these changes; World still restarts
+its matching running service.
+
+The World skill above is installed separately: rerun
+`herdr-world integration install <harness>` to refresh it, or
+`herdr-world integration uninstall <harness>` to remove it.
+`herdr-world rollback` restores only World, leaving Herdr and its
+integrations in place.
+
 ## Paths
 
 Every path below ends in `/herdr-world/SKILL.md`. Roots follow
@@ -125,5 +140,6 @@ World's rows. SSH connections show no World rows yet. The Claude row's
 [limits tap](#claude-limits-tap), as the CLI does, and the row shows Outdated
 when the skill is current but the tap is not.
 
-This adds no SSH installation or automatic upgrade step. [The approved design](../openspec/changes/world-harness-integration/design.md)
-tracks those follow-ups.
+World skill installation and updates remain manual and local.
+[The approved design](../openspec/changes/world-harness-integration/design.md)
+tracks SSH installation and automatic skill updates.

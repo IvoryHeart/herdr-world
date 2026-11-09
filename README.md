@@ -98,11 +98,11 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
 
 ## Quick start
 
-1. Herdr World runs on [Herdr](https://herdr.dev). Homebrew reuses existing Herdr
-   and installs it on first World launch only if missing. The published 0.2.7
-   standalone installer installs or upgrades Herdr to the verified release; set
-   `HERDR_WORLD_SKIP_HERDR=1` to leave yours untouched. With npm or a Windows
-   archive, run `herdr-world herdr upgrade --install` once if needed.
+1. Herdr World runs on [Herdr](https://herdr.dev). A fresh standalone install
+   reuses existing Herdr and installs it only if missing; Homebrew does the same
+   on first World launch. Set `HERDR_WORLD_SKIP_HERDR=1` to skip this setup.
+   With npm or a Windows archive, run `herdr-world herdr upgrade --install`
+   once if needed.
    `herdr-world herdr setup` configures future startup as a user service and starts
    Herdr if down; an already-running server keeps running without a restart. If
    you open World before Herdr is installed or running, Town offers **Set up
@@ -121,12 +121,13 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
    npm requires Node.js 22.14.0 or newer and downloads only the binary for the
    current platform. On Windows, use npm or download the matching x64 or ARM64
    archive from the [latest release](https://github.com/IvoryHeart/herdr-world/releases/latest).
-   Rerunning the installer over an existing World installation upgrades Herdr,
-   refreshes its harness integrations and World plugin, then restarts the running
-   managed World service when it uses that executable. The output reports each
-   step and explains when a restart was skipped. `HERDR_WORLD_SKIP_HERDR=1`
-   skips the Herdr steps while still restarting World. Fresh installs keep an
-   existing Herdr and install it only if missing.
+   Rerun the installer to upgrade: it upgrades Herdr, refreshes its harness
+   integrations and installed World plugin, then restarts the running World
+   service using that executable (systemd on Linux, launchd on macOS). Output
+   reports updated or current components and whether World restarted.
+   Put `HERDR_WORLD_SKIP_HERDR=1` before `sh` to skip Herdr and integration/plugin
+   changes while still restarting World. `herdr-world rollback` restores the
+   previous World binary; it leaves Herdr and integrations as they are.
 3. On Linux/macOS standalone installs, add `~/.local/bin` to `PATH`. Run
    `herdr-world` (or `herdr-world.exe` from an extracted Windows archive) and open
    the printed URL.

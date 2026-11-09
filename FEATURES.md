@@ -632,12 +632,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   upgrades Herdr and refreshes detected harness integrations and the installed
   World plugin through the same path as `herdr-world update`, then restarts the
   matching running systemd or launchd World service. Output reports the Herdr
-  steps and whether the service restarted or why it did not.
+  and integration results (updated or current) and whether the service restarted
+  or why it did not.
   `HERDR_WORLD_SKIP_HERDR=1` skips Herdr and integration/plugin changes while
-  keeping the World restart. A failed Herdr step reports a retry and still
-  restarts World; a failed service restart reports failure without undoing the
-  installed binary. Pinned older releases without finalization support print
-  manual restart and upgrade guidance.
+  keeping the World restart. `herdr-world rollback` restores the previous World
+  binary, leaving Herdr and integrations as they are.
 - **Per-host Herdr identity.** **Manage connections → Check version again**
   reads the selected card's running server version and protocol. Compatibility
   expires after one minute; failed or disconnected checks remain unknown.
