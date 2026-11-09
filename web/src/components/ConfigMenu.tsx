@@ -39,6 +39,7 @@ import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
 import {
   herdrUpgradeMenuEntry,
   herdrUpgradeOffered,
+  OperationalContext,
   shallowEqual,
   store,
   useStoreSelector,
@@ -805,17 +806,23 @@ export function ConfigMenu({
           includes loading and all Configuration detail dialogs. */}
       {configurationTab
         ? createPortal(
-            <Suspense
-              fallback={
-                <ConfigurationLoadingDialog onClose={closeConfiguration} />
-              }
-            >
-              <ConfigurationDialog
-                {...configuration}
-                initialTab={configurationTab}
-                onClose={closeConfiguration}
-              />
-            </Suspense>,
+            // Configuration names the active connection, so it uses that
+            // connection's current lease. A World view's context is its
+            // selection's host, or none at all, which left Integrations and
+            // Connection settings on a client that was never current.
+            <OperationalContext.Provider value={null}>
+              <Suspense
+                fallback={
+                  <ConfigurationLoadingDialog onClose={closeConfiguration} />
+                }
+              >
+                <ConfigurationDialog
+                  {...configuration}
+                  initialTab={configurationTab}
+                  onClose={closeConfiguration}
+                />
+              </Suspense>
+            </OperationalContext.Provider>,
             document.body,
           )
         : null}

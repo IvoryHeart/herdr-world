@@ -195,3 +195,45 @@
     justify-content: flex-end;
   }
 }
+
+/* World's own skill, nested under the harness's Herdr row. */
+.agent-integrations-world {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-soft);
+}
+
+.agent-integrations-world-copy {
+  display: flex;
+  flex: 1 1 180px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.agent-integrations-world-name {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.agent-integrations-world-path {
+  color: var(--muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.agent-integrations-world-shared {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.agent-integrations-world-only {
+  margin-top: 10px;
+}
