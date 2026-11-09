@@ -120,7 +120,8 @@ The [real resource-child regression](../web/src/world/WorldInspectorResourceResu
 covers disconnect, delayed worktree readmission and replacement; a
 [stale-worktree Chat regression](../web/src/world/WorldInspectorChatWorktree.test.ts)
 checks that a worktree being re-read holds only Files, Changes and Commits,
-never Chat; the
+never Chat ([`?worktreeChanged` preview switch](../web/src/agentWorktreeTrial.ts));
+the
 [World browser regression](../web/src/world/WorldTerminalHandoff.test.ts) covers
 window, renderer and Message-draft retention. See the
 [visual gallery](reviews/mobile-resume.md) for synthetic viewport evidence.

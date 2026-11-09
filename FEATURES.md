@@ -1338,7 +1338,9 @@ until refreshed. When the agent's binding changes while it works, Files, Changes
 and Commits keep their last view, marked **Worktree changed · Showing last
 observation**, and stay non-actionable until the worktree is read again
 (opening one of them reads it). Chat and Terminal are never held by the
-worktree: Chat's message box and controls keep working. Files never silently
+worktree: Chat's message box and controls keep working. For testing only,
+`?worktreeChanged` makes the first agent window opened see its worktree
+evidence as stale; opening Files reads it again. Files never silently
 falls back to the workspace checkout.
 Detached HEAD is supported. An outside-Git or inaccessible cwd is shown as
 unconfirmed evidence, without scanning neighboring repositories.
