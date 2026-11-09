@@ -221,6 +221,23 @@ case ":${PATH:-}:" in
   ;;
 esac
 
+# A replacement finishes through the newly installed release's update path.
+# Probe support because this script can also install older, pinned releases.
+if [ -n "$backup" ] || [ -n "$legacy_launcher_target" ]; then
+  update_help="$("$target" update --help 2>/dev/null)" || update_help=""
+  case "$update_help" in
+  *--finish-install*)
+    if ! HERDR_WORLD_SKIP_HERDR="$skip_herdr" "$target" update --finish-install; then
+      fail "World is installed, but finishing the upgrade failed; run \`$target update --finish-install\` to retry (preserve HERDR_WORLD_SKIP_HERDR=1 if set)."
+    fi
+    exit 0
+    ;;
+  *)
+    printf 'This World release cannot finish installer upgrades automatically. Restart any running herdr-world process, then run `%s herdr upgrade` to refresh Herdr and its integrations.\n' "$target"
+    ;;
+  esac
+fi
+
 # Generated from the shared Unix bootstrap and verified runtime metadata.
 # Regenerate with: bun scripts/herdr-bootstrap.ts
 # BEGIN generated Herdr compatibility bootstrap

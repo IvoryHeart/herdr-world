@@ -1,10 +1,6 @@
-import { lstatSync, readFileSync, renameSync } from "node:fs";
+import { lstatSync, renameSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { worldEnv } from "../config/environment";
-import {
-  escapeSystemdExecPath,
-  xmlEscape,
-} from "../config/service-definitions";
 import {
   updateInstallationBlockReason,
   compareVersion,
@@ -25,16 +21,11 @@ import {
   isStandaloneBinary,
   parseCommandArgs,
   printJson,
+  UsageError,
   wantsHelp,
 } from "./command";
-import {
-  readServiceSetup,
-  restartRunningService,
-  serviceStatus,
-} from "./service-context";
-
-// Covers a verified download, a live handoff and a plugin rebuild.
-const HERDR_UPGRADE_TIMEOUT_MS = 10 * 60_000;
+import { readServiceSetup } from "./service-context";
+import { finishUpdate, restartServiceUsing } from "./update-finish";
 
 export interface UpdateDependencies {
   runProcess?: RunProcessWithCodeTimeout;
@@ -45,10 +36,12 @@ function updateHelp(): string {
 
 Usage:
   herdr-world update [--check] [--json]
+  herdr-world update --finish-install
 
 Options:
   --check   only report whether a newer release exists
   --json    print machine-readable output (with --check)
+  --finish-install  finish an installer replacement without downloading World
 
 The release manifest, archive checksum, package VERSION and binary version are
 verified before the executable is replaced in place. The previous executable is
@@ -56,6 +49,9 @@ kept as herdr-world.previous; \`herdr-world rollback\` restores it. The new
 release then runs \`herdr-world herdr upgrade\` to bring Herdr, the harness
 integrations and the Herdr World plugin up to the versions it declares. A
 running managed service that uses this executable is restarted afterwards.
+
+The installer uses --finish-install after replacing an existing executable;
+HERDR_WORLD_SKIP_HERDR=1 skips Herdr and its integrations in that mode.
 
 HERDR_WORLD_UPDATE_BASE_URL selects a mirror (from the shell, else the service
 config). To install a specific version, rerun the installer with
@@ -83,37 +79,6 @@ function serviceEnv(context: CliContext): Record<string, string> {
   }
 }
 
-/** Restart the managed service only when its definition runs this executable. */
-function restartServiceUsing(context: CliContext, executable: string): number {
-  let status: ReturnType<typeof serviceStatus>;
-  try {
-    status = serviceStatus(context);
-  } catch {
-    return EXIT_OK;
-  }
-  if (!status.installed || !status.active) {
-    context.log(
-      "Restart any running herdr-world process to use the new version.",
-    );
-    return EXIT_OK;
-  }
-  const definition = readFileSync(status.definition, "utf8");
-  const forms = [
-    executable,
-    escapeSystemdExecPath(executable),
-    xmlEscape(executable),
-  ];
-  if (!forms.some((form) => definition.includes(form))) {
-    context.log(
-      `The managed service runs a different executable (${status.definition}); it was not restarted.`,
-    );
-    return EXIT_OK;
-  }
-  const code = restartRunningService(context);
-  if (code === 0) context.log("Restarted the service.");
-  return code ?? EXIT_OK;
-}
-
 export function createUpdateCommand(
   dependencies: UpdateDependencies = {},
 ): CliCommand {
@@ -131,8 +96,20 @@ export function createUpdateCommand(
       const { values } = parseCommandArgs(args, {
         check: { type: "boolean" },
         json: { type: "boolean" },
+        "finish-install": { type: "boolean" },
       });
       const { runtime } = context;
+      if (values["finish-install"]) {
+        if (values.check || values.json)
+          throw new UsageError(
+            "--finish-install cannot be combined with --check or --json",
+          );
+        return finishUpdate(
+          context,
+          runProcess,
+          worldEnv("SKIP_HERDR", runtime.env) === "1",
+        );
+      }
       const target = resolveUpdateTarget(runtime.platform, runtime.arch);
       if (!target) {
         context.error(
@@ -215,22 +192,7 @@ export function createUpdateCommand(
         `Installed herdr-world ${manifest.version} at ${runtime.execPath}.`,
       );
       context.log(`Previous executable: ${runtime.execPath}.previous`);
-      // The new release declares its verified Herdr; let it bring Herdr, the
-      // harness integrations and the plugin up to date as a separate step.
-      // A Herdr problem leaves the World update in place.
-      context.log("Upgrading Herdr for this release...");
-      const herdr = await runProcess(
-        [runtime.execPath, "herdr", "upgrade"],
-        HERDR_UPGRADE_TIMEOUT_MS,
-      );
-      for (const line of `${herdr.stdout}\n${herdr.stderr}`.split("\n"))
-        if (line.trim()) context.log(line.trimEnd());
-      if (herdr.code !== 0) {
-        context.log(
-          "Herdr was not fully upgraded; run `herdr-world herdr upgrade` to retry.",
-        );
-      }
-      return restartServiceUsing(context, runtime.execPath);
+      return finishUpdate(context, runProcess);
     },
   };
 }

@@ -121,6 +121,12 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
    npm requires Node.js 22.14.0 or newer and downloads only the binary for the
    current platform. On Windows, use npm or download the matching x64 or ARM64
    archive from the [latest release](https://github.com/IvoryHeart/herdr-world/releases/latest).
+   Rerunning the installer over an existing World installation upgrades Herdr,
+   refreshes its harness integrations and World plugin, then restarts the running
+   managed World service when it uses that executable. The output reports each
+   step and explains when a restart was skipped. `HERDR_WORLD_SKIP_HERDR=1`
+   skips the Herdr steps while still restarting World. Fresh installs keep an
+   existing Herdr and install it only if missing.
 3. On Linux/macOS standalone installs, add `~/.local/bin` to `PATH`. Run
    `herdr-world` (or `herdr-world.exe` from an extracted Windows archive) and open
    the printed URL.

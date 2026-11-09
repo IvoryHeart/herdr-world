@@ -624,10 +624,20 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     another text field; the browser's own find stays closed. Change the keys
     under **Search the current view** in Settings → Shortcuts.
   See the [Town exercise](./docs/TUTORIAL.md#town).
-- **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
+- **Reuse existing Herdr on first install.** A fresh standalone install and the Homebrew launcher keep
   the runtime's existing version and owner. Only a missing Herdr is installed;
   Homebrew does this on first normal local World launch, without a forced Herdr
   formula or Intel source build. Explicit runtime upgrades remain available.
+- **Finish installer upgrades.** Replacing an existing standalone World executable
+  upgrades Herdr and refreshes detected harness integrations and the installed
+  World plugin through the same path as `herdr-world update`, then restarts the
+  matching running systemd or launchd World service. Output reports the Herdr
+  steps and whether the service restarted or why it did not.
+  `HERDR_WORLD_SKIP_HERDR=1` skips Herdr and integration/plugin changes while
+  keeping the World restart. A failed Herdr step reports a retry and still
+  restarts World; a failed service restart reports failure without undoing the
+  installed binary. Pinned older releases without finalization support print
+  manual restart and upgrade guidance.
 - **Per-host Herdr identity.** **Manage connections → Check version again**
   reads the selected card's running server version and protocol. Compatibility
   expires after one minute; failed or disconnected checks remain unknown.
@@ -1945,7 +1955,7 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 - Manage a user service from the CLI; check releases and run checksum-verified
   one-click standalone updates under a supported supervisor. Probe `/health` or
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
-- Keep Herdr on the version this World release verified: installs and updates
+- Keep Herdr on the version this World release verified: installer replacements and updates
   bring Herdr, the Codex/Claude/Pi harness integrations and the Herdr World plugin up to
   date, and **Menu → Runtime → Upgrade Herdr** (or **Update Herdr integrations**)
   appears when something is behind. A running server keeps its panes through a

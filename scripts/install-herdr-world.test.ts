@@ -58,6 +58,14 @@ function createInstallerFixture(checksumName?: string, version = "9.8.7") {
     binary,
     `#!/bin/sh
 [ "\${1:-}" = "--version" ] && { echo "${product} ${version}"; exit 0; }
+if [ "$*" = "update --help" ]; then
+  if [ "${version}" = 0.2.7 ]; then echo 'update [--check]'; else echo 'update --finish-install'; fi
+  exit 0
+fi
+if [ "$*" = "update --finish-install" ]; then
+  echo "$* skip=\${HERDR_WORLD_SKIP_HERDR:-}" >> "$HERDR_STEP_LOG"
+  exit "\${FINISH_STEP_CODE:-0}"
+fi
 if [ "\${1:-}" = herdr ] && [ -n "\${HERDR_CALL_LOG:-}" ]; then echo "$*" >> "$HERDR_CALL_LOG"; fi
 if [ "$*" = "herdr --help" ]; then
   if [ "${version}" = 0.2.7 ]; then echo 'herdr upgrade --install'; else echo 'herdr upgrade --install --only-if-missing'; fi
@@ -219,6 +227,59 @@ test("standalone compatibility code stays identical to the canonical verified bo
 });
 
 describe("release installer", () => {
+  test.each(["", "1"])(
+    "an existing World installation finishes through the new binary (skip Herdr=%s)",
+    (skip) => {
+      const fixture = createInstallerFixture(undefined, "0.3.0-rc.2");
+      mkdirSync(fixture.installDir, { recursive: true });
+      writeFileSync(
+        join(fixture.installDir, "herdr-world"),
+        "old 0.2.7 binary\n",
+      );
+      const result = runInstaller(fixture, undefined, {
+        HERDR_WORLD_VERSION: "0.3.0-rc.2",
+        HERDR_FIXTURE_STATE: "current",
+        HERDR_WORLD_SKIP_HERDR: skip,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
+        `update --finish-install skip=${skip}\n`,
+      );
+      expect(existsSync(fixture.calls)).toBe(false);
+    },
+  );
+
+  test("reports finalization failure without undoing the installed World", () => {
+    const fixture = createInstallerFixture();
+    mkdirSync(fixture.installDir, { recursive: true });
+    writeFileSync(join(fixture.installDir, "herdr-world"), "old binary\n");
+    const result = runInstaller(fixture, undefined, { FINISH_STEP_CODE: "1" });
+    expect(result.exitCode).not.toBe(0);
+    expect(
+      readFileSync(join(fixture.installDir, "herdr-world.previous"), "utf8"),
+    ).toBe("old binary\n");
+    expect(result.stderr.toString()).toContain("update --finish-install");
+  });
+
+  test("an older pinned replacement keeps safe bootstrap and prints manual upgrade guidance", () => {
+    const fixture = createInstallerFixture(undefined, "0.2.7");
+    mkdirSync(fixture.installDir, { recursive: true });
+    writeFileSync(join(fixture.installDir, "herdr-world"), "old binary\n");
+    const result = runInstaller(fixture, undefined, {
+      HERDR_WORLD_VERSION: "0.2.7",
+      HERDR_FIXTURE_STATE: "current",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain(
+      "cannot finish installer upgrades automatically",
+    );
+    expect(result.stdout.toString()).toContain(
+      "Restart any running herdr-world process",
+    );
+    expect(result.stdout.toString()).toContain("herdr upgrade");
+    expect(existsSync(fixture.herdrStepLog)).toBe(false);
+  });
+
   test("accepts World variables, including empty VERSION for latest", () => {
     const fixture = createInstallerFixture();
     const installDir = join(fixture.root, "new-install");
@@ -269,6 +330,9 @@ describe("release installer", () => {
     );
     expect(installed.exitCode).toBe(0);
     expect(installed.stdout.toString().trim()).toBe("herdr-world 9.8.7");
+    expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
+      "update --finish-install skip=\n",
+    );
     expect(
       readFileSync(join(fixture.installDir, "herdr-world.previous"), "utf8"),
     ).toBe("previous binary\n");
