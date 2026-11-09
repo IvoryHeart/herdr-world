@@ -65,7 +65,7 @@ import {
 } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
-  WINDOW_ARRANGEMENT_CHOICES,
+  offeredArrangementChoices,
   type WindowArrangementControl,
 } from "./WindowArrangementMenu";
 import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
@@ -985,7 +985,7 @@ function OwnedCommandCombobox({
     : [];
 
   const arrangementActions: ActionDefinition[] = arrangementControl
-    ? WINDOW_ARRANGEMENT_CHOICES.map(
+    ? offeredArrangementChoices(arrangementControl).map(
         ({ command, label, description, shortcutId }) => {
           const shortcut = shortcutId
             ? shortcutLabel(shortcutId)

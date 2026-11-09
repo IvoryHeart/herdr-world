@@ -184,7 +184,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
       return;
     }
     if (command === "fit-right" || command === "fit-left") {
-      if (!native && state.activeId)
+      if (!mobile && !native && state.activeId)
         dispatch({
           type: "fit",
           id: state.activeId,
@@ -221,8 +221,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     if (reason) disabledReasons[preset] = reason;
   }
   for (const command of ["fit-right", "fit-left"] as const) {
-    if (mobile) disabledReasons[command] = "Available in desktop layout.";
-    else if (native || !state.activeId)
+    if (native || !state.activeId)
       disabledReasons[command] = "No window is open.";
   }
   if (!state.baseline)
@@ -351,6 +350,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     arrangementControl: {
       activePreset: native ? "single" : (state.layout?.preset ?? null),
       disabledReasons,
+      hidden: mobile ? ["fit-right", "fit-left"] : undefined,
       onSelect,
       windows: inputs
         .filter((input) => !state.windows[input.id]?.dismissed)

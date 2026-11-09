@@ -24,6 +24,8 @@ export type WindowArrangementControl = {
   windows?: readonly WindowSwitcherEntry[];
   activePreset: TerminalWindowArrangementPreset | null;
   disabledReasons: Partial<Record<WindowArrangementCommand, string>>;
+  /** Commands not offered at all in this layout (phone: no Fit). */
+  hidden?: readonly WindowArrangementCommand[];
   onSelect: (command: WindowArrangementCommand) => void;
 };
 
@@ -96,6 +98,13 @@ export const WINDOW_ARRANGEMENT_CHOICES: readonly {
     actionOnly: true,
   },
 ];
+
+/** The choices a layout offers in Actions; phone layouts hide Fit. */
+export function offeredArrangementChoices(control: WindowArrangementControl) {
+  return WINDOW_ARRANGEMENT_CHOICES.filter(
+    ({ command }) => !control.hidden?.includes(command),
+  );
+}
 
 export function WindowArrangementMenu({
   control,

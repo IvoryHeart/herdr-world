@@ -413,10 +413,7 @@ export function useWorldInspectorWindows({
       if (reason) disabledReasons[preset] = reason;
     }
     for (const command of ["fit-right", "fit-left"] as const) {
-      if (compactArrangement)
-        disabledReasons[command] = "Available in desktop layout.";
-      else if (!activeInspectorId)
-        disabledReasons[command] = "No window is open.";
+      if (!activeInspectorId) disabledReasons[command] = "No window is open.";
     }
     if (!managedWindows.baseline)
       disabledReasons.restore = "No arranged positions to restore.";
@@ -438,6 +435,7 @@ export function useWorldInspectorWindows({
           ? "single"
           : (managedWindows.layout?.preset ?? null),
       disabledReasons,
+      hidden: compactArrangement ? ["fit-right", "fit-left"] : undefined,
       onSelect: selectVisualArrangement,
       // Panels are listed too, so a minimized one can be restored.
       windows: managedInputs.map((input) => ({
