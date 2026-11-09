@@ -1,6 +1,10 @@
 import { statSync } from "node:fs";
 import { type CliContext, EXIT_FAILURE, EXIT_OK } from "./command";
-import { installWorldIntegration } from "./integration";
+import {
+  installedMessage,
+  installWorldIntegration,
+  type WorldIntegrationInstall,
+} from "./integration";
 import { integrationPaths, WORLD_HARNESSES } from "./integration-paths";
 import { integrationDisabled } from "./integration-preferences";
 
@@ -14,7 +18,7 @@ export function syncWorldIntegrations(context: CliContext): number {
   }
   let found = false;
   let code = EXIT_OK;
-  const installed = new Map<string, string>();
+  const installed = new Map<string, WorldIntegrationInstall>();
   for (const harness of WORLD_HARNESSES) {
     const paths = integrationPaths(harness, context.runtime);
     if (!paths) continue;
@@ -39,7 +43,7 @@ export function syncWorldIntegrations(context: CliContext): number {
         installed.set(paths.file, action);
       }
       context.log(
-        `${harness}: ${action} World's integration. Remove: herdr-world integration uninstall ${harness}`,
+        `${harness}: ${installedMessage(action)}. Remove: herdr-world integration uninstall ${harness}`,
       );
     } catch (error) {
       context.error(

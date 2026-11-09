@@ -78,6 +78,40 @@ export function claudeStatusLineTap(
       const dir = path.join(home, ".cache", "herdr-world"),
         file = path.join(dir, "claude-status-line.json"),
         temporary = `${file}.${pid}.tmp`;
+      // Every Claude session's tap writes this one file with its own last
+      // snapshot, so an older session can arrive after a fresher one. Within
+      // a window (same resets_at) usage only rises until the reset: keep the
+      // highest reading, and a stored later window over an earlier one.
+      let saved: Record<string, any> = {};
+      try {
+        saved = object(JSON.parse(fs.readFileSync(file, "utf8")));
+      } catch {
+        // No earlier reading, or a damaged one: this reading stands.
+      }
+      for (const [i, w] of windows.entries()) {
+        const old = object(
+          (Array.isArray(saved.windows) && saved.version === 1
+            ? saved.windows
+            : []
+          ).find((o: any) => object(o).window_minutes === w.window_minutes),
+        );
+        if (
+          typeof old.used_percent === "number" &&
+          Number.isFinite(old.used_percent) &&
+          old.used_percent >= 0 &&
+          old.used_percent <= 100 &&
+          Number.isSafeInteger(old.resets_at) &&
+          w.resets_at !== null &&
+          (old.resets_at > w.resets_at ||
+            (old.resets_at === w.resets_at &&
+              old.used_percent > w.used_percent))
+        )
+          windows[i] = {
+            window_minutes: w.window_minutes,
+            used_percent: old.used_percent,
+            resets_at: old.resets_at,
+          };
+      }
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       fs.writeFileSync(
         temporary,

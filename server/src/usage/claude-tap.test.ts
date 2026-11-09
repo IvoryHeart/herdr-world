@@ -142,6 +142,57 @@ test("input without limits leaves the last reading in place", () => {
   expect(reading(home)).toBe(before);
 });
 
+test("sessions writing out of order keep the highest reading per window until it resets", () => {
+  const { home } = sandbox();
+  const fiveHour = 1_900_003_600,
+    week = 1_900_400_000;
+  const session = (five: number, seven: number, resets = fiveHour) =>
+    JSON.stringify({
+      rate_limits: {
+        five_hour: { used_percentage: five, resets_at: resets },
+        seven_day: { used_percentage: seven, resets_at: week },
+      },
+    });
+  const used = () =>
+    JSON.parse(reading(home)).windows.map(
+      (w: { used_percent: number; resets_at: number }) => [
+        w.used_percent,
+        w.resets_at / 1000,
+      ],
+    );
+  // A fresh session sees 23 % / 22 %; an older one still holds 22 % / 21 %.
+  claudeStatusLineTap(session(23, 22), ports(home));
+  claudeStatusLineTap(session(22, 21), { ...ports(home), now: now + 1 });
+  expect(used()).toEqual([
+    [23, fiveHour],
+    [22, week],
+  ]);
+  expect(JSON.parse(reading(home)).at).toBe(now + 1);
+  // A rise in either window is kept.
+  claudeStatusLineTap(session(22, 30), ports(home));
+  expect(used()).toEqual([
+    [23, fiveHour],
+    [30, week],
+  ]);
+  // A new five-hour window starts fresh; a session still in the old one
+  // cannot bring it back.
+  const next = fiveHour + 18_000;
+  claudeStatusLineTap(session(1, 30, next), ports(home));
+  claudeStatusLineTap(session(40, 30, fiveHour), ports(home));
+  expect(used()).toEqual([
+    [1, next],
+    [30, week],
+  ]);
+  // Without a reset time nothing is comparable: the new reading stands.
+  claudeStatusLineTap(
+    JSON.stringify({ rate_limits: { five_hour: { used_percentage: 0 } } }),
+    ports(home),
+  );
+  expect(JSON.parse(reading(home)).windows).toEqual([
+    { window_minutes: 300, used_percent: 0, resets_at: null },
+  ]);
+});
+
 test("Claude's local settings sit at the canonical Git root when the user owns it", () => {
   const { home } = sandbox();
   const line = (command: string) => ({

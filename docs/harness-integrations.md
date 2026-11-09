@@ -5,7 +5,8 @@ discovers supported harnesses by their existing configuration folders and instal
 or refreshes World's integrations. This also happens when World is already up to
 date. Discovery uses the paths and overrides below; it never launches a harness
 or creates a missing harness configuration folder. Each detected harness gets a
-plain installed, updated, skipped or failed report, with the removal command.
+plain report with the removal command: installed (it was not there before),
+updated (World changed it), already current (nothing changed), skipped or failed.
 
 Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` for manual-only management, alongside
 `HERDR_WORLD_SKIP_HERDR=1` when desired. The options are independent: skipping

@@ -1239,8 +1239,9 @@ belongs to Herdr and uses Town's move gestures or guarded CLI moves.
 Every standalone installer run and `herdr-world update` discovers supported
 harnesses by their existing config folders and installs or refreshes the release's
 World guide (plus Claude's limits tap). This also runs when World is already
-current; `update --check` is read-only. Per-harness output says what was installed,
-updated, skipped or failed and gives `herdr-world integration uninstall <harness>`.
+current; `update --check` is read-only. Per-harness output says whether World's
+integration was installed (new), updated (changed), already current (unchanged),
+skipped or failed, and gives `herdr-world integration uninstall <harness>`.
 `HERDR_WORLD_SKIP_INTEGRATIONS=1` keeps these manual, independently of
 `HERDR_WORLD_SKIP_HERDR=1`. A conflict or failure is reported and other harnesses
 continue; an installed World update and its service restart still complete.

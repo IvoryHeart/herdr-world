@@ -164,11 +164,14 @@ function requireManagedSkill(
   return installed.state !== "not_installed";
 }
 
+/** What one install did: new, changed, or nothing to change. */
+export type WorldIntegrationInstall = "installed" | "updated" | "current";
+
 /** Writes the release's skill for one harness; the CLI and Settings share it. */
 export function installWorldIntegration(
   harness: WorldHarness,
   runtime: CliRuntime,
-) {
+): WorldIntegrationInstall {
   const paths = supportedPaths(harness, runtime);
   let configured = false;
   try {
@@ -181,6 +184,11 @@ export function installWorldIntegration(
       `${displayPath(paths.config, runtime)} does not exist. Run ${harness} first to create its configuration folder.`,
     );
   const existed = requireManagedSkill(paths);
+  // Judged before writing: rewriting identical files changes nothing.
+  const current =
+    existed &&
+    readFileSync(paths.file, "utf8") === skillFile(paths.id) &&
+    (harness !== "claude" || claudeTapCurrent(paths.config, runtime));
   if (harness === "claude") changeClaudeTap(paths.config, "install", runtime);
   mkdirSync(paths.folder, { recursive: true });
   const temporary = join(paths.folder, `.SKILL.md-${randomUUID()}.tmp`);
@@ -194,7 +202,14 @@ export function installWorldIntegration(
     if (stat(temporary)) unlinkSync(temporary);
   }
   setIntegrationDisabled(paths.id, runtime, false);
-  return existed ? "updated" : "installed";
+  return current ? "current" : existed ? "updated" : "installed";
+}
+
+/** How the CLI and installers report one install. */
+export function installedMessage(action: WorldIntegrationInstall) {
+  return action === "current"
+    ? "World's integration is already current"
+    : `${action} World's integration`;
 }
 
 /** Removes World's skill file, and its folder when empty. */
@@ -270,8 +285,8 @@ HERDR_WORLD_SKIP_INTEGRATIONS=1 skips sync. Uninstall stays removed until explic
       }
       const path = displayPath(paths.file, context.runtime);
       if (action === "install") {
-        installWorldIntegration(harness, context.runtime);
-        context.log(`${harness}: installed (${path})`);
+        const done = installWorldIntegration(harness, context.runtime);
+        context.log(`${harness}: ${installedMessage(done)} (${path})`);
       } else if (action === "uninstall") {
         uninstallWorldIntegration(harness, context.runtime);
         context.log(`${harness}: uninstalled (${path})`);
