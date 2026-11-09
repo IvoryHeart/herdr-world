@@ -71,7 +71,7 @@ import { closeTopLayer } from "../layerStack";
 import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldViewPicker } from "./WorldViewPicker";
-import { NeedsYouCounter } from "./NeedsYouTab";
+import { NeedsYouCounter, NeedsYouTabBadge } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
 import { WorldControlPlane } from "./WorldControlPlane";
 import {
@@ -382,6 +382,7 @@ export default function WorldFoundationApp() {
       data-zen={zenActive ? "" : undefined}
     >
       <div className="world-topbar-host" ref={setTopbarPortal} />
+      <NeedsYouTabBadge world={topbarWorld} />
       <div className="world-spaces-layer is-active">
         <App
           operationalShortcutsEnabled={view === "spaces"}

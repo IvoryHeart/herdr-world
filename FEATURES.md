@@ -119,6 +119,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the figure to open it again. Untick **Show this on start** at its foot,
     or switch **Menu → Town Master greeting**, to stop it on this browser.
     Your very first visit is greeted too, without a last time.
+  - **Tab and app icon count**: in every view, while anything needs you, the
+    browser tab reads `(N) Herdr World`, its icon carries a small yellow
+    badge (the number up to 9, then `9+`), and an installed World shows the
+    number on its dock, taskbar or home-screen icon where the system supports
+    app badges. N is the **Needs you** count. It keeps updating while the tab
+    is in the background and follows answers made on another device; with
+    nothing waiting the title and icon are plain again. Switch off
+    **Menu → Count on tab and app icon** to stop it on this browser.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
     A queued agent without a Herdr name is labelled with its room rather than

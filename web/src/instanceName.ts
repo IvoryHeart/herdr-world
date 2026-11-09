@@ -3,14 +3,16 @@ import {
   normalizeTitleSuffix,
   type InstanceSettings,
 } from "../../shared/instanceName";
+import { countedTitle, plainTitle, titleCount } from "./world/attentionBadge";
 
 export function applyInstanceName(
   settings: InstanceSettings,
   target: Document = document,
 ) {
   const name = instanceDisplayName(settings.title_suffix);
-  const changed = target.title !== name;
-  target.title = name;
+  const changed = plainTitle(target.title) !== name;
+  // Keeps the Needs you count the tab shows in front of the name.
+  target.title = countedTitle(name, titleCount(target.title));
   for (const meta of target.querySelectorAll(
     'meta[name="apple-mobile-web-app-title"], meta[name="application-name"]',
   ))

@@ -2,7 +2,13 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
 import { WorldDeskStore } from "./deskStateStore";
-import { NeedsYouCounter, NeedsYouList } from "./NeedsYouTab";
+import { NeedsYouCounter, NeedsYouList, NeedsYouTabBadge } from "./NeedsYouTab";
+import { worldLocalStorage } from "../browserStorage";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
+} from "./officePreferences";
 import type { WorldAsk, WorldAsksStore } from "./worldAsks";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import "../styles/tokens.css";
@@ -300,7 +306,66 @@ async function run() {
   );
 }
 
+/** The tab title and icon follow the counter's number, and Menu's switch. */
+async function tabBadge() {
+  const icon = document.createElement("link");
+  icon.rel = "icon";
+  icon.href = "/herdr-world-icon-192.png";
+  document.head.append(icon);
+  document.title = "Herdr World";
+  const plain = document.title;
+  const host = document.createElement("div");
+  document.body.append(host);
+  const badgeRoot = createRoot(host);
+  const show = (leaves: WorldLeafObject[]) =>
+    flushSync(() => badgeRoot.render(<NeedsYouTabBadge world={{ leaves }} />));
+  const badged = () =>
+    document.head.querySelector<HTMLLinkElement>("link[data-attention-badge]");
+  const setSwitch = (tabBadge: boolean) => {
+    writeOfficePreferences(worldLocalStorage, {
+      ...readOfficePreferences(worldLocalStorage),
+      tabBadge,
+    });
+    window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  };
+  setSwitch(true);
+  show([blocked, prompted, asker]);
+  check(
+    document.title === `(2) ${plain}`,
+    `title shows the counter's 2: ${document.title}`,
+  );
+  for (let wait = 0; wait < 60 && !badged(); wait++) await frame();
+  check(
+    !!badged()?.href.startsWith("data:image/png") && !icon.isConnected,
+    "tab icon is the drawn badge, in place of the plain icon",
+  );
+  show([blocked, asker]);
+  check(document.title === `(1) ${plain}`, "title drops to 1 without reload");
+  flushSync(() => setSwitch(false));
+  await frame();
+  check(
+    document.title === plain && !badged() && icon.isConnected,
+    "switch off restores the plain title and icon at once",
+  );
+  flushSync(() => setSwitch(true));
+  check(document.title === `(1) ${plain}`, "switch on shows the count again");
+  show([asker]);
+  await frame();
+  check(
+    document.title === plain && !badged() && icon.isConnected,
+    "nothing waiting: plain title and icon",
+  );
+  show([blocked]);
+  badgeRoot.unmount();
+  await frame();
+  check(
+    document.title === plain && !badged() && icon.isConnected,
+    "leaving restores the plain title and icon",
+  );
+}
+
 void run()
+  .then(tabBadge)
   .catch((error) => failures.push(String(error)))
   .finally(() =>
     fetch("/result", { method: "POST", body: JSON.stringify(failures) }),

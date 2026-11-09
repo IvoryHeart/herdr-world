@@ -24,7 +24,18 @@ describe("View preferences", () => {
       townOpens: "chat",
       townMaster: "firstmate",
       townGreeting: true,
+      tabBadge: true,
     });
+  });
+
+  test("the tab and app icon count is on unless it was turned off", () => {
+    const read = (tabBadge: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ tabBadge })))
+        .tabBadge;
+    expect(DEFAULT_OFFICE_PREFERENCES.tabBadge).toBe(true);
+    expect(read(false)).toBe(false);
+    expect(read(true)).toBe(true);
+    expect(read("no")).toBe(true);
   });
 
   test("the Town Master's greeting is on unless it was turned off", () => {
@@ -88,6 +99,7 @@ describe("View preferences", () => {
       townOpens: "terminal",
       townMaster: "",
       townGreeting: false,
+      tabBadge: false,
     });
     expect(storage.value).toEqual({
       key: OFFICE_PREFERENCES_KEY,
@@ -97,6 +109,7 @@ describe("View preferences", () => {
         townOpens: "terminal",
         townMaster: "",
         townGreeting: false,
+        tabBadge: false,
       }),
     });
   });
