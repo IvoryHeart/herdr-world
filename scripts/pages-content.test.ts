@@ -5,8 +5,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  checkTutorialShape,
   localPageReferences,
+  measureTutorial,
   renderTutorial,
+  tutorialLimits,
   verifySiteReferences,
   versionSiteAssets,
 } from "./pages-content";
@@ -53,23 +56,55 @@ describe("tutorial Markdown", () => {
     );
   });
 
-  test("renders tutorial headings with stable unique IDs and a five-chapter TOC", async () => {
+  test("renders tutorial headings with stable unique IDs and a nested TOC", async () => {
     const markdown = await Bun.file(
       new URL("../docs/TUTORIAL.md", import.meta.url),
     ).text();
     const { content, navigation } = await renderTutorial(markdown);
     expect(content).toContain('id="tutorial-title"');
-    expect(content.match(/<h2 /g)).toHaveLength(5);
-    expect(navigation.match(/<li>/g)).toHaveLength(5);
-    expect(navigation).toContain('href="#chapter-5"');
+    const chapters = content.match(/<h2 /g)?.length ?? 0;
+    const sections = content.match(/<h3 /g)?.length ?? 0;
+    expect(chapters).toBe(8);
+    expect(navigation.match(/<li>/g)).toHaveLength(chapters + sections);
+    expect(navigation).toContain(`href="#chapter-${chapters}"`);
+    expect(navigation).toContain(`href="#section-${sections}"`);
     const ids = [...content.matchAll(/\bid="([^"]*)"/g)].map(
       (match) => match[1],
     );
     expect(ids).not.toContain("");
     expect(new Set(ids).size).toBe(ids.length);
-    for (const anchor of ["tailscale", "tailcat", "ssh", "troubleshooting"]) {
+    // README, FEATURES, the knowledge map and the home page link to these.
+    for (const anchor of [
+      "start",
+      "town",
+      "town-lenses",
+      "chat",
+      "new-agent",
+      "chimes",
+      "board",
+      "agent-cli",
+      "desk",
+      "graph",
+      "daily",
+      "ranger",
+      "workflow",
+      "networking",
+      "tailscale",
+      "ssh",
+      "tailcat",
+      "troubleshooting",
+    ]) {
       expect(ids).toContain(anchor);
     }
+  });
+
+  test("gives each completion check its own callout", async () => {
+    const { content } = await renderTutorial(
+      "# T\n\n1. Do it.\n\n**You are done when:** it shows.\n",
+    );
+    expect(content).toContain(
+      '<p class="tutorial-done"><strong>You are done when:</strong> it shows.</p>',
+    );
   });
 
   test("rewrites images and canonical docs, preserves code and source anchors", async () => {
@@ -323,6 +358,58 @@ describe("Pages references", () => {
       "index.html": '<a href="../private.txt">Outside</a>',
     });
     await rejects(verifySiteReferences(directory), /escapes output/);
+  });
+});
+
+describe("tutorial shape", () => {
+  const step = (words: number) =>
+    Array.from({ length: words }, (_, i) => `word${i}`).join(" ");
+
+  test("the tutorial stays within its learner's limits", async () => {
+    const markdown = await Bun.file(
+      new URL("../docs/TUTORIAL.md", import.meta.url),
+    ).text();
+    expect(() => checkTutorialShape(markdown)).not.toThrow();
+    const { words, longest } = measureTutorial(markdown);
+    expect(words).toBeLessThanOrEqual(tutorialLimits.words);
+    expect(longest.words).toBeLessThanOrEqual(tutorialLimits.blockWords);
+  });
+
+  test("refuses a step that grows into a wall of text", () => {
+    const markdown = `# T\n\n1. Short step.\n2. ${step(tutorialLimits.blockWords + 1)}\n   continued.\n`;
+    expect(measureTutorial(markdown).longest.words).toBe(
+      tutorialLimits.blockWords + 2,
+    );
+    expect(() => checkTutorialShape(markdown)).toThrow(/FEATURES\.md/);
+  });
+
+  test("measures a step as a whole, not paragraph by paragraph", () => {
+    const paragraphs = Array.from({ length: 5 }, () => `   ${step(40)}`);
+    const markdown = `# T\n\n1. Step.\n\n${paragraphs.join("\n\n")}\n\n2. Next.\n`;
+    expect(measureTutorial(markdown).longest.words).toBe(201);
+    expect(() => checkTutorialShape(markdown)).toThrow(/201-word step/);
+  });
+
+  test("refuses a tutorial over its word budget", () => {
+    const paragraph = step(tutorialLimits.blockWords - 10);
+    const count =
+      Math.ceil(tutorialLimits.words / paragraph.split(" ").length) + 1;
+    const markdown = Array.from({ length: count }, () => paragraph).join(
+      "\n\n",
+    );
+    expect(() => checkTutorialShape(markdown)).toThrow(/words of prose/);
+  });
+
+  test("counts prose only: not code, comments, link targets or images", () => {
+    const { words } = measureTutorial(
+      "<!-- a long maintainer note here -->\n\n" +
+        "Open [the guide](./DEPLOYMENT.md#install-a-release) now.\n\n" +
+        "![Alt text words](./images/a.png)\n\n" +
+        "```bash\nherdr-world --host 127.0.0.1 --port 8787\n```\n\n" +
+        "> Quoted tip.\n\n| Mark | Meaning |\n| --- | --- |\n| **!** | Blocked |\n",
+    );
+    // Open the guide now (4) + Quoted tip (2) + Mark Meaning (2) + Blocked (1)
+    expect(words).toBe(9);
   });
 });
 

@@ -2,6 +2,7 @@ import { cp, copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  checkTutorialShape,
   renderTutorial,
   verifySiteReferences,
   versionSiteAssets,
@@ -59,9 +60,9 @@ for (const [source, destination] of assets) {
   await copyFile(sourcePath, join(assetDirectory, destination));
 }
 
-const tutorial = await renderTutorial(
-  await Bun.file(join(root, "docs/TUTORIAL.md")).text(),
-);
+const tutorialMarkdown = await Bun.file(join(root, "docs/TUTORIAL.md")).text();
+checkTutorialShape(tutorialMarkdown);
+const tutorial = await renderTutorial(tutorialMarkdown);
 const tutorialPath = join(outputDirectory, "tutorial/index.html");
 const template = await Bun.file(tutorialPath).text();
 for (const slot of ["content", "navigation"]) {
