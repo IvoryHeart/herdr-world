@@ -160,6 +160,7 @@ export function drawTownSelectionEffects(
     )
       ambient.continuous();
   };
+  drawTownGroupRings(fxLayer, model, actors, layoutCells, state, camera);
   for (const [key, color] of [
     [state.selectedKey, 0xffd166],
     [state.hoverKey !== state.selectedKey ? state.hoverKey : null, 0xffffff],
@@ -200,5 +201,47 @@ export function drawTownSelectionEffects(
       if (color === 0xffd166 && townSpriteVisible(fxLayer, camera.viewport))
         ambient.continuous();
     }
+  }
+}
+
+/** The group selection's colour: apart from the gold selection and white hover. */
+export const TOWN_GROUP_RING = 0x6fe3ff;
+
+/**
+ * A steady ring under each agent in the group selection, wherever it stands.
+ * It never pulses, and keeps a readable size on screen when zoomed out.
+ */
+function drawTownGroupRings(
+  fxLayer: Graphics,
+  model: TownModel,
+  actors: TownActors,
+  layoutCells: ReadonlyMap<string, TownCell>,
+  state: TownSceneState,
+  camera: TownCamera,
+) {
+  if (!state.groupKeys?.size) return;
+  const z = Math.max(0.05, camera.z);
+  const width = 2.5 / z;
+  for (const key of state.groupKeys) {
+    const actor = actors.actors.get(key);
+    if (!actor || actor.mode === "out") continue;
+    let x = actor.x;
+    let y = actor.y;
+    if (actor.mode === "seat") {
+      const seat = model.agentSeats.get(key);
+      const cell = seat && layoutCells.get(seat.deskKey);
+      if (cell && seat) {
+        const geometry = townSeat(cell, seat.seat);
+        x = geometry.cx;
+        y = geometry.top ? geometry.tableY + 17 : geometry.tableY + 56;
+      }
+    }
+    const rx = Math.max(13, 9 / z);
+    const ry = Math.max(5, 4 / z);
+    fxLayer
+      .ellipse(x, y, rx, ry)
+      .fill({ color: TOWN_GROUP_RING, alpha: 0.25 })
+      .ellipse(x, y, rx, ry)
+      .stroke({ color: TOWN_GROUP_RING, width, alpha: 0.95 });
   }
 }

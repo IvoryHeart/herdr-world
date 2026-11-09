@@ -274,6 +274,43 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (Town as usual). The browser remembers the last lens for `L` and
     **Lenses**. With `?scene=town-scale` every lens has synthetic data.
     Board offers the same lenses over its cards (see Board below).
+  - **Select several agents and give them one order**, as a strategy game
+    selects units. On a desktop, **Shift+drag** on the map (also over a room
+    card or a desk) draws a box: every agent drawn inside it joins the
+    selection, at its desk, at reception or at the bar; agents in a folded
+    room are not drawn, so a box leaves them out. **Shift+click** an agent
+    (or a table, for its agents) adds it or removes it; so does
+    **Shift+click** on a reception portrait. Plain drags still pan and plain
+    clicks still open. On a phone, where a hold lifts a desk or agent, an
+    agent's peek or a table's card offers **Select**; while a selection is
+    open a tap adds or removes an agent instead of opening it. With the
+    keyboard, `S` on a focused agent target adds or removes it. Each
+    selected agent has a steady cyan ring (it never pulses); zoomed out,
+    its room card is outlined and says how many it holds, and its reception
+    portrait is outlined. Screen readers hear "selected" in each selected
+    agent's name. An agent that is closed or put in the bin leaves the
+    selection.
+    While agents are selected the Town board sign (on a phone, the summary
+    chip, which reads "N selected") becomes the command card: "7 selected ·
+    3 finished · 2 working · 1 needs you · 1 idle" and its orders, each
+    counting exactly the agents it acts on. **Mark reviewed (N)** marks each
+    selected finished agent's work reviewed with the usual rule, one agent
+    at a time, and lists each as reviewed or not saved. **Send a message
+    (N of M)** opens a text box (Ctrl+Enter or Cmd+Enter sends, Escape
+    closes it) and sends the same text to each agent that can take it
+    through Chat's send path, so a working agent's message is queued as in
+    Chat; the card lists each agent as sent, queued or
+    refused with the reason, and never reports a send it did not get.
+    Agents waiting on a question or permission prompt are left out ("left
+    out: has a question"), since typed text could answer their prompt
+    (#284); plain shells, out-of-fuel and offline agents are left out with
+    their reason. A group message is text only: attach files or run a
+    command from one agent's Chat. **Show them** moves the camera to frame every selected
+    agent; **Clear**, Escape or **Back** on a phone ends the selection.
+    With `?scene=town-scale` the synthetic hosts take a group message with
+    synthetic outcomes, and the card labels them **TEST DATA**: working
+    agents queue it, idle and finished ones take it and work, and agents in
+    an unknown state refuse it.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;

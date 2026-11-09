@@ -8,6 +8,7 @@ import {
 } from "react";
 import { yieldWorldTask } from "../worldObject";
 import type { TownTarget } from "./townTargets";
+import { useTownGroupKeys } from "./useTownGroup";
 
 const TARGET_BATCH = 16;
 
@@ -30,6 +31,7 @@ export function TownTargets({
   /** Keyboard move (key M) for a focused desk or agent target. */
   onMoveTarget(kind: "desk" | "agent", key: string): void;
 }) {
+  const group = useTownGroupKeys();
   const identity = useMemo(
     () => targets.map(({ kind, key }) => `${kind}:${key}`).join("|"),
     [targets],
@@ -68,8 +70,10 @@ export function TownTargets({
       aria-label="Office scene targets"
       aria-busy={pending > 0}
       onKeyDown={(event) => {
-        // M moves the focused desk or agent; the canvas moves by drag.
-        if (event.key !== "m" && event.key !== "M") return;
+        // M moves the focused desk or agent; the canvas moves by drag. S
+        // adds the focused agent to the group selection or removes it.
+        const lower = event.key.toLowerCase();
+        if (lower !== "m" && lower !== "s") return;
         if (event.metaKey || event.ctrlKey || event.altKey) return;
         const button = (event.target as HTMLElement).closest<HTMLElement>(
           ".world-semantic-target",
@@ -77,8 +81,10 @@ export function TownTargets({
         const kind = button?.dataset.kind;
         const key = button?.dataset.targetKey;
         if (!key || (kind !== "desk" && kind !== "agent")) return;
+        if (lower === "s" && (kind !== "agent" || !group)) return;
         event.preventDefault();
-        onMoveTarget(kind, key);
+        if (lower === "s") group!.toggle([key]);
+        else onMoveTarget(kind, key);
       }}
     >
       {pending ? (
@@ -91,6 +97,7 @@ export function TownTargets({
           key={`${target.kind}:${target.key}`}
           target={target}
           selected={selectedKey === target.key}
+          grouped={target.kind === "agent" && !!group?.keys.has(target.key)}
           onSelect={onSelect}
           onActivate={onActivate}
           onActivateRoom={onActivateRoom}
@@ -104,6 +111,7 @@ export function TownTargets({
 const TownTargetButton = memo(function TownTargetButton({
   target,
   selected,
+  grouped,
   onSelect,
   onActivate,
   onActivateRoom,
@@ -111,11 +119,14 @@ const TownTargetButton = memo(function TownTargetButton({
 }: {
   target: TownTarget;
   selected: boolean;
+  /** In the group selection: said in its name, so it is announced. */
+  grouped: boolean;
   onSelect(key: string): void;
   onActivate(key: string): void;
   onActivateRoom(key: string): void;
   onFocusTarget(target: TownTarget): void;
 }) {
+  const label = grouped ? `${target.label}, selected` : target.label;
   return (
     <button
       className="world-semantic-target"
@@ -123,9 +134,9 @@ const TownTargetButton = memo(function TownTargetButton({
       data-kind={target.kind}
       data-target-key={target.key}
       data-color={target.color}
-      aria-label={target.label}
+      aria-label={label}
       aria-pressed={selected}
-      title={target.label}
+      title={label}
       style={{
         left: target.rect.x,
         top: target.rect.y,
@@ -160,6 +171,7 @@ const TownTargetButton = memo(function TownTargetButton({
 type TownTargetButtonProps = {
   target: TownTarget;
   selected: boolean;
+  grouped: boolean;
   onSelect(key: string): void;
   onActivate(key: string): void;
   onActivateRoom(key: string): void;
@@ -174,6 +186,7 @@ function sameTargetButton(
   const b = next.target;
   return (
     previous.selected === next.selected &&
+    previous.grouped === next.grouped &&
     previous.onSelect === next.onSelect &&
     previous.onActivate === next.onActivate &&
     previous.onActivateRoom === next.onActivateRoom &&

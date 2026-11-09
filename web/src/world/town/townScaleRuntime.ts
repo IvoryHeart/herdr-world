@@ -3,7 +3,8 @@
  * be tried and not only looked at. Its three synthetic hosts answer the
  * calls Town's and Board's actions make: rename, close and reorder rooms,
  * reorder desks, read an asking agent's question, answer it, read an
- * agent's latest message, and keep the reviewed record for finished work.
+ * agent's latest message, take a message as Chat sends it (synthetic
+ * outcomes), and keep the reviewed record for finished work.
  *
  * Only a page opened with `?scene=town-scale` creates it. Nothing reaches the
  * World service or Herdr, and a reload starts the scene afresh. Any other
@@ -60,6 +61,10 @@ function latestText(pane: Pane, answered: boolean): string | null {
       return null;
   }
 }
+
+/** A scene agent's one synthetic session, so Chat's send can name it. */
+const sceneSession = (pane: Pane) =>
+  pane.agent ? `scene-session:${pane.pane_id}` : null;
 
 /** Herdr inserts before the item at `insertIndex`, counted before removal. */
 function herdrInsert(
@@ -280,30 +285,54 @@ export class TownScaleRuntime {
         const pane = snapshot.panes.find((p) => p.pane_id === params.pane_id);
         if (!pane) throw new Error("unknown pane");
         if (pane.agent_status !== "blocked") return { ok: true };
-        // The answer lands: the agent works a moment, then finishes its
-        // turn. Herdr reports a finished turn as idle once seen, so it
-        // waits for review as an idle agent with a recent stop.
         this.answered.add(pane.pane_id);
-        this.setPane(
+        this.workThenFinish(
           connectionId,
           pane.pane_id,
-          "working",
           "Running the migration",
         );
-        setTimeout(() => {
-          const current = this.connections.find(
-            (c) => c.connectionId === connectionId,
-          );
-          const now = current?.snapshot?.panes.find(
-            (p) => p.pane_id === pane.pane_id,
-          );
-          if (!current || !now || now.agent_status !== "working") return;
-          this.setPane(connectionId, pane.pane_id, "idle", undefined);
-          this.recordStop(current, now, this.now());
-          for (const listener of [...this.deskListeners])
-            listener({ type: "world_desk_changed" } as BridgeControlMsg);
-        }, this.answerWorkMs);
         return { ok: true };
+      }
+      case "agent_conversation.send": {
+        // Synthetic outcomes (test data) as Chat's send reports them: a
+        // working agent queues the message, an idle or finished one takes
+        // it and works, and the rest refuse with a reason.
+        const pane = snapshot.panes.find((p) => p.pane_id === params.pane_id);
+        if (!pane) throw new Error("unknown pane");
+        const refuse = (reason: string, message: string) => ({
+          status: "refused",
+          reason,
+          message: `${message} Nothing was sent (test data).`,
+        });
+        if (!pane.agent)
+          return refuse("unavailable", "This scene pane has no agent.");
+        if (params.session_fingerprint !== sceneSession(pane))
+          return refuse("changed", "The conversation in this pane changed.");
+        if (pane.agent_status === "blocked")
+          return refuse("unsettled", "The agent is waiting on a question.");
+        if (pane.agent_status === "unknown")
+          return refuse(
+            "unavailable",
+            "The synthetic host cannot tell what this agent is doing.",
+          );
+        const queued = pane.agent_status === "working";
+        if (!queued)
+          this.workThenFinish(
+            connectionId,
+            pane.pane_id,
+            "Working on your message",
+          );
+        return {
+          status: "sent",
+          delivery: {
+            id: `scene-send:${pane.pane_id}:${this.now()}`,
+            kind: "message",
+            text: String(params.text ?? ""),
+            state: "pending",
+            queued,
+            sent_at: new Date(this.now()).toISOString(),
+          },
+        };
       }
       case "agent_conversation.watch":
       case "agent_conversation.unwatch":
@@ -322,7 +351,7 @@ export class TownScaleRuntime {
           agent: pane.agent || null,
           agent_status: pane.agent_status,
           session_binding: null,
-          session_fingerprint: null,
+          session_fingerprint: sceneSession(pane),
           session_label: null,
           status: "ok",
           unavailable: null,
@@ -340,6 +369,30 @@ export class TownScaleRuntime {
       default:
         throw new Error(`The scale scene's synthetic hosts cannot ${method}.`);
     }
+  }
+
+  /**
+   * The agent works a moment, then finishes its turn. Herdr reports a
+   * finished turn as idle once seen, so it waits for review as an idle agent
+   * with a recent stop.
+   */
+  private workThenFinish(
+    connectionId: string,
+    paneId: string,
+    summary: string,
+  ) {
+    this.setPane(connectionId, paneId, "working", summary);
+    setTimeout(() => {
+      const current = this.connections.find(
+        (c) => c.connectionId === connectionId,
+      );
+      const now = current?.snapshot?.panes.find((p) => p.pane_id === paneId);
+      if (!current || !now || now.agent_status !== "working") return;
+      this.setPane(connectionId, paneId, "idle", undefined);
+      this.recordStop(current, now, this.now());
+      for (const listener of [...this.deskListeners])
+        listener({ type: "world_desk_changed" } as BridgeControlMsg);
+    }, this.answerWorkMs);
   }
 
   private setPane(

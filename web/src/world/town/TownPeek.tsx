@@ -13,6 +13,7 @@ import {
   TERMINAL_COLORS,
   type TerminalColor,
 } from "../terminalColor";
+import { TownGroupSelectButton } from "./TownGroupCard";
 
 export function townStatusText(agent: OfficeAgent) {
   return agent.stale
@@ -247,6 +248,7 @@ export function TownPeek({
             </span>
           </button>
         ) : null}
+        <TownGroupSelectButton keys={[agent.key]} />
       </div>
       <div className="town-peek-foot">
         {onNext ? (

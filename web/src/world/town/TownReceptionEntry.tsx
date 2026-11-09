@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { townPortrait } from "./townSprites";
 import { townReceptionName } from "./townNameplates";
+import { useTownGroupKeys } from "./useTownGroup";
 
 export const portrait = townPortrait;
 
@@ -35,6 +36,8 @@ export function ReceptionEntry({
   onHoverEntry(key: string | null, rect?: DOMRect): void;
 }) {
   const ref = useRef<HTMLButtonElement | null>(null);
+  const group = useTownGroupKeys();
+  const grouped = !!group?.keys.has(agent.key);
   const { name, title } = townReceptionName(agent, room, desk);
   useLayoutEffect(() => {
     if (selected) ref.current?.setAttribute("data-selected", "true");
@@ -46,17 +49,25 @@ export function ReceptionEntry({
       type="button"
       className={`town-reception-entry${!asking && agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
       data-agent-key={agent.key}
+      data-grouped={grouped || undefined}
       data-owner-question={asking || undefined}
       disabled={agent.stale || !agent.canOpenInSpaces}
-      aria-label={
+      aria-label={`${
         asking
           ? `${title}, owner question`
           : agent.semanticStatus === "done"
             ? `${title}, finished`
             : `${title}, needs you for ${ago(since, now)}`
-      }
+      }${grouped ? ", selected" : ""}`}
       title={agent.taskSummary ? `${title}: ${agent.taskSummary}` : title}
-      onClick={() => (asking ? onActivate(agent.key) : onSelect(agent.key))}
+      onClick={(event) =>
+        // Shift+click toggles the agent in the group selection (#820).
+        event.shiftKey && group
+          ? group.toggle([agent.key])
+          : asking
+            ? onActivate(agent.key)
+            : onSelect(agent.key)
+      }
       onDoubleClick={() => onActivate(agent.key)}
       onMouseEnter={(event) =>
         onHoverEntry(agent.key, event.currentTarget.getBoundingClientRect())

@@ -3,6 +3,7 @@ import { checkTownEdgeArrows } from "./townEdgeArrows.browser";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
 import { checkTownBuildingSigns } from "./townBuildingSigns.browser";
 import { checkTownReceptionFilter } from "./townReceptionFilter.browser";
+import { checkTownGroup } from "./townGroup.browser";
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { TERMINAL_COMPOSER_REQUEST_EVENT } from "../terminalComposerRequest";
 import { StrictMode, useEffect, useState } from "react";
@@ -1302,6 +1303,18 @@ async function run() {
       await waitFor(
         () => window.__HERDR_TOWN_RENDERER__?.activeApplications === 0,
         "reception filter proof unmount left a live renderer",
+      );
+    }
+    return;
+  }
+  if (scale === "group") {
+    try {
+      await checkTownGroup(host, check, waitFor, () => deskReviews.length);
+    } finally {
+      root.unmount();
+      await waitFor(
+        () => window.__HERDR_TOWN_RENDERER__?.activeApplications === 0,
+        "group selection proof unmount left a live renderer",
       );
     }
     return;

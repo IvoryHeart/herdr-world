@@ -9,7 +9,8 @@ export type TownCanvasCase = [
 ];
 
 // The original 22 parameter tuples, partitioned without changing fixture
-// behavior, plus the reception filter cases (#501).
+// behavior, plus the reception filter cases (#501) and the group selection
+// case (#820).
 export const townCanvasCases = {
   baseline: [
     [1440, 900, "typical", 0],
@@ -19,6 +20,7 @@ export const townCanvasCases = {
     [1440, 900, "max", 0],
     [390, 844, "reception", 0],
     [1440, 900, "reception", 0],
+    [1440, 900, "group", 0],
   ],
   extended: [
     [390, 844, "extended", 0],

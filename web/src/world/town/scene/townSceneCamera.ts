@@ -365,6 +365,25 @@ export class TownSceneCamera {
   }
 
   /**
+   * Frame a world rectangle in the usable view, as Show them frames the
+   * selected agents: never closer than desk level, never past the limits.
+   */
+  frameRect(rect: { x: number; y: number; width: number; height: number }) {
+    const camera = this.camera;
+    if (!camera) return;
+    const { width, height, inset } = camera.viewport;
+    const usableWidth = Math.max(1, width - inset.left - inset.right);
+    const usableHeight = Math.max(1, height - inset.top - inset.bottom);
+    const fit = Math.min(
+      usableWidth / Math.max(1, rect.width),
+      usableHeight / Math.max(1, rect.height),
+    );
+    const z = Math.min(fit, camera.limits?.desk ?? fit);
+    camera.flyTo(rect.x + rect.width / 2, rect.y + rect.height / 2, z, 0.6);
+    this.invalidate("frame");
+  }
+
+  /**
    * The zoom buttons step between whole town, one building, one room and one
    * desk, choosing whatever is nearest the centre of the screen. The current
    * step is read from the zoom, so pinching and wheel zoom mix freely.

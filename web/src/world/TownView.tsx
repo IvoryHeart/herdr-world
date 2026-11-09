@@ -96,6 +96,7 @@ import { townDeskAgentKey } from "./town/townOpen";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import { useTownSearch } from "./town/useTownSearch";
+import { TownGroupProvider, useTownGroup } from "./town/useTownGroup";
 import { officeRoomKeyForSelection } from "./officeRoomActions";
 import {
   awaitsReviewNow,
@@ -274,6 +275,11 @@ export default function TownView({
     () => unseenTownCompletions(office.roster, completionSeenKeys),
     [completionSeenKeys, office.roster],
   );
+  const finishedKeys = useMemo(
+    () => new Set(unseenCompletions.map((agent) => agent.key)),
+    [unseenCompletions],
+  );
+  const group = useTownGroup({ office, world, finishedKeys, mark: work.mark });
   const selectedRoomKey = officeRoomKeyForSelection(world, selectedId);
   const conversationTargets = useMemo(
     () =>
@@ -728,6 +734,8 @@ export default function TownView({
    * opens its pane.
    */
   const tapTown = (key: string) => {
+    if (group.tapToggles())
+      return group.toggle(agentByKey.has(key) ? [key] : group.deskAgents(key));
     const desk = agentByKey.has(key)
       ? undefined
       : office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
@@ -782,205 +790,207 @@ export default function TownView({
 
   return (
     <AnswerOutboxContext.Provider value={townSummary.openOutbox}>
-      {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
-      <WorldSearchResults
-        world={world}
-        onSelect={onSelect}
-        {...search.results}
-      />
-      {townSummary.window}
-      <div
-        className={`world-office-shell world-stage-shell town-view-shell`}
-        onPointerDownCapture={(event) => {
-          lastPointer.current = { x: event.clientX, y: event.clientY };
-        }}
-      >
-        {DEVTOOLS && tracing ? (
-          <TraceOverlay
-            view="town"
-            trace={trace}
-            status={() => ({ mode: peek ? "peek" : "idle", pointers: 0 })}
-            onClose={() => setTrace(false)}
-          />
-        ) : null}
-        {moveDialogs}
-        {chooserDesk ? (
-          <TownChooser
-            title={chooserDesk.displayLabel}
-            detail={`${chooserDesk.observedPaneCount} panes`}
-            onClose={() => setChooser(null)}
-            entries={chooserPanes.map(({ device }) => {
-              const agent = device.agentKey
-                ? agentByKey.get(device.agentKey)?.agent
-                : undefined;
-              return {
-                key: device.key,
-                label: device.displayLabel,
-                detail: agent ? townStatusText(agent) : "terminal",
-                onChoose: () => {
-                  setChooser(null);
-                  if (agent) openAgent(agent.key);
-                  else openReply(device.key);
-                },
-              };
-            })}
-          />
-        ) : null}
-        {peekAgent ? (
-          <TownPeek
-            // One card per agent session: late upload or reply results of
-            // another agent never land in this one.
-            key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
-            agent={peekAgent}
-            where={whereOfAgent(peekAgent.key)}
-            conversation={peekConversation}
-            question={peekQuestion}
-            choices={peekChoices}
-            canReply={peekCanReply}
-            anchor={peek!.anchor}
-            onAnswer={(key) =>
-              void reply(peekLeaf, peekAgent.displayLabel, key, false)
-            }
-            deskColor={peekDeskColor(peekAgent.key)}
-            review={peekReport.review}
-            onReviewed={() =>
-              void peekReport.markShown(
-                work.mark,
-                peekAgent.displayLabel,
-                toast,
-              )
-            }
-            onChat={() => openChat(peekAgent.key)}
-            onTerminal={() => {
-              setPeek(null);
-              openOfficeTerminal(peekAgent.key);
-            }}
-            onNext={
-              reception.step(peekAgent.key, peek!.anchor) ??
-              (nextCall(peekAgent.key)
-                ? () => openAgent(nextCall(peekAgent.key)!.agent.key)
-                : null)
-            }
-            onClose={() => {
-              holdPeek.current = false;
-              reception.clear();
-              setPeek(null);
-            }}
-            onHold={(hold) => {
-              holdPeek.current = hold;
-              if (hold) window.clearTimeout(peekTimer.current);
-              else schedulePeek(null, 320);
-            }}
-          />
-        ) : null}
-        {toastsView}
-        <div className="town-stage">
-          <TownHerdrSetupOffer world={world} aggregate={aggregate} />
-          <TownMasterFigure />
-          <TownCanvas
-            trace={trace}
-            projection={office}
-            foldedActivity={foldedActivity}
-            relations={relations}
-            terminalColors={terminalColors}
-            deskPins={deskPins}
-            roomPins={roomPins}
-            foldRevision={foldRevision}
-            selectedKey={peek?.key ?? selectedKey}
-            completionSeenKeys={completionSeenKeys}
-            summonedKeys={summonedKeys}
-            askingKeys={askingKeys}
-            receptionHeldKeys={reception.held}
-            receptionTakes={reception.takes}
-            onFindHeld={reception.find}
-            // A letter at reception: its question in Needs you.
-            onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
-            quests={questMarks}
-            steps={townSteps}
-            conversationTargets={conversationTargets}
-            onSelect={tapTown}
-            onActivateAgent={openReply}
-            onActivateRoom={() => {
-              // In the town a room tap only zooms; it never opens an Inspector.
-            }}
-            onHover={(hover) => {
-              if (hover)
-                lastPointer.current = { x: hover.clientX, y: hover.clientY };
-              if (hover && agentByKey.has(hover.key)) {
-                setSceneHover(null);
-                hoverAgent(hover.key, { x: hover.clientX, y: hover.clientY });
-              } else {
-                setSceneHover(hover);
-                hoverAgent(null);
+      <TownGroupProvider group={group}>
+        {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
+        <WorldSearchResults
+          world={world}
+          onSelect={onSelect}
+          {...search.results}
+        />
+        {townSummary.window}
+        <div
+          className={`world-office-shell world-stage-shell town-view-shell`}
+          onPointerDownCapture={(event) => {
+            lastPointer.current = { x: event.clientX, y: event.clientY };
+          }}
+        >
+          {DEVTOOLS && tracing ? (
+            <TraceOverlay
+              view="town"
+              trace={trace}
+              status={() => ({ mode: peek ? "peek" : "idle", pointers: 0 })}
+              onClose={() => setTrace(false)}
+            />
+          ) : null}
+          {moveDialogs}
+          {chooserDesk ? (
+            <TownChooser
+              title={chooserDesk.displayLabel}
+              detail={`${chooserDesk.observedPaneCount} panes`}
+              onClose={() => setChooser(null)}
+              entries={chooserPanes.map(({ device }) => {
+                const agent = device.agentKey
+                  ? agentByKey.get(device.agentKey)?.agent
+                  : undefined;
+                return {
+                  key: device.key,
+                  label: device.displayLabel,
+                  detail: agent ? townStatusText(agent) : "terminal",
+                  onChoose: () => {
+                    setChooser(null);
+                    if (agent) openAgent(agent.key);
+                    else openReply(device.key);
+                  },
+                };
+              })}
+            />
+          ) : null}
+          {peekAgent ? (
+            <TownPeek
+              // One card per agent session: late upload or reply results of
+              // another agent never land in this one.
+              key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
+              agent={peekAgent}
+              where={whereOfAgent(peekAgent.key)}
+              conversation={peekConversation}
+              question={peekQuestion}
+              choices={peekChoices}
+              canReply={peekCanReply}
+              anchor={peek!.anchor}
+              onAnswer={(key) =>
+                void reply(peekLeaf, peekAgent.displayLabel, key, false)
               }
-            }}
-            onSelectedAnchorChange={onSelectedAnchorChange}
-            onAnchorChange={(anchors: WorldConversationAnchors | null) => {
-              onConversationNodeAnchorsChange?.(
-                anchors
-                  ? Object.fromEntries(
-                      Object.entries(anchors).flatMap(([id, value]) => {
-                        const anchor = preferredOfficeConnectorAnchor(value);
-                        return anchor ? [[id, anchor]] : [];
-                      }),
-                    )
-                  : null,
-              );
-            }}
-            selectedRoomKey={selectedRoomKey}
-            observability={observability}
-            summary={townSummary.summary}
-            onOpenSummary={townSummary.open}
-            sinceYouLeft={townSummary.sinceYouLeft}
-            roomFocus={roomFocus}
-            calm={preferences.townCalm}
-            chrome={TOWN_CHROME}
-            centerActions={townCenter}
-            needsYouOrder={needsYouOrder}
-            activityAt={activityAt}
-            roomActions={{
-              onToggleFold: toggleRoomFold,
-              onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
-              onGroupDesk: teams.runGroupDesk,
-              onUngroupDesk: (deskKey) => teams.runUngroupDesk(deskKey),
-              onReorderDesk: runDeskReorder,
-              onDropAgent: runAgentMove,
-              ...roomMoves,
-              onBinDrop: (kind, key) =>
-                putTownDropInBin(office, world, kind, key),
-              onMoveDesk: (deskKey) => {
+              deskColor={peekDeskColor(peekAgent.key)}
+              review={peekReport.review}
+              onReviewed={() =>
+                void peekReport.markShown(
+                  work.mark,
+                  peekAgent.displayLabel,
+                  toast,
+                )
+              }
+              onChat={() => openChat(peekAgent.key)}
+              onTerminal={() => {
                 setPeek(null);
-                setMoveFlow({ step: "room", deskKey });
-              },
-              onMoveAgent: (agentKey) => {
+                openOfficeTerminal(peekAgent.key);
+              }}
+              onNext={
+                reception.step(peekAgent.key, peek!.anchor) ??
+                (nextCall(peekAgent.key)
+                  ? () => openAgent(nextCall(peekAgent.key)!.agent.key)
+                  : null)
+              }
+              onClose={() => {
+                holdPeek.current = false;
+                reception.clear();
                 setPeek(null);
-                setMoveFlow({ step: "desk", agentKey });
-              },
-              onChoosePanes: (deskKey) => {
-                setPeek(null);
-                setChooser(deskKey);
-              },
-              ...townRoomActions,
-              placeColor: placeColorOf,
-            }}
-            search={search.canvas}
+              }}
+              onHold={(hold) => {
+                holdPeek.current = hold;
+                if (hold) window.clearTimeout(peekTimer.current);
+                else schedulePeek(null, 320);
+              }}
+            />
+          ) : null}
+          {toastsView}
+          <div className="town-stage">
+            <TownHerdrSetupOffer world={world} aggregate={aggregate} />
+            <TownMasterFigure />
+            <TownCanvas
+              trace={trace}
+              projection={office}
+              foldedActivity={foldedActivity}
+              relations={relations}
+              terminalColors={terminalColors}
+              deskPins={deskPins}
+              roomPins={roomPins}
+              foldRevision={foldRevision}
+              selectedKey={peek?.key ?? selectedKey}
+              completionSeenKeys={completionSeenKeys}
+              summonedKeys={summonedKeys}
+              askingKeys={askingKeys}
+              receptionHeldKeys={reception.held}
+              receptionTakes={reception.takes}
+              onFindHeld={reception.find}
+              // A letter at reception: its question in Needs you.
+              onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
+              quests={questMarks}
+              steps={townSteps}
+              conversationTargets={conversationTargets}
+              onSelect={tapTown}
+              onActivateAgent={openReply}
+              onActivateRoom={() => {
+                // In the town a room tap only zooms; it never opens an Inspector.
+              }}
+              onHover={(hover) => {
+                if (hover)
+                  lastPointer.current = { x: hover.clientX, y: hover.clientY };
+                if (hover && agentByKey.has(hover.key)) {
+                  setSceneHover(null);
+                  hoverAgent(hover.key, { x: hover.clientX, y: hover.clientY });
+                } else {
+                  setSceneHover(hover);
+                  hoverAgent(null);
+                }
+              }}
+              onSelectedAnchorChange={onSelectedAnchorChange}
+              onAnchorChange={(anchors: WorldConversationAnchors | null) => {
+                onConversationNodeAnchorsChange?.(
+                  anchors
+                    ? Object.fromEntries(
+                        Object.entries(anchors).flatMap(([id, value]) => {
+                          const anchor = preferredOfficeConnectorAnchor(value);
+                          return anchor ? [[id, anchor]] : [];
+                        }),
+                      )
+                    : null,
+                );
+              }}
+              selectedRoomKey={selectedRoomKey}
+              observability={observability}
+              summary={townSummary.summary}
+              onOpenSummary={townSummary.open}
+              sinceYouLeft={townSummary.sinceYouLeft}
+              roomFocus={roomFocus}
+              calm={preferences.townCalm}
+              chrome={TOWN_CHROME}
+              centerActions={townCenter}
+              needsYouOrder={needsYouOrder}
+              activityAt={activityAt}
+              roomActions={{
+                onToggleFold: toggleRoomFold,
+                onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
+                onGroupDesk: teams.runGroupDesk,
+                onUngroupDesk: (deskKey) => teams.runUngroupDesk(deskKey),
+                onReorderDesk: runDeskReorder,
+                onDropAgent: runAgentMove,
+                ...roomMoves,
+                onBinDrop: (kind, key) =>
+                  putTownDropInBin(office, world, kind, key),
+                onMoveDesk: (deskKey) => {
+                  setPeek(null);
+                  setMoveFlow({ step: "room", deskKey });
+                },
+                onMoveAgent: (agentKey) => {
+                  setPeek(null);
+                  setMoveFlow({ step: "desk", agentKey });
+                },
+                onChoosePanes: (deskKey) => {
+                  setPeek(null);
+                  setChooser(deskKey);
+                },
+                ...townRoomActions,
+                placeColor: placeColorOf,
+              }}
+              search={search.canvas}
+            />
+          </div>
+          {sceneHover && sceneHover.key !== selectedKey ? (
+            <OfficeCanvasCallout
+              callout={officeCalloutForKey(office, sceneHover.key)}
+              left={sceneHover.clientX}
+              top={sceneHover.clientY}
+            />
+          ) : null}
+          <TownRoomDialogs
+            dialog={roomDialog}
+            setDialog={setRoomDialog}
+            roomForKey={roomForKey}
+            submitRenameRoom={submitRenameRoom}
+            closeRoom={closeRoom}
           />
         </div>
-        {sceneHover && sceneHover.key !== selectedKey ? (
-          <OfficeCanvasCallout
-            callout={officeCalloutForKey(office, sceneHover.key)}
-            left={sceneHover.clientX}
-            top={sceneHover.clientY}
-          />
-        ) : null}
-        <TownRoomDialogs
-          dialog={roomDialog}
-          setDialog={setRoomDialog}
-          roomForKey={roomForKey}
-          submitRenameRoom={submitRenameRoom}
-          closeRoom={closeRoom}
-        />
-      </div>
+      </TownGroupProvider>
     </AnswerOutboxContext.Provider>
   );
 }
