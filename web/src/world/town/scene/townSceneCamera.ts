@@ -419,7 +419,7 @@ export class TownSceneCamera {
     // phone where home fits one building's width), home, the nearest
     // building, its nearest room and a desk.
     const whole = limits.all < limits.home * 0.93;
-    const steps: { z: number; home?: true; go(z: number): void }[] = [
+    const steps: { z: number; fixed?: true; go(z: number): void }[] = [
       ...(whole
         ? [
             {
@@ -435,7 +435,8 @@ export class TownSceneCamera {
         : []),
       {
         z: limits.home,
-        home: true,
+        // Home always lands at the home zoom, so its step stays there.
+        fixed: true,
         go: () => this.frameHome(layout, viewport, true),
       },
       {
@@ -473,11 +474,11 @@ export class TownSceneCamera {
           ]
         : []),
     ];
-    // Each step zooms in at least 1.2×, except home: it is framed at its own
-    // zoom, so a camera there must read as home, not as a step short of it,
-    // or Zoom in would frame home again and never move in.
+    // Each step goes at least 1.2 times closer than the one before, except
+    // home: raised above where it lands, a camera resting at home would read
+    // as the whole town and zoom in would only fly home again (#817).
     for (let i = 1; i < steps.length; i += 1)
-      if (!steps[i]!.home)
+      if (!steps[i]!.fixed)
         steps[i]!.z = Math.min(
           limits.max,
           Math.max(steps[i]!.z, steps[i - 1]!.z * 1.2),

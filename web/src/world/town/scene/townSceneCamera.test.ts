@@ -369,6 +369,34 @@ test("zoom in steps from home to a building, a room and a desk, then zooms", () 
   expect(camera.z).toBeCloseTo(limits.all);
 });
 
+test("zoom in leaves home when the whole town is barely wider than home", () => {
+  // The whole town is a separate step, but within 1.2 times home: home's
+  // step is raised to 1.2 times the whole town's zoom while home itself
+  // lands at its own zoom (#817).
+  const { view, layout, viewport, camera } = setup({
+    width: 1920,
+    height: 1850,
+  });
+  view.attach(camera, layout, viewport);
+  const limits = camera.limits!;
+  expect(limits.all).toBeLessThan(limits.home * 0.93);
+  expect(limits.all * 1.2 * 0.93).toBeGreaterThan(limits.home);
+  expect(camera.z).toBeCloseTo(limits.home);
+  view.stepZoom(1, layout, viewport);
+  settle(camera);
+  expect(camera.z).toBeGreaterThanOrEqual(limits.home * 1.2 - 1e-9);
+  // Zoom out still comes home, then shows the whole town.
+  view.stepZoom(-1, layout, viewport);
+  settle(camera);
+  expect(camera.z).toBeCloseTo(limits.home);
+  view.stepZoom(-1, layout, viewport);
+  settle(camera);
+  expect(camera.z).toBeCloseTo(limits.all);
+  view.stepZoom(1, layout, viewport);
+  settle(camera);
+  expect(camera.z).toBeCloseTo(limits.home);
+});
+
 const target = (x: number, y: number): TownTarget => ({
   key: "t",
   kind: "desk",
