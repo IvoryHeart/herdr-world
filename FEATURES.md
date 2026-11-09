@@ -778,8 +778,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the finished work not yet reviewed (each with its room, host and last
     activity; tap one to show it on the board) and each host's counts,
     expenses and limits. Escape or the chip closes it. Each host zone's label
-    carries that host's counts, expenses today and over 7 days, and limits;
-    each workspace card shows its usage today and over 7 days, as Town's room
+    is a heading with the host's name and agent counts, then short lines
+    under it: expenses today and over 7 days, and each harness's limits on
+    its own line; each workspace card shows its usage today and over 7 days, as Town's room
     card does. A single agent's tab card ends its line with what the agent is
     doing now, and a pane row shows it as its state: the running step and its
     time (amber once it has run long, as Town's thought bubbles), **Not
