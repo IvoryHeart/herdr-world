@@ -285,6 +285,35 @@ test("keys pan by 60 screen pixels and zoom about the centre", () => {
   expect(reasons).toEqual(["zoom-step", "keyboard", "keyboard"]);
 });
 
+test("zoom in from home moves in when the whole town is only a little wider", () => {
+  // ALL a step out of home, yet under 1.2× from it: the steps' spacing must
+  // not lift the home step off where home is framed, or the camera at home
+  // reads as one step out and every Zoom in frames home again.
+  const three = office({
+    alpha: working(6),
+    beta: working(3),
+    gamma: working(8),
+  });
+  let close = 0;
+  for (let height = 1200; height <= 1320; height += 10) {
+    const { view, layout, viewport, camera } = setup(
+      { width: 1200, height },
+      new Map(),
+      three,
+    );
+    view.attach(camera, layout, viewport);
+    const { all, home } = camera.limits!;
+    if (all < home * 0.93 && home < all * 1.2 * 0.93) close += 1;
+    view.stepZoom(1, layout, viewport);
+    settle(camera);
+    expect({ height, zoomedIn: camera.z > home * 1.05 }).toEqual({
+      height,
+      zoomedIn: true,
+    });
+  }
+  expect(close).toBeGreaterThan(0);
+});
+
 test("on a phone, zoom out steps to the whole town and zoom in comes home", () => {
   const { view, layout, viewport, camera } = setup(PHONE);
   view.attach(camera, layout, viewport);
