@@ -1,0 +1,280 @@
+import {
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+  type CliCommand,
+  type CliRuntime,
+  displayPath,
+  EXIT_FAILURE,
+  EXIT_OK,
+  parseCommandArgs,
+  UsageError,
+  wantsHelp,
+} from "./command";
+import {
+  integrationPaths,
+  SHARED_HARNESSES,
+  WORLD_HARNESSES,
+  type WorldHarness,
+} from "./integration-paths";
+import { WORLD_SKILL } from "./world-skill";
+import { changeClaudeTap, claudeTapCurrent } from "./integration-claude";
+
+export const WORLD_SKILL_VERSION = 1;
+
+function stat(path: string) {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+function requireRegular(path: string, directory = false) {
+  const info = stat(path);
+  if (info && !(directory ? info.isDirectory() : info.isFile()))
+    throw new Error(
+      `refusing non-${directory ? "directory" : "regular file"}: ${path}`,
+    );
+}
+
+function skillFile(id: string) {
+  return `---
+name: herdr-world
+description: Use Herdr World to ask the owner questions, report results, publish a task summary and stamp parent-child agents.
+---
+<!--
+installed by herdr-world
+managed by herdr-world; reinstalling or updating overwrites this file
+HERDR_WORLD_INTEGRATION_ID=${id}
+HERDR_WORLD_INTEGRATION_VERSION=${WORLD_SKILL_VERSION}
+-->
+${WORLD_SKILL}`;
+}
+
+function installedState(
+  file: string,
+  id: string,
+): Pick<WorldIntegrationStatus, "state" | "version"> {
+  const info = stat(file);
+  if (!info) return { state: "not_installed" };
+  if (!info.isFile()) return { state: "outdated" };
+  const contents = readFileSync(file, "utf8");
+  const ids = [
+    ...contents.matchAll(/^HERDR_WORLD_INTEGRATION_ID=([^\r\n]+)\r?$/gm),
+  ];
+  const versions = [
+    ...contents.matchAll(/^HERDR_WORLD_INTEGRATION_VERSION=(\d+)\r?$/gm),
+  ];
+  const version = versions.length === 1 ? Number(versions[0]![1]) : NaN;
+  const valid =
+    ids.length === 1 && ids[0]![1] === id && Number.isSafeInteger(version);
+  return valid
+    ? {
+        state: version >= WORLD_SKILL_VERSION ? "current" : "outdated",
+        version,
+      }
+    : { state: "outdated" };
+}
+
+export type WorldIntegrationState =
+  | "current"
+  | "outdated"
+  | "not_installed"
+  | "unsupported";
+
+/** One harness's World skill, as the CLI and Settings report it. */
+export interface WorldIntegrationStatus {
+  harness: WorldHarness;
+  state: WorldIntegrationState;
+  /** The installed version, when its marker is valid. */
+  version?: number;
+  available_version: number;
+  /** Home-relative skill file; absent when unsupported. */
+  path?: string;
+  /** Why it is unsupported, or which part besides the skill is outdated. */
+  reason?: string;
+  /** Other harnesses that read, and lose on removal, the same file. */
+  shared_with: WorldHarness[];
+}
+
+const UNSUPPORTED_REASON = "no documented skill folder";
+
+export function isWorldHarness(name: unknown): name is WorldHarness {
+  return WORLD_HARNESSES.includes(name as WorldHarness);
+}
+
+export function worldIntegrationStatus(
+  harness: WorldHarness,
+  runtime: CliRuntime,
+): WorldIntegrationStatus {
+  const paths = integrationPaths(harness, runtime);
+  const base = { harness, available_version: WORLD_SKILL_VERSION };
+  if (!paths)
+    return {
+      ...base,
+      state: "unsupported",
+      reason: UNSUPPORTED_REASON,
+      shared_with: [],
+    };
+  let installed: Pick<WorldIntegrationStatus, "state" | "version" | "reason"> =
+    installedState(paths.file, paths.id);
+  if (
+    harness === "claude" &&
+    installed.state === "current" &&
+    !claudeTapCurrent(paths.config, runtime)
+  )
+    installed = { state: "outdated", reason: "Claude limits tap" };
+  return {
+    ...base,
+    ...installed,
+    path: displayPath(paths.file, runtime),
+    shared_with: SHARED_HARNESSES.includes(harness)
+      ? SHARED_HARNESSES.filter((other) => other !== harness)
+      : [],
+  };
+}
+
+function supportedPaths(harness: WorldHarness, runtime: CliRuntime) {
+  const paths = integrationPaths(harness, runtime);
+  if (!paths)
+    throw new Error(`${harness}: unsupported (${UNSUPPORTED_REASON})`);
+  return paths;
+}
+
+/** Writes the release's skill for one harness; the CLI and Settings share it. */
+export function installWorldIntegration(
+  harness: WorldHarness,
+  runtime: CliRuntime,
+) {
+  const paths = supportedPaths(harness, runtime);
+  let configured = false;
+  try {
+    configured = statSync(paths.config).isDirectory();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (!configured)
+    throw new Error(
+      `${displayPath(paths.config, runtime)} does not exist. Run ${harness} first to create its configuration folder.`,
+    );
+  requireRegular(paths.folder, true);
+  requireRegular(paths.file);
+  if (harness === "claude") changeClaudeTap(paths.config, "install", runtime);
+  mkdirSync(paths.folder, { recursive: true });
+  const temporary = join(paths.folder, `.SKILL.md-${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, skillFile(paths.id), {
+      flag: "wx",
+      mode: 0o644,
+    });
+    renameSync(temporary, paths.file);
+  } finally {
+    if (stat(temporary)) unlinkSync(temporary);
+  }
+}
+
+/** Removes World's skill file, and its folder when empty. */
+export function uninstallWorldIntegration(
+  harness: WorldHarness,
+  runtime: CliRuntime,
+) {
+  const paths = supportedPaths(harness, runtime);
+  requireRegular(paths.folder, true);
+  requireRegular(paths.file);
+  if (harness === "claude") changeClaudeTap(paths.config, "uninstall", runtime);
+  if (stat(paths.file)) unlinkSync(paths.file);
+  try {
+    rmdirSync(paths.folder);
+  } catch (error) {
+    if (
+      !["ENOENT", "ENOTEMPTY", "EEXIST"].includes(
+        (error as NodeJS.ErrnoException).code ?? "",
+      )
+    )
+      throw error;
+  }
+}
+
+const SHARED_LABELS: Partial<Record<WorldHarness, string>> = {
+  codex: "Codex",
+  pi: "Pi",
+  kimi: "Kimi",
+};
+
+export const integrationCommand: CliCommand = {
+  name: "integration",
+  summary: "install, remove or check the World skill for an agent harness",
+  actions: ["install", "uninstall", "status"],
+  help: () => `Usage: herdr-world integration install|uninstall <harness>
+       herdr-world integration status [<harness>]
+
+Harnesses: ${WORLD_HARNESSES.join(", ")}
+
+Installs the release's World skill on this host, plus Claude's chained limits tap.
+The harness's config
+folder must already exist. Codex, Pi and Kimi share ~/.agents/skills/herdr-world/SKILL.md;
+removing any of them removes that file for all three. No service is required.`,
+  async run(args, context) {
+    if (wantsHelp(args)) {
+      context.log(integrationCommand.help());
+      return EXIT_OK;
+    }
+    const { positionals } = parseCommandArgs(args, {}, 2);
+    const [action, name] = positionals;
+    if (!["install", "uninstall", "status"].includes(action ?? ""))
+      throw new UsageError("expected install, uninstall or status");
+    if ((!name && action !== "status") || (name && !isWorldHarness(name)))
+      throw new UsageError(
+        name ? `unknown harness: ${name}` : "missing harness",
+      );
+    let exit = EXIT_OK;
+    for (const harness of name ? [name as WorldHarness] : WORLD_HARNESSES) {
+      const paths = integrationPaths(harness, context.runtime);
+      if (!paths) {
+        context.log(`${harness}: unsupported (${UNSUPPORTED_REASON})`);
+        if (action !== "status") exit = EXIT_FAILURE;
+        continue;
+      }
+      // Mutations never read the existing file: an unreadable SKILL.md is
+      // still replaced or removed, as the installer itself allows.
+      const path = displayPath(paths.file, context.runtime);
+      if (action === "install") {
+        installWorldIntegration(harness, context.runtime);
+        context.log(`${harness}: installed (${path})`);
+      } else if (action === "uninstall") {
+        uninstallWorldIntegration(harness, context.runtime);
+        context.log(`${harness}: uninstalled (${path})`);
+        const others = SHARED_HARNESSES.filter((other) => other !== harness);
+        if (SHARED_HARNESSES.includes(harness))
+          context.log(
+            `The shared file is also removed for ${others
+              .map((other) => SHARED_LABELS[other])
+              .join(" and ")}.`,
+          );
+      } else {
+        const status = worldIntegrationStatus(harness, context.runtime);
+        const label =
+          status.state === "not_installed"
+            ? "not installed"
+            : status.state === "outdated" && status.reason
+              ? `outdated (${status.reason})`
+              : status.state;
+        const version =
+          status.version === undefined ? "" : ` (v${status.version})`;
+        context.log(`${harness}: ${label}${version} (${path})`);
+      }
+    }
+    return exit;
+  },
+};

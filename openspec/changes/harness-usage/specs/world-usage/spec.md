@@ -104,6 +104,10 @@ The usage read SHALL report, per qualified host, the newest subscription-limit o
 - **WHEN** a Codex rollout on a host records token counts with primary and secondary rate-limit windows
 - **THEN** that host's limits list both windows from its newest such record, attributed to the Codex session log
 
+#### Scenario: Claude sessions outside World report through the installed tap
+- **WHEN** the user explicitly installs the Claude World integration and starts a new Claude session without a project status line override
+- **THEN** the chained status line records the same numeric limits as the per-launch tap and preserves the previous command's input and output; uninstall restores unchanged settings byte for byte, including absence, while preserving intervening user edits
+
 #### Scenario: Claude reports limit windows through World's status line tap
 - **WHEN** World starts a Claude agent and Claude Code passes rate limits to that agent's status line
 - **THEN** a per-launch status line command records the five-hour and weekly windows on that host and runs the user's own status line command with its output unchanged, without writing the user's Claude settings files, and that host's limits list both windows attributed to the Claude status line

@@ -1197,6 +1197,26 @@ belongs to Herdr and uses Town's move gestures or guarded CLI moves.
 
 ### Agent CLI (`herdr-world --skill`)
 
+Install the release's guide with `herdr-world integration install claude`
+(or `codex`, `pi`, or another [Herdr harness](./docs/harness-integrations.md)).
+Start a new harness session to discover the `herdr-world` skill.
+Installation is explicit, local to the host, and needs no running World service.
+`integration status [harness]` lists the state, version and path;
+`integration uninstall <harness>` removes it. Codex, Pi and Kimi share
+`~/.agents/skills/herdr-world/SKILL.md`; removing one also removes it for
+the other two, which the command names. OMP, Letta and MastraCode report
+unsupported. See [paths and overrides](./docs/harness-integrations.md).
+**Menu → Configuration → Integrations** shows the same state and path as a
+**World skill** line under each Herdr harness on World's own host, with
+Install, Update and Uninstall buttons that run the CLI's installer; uninstalling
+a shared file confirms which harnesses lose it first.
+
+The Claude install also chains the existing status line through World's limits
+tap. Sessions started outside World update the host's Claude Fuel gauge; the
+previous command keeps its input and output. Reinstall never chains World twice.
+Uninstall restores the original settings bytes when unchanged and preserves later
+user edits. See [settings safety and preview](./docs/harness-integrations.md#claude-limits-tap).
+
 Agents change World objects themselves from their pane, through the running
 World service. `herdr-world --skill` prints the guide; commands answer in JSON
 when piped, with stable exit codes:
@@ -1240,6 +1260,9 @@ when piped, with stable exit codes:
   reports permanent withdrawal refusals once for the owner to answer.
 - `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
   `result ls`: task results kept by World, instead of terminal scraping.
+- `task-summary "…" [--ttl-ms MS]`: a short label for the current Herdr agent
+  session, expiring after 15 minutes by default. `stamp CHILD_PANE PARENT_PANE`
+  records parentage directly in Herdr; both accept `--session NAME`.
 - `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It
   is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
   it names is the child's claim.
