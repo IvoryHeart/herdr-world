@@ -1052,7 +1052,8 @@ shows a **World skill** line under each harness, with its state, path and
 **Install**, **Update** or **Uninstall**. The buttons run the same installer on
 World's own host and ask for confirmation first; uninstalling Codex, Pi or
 Kimi names the other two that lose the shared file. SSH connections show no
-World skill lines yet.
+World skill lines yet. If World restarts while the panel is open, the panel
+shows **Reconnecting to World...** and then reloads by itself.
 
 Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
 to colour and pin its card, group with the agent that started it, report a

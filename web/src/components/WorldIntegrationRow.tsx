@@ -14,29 +14,36 @@ import {
 export function useWorldIntegrations(
   enabled: boolean,
   label: (harness: string) => string,
+  /** Reload whenever this changes, such as World's connection after a restart. */
+  epoch?: unknown,
 ) {
   const [items, setItems] = useState<WorldIntegration[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [changeError, setChangeError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const mounted = useRef(true);
   const sequence = useRef(0);
 
   const load = useCallback(async () => {
+    void epoch;
     if (!enabled) return;
     const request = ++sequence.current;
     try {
       const next = parseWorldIntegrations(
         await bridge.call("world.integration.list"),
       );
-      if (mounted.current && request === sequence.current) setItems(next);
+      if (mounted.current && request === sequence.current) {
+        setItems(next);
+        setLoadError(null);
+      }
     } catch (e) {
       if (mounted.current && request === sequence.current) {
         setItems(null);
-        setError(`Could not load World skills: ${(e as Error).message}`);
+        setLoadError(`Could not load World skills: ${(e as Error).message}`);
       }
     }
-  }, [enabled]);
+  }, [enabled, epoch]);
 
   useEffect(() => {
     mounted.current = true;
@@ -58,7 +65,7 @@ export function useWorldIntegrations(
           ? "Update"
           : "Install";
     setBusy(item.harness);
-    setError(null);
+    setChangeError(null);
     setMessage(null);
     try {
       await bridge.call(`world.integration.${action}`, {
@@ -70,7 +77,7 @@ export function useWorldIntegrations(
         );
     } catch (e) {
       if (mounted.current)
-        setError(
+        setChangeError(
           `${verb} of World's skill for ${label(item.harness)} failed: ${(e as Error).message}`,
         );
     } finally {
@@ -79,7 +86,14 @@ export function useWorldIntegrations(
     }
   };
 
-  return { items, busy, error, message, load, change };
+  return {
+    items,
+    busy,
+    error: changeError ?? loadError,
+    message,
+    load,
+    change,
+  };
 }
 
 export function WorldIntegrationRow({

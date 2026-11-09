@@ -5,7 +5,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
   connectionClientScopeKey,
   useConnectionClient,
+  useConnectionReady,
 } from "../useConnectionClient";
+import { useStoreSelector } from "../store";
 import { focusIfUnchanged } from "./dialogFocus";
 import {
   useWorldIntegrations,
@@ -15,6 +17,7 @@ import { worldHarnessFor, type WorldIntegration } from "../worldIntegrations";
 import "./AgentIntegrationsSettings.css";
 
 import {
+  lacksIntegrationManagement,
   parseAgentIntegrations,
   type AgentIntegration,
 } from "../agentIntegrations";
@@ -54,6 +57,17 @@ export function AgentIntegrationsSettings({
     client,
     client.serverRuntimeGeneration,
   );
+  // World restarts and runtime replacements briefly leave this client stale;
+  // the hook captures a current one once World's catalog is back.
+  const ready = useConnectionReady(client);
+  const waiting = useStoreSelector((s) =>
+    s.status !== "connected" || !s.catalogueReady
+      ? "Reconnecting to World..."
+      : s.connections.find((c) => c.id === client.connectionId)?.state !==
+          "ready"
+        ? "Waiting for Herdr on this host..."
+        : null,
+  );
   const [items, setItems] = useState<AgentIntegration[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -69,7 +83,11 @@ export function AgentIntegrationsSettings({
   const labelFor = (harness: string) =>
     items?.find((item) => worldHarnessFor(item.target) === harness)?.label ??
     harness;
-  const world = useWorldIntegrations(!sshDestination, labelFor);
+  const world = useWorldIntegrations(
+    !sshDestination && ready,
+    labelFor,
+    client,
+  );
   const worldRow = (harness: string) =>
     world.items?.find((item) => item.harness === harness);
 
@@ -102,9 +120,10 @@ export function AgentIntegrationsSettings({
     } catch (e) {
       if (mounted.current && request === sequence.current) {
         setItems(null);
+        // A stale client is shown as reconnecting, not as a failure.
         setError(
           !client.isCurrent()
-            ? "The selected host is no longer available. Reconnect it or choose another host."
+            ? null
             : [
                 outcome?.error,
                 `Could not load integrations: ${(e as Error).message}`,
@@ -117,9 +136,7 @@ export function AgentIntegrationsSettings({
       if (mounted.current && request === sequence.current) {
         if (!client.isCurrent()) {
           setItems(null);
-          setError(
-            "The selected host is no longer available. Reconnect it or choose another host.",
-          );
+          setError(null);
         } else if (outcome) {
           setMessages(outcome.messages);
           if (pendingChanges.get(scope) === operation)
@@ -132,11 +149,13 @@ export function AgentIntegrationsSettings({
 
   useEffect(() => {
     mounted.current = true;
-    void load();
+    // Also reload when the same client becomes current again.
+    if (ready) void load();
+    else setLoading(false);
     return () => {
       mounted.current = false;
     };
-  }, [load]);
+  }, [load, ready]);
 
   const change = async (
     item: AgentIntegration,
@@ -229,7 +248,7 @@ export function AgentIntegrationsSettings({
   const unavailable = (items ?? []).filter(
     (item) => !item.available && item.state === "not_installed",
   );
-  const worldDisabled = world.busy !== null;
+  const worldDisabled = world.busy !== null || !ready;
   const renderWorld = (row: WorldIntegration | undefined) =>
     row ? (
       <WorldIntegrationRow
@@ -379,22 +398,35 @@ export function AgentIntegrationsSettings({
       <div role="status" className="agent-integrations-status">
         {busy
           ? "Applying integration change..."
-          : loading
-            ? "Loading integrations..."
-            : null}
+          : !ready && waiting
+            ? waiting
+            : loading
+              ? "Loading integrations..."
+              : null}
         {messages.map((message, index) => (
           <div key={index}>{message}</div>
         ))}
       </div>
-      {error ? (
+      {!ready ? (
+        waiting ? null : (
+          <div className="configuration-error" role="alert">
+            <span>Settings lost track of World's connection.</span>{" "}
+            <button type="button" onClick={() => window.location.reload()}>
+              Reload
+            </button>
+          </div>
+        )
+      ) : error ? (
         <div className="configuration-error" role="alert">
           <span>
-            {error} If this Herdr server does not support integration
-            management, update Herdr.
+            {error}
+            {lacksIntegrationManagement(error)
+              ? " This Herdr server does not support integration management; update Herdr."
+              : ""}
           </span>
         </div>
       ) : null}
-      {world.busy || world.message || world.error ? (
+      {world.busy || (ready && (world.message || world.error)) ? (
         <div
           role={world.error ? "alert" : "status"}
           className={

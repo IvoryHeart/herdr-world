@@ -5,3 +5,10 @@
   buttons that run the same installer as `herdr-world integration`.
   Uninstalling the file Codex, Pi and Kimi share names the harnesses that
   lose it before it runs.
+
+### Fixed
+
+- Configuration → Integrations reloads by itself after World restarts or a
+  connection's Herdr runtime changes, instead of saying the host is no longer
+  available. It suggests updating Herdr only when Herdr refuses the
+  integration methods.
