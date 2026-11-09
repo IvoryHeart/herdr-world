@@ -90,6 +90,8 @@ const build = await Bun.build({
 if (!build.success) {
   throw new AggregateError(build.logs, "Failed to optimize the Pages site");
 }
+// styles.css imports the home page's sections; the bundle carries them.
+await rm(join(outputDirectory, "home.css"));
 
 // The film draws its Town with the app's own Town code, bundled beside it.
 const filmTown = await Bun.build({
