@@ -2,8 +2,8 @@
  * The film's Town art: the application's own layout, painting, sprite and
  * routing code, bundled by `bun run build:site` into `film/town-art.js`. The
  * film draws its Town scenes with these functions, so its rooms, desks,
- * people, town center, bus stops and walks are the ones the app draws rather
- * than an approximation of them.
+ * people, town center, post office, bus stops, thought bubbles and walks
+ * are the ones the app draws rather than an approximation of them.
  */
 
 import { TERMINAL_COLOR_HEX } from "../../web/src/world/terminalColor";
@@ -29,6 +29,17 @@ import {
   townSeat,
 } from "../../web/src/world/town/townLayout";
 import {
+  TOWN_POST_YARD_ROWS,
+  townPostLot,
+  townPostSlot,
+} from "../../web/src/world/town/townPost";
+import {
+  paintTownPostHouse,
+  paintTownPostYard,
+} from "../../web/src/world/town/townPostPaint";
+import { townStepGlyphUrl } from "../../web/src/world/town/townStepArt";
+import { TOWN_STEP_WORDS } from "../../web/src/world/town/townSteps";
+import {
   TOWN_HOST_THEMES,
   paintTownFacade,
   paintTownGround,
@@ -51,6 +62,8 @@ Object.assign(window, {
     TOWN_DESK_COLORS,
     TOWN_FACADE,
     TOWN_HOST_THEMES,
+    TOWN_POST_YARD_ROWS,
+    TOWN_STEP_WORDS,
     TOWN_TILE,
     TownNavigation,
     buildTownSprites,
@@ -59,6 +72,8 @@ Object.assign(window, {
     paintTownFacade,
     paintTownGround,
     paintTownInterior,
+    paintTownPostHouse,
+    paintTownPostYard,
     paintTownRoof,
     townArrivalPath,
     townBusRoute,
@@ -70,8 +85,11 @@ Object.assign(window, {
     townDeskTable,
     townLookFor,
     townNearestStop,
+    townPostLot,
+    townPostSlot,
     townQueueSpot,
     townScreen,
     townSeat,
+    townStepGlyphUrl,
   },
 });
