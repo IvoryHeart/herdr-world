@@ -164,6 +164,7 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
                 onClose() {},
                 onFloat() {},
                 onSnap() {},
+                onFit() {},
                 attention: { current: "watching", onInterest: attention },
                 pin: { pinned, onPin },
               },

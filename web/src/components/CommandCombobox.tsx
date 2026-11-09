@@ -66,7 +66,7 @@ import {
 } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
-  WINDOW_ARRANGEMENT_CHOICES,
+  offeredArrangementChoices,
   type WindowArrangementControl,
 } from "./WindowArrangementMenu";
 import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
@@ -991,7 +991,7 @@ function OwnedCommandCombobox({
     : [];
 
   const arrangementActions: ActionDefinition[] = arrangementControl
-    ? WINDOW_ARRANGEMENT_CHOICES.map(
+    ? offeredArrangementChoices(arrangementControl).map(
         ({ command, label, description, shortcutId }) => {
           const shortcut = shortcutId
             ? shortcutLabel(shortcutId)
@@ -1000,13 +1000,15 @@ function OwnedCommandCombobox({
             key: `arrangement-${command}`,
             icon: <LayoutGrid size={15} />,
             title:
-              command === "close-all"
-                ? "Close all terminal windows"
-                : command === "open-all"
-                  ? "Open all terminal windows"
-                  : command === "restore"
-                    ? "Restore window positions"
-                    : `Arrange windows: ${label}`,
+              command === "fit-right" || command === "fit-left"
+                ? label
+                : command === "close-all"
+                  ? "Close all terminal windows"
+                  : command === "open-all"
+                    ? "Open all terminal windows"
+                    : command === "restore"
+                      ? "Restore window positions"
+                      : `Arrange windows: ${label}`,
             detail: description,
             shortcut: shortcut === "Unassigned" ? undefined : shortcut,
             keywords: ["layout", "tile", "windows", label],

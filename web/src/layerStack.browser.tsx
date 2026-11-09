@@ -152,6 +152,7 @@ function TerminalWindow() {
             onMaximize() {},
             onClose() {},
             onSnap() {},
+            onFit() {},
             onFloat() {},
             color: choice,
           }}

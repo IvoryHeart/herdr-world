@@ -20,7 +20,7 @@ import {
 } from "../../components/ColorSwatch";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { useLayer } from "../../layerStack";
-import type { SnapTarget } from "./windowManager";
+import type { FitSide, SnapTarget } from "./windowManager";
 import "./windows.css";
 import "../../components/WorkspaceInspectorActions.css";
 
@@ -31,6 +31,8 @@ export type ManagedWindowControls = {
   onMaximize(): void;
   onClose(): void;
   onSnap(target: SnapTarget): void;
+  /** Against one edge at the normal docked width, not half the screen. */
+  onFit(side: FitSide): void;
   onFloat(): void;
   /** A terminal window's colour, chosen in its menu. */
   color?: {
@@ -87,6 +89,10 @@ export function WindowBackButton({
     </button>
   );
 }
+const fitChoices: { side: FitSide; label: string }[] = [
+  { side: "right", label: "Fit right" },
+  { side: "left", label: "Fit left" },
+];
 const choices: { target: SnapTarget; label: string }[] = [
   { target: "left", label: "Left half" },
   { target: "right", label: "Right half" },
@@ -211,6 +217,10 @@ export function WindowControls({
     ...(controls.compact
       ? []
       : [
+          ...fitChoices.map(({ side, label }) => ({
+            label,
+            run: () => controls.onFit(side),
+          })),
           ...choices.map(({ target, label }) => ({
             label,
             run: () => controls.onSnap(target),

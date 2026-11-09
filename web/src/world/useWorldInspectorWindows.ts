@@ -2,14 +2,19 @@ import { useFocusedInspectorInterest } from "./useFocusedInspectorInterest";
 import {
   floatingTerminalGeometryId,
   readFloatingTerminalDock,
-  readFloatingTerminalDockWidth,
   readFloatingTerminalGeometry,
+  readFloatingTerminalSnapDock,
+  readWindowFitWidth,
+  writeFloatingTerminalDock,
   type FloatingTerminalDock,
 } from "./floatingTerminalPreferences";
 import { useLayoutPreferences } from "../layoutPreferences";
 import {
+  DOCKED_WINDOW_WIDTH,
+  fitDock,
   fitWindow,
   initialWindowRect,
+  type FitSide,
   type SnapTarget,
 } from "./windows/windowManager";
 import {
@@ -20,7 +25,10 @@ import { type SnapDock, visibleWindowIds } from "./windows/windowManager";
 import { useWorldPanels } from "./windows/WorldPanel";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
-import { type WindowArrangementControl } from "../components/WindowArrangementMenu";
+import {
+  type WindowArrangementCommand,
+  type WindowArrangementControl,
+} from "../components/WindowArrangementMenu";
 import { store } from "../store";
 import {
   readInspectorPreferences,
@@ -28,10 +36,7 @@ import {
 } from "../workspaceResource";
 import { worldRuntimeStore, type WorldRuntimePriority } from "./runtimeStore";
 import { type WorldLeafObject, type WorldObjectNode } from "./worldObject";
-import {
-  terminalWindowArrangementReason,
-  type TerminalWindowArrangementPreset,
-} from "./terminalWindowArrangement";
+import { terminalWindowArrangementReason } from "./terminalWindowArrangement";
 import {
   worldInspectorForNode,
   worldInspectorWindowId,
@@ -123,7 +128,7 @@ export function useWorldInspectorWindows({
             worldLocalStorage,
             floatingTerminalGeometryId(conversation),
           ),
-          readFloatingTerminalDockWidth(
+          readFloatingTerminalSnapDock(
             worldLocalStorage,
             floatingTerminalGeometryId(conversation),
           ),
@@ -258,14 +263,37 @@ export function useWorldInspectorWindows({
       });
     }
   }, [inspectorConversations, windowStage.width, windowCommand]);
+  /**
+   * Fit a window to one edge at the normal docked width. Town reopens an
+   * Inspector where it was left, so Town remembers the fit like a snap.
+   */
+  const fitWindowToSide = useCallback(
+    (id: string, side: FitSide) => {
+      const dock = fitDock(readWindowFitWidth(worldLocalStorage));
+      const conversation = inspectorConversationsRef.current.find(
+        (candidate) => worldInspectorWindowId(candidate) === id,
+      );
+      if (view === "town" && conversation)
+        writeFloatingTerminalDock(
+          worldLocalStorage,
+          floatingTerminalGeometryId(conversation),
+          side,
+          dock,
+        );
+      windowCommand({ type: "fit", id, side, dock });
+    },
+    [view, windowCommand, inspectorConversationsRef],
+  );
   const selectVisualArrangement = useCallback(
-    (
-      command:
-        | TerminalWindowArrangementPreset
-        | "restore"
-        | "close-all"
-        | "open-all",
-    ) => {
+    (command: WindowArrangementCommand) => {
+      if (command === "fit-right" || command === "fit-left") {
+        if (!compactArrangement && activeInspectorId)
+          fitWindowToSide(
+            activeInspectorId,
+            command === "fit-right" ? "right" : "left",
+          );
+        return;
+      }
       if (command === "open-all") {
         const uniqueTabs = availableWindowTabs;
         const omitted = Math.max(
@@ -354,6 +382,8 @@ export function useWorldInspectorWindows({
       world,
       availableWindowTabs,
       panels,
+      activeInspectorId,
+      fitWindowToSide,
     ],
   );
   const visualArrangementControl = useMemo<WindowArrangementControl>(() => {
@@ -382,6 +412,9 @@ export function useWorldInspectorWindows({
             );
       if (reason) disabledReasons[preset] = reason;
     }
+    for (const command of ["fit-right", "fit-left"] as const) {
+      if (!activeInspectorId) disabledReasons[command] = "No window is open.";
+    }
     if (!managedWindows.baseline)
       disabledReasons.restore = "No arranged positions to restore.";
     if (!managedInputs.length)
@@ -402,6 +435,7 @@ export function useWorldInspectorWindows({
           ? "single"
           : (managedWindows.layout?.preset ?? null),
       disabledReasons,
+      hidden: compactArrangement ? ["fit-right", "fit-left"] : undefined,
       onSelect: selectVisualArrangement,
       // Panels are listed too, so a minimized one can be restored.
       windows: managedInputs.map((input) => ({
@@ -488,6 +522,7 @@ export function useWorldInspectorWindows({
     compactArrangement,
     managedWindows,
     windowCommand,
+    fitWindowToSide,
     activeInspectorId,
     contextRailInspector,
     visibleFloatingInspectorIds,
@@ -506,7 +541,7 @@ export type WorldInspectorWindows = ReturnType<typeof useWorldInspectorWindows>;
  * the dock it was last left with (docked somewhere, or floating).
  */
 /** Town's docked window opens at a readable width rather than half the stage. */
-export const TOWN_DOCK_WIDTH = 520;
+export const TOWN_DOCK_WIDTH = DOCKED_WINDOW_WIDTH;
 
 /**
  * How wide Town's docked window opens: the width it was last resized to, or
@@ -516,11 +551,10 @@ export const TOWN_DOCK_WIDTH = 520;
 export function inspectorInitialDock(
   view: string,
   saved: FloatingTerminalDock | null,
-  savedWidth: number | null,
+  savedDock: SnapDock | null,
 ): SnapDock | undefined {
   if (view !== "town") return undefined;
-  if (savedWidth && (saved === "left" || saved === "right"))
-    return { width: savedWidth };
+  if (savedDock && (saved === "left" || saved === "right")) return savedDock;
   return saved ? undefined : { width: TOWN_DOCK_WIDTH, upToHalf: true };
 }
 
