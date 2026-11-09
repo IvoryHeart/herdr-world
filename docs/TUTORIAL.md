@@ -1,820 +1,1939 @@
 <!-- markdownlint-disable MD033 -->
 <!-- Explicit anchors keep section links usable in both GitHub and Pages. -->
-<!--
-  This is a learner's guide: short steps, what to do and what you will see.
-  Change it only when a learner's steps change. Edge cases, limits, refusals and
-  internals belong in FEATURES.md. `bun run build:site` fails when a step or
-  paragraph grows past its limit or the page past its word budget.
--->
 
 # From your first terminal to a workspace that travels
 
-Herdr World puts your coding agents in one place you can open from any
-browser: who is working, who needs you, and what they changed.
+**Start Herdr World on the Herdr host and open its URL:** follow [chapter 1](#start).
+Not installed? Use the [installation guide](./DEPLOYMENT.md#install-a-release).
 
-In this tutorial you give an agent one small task (improving a README),
-follow it, check what it changed, and then pick it up from your phone.
+Practice one task: **ask an agent to improve a README, review the changes, then
+check from your phone.** No Git, SSH, or networking knowledge is needed to start.
 
-> **You need:** a computer with a project you may change, and an agent CLI you
-> are signed in to, such as Claude Code or Codex. No Git, SSH or networking
-> knowledge is needed to start.
+> With both tools installed: chapter 1 takes about 5 minutes; chapters 1-3 about
+> 25 minutes. Allow 15-25 more for remote access, excluding installation,
+> approvals, and troubleshooting. Stop at any completion check.
 >
-> **Time:** about 5 minutes to get started and 30 minutes for chapters 1 to 6.
-> Remote access takes another 15 to 25 minutes.
+> **This static Pages tutorial does not run Herdr or keep terminals alive.**
+> You still need the Herdr World process.
 
-This page is only reading material: World itself runs on your computer.
+> **New in 0.2.7:** [chat with an agent](#chat) in its one window,
+> [start agents from profiles](#new-agent), [hear who needs you](#chimes),
+> [let agents arrange World](#agent-cli), and follow pull requests in
+> [Board's Work lens](#board). See the
+> [0.2.7 release notes](./releases/v0.2.7.md).
 
-## 1. Get started
+## 1. Start here: see your own work locally
 
 <a id="start"></a>
 
-### How the pieces fit
+### Three names, three jobs
+
+The browser reaches your agent through two services:
 
 ```text
-Your browser or phone
-      |
-Herdr World   (the app you see)
-      |
-Herdr         (runs your terminals)
-      |
-Your shells and agents
+Your browser / installed PWA
+          |
+          | HTTP + WebSocket
+          v
+Herdr World (command: herdr-world)
+          |
+          | Herdr control and terminal-render sockets
+          v
+Herdr server -> workspace -> tab -> pane -> shell / agent
 ```
 
-- **Herdr** runs the terminals. They keep running when you close the browser,
-  but stop if the computer sleeps or shuts down.
-- **World** shows them in your browser and lets you act on them.
-- **Agents** stay ordinary command-line tools. World does not provide models
-  or sign you in to them.
+**Herdr owns terminals; Herdr World supplies the browser UI; agents remain CLIs.**
+Herdr World neither provides models nor installs/signs in to Codex, Claude, Pi, or
+other tools. Closing the browser leaves terminals running, but host sleep,
+shutdown, or process exit can stop work.
 
-### Install and open World
+The current foundation uses only Herdr World service, plugin, storage, and browser
+identities. It intentionally starts with fresh preferences rather than importing an
+older World or Roamgate installation.
 
-1. Install World by following
-   [Install a release](./DEPLOYMENT.md#install-a-release). The standalone
-   installer also installs or upgrades [Herdr](https://herdr.dev).
-2. Start World and leave it running:
+### Open your first workspace: about 5 minutes
+
+1. If Herdr is already installed, start it with a trusted project open. See
+   [herdr.dev](https://herdr.dev) for setup. If it is not installed, do step 2
+   first: the published 0.2.7 standalone installer installs or upgrades Herdr to
+   the verified release. Set `HERDR_WORLD_SKIP_HERDR=1` to leave your Herdr
+   untouched. Homebrew reuses existing Herdr and installs a missing runtime on
+   first normal World launch; npm and Windows archives leave setup to you.
+   Run `herdr-world herdr setup` to install Herdr if needed and configure its user
+   service before step 3. It starts Herdr if down; if already running, it registers
+   future startup without restarting the live server. Alternatively, open World
+   first: while Herdr is missing or stopped, Town offers **Set up Herdr**, and
+   nothing installs or starts until you confirm. Explicit World updates retain a separate Herdr upgrade
+   step. See
+   [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
+2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
+   Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
+   Node.js 22.14.0 or newer) or the matching x64/ARM64 archive and
+   `herdr-world.exe`. Alternatively,
+   follow the [plugin setup](./DEPLOYMENT.md#herdr-plugin).
+3. Start it on that computer:
+
+   **Standalone:** leave this process running:
 
    ```bash
    herdr-world
    ```
 
-   Using the Herdr plugin instead? Start it with its
-   [startup action](./DEPLOYMENT.md#herdr-plugin) and take the login URL from
-   its log.
+   **Plugin:** use its [startup action](./DEPLOYMENT.md#herdr-plugin) and obtain
+   the login URL from the panel/command log. The plugin does not add `herdr-world`
+   to `PATH`; skip the standalone command.
 
-3. Open the URL it prints on the same computer. It looks like
-   `http://127.0.0.1:8787` and carries a login token.
-4. World opens on **Town**. If Herdr is missing or stopped, Town offers
-   **Set up Herdr**; nothing is installed until you confirm.
-5. Open **Spaces** from the view picker at the top. Choose **+** (New
-   workspace) beside the workspace list, set **Working directory** to your
-   project's folder, and choose **Create**.
-6. Select the new workspace and its shell pane, and type `pwd`
-   (`Get-Location` in PowerShell).
+4. Open the printed URL (including any token) on **the same computer**. Standalone
+   defaults to `http://127.0.0.1:8787` and opens **Town**. Use the view
+   switcher to open **Spaces**, select a workspace and idle shell pane, then
+   run `pwd` (`Get-Location` in PowerShell).
 
-**You are done when:** the terminal shows your project's folder. Get this
-working before you set up remote access.
+**You are done when:** terminal input shows your project directory. Get this
+working before configuring remote access.
+
+> **Check the listener:** standalone defaults to loopback and requires login
+> using a configured password or the generated persistent token. A new `herdr-world service install` uses
+> `0.0.0.0:8787` with a token; the plugin uses this service too.
 
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 
-### Four views of the same work
+*Find the project and active pane. Screenshot menu positions can differ by release.*
 
-| View | Use it to |
+### Find an available World upgrade
+
+An available World release shows a notification once per version in this browser
+profile at this World address. Repeated checks and page or service restarts keep
+that history. Dismissing the notification leaves the red attention dot on **Menu**.
+Open **Menu → Help & updates → Upgrade to <version>** when you are ready; a failed
+installation keeps this action available for retry. The dot clears after a
+successful upgrade or a check confirms no update remains. Existing installation
+channel and restart checks still apply.
+
+Notification history uses an atomic IndexedDB claim so concurrent windows cannot
+both announce the same release. Existing browser notification markers remain
+honored. If persistent storage is blocked, cross-window deduplication is unavailable
+and only page-lifetime suppression is guaranteed; a slow claim fails closed rather
+than racing another window.
+Clearing site storage resets this history; other World origins and browser
+profiles keep independent history. Disabling automatic checks stops future checks,
+without hiding an already discovered upgrade. Manual **Check for updates**
+answers with a brief completion message without repeating the release notification.
+It remains available even if the Upgrade entry is disabled; the menu visibly
+explains the installation-channel restriction on phones and desktops.
+
+### Reload a tab after the service changes
+
+An open tab keeps running the build it loaded, even after the service is
+upgraded, rebuilt or rolled back. When the service serves a different build, a
+notice names this tab's build and the served one. This is separate from the
+release notification above: it compares this tab with the running service, not
+the service with the latest release. Choose **Reload** when convenient; Herdr
+sessions keep running and open terminals reconnect. **Later** hides the notice
+until another build is served, and **Menu** keeps showing both builds. If a
+part of the app fails to load because the service no longer has its files,
+World shows a **Reload** notice rather than reloading by itself; reopening that
+part after **Later** shows the notice again.
+
+### Choose a view for the task
+
+Use the view switcher to move between these views without restarting work:
+
+| View | Use it for |
 | --- | --- |
-| Town | See each agent as a character in a small town, and who needs you. World opens here. |
-| Board | Lay agents out as cards on a pin board, beside your own notes. |
-| Desk | Work through a queue: who needs an answer, what finished, what is running. |
-| Spaces | Work in one workspace's terminals, files and changes. |
+| Town | Explore host buildings, workspace rooms and team tables; the default landing view |
+| Board | Pin notes beside hosts, workspaces and agents, string them together and send a note to an agent |
+| Desk | Find agents needing input, review finished turns and follow work in flight |
+| Spaces | Work in one workspace's terminal panes, files, changes and history |
 
-Switch views with the view picker at the top edge (on a phone, the corner
-button). Views open full-screen; choose **Exit Zen** to show the menu bars.
+Office, Tree and Graph have been retired; `/office` opens Town, and `/graph` and
+`/tree` open Board. The exercises below use Town, Board, Desk and Spaces. Board
+and these redirects are included in [0.2.6](./releases/v0.2.6.md).
 
-**Hosts** starts at **All hosts**. Choose fewer to narrow what you see; this
-never disconnects anything. **Manage connections** adds a computer over SSH or
-reconnects one. A disconnected host stays visible, marked
-**Disconnected · Reconnect**.
+**Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
+use **Manage connections** to add or reconnect a local or SSH profile. Filtering
+changes what you see and does not disconnect hosts or retarget open terminals.
+If a host disconnects, its cached building and agents remain visible as stale
+history. Town's building and reception and Board's host label show
+**Disconnected · Reconnect**; their old agents cannot open live Chat or terminals.
+Transient SSH failures retry with backoff. Tap **Reconnect** to restart that
+host's connection, or use **Manage connections** to inspect its error. Other
+hosts stay usable.
 
-### Keep World up to date
-
-When a new release is out, World tells you once and puts a dot on **Menu**.
-Install it when you are ready with **Menu → Help & updates → Upgrade to …**.
-After an upgrade, open tabs offer **Reload**; your terminals keep running.
-
-## 2. Find what needs you in Town
+### Explore Town: find work that needs you
 
 <a id="town"></a>
 
-![Town with two host buildings, receptions holding waiting and finished agents, the expenses billboard, the fuel board and the post office](./images/herdr-world-desktop-town.png)
+1. Open **Town** from the view switcher, or return to the World root URL.
+   Every view opens in Zen, full-bleed: use the view picker at the top edge (on
+   a phone, the corner button) to switch views, or **Exit Zen** to show the
+   bars. The choice is shared, so leaving Zen in one view leaves it in all.
+   Each host is a building, each workspace a room, each tab a table and each pane a
+   seat. Plain terminal panes show a prompt rather than an agent character.
+   The **town center**, the domed hall at the top of the town just across the
+   first street from the buildings, is Town's landmark. Tap it (or its **Town center** plaque, or Tab to the plaque and
+   press Enter) for a ring of actions around its doors: **New agent** opens the
+   launcher (in the room you have open, when it can start one there), **Town
+   master** opens your coordinating agent's Chat, **Needs you** opens that tab,
+   **Summary** the Town summary, **Lenses** colours the map by one fact (see
+   [lenses](#town-lenses)), **Profiles** the agent profiles and **New
+   room** creates a room. Arrow keys move around the ring; Escape, a tap
+   outside, the centre **✕** or **Back** on a phone closes it.
+2. On a wide window Town opens framed on the billboard, the reception
+   boards, the town center and every building, centred. Use **+** and **−** to move between town,
+   building, room and desk detail; **ALL** (or **−** from that first view)
+   shows the whole town. Zoomed out, the land around it is generated
+   woods, meadows, gardens, ponds and footpaths, with each street running on as
+   a country lane, and carries on to the edges of the window however far you
+   zoom out or pan; it looks the same after a reload, and only the land next to
+   a growing building changes. Drag the background to pan, or use arrow keys
+   when the scene has focus. Tap a room to zoom in. Zoomed into a room or
+   desk, an arrow on the view's edge points at each agent that needs you out
+   of sight, with its mark (**!**, **?** or **✓**) and a count when several
+   lie the same way, such as `! 3`; click or tap it to travel there and see
+   the agent's mark pulse. On a desktop, press **N** to visit the next thing
+   that needs you, in Needs you's order: the camera moves to the agent, Needs
+   you opens at it and a label counts "1 of 7 · N next". **Shift+N** goes
+   back. With nothing waiting, **N** says "Nothing needs you". Rebind both
+   under **Town** in Keyboard shortcuts. Large towns may initially
+   show roofs; zoom in to see room summaries and desks. Phones stack buildings
+   vertically. Room nameplates fit their rooms: long names end in an ellipsis;
+   hover the name for its full text. The colour, active/total agent count and
+   blocked badge stay visible. Active means working or waiting on you; plain
+   terminals are excluded from the total. Hover the count for the working/waiting
+   breakdown. Hover or focus a plate for the room's card below it: the Town
+   board's numbers for that room (working, need you, done, quiet and its
+   agents) and its economy today (estimated cost, tokens and models), then
+   Rename and Close. Cost shows when a price table is set; otherwise the card
+   says "no price table". See [harness usage](./usage.md). Hover a table or its nameplate for the
+   same card about that table. Zoomed out to the room cards, hover anywhere
+   over a room for its numbers under its card. On a touch screen, tap the plate or nameplate;
+   the first tap on a table opens its card, and a second tap (or a double tap)
+   opens the table as before. The dashed **+** seat inside a room
+   opens its launcher with that room selected. Choose **Terminal** for a plain
+   tab, a profile, or an agent kind. If the requested room is no longer
+   available, choose a current room in the launcher before creating anything.
+3. Look at reception, at the top of each building, for blocked agents waiting
+   for input, oldest first. Finished agents also wait there until you open
+   their terminal or mark that completion reviewed, then join idle agents at
+   the bar in the building's bottom corner. When the queue is full, the rest
+   crowd the lobby and grumble, then nap on the floor after about 90 seconds;
+   the front of the crowd takes the next free spot. An agent out of fuel (its
+   harness hit a usage limit) stays slumped at its desk under an empty fuel
+   can and a clock showing when the limit resets; hover its table for the
+   full words. These
+   locations visualize status; they do not move the underlying pane or change its host. To keep
+   reception for what matters now, press its sign (the **!** **?** **✓**
+   marks) and untick a mark, for example **✓** Done: those agents stay at
+   their desks with their mark, and reception shows `✓ N at desks · find`.
+   Press **find** to open the first of them and **Next ›** to step through
+   the rest; **Reset to default** brings everyone back. A change applies to
+   that building alone; tick **Apply to all buildings** to give every building
+   the same marks. Counts, Board and Needs you are
+   unchanged, and World keeps the filter for every browser. Zoomed in to
+   desks the boards are put away: tap the reception lobby to bring its board
+   and sign back. Each reception board ends with the building's **Expenses
+   today**: that host's tokens and estimated cost and its three costliest
+   rooms; the **City expenses** billboard on the lawn above the town center
+   shows the whole World, with **Today** and **7 days** buttons. Boards keep
+   clear of the town center, the post office and each other: one that would
+   cover them moves aside over its building, or lower, under what is in
+   its way.
+   **Today** uses UTC; **7 days** includes today. The Town board's **Economy
+   today · UTC · harness logs** shows the same Today figures and pricing rule.
+   Building totals add up to the city. Under each figure one short line names
+   its caveats, such as "partial · 1 host missing"; hover it, or tap it on a
+   phone, for the full explanation, including unattributed usage (already part
+   of the totals, not another charge) and a detail limit (which never lowers
+   totals). Without a price table they show tokens and "no price table"; a
+   host whose logs cannot be read says "no data", never 0. On a phone, tap the
+   coin signs to open them. With the GitHub source signed in, the **post office**
+   left of the town center, on the first street, holds your open pull requests as parcels,
+   ready to merge first; its sign counts ready, failing and waiting. Hover a
+   parcel for its title and state and tap it for the pull request card with
+   **Merge…**; a merged parcel is carried off. On a phone, tap the post box
+   sign on the town center. For the
+   whole picture, the Town board counts every building's agents, quiet ones
+   included. Its **FUEL** gauges show how much of each Codex and Claude
+   subscription window is left (amber and **low** under 15 %). A reading more
+   than 15 minutes old says how old it is, such as "seen 1 h ago"; hover or tap
+   a gauge for its reset time, how old the numbers are and where they came from. The
+   Claude gauge appears within about a minute of the first answer from a
+   Claude agent you started from World, and reads **reached, resets …** while Claude is refusing work at
+   its limit. Press **Summary** on the board (on a phone, tap the
+   counts chip under the search bar): the **Town summary** window lists who
+   needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
+   rooms with their counts and its subscription limits, and spend. When you come back after 30 minutes
+   or more away, the board sign starts with **Since you left**: what is new
+   for you, what finished and what merged while you were away. Each line
+   opens **Needs you** at that item, which carries a "new" dot (the merged
+   line opens **Needs you** itself); **✕** clears
+   the recap. Each time you come back (World opening, or its page
+   back on screen after 30 minutes or more hidden), the **Town Master**, the
+   small figure beside the board, greets you with one card: when you were
+   last here, the same since-you-left lines and, when a newer World release
+   is out, a **See update** button that opens **Menu** at its update entry.
+   Board shows the card at its hub beside the bin, Desk at its summary, and
+   a phone as a sheet with **Back**. It waits while Chat, **Needs you** or
+   another window covers its place (on a phone, while any is open). Close it with **✕**, Escape or a tap elsewhere;
+   tap the figure to see it again, and untick **Show this on start** (or
+   switch off **Menu → Town Master greeting**) to stop it. While anything
+   needs you, World's browser tab reads `(N) Herdr World` and its icon (and
+   an installed World's app icon) shows the number, so you see it from
+   another tab; **Menu → Count on tab and app icon** turns that off. Answer a question from its offered
+   options or type a reply. World saves the answer before confirming it, and
+   the agent can retrieve it with `herdr-world ask get ID` or `--wait`, including
+   after a restart. For new asks from a verified local Linux agent with a bound
+   Chat session, World also sends the saved answer there without needing
+   `--wait`. An offline host waits; a changed asking session is skipped.
+   **Outbox** in Town Summary keeps waiting, unconfirmed and
+   not-sent answers reachable without adding open questions. If a send is
+   uncertain, World will not retry it automatically. **Send again…** asks you to
+   accept a possible duplicate to the original session; **Dismiss** or **Cancel send**
+   stops delivery while preserving the answer for `ask get`. Submission to
+   Herdr does not prove the agent read or acted on it. Dismissals and older or
+   unverified asks remain retrieval-only.
+   Agent questions and results use the instance's `world.sqlite`;
+   [back it up with the service stopped](https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#durable-questions-results-and-backups).
+   A blocked agent that also asked a question counts
+   as two items needing you. Tap a room to show it in Town; on a phone, Summary
+   closes first. Press **Summary** again to restore its minimized window or bring
+   it to the front. Use **Back** to close the summary.
+4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
+   with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
+   Without a session yet it opens on Terminal for startup questions, then
+   switches to Chat when the session arrives; a view you choose by hand sticks.
+   On a phone, the anchored header dropdown switches between **Chat**, **Terminal**,
+   **Files** and **Changes**; the **⋯** menu contains attention settings.
+   In Town it docks on the right at a readable width; drag its left edge to
+   resize it (Town remembers the width), or drag its title to undock it.
+   [Chat with an agent](#chat) explains reading, replying and answering there.
+   **Needs you** in the top bar (in the view picker in Zen and on a phone,
+   where outside Zen it is an inbox icon with a count badge after the view's
+   name) counts the questions and blocked agents waiting on you, in every view.
+   Tap it to open the **Needs you** tab on the left: each question, blocked
+   agent and finished task is a compact notification from its agent. When the
+   agent asked something, tap a quick reply (or **Other…** to type), or type in
+   the answer field and press Enter. To send a screenshot or file with a typed
+   answer, tap the paperclip in the answer field (on a phone it offers your
+   photos and files), paste an image into the field, or drop files on it. Each
+   file shows as a chip with a thumbnail while it uploads; **✕** removes it
+   before you send. The answer carries each stored file's path, so the asking
+   agent can open it. Tap a long message (or **more**) to read
+   all of it, links included; **less** shortens it again. Tabbing into a
+   message reveals its links. The agent's name and the chat icon open the
+   agent's Chat for the context behind it. **✕** dismisses a question, or marks
+   finished work reviewed; its tooltip says which. Hover an agent's name for
+   its card. The tab stays open or closed on this device; **✕** in its header
+   (or **Back** on a phone) closes it. The Town master's chat (**Menu → Town master**, `firstmate` by
+   default) opens docked once per visit on wide screens; **Town master** on
+   the town center (or the crown beside Board's bin) opens it at any time. That action finds the agent given the
+   role under **Menu → Sounds** first, then, when nobody holds the role, the
+   name set here. A role holder that is not in Town (for example, filtered
+   out) is reported as absent rather than replaced by a namesake; with neither
+   set it opens **Sounds** so you can choose one. Hover an agent for a
+   small preview card: its latest message as **Chat** shows it, never terminal
+   text; when the conversation cannot be read, it says why. It highlights a
+   question when one can be identified, and refreshes when the conversation
+   changes. Opening
+   an agent brings it back to its desk from reception or the bar until its
+   status changes. To open terminals instead, set **Menu → Agents open** to
+   **Terminal** (Board and Desk follow it too); that tap also brings the agent back and, like the chat, does
+   not mark its work reviewed.
+   Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
+   or `/loop`) shows a swallowtail pennant beside its seat, with a progress
+   bar when the quest has steps; tap the pennant to see **Quest** and its
+   title.
+   Working agents show a thought bubble over their heads with a glyph for
+   what they are doing now: editing, running tests or a command, reading
+   code, browsing the web, thinking, or waiting on a subagent. A step that
+   has run unusually long shows its time in amber, such as **14m**. Zoom to a
+   desk, or select it, to read what the agent is doing now and the step in
+   words, such as **Run the login tests · tests 3m**. Zoomed out further,
+   the bubbles go.
+5. Read the question before using an answer button: it sends the offered key to
+   that live pane. When no supported choices appear, use **Open chat** to reply
+   in the agent's window, or **Open terminal** in the card's header (or the
+   window's **Terminal** view).
+6. The window's **Files** and **Changes** use the same agent worktree,
+   rather than its launch checkout. Open the location line for **Worktree**
+   (a bottom sheet on phones):
+   the source mark explains the evidence, and radio choices switch both views.
+   If choices are ambiguous or stale, use **Choose a worktree** and **Refresh**;
+   resource access waits for a current selection. **Open terminal** is for
+   direct work.
+   In Town, Board or Desk, click a local source reference in **Chat** to open
+   **Files** in the same window at its line (for example, `src/example.ts:12`).
+   Relative references
+   start at the selected worktree. If the path is outside it or its binding is
+   unavailable, use **Choose a worktree**, then click the reference again.
+   For a root filename with spaces, use a path prefix, such as `./my file.ts:12`,
+   or an explicit Markdown file link.
+   If a retained file becomes unavailable, its preview shows a notice instead
+   of closing the window. Choose a current worktree or another file, then
+   **Retry preview** if needed; Chat and its draft remain open.
+   The swatch beside a room's name colours that workspace (its carpet here,
+   its card in Board and a dot in the Spaces sidebar), and the swatch on a
+   building's reception board colours the host (its roof, Board zone and
+   Spaces header). A workspace's colour shows on its tables that have no colour
+   of their own; a host's does not.
+   Click the icon beside the terminal's name to open **Terminal appearance**;
+   In Spaces, use the same icon in the native tab strip or an arranged window's
+   header. It edits the selected pane in that tab. On a phone, use the coloured
+   appearance button in the terminal app bar.
+   The header shows the native tab name. Edit **Tab name** and choose **Save
+   name** to rename that Herdr tab in every view. Pick a colour, enter a short
+   **Status message** (up to 160 characters) and choose **Save status**, or
+   select a **Pane avatar**. Split panes share the tab name, colour and status,
+   while each pane can have its own avatar. **Default colour**, **Clear status**
+   and **Default avatar** reset only that choice; the avatar returns to its
+   profile or identity default. An error stays in the editor and keeps an
+   unsaved name/status draft, so it can be retried. If the pane moves to another
+   tab, reopen the editor for that destination; the old draft is not transferred.
+   Board shows the avatar and status on the card, Town uses the character and
+   desk callout, Spaces shows the avatar and status in its tab tooltip, and
+   Desk uses the same shared choices. These choices are saved by World for
+   every browser; runtime status badges keep their normal meanings and colours.
+   Appearance does not add workspace icon or workspace status controls.
+   The settings still link to **Edit profile · <name>** when World launched the
+   agent from a profile, otherwise **Profiles…**. The terminal window's menu
+   has **Colour**, and the Spaces tab menu (right-click or long-press) offers
+   the same palette and **Default colour**.
+   In the agent's window, the button beside its name sets its interest (on a
+   phone, use **⋯ → Attention**):
+   **Muted** stops its chimes, **Focused** lets only focused agents chime, and
+   **Default (from groups)** inherits group intent, while **Watch** explicitly
+   overrides a group mute. Its questions and results still arrive in
+   reception.
+   **Next** cycles waiting agents, then finished agents when no other agent is
+   waiting.
+7. To move a table to another room, zoom in until you see tables (room
+   summaries are close enough), then drag it with the mouse, or hold it for a
+   moment on a phone and then drag. A hold works even where a room summary
+   covers the table; a tap on the summary still zooms into the room. Drop it on
+   another room of the same building; the plaque under your pointer says where
+   it will land, or why it cannot. Hold it near the edge of the view to scroll
+   the town toward rooms out of sight, as on a phone where rooms stack. The table lifts off and swings along behind
+   your pointer with its agents aboard, then drops onto its new spot in a puff
+   of dust; if the move is refused, it shakes and springs back. To move one
+   agent, drag it onto another table instead: it dangles by the scruff on the
+   way. With **Town calm motion** or reduced motion, the table just follows
+   your pointer and fades into place. From the keyboard, focus a table or agent and press **M** to
+   choose a destination. The live panes move, so agents keep running. If a move
+   fails part-way, Town tries to move the panes back, and its notice says what
+   happened: back in the original room (the table's pane layout may differ),
+   only partly moved, or locations unknown. Unless the notice says the table is
+   back, check both rooms before you carry on. Moving a room's last table
+   closes that room, so Town asks first.
+8. Tables sit in the order of their tabs, left to right and then row by row.
+   A table's nameplate shows its sole agent's Herdr name when it has one;
+   otherwise it shows the tab's name, or `Tab N` for an unnamed tab.
+   To change the order, drag a table onto another table in the same room: it
+   takes that table's place, and the tables in between shift along. Drop it on
+   the room's free spot to put it last of the tables shown. A room grows as
+   tabs open and rooms shrink to fit when tabs close. An expanded room stays
+   expanded as it shrinks until you use **« Fold**. Rooms grow up
+   to eight tables wide on a wide screen, six on a portrait or half-width screen
+   and four on a phone, then row by row. A folded room normally
+   shows the first 24 tabs in the same order as Spaces. Use the room's bottom-right
+   **» +N** tile beside the dashed **+** seat to reveal the next 20 tables per
+   click until the whole room is shown. **+N** counts currently hidden tabs;
+   agent activity and pins do not pull later tabs ahead of that boundary.
+   A red **!** at the tile's top-left means hidden desks need you; a green **✓**
+   at the top-right means hidden work is finished and not reviewed. Revealing
+   those desks or resolving their attention clears the icons. After the first
+   expansion, the adjacent **« Fold** action returns straight to the first 24,
+   even while more desks remain hidden. The plaque counts all agents in the room.
+   Rooms sit in columns that suit your screen
+   (one on a phone), and a growing room pushes down only the rooms below it,
+   once you let go of the town. Town moves the tab in Herdr, so Spaces
+   shows the new order too, and moving a tab in Spaces moves its table. The
+   tables move once Herdr reports the new order, and agents stay with their
+   table.
+9. To group tables, drag one onto another table and rest it there a moment:
+   it snaps to that table and the plaque says **Group with …**; let go. The
+   two get one wall: Town brings the table to that room and seats it in a
+   free place touching the other, on the side it came from where it can.
+   No other table moves, so the shape you build is the shape you get; the
+   tables keep those places until the room's tab order changes or the page
+   reloads. An agent started by another agent is grouped
+   automatically, with a solid connector to its parent and the parent's
+   colour. To take a table you grouped out of its group, drag it onto its own
+   room's bare floor, away from the free spot (**Leave the team**); a spawn
+   link stays. Without a drag, focus a table and press **M**: **Group with…**
+   lists the tables to join, and **Leave the team** takes it out. A table's
+   name for screen readers says who its team is.
+10. To keep a table where it is, open one of its agents (its window) and choose
+   **Pin desk in Town** at the top of the phone window's **⋯** menu. On desktop,
+   choose the same action from the window’s **⋯** menu.
+   The table wears a pin, stays put
+   when tabs are reordered or the room grows, and its agents stay at it rather
+   than taking breaks at the bar; they still go to reception when they need
+   you or finish, and come straight back once seen. Choose **Unpin desk in
+   Town** to let it follow the tab order again.
+11. To arrange a building, hover or focus a room's name plaque and drag the
+   **Move** handle in its card, or drag the room by its name or its wall (the
+   pointer shows a grab hand). The room moves freely within its building,
+   with all its tables and agents: a green outline shows where it will stand
+   and pale outlines show where rooms in its way will go (they move down),
+   and the building grows or shrinks to fit. Let go on its own spot or press
+   Escape and it goes back. On a phone, drag the Move handle, or touch and
+   hold the room's name or wall, then drag. From the keyboard, use the **←**
+   (**Move before …**) and **→** (**Move after …**) arrows in the card to
+   swap the room with its neighbour. A room never moves to another host's
+   building. World saves the arrangement, so it stays after a reload and
+   every device shows it, and Herdr's workspace order follows it (top to
+   bottom, left to right), so Spaces lists the rooms in the same order.
+   To put a building back in order, choose **Tidy rooms** (sparkles) on the
+   building's sign when you look over the town, or the sparkles button on
+   its reception board, next to its colour, when you are inside: the rooms
+   glide into neat columns in Herdr's order, without gaps or overlaps, and
+   the note at the top offers **Undo** for a few seconds. Tidying again
+   changes nothing.
 
-### Look around
+A table with more panes than drawn seats shows the count and offers a chooser
+for every pane. When a table closes, the tables after it close up so the room
+keeps no gap. Every building has a **+ Add room** doorway just left of its
+bar, and it stays there whatever its rooms do: click or tap it to create a
+workspace on that building's host, and the new room appears where rooms
+normally go. The town center's **New room** does the same. Room actions also create
+tabs and manage the room. Check the destination host before creation. Stale buildings
+remain visible but cannot accept operations. Use search and the Hosts filter to
+narrow the work you are following. The **Town calm motion** setting reduces
+ambient animation.
 
-Each computer is a **building**, each workspace a **room**, each tab a
-**table**, and each agent a **character** at its seat. Plain shells show a
-prompt instead of a character.
+Town's search finds where things are. In World's default full-screen (Zen)
+layout the search hangs from the top edge beside the view buttons; with the
+bars shown it sits in the top bar. On a desktop it rests as a search icon:
+click it to unfold the search box with the cursor in it. Type part of a room, table or agent
+name, or words from an agent's task, in any order: the matches light up on
+the map, the rest of Town dims a little, and the result line says how many
+there are and how many are off-screen. Each result names its type, its place
+(`host › room › table`) and status, and a task match shows the words it found.
+Click a result, or press **Down** to pick one and **Enter**: the camera
+travels there and the result pulses. Click it or press **Enter** again to
+open it. On a phone, tap the search button in the bottom-right corner, type, and tap a
+result: the box opens at the top of the screen with its results in one panel
+just below it, and the map stays in sight underneath. Press
+**Escape**, tap **✕** or empty the box, and Town goes back to how it was.
+On a desktop, **Escape** also folds the box back into its icon, and so does
+clicking away from an empty box; while a query is in it, the box stays open.
+Press **/** or **Ctrl+F** (**Cmd+F** on a Mac) to unfold the search of Town,
+Board or Desk with the cursor in it, without reaching for the mouse; the icon's
+tooltip names these keys. In a terminal, the Chat
+composer or another text field those keys keep doing what they do there. Change
+them under **Search the current view** in Settings → Shortcuts.
 
-1. Drag the background to pan. Use **+** and **−** to zoom between town,
-   building, room and desk; **ALL** shows the whole town.
-2. Tap a room to zoom in. Hover its nameplate for its card: how many agents
-   are working, waiting or done, and what the room cost today.
-3. Look at the working agents. Each has a thought bubble showing what it is
-   doing: editing, running tests, reading code, thinking.
-4. Zoom to a desk to read the step in words, such as
-   **Run the login tests · tests 3m**. A step that runs long turns amber.
+To find or do anything from any view, press **Ctrl+K** (**Cmd+K** on a Mac)
+to open the command box. Type `harbor` and it lists what Town's search would
+find, each with its status mark and place; **Down** and **Enter**, or a click,
+select one as clicking it in Town does. The same box creates rooms, tabs and
+agents, acts on the selected agent and goes to Board, Desk or Spaces. In Zen
+the **⌘** button beside the view buttons opens it too; on a phone, tap the
+corner view button and then **Find or act**. In a terminal, the Chat composer
+or a text field, Ctrl+K and Cmd+K keep their meaning there; press
+**Ctrl+Alt+K** (**Cmd+Option+K** on a Mac) instead.
+**Escape** or the same key closes the box.
 
-On a phone the buildings stack vertically; tap wherever this guide says hover.
+A quiet **?** at reception means an agent has asked you a question with
+`herdr-world ask`. The question also arrives as a Herdr notification, which
+reaches Herdr and, when you enabled them, your phone notifications. It stays
+at reception until answered, dismissed or withdrawn;
+tapping its reception entry opens that agent, and tapping its letter opens
+**Needs you** at that question. Read it there or in **Summary**, where it names
+the asking agent, then choose an option or type an answer. The waiting agent
+receives that answer. **Chat about this** (in Needs you) or **Open agent** (in
+Summary) opens the asker; **Dismiss** closes a stale or mistaken question
+without answering it. A question marked unverified came from a process World
+could not confirm runs in that pane. Town, Board, Desk and Chat share one set
+of marks, each with one glyph, colour and word: **•** Working, **!** Needs you
+(blocked on its own question), **?** Asks you, **✓** Done (not reviewed yet),
+**–** Idle or Reviewed, **~** No signal and **×** Offline.
 
-![Town zoomed in to the desks, with thought bubbles naming each working agent's step](./images/herdr-world-desktop-town-steps.png)
+**Mark reviewed** acknowledges that completion in one record on this World
+service, so Town, Desk, Needs you, your phone and your desktop agree. World saves the mark across
+restarts. It reappears after World verifies the same terminal and known agent
+session; a replacement session or later completion needs review again. Old
+separate completion checks transfer only with the same known session and native
+completion sequence. Work without session proof may need review once after an
+upgrade. If World cannot yet verify its Desk stop, retry Mark reviewed when the
+connection is ready.
+Opening a finished agent's terminal also clears its reception stop; neither action proves the result
+is correct. A later completion can need review again. Read the explanation and
+check the diff using chapter 2 before treating the work as complete.
 
-### See who needs you
+To close an agent you no longer need, drag it onto the **bin** at the
+bottom of Town or Board, or onto a Town bus stop; or open its window and choose
+**Put in bin** from **⋯** (this also works from Desk). The bin floats at the
+bottom of the screen and lights up while you drag, so on a phone a short drag
+is enough wherever you have scrolled; the town holds still while you rest on
+it. Nothing closes yet: in
+Town the agent walks out of the front door to the nearest bus stop, a London
+stop with a red roundel at a road crossing, whichever you dropped it on (an
+agent you binned on Board walks out too the first time you open Town).
+Everyone waiting at a stop lines up along the pavement, newest at the end; a
+long queue turns back in a second row, and past that a small red **+N** board
+at its end counts the rest. An agent you put back steps out of the queue and
+walks home to its front door, and those behind step up. Its
+seat fades into the carpet and crumbles, so the desk reads as going; when
+every agent at a desk is binned the whole desk fades. A
+small board over the waiting agents counts down to the bus reaching that stop
+and reads **due** a few seconds before it pulls in; Town's bin shows the time
+to the next bus. Elsewhere there is no bus: on Board the bin reads **Cleaning
+up** and how many, and its tray says when they close. Every four minutes a red double-decker comes in, slows to each stop where
+someone waits, stands there about ten seconds while they board (you can see
+them in its windows), then speeds up
+and drives off the map; only then does World close their agents. Changed your
+mind? Open the tray from the bin (or tap a stop or the bus) and choose **Put
+back** any time before the bus has left the screen, even after the agent has
+boarded: it walks back to its desk and stays open. Tap the bus while it drives
+to stop it where it is and open the tray: nothing closes while it stands, and
+**Let the bus go**, or closing the tray, sends it on. **Close now** skips the wait. A pinned desk or a tab pinned
+in Spaces keeps its last agent, and restarting World empties the bin without
+closing anything.
 
-Agents that need you walk to **reception** at the top of their building. The
-same marks appear in every view:
+**You are done when:** you can find an agent on the expected host, read its peek,
+and open its terminal or Inspector without losing its workspace context.
 
-| Mark | Meaning |
-| --- | --- |
-| **!** | Blocked: waiting for your input |
-| **?** | Asked you a question |
-| **✓** | Finished, not reviewed yet |
-| **•** | Working |
-| **–** | Idle, or reviewed |
-
-1. Tap **Needs you** in the top bar. A list opens on the left with every
-   question, blocked agent and finished task.
-2. Answer a question with one of its buttons, or type a reply and press
-   Enter. The paperclip attaches a screenshot or file.
-3. Tap an agent's name for its Chat and the context behind the question.
-4. On a desktop, press **N** to fly to the next thing that needs you;
-   **Shift+N** goes back.
-
-While anything needs you, the browser tab shows the count, such as
-`(3) Herdr World`, so you notice it from another tab.
-
-> **Finished is not verified.** A **✓** means the agent stopped, not that its
-> work is right. [Chapter 5](#daily) shows how to check.
-
-### Open an agent
-
-Tap an agent or its table. Its window opens on **Chat**, with **Terminal**,
-**Files** and **Changes** in the selector at the top. On a wide screen it docks
-on the right; drag its edge to resize it. [Chat with an agent](#chat) covers
-reading and replying.
-
-Prefer the terminal? Set **Menu → Agents open** to **Terminal**.
-
-### Find anything
-
-- **Search:** click the search icon (or press **/**) and type part of a room,
-  table or agent name, or words from an agent's task. Matches light up on the
-  map; choose a result to fly there.
-- **Command box:** press **Ctrl+K** (**Cmd+K** on a Mac) to find things, switch
-  views, and create rooms, tabs and agents. Inside a terminal, press
-  **Ctrl+Alt+K** (**Cmd+Option+K**) instead.
-
-### The town center and its boards
-
-Tap the domed **town center** at the top of the town for a ring of actions:
-**New agent**, **Town master** (your coordinating agent's Chat), **Needs you**,
-**Summary**, **Lenses**, **Profiles** and **New room**.
-
-Around it you will find:
-
-- **The Town board.** It counts every agent. Its **FUEL** gauges show how much
-  of each Claude and Codex subscription window is left. **Summary** lists who
-  needs you, unreviewed work, each host and spend.
-- **The City expenses billboard.** Estimated cost for today and the last 7
-  days. Each building's reception board shows its own share. Costs need a
-  price table; see [harness usage](./usage.md).
-- **The post office.** With GitHub connected, your open pull requests wait here
-  as parcels. Tap one for its card and **Merge…**.
-
-After 30 minutes or more away, the board starts with **Since you left**: what
-is new for you, what finished and what merged.
-
-### Rearrange Town
-
-These moves change the real Herdr tabs and panes, and agents keep running.
-
-- **Move a table to another room:** zoom in until you see tables, then drag
-  one onto another room of the same building. On a phone, hold it first. From
-  the keyboard, focus it and press **M**.
-- **Move one agent:** drag it onto another table.
-- **Reorder tables:** drag a table onto another table in the same room.
-- **Group tables:** drag one onto another and rest a moment, until the label
-  says **Group with …**.
-- **Move a room:** drag it by its name or wall. **Tidy rooms** (the sparkles
-  on a building's sign) puts a building back in order, with **Undo**.
-- **Keep a table in place:** in its agent's window, choose
-  **⋯ → Pin desk in Town**.
-- **Rename or colour a tab:** click the icon beside a terminal's name for
-  **Terminal appearance**: name, colour, a short status and an avatar.
-
-Every building has a **+ Add room** doorway. The dashed **+** seat inside a
-room starts a new tab or agent there.
-
-### Clear away finished agents
-
-1. Drag an agent you no longer need onto the **bin** at the bottom of the
-   screen, or choose **⋯ → Put in bin** in its window.
-2. The agent walks out to the nearest bus stop. Nothing is closed yet.
-3. Every four minutes a red bus collects whoever is waiting. World closes
-   those agents only once it has driven off.
-
-Changed your mind? Open the tray from the bin and choose **Put back** before
-the bus leaves. **Close now** skips the wait.
-
-**You are done when:** you can find an agent, see what it is doing and open
-its window.
+![Town with four disposable workspace rooms, one agent waiting at reception and one finished](./images/herdr-world-desktop-town.png)
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
-
-*These Town pictures show a synthetic crew on two hosts; every name, cost and
-step in them is sample data.*
 
 ### See one fact across Town: lenses
 
 <a id="town-lenses"></a>
 
-A lens colours every room and desk by one fact.
+1. Tap the town center and choose **Lenses**, or press `L`. Town dims and
+   every room takes a colour; the Town board sign (on a phone, the summary
+   chip) becomes the lens's legend, with its scale.
+2. Press the lens's name to choose another, or **‹ ›** (`L`, `Shift+L`) to
+   step: **Idle time** (warm is fresh, cold is hours since the agent last
+   worked: who have you forgotten?), **Spend** (today's cost per room and
+   desk; hatched **No data** where a host has no reading, never zero), **Pull
+   requests** (failing, ready, waiting, draft or merged), **Quests** and
+   **Harness** (a room with several harnesses is striped by each one's
+   share).
+3. Zoom into a room: each desk and agent carries its own colour. Hover, focus
+   or tap one and the legend says its value in words, such as "Idle 3 h 12 m",
+   "~$1.40 today" or "#123 CI failing". Taps open what they always do.
+   Search with a lens on and the matches are outlined over its colours;
+   Escape ends the search and keeps the lens.
+4. Press **✕** or Escape: Town is back exactly as it was, at the same place.
+   Town always opens without a lens; your browser remembers the last one for
+   `L` and **Lenses**.
 
-1. Tap the town center and choose **Lenses**, or press **L**.
-2. Press the lens's name, or **‹ ›**, to switch between:
-   - **Idle time**: warm is fresh, cold is hours since the agent last worked.
-     Who have you forgotten?
-   - **Spend**: today's cost per room and desk.
-   - **Pull requests**: failing, ready, waiting, draft or merged.
-   - **Quests** and **Harness**.
-3. Zoom in and hover or tap a desk. The legend says its value in words, such
-   as "Idle 3 h 12 m" or "#123 CI failing".
-4. Press **✕** or Escape, and Town is back as it was.
+Board has the same lenses: see [Board](#board).
 
-**You are done when:** you found the coldest room and the desk with a failing
-pull request.
-
-## 3. Work with your agents
+**You are done when:** you can find the coldest room and the desk with a
+failing pull request, and return to Town as usual.
 
 ### Chat with an agent
 
 <a id="chat"></a>
 
-Chat shows an agent's conversation, read from the agent's own record rather
-than from terminal text.
+Chat shows an agent's conversation from its own transcript, never terminal
+text. It works for any agent you open from Town, Board or Desk.
 
-1. **Read** from the bottom. Scroll up for older messages.
-2. **See what it is doing now.** The bar at the top shows its status, its task
-   and how long it has been at it. The tool call running now sits at the end,
-   with a timer.
-3. **Open a tool row** to see what it did: the edit's diff, a test run's
-   result, or the end of a command's output.
-4. **Reply** in the box at the bottom. Enter adds a line; the paper plane, or
-   **Ctrl+Enter** (**Cmd+Enter**), sends. The paperclip attaches files. Type
-   **/** for the agent's own commands.
-5. **Check the receipt** under your message. It reads **Sent, not seen in the
-   transcript** until the agent's record shows your words.
-6. **Answer the agent's prompts.** When Claude Code or Codex asks for
-   permission or asks a question, Chat shows a card with each option. Read it,
-   then pick one. Anything Chat cannot answer safely, it sends you to the
-   **Terminal** for.
-7. **Stop**, or Esc pressed twice, interrupts the agent.
+1. Read from the bottom. Chat shows the latest 200 entries; scroll up (or press
+   **Load earlier messages**) to load older pages while keeping your place.
+   While you read back, **Jump to latest** counts new agent messages.
+   **Menu → Configuration → Appearance → Chat text** sets the text size.
+   Expanded or in Zen, Chat fills the window like Terminal: each run of
+   messages names its sender, with the time at the right edge. A report
+   another agent typed in as `name: …` shows as that agent's, marked
+   **relayed**; on a phone or in a narrow window, messages stay bubbles.
+2. Check what the agent is doing now. The Now bar shows its status circle
+   (hover for the word: blue working, yellow needs you, green done, grey
+   idle), the task from its terminal title and how long it has been at it.
+   An agent stopped on its usage limit shows a red dot and, for example,
+   `Usage limit reached · resets 15:00 (Codex)`, as its Town table does.
+   The tool call running now sits at the end of the conversation with its
+   own timer. **Stop**, or Esc pressed twice, interrupts Claude Code, Codex
+   or Pi; Chat never stops an agent by itself.
+   When the agent's tab has several panes (a review round, say), a small
+   drawing of the tab's split comes first in the window title, with the
+   agent that needs you in yellow. Tap it to open a map of the real layout,
+   then tap a pane to show that agent's Chat or terminal in the same window.
+   Switching changes only what World shows, not Herdr's focus.
+3. Open a tool row to see what the call did: the edit's diff, a test run's
+   pass or fail with its first failure, or the end of its output. An agent
+   with a quest shows one slim title and progress row in the conversation;
+   expand it to read each objective as pending, active, done or blocked.
+4. Reply in the composer at the bottom; opening Chat focuses it for typing.
+   Enter adds a line; the paper-plane
+   button, **Ctrl+Enter** or **Cmd+Enter** sends with Herdr's agent prompt.
+   The paperclip (**Add a file**) uploads files to the pane's host and adds
+   their paths: each file shows a chip while it uploads, then done or failed
+   with Retry and Remove, and Send waits for uploads. Review the message and
+   attached paths before sending. Type **/**, or use
+   **⋮ → Browse commands**, for the harness's commands. Drafts are kept per
+   conversation.
+5. Read the receipt under your message. It says **Sent, not seen in the
+   transcript** (**Queued · sent to &lt;agent&gt;** while a busy agent holds it, or
+   **sent, not checked** for a slash command) until the transcript has it.
+   Then it says **Sent from Chat; matched by its words**, or **Sent from Chat;
+   matched by order** (an inference when the harness rewrites the text, such as
+   a paste or image placeholder). Chat never claims "delivered". A red notice names
+   another session if there is evidence the message went there, and pauses
+   Send. Claude Code's `!` and `#` modes still need the Terminal.
+6. Answer the agent's own prompts. When Claude Code shows a permission box or
+   a question form, or Codex an approval or question dialog, Chat shows the full request and
+   each option on an ask card. Pick one (or press its number with the card
+   focused): Chat checks the prompt, session and state have not changed,
+   presses that key in the agent's pane and shows what it sent. It says **You
+   answered** only once Herdr shows the agent moved on. A form of several
+   questions lists every question's header, answered or not, and asks them
+   one at a time; after the last, its review offers **Submit answers**. Herdr
+   cannot hold a prompt between that check and the key, so read the card
+   first. For **Type something.**, **Chat about this** or plan feedback, pick
+   the option, type a single-line reply and choose **Send text answer**. Chat
+   checks the native text editor before submitting. Already-open native text
+   editors and unsupported menus stay in the Terminal.
+   Claude's questions also come from its own record, so the card shows each
+   question, header, option and description even when the terminal cuts them
+   off. Chat offers answer buttons only when the terminal shows that same
+   question and options; otherwise, and for questions where several options
+   can be picked, it shows the whole question with **Answer in the Terminal**
+   and says why. A prompt Chat does not recognise is shown as the terminal
+   draws it, never as a clipped last line.
+   Before Claude starts its session it may ask whether to trust the folder.
+   Chat and **Needs you** show that question with **No, exit** and **Yes, I
+   trust this folder**, the one under Claude's cursor marked. The full folder,
+   safety question and warnings appear above the choices. For pre-approved tool
+   grants the decline choice may be **No, continue without these permissions**:
+   it continues Claude without those grants instead of exiting. Your click is
+   the choice: Chat checks it is still the same question in the same Claude
+   process with no session, moves Claude's selection if needed, checks again
+   and presses Enter. Chat opens once the session starts.
+   Commands such as `/model` and `/permissions` open the harness's own menu;
+   Chat shows it on a menu card with the cursor marked. Pick a numbered
+   option, or use the key buttons the menu names (**↑**/**↓**, **Enter**,
+   **Esc**, **s**, **←**/**→**), or press those keys with the card focused.
+   Each step, such as Codex's effort level or Claude Code's rule field and
+   save location, replaces the card until the menu closes. A field takes one
+   line with **Type**; press the menu's **Enter** after checking it. Options
+   past 9, and lists with a search field, are reached with the arrows.
+   If Chat says the terminal is too small to show the menu, choose **Open
+   Terminal**, or click Terminal, to restore its size. Chat shows this only
+   after a measured row read for this session's current command; an unknown
+   size does not become a size warning.
+   **⋮** also holds the Terminal's key controls (**Esc**, **Tab**, arrows,
+   **Ctrl** keys) for anything else; they go to the session Chat shows.
+7. A known pull request named in an agent's **READY** or **opened**
+   announcement, or its current work claim, gets a PR card. Open **Details**
+   for CI and reviews. **Ask the author to fix** sends a `↳ #N` message when
+   this conversation owns the PR's claim; your unsent draft is kept.
 
-> Chat reads Claude Code, Codex, Pi and several other agents. When it cannot
-> find a conversation it says why and offers a fix. See the
-> [Chat guide](./CHAT.md).
+A Codex conversation inferred from its shared daemon is read-only: Chat offers
+no composer or answer buttons. In Codex's Terminal, run `/title` and add
+**Thread ID**, or use **Details → Link Codex session** to preview and confirm
+the intended thread. Ambiguous panes or threads stay unbound. If Chat cannot
+read a conversation, it says why and offers the matching action. The
+[Chat guide](./CHAT.md) covers each harness.
 
-**You are done when:** you sent an agent a message and its receipt shows the
-message reached the transcript.
+To type directly into the selected agent's terminal while reading its history,
+open **Details → Chat**. Its message box shares that pane's **Message** draft;
+paste an image or use **Add images** to insert an uploaded path. Desktop Enter
+sends and Shift+Enter adds a line; touch Enter adds a line and **Send** sends.
+If the agent is working, blocked or unknown, read the warning and choose **Send
+anyway** explicitly. This terminal input has no transcript receipt. The primary
+Chat composer still requires a verified session binding.
+
+For new Codex panes, use `codex --no-daemon` after installing the host's Codex
+integration. Its hooks then inherit that pane's environment. Resume existing
+shared-daemon sessions with the same flag; see [Codex launches](./HISTORY.md#pane-scoped-codex-launches).
+
+**You are done when:** you sent an agent a message from Chat and its receipt
+shows it in the transcript.
 
 ![Town with an agent window docked on Chat, showing its report on a README change](./images/herdr-world-desktop-chat.png)
 
 ![An agent's Chat on a phone](./images/herdr-world-mobile-chat.png)
 
+### Return after backgrounding
+
+If a phone backgrounds World or the browser loses its connection, open
+Inspectors, terminal output, split positions and unsent Message drafts stay in
+this page. A disconnected indicator marks the last observation; controls wait
+for a fresh connection to the same host and runtime. Input is never replayed.
+
+If a terminal says **Terminal is not receiving output**, choose **Retry terminal**
+to retry that terminal while keeping the page open. **Reload app** is a separate,
+explicit action. World never reloads automatically because terminal frames stop.
+A browser or OS that discards the whole page can still lose its in-memory state.
+
 ### Start a new agent from a profile
 
 <a id="new-agent"></a>
 
-A **profile** is a ready-made agent: a name, a harness and model, a role,
-skills, a first brief and a look in Town.
+A profile is a ready-made agent: a name, a harness and model, a role, skills,
+a starting brief and a look in Town. World starts it in a new tab for you.
 
-1. Open **Menu → Agent profiles**. Pick a starter (Reviewer, Builder, Designer
-   or FirstMate), or choose **New profile**.
-2. Work through **Who**, **Brain**, **Skills & tools**, **Brief** and
-   **Look & sound**, then **Save**. In the brief, `{{task}}` becomes the task
-   you type at launch.
-3. Open **New agent**: from the town center, with **Ctrl+K**, or with the
-   dashed **+** seat in a room.
-4. Type a task and tap your profile. To get a plain shell instead, choose
-   **Terminal**.
-5. World creates the tab, starts the agent and sends the brief. In Town, the
-   new agent walks in and sits down at its desk.
+1. Open **Menu → Agent profiles** (or **Actions → Agent profiles**, or click an
+   agent window's icon and choose **Edit profile** / **Profiles…**). The
+   starters are Reviewer (Codex), Builder, Designer and FirstMate (Claude
+   Code). Pick one, or press **New profile** or **Duplicate**.
+2. On **Who**, set the name, home room, role and colour. On **Brain**, choose a
+   harness the host supports, a model (empty keeps the harness's default) and
+   a permission mode. On **Skills & tools**, tap the skills (found in the
+   room's `.agents/skills` and `.claude/skills` and your harness folders) and,
+   for Claude Code, the tools it may use. On **Brief**, write the first prompt;
+   `{{task}}` is filled with what you type when you launch. On **Look & sound**,
+   dress the character and watch it walk, turn and sit in the preview, and
+   pick its **Chime** (or keep the class default). **What a
+   launch runs** shows the exact Herdr command. Press **Save**.
+3. Open **New agent**: **Actions → New agent**, **New agent** on Town's town
+   center, **+** beside Board's bin, the dashed **+** seat inside a Town room (zoom into the room first),
+   or the robot beside **+** in Spaces' tab bar. The seat preselects its room. Choose **Terminal**, the first choice,
+   for a plain shell tab; to start an agent, optionally type a task and tap a
+   profile or a kind under **Quick start**.
+4. If a harness is logged out on that host, the launcher says so: **Log in**
+   opens a small tab and shows the harness's own login command
+   (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
+   tab**, run it and finish the login there, then **Check again**.
+   The launcher finishes opening a login tab before accepting a start.
+   Failed, incomplete or unsupported checks show **unknown**, never “not
+   installed” or “logged out”. You can still try a supported harness; use
+   **Check again** to retry or **Edit profiles** to review its configuration.
+   The check's source and completion time are shown separately from profile
+   settings. Windows readiness checks are unsupported.
+5. World creates the tab, starts the agent, waits until it is ready and sends
+   the brief, then opens its terminal. The tab takes the profile's colour and
+   the agent wears the profile's look in Town. If the agent stops on a question
+   first (for example Claude asking whether to trust a new folder), the
+   launcher says so and **Open its tab** lets you answer. While it starts, the
+   choice you pressed stays marked and **Starting …** says what World is doing;
+   after 10 seconds it says **Taking longer than usual**. Progress and the
+   outcome stay visible above the choices, even with a long readiness list.
+   If the new window opens on Terminal before Chat can read the agent, a line
+   under its header says Chat is not available yet; Chat opens by
+   itself when it can, or choose **Stay on Terminal**.
+   The launcher closes when the start is confirmed, and Town shows the new
+   agent arriving: it steps out at the town center (when you used the town
+   center's **New agent**) or at the bus stop nearest its room, walks to its
+   building, goes in and sits at its desk with a short sparkle and its name.
+   Reloading never replays an arrival, and a failed start has none. With
+   reduced motion it is at its desk at once, highlighted briefly. After an uncertain
+   start, its start choices stay disabled: open the existing tab, or
+   close the launcher before deliberately starting another agent. A definite
+   failure lets you retry, log in or edit profiles. Closing it
+   while a launch is pending leaves any created tab in its room; a late reply
+   does not reopen its window or close a new launcher.
 
-If the agent's CLI is logged out on that computer, the launcher says so and
-shows the login command, such as `claude auth login`. **Open its tab**, run
-the command, then choose **Check again**.
+The profile assignment follows its terminal when you move it and is shared
+with other Worlds connected to that Herdr. Each World uses its own profile
+of that ID; without one, it shows the recorded name with the default look.
+Closing the terminal or restarting Herdr ends the assignment.
 
-**You are done when:** your new agent answers in its own tab, dressed the way
-you chose.
+**You are done when:** an agent you started from a profile is answering in its
+own tab, dressed as you chose in Town.
 
 ### Hear who needs you
 
 <a id="chimes"></a>
 
-1. Open **Menu → Sounds** and tap **Needs you**, **For you** and **Finished**
-   to hear each chime. On devices that should stay quiet, turn off
-   **Play chimes on this device**.
-2. Under **Town master**, choose your coordinating agent and tap
-   **Make Town master**. Its chime is a sound of its own.
-3. Tap anywhere in World once: browsers play sound only after a tap.
+1. Open **Menu → Sounds**. Under **This device**, leave **Play chimes on this
+   device** on and tap **Needs you**, **For you** and **Finished** to hear the
+   three patterns. Turn it off on devices that shouldn't chime; push stays
+   silent too while World is open, including when notifications are first
+   enabled. Open tabs share this device setting, and queued burst sounds
+   follow your latest sound choices.
+2. Under **Town master**, choose your coordinating agent (for example
+   FirstMate) and tap **Make Town master**. Its chime is a sound of its own.
+   Worlds connected to the same Herdr share this role. The newest assignment
+   wins, and moving it from another live agent asks first. It ends when its
+   terminal closes or Herdr restarts. Offline claims wait for reconnection;
+   clearing the role requires every observed claimant to be reachable.
+3. Tap anywhere in World once (browsers start sound only after a tap). When an
+   agent finishes or needs you, World chimes and a toast says who and why.
 
-**You are done when:** an agent finishing in another tab chimes, and a toast
-names it.
+**You are done when:** an agent finishing in another tab makes a chime and a
+toast naming it.
 
-### Come back after a break
-
-When your phone puts World in the background or the connection drops, your
-windows and drafts stay where they were. Controls wait until the connection is
-back, and nothing you typed is sent twice. If a terminal says
-**Terminal is not receiving output**, choose **Retry terminal**.
-
-### Let agents use World
-
-<a id="agent-cli"></a>
-
-Agents can work with World too: colour and pin their own cards, report
-results, and ask you questions.
-
-1. On the computer where the agent runs, install World's guide for it:
-
-   ```bash
-   herdr-world integration install claude
-   ```
-
-   Use `codex` or `pi` for those agents, or use
-   **Menu → Configuration → Integrations**.
-
-2. Start a new agent session. It can now ask you something:
-
-   ```bash
-   herdr-world ask "Ship it?" --options yes,no --wait
-   ```
-
-3. The question appears in **Needs you** and at reception with **?**. Answer
-   it, and the agent carries on.
-
-The complete command list, and crew groups such as Pods and Teams, are in
-[the agent CLI reference](../FEATURES.md#agent-cli-herdr-world---skill) and
-[Groups](../FEATURES.md#groups).
-
-## 4. Board and Desk
-
-### Board: cards and notes for your agents
+### Use Board: notes and strings for your agents
 
 <a id="board"></a>
 
-Board shows the same hosts, workspaces and tabs as cards on a pin board,
-beside your own notes. World saves the notes, so your phone and desktop show
-the same board.
+Board shows the same hosts, workspaces and tabs as cards on a pin board, beside
+your own notes. Notes are saved by the World service, so the same board appears
+on your phone and desktop.
 
-1. Choose **Board**. Each host is a dashed zone, each workspace a card, and
-   each tab a smaller card around it. A working agent's card pulses.
-2. Scroll or pinch to zoom; drag empty board to pan.
-3. Drag a workspace card, and its tabs follow. The sparkle button tidies the
-   board, with **Undo**.
-4. Tap a tab to open its agent's window, as in Town. **Next** opens the next
-   agent that needs you.
-5. Double-click (on a phone, double-tap) empty board to pin a note and type.
-6. Drag the note's red dot onto an agent's card to string them together.
-7. Select the note and choose **Send to …**. World checks the same agent is
-   still in that pane, then sends the note once.
+1. Choose **Board** from the view switcher (on a phone it is in the bottom bar).
+   Each host is a dashed zone, each workspace a card, and each tab a card around
+   its workspace. A tab with several panes lists them as rows; a tab of plain
+   shells looks like a small terminal. A working agent's tab pulses (as does the
+   selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
+   turns the pulses off. Each workspace card counts its agents by status.
+   The same menu offers **Surface → Follow theme / Whiteboard / Blackboard**,
+   **Status colours…** and **Help**. Surface and status choices stay in this
+   browser; they do not change the card colours shared across your devices.
+   Reset status colours to use the chosen surface's defaults again.
+   The chip at the top left counts what Town's board counts: busy, waiting,
+   done (finished, not yet reviewed) and quiet agents on every host. Tap it for
+   the **Board summary**: the counts, expenses today and over 7 days, each
+   harness's limits with how long ago they were read, the finished work you
+   have not reviewed (tap one to show it on the board) and each host's line.
+   Escape or the chip closes it; on a phone the summary scrolls within the
+   screen. Each host zone's name carries that host's counts, expenses and
+   limits, each workspace card its usage today and over 7 days, and each
+   agent's tab or pane row what it is doing now: its running step and time
+   (amber once it has run long), **Not reviewed** or **Reviewed** for a
+   finish, or how long it has been idle. The numbers are Town's own.
+   An agent's card shows a ⚑ chip with its quest progress, such as 2/5; hover
+   the chip for the quest and its current step.
+   The round **+** on a workspace's right edge (shown on hover or selection)
+   opens **New tab**: choose a Terminal, one of your profiles or an agent kind
+   the host supports, optionally name the tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
+   tab to give it a colour of your own; status keeps its own colours. A tab's
+   colour is its terminal colour, the same one Spaces and Town show: it starts
+   as a stable default (the colour of the agent that spawned it, or its
+   workspace's colour, if you gave the workspace one), and **Default colour**
+   returns to it. A faint string joins tabs whose agents know each other.
+   Drag a tab onto another tab to group them, or select a tab, press
+   **Group…** and tap the other; a grouped tab's bar offers **Ungroup**.
+   The hub beside the bin, at the bottom centre, holds the town center's
+   actions: **+** opens **New agent** (in the selected card's workspace, when
+   it can start one there), the crown opens your **Town master**'s Chat, and
+   **⋯** opens a menu with **New agent**, **Town master**, **Needs you**,
+   **Summary**, **Profiles** and **New workspace**. **Summary** takes you to
+   Town with its summary open. Escape, a tap outside or **Back** on a phone
+   closes the menu. Board's controls keep clear of the hub and bin, folding
+   into their **⋯** menu when the row is short of room.
+2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
+   bottom right. Zoomed out, each workspace shows a square per pane (hollow for
+   shells); tap a workspace there to zoom in on it.
+   Click the **Search Board** icon (beside the view buttons in Zen, in the top
+   bar otherwise), or press **/**, and type to keep matching cards lit and dim the rest; the results float
+   over the top of the board. **Down** and **Up** pick a result, **Enter** or
+   a click selects it, and **Escape** ends the search.
+3. Drag a workspace and its tabs follow; cards settle within about a second.
+   On a phone, hold a card still before dragging; a quick swipe pans. Add a
+   second finger to switch from dragging to pinch zoom without committing a move.
+   Settling pauses while you type in an open terminal.
+   The chevron on a workspace's top-left corner folds its tabs behind a count, and tapping the count opens
+   them into free space. The sparkle button tidies the selected workspace, or
+   the whole board, and offers **Undo**; notes strung to cards move with them,
+   and notes left on a card move to free space. Select a card and press
+   **Pin** in its bar to keep it where it is: a pinned card shows a pin, and
+   placement, tidying and settling leave it until you **Unpin** it (you can
+   still drag it). On a phone, tap the pin in the card's terminal header.
+4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
+   Changes and Chat; a line joins each Inspector window to its card. Tapping or
+   double-clicking an agent's tab opens its Chat, as in Town; a plain shell, or an
+   agent without Chat, opens its terminal. **Next**, beside Work, opens the next
+   pane needing you: a waiting agent or a shared question placed on its pane,
+   including a shell question. At narrow widths, Next remains available in the
+   Board menu. Stale hosts and shells without questions are skipped.
+5. Double-click (or double-tap) empty board to pin a note and type; double-click
+   a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
+6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
+   to it; a tab with several panes asks which pane. Drop it on empty board for a
+   new note strung to where you started. Click a string, then **Delete**, to
+   remove it.
+7. A note strung to an agent's pane offers **Send to <agent>**. World remembers
+   which agent was in the pane when you made the string. Before sending, it checks
+   the current runtime, the pane and terminal, and that the same agent is still
+   there, then sends the note once. If another agent has taken over the pane,
+   even in the same terminal, nothing is sent: World names the new agent and
+   offers **Send to** it instead. If Herdr stops reporting the captured session,
+   World asks again rather than assuming the same pane still holds that agent.
+   A missing-session message means World cannot verify continuity, rather than
+   knowing that a replacement occurred. If you choose **Send to B** and A returns
+   before submission, World refuses; it does not send to A instead.
+   The agent can change between the check and the prompt submission. If World
+   detects that change afterwards, it reports uncertain delivery; inspect the
+   pane before trying again. Nothing is sent without your action.
+   **Start an agent…** opens the same dialog: choose the workspace
+   and the agent or profile, optionally name the tab, and press **Start and
+   send**; the note is sent once the agent is ready.
+8. Drag a tab onto another workspace of the same host to move it there (on a
+   phone, hold the tab still for a moment first; a quick swipe pans). Board
+   asks first, with **Don't ask again**, and always asks before moving a
+   workspace's last tab, which closes that workspace. Strings follow the move.
+   To move just one pane, drag its row—or the grip on a single-pane tab—onto
+   another tab on the same host; on a phone, hold the row or grip first. Dragging
+   the rest of a single-pane card still arranges the whole card. During a pane
+   move, the other panes and the whole card stay in place.
+   Cancelling the drag or dropping on empty board sends no move. If moving the
+   pane would close its old room, Board asks for confirmation first. Strings
+   to that pane follow it.
+   Select a workspace for Town's room actions in its bar: **Rename…** and
+   **Close…** use Town's dialogs (closing asks first, because its terminals
+   end). **Herdr order ‹ Earlier / Later ›** in a workspace's or tab's bar
+   moves the room among its host's rooms, or the tab among its room's tabs,
+   in Herdr's own order, so Town's buildings and desks and Spaces follow.
+   Dragging a card and Tidy still arrange only the Board.
+   Rest the mouse on an agent's tab or pane row for a peek, as in Town: its
+   latest Chat message, the question it is asking with answer buttons, and
+   **Mark reviewed** for a finished agent (which also sends it on from Town's
+   reception). On a phone, select the agent's tab and press **Preview** in its
+   bar; a finished agent's bar also offers **Mark reviewed** directly. An
+   agent counts as finished when Herdr reports it done, or idle after a turn
+   World saw end, as in Town and Needs you. To try these without touching
+   your hosts, open World with `?scene=town-scale`: its synthetic hosts take
+   every one of these actions in the page.
 
-Board shares Town's bin, **Needs you**, lenses (press **L**) and
-**Since you left**. Dragging a tab onto another workspace moves it there for
-real, so Board asks first.
+9. Press the labelled **Work** pill, first in Board's bottom-right controls:
+   if an Inspector fills the phone screen, close it with **X** or **Back** first.
+   Work opens your
+   GitHub pull requests in columns from **In review** through **Fixing**,
+   **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
+   your Jira tickets and assigned issues by status. A card names the agents
+   working on it; tap one to close Work and jump to its card. **Merged**
+   groups the week's pull requests you opened by the day they merged, with
+   today open; tap a day to open
+   it, and change how many days it covers in **Settings → Sources**. History
+   has a 400-PR bound and shares a one-minute refresh deadline with open work
+   and action details, which are read first. If Sources says history was
+   shortened, shorten the window there and refresh. World keeps its last
+   complete list; the reported merge date is only the oldest valid date
+   observed, not proof that every merge since that date was read. Escape or a
+   press outside also closes Work. **Green** means checks pass while a
+   required review is pending; **Ready to merge** means approved, or passing
+   in a repository that requires no review. The same pull
+   request appears as a badge on the agent's desk in Town, such as `#42 ✓`;
+   for one of your open pull requests, tap the badge to open the same card.
+   Your own open pull requests get a fuller card: CI dots, each rev agent's
+   result and **Ready ✓** when your merge rules hold. **Details** shows each
+   rule, the failing checks and the reviewers' formal reviews or comments.
+   **Unknown reviewer** means the RESULT post has no clear reviewer claim;
+   use **View RESULT source** to inspect it. It does not confirm readiness.
+   The card also shows **GitHub details fresh**, **stale · cached evidence**
+   or **unavailable**, with its own read time. A refreshed list does not renew
+   cached detail. Choose **Refresh Sources** to retry; stale or unavailable
+   findings/screenshots remain unknown and must be refreshed before Merge.
+   **Merge…**,
+   **Close…** and **Mark ready…** ask first and say exactly what happens;
+   while GitHub still requires a review, use **Open on GitHub** or **Copy
+   merge command** and merge it yourself.
+   If Work shows **Set up Jira** or says no source is connected, open
+   **Settings → Sources**: sign
+   in to GitHub with `gh auth login` as the user that runs World, or add your
+   Jira site, account email and an API token there. A tab whose agent works on
+   a pull request or ticket also shows its desk badge beside the tab's name,
+   such as `#42 ✓`; tap it as in Town.
+10. Press **Lenses** beside Work (on a phone, in **⋮**), or press `L`: Board
+   shows Town's [lenses](#town-lenses) with the same legend at its top left.
+   Each workspace card reads as its Town room, each tab as its desk and each
+   pane row as its agent: the reading sits on a tag along the card's top edge
+   and colours its outline, and cards with nothing to show step back. Hover,
+   focus or tap a card to read it in the legend; **‹ ›**, `L` and `Shift+L`
+   step, **✕** or Escape leaves. After 30 minutes or more away, Board's top
+   left also shows Town's **Since you left** recap.
 
-**You are done when:** you pinned a note and strung it to an agent. Read the
-target before you press **Send**.
+After Herdr restarts, Board cannot prove that a workspace or agent is the one a
+string was made with, so it draws those strings dashed and asks once per host:
+**Keep** or **Detach**. A string whose target closed waits in **Needs a home**
+(a separate **Needs a home · n** control), where you can re-attach its note or discard
+the string; notes always stay. At zero or when space is tight, the action remains
+in **⋮ → Needs a home (n)**. On phones, **Tidy** is in **⋮**, and **Lenses**, Fit
+then the zoom buttons move there as needed; **Work** keeps its text and the controls stay on one
+row. If Board misbehaves, describe the steps that led
+there in a bug report.
 
-![Board with one host zone: room cards linked to agent and terminal cards, with steps, a question, finished work and expenses](./images/herdr-world-desktop-board.png)
+**You are done when:** you can find your workspace card, pin a note and string it
+to the intended workspace or pane. Read the target before using **Send**.
+
+![Board with four workspace cards, terminal tabs and a note strung to an agent](./images/herdr-world-desktop-board.png)
 
 ![Board close-up of a note strung to an agent](./images/herdr-world-mobile-board.png)
 
-### Follow pull requests and tickets
+The Town and Board screenshots show disposable projects where real Claude Code
+agents ran small tasks: one is waiting on you and one has finished. The note
+strung to an agent is sample planning text, not a report of completed agent
+work.
 
-1. Press **Work** in Board's bottom-right controls.
-2. Your GitHub pull requests appear in columns: **In review**, **Fixing**,
-   **Green**, **Ready to merge** and **Merged**. **Tickets** shows your Jira
-   tickets and assigned issues.
-3. Each card names the agents working on it. Tap one to jump to it.
-4. Open a pull request for its checks and reviews. **Merge…**, **Close…** and
-   **Mark ready…** ask first and say exactly what will happen.
+### Let agents arrange World
 
-Nothing shows? Open **Settings → Sources**. Sign in to GitHub with
-`gh auth login` as the user that runs World, or add your Jira site and an API
-token.
+<a id="agent-cli"></a>
 
-### Desk: a queue of what needs you
+To have a harness discover the guide automatically, run
+`herdr-world integration install claude` on the host where it runs, then
+start a new Claude Code session. Use `codex` or `pi` for those harnesses.
+The harness's configuration folder must already exist; World creates its
+skill folder if needed. `herdr-world integration status` lists every Herdr
+harness with its state and path, without installing anything.
+`herdr-world integration uninstall codex` removes the file shared by Codex,
+Pi and Kimi and names the other two. OMP, Letta and MastraCode show
+`unsupported`. See [all paths and overrides](./harness-integrations.md).
+
+The Claude install also chains your existing status line through World's limits
+tap, so new Claude sessions outside World update Town's **Fuel** row. Tap **Claude**
+there for its windows and last observation. Uninstall restores your original
+settings exactly when unchanged, or preserves intervening edits while restoring
+the prior status line. Malformed settings are refused. See the
+[tap's recovery and preview guide](./harness-integrations.md#claude-limits-tap).
+
+You can do the same from the browser: **Menu → Configuration → Integrations**
+shows a **World skill** line under each harness, with its state, path and
+**Install**, **Update** or **Uninstall**. The buttons run the same installer on
+World's own host and ask for confirmation first; uninstalling Codex, Pi or
+Kimi names the other two that lose the shared file. SSH connections show no
+World skill lines yet. If World restarts while the panel is open, the panel
+shows **Reconnecting to World...** and then reloads by itself.
+
+Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
+to colour and pin its card, group with the agent that started it, report a
+task result, or ask you a question (`herdr-world ask "Ship it?" --options
+yes,no --wait`). A question shows first in the **Needs you** tab with the
+agent's name and waits at reception with **?**; pick an option or type an answer,
+and the waiting agent carries on. An asker can withdraw a cleared question with
+`herdr-world ask withdraw <question-id>`, which clears its markers. If its
+creation reply was lost, `herdr-world ask withdraw --key <cause-key>` withdraws
+that asking occupant's retained question without creating another one.
+`herdr-world history` shows Board edits, and `herdr-world undo` conditionally
+takes back a recorded Board change. A change marked **unverified** came from a process
+World could not place in the pane it named, or from a terminal that named no
+pane.
+
+An agent can publish its current activity with
+`herdr-world task-summary "Verifying the login fix"`. The label belongs to
+that exact Herdr session and expires after 15 minutes by default; use
+`result --task TASK-42 "Verified the fix" --status done` for a durable result.
+The guide also teaches `stamp CHILD_PANE PARENT_PANE` to group spawned agents.
+
+Use `herdr-world pod create Chat` to create a crew Group, then
+`herdr-world pod add Chat agent://connection-a/builder` to add an agent's
+qualified address. `pod now Chat "Review first" "Ship"` records an ordered
+Now list; `group list` includes World-owned Teams/Pods and Herdr-owned Rooms/Desks.
+Lead/reviewer edits are reserved to you or FirstMate by crew rule; World records
+the sender claim and basis without authenticating that role. `group show Chat`
+shows recent attribution from the latest 128 Group changes, which are separate
+from Board undo. Deleting a Group needs `--yes` and leaves its agents running.
+
+`group add ROOM AGENT --herdr` moves the agent's whole desk: read the printed
+list of every affected agent before the move. Adding to a Desk moves one pane.
+Use `--allow-close-room` only when you also agree to close the source room when its last desk leaves.
+The result reports Done, Partly done, Not done or Unknown and observed locations.
+On Unknown, inspect Herdr before deciding what to do; never retry automatically.
+
+To migrate an existing crew table once, use `herdr-world group import pods.md
+--connection connection-a --yes`. The table needs Pod, Lead, Builders and
+Reviewers columns, with optional Now. If a name is away, ambiguous or annotated,
+supply `--mapping` as a JSON object from that exact table name to its qualified
+`agent://` address. The import is atomic and refuses existing Pod names. From
+then on, edit World through the CLI and render the table with `herdr-world group
+list --kind pod --markdown`; there is no two-way file synchronization.
+
+### Organize Groups
+
+Open **Actions → Groups**. Use the kind chips to find a Pod, Team, Room or Desk;
+tap a row for its members, status, open PR cards and Now list. On a phone, Back
+returns to the roster or closes the panel. On desktop the panel uses the same
+move, snap, maximize and window menu as your other World windows.
+
+Town's **Summary** also lists **Pods**, after Hosts and rooms and before Spend.
+Each row shows current status, the first Now item and the PR count or its
+cached/unknown state. Tap it to open that Pod in Groups, including when the
+Groups window is already open or minimized. Reception keeps its shared counts.
+
+Choose **New…** for a Pod or Team. In a Pod, **Add…** accepts a current agent or
+an explicit qualified address, including an away agent. **Roles…** changes roles;
+lead/reviewer edits follow the owner/FirstMate crew rule. Moving an exclusive
+lead/builder role asks first and keeps any other roles. An ambiguous address
+remains ambiguous: **Inspect** opens one current match; it does not pick its
+identity for membership. Rename duplicates in Herdr or explicitly replace the
+member with a distinct address.
+Selecting a current agent refuses duplicate Herdr names on the same connection.
+It also refuses to add a replacement that has appeared in the selected terminal;
+choose the agent again or supply the intended qualified address.
+
+**Edit pod…** changes its name, Now list and warning limit. **Promote to Pod…**
+shows every terminal-to-address mapping before preserving a Team's identity as a
+Pod. **Delete…** asks first and leaves agents running. If someone edits the Board
+while a form or confirmation is open, the write is refused and your draft stays
+open. Review the current values shown in the form, choose **Use current version**,
+then explicitly save again. Reviewing does not retry the write. Recent changes retain sender claims and their basis, or unknown attribution
+when no claim was supplied.
+
+A Team/Pod's Interest button offers **Default**, **Muted** and **Focused**.
+An agent's bell, or **⋯ → Attention** in a mobile window, offers **Default (from
+groups)** and explicit **Watch**, **Muted** and **Focused**. Default follows its
+groups; an explicit agent choice overrides them. Otherwise Group Focus
+wins over Mute. Focus adds reachable members to the other focused agents/groups;
+away or ambiguous members do not activate it. A focused group with no effective
+members online says so. Hover an agent's bell to see the source of its choice.
+Needs-you items and counts still arrive while muted. The Town master's needs-you
+can break the focus filter, while its explicit mute and device/motif switches
+still apply. Room/Desk interest controls are hidden in v1.
+
+### Use Desk: answer, review and follow work
 
 <a id="desk"></a>
 <!-- Keep old Graph exercise links working after the Graph view was retired. -->
 <a id="graph"></a>
 
-Desk lists the same agents by what they need from you, not by where they are.
+Use Town for a spatial view and Board for your arrangement of cards and notes.
+Desk offers the same agent work as a queue organized by attention rather than
+location. Use **Actions > New workspace** or **New tab** from a visual view;
+confirm the destination host. Creation needs a ready host and prepares the source
+terminal before opening the result in the current view.
 
-1. Open **Desk**. Start with **Needs you** (blocked agents), then
-   **To review** (finished turns), then **In flight** (running work).
-2. Open a card to read its Chat, or check its terminal, files and changes. On
-   a wide screen it opens beside the list, and **J** and **K** move between
-   agents.
-3. Once you have checked the work, choose **Mark reviewed**. Every browser
-   sees the mark; **Undo** takes it back.
+In **Desk**, start with **Needs you** for blocked agents (**Answer** opens the
+Needs you tab at that agent), **To review** for
+finished turns and **In flight** for running work. Open a card to read its Chat or
+inspect the terminal, files or changes. Read the result and verify the diff before
+using **Mark reviewed**; the mark is shared by every browser connected to this
+World service and does not commit files or certify success. **Undo** restores
+that exact stop across those browsers. **Agents** lists all agents in your Hosts
+filter, with recently opened agents shared too. **Reviewed** shows each agent's
+latest marked stop while it remains idle or done; older stops are not retained.
 
-> **Mark reviewed** records that you looked. It does not commit anything or
-> prove the work is right.
+Hosts outside the filter appear as summary chips, including beside an open Desk
+reading pane. On phones, the host chips and expanded list wrap below the counts.
+Select a host chip to see its
+observed agents, then choose **Reveal & open [agent] on [host]**. This explicitly
+adds that host to your current Hosts selection and opens the selected agent's
+Inspector; previously opened Inspectors keep their own hosts and resources.
+Reading a summary leaves the filter unchanged. Cached or unavailable agents
+explain why they cannot open. If the runtime or agent session changes while the
+summary is open, reopen the summary to choose a current agent. Leaving Desk or
+starting another opening cancels a pending reveal; returning does not resume it.
+A superseded reveal leaves a current agent available to retry. A host or session
+that is actually unavailable still explains why it cannot open.
 
-**You are done when:** you can find the same agent in Town, Board and Desk.
+Desk marks, observed stop times and recent opens live in bounded service memory.
+They survive browser reloads and changes to the Hosts filter, but clear when the
+World service restarts. A replacement runtime or agent session starts fresh.
+Existing browser-local Desk marks are not imported. A mark stays shared even
+when another browser has not read that agent's receipt; later observed stops or
+native activity return the agent to review. The stop's 12-hour display time can
+expire without removing its review mark. Native state progress also reveals work
+that finished while World was closed or between snapshots, even when no browser
+saw the agent working. **Mark reviewed** waits while the new stop's report
+refreshes; an older report cannot enable the mark. An unavailable report can
+settle without blocking review.
 
-### Arrange windows
+On wide screens, selecting a Desk card opens a reading pane on the right and
+folds the lanes into one queue. Use **J** / **K** to preview neighboring agents,
+**Enter** to enter the terminal and **Esc** to close the pane. Phones open the
+Inspector full screen. Search with **/** across names, workspaces, requests and
+reports. **Mark reviewed** acknowledges a turn only after you have inspected it;
+it does not verify the work for you.
 
-- **− Minimize** hides a window. On a desktop, **Open windows** brings it back;
-  on a phone, tap its chip at the bottom.
-- **⋯ → Fit right** puts a window beside the view at full height.
-- On a phone one window fills the screen, and **Back** returns to the view.
-- Closing a window never stops the agent.
+**You are done when:** you can find the same agent in Town, Board or Desk and
+open its terminal on the expected host.
 
-### Workspaces, tabs, panes and worktrees
+Use the visible **− Minimize** button in an Inspector's header to hide its
+window. On desktop, **Open windows** restores it. **Close** (or **‹ Back**) dismisses
+the window; tap the agent or terminal again to reopen it. These controls leave
+agents and terminal sessions running and work in Town, Board and Desk.
+On touch tablets or without a pointing device, narrow Town columns keep 40px
+window controls and hide the pane map to leave room for the agent's name.
+On a phone, a minimized window waits as a chip at the bottom left of Town or
+Board, above the bottom controls and also in Zen: tap the chip once to bring the
+window back. While another window fills the screen, the chips sit in a strip at
+the bottom of that window, below its content, so restoring still takes one tap;
+**Tabs** in the expanded mobile controls also lists windows.
+On desktop, **Arrange windows** can tile or cascade open Inspectors. To put one
+window beside the view instead of over half of it, choose **⋯ → Fit right** or
+**Fit left**: the window takes the full height at a readable width (the width you
+last dragged a docked window to), and **Right half** still fills half. Both are
+in **Actions** too, where you can give them a shortcut.
+On mobile, one Inspector fills the screen:
+use the on-screen **Back** to return straight to the visual view, including
+when Composer is open. The phone's own Back closes Composer first, then the
+terminal on the next press. Tapping the terminal's name opens the workspace
+list; Back (on-screen or the phone's) or tapping the name again closes it and
+shows the terminal. Any open menu or picker closes the same way, one at a time;
+tapping the terminal closes them all. Use the ellipsis controls for additional navigation.
+Closing an Inspector leaves the terminal session running.
 
-| Name | What it is | In this tutorial |
+### Learn this one hierarchy
+
+| Object | What it is | Example in this exercise |
 | --- | --- | --- |
-| Workspace | A working environment, usually one project folder | Your project |
-| Tab | A layout inside a workspace | A documentation tab |
-| Pane | One terminal inside a tab | The agent on the left, a shell on the right |
-| Worktree | Another checkout of the same Git repository | A separate branch for a second task |
+| Workspace | A working environment, usually associated with a project directory | Your project repository |
+| Tab | A layout within a workspace | A documentation tab |
+| Pane | One terminal region within a tab | An agent on the left, tests on the right |
+| Worktree | Another real checkout directory of the same Git repository | An isolated documentation branch |
 
-> **Panes share files.** Two panes in the same folder edit the same checkout.
-> For parallel changes, use worktrees ([chapter 6](#workflow)).
+**Splitting panes does not isolate files.** Terminals in the same directory
+modify the same checkout; use chapter 3 for parallel changes.
 
-## 5. Check what the agent changed
+## 2. Everyday work: verify what the agent changed
 
 <a id="daily"></a>
 
-### Give the agent a small task
+### 2.1 Find the terminal you want to control
 
-1. In **Spaces**, open your practice project and create a tab.
-2. Start your agent CLI in it.
-3. Paste this prompt, read it, and send it. Model usage may cost money.
+Open the command menu (**Ctrl+K**, **Cmd+K** on a Mac) to search workspaces,
+files, tabs, panes, and agents;
+enter `README.md` to open a project-relative path. Defaults differ by platform:
+use [Keyboard Shortcuts](../FEATURES.md#keyboard-shortcuts) or interface menus.
 
-   ```text
-   Read this project's README and add a short first-run example.
-   Check the project's actual commands first; do not invent flags.
-   Modify only the README. Do not install dependencies, commit, or push.
-   When finished, explain what changed and what you have not actually verified.
-   ```
+1. Select your practice project and create a tab from its menu.
+2. Split right from the pane actions menu (`Cmd+D` on macOS).
+3. Start an installed, signed-in agent CLI on the left; keep a shell on the right.
+4. Open the recent pane switcher (`Ctrl+Tab` on macOS). Release its opening
+   modifier to switch or press `Esc` to cancel.
 
-4. Watch its status: working, then blocked (it needs you) or done.
-5. Open the agent's **Chat** and read its explanation.
+**You are done when:** you can switch panes and know where typing will go.
 
-**You are done when:** you found the agent's explanation, not just the last
-line of its terminal.
+Paste into the focused terminal with `Ctrl+V` (`⌘V` on macOS), including when
+World is opened at a plain-HTTP LAN address. On plain-HTTP addresses,
+`Ctrl+Shift+V` on Windows/Linux also uses native plain-text paste when the
+browser supports it; use `Ctrl+V` or drag and drop for images. Over HTTPS or
+localhost it keeps async clipboard reads, including images. Other custom paste
+shortcuts need clipboard access over HTTPS or localhost. If World shows paste
+guidance, use the native gesture, drag and drop files, or open the HTTPS address;
+changing site permissions cannot enable a missing Clipboard API.
 
-### Read the file, then the diff
+> Browsers may reserve `Cmd+T`, `Cmd+W`, or `Cmd+D`; use menus or the shortcut
+> editor. PWAs are often more reliable. Do not substitute Ctrl for every Cmd.
 
-1. Open **Files** and find `README.md`. Switch between **Preview** and
-   **Source** to check both its formatting and its text.
-2. Open **Changes** and read the README's added and removed lines.
-3. Find the command the agent added, and check it really exists in the
-   project.
+### 2.2 Give the agent a small, reviewable task
 
-![Board Inspector previewing the demo guide](./images/herdr-world-desktop-files.png)
+Use a repository you may modify. Paste, review, and manually submit this prompt;
+model usage may incur charges.
 
-![Board Inspector showing the README section the agent added](./images/herdr-world-desktop-changes.png)
+```text
+Read this project's README and add a short first-run example.
+Check the project's actual commands first; do not invent flags.
+Modify only the README. Do not install dependencies, commit, or push.
+When finished, explain what changed and what you have not actually verified.
+```
 
-**You are done when:** you can point at the new lines and you have checked the
-command.
+Watch Herdr's recognized status: `working` suggests activity, `blocked` needs
+attention, and `done`/`idle` suggest when to return. **Status is not verification:**
+`done` does not mean tests passed. Available states depend on agent integration.
 
-### Send precise feedback
+Open **Chat** in the Inspector to read the conversation and reply. Chat shows
+user and agent messages, with one line for each run of tool calls, and updates
+while the agent works. A new agent without a session shows **No messages yet.**
+With Chat as the opening preference, its window starts on **Terminal** whenever
+Chat cannot show the conversation: no session, unsupported harness, missing
+integration or an unreadable record. It switches once Chat is available, unless
+you have chosen a view yourself. Pick Chat yourself to see its explanation and
+**Open Terminal**. A missing or unreadable reported transcript keeps its error;
+an agent still starting or waiting is not told to install an integration.
+If Chat cannot read the conversation it says why and
+offers the fix it names, or **Open Terminal**. A message you send shows as
+not yet seen until the transcript has the same words; if it went to another session, a red
+notice names it. Slash commands such as `/compact` work from Chat too (see
+[Chat with an agent](#chat)). Choose **Details** for the Session Inspector:
+Chat and Timeline, ATIF (a normalized trajectory), and raw transcript; original
+export preserves the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
+for Chat, Files, and Changes on your platform. In Details, switch **Chat / Timeline**
+to read the conversation or inspect individual records. The conversation minimap
+jumps between loaded messages; it does not load older transcript pages.
 
-1. In **Changes**, click a line number (or drag across several) and write a
-   comment, such as "Use the dev command in package.json."
-2. Check your comments in the review panel.
-3. Choose the agent's pane. World puts your feedback in its input box.
-4. Read the message there and press Enter yourself.
+If Chat cannot find a Codex conversation, open **Details**, expand **Link Codex session**, enter the full
+conversation UUID currently open in that pane and choose **Check session**.
+Review the directory, timestamp and transcript path, then **Confirm session link**.
+Keep Codex in the foreground and repeat the preview if the pane or session changes.
+The link replaces the pane's existing session association for all viewers.
 
-**You are done when:** the agent received feedback that points at exact lines.
+**You are done when:** you found the explanation, not just the last terminal line.
 
-### Take care with Git actions
+> Chat and inspection read Codex, Claude, Kimi, Grok Build, Pi, Muse Code and Antigravity CLI
+> transcripts; Codex, Claude and Pi are checked against real ones. See the
+> [harness matrix](./CHAT.md#harness-matrix).
+> Follow missing-metadata integration hints. For Codex 0.157 and later, run
+> `/title` in Codex and add Thread ID so Chat knows which conversation a pane
+> shows. SSH reads Herdr-reported paths and
+> Claude, Codex and Pi ID lookups remotely. Claude requires its Herdr-reported UUID
+> to match one transcript in that host's `~/.claude/projects/`;
+> other local ID/directory fallbacks may miss remote
+> transcripts. See [session inspection](../FEATURES.md#agent-awareness-and-session-inspection).
 
-**Changes** separates staged, unstaged, untracked and conflicted files, and
-**Against branch** compares with another branch. This exercise needs no
-commit; to commit, follow your project's usual checks in a shell.
+### 2.3 Read the file, then the diff
 
-> **Discard Unstaged** loses changes and **Delete Untracked** deletes files.
-> Confirming is not a backup: when unsure, cancel.
+1. Open **File Explorer** from the interface menu and find `README.md`.
+2. Switch between **Raw / Rendered** to check both the source and formatting.
+   Previews also support images, Mermaid diagrams in Markdown, and standalone
+   Mermaid files.
+3. Open **Diff Viewer** from the interface menu. Select the working-tree scope and
+   inspect the README's added and removed lines.
+4. Use `Cmd/Ctrl+F` in the diff to find the command the agent added. Confirm
+   that it actually exists in the project's configuration.
 
-### Ask Ranger about your workspaces
+**You are done when:** you can identify the new lines and verify the run command.
 
-<a id="ranger"></a>
+*File-tree search covers loaded files, not repository-wide full-text search.*
 
-Ranger is World's assistant for questions about your workspaces.
+Right-click/long-press for file actions, drag to upload, or download a file or
+`.tar.gz` directory. `Cmd/Ctrl+Click` on terminal paths opens previews.
+**Uploads, deletions, and SSH file operations affect real target-host files.**
 
-1. Open **Ranger**, choose a model (or **Claude Code**), and allow the
-   workspaces it may read.
-2. Ask a question. While it answers, press Enter or **Steer** to adjust the
-   answer in progress, or Alt+Enter (**Option+Enter**) or **Queue** to send
-   your message once it finishes.
+### 2.4 Send precise feedback back to the agent
 
-See [Ranger](../FEATURES.md#ranger-and-workspace-tools) for scheduled tasks and
-permissions.
+1. Click/drag diff line numbers and comment, for example: "Use the dev command
+   in package.json." Source annotation gutters and rendered Markdown selections
+   also accept comments.
+2. Check files, ranges, and quotes in the review panel; reorder as needed.
+3. Choose the agent pane and pre-fill its input with compiled feedback.
+4. Review the full message in that pane and press Enter yourself.
 
-## 6. Parallel work and your phone
+**You are done when:** the agent receives located, contextual feedback.
+**Pre-filling does not submit.**
+
+Drafts stay in this browser/checkout, not GitHub PRs or other devices. Failed
+re-anchoring marks a comment stale but retains its original quote.
+
+### 2.5 Do not rush into bulk actions
+
+Diff Viewer separates staged, unstaged, untracked, and conflicted files.
+Choose **Against branch** to compare with the repository default or select another
+local or remote-tracking branch. World uses existing refs without fetching; the
+choice stays with this repository on this host.
+Context actions stage/unstage matching changes; **More Git actions** affects
+multiple files.
+
+**This exercise needs no commit.** To commit, first run `git status` in the
+shell and follow the project's checks/commit process. Staging is not committing;
+committing is not pushing.
+
+> **Discard Unstaged loses unstaged changes; Delete Untracked deletes files.**
+> Confirmation is not a backup. When uncertain, cancel and preserve files.
+
+To move a split pane to another tab in the same workspace, drag its handle onto
+that tab. Hover to reveal the destination panes, then drop on a pane edge. Drop
+on **+** to break the pane into a new tab.
+
+### Ranger: steer or queue a message
+
+1. Open **Ranger**, configure a model and explicitly allow the workspaces it may read.
+2. Ask a question. While it answers, press Enter or **Steer** to adjust the current
+   turn after its next step. Use Alt+Enter (**Option+Enter** on macOS) or **Queue**
+   to wait until that answer finishes.
+3. Edit or remove waiting messages above the editor. Up to eight may wait. A
+   message that needs a different workspace scope waits for its own turn.
+4. After **Stop**, a failure, restart or chat switch, choose **Send next** when
+   ready to continue. If a selected runtime was replaced, remove the stale queued
+   message and resend it with a refreshed workspace selection. A changed model or
+   thinking effort also holds the message; restore the original selection or resend.
+5. Expand **Thinking** above a reply when the model provides reasoning. Selecting
+   text there or in the answer stays intact while terminal output updates.
+
+Ranger can also use **Claude Code** as its model provider. Install and sign in to
+`claude` as the account running World, then select **Claude Code** and a model in
+Ranger settings. It uses that CLI's sign-in. Other providers continue to use the
+configured Ranger or explicitly selected Pi credentials. Changing between these
+engines starts fresh model context; your conversation remains visible.
+
+For a scheduled task, **All workspaces, new ones too** follows the workspaces
+Ranger is permitted to use when each run starts. It follows the current explicit
+workspace grants; high-permission all-workspace access is not required. Use a fixed selection to stay on named workspaces.
+Each run still captures current connection generations, and confirmed actions
+retain the normal permission checks.
+
+Ask Ranger to show a workspace or session to open it in the shared Inspector.
+Only the World window that sent that question follows the reply. A replaced
+runtime or missing target produces an unavailable-target notice; it never selects
+another host as a fallback.
+
+Workspace reads and actions still use explicit permissions and captured ownership;
+steering does not enable high-permission mode or send a prompt to another agent.
+
+## 3. Parallel work and mobile access
 
 <a id="workflow"></a>
 
-### Give each parallel task its own worktree
+### 3.1 When do you need a worktree?
 
-Panes in the same folder edit the same files. For two tasks at once, give each
-its own worktree: a separate checkout and branch of the same repository.
+For simultaneous tasks that edit files, use separate worktrees: each has its
+own checkout directory and branch.
 
-1. Right-click the workspace and choose **Worktree Lifecycle**, or search for
-   `worktree lifecycle` with **Ctrl+K**.
-2. Create and open a worktree. It starts from the latest `origin/main`, without
-   your uncommitted changes.
-3. In its terminal, run `pwd` and `git status` to confirm the folder and
-   branch before you start an agent there.
+1. If the repository has an `origin`, confirm that it is fetchable. Inspect
+   `paseo.json` if it exists. If you do not trust its commands, disable hooks
+   for this repository through **Worktree hooks** before proceeding.
+2. Open **Worktree Lifecycle** from the workspace context menu, or search for
+   `worktree lifecycle` in the command menu. World's navigator offers the same
+   button and menu entries on desktop and phone. **Worktree location** there
+   chooses where this repository's new worktrees go.
+3. Create and open a documentation worktree. Herdr World starts it from the latest
+   fetched `origin/main` (a repository without an `origin` starts from the
+   checked-out commit), without carrying over the source workspace's
+   uncommitted changes.
+4. In the new worktree's terminal, run `pwd` and `git status`. Confirm the
+   directory and branch before starting the agent.
 
-> A repository's `paseo.json` hooks run its own code when worktrees are created
-> or removed. If you do not trust them, turn them off under **Worktree hooks**
-> first. See [worktree hooks](../FEATURES.md#paseo-worktree-hooks).
+**You are done when:** tasks have separate checkouts and independently reviewable
+changes. Group/collapse/pin preferences stay in this browser.
 
-**You are done when:** each task has its own folder and its own changes to
-review.
+> `paseo.json` setup/opened/teardown/removed hooks are enabled by default and run
+> repository code, remotely in SSH mode. Before removal, save/commit wanted
+> results, end tasks, and read the confirmation. Hook failure can block removal;
+> see [hook boundaries](../FEATURES.md#paseo-worktree-hooks).
 
-### Continue from your phone
+Leave **Automatic branch updates** off for this exercise. When enabled, they
+fetch/merge `origin/main` every 10 minutes by default, never push, skip dirty or
+detached checkouts, and abort conflicts. They run only while the workspace is open
+in this connection. See [update controls](../FEATURES.md#automatic-branch-updates).
 
-First set up [Tailscale and Serve](#tailscale) in chapter 7. On a phone,
-`127.0.0.1` means the phone itself, not your computer.
+### 3.2 Continue from your phone
 
-1. Open World's HTTPS address on your phone, log in, and choose your agent.
-2. Read and reply in **Chat**. In a terminal, tap **Message** to type with the
-   phone keyboard; the key rows give you arrows, Esc and Ctrl.
-3. Open **Changes** to review the README diff.
-4. Adjust the size in **Menu → Appearance → Text size**.
-5. Install World as an app:
+On a computer, click inside terminal output to send physical arrow keys and
+Ctrl combinations directly to that terminal. Opening Message does not disable
+desktop terminal input; unsent Message drafts remain separate.
 
-| Browser or device | Where to install |
+To check a host, open **Manage connections** and use **Check version again** on
+its card. The running Herdr version and protocol are specific to that host;
+after one minute, check again before relying on compatibility. A failed check
+stays unknown: reconnect the host and retry. The installed binary is not inferred
+from its server. The connection card explains why upgrade is unavailable and
+does not run an update command.
+
+First complete chapter 4's [Tailscale + Serve](#tailscale) setup and access checks.
+Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer.
+
+1. Open Herdr World in the mobile browser and select your practice project and
+   agent pane. Authenticate first if your deployment requires login.
+2. Tap **Message** below the terminal to raise the keyboard and compose; use
+   the side-by-side **keyboard (Composer) / terminal (Direct)** icons to choose
+   draft editing or typing straight into the terminal. Direct saves and hides the draft; Composer
+   restores it. Both modes stay available while a long draft is expanded.
+   **/ Commands** opens command suggestions for the draft;
+   it does not turn on Direct. The input stays below the output.
+   The toolbar places attachment and Commands on the left, input-mode icons in
+   the middle, and Insert, Send and Close on the right.
+   Tabs and More live in the shared top app bar. Special-key rows stay visible
+   in both modes for arrows, Ctrl and other actions awkward on a touch keyboard.
+   In an ordinary shell pane, **Agent terminals** beside Message can
+   start an agent there. Begin with an empty shell prompt and draft, then choose
+   the agent; World types its command and Enter. Use the pencil to customize a
+   command for this browser and connection, or **Reset** for the detected default.
+   An unsuccessful send keeps the command in Message for recovery.
+3. Open Changes to review the README diff. Mobile uses a unified diff layout;
+   long-press a file to open its actions menu. To open a link printed in a
+   terminal, long-press it and choose **Open link** (on a computer,
+   `Cmd`/`Ctrl`-click it). This works in Town and Board Inspectors too,
+   including with Composer open. The URL stays available while its own displayed
+   rows are unchanged; an adjacent progress line does not withdraw it.
+4. Adjust **Menu > Appearance > Text size** (80%-150%), then use the relevant
+   platform entry below to install the PWA.
+
+| Browser / device | Installation entry |
 | --- | --- |
-| iPhone or iPad Safari | Share → Add to Home Screen |
-| macOS Safari 17 or later | File → Add to Dock |
-| Chrome or Edge | Browser menu → Install app |
+| iPhone / iPad Safari | Share > Add to Home Screen |
+| macOS Safari 17+ | File > Add to Dock |
+| Chrome / Edge | Browser menu > Install app |
 
-**You are done when:** the home-screen icon opens World. Install your World
-address, not this tutorial page.
+**You are done when:** the home-screen icon opens your project. Install the stable
+Herdr World service URL, not this tutorial's Pages URL.
 
 ![Mobile Spaces terminal with touch shortcut controls](./images/herdr-world-mobile-spaces.png)
 
-> The app does not work offline and does not keep your computer awake.
-> Notifications help, but do not rely on them as alarms.
+**PWA is not offline access or background keep-alive.** Host sleep, stopped
+Herdr World, or a disconnected VPN interrupts access. A completion notification's
+**Open agent** follows **Agents open**: Chat by default when supported, or
+Terminal when selected or when Chat is unavailable, after checking its original
+runtime and agent session. In Spaces it opens the notified agent's owning host;
+a refused notification leaves the current Inspector open. Browser permissions and OS restrictions make notifications unsuitable
+as reliable alerts.
 
-### Sharing World between browsers
+### 3.3 Multiple browsers are not separate permission roles
 
-Every browser connected to your World sees and controls the same terminals.
-There is no read-only role, so give access only to people you would hand your
-terminal to. Each browser keeps its own Hosts filter, drafts and shortcuts.
+Browsers share Herdr events, visual pane pins and Desk review state; fonts,
+drafts, workspace pins and shortcuts can remain browser-local.
+Connection controls can pause your browser or others.
 
-## 7. Reach World from another device
+**Profiles are shared; each browser saves its own Hosts filter.** Town, Board, Desk,
+their counts, and search initially show all hosts and follow that filter.
+Changing the filter preserves open Inspectors and the owners of pending operations.
+Manage connections controls lifecycle separately; global creation confirms one
+destination. Editing a profile affects others' connection lists. There is no
+per-person read-only role: do not share a workspace URL like a document link.
+
+## 4. Remote access: choose the right connection
 
 <a id="networking"></a>
 
-Pick the route that matches what you want to do:
+**Choose Tailscale + Serve for everyday phone/computer access.** Use SSH if you
+already have SSH access and only need another computer. Reserve Tailcat for
+temporary experiments between computers you control.
 
-| Your goal | Route | What you need |
+| Your goal | Recommended route | What you need |
 | --- | --- | --- |
-| Use World on the computer running Herdr | Local World | Nothing extra |
-| Reach World from your phone, anywhere | Tailscale + Serve | Both devices in one tailnet |
-| Use your local World with Herdr on another computer | SSH profile | SSH access; World on Linux or macOS |
-| Connect two computers you control, briefly | Tailcat | Tailcat on both computers |
+| Use Herdr World on the computer running Herdr | Local Herdr World | No extra networking tool |
+| Reach the workspace from your phone away from home | Tailscale + Serve | Host and phone in the same tailnet |
+| Manage remote Herdr through local Herdr World | SSH profile / `--ssh-host` | Local Linux/macOS, Herdr already running remotely |
+| Connect two computers temporarily without a tailnet | Tailcat port forwarding | Tailcat on both ends and a securely exchanged address |
 
-None of these needs router port forwarding. Try your chosen route on your own
-network before you rely on it.
+These external tools are **not built-in integrations**. No router forwarding,
+exit node, or subnet routing is needed. Verify the chosen route on your own
+network before relying on it.
 
-### Before you connect anything
+### 4.1 Separate the two network hops
 
-- **Anyone who can open World can run commands as you.** Admit only devices
-  and people you fully trust.
-- **World always asks for a login**, on every address. Set
-  `HERDR_WORLD_PASSWORD` (15 characters or more), or use the generated token.
-- **Use HTTPS or an encrypted tunnel**, and limit who can reach it.
-- **Never share** passwords, token URLs or Tailcat addresses in screenshots,
-  issues, chats or config files.
+```text
+Hop A: Browser -> Herdr World
+       Tailscale Serve / SSH TCP forwarding / Tailcat port forwarding
 
-Read [SECURITY.md](../SECURITY.md) for the full model. Do not bind World to
-`0.0.0.0` just to reach it from elsewhere: that exposes it to your whole
-network.
+Hop B: Herdr World -> Herdr
+       Local sockets / a Herdr World SSH profile
+```
+
+Tailscale/Tailcat solve **hop A** (browser to Herdr World); `--ssh-host` solves
+**hop B** (Herdr World to Herdr). Start with the hop you need.
+
+#### Safety checks before connecting
+
+1. Admit only fully trusted devices/people: UI access is terminal/file authority
+   as the Herdr World user.
+2. **Every listener requires login, including loopback.** Set
+   `HERDR_WORLD_PASSWORD` to 15–1024 characters or use the generated token.
+3. Use HTTPS or a trusted encrypted tunnel; restrict listeners and access policy.
+   Login throttling applies to failed attempts; passwords provide no TLS,
+   multi-user authorization or sandbox.
+4. Never publish passwords, token URLs, or Tailcat addresses in screenshots,
+   issues, chats, or configs.
+
+Read [SECURITY.md](../SECURITY.md). These are private-access examples. Use an independently authenticated proxy if you need additional access policy.
+Do not bind `0.0.0.0` just to force login: that expands network exposure.
 
 <a id="tailscale"></a>
 
-### Tailscale and Serve: the everyday choice
+### 4.2 Tailscale + Serve: the recommended everyday option
 
-**Tailscale** joins your devices in a private network called a tailnet.
-**Serve** gives World a private HTTPS address that only your tailnet can open.
+**Tailscale** links authorized devices in a private **tailnet**, using WireGuard
+with direct connections or relays. **Serve** gives local HTTP a tailnet-only HTTPS
+address.
 
 ```text
-Phone (on Tailscale) --HTTPS--> Tailscale Serve --> 127.0.0.1:8787 --> World --> Herdr
+Phone browser (connected to Tailscale)
+          |
+          | HTTPS, restricted by tailnet access policy
+          v
+Tailscale Serve on the work computer
+          |
+          | HTTP, local loopback only
+          v
+127.0.0.1:8787 -> Herdr World -> local Herdr
 ```
 
-#### Prepare your devices
+#### Prepare both devices: about 5-10 minutes
 
-1. Install [Tailscale](https://tailscale.com/download) on the computer and on
-   your phone, and sign both in to the same tailnet.
-2. On the computer, run `tailscale status` and check both devices are online.
-3. [Limit access](https://tailscale.com/docs/features/access-control) to the
-   people and devices that should reach World on port 443. Check existing
-   broad rules before you go on.
+1. Install [Tailscale](https://tailscale.com/download) on the host and visiting
+   device. Sign into the same tailnet; confirm both are online in its admin console.
+2. Run `tailscale status` on the host. For a missing macOS CLI, follow the
+   [macOS instructions](https://tailscale.com/docs/install/mac), not a second
+   client installation to fix PATH.
+3. [Restrict access](https://tailscale.com/docs/features/access-control) to intended
+   users/devices on the Herdr World node's HTTPS port 443. Check broad existing rules.
+   Tailnet membership is not least privilege: **verify scope before enabling Serve**.
 
-#### Share World over Serve
+#### Start Herdr World with a local-only listener
 
-1. Check for an existing Serve setup that you need to keep:
+On **the Herdr host**, ensure port 8787 is free. If a plugin/user service already
+runs Herdr World, follow the existing-service instructions below; do not duplicate it.
+
+```bash
+herdr-world --host 127.0.0.1 --port 8787
+```
+
+On Windows, use `herdr-world.exe` (`./herdr-world.exe` from its PowerShell directory).
+Leave the process running.
+
+> **No Herdr World login page:** Tailscale identity/access rules admit remote devices
+> directly. HTTPS protects transport. Local processes can also access loopback.
+> Continue only if you accept this boundary.
+
+**Existing service:** edit `~/.config/herdr-world/herdr-world.env` (Unix) or
+`%APPDATA%\herdr-world\herdr-world.env` (Windows). Preserve other settings; set
+`HOST=127.0.0.1` and `PORT=8787`. **This removes the token/password gate:** Tailscale
+policy must replace it. Protect this potentially secret file; never commit it.
+Restart for your installation:
+
+**Standalone installation:**
+
+```bash
+herdr-world service restart
+```
+
+**Plugin installation:**
+
+```bash
+herdr plugin action invoke herdr-world.restart
+```
+
+Plugin actions are asynchronous: confirm restart in its panel/log.
+See [service configuration and logs](./DEPLOYMENT.md#user-service).
+
+#### Connect from another terminal on the same work computer
+
+1. Check for existing Serve configuration you need to preserve:
 
    ```bash
    tailscale serve status
    ```
 
-2. If HTTPS port 443 is free, share World. Approve the certificate link it
-   prints the first time:
+2. Confirm HTTPS port 443 at `/` is free. If occupied, use official documentation
+   to plan another port/node; do not overwrite another service.
 
    ```bash
    tailscale serve --bg --https=443 http://127.0.0.1:8787
    ```
 
-3. Restart World with the HTTPS address Serve printed, without a trailing
-   slash:
+   Approve the first-run HTTPS certificate consent link as an authorized admin.
+   Hostnames appear in public certificate transparency logs: avoid sensitive names.
+
+3. Configure the printed HTTPS address as World's one proxy origin and restart World.
+   For a foreground process, stop it with <kbd>Ctrl</kbd>+<kbd>C</kbd> and restart it:
 
    ```bash
    HERDR_WORLD_PUBLIC_ORIGIN=https://machine-name.tailnet-name.ts.net \
      herdr-world --host 127.0.0.1 --port 8787
    ```
 
-   Running World as a service? Add that line to its environment file and
-   restart it; see [the user service](./DEPLOYMENT.md#user-service).
+   For an existing service, add the same `HERDR_WORLD_PUBLIC_ORIGIN=...` line to
+   its environment file and repeat the standalone or plugin restart command above.
+   Use the exact origin printed by Tailscale, without a path or trailing slash.
 
-4. On your phone, with Tailscale on, open that HTTPS address and log in.
-5. Run `pwd` in a shell pane to check the terminal answers.
+4. On your Tailscale-connected phone, open the printed address, shaped like
+   `https://machine-name.tailnet-name.ts.net`. **Use the printed HTTPS hostname,
+   not a bare IP address or localhost on your phone.**
+5. Run `pwd` in an idle shell pane to verify terminal interaction. Test that a
+   tailnet device excluded by your access rules cannot connect; if you have
+   no suitable test device, at least verify the denial using policy tests.
+   With Tailscale disconnected and no other access path, the HTTPS endpoint
+   should also be unreachable.
 
-**You are done when:** your phone reaches World over mobile data, and a device
-your rules exclude cannot.
+**You are done when:** cellular access works with Tailscale, and excluded devices
+cannot connect. Incognito is not an admission test; device identity stays the same.
 
-> **Use Serve, never Funnel.** Funnel puts World on the public internet.
-> Machine names appear in public certificate logs, so avoid sensitive names.
+> **Serve is private; Funnel is public. Do not substitute `funnel`.** Serve identity
+> headers add no Herdr World per-person/read-only roles. Use domain root `/`; arbitrary
+> subpaths such as `/studio/` are not assured.
 
-To stop sharing, turn off just this address and check what remains:
+#### Stop sharing, or make it a regular setup
+
+Before closing this endpoint, check that other mounts will not be affected:
 
 ```bash
 tailscale serve --bg --https=443 off
 tailscale serve status
 ```
 
-`--bg` keeps Serve running, not World, and does not stop the computer
-sleeping. For a lasting setup, run World as a
-[user service](./DEPLOYMENT.md#user-service).
+`tailscale serve reset` clears the device's entire Serve configuration, including
+other services. **`--bg` persists Serve, not Herdr World, and does not prevent sleep.**
+After verification, configure a [Herdr World user service](./DEPLOYMENT.md#user-service)
+if needed, keeping loopback and strict Tailscale policy.
 
 <a id="ssh"></a>
 
-### SSH: reach Herdr on another computer
+### 4.3 SSH: connect to Herdr, or forward the web interface
 
-#### Option A: your local World, remote Herdr
+#### Option A: local Herdr World, remote Herdr
 
-World runs on your computer (Linux or macOS) and controls Herdr on another.
+Use local Herdr World with remote code/agents. **Herdr World must run on Linux/macOS**
+for SSH socket forwarding; Windows supports native local profiles only.
 
-1. Check that plain `ssh workbox` works, where `workbox` is an alias in your
-   `~/.ssh/config`. Keep ports, jump hosts and keys there.
-2. Check that Herdr is already running on that computer.
-3. In World, open **Manage connections**, add an SSH profile with Destination
-   `workbox`, and connect.
-4. Open the remote project and run `pwd` to confirm the folder.
+1. Verify connectivity with system SSH, confirm the host fingerprint, and check
+   authentication and the already-running remote Herdr server. Put custom
+   ports, jump hosts, and keys in local `~/.ssh/config`; for example, configure
+   the destination as the alias `workbox`.
+2. In local Herdr World, add an SSH profile through the connection selector beside
+   the title. Set Destination to `workbox`, leaving the control and render
+   socket paths empty for automatic resolution.
+3. Test and connect using the selector. Open the remote project and run `pwd`
+   in its terminal to confirm the directory.
 
-**You are done when:** your browser controls the remote terminal and files.
-Uploads, Git and file actions now happen on that remote computer.
+Or start a local bridge on a free port:
 
-World never stores SSH passwords or keys; OpenSSH handles them. See
+```bash
+herdr-world --ssh-host workbox --host 127.0.0.1
+```
+
+**You are done when:** the local browser controls the remote terminal/files.
+Image uploads, Git, file operations, and hooks run on that remote host.
+
+Explicit `--socket-path` / `--client-socket-path` or environment equivalents
+override tunnel paths; stale settings can select the wrong target. Profiles
+store no passwords/keys; OpenSSH owns host verification/authentication. See
 [connections](./DEPLOYMENT.md#local-and-ssh-connections).
 
-#### Option B: World already runs remotely
+#### Option B: Herdr World already runs remotely; forward its web port
 
-Forward its web port to your computer with SSH (this works on Windows too):
+Both services stay remote; system SSH forwards the web port (not `--ssh-host`).
+Remote Herdr World must use loopback: login is bypassed, so SSH authentication controls
+remote admission. Visiting-computer processes can also use the forwarded port.
+This option works with Windows OpenSSH too.
+
+On the visiting computer, replace `workbox` with your SSH alias:
 
 ```bash
 ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:18787:127.0.0.1:8787 workbox
 ```
 
-Open `http://127.0.0.1:18787` on that computer and log in. Press Ctrl+C in
-the SSH terminal when you are finished.
+Open `http://127.0.0.1:18787` there, not on your phone. HTTP stays on loopback at
+each end; SSH encrypts the link. `-N` runs no remote command; `18787` is local,
+`8787` remote. **Press Ctrl+C in this terminal when finished.**
 
 <a id="tailcat"></a>
 
-### Tailcat: a temporary link between your computers
+### 4.4 Tailcat: a temporary link between trusted computers
 
-[Tailcat](https://github.com/tailscale/tailcat#readme) is a separate,
-experimental tool from the Tailscale team. It links two computers without a
-tailnet or account. Use it only between computers you control, and use
-Tailscale for your phone.
+**Tailcat is a separate Tailscale-team tool**, not Tailscale. It uses WireGuard,
+NAT traversal, and DERP without a tailnet/account, but offers no long-term device
+directory or access-policy management. Its client maps remote ports to localhost;
+privately exchange the server's address.
 
-> Tailcat makes no stability promises, and this project has not tested this
-> example end to end. Check `tailcat --help` on both computers before you
-> start.
+> **Experimental:** no upstream CLI/API/wire stability promises or relay
+> availability/throughput SLA. Its threat model primarily covers your own devices.
+> This project has not verified this example end-to-end on two machines. Check
+> both versions and `tailcat --help`, `tailcat serve --help`, and
+> `tailcat forward --help` for `serve`, `forward`, and `--key=new` support.
+> Update through official instructions; do not guess flags.
 
-1. Install Tailcat on both computers from its
-   [official instructions](https://github.com/tailscale/tailcat#install).
-2. On the computer running World, share only World's port with a new address:
+#### Prepare both ends
+
+Install supported versions on both computers from the
+[official repository](https://github.com/tailscale/tailcat#install): macOS supports
+`brew install tailcat`; other systems need the matching release architecture.
+The experimental web demo is not a general Herdr World proxy, and phones are not
+assumed to support these CLIs. Use Tailscale for regular mobile access.
+
+#### Connect only the Herdr World port
+
+1. Run Herdr World on the work computer at `127.0.0.1:8787` and verify its local
+   page. **This listener has no Herdr World login gate. The experiment relies
+   entirely on Tailcat admission; leaking the address leaks access to the
+   workspace.** Use only two computers you control, not a demo for other people.
+2. In another terminal on the work computer, start a temporary single-port
+   service:
 
    ```bash
    tailcat serve --key=new 8787
    ```
 
-3. Send the printed `tc…` address to the other computer over a private
-   channel. **Treat it like a password.**
-4. On the other computer, replace the placeholder and run this. It listens
-   only on `127.0.0.1`; do not add `--bind=0.0.0.0`.
+   `--key=new` forces an ephemeral key, avoiding reuse of a previously shared
+   address when a saved key named `default` already exists. Confirm that the
+   output says it is using a new address.
+
+3. Send the complete printed `tc...` address through a trusted private channel
+   to the visiting computer. Run this there, **replacing
+   `tcREPLACE_WITH_PRIVATE_ADDRESS` first**:
 
    ```bash
    tailcat forward tcREPLACE_WITH_PRIVATE_ADDRESS 18787:8787
    ```
 
-5. Open `http://127.0.0.1:18787` there and log in.
-6. When finished, press Ctrl+C in both Tailcat terminals, and check that the
-   address no longer works.
+   Upstream's `forward` binds to `127.0.0.1` by default. Verify that in its
+   output; do not add `--bind=0.0.0.0`.
 
-**You are done when:** the other computer reaches World without a public
-listener, and access stops when both Tailcat processes exit.
+4. On the visiting computer, open `http://127.0.0.1:18787` and run `pwd` in an
+   idle shell pane to verify interaction.
+5. When finished, press Ctrl+C in both Tailcat terminals. Confirm the visiting
+   computer's address no longer works. Once the ephemeral server exits, the
+   old address no longer corresponds to a running service.
 
-#### Tailscale or Tailcat?
+```text
+Visiting browser -> 127.0.0.1:18787 -> tailcat forward
+                                          |
+                                 WireGuard encryption
+                                 (direct or via DERP)
+                                          |
+Work host: Herdr <- Herdr World :8787 <- tailcat serve
+```
 
-| | Tailscale + Serve | Tailcat |
+**You are done when:** the trusted computer has access without a public listener,
+and access stops when both forwarding processes exit.
+
+**Protect the Tailcat address as a credential:** default addresses include a
+pre-shared key, not just a hostname. Keep default protections; avoid weakening
+compatibility options. Do not expand to `serve all`, exit-node mode,
+authentication-free SSH, or writable-directory sharing.
+
+#### Which one should you choose?
+
+| Consideration | Tailscale + Serve | Tailcat |
 | --- | --- | --- |
-| Best for | Everyday access from all your devices | A short-lived link between two computers |
-| Who gets in | Your tailnet's rules, then World's login | Whoever has the address, then World's login |
-| You look after | Device sign-ins and access rules | The address, versions and stopping it |
+| Best fit | Regular private access across your devices | A short-lived connection between your computers |
+| Who gets access | Tailnet identity and policy; no Herdr World login gate in this example | The connection address and optional client restrictions; no Herdr World login gate in this example |
+| Browser entry | A private HTTPS hostname | Localhost exposed by the client CLI |
+| Ongoing responsibility | Maintain device sign-ins, policies, and services | Protect the temporary address, check versions, and stop processes |
 
-## 8. Troubleshoot
+Neither tool guarantees a direct connection on every network. A DERP relay
+does not mean encryption is disabled, but performance may differ from your LAN.
+
+## 5. Troubleshoot the hop that failed
 
 <a id="troubleshooting"></a>
 
-### A page will not open
+### A page will not open: check in order, about 3 minutes
 
-Check one hop at a time, starting closest to World.
-
-1. On the computer running World, check the service answers:
+1. On the **Herdr World host**, probe its HTTP service:
 
    ```bash
    curl -fsS http://127.0.0.1:8787/healthz
    ```
 
-   If the connection is refused, check World is running and on the expected
-   port before you change anything else. (Windows: use `curl.exe`.)
+   Use `curl.exe` in Windows PowerShell. This is a service probe, not proof
+   that every Herdr feature works. For a refused connection, check the Herdr World
+   process, port, and service status before changing the VPN.
 
-2. Open World on that computer. If the page loads but terminals do not, check
-   that Herdr is running and look at the connection error in
-   **Manage connections**.
-3. Once that works, check the route to your other device: `tailscale status`
-   and `tailscale serve status`, the SSH terminal, or both Tailcat processes.
-4. If the page loads but typing does nothing, check the right pane is
-   selected and the connection is not paused. Try locally to tell a network
-   problem from a Herdr one.
+2. Open Herdr World locally on its host, authenticating first for a non-loopback
+   deployment. If the page appears but the terminal does not, check that
+   Herdr is running, the selected profile, control and render socket paths,
+   and connection errors in the logs.
+3. Once local access works, check hop A. For Tailscale, use `tailscale status`
+   and `tailscale serve status`. For SSH, confirm the forwarding terminal is
+   still running. For Tailcat, check both processes and that the address
+   belongs to this server run.
+4. If the page loads but typing produces no output, check that the browser
+   connection is not paused, the right pane is selected, and the proxy
+   supports WebSocket upgrades and long-lived connections. Retry locally to
+   distinguish proxy trouble from Herdr rendering trouble.
 
-**You are done when:** you found which hop failed and fixed only that one.
+**You are done when:** you identified the failing service, Herdr connection, or
+access path and changed only that part.
 
-### Common problems
+### Five common symptoms
 
-| What you see | Check first |
+| Symptom | Check this first |
 | --- | --- |
-| `127.0.0.1` on the phone does not open World | That address is the phone itself. Use Serve's HTTPS address. |
-| World opens without asking for a login | This browser already has a session. Try a private window. |
-| `Address already in use` | World may already run as a service or plugin on 8787. Do not start a second copy. |
-| Chat or history is empty over SSH | See the [Chat guide](./CHAT.md) for the agent's transcript requirements. |
-| Paste, clipboard or app install does not work | These need HTTPS away from the World computer. Use Serve's HTTPS address. |
+| Localhost on the phone does not open the computer's workspace | Localhost points to the phone. Use Serve's printed HTTPS URL. |
+| Herdr World opens directly despite a configured password | Loopback listeners skip built-in authentication. For non-loopback listeners, use a fresh incognito window to rule out an existing cookie. |
+| `Address already in use` | A plugin or user service may already occupy 8787. Do not start a duplicate bridge. |
+| SSH connects, but session history is empty | Check remote transcript readability and the metadata/fallback limitations in chapter 2. |
+| Image paste, clipboard access, or PWA installation is restricted | Check the HTTPS secure context, browser permissions, and platform support. Prefer the Serve HTTPS address. |
 
-For token recovery, restarts and logs, see [deployment](./DEPLOYMENT.md). When
-you ask for help, share your World and OS versions, the failing step and
-redacted logs.
+See [deployment](./DEPLOYMENT.md) for token recovery, restarts, and debug logs.
+Do not disable authentication permanently or open the entire firewall. For help,
+share redacted logs, OS/Herdr World versions, and the failing step.
 
 ### Your first round is complete
 
 Check before finishing:
 
-- [ ] I know which workspace, tab and pane receives what I type.
-- [ ] I read the actual diff, and I know an agent's "done" is not verification.
-- [ ] I know which computer receives file and Git operations.
-- [ ] For remote access, I checked who can log in, which address World
-  listens on, who the network admits, and how to stop sharing.
+- [ ] I know which workspace, tab, and pane will receive my input.
+- [ ] I reviewed the actual diff and know that an agent's "done" is not verification.
+- [ ] I know which host receives file and Git operations.
+- [ ] For remote access, I checked the effective authentication boundary, listener address, allowed users, and how to stop sharing.
 
-**Next time you open World, try one small thing:** find an agent waiting for
-you and read one part of its diff.
+**Next time you open Herdr World, take one small action: find an agent waiting for
+you and inspect one part of its diff.**
 
-### Where to go next
+### References and maintenance
 
-- [Features and shortcuts](../FEATURES.md): every control, limit and
-  shortcut.
-- [Installation and deployment](./DEPLOYMENT.md): installs, services,
-  connections and settings.
-- [Security model](../SECURITY.md): what access to World allows, and how login
-  works.
-- [Architecture](./ARCHITECTURE.md): how World, Herdr and connections fit
-  together.
-- [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve),
-  [Tailscale access controls](https://tailscale.com/docs/features/access-control)
-  and the [Tailcat security model](https://github.com/tailscale/tailcat/blob/main/SECURITY.md).
+Third-party commands follow official sources. For fast-changing Tailcat, check
+your installed version's help.
+
+#### Product references
+
+- [Features and shortcuts](../FEATURES.md): complete capabilities, limitations,
+  and action reference.
+- [Installation and deployment](./DEPLOYMENT.md): the canonical reference for
+  binaries, plugins, profiles, services, and configuration.
+- [Security model](../SECURITY.md): permissions, authentication, and trust
+  boundaries.
+- [Architecture](./ARCHITECTURE.md): read this when you want to understand the
+  bridge, events, and connection isolation.
+
+#### Official networking references
+
+- [Tailscale Serve concepts and requirements](https://tailscale.com/docs/features/tailscale-serve)
+  and [CLI configuration and shutdown](https://tailscale.com/docs/reference/tailscale-cli/serve).
+- [Tailscale access controls](https://tailscale.com/docs/features/access-control)
+  and [HTTPS certificates and public names](https://tailscale.com/docs/how-to/set-up-https-certificates).
+- [Tailscale Funnel](https://tailscale.com/docs/features/tailscale-funnel): why
+  this is not the private endpoint recommended here.
+- [Tailcat README](https://github.com/tailscale/tailcat#readme): installation,
+  port forwarding, keys, and stability.
+- [Tailcat security model](https://github.com/tailscale/tailcat/blob/main/SECURITY.md):
+  read the current limitations before experimenting.
+
+The Pages build renders this canonical Markdown; do not duplicate its body in HTML.
+Review affected chapters when installation flags, feature limits, or upstream
+networking commands change.

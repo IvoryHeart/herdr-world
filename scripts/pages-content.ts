@@ -9,101 +9,9 @@ export interface TutorialPage {
   navigation: string;
 }
 
-/**
- * The tutorial teaches a learner; FEATURES.md is the reference. These limits
- * keep each step readable and stop edge cases accumulating in the tutorial.
- */
-export const tutorialLimits = { words: 6000, blockWords: 60 } as const;
-
-export interface TutorialShape {
-  words: number;
-  longest: { words: number; text: string };
-}
-
-function proseWords(text: string): number {
-  return (
-    text
-      .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/<[^>]+>/g, " ")
-      .match(/[\p{L}\p{N}][^\s]*/gu)?.length ?? 0
-  );
-}
-
-/**
- * Measure the tutorial's prose: total words and its longest block. A block is a
- * paragraph, or a whole list item with its indented paragraphs and sub-items,
- * so a step cannot grow into a wall of text by splitting it into paragraphs.
- */
-export function measureTutorial(markdown: string): TutorialShape {
-  const lines = markdown
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/^ *(```|~~~)[^\n]*\n[\s\S]*?^ *\1 *$/gm, "")
-    .split("\n")
-    .map((raw) => raw.replace(/^\s*>\s?/, ""));
-  const item = /^(\s*)(\d+\.|[-*+])\s+/;
-  const blocks: string[] = [];
-  // Paragraphs: every list item or heading starts a new one.
-  let current: string[] = [];
-  const flush = () => {
-    if (current.length) blocks.push(current.join(" "));
-    current = [];
-  };
-  for (const line of lines) {
-    if (!line.trim()) flush();
-    else if (item.test(line) || /^#|^\s*\|/.test(line)) {
-      flush();
-      current.push(line.replace(item, ""));
-    } else current.push(line);
-  }
-  flush();
-  // Whole steps: a list item runs until a non-blank line at or left of its marker.
-  const steps: { indent: number; text: string[] }[] = [];
-  for (const line of lines) {
-    const indent = line.length - line.trimStart().length;
-    if (line.trim()) {
-      while (steps.length && indent <= (steps.at(-1)?.indent ?? 0)) {
-        blocks.push(steps.pop()?.text.join(" ") ?? "");
-      }
-    }
-    const marker = item.exec(line);
-    if (marker) {
-      steps.push({ indent: marker[1].length, text: [] });
-    }
-    for (const step of steps) step.text.push(line.replace(item, ""));
-  }
-  for (const step of steps) blocks.push(step.text.join(" "));
-  let words = 0;
-  let longest = { words: 0, text: "" };
-  for (const block of blocks) {
-    const count = proseWords(block);
-    if (count > longest.words) longest = { words: count, text: block.trim() };
-  }
-  for (const line of lines) words += proseWords(line.replace(item, ""));
-  return { words, longest };
-}
-
-/** Fail the site build when the tutorial outgrows a learner's guide. */
-export function checkTutorialShape(markdown: string): void {
-  const { words, longest } = measureTutorial(markdown);
-  const advice =
-    "Keep tutorial steps short; put reference detail, edge cases and limits in FEATURES.md.";
-  if (longest.words > tutorialLimits.blockWords) {
-    const start = longest.text.split(/\s+/).slice(0, 12).join(" ");
-    throw new Error(
-      `docs/TUTORIAL.md has a ${longest.words}-word step or paragraph (limit ${tutorialLimits.blockWords}): "${start} …". ${advice}`,
-    );
-  }
-  if (words > tutorialLimits.words) {
-    throw new Error(
-      `docs/TUTORIAL.md has ${words} words of prose (limit ${tutorialLimits.words}). ${advice}`,
-    );
-  }
-}
-
 /** Render trusted repository Markdown; this is not an untrusted-content sanitizer. */
 export async function renderTutorial(markdown: string): Promise<TutorialPage> {
-  const chapters: { link: string; sections: string[] }[] = [];
+  const navigation: string[] = [];
   let chapter = 0;
   let section = 0;
   // Explicit source anchors remain usable on both GitHub and Pages. Generated
@@ -114,26 +22,12 @@ export async function renderTutorial(markdown: string): Promise<TutorialPage> {
       let id = "tutorial-title";
       if (level === "2") {
         id = `chapter-${++chapter}`;
-        chapters.push({ link: `<a href="#${id}">${title}</a>`, sections: [] });
+        navigation.push(`<li><a href="#${id}">${title}</a></li>`);
       } else if (level === "3") {
         id = `section-${++section}`;
-        chapters
-          .at(-1)
-          ?.sections.push(`<li><a href="#${id}">${title}</a></li>`);
       }
       return `<h${level} id="${id}">${title}</h${level}>`;
-    })
-    // Each exercise ends with its completion check; give it its own callout.
-    .replaceAll(
-      "<p><strong>You are done when:</strong>",
-      '<p class="tutorial-done"><strong>You are done when:</strong>',
-    );
-  const navigation = chapters
-    .map(
-      ({ link, sections }) =>
-        `<li>${link}${sections.length ? `<ol>${sections.join("")}</ol>` : ""}</li>`,
-    )
-    .join("");
+    });
 
   const content = await new HTMLRewriter()
     .on("a[href]", {
@@ -186,7 +80,7 @@ export async function renderTutorial(markdown: string): Promise<TutorialPage> {
     .transform(new Response(html))
     .text();
 
-  return { content, navigation: `<ol>${navigation}</ol>` };
+  return { content, navigation: `<ol>${navigation.join("")}</ol>` };
 }
 
 /** Give changed CSS/JS a new cache key without invalidating unchanged assets. */

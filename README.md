@@ -61,21 +61,17 @@ Office, Tree and Graph have been retired: old `/office` addresses open Town, and
 
 ## Screenshots
 
-The Town and Board captures show 0.3.0 with a synthetic crew on two hosts:
-agents working, asking, blocked and finished, with their current steps,
-expenses and subscription gauges. The Chat, Files, Changes and Spaces captures
-show 0.2.7 with four disposable workspaces on a throwaway Herdr session, where
-three real Claude Code agents ran small tasks: one added a first-run section to
-the demo README, one waited on you and one finished. The notes and terminal
-commands are synthetic. Click a screenshot to open it at full resolution.
+These captures show 0.2.7 with four disposable workspaces on a throwaway Herdr
+session. Three real Claude Code agents ran small tasks there: one added a
+first-run section to the demo README, one is waiting on you and one has
+finished. The notes and terminal commands are synthetic. Click a screenshot to
+open it at full resolution.
 
 ### Desktop
 
-| Town: buildings, receptions, expenses and fuel | Town desks: each agent's current step |
+| Town: buildings, rooms and reception | Board: workspace cards, tabs and a strung note |
 | --- | --- |
-| [![Town with two host buildings, receptions holding waiting and finished agents, the expenses billboard, the fuel board and the post office](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Town zoomed in to the desks, with thought bubbles naming each working agent's step](./docs/images/herdr-world-desktop-town-steps.png)](./docs/images/herdr-world-desktop-town-steps.png) |
-
-[![Board with one host zone: room cards linked to agent and terminal cards, with steps, a question, finished work, expenses and subscription gauges](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png)
+| [![Town with four workspace rooms, one agent waiting at reception and one finished](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Board with four workspace cards, terminal tabs and a note strung to an agent](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png) |
 
 [![Spaces with the workspace list and a live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
 
@@ -94,7 +90,7 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
 
 | Town | Chat | Board | Spaces |
 | --- | --- | --- | --- |
-| [![Town at phone width: a reception with a waiting agent and room cards](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![An agent's Chat on a phone](./docs/images/herdr-world-mobile-chat.png)](./docs/images/herdr-world-mobile-chat.png) | [![Board close-up of a note strung to an agent](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
+| [![Town at phone width with the Needs you tray](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![An agent's Chat on a phone](./docs/images/herdr-world-mobile-chat.png)](./docs/images/herdr-world-mobile-chat.png) | [![Board close-up of a note strung to an agent](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
 
 ## Quick start
 

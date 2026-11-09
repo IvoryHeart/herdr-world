@@ -36,14 +36,11 @@ For an optional visible two-agent run, use the
 
 Every significant product, API, configuration, installation or workflow change
 must update the relevant current documentation in the same change. Use the
-knowledge map to identify affected guides. `FEATURES.md` is the reference: put
-new or changed controls, edge cases, limits and refusals there. Change
-`docs/TUTORIAL.md` only when a learner's steps change, and keep it a learner's
-guide: short steps saying what to do and what they will see, no internals.
-Update `README.md` for first-run changes, and deployment, architecture or
-contributor guidance as applicable. Tutorial text has one source,
-`docs/TUTORIAL.md`; `bun run build:site` renders it and fails when a step or the
-whole tutorial outgrows its limits. Keep historical evidence historical. In the handoff,
+knowledge map to identify affected guides. Update `docs/TUTORIAL.md` and
+`FEATURES.md` when user steps or controls change, `README.md` for first-run
+changes, and deployment, architecture or contributor guidance as applicable.
+Tutorial text has one source: `docs/TUTORIAL.md`; run `bun run build:site` for
+tutorial or site changes. Keep historical evidence historical. In the handoff,
 name the updated docs or explain concretely why existing guidance remains
 accurate; a changelog entry alone does not replace usage documentation.
 

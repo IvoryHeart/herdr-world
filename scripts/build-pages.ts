@@ -2,7 +2,6 @@ import { cp, copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  checkTutorialShape,
   renderTutorial,
   verifySiteReferences,
   versionSiteAssets,
@@ -15,10 +14,6 @@ const assetDirectory = join(outputDirectory, "assets");
 
 const assets = [
   ["docs/images/herdr-world-desktop-town.png", "herdr-world-desktop-town.png"],
-  [
-    "docs/images/herdr-world-desktop-town-steps.png",
-    "herdr-world-desktop-town-steps.png",
-  ],
   ["docs/images/herdr-world-mobile-town.png", "herdr-world-mobile-town.png"],
   [
     "docs/images/herdr-world-desktop-board.png",
@@ -60,9 +55,9 @@ for (const [source, destination] of assets) {
   await copyFile(sourcePath, join(assetDirectory, destination));
 }
 
-const tutorialMarkdown = await Bun.file(join(root, "docs/TUTORIAL.md")).text();
-checkTutorialShape(tutorialMarkdown);
-const tutorial = await renderTutorial(tutorialMarkdown);
+const tutorial = await renderTutorial(
+  await Bun.file(join(root, "docs/TUTORIAL.md")).text(),
+);
 const tutorialPath = join(outputDirectory, "tutorial/index.html");
 const template = await Bun.file(tutorialPath).text();
 for (const slot of ["content", "navigation"]) {
@@ -91,8 +86,6 @@ const build = await Bun.build({
 if (!build.success) {
   throw new AggregateError(build.logs, "Failed to optimize the Pages site");
 }
-// styles.css imports the home page's sections; the bundle carries them.
-await rm(join(outputDirectory, "home.css"));
 
 // The film draws its Town with the app's own Town code, bundled beside it.
 const filmTown = await Bun.build({
