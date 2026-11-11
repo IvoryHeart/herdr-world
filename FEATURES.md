@@ -2012,7 +2012,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     paint. **Exception:** if no Herdr app or typing viewer has the terminal
     open, core moves it to its headless size when World starts watching (its
     rule for every observer); World says "herdr-core moved it from C×R to its
-    headless size". Back or Escape closes the view. The watch ends, with the
+    headless size" while that grid lasts; once an app's pane opens and sets
+    its own size, the line names that size and drops the move. Back or
+    Escape closes the view. The watch ends, with the
     reason and **Watch again**, when the program exits, another program takes
     the address, or the core connection is lost; when core is back the open
     view watches again by itself. A hidden page holds no watch and resumes

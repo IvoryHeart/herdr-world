@@ -12,6 +12,8 @@ import "@xterm/xterm/css/xterm.css";
 import { bridge, type ConnectionStatus } from "../api";
 import {
   type CoreGrid,
+  type CoreGridMove,
+  type CoreWatchReply,
   CoreWatchScreen,
   watchEndedText,
   watchGridText,
@@ -82,7 +84,7 @@ export function CoreTerminalWatch({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const [grid, setGrid] = useState<CoreGrid | null>(null);
-  const [movedFrom, setMovedFrom] = useState<CoreGrid | null>(null);
+  const [moved, setMoved] = useState<CoreGridMove | null>(null);
   const [ended, setEnded] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const [drawn, setDrawn] = useState({ width: 0, height: 0 });
@@ -135,6 +137,7 @@ export function CoreTerminalWatch({
     let live = true;
     term.reset();
     setGrid(null);
+    setMoved(null);
     setEnded(null);
     const screen = new CoreWatchScreen({
       resize: (cols, rows) => {
@@ -156,6 +159,7 @@ export function CoreTerminalWatch({
         setEnded((error as Error).message);
         return;
       }
+      setMoved(screen.moved);
       if ("closed" in push) setEnded(watchEndedText(push.closed));
     });
     bridge
@@ -165,8 +169,10 @@ export function CoreTerminalWatch({
         address: target.address,
         stream,
       })
-      .then((opened: { moved_from?: CoreGrid | null } | null) => {
-        if (live) setMovedFrom(opened?.moved_from ?? null);
+      .then((opened: CoreWatchReply) => {
+        if (!live) return;
+        screen.opened(opened);
+        setMoved(screen.moved);
       })
       .catch((error: Error) => {
         if (live) setEnded(error.message);
@@ -242,7 +248,7 @@ export function CoreTerminalWatch({
         </button>
         <div className="core-watch-title">
           <strong>{title}</strong>
-          <small data-core-watch-grid>{watchGridText(grid, movedFrom)}</small>
+          <small data-core-watch-grid>{watchGridText(grid, moved)}</small>
         </div>
         <span
           className="core-watch-badge"

@@ -62,6 +62,19 @@ export type CoreWatchSurface = {
   write(bytes: Uint8Array): void;
 };
 
+/** What World's attach did to an unviewed terminal: core moved it from one grid to another. */
+export type CoreGridMove = { from: CoreGrid; to: CoreGrid };
+
+/** The watch reply's grid facts (`world.core.watch`). */
+export type CoreWatchReply = {
+  grid?: unknown;
+  moved_from?: unknown;
+} | null;
+
+function sameGrid(a: CoreGrid, b: CoreGrid): boolean {
+  return a.cols === b.cols && a.rows === b.rows;
+}
+
 export class CoreWatchOrderError extends Error {
   constructor() {
     super("core sent terminal output before its size");
@@ -86,6 +99,9 @@ function decodeBase64(text: string): Uint8Array {
  */
 export class CoreWatchScreen {
   private current: CoreGrid | null = null;
+  private first: CoreGrid | null = null;
+  private replaced = false;
+  private move: CoreGridMove | null = null;
   private ended: string | null = null;
 
   constructor(private readonly surface: CoreWatchSurface) {}
@@ -98,6 +114,24 @@ export class CoreWatchScreen {
     return this.ended;
   }
 
+  /**
+   * The move World's attach caused, while core still holds the grid it moved
+   * to. Any later grid (a Herdr app's pane opening, say) was set by someone
+   * else, so the move stops describing the terminal and is dropped for good.
+   */
+  get moved(): CoreGridMove | null {
+    return this.move;
+  }
+
+  /** Core's reply to the watch, which may arrive before or after its first grid. */
+  opened(reply: CoreWatchReply): void {
+    const to = reply?.grid;
+    const from = reply?.moved_from;
+    if (!isGrid(from) || !isGrid(to) || this.replaced) return;
+    if (this.first && !sameGrid(this.first, to)) return;
+    this.move = { from: { ...from }, to: { ...to } };
+  }
+
   apply(push: CoreTerminalPush): void {
     if (this.ended !== null) return;
     if ("grid" in push) {
@@ -105,6 +139,9 @@ export class CoreWatchScreen {
       if (this.current?.cols !== cols || this.current?.rows !== rows)
         this.surface.resize(cols, rows);
       this.current = { cols, rows };
+      if (!this.first) this.first = { cols, rows };
+      else if (!sameGrid(this.first, this.current)) this.replaced = true;
+      if (this.move && !sameGrid(this.move.to, this.current)) this.move = null;
       return;
     }
     if ("closed" in push) {
@@ -158,20 +195,19 @@ export function watchEndedText(reason: string): string {
 /**
  * The grid line under the title. A watched grid is the size core holds: the
  * size a Herdr app's pane set, or core's headless size when no app shows the
- * terminal. World says which, and when its own attach moved an unviewed
- * terminal to headless (core's observer rule), it says that too.
+ * terminal. World says which. While core still holds the grid World's own
+ * attach moved an unviewed terminal to (core's observer rule), it says that
+ * too; once another grid replaces it, the line describes only the current one.
  */
 export function watchGridText(
   grid: CoreGrid | null,
-  movedFrom: CoreGrid | null,
+  moved: CoreGridMove | null,
 ): string {
   if (!grid) return "Waiting for its size…";
   const size = `${grid.cols}×${grid.rows}`;
-  const headless =
-    grid.cols === CORE_HEADLESS_GRID.cols &&
-    grid.rows === CORE_HEADLESS_GRID.rows;
-  if (movedFrom)
-    return `${size}: herdr-core moved it from ${movedFrom.cols}×${movedFrom.rows} to its headless size when World started watching, because no Herdr app has it open`;
+  const headless = sameGrid(grid, CORE_HEADLESS_GRID);
+  if (moved && sameGrid(moved.to, grid))
+    return `${size}: herdr-core moved it from ${moved.from.cols}×${moved.from.rows} to its headless size when World started watching, because no Herdr app has it open`;
   if (headless)
     return `${size}: herdr-core's headless size, used while no Herdr app has it open`;
   return `${size}: the size of the Herdr app or terminal that has it open`;
