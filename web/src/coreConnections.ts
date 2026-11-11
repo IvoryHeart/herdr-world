@@ -31,6 +31,7 @@ export type CoreConnectionSummary = {
   generation: number;
   error?: { message: string };
   ssh_destination?: string;
+  remote_platform?: "windows";
   core_session: string;
   core_state_dir: string;
   auto_connect: boolean;
@@ -132,6 +133,9 @@ export function parseCoreConnections(value: unknown): CoreConnectionSummary[] {
         ...(typeof item.ssh_destination === "string"
           ? { ssh_destination: item.ssh_destination }
           : {}),
+        ...(item.type === "ssh" && item.remote_platform === "windows"
+          ? { remote_platform: "windows" as const }
+          : {}),
         core_session: item.core_session,
         core_state_dir: item.core_state_dir,
         auto_connect: item.auto_connect === true,
@@ -172,7 +176,7 @@ export function coreTerminalLabel(terminal: CoreObservedTerminal): string {
 export type CoreProfileDraft = {
   id: string;
   label: string;
-  where: "local" | "ssh";
+  where: "local" | "ssh" | "windows";
   sshDestination: string;
   session: string;
   stateDir: string;
@@ -192,18 +196,23 @@ export function coreProfilePayload(draft: CoreProfileDraft) {
   if (!label) throw new Error("Name is required.");
   if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/.test(session))
     throw new Error("Session must be a herdr-core session name.");
-  if (stateDir && !stateDir.startsWith("/"))
+  const windows = draft.where === "windows";
+  if (windows) {
+    if (stateDir && !/^[A-Za-z]:\\/.test(stateDir))
+      throw new Error("State directory must be an absolute Windows path.");
+  } else if (stateDir && !stateDir.startsWith("/"))
     throw new Error("State directory must be an absolute path.");
-  if (draft.where === "ssh" && !draft.sshDestination.trim())
+  if (draft.where !== "local" && !draft.sshDestination.trim())
     throw new Error("SSH destination is required.");
   return {
     id,
     label,
-    type: draft.where,
+    type: draft.where === "local" ? ("local" as const) : ("ssh" as const),
     runtime: "herdr-core" as const,
-    ...(draft.where === "ssh"
+    ...(draft.where !== "local"
       ? { ssh_destination: draft.sshDestination.trim() }
       : {}),
+    ...(windows ? { remote_platform: "windows" as const } : {}),
     core_session: session,
     core_state_dir: stateDir,
     auto_connect: draft.autoConnect,

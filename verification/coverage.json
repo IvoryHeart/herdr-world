@@ -2948,13 +2948,14 @@
         "quint/herdr-core-runtime.test.ts",
         "server/src/herdr-core/mirror.test.ts",
         "server/src/herdr-core/replay.test.ts",
-        "server/src/herdr-core/connections.test.ts"
+        "server/src/herdr-core/connections.test.ts",
+        "server/src/herdr-core/windows.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "composed-design-model",
       "assessment": "Bounded composed model. Replay drives the production CoreMirror for every mirror, cursor and readiness transition, with four production negative controls (gap, heartbeat, stale, missed cut); capture/dispatch/deliver still use the design seam because the model checks the source occupant at dispatch while World can check only its observation. Foundation delivery history is not acceptance of this contract.",
       "status": "pending",
-      "remaining": "Independent design/model review; a model split of observed versus actual occupant before the production fence can replace the authority seam; harness, browser/app and Windows consumer acceptance in P2–P6.",
+      "remaining": "Independent design/model review; a model split of observed versus actual occupant before the production fence can replace the authority seam; harness, browser/app and owner real-Windows relay acceptance in P2–P6. The Windows relay realizes the same existing-only connect (a probe reads core.lock, then one relay per generation opens exactly that pipe); it adds no ordering rule, so the model is unchanged and its evidence is the fake-pipe and real-PowerShell tests.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": [
@@ -2967,7 +2968,8 @@
           "quint/herdr-core-runtime.test.ts",
           "server/src/herdr-core/mirror.test.ts",
           "server/src/herdr-core/replay.test.ts",
-          "server/src/herdr-core/connections.test.ts"
+          "server/src/herdr-core/connections.test.ts",
+          "server/src/herdr-core/windows.test.ts"
         ],
         "checks": [
           "bun quint/run.ts --case herdr-core-runtime",

@@ -63,6 +63,8 @@ export type CoreConnectionProfile = {
   runtime: "herdr-core";
   /** OpenSSH alias or user@host; empty for a local core. */
   ssh_destination?: string;
+  /** A Windows SSH host: World relays core's named pipe through PowerShell. */
+  remote_platform?: "windows";
   /** Core's `HC_SESSION` name (`default` unless the core was started with one). */
   core_session: string;
   /** Absolute core state directory; empty means the session's default. */
@@ -99,6 +101,7 @@ export function connectionRecoveryFingerprint(
           profile.runtime,
           profile.type,
           profile.ssh_destination ?? "",
+          ...(profile.remote_platform ? [profile.remote_platform] : []),
           profile.core_session,
           profile.core_state_dir,
         ]),
@@ -371,6 +374,20 @@ export function validateSshConnectionProfile(
 }
 
 const CORE_SESSION = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/;
+/** `C:\\...`: a drive-absolute Windows directory with no traversal. */
+const WINDOWS_DIRECTORY =
+  /^[A-Za-z]:\\(?:[^\\/:*?"<>|\u0000-\u001f\u007f-\u009f]+\\?)*$/;
+
+function validateWindowsDirectory(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length > 260 ||
+    !WINDOWS_DIRECTORY.test(value) ||
+    value.split("\\").some((part) => part === "." || part === "..")
+  )
+    throw new Error("core_state_dir must be an absolute Windows directory");
+  return value;
+}
 
 export function validateCoreConnectionProfile(
   value: unknown,
@@ -391,6 +408,9 @@ export function validateCoreConnectionProfile(
       "core_state_dir",
       "auto_connect",
       ...(ssh ? ["ssh_destination"] : []),
+      ...(ssh && value.remote_platform !== undefined
+        ? ["remote_platform"]
+        : []),
     ],
     "connection profile",
   );
@@ -399,6 +419,12 @@ export function validateCoreConnectionProfile(
     throw new Error(`${STARTUP_DEFAULT_CONNECTION_ID} is reserved`);
   }
   if (value.runtime !== "herdr-core") throw new Error("invalid runtime");
+  if (
+    value.remote_platform !== undefined &&
+    value.remote_platform !== "windows"
+  )
+    throw new Error("invalid remote_platform");
+  const windows = value.remote_platform === "windows";
   if (typeof value.auto_connect !== "boolean") {
     throw new Error("auto_connect must be a boolean");
   }
@@ -411,13 +437,19 @@ export function validateCoreConnectionProfile(
   if (value.core_state_dir !== "") {
     if (!ssh && platform === "win32")
       throw new Error("herdr-core state directories are POSIX paths");
-    try {
-      stateDir = ssh
-        ? validateRemoteSocketPath(value.core_state_dir, "core_state_dir")
-        : validateSocketPath(value.core_state_dir, "core_state_dir", platform);
-    } catch {
-      throw new Error("core_state_dir must be an absolute directory path");
-    }
+    if (windows) stateDir = validateWindowsDirectory(value.core_state_dir);
+    else
+      try {
+        stateDir = ssh
+          ? validateRemoteSocketPath(value.core_state_dir, "core_state_dir")
+          : validateSocketPath(
+              value.core_state_dir,
+              "core_state_dir",
+              platform,
+            );
+      } catch {
+        throw new Error("core_state_dir must be an absolute directory path");
+      }
   }
   return {
     id,
@@ -427,6 +459,7 @@ export function validateCoreConnectionProfile(
     ...(ssh
       ? { ssh_destination: validateSshDestination(value.ssh_destination) }
       : {}),
+    ...(windows ? { remote_platform: "windows" as const } : {}),
     core_session: value.core_session,
     core_state_dir: stateDir,
     auto_connect: value.auto_connect,
@@ -739,6 +772,9 @@ export function publicConnectionProfile(
       runtime: "herdr-core",
       ...(profile.ssh_destination
         ? { ssh_destination: profile.ssh_destination }
+        : {}),
+      ...(profile.remote_platform
+        ? { remote_platform: profile.remote_platform }
         : {}),
       core_session: profile.core_session,
       core_state_dir: profile.core_state_dir,
