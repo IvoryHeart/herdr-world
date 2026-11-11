@@ -373,7 +373,7 @@ describe("herdr-core connections", () => {
     const fixture = createCoreFixture(() => w.service);
     // Remove without ever starting, then start: both refuse to touch it.
     await expect(fixture.remove()).rejects.toThrow("left in place");
-    await expect(fixture.start()).rejects.toThrow("is not the fixture's");
+    await expect(fixture.start()).rejects.toThrow("is not this fixture's");
     expect(fixture.status().running).toBe(false);
     await expect(fixture.remove()).rejects.toThrow("left in place");
     const kept = w.service.coreList();
@@ -390,7 +390,7 @@ describe("herdr-core connections", () => {
     ).toBe("Existing user core");
   });
 
-  test("the fixture replaces only its own leftover from an earlier run", async () => {
+  test("an earlier run's profile is left for the person to remove", async () => {
     const w = world();
     const earlier = createCoreFixture(() => w.service);
     await earlier.start();
@@ -398,14 +398,24 @@ describe("herdr-core connections", () => {
     // An earlier World stopped without removing the fixture's profile.
     earlier.dispose();
     const fixture = createCoreFixture(() => w.service);
+    await expect(fixture.start()).rejects.toThrow("remove it in Settings");
+    await expect(fixture.remove()).rejects.toThrow("left in place");
+    expect(w.service.coreList().map((c) => c.core_state_dir)).toEqual([
+      leftDir,
+    ]);
+    // Once the person removes it, the fixture starts as usual.
+    await w.service.remove(CORE_FIXTURE_CONNECTION_ID);
     await fixture.start();
-    await until(
-      () => w.core.manager.status(CORE_FIXTURE_CONNECTION_ID).state === "ready",
-    );
-    const now = w.service.coreList();
-    expect(now).toHaveLength(1);
-    expect(now[0]!.core_state_dir).not.toBe(leftDir);
     await fixture.remove();
     expect(w.service.coreList()).toEqual([]);
+  });
+
+  test("a user profile at a fixture-like path is never removed", async () => {
+    const w = world();
+    const dir = join(tmpdir(), "hcw-fixture-user-managed", "state");
+    await w.service.create(coreProfile(CORE_FIXTURE_CONNECTION_ID, dir));
+    const fixture = createCoreFixture(() => w.service);
+    await expect(fixture.remove()).rejects.toThrow("left in place");
+    expect(w.service.coreList().map((c) => c.core_state_dir)).toEqual([dir]);
   });
 });
