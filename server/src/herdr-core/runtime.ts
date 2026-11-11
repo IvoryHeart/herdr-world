@@ -1,3 +1,4 @@
+import type { CoreKeysResult, CoreSendResult } from "./delivery-params";
 import { coreOccupantFingerprint } from "./occupant";
 import type {
   ConnectionRuntime,
@@ -62,6 +63,7 @@ export type CoreTransport = {
 };
 
 export type CoreRuntimeOptions = {
+  local?: boolean;
   identity: ConnectionIdentity;
   context: ConnectionRuntimeContext;
   transport: CoreTransport;
@@ -92,6 +94,7 @@ export type CoreRuntimeOptions = {
 
 export type CoreConnectionRuntime = ConnectionRuntime & {
   readonly runtime: "herdr-core";
+  readonly local: boolean;
   readonly signal: AbortSignal;
   readonly core: CoreFenceView & {
     readonly version: string | null;
@@ -120,6 +123,9 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
    * `publication`). A lost reply is `CoreWriteUncertainError`.
    */
   offers(method: CoreWriteMethod): boolean;
+  inspect(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+  ): Promise<CoreTerminalRecord>;
   /** Not checked at publication: the caller checks before following up. */
   run(
     fence: CoreOperationFence<CoreConnectionRuntime>,
@@ -148,6 +154,25 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
     fence: CoreOperationFence<CoreConnectionRuntime>,
     sink: CoreWatchSink,
   ): Promise<CoreWatch>;
+  /**
+   * Session input (delivery.ts). Checked at dispatch only: the caller
+   * decides what a reply that outlived its occupant means. `cancel` asks
+   * core to drop a send it still holds.
+   */
+  send(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    request: { text: string; force: boolean },
+    options: { cancel: AbortSignal; timeoutMs?: number },
+  ): Promise<CoreSendResult>;
+  keys(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    keys: readonly string[],
+  ): Promise<CoreKeysResult>;
+  /**
+   * Calls `listener` after every event or snapshot the mirror applies and
+   * when the runtime fails or stops; returns the unsubscribe.
+   */
+  watch(listener: () => void): () => void;
   /**
    * Shares seen or favourite with Herdr's apps (`herdr.seen`,
    * `herdr.pinned`). `decide` reads the occupant's current record right
@@ -273,6 +298,16 @@ export function createCoreConnectionRuntime(
   let publishTimer: ReturnType<typeof setTimeout> | null = null;
   let lastPublished = "";
   let stopTask: Promise<void> | null = null;
+  const watchers = new Set<() => void>();
+  const notify = () => {
+    for (const listener of [...watchers]) {
+      try {
+        listener();
+      } catch {
+        // A watcher's failure never stops the mirror.
+      }
+    }
+  };
 
   const publish = (force = false) => {
     if (!options.context.isCurrent() && !force) return;
@@ -296,9 +331,9 @@ export function createCoreConnectionRuntime(
     const key = JSON.stringify(
       coreTopology(terminals, coreSummary?.name ?? "herdr-core", {
         firstSight,
-        occupancy: (address) => mirror.occupancy(address),
         world: layout(),
         coreId: epoch?.coreId,
+        occupancy: (address) => mirror.occupancy(address),
         now: at,
       }),
     );
@@ -342,6 +377,7 @@ export function createCoreConnectionRuntime(
     abort.abort(error);
     withdraw();
     client?.close(error.message);
+    notify();
     if (ready && options.context.isCurrent()) options.onFailure(error);
   };
 
@@ -401,7 +437,10 @@ export function createCoreConnectionRuntime(
           fail(new CoreMirrorRetiredError(mirror.retired ?? "gap"));
           return;
         }
-        if (outcome === "applied") schedulePublish();
+        if (outcome === "applied") {
+          schedulePublish();
+          notify();
+        }
       },
       end: (error) => fail(error),
     });
@@ -548,6 +587,7 @@ export function createCoreConnectionRuntime(
     if (expiryTimer) clearTimeout(expiryTimer);
     if (!failed) withdraw();
     client?.close("connection runtime retired");
+    notify();
     stopTask = options.transport.close().catch(() => undefined);
     return stopTask;
   }
@@ -569,6 +609,7 @@ export function createCoreConnectionRuntime(
   const self: CoreConnectionRuntime = {
     identity,
     runtime: "herdr-core",
+    local: options.local === true,
     signal: abort.signal,
     core: view,
     operations: coreRuntimeReader({
@@ -586,6 +627,10 @@ export function createCoreConnectionRuntime(
     layout,
     layoutChanged: () => readModelChanged(),
     offers: (method) => client?.offers(method) ?? false,
+    inspect: (fence) =>
+      write(fence, true, (current) =>
+        current.getTerminal(fence.occupant!.address),
+      ),
     // A started program exists whatever happens next: its record is returned
     // and the caller decides what it may still publish.
     run: (fence, request) =>
@@ -594,7 +639,28 @@ export function createCoreConnectionRuntime(
       write(fence, true, async (current) => {
         await current.kill(fence.occupant!.address);
       }),
-    send: async (fence, text, beforeSubmit, timeoutMs, authorized) => {
+    send: async (
+      fence,
+      request: string | { text: string; force: boolean },
+      options:
+        | (() => Promise<boolean>)
+        | { cancel: AbortSignal; timeoutMs?: number },
+      timeoutMs?: number,
+      authorized?: () => boolean,
+    ) => {
+      if (typeof request !== "string")
+        return write(
+          fence,
+          true,
+          (current) =>
+            current.sendText(fence.occupant!.address, request.text, {
+              ...(options as { cancel: AbortSignal; timeoutMs?: number }),
+              force: request.force,
+            }),
+          false,
+        );
+      const text = request;
+      const beforeSubmit = options as () => Promise<boolean>;
       if (!self.offers("terminal.send"))
         throw new CoreUnsupportedError(
           view.version ?? "unknown",
@@ -648,6 +714,17 @@ export function createCoreConnectionRuntime(
     watchTerminal,
     shareLabel,
     shells,
+    keys: (fence, keys) =>
+      write(
+        fence,
+        true,
+        (current) => current.keys(fence.occupant!.address, keys),
+        false,
+      ),
+    watch: (listener) => {
+      watchers.add(listener);
+      return () => watchers.delete(listener);
+    },
     startTransport,
     startBackground,
     stop,

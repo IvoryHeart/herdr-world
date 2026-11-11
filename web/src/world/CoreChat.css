@@ -1,0 +1,42 @@
+.core-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow: auto;
+  min-width: 0;
+  color: var(--text-primary);
+}
+.core-chat p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.core-chat form,
+.core-chat label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.core-chat textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 64px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.core-chat-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.core-chat pre {
+  overflow: auto;
+  max-height: 240px;
+  white-space: pre;
+  font-size: 12px;
+}

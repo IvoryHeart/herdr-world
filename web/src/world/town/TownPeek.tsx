@@ -317,13 +317,13 @@ export function TownPeek({
             <span>Retry</span>
           </button>
         ) : null}
-        {agent.viewOnly ? (
+        {agent.viewOnly && !agent.coreChat ? (
           <button type="button" disabled title={agent.viewOnly.reason}>
             <span>
               {agent.semanticStatus === "done" ? "Follow up" : "Open chat"}
             </span>
           </button>
-        ) : canReply ? (
+        ) : canReply || agent.coreChat ? (
           <button type="button" onClick={onChat}>
             <span>
               {agent.semanticStatus === "done" ? "Follow up" : "Open chat"}

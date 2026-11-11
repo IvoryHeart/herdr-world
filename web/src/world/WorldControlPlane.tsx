@@ -1,3 +1,4 @@
+import { CoreChatWindow } from "./CoreChat";
 import { memo, Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
@@ -242,6 +243,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     inspectorConversationsRef,
     currentSelectionGeneration,
     selected,
+    coreChatSelected,
     selectedId,
     setWindowLayer,
     windowStage,
@@ -362,7 +364,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   };
 
   // A herdr-core terminal opens as a watch: World adopts core's grid and
-  // sends nothing back. Files and Changes use a separate resource Inspector.
+  // sends nothing back. Chat and resources use their separate routes.
   const coreWatch = useCoreTerminalWatch(
     (id) => aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id),
   );
@@ -375,11 +377,17 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       ? Rest
       : never
   ) =>
-    coreWatch.watch(id)
+    rest[2] !== "history" && coreWatch.watch(id)
       ? Promise.resolve()
       : openInspectorTerminalById(id, ...rest);
-  const openNodeById = (id: string, signal?: AbortSignal) =>
-    coreWatch.watch(id) ? Promise.resolve() : openInspectorNodeById(id, signal);
+  const openNodeById = (id: string, signal?: AbortSignal) => {
+    const node = aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id);
+    return node?.kind === "agent" && node.pane.runtime === "herdr-core"
+      ? openInspectorNodeById(id, signal)
+      : coreWatch.watch(id)
+        ? Promise.resolve()
+        : openInspectorNodeById(id, signal);
+  };
 
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
@@ -430,6 +438,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         />
       ) : null}
       <CoreKillConfirmHost />
+      {coreChatSelected &&
+      selected?.kind === "agent" &&
+      selected.pane.runtime === "herdr-core" ? (
+        <CoreChatWindow leaf={selected} onClose={closeIntent} />
+      ) : null}
       <CoreWorktreesHost />
       <WorldBin
         always={view === "town" || view === "board"}

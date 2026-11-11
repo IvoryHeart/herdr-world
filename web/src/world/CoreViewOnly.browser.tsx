@@ -10,11 +10,7 @@ import { projectAgent } from "./officeAgent";
 import { WorldRuntimeStore } from "./runtimeStore";
 import { TownPeek } from "./town/TownPeek";
 import { FloatShellOverlay } from "../components/FloatShellOverlay";
-import {
-  buildWorldObject,
-  CORE_VIEW_ONLY_REASON,
-  type WorldLeafObject,
-} from "./worldObject";
+import { buildWorldObject, type WorldLeafObject } from "./worldObject";
 import type { WorldAsksStore } from "./worldAsks";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -272,29 +268,15 @@ async function run() {
     item?.textContent?.includes("Which branch should I merge into?") === true,
     `Needs you shows the program's own words: ${item?.textContent}`,
   );
-  check(
-    item?.textContent?.includes(CORE_VIEW_ONLY_REASON) === true,
-    "Needs you says why it is view only",
-  );
-  const answerField = item?.querySelector<HTMLInputElement>(
-    ".needs-you-field input",
+  const answerField = item?.querySelector<HTMLTextAreaElement>(
+    ".core-chat textarea",
   );
   const answerSend = item?.querySelector<HTMLButtonElement>(
-    ".needs-you-field .needs-you-send",
+    ".core-chat button[type=submit]",
   );
   check(
-    answerField?.disabled === true &&
-      answerField.title === CORE_VIEW_ONLY_REASON &&
-      answerSend?.disabled === true &&
-      answerSend.title === CORE_VIEW_ONLY_REASON,
-    "Needs you keeps the answer field and Send, disabled with the reason",
-  );
-  const disabled = [...document.querySelectorAll<HTMLButtonElement>("button")]
-    .filter((button) => button.disabled)
-    .map((button) => button.title);
-  check(
-    disabled.filter((title) => title === CORE_VIEW_ONLY_REASON).length >= 2,
-    `controls stay visible, disabled with the reason: ${JSON.stringify(disabled)}`,
+    answerField?.disabled === false && answerSend?.disabled === true,
+    "Core answers have an editable field; an empty answer cannot send",
   );
   // Its terminal can be watched (never typed into) from every surface.
   const watchButtons = [

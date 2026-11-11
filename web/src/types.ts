@@ -105,6 +105,8 @@ export interface Pane {
   agent_status: string;
   /** Present only on herdr-core terminals, which World observes only. */
   runtime?: "herdr-core";
+  /** Opaque binding to the addressed core program and foreground. */
+  core_recipient?: string;
   /** herdr-core: why a blocked program waits (permission, question, auth). */
   blocked_kind?: string;
   /** herdr-core: the program's own status message (OSC 7501 `msg`). */

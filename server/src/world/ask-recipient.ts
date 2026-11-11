@@ -1,3 +1,10 @@
+import {
+  coreAskBinding,
+  type CoreAnswerConnections,
+} from "../herdr-core/ask-recipient";
+import { coreRecipientChange } from "../herdr-core/recipient";
+import type { ReadyRuntimeLease } from "../connections/manager";
+import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import type { Conversation, ConversationSource } from "../agent/conversation";
 import {
   askSessionFingerprint,
@@ -8,7 +15,6 @@ import {
 } from "./world-cli-actor";
 import type { CliActor, LedgerAsk } from "./world-ledger";
 import {
-  herdrRecipient,
   originalAsker,
   validRecipient,
   type AnswerActor,
@@ -42,11 +48,23 @@ export type AnswerConnections = {
 export type RecipientResolution =
   | {
       state: "attached";
+      kind?: "core-token";
+      core: true;
+      lease: ReadyRuntimeLease<CoreConnectionRuntime>;
+    }
+  | {
+      state: "attached";
       kind?: "herdr";
+      core?: false;
       lease: AnswerLease;
       conversation: Conversation;
     }
-  | { state: "attached"; kind: "core"; lease: CorePreparedDelivery }
+  | {
+      state: "attached";
+      kind: "core";
+      core?: false;
+      lease: CorePreparedDelivery;
+    }
   | { state: "unresolved" | "ended" | "unconfirmed"; reason: string };
 const chatScheme = (value: Conversation) =>
   value.session_binding === "reported"
@@ -65,12 +83,18 @@ const host = (lease: AnswerLease) => ({
 /** Resolve only captured source evidence, never a replacement pane or connection. */
 export function createAskRecipients(deps: {
   connections(): AnswerConnections;
+  core?(): CoreAnswerConnections | CoreCallerSource | null;
   clock: StoragePorts["clock"];
   incarnation: string;
-  /** herdr-core connections (P4): their askers are bound to a program. */
-  core?(): CoreCallerSource | null;
 }) {
-  const coreSource = () => deps.core?.() ?? null;
+  const coreSource = () => {
+    const value = deps.core?.();
+    return value && "hosts" in value ? value : null;
+  };
+  const coreConnections = () => {
+    const value = deps.core?.();
+    return value && "list" in value ? value : null;
+  };
   const isCore = (id: string) =>
     !deps
       .connections()
@@ -174,14 +198,6 @@ export function createAskRecipients(deps: {
     actor: CliActor,
   ): Promise<AnswerRecipient | undefined> {
     if (
-      actor.verified &&
-      actor.connection_id &&
-      actor.pane_id &&
-      actor.agent_session_fingerprint &&
-      isCore(actor.connection_id)
-    )
-      return captureCore(actor);
-    if (
       !actor.verified ||
       !actor.connection_id ||
       !actor.pane_id ||
@@ -189,6 +205,10 @@ export function createAskRecipients(deps: {
       !actor.agent_session_fingerprint
     )
       return;
+    if (isCore(actor.connection_id)) return captureCore(actor);
+    const core = coreConnections();
+    if (core?.list().some((entry) => entry.id === actor.connection_id))
+      return coreAskBinding(core, actor, deps.incarnation, deps.clock.now());
     const lease = deps.connections().readyRuntimeLease(actor.connection_id);
     const source = lease?.runtime.agentSessions?.conversation;
     if (
@@ -242,12 +262,49 @@ export function createAskRecipients(deps: {
         reason:
           "The original runtime cannot be established after a World restart; use ask get",
       };
-    if (recipient.adapter === "herdr-core") return resolveCore(recipient);
-    if (!exists(recipient.connection_id))
+    if (
+      !exists(recipient.connection_id) &&
+      !coreConnections()
+        ?.list()
+        .some((entry) => entry.id === recipient.connection_id)
+    )
       return {
         state: "ended",
         reason: "The original connection was removed; use ask get",
       };
+    if ("core_id" in recipient) return resolveCore(recipient);
+    if (recipient.adapter === "herdr-core") {
+      const core = coreConnections();
+      const lease = core?.readyRuntimeLease(recipient.connection_id);
+      if (!lease?.isCurrent())
+        return {
+          state: "unresolved",
+          reason: "The original core host is offline",
+        };
+      if (lease.generation !== recipient.connection_generation)
+        return {
+          state: "unconfirmed",
+          reason: "The core runtime changed; answer not sent, use ask get",
+        };
+      const view = lease.runtime.core;
+      if (!view.actionable || !view.epoch)
+        return {
+          state: "unresolved",
+          reason: "Core observation is not current",
+        };
+      const change = coreRecipientChange(
+        recipient.conversation.fingerprint,
+        view.epoch.coreId,
+        view.terminal(recipient.pane_id),
+        view.occupancy(recipient.pane_id),
+      );
+      return change
+        ? {
+            state: "unconfirmed",
+            reason: "The asking program changed; nothing sent, use ask get",
+          }
+        : { state: "attached", core: true, lease };
+    }
     const lease = deps.connections().readyRuntimeLease(recipient.connection_id);
     if (!lease?.isCurrent())
       return {
@@ -340,6 +397,16 @@ export function createAskRecipients(deps: {
       originalAsker(ask.recipient, by)
     )
       return "refused";
+    const core = coreConnections();
+    if (core?.list().some((entry) => entry.id === by.connection_id)) {
+      const lease = core.readyRuntimeLease(by.connection_id);
+      if (!lease?.isCurrent()) return "pending";
+      const view = lease.runtime.core;
+      return view.epoch &&
+        coreAskBinding(core, by, deps.incarnation, deps.clock.now())
+        ? "allowed"
+        : "refused";
+    }
     if (!exists(by.connection_id)) return "refused";
     if (isCore(by.connection_id)) {
       const host = coreSource()
@@ -353,6 +420,7 @@ export function createAskRecipients(deps: {
         ? "allowed"
         : "refused";
     }
+
     const lease = deps.connections().readyRuntimeLease(by.connection_id);
     if (!lease?.isCurrent()) return "pending";
     const native = await paneActor(host(lease), by.pane_id);
@@ -373,7 +441,7 @@ export function createAskRecipients(deps: {
         recipient.service_incarnation !== deps.incarnation
       )
         return;
-      if (recipient.adapter === "herdr-core") {
+      if ("core_id" in recipient) {
         const host = coreHost(recipient.connection_id);
         return host
           ? {
@@ -383,9 +451,10 @@ export function createAskRecipients(deps: {
             }
           : undefined;
       }
-      const lease = deps
-        .connections()
-        .readyRuntimeLease(recipient.connection_id);
+      const lease =
+        recipient.adapter === "herdr-core"
+          ? coreConnections()?.readyRuntimeLease(recipient.connection_id)
+          : deps.connections().readyRuntimeLease(recipient.connection_id);
       if (lease?.isCurrent())
         return {
           connection_id: lease.connectionId,
@@ -398,9 +467,7 @@ export function createAskRecipients(deps: {
       lease: AnswerLease,
       info: Record<string, unknown>,
     ) {
-      // Only a Herdr (TUI) Chat session is sent answers.
       return (
-        herdrRecipient(recipient) &&
         recipient.service_incarnation === deps.incarnation &&
         lease.isCurrent() &&
         info.pane_id === recipient.pane_id &&

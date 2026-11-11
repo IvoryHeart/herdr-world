@@ -91,7 +91,9 @@ this worker to post upstream messages.
    (upstream #203/#209)? The fixed Windows PowerShell relay proceeds independently.
 3. Q3, Safe input: can a public program incarnation condition send/keys, checked
    when a queued send actually executes? Core owns closing this replacement
-   window. World uses core send/keys for every harness with an immediate
+   window. Best-effort World cancellation cannot close the interval before the
+   foreground/replacement event reaches World, or revoke already typed input.
+   World uses core send/keys for every harness with an immediate
    occupant/foreground check and uncertain timeouts; no harness side channel.
 4. Q4, Observer resize: is observer-alone attachment resetting to headless intended?
 5. Q5, Oversized recovery: can suppressed missed snapshots be explicit, labels

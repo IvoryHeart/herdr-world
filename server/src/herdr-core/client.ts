@@ -1,5 +1,26 @@
 import { isLocalCoreAddress } from "../../../shared/coreAddress";
+import {
+  CoreRpcError,
+  CoreUnavailableError,
+  CoreWriteUncertainError,
+  CoreUnsupportedError,
+  CoreIncompatibleError,
+} from "./errors";
+export {
+  CoreRpcError,
+  CoreUnavailableError,
+  CoreWriteUncertainError,
+  CoreUnsupportedError,
+  CoreIncompatibleError,
+} from "./errors";
 import type { CoreByteStream } from "./stream";
+import {
+  coreCancelFrame,
+  coreSendRequest,
+  coreKeysRequest,
+  type CoreSendResult,
+  type CoreKeysResult,
+} from "./delivery-params";
 import { isSharedLabelChange, type SharedLabelChange } from "./shared-state";
 import {
   CoreProtocolError,
@@ -31,14 +52,16 @@ type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
  * shared `herdr.seen`/`herdr.pinned`, and placement at launch). None is
  * required for observation: on a core without one, that action fails and
  * World keeps observing. World's own float shells (`float-shell.ts`) also
- * view theirs (`terminal.attach`). Native `terminal.send` delivers asks and Ranger prompts. Never `terminal.keys`, `machine.*`, `file.*`, `server.stop`/`restart` or
+ * view theirs (`terminal.attach`). Agent input uses native send/keys
+ * (delivery.ts). Never `machine.*`, `file.*`, `server.stop`/`restart` or
  * `terminal.put`.
  */
 export type CoreWriteMethod =
   | "terminal.run"
   | "terminal.kill"
   | "terminal.label"
-  | "terminal.send";
+  | "terminal.send"
+  | "terminal.keys";
 /** Optional for float shells: a core without them refuses only that. */
 const FLOAT_SHELL_METHODS = [
   "terminal.run",
@@ -102,55 +125,6 @@ export type CoreEventLine =
       method: "missed";
       params: { seq: number; terminals: CoreTerminalRecord[] };
     };
-
-export class CoreRpcError extends Error {
-  constructor(
-    message: string,
-    readonly code: number,
-    readonly kind: string | null,
-  ) {
-    super(message);
-    this.name = "CoreRpcError";
-  }
-}
-
-export class CoreUnavailableError extends Error {
-  readonly retryable = true;
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "CoreUnavailableError";
-  }
-}
-
-/**
- * A write whose reply never came (timeout or a closed connection after it
- * was sent): core may or may not have done it. Shown as uncertain and never
- * retried automatically.
- */
-export class CoreWriteUncertainError extends Error {
-  readonly outcome = "uncertain";
-  constructor(method: string, options?: ErrorOptions) {
-    super(`herdr-core may have done ${method}; its reply never came`, options);
-    this.name = "CoreWriteUncertainError";
-  }
-}
-
-/** The connected core does not offer an operation World needs. */
-export class CoreUnsupportedError extends Error {
-  readonly retryable = false;
-  constructor(version: string, method: string) {
-    super(`herdr-core ${version} does not offer ${method}`);
-    this.name = "CoreUnsupportedError";
-  }
-}
-
-export class CoreIncompatibleError extends Error {
-  readonly retryable = false;
-  constructor(message: string) {
-    super(message);
-    this.name = "CoreIncompatibleError";
-  }
-}
 
 type Pending = {
   resolve(value: unknown): void;
@@ -326,7 +300,7 @@ function parseHello(value: unknown): CoreHello {
 /**
  * One framed connection to an already-running core. It never starts a core
  * and never sends `caller`. Its mutating calls are the typed writes
- * (`run`, `kill`, `label`, `shareLabel`) and World's own float shells
+ * (`run`, `kill`, `label`, `shareLabel`, `sendText`, `keys`) and World's own float shells
  * (`runShell`, `attach`).
  */
 export class CoreClient {
@@ -517,36 +491,49 @@ export class CoreClient {
     ) as Promise<CoreTerminalRecord>;
   }
 
-  /** Core owns paste, Enter and harness-specific delivery. No caller or force. */
-  sendText(address: string, text: string, timeoutMs = 15_000) {
-    if (!text.trim() || text.length > 32_000 || text.includes("\0"))
-      throw new CoreProtocolError("invalid message text");
+  /** Native scheduling and best-effort cancellation; lost replies stay uncertain. */
+  sendText(
+    address: string,
+    text: string,
+    options:
+      | { force: boolean; cancel?: AbortSignal; timeoutMs?: number }
+      | number = 15_000,
+  ) {
+    if (typeof options === "number") {
+      if (!text.trim() || text.length > 32_000 || text.includes("\0"))
+        throw new CoreProtocolError("invalid message text");
+      return this.write(
+        "terminal.send",
+        { terminal: localAddress(address), text, force: false, wait: false },
+        options,
+      ) as Promise<CoreSendResult>;
+    }
     return this.write(
-      "terminal.send",
-      {
-        terminal: localAddress(address),
-        text,
-        force: false,
-        wait: false,
-      },
-      timeoutMs,
-    ) as Promise<{
-      status: string | null;
-      turn: number;
-      started: boolean | null;
-    }>;
+      ...coreSendRequest(address, text, options),
+    ) as Promise<CoreSendResult>;
+  }
+
+  /**
+   * Presses named keys after ~3 s of a person's quiet. Core cannot cancel
+   * keys once asked (only sends), so World checks before asking.
+   */
+  keys(address: string, keys: readonly string[], timeoutMs = 15_000) {
+    return this.write(
+      ...coreKeysRequest(address, keys, timeoutMs),
+    ) as Promise<CoreKeysResult>;
   }
 
   private async write(
     method: CoreWriteMethod,
     params: Record<string, unknown>,
     timeoutMs: number,
+    cancel?: AbortSignal,
   ): Promise<unknown> {
     if (!this.offers(method))
       throw new CoreUnsupportedError(this.hello.version, method);
     if (this.closedError) throw this.closedError;
     try {
-      return await this.call(method, params, timeoutMs);
+      return await this.call(method, params, timeoutMs, cancel);
     } catch (error) {
       // Sent: only core's own refusal proves nothing happened.
       if (error instanceof CoreRpcError) throw error;
@@ -806,16 +793,32 @@ export class CoreClient {
     method: CoreMethod | typeof WATCH_METHOD,
     params: Record<string, unknown>,
     timeoutMs: number,
+    cancel?: AbortSignal,
   ): Promise<unknown> {
     if (this.closedError) return Promise.reject(this.closedError);
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
+      const askCancel = () => this.send(coreCancelFrame(id));
+      const settle = () => cancel?.removeEventListener("abort", askCancel);
       const timer = setTimeout(() => {
         this.pending.delete(id);
         if (method === WATCH_METHOD) this.abandoned.add(id);
+        settle();
+        // World gives up on it: core drops it too if it is still held.
+        if (cancel) askCancel();
         reject(new CoreUnavailableError(`timeout: ${method}`));
       }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, {
+        resolve: (value) => {
+          settle();
+          resolve(value);
+        },
+        reject: (error) => {
+          settle();
+          reject(error);
+        },
+        timer,
+      });
       this.send(
         encodeFrame(
           0,
@@ -825,6 +828,8 @@ export class CoreClient {
           ),
         ),
       );
+      if (cancel?.aborted) askCancel();
+      else cancel?.addEventListener("abort", askCancel, { once: true });
     });
   }
 

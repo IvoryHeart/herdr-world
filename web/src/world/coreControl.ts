@@ -7,8 +7,8 @@ import type { CoreAlsoEnded } from "../../../shared/coreKill";
  * Every call names the core connection and the runtime generation the
  * person saw; the service refuses it when the core has since reconnected.
  *
- * Opening a core terminal and chatting with its agent are not here yet:
- * those nodes keep their view-only reason.
+ * Core Chat uses coreDelivery.ts. Terminal and file controls keep their
+ * separate availability; this module grants none of their authority.
  */
 export type CoreTarget = { connectionId: string; generation: number };
 

@@ -9,14 +9,17 @@ export const ANSWER_DELIVERY_VERB = {
   recovery: "opaque",
 } as const;
 export const ANSWER_DELIVERY_DELAY_MS = 3000;
-export type HerdrAnswerRecipient = {
-  adapter: "herdr";
+export type ChatAnswerRecipient = {
+  adapter: "herdr" | "herdr-core";
   connection_id: string;
   pane_id: string;
   terminal_id: string;
-  reported: { scheme: "herdr-reported-v1"; fingerprint: string };
+  reported: {
+    scheme: "herdr-reported-v1" | "core-occupant-v1";
+    fingerprint: string;
+  };
   conversation: {
-    scheme: "reported-v1" | "codex-title-v1";
+    scheme: "reported-v1" | "codex-title-v1" | "core-recipient-v1";
     fingerprint: string;
   };
   captured_at: number;
@@ -44,7 +47,7 @@ export type CoreAnswerRecipient = {
   service_incarnation: string;
   connection_generation: number;
 };
-export type AnswerRecipient = HerdrAnswerRecipient | CoreAnswerRecipient;
+export type AnswerRecipient = ChatAnswerRecipient | CoreAnswerRecipient;
 export type AnsweringAgent = Pick<
   CliActor,
   | "label"
@@ -96,6 +99,7 @@ function validCoreRecipient(
   return Boolean(
     value &&
       value.adapter === "herdr-core" &&
+      "core_id" in value &&
       typeof value.connection_id === "string" &&
       value.connection_id.length > 0 &&
       typeof value.pane_id === "string" &&
@@ -112,29 +116,38 @@ function validCoreRecipient(
       HEX64.test(value.reported.fingerprint),
   );
 }
-/** A verified original asker of either runtime. */
+export function herdrRecipient(
+  value: AnswerRecipient | null | undefined,
+): value is ChatAnswerRecipient {
+  return Boolean(
+    value &&
+      "conversation" in value &&
+      ["herdr", "herdr-core"].includes(value.adapter) &&
+      [value.connection_id, value.pane_id, value.terminal_id].every(
+        (part) => typeof part === "string" && part.length > 0,
+      ) &&
+      value.reported?.scheme ===
+        (value.adapter === "herdr-core"
+          ? "core-occupant-v1"
+          : "herdr-reported-v1") &&
+      typeof value.reported.fingerprint === "string" &&
+      /^[a-f0-9]{64}$/.test(value.reported.fingerprint) &&
+      (value.adapter === "herdr-core"
+        ? value.conversation?.scheme === "core-recipient-v1"
+        : ["reported-v1", "codex-title-v1"].includes(
+            value.conversation?.scheme,
+          )) &&
+      typeof value.conversation.fingerprint === "string" &&
+      (value.adapter === "herdr-core"
+        ? /^[a-f0-9]{64}\.[a-f0-9]{32}$/
+        : /^[a-f0-9]{64}$/
+      ).test(value.conversation.fingerprint),
+  );
+}
 export function validRecipient(
   value: AnswerRecipient | null | undefined,
 ): value is AnswerRecipient {
   return herdrRecipient(value) || validCoreRecipient(value);
-}
-/** One World can deliver an answer to today: a Herdr (TUI) Chat session. */
-export function herdrRecipient(
-  value: AnswerRecipient | null | undefined,
-): value is HerdrAnswerRecipient {
-  return Boolean(
-    value &&
-      value.adapter === "herdr" &&
-      [value.connection_id, value.pane_id, value.terminal_id].every(
-        (part) => typeof part === "string" && part.length > 0,
-      ) &&
-      value.reported?.scheme === "herdr-reported-v1" &&
-      typeof value.reported.fingerprint === "string" &&
-      /^[a-f0-9]{64}$/.test(value.reported.fingerprint) &&
-      ["reported-v1", "codex-title-v1"].includes(value.conversation?.scheme) &&
-      typeof value.conversation.fingerprint === "string" &&
-      /^[a-f0-9]{64}$/.test(value.conversation.fingerprint),
-  );
 }
 export function sameRecipient(
   left: AnswerRecipient | null | undefined,
@@ -147,13 +160,12 @@ export function sameRecipient(
       left.connection_id === right.connection_id &&
       left.pane_id === right.pane_id &&
       left.terminal_id === right.terminal_id &&
-      left.reported.scheme === right.reported.scheme &&
       left.reported.fingerprint === right.reported.fingerprint &&
-      (left.adapter === "herdr" && right.adapter === "herdr"
+      ("conversation" in left && "conversation" in right
         ? left.conversation.scheme === right.conversation.scheme &&
           left.conversation.fingerprint === right.conversation.fingerprint
-        : left.adapter === "herdr-core" &&
-          right.adapter === "herdr-core" &&
+        : "core_id" in left &&
+          "core_id" in right &&
           left.core_id === right.core_id &&
           left.pid === right.pid),
   );
@@ -246,7 +258,8 @@ export function isAnswerIntent(value: unknown): value is AnswerIntent {
   if (
     recipient &&
     typeof recipient === "object" &&
-    (recipient as { adapter?: unknown }).adapter === "herdr-core"
+    (recipient as { reported?: { scheme?: unknown } }).reported?.scheme ===
+      "herdr-core-occupant-v1"
   )
     return (
       fields(recipient, [

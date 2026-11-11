@@ -45,6 +45,26 @@ test("relative deltas and creation survive missed and old callbacks", () => {
   return expectObservationMismatch(() => replayCore(lost), ["core.state"]);
 });
 
+test("stale-after-missed counterexamples may double a bounded source delta", () => {
+  const states = trace([
+    "restart",
+    "connect",
+    "disconnect",
+    "x",
+    "connect",
+    "x",
+    "missed",
+    "receive",
+  ]);
+  // The composed model's seed-42 mutant reapplied the delta after the cut.
+  states.at(-1)!.c.mirror[0]!.x = 3;
+  validateCoreTrace(states);
+  const malformed = structuredClone(states);
+  malformed.at(-1)!.c.source[0]!.x = 3;
+  expect(() => validateCoreTrace(malformed)).toThrow();
+  return expectObservationMismatch(() => replayCore(states), ["core.state"]);
+});
+
 test("queued session delivery is refused after kept replacement", async () => {
   const states = trace([
     "connect",
@@ -60,6 +80,18 @@ test("queued session delivery is refused after kept replacement", async () => {
     () => replayCore(states, true),
     ["core.state"],
   );
+});
+
+test("missing foreground refuses dispatch through the production recipient gate", () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    "capture",
+    "loseForeground",
+    "dispatch",
+  ]);
+  replayCore(states);
+  expect(states.at(-1)!.c.attempts).toBe(0);
 });
 
 test("original leases cannot be replaced by another profile on the same core", () => {
@@ -109,8 +141,8 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
   );
 });
 
-test("all twenty-one ordering, authority, worktree and observe faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(21);
+test("all twenty-two ordering, authority, foreground, worktree and observe faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(22);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;
@@ -167,12 +199,27 @@ describe("a kill ends only what was confirmed (M7)", () => {
     expect(replayCore(states).has("unconfirmedCascadeRefused")).toBe(true);
   });
 
-  test("a kept replacement with the same pid is not the confirmed program", () => {
+  test("a kept replacement with the same pid is not the confirmed program", async () => {
     const states = authority(
       trace(["connect", "baseline", "plan", "replace", "baseline", "kill"]),
     );
     expect(states.at(-1)!.c).toMatchObject({ killed: false, ready: true });
     replayCore(states);
+    const output = await mkdtemp(join(tmpdir(), "core-kill-control-"));
+    try {
+      const mutant = await mutateImplementation(
+        "herdr-core-runtime",
+        "core-kill-pid-only",
+        { root: process.cwd(), output },
+      );
+      const subjects = (await import(mutant)) as CoreSubjects;
+      await expectObservationMismatch(
+        () => replayCore(states, false, 2, subjects),
+        ["core.state"],
+      );
+    } finally {
+      await rm(output, { recursive: true, force: true });
+    }
   });
 });
 
