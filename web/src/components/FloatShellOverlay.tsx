@@ -2,20 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Power, X } from "lucide-react";
-import { bridge, type BridgeControlMsg } from "../api";
+import { bridge, type BridgeControlMsg, type ConnectionStatus } from "../api";
 import { TERMINAL_FONT_FAMILY, terminalFontOptions } from "../appearance";
 import { isMobileLayout } from "../layoutPreferences";
 import { pluginActionShortcut } from "../pluginActionShortcuts";
 import { store } from "../store";
 import {
+  coreAuthorityFrom,
+  type FloatShellAuthority,
   type FloatShellTarget,
   hideFloatShell,
   useFloatShellTarget,
 } from "../world/floatShell";
+import { worldRuntimeStore } from "../world/runtimeStore";
+import { FloatShellInput } from "./floatShellInput";
 
 const RESIZE_DEBOUNCE_MS = 150;
-/** The service refuses more than 64 KiB of keys in one call. */
-const MAX_INPUT_BYTES = 48 * 1024;
+const TRANSPORT_LOST = "World's connection was lost; open the shell again";
+const NOT_READY = "That host is not connected right now; try again";
+
+const readyGeneration = coreAuthorityFrom(worldRuntimeStore);
 
 type Phase =
   | { kind: "opening" }
@@ -51,10 +57,13 @@ export function FloatShellOverlay({
   terminalTheme,
   terminalFontFamily = TERMINAL_FONT_FAMILY,
   terminalFontScale,
+  authority = readyGeneration,
 }: {
   terminalTheme: ITheme;
   terminalFontFamily?: string;
   terminalFontScale: number;
+  /** Where Open again takes its authority; tests replace it. */
+  authority?: FloatShellAuthority;
 }) {
   const target = useFloatShellTarget();
   if (!target) return null;
@@ -63,6 +72,7 @@ export function FloatShellOverlay({
       // A new target (another room, or a reconnected core) is a new view.
       key={`${target.connectionId}:${target.generation}:${target.terminalId}`}
       target={target}
+      authority={authority}
       terminalTheme={terminalTheme}
       terminalFontFamily={terminalFontFamily}
       terminalFontScale={terminalFontScale}
@@ -72,11 +82,13 @@ export function FloatShellOverlay({
 
 function FloatShellWindow({
   target,
+  authority,
   terminalTheme,
   terminalFontFamily,
   terminalFontScale,
 }: {
   target: FloatShellTarget;
+  authority: FloatShellAuthority;
   terminalTheme: ITheme;
   terminalFontFamily: string;
   terminalFontScale: number;
@@ -84,6 +96,9 @@ function FloatShellWindow({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const streamRef = useRef<string | null>(null);
+  // The first open uses the generation the person clicked; Open again takes
+  // the connection's current one, and the service rechecks the room.
+  const generationRef = useRef(target.generation);
   const [phase, setPhase] = useState<Phase>({ kind: "opening" });
   const [attempt, setAttempt] = useState(0);
 
@@ -114,63 +129,32 @@ function FloatShellWindow({
     termRef.current = term;
     let disposed = false;
     let stream: string | null = null;
+    /** This attempt's own state, read by callbacks React state can't reach. */
+    let view: "opening" | "open" | "closed" = "opening";
 
-    // Keys go one call at a time, so they arrive in the order typed; what is
-    // typed meanwhile joins the next call.
-    let pending: Uint8Array[] = [];
-    let sending = false;
-    const flush = async () => {
-      if (sending || !stream) return;
-      sending = true;
-      try {
-        while (pending.length && stream && !disposed) {
-          let size = 0;
-          const take: Uint8Array[] = [];
-          while (
-            pending.length &&
-            size + pending[0]!.byteLength <= MAX_INPUT_BYTES
-          ) {
-            const next = pending.shift()!;
-            size += next.byteLength;
-            take.push(next);
-          }
-          if (!take.length)
-            take.push(pending.shift()!.slice(0, MAX_INPUT_BYTES));
-          const bytes = new Uint8Array(
-            take.reduce((n, b) => n + b.byteLength, 0),
-          );
-          let at = 0;
-          for (const part of take) {
-            bytes.set(part, at);
-            at += part.byteLength;
-          }
-          await bridge.call("world.float.input", {
-            stream,
-            data: base64(bytes),
-          });
-        }
-      } catch (error) {
-        // Never replayed: a person sees what reached the shell and retypes.
-        pending = [];
+    const input = new FloatShellInput(
+      async (bytes) => {
+        await bridge.call("world.float.input", {
+          stream,
+          data: base64(bytes),
+        });
+      },
+      () => Boolean(stream) && !disposed,
+      (error) =>
         store.notify({
           kind: "error",
           message: "Float shell input was not sent",
           detail: messageOf(error),
-        });
-      } finally {
-        sending = false;
-      }
-    };
+        }),
+    );
     const encoder = new TextEncoder();
     const onData = term.onData((data) => {
       if (!stream) return;
-      pending.push(encoder.encode(data));
-      void flush();
+      void input.push(encoder.encode(data));
     });
     const onBinary = term.onBinary((data) => {
       if (!stream) return;
-      pending.push(Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff));
-      void flush();
+      void input.push(Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff));
     });
     // The toggle that opened it hides it again, as in Herdr Float.
     term.attachCustomKeyEventHandler((event) => {
@@ -182,6 +166,20 @@ function FloatShellWindow({
       return true;
     });
 
+    const retire = () => {
+      view = "closed";
+      stream = null;
+      streamRef.current = null;
+      input.clear();
+    };
+    // The service leaves this socket's views when the socket closes, so a
+    // lost connection (a phone resuming) ends this view: no push can say so.
+    const offStatus = bridge.onStatus((status: ConnectionStatus) => {
+      if (status === "connected" || disposed || view === "closed") return;
+      retire();
+      setPhase({ kind: "closed", reason: TRANSPORT_LOST });
+    });
+
     const offControl = bridge.onControl((control: BridgeControlMsg) => {
       const push = control;
       if (!stream || push.stream !== stream) return;
@@ -189,8 +187,7 @@ function FloatShellWindow({
         // Bytes, not text: xterm joins a character split across pushes.
         term.write(fromBase64(push.data));
       } else if (push.type === "float_closed") {
-        stream = null;
-        streamRef.current = null;
+        retire();
         if (push.ended) {
           // The shell itself ended (exit, or End shell): nothing to show.
           hideFloatShell();
@@ -204,13 +201,14 @@ function FloatShellWindow({
     bridge
       .call("world.float.open", {
         connection_id: target.connectionId,
-        connection_generation: target.generation,
+        connection_generation: generationRef.current,
         terminal_id: target.terminalId,
+        room: target.room,
         cols: dims?.cols ?? term.cols,
         rows: dims?.rows ?? term.rows,
       })
       .then((opened: { stream: string; created: boolean }) => {
-        if (disposed) {
+        if (disposed || view === "closed") {
           void bridge
             .call("world.float.hide", { stream: opened.stream })
             .catch(() => {});
@@ -218,6 +216,7 @@ function FloatShellWindow({
         }
         stream = opened.stream;
         streamRef.current = opened.stream;
+        view = "open";
         setPhase({ kind: "open", created: opened.created });
         fit.fit();
         const settled = fit.proposeDimensions();
@@ -232,7 +231,9 @@ function FloatShellWindow({
         term.focus();
       })
       .catch((error: unknown) => {
-        if (!disposed) setPhase({ kind: "closed", reason: messageOf(error) });
+        if (disposed || view === "closed") return;
+        view = "closed";
+        setPhase({ kind: "closed", reason: messageOf(error) });
       });
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -255,6 +256,7 @@ function FloatShellWindow({
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       offControl();
+      offStatus();
       onData.dispose();
       onBinary.dispose();
       // Hiding leaves the shell running; only this view goes.
@@ -269,6 +271,18 @@ function FloatShellWindow({
     // Theme updates in place; a font change applies to the next open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
+
+  /** Open again: the connection's current authority, never a retired one. */
+  const reopen = () => {
+    const generation = authority(target.connectionId);
+    if (generation === null) {
+      setPhase({ kind: "closed", reason: NOT_READY });
+      return;
+    }
+    generationRef.current = generation;
+    setPhase({ kind: "opening" });
+    setAttempt((value) => value + 1);
+  };
 
   const endShell = () => {
     const stream = streamRef.current;
@@ -306,10 +320,7 @@ function FloatShellWindow({
             <button
               type="button"
               className="float-shell-action"
-              onClick={() => {
-                setPhase({ kind: "opening" });
-                setAttempt((value) => value + 1);
-              }}
+              onClick={reopen}
             >
               Open again
             </button>

@@ -162,7 +162,12 @@ popups and verify Windows named-pipe/key behavior on a real owner test host.
   change in the shell keeps its view and End shell (only the program occupant
   is bound); the stream's lease, connection generation and core process are
   checked at dispatch and publication, so a restarted core closes the view
-  with its reason and never resumes it on the new process
+  with its reason and never resumes it on the new process; Open again takes
+  the connection's current generation and the service refuses it when the
+  agent's address now belongs to another room
+- **AND** a browser whose socket closes while its view opens gets none: an
+  attachment that arrives after the browser left is detached at once, and a
+  browser that sees its own socket drop closes the view with Open again
 
 #### Scenario: Room shell ordering and flow
 

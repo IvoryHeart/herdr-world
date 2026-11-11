@@ -59,7 +59,14 @@ const float = {
   resized: 0,
   running: false,
   stream: 0,
+  /** The core connection's current generation and agent room. */
+  generation: -1,
+  room: "",
   handlers: new Set<(control: unknown) => void>(),
+  statusHandlers: new Set<(status: string) => void>(),
+  status(status: string) {
+    for (const handler of float.statusHandlers) handler(status);
+  },
   push(control: Record<string, unknown>) {
     for (const handler of float.handlers) handler(control);
   },
@@ -72,6 +79,11 @@ const float = {
 async function floatCall(method: string, params: Record<string, unknown>) {
   if (method === "world.float.open") {
     float.opens.push(params);
+    // The service's own refusals (`FloatShellService.open`).
+    if (params.connection_generation !== float.generation)
+      throw new Error("herdr-core reconnected; open the float shell again");
+    if (params.room !== float.room)
+      throw new Error("That agent is in another room now");
     const stream = `float-${++float.stream}`;
     const created = !float.running;
     float.running = true;
@@ -127,7 +139,10 @@ Object.assign(bridge, {
     isCurrent: () => false,
     call: (method: string) => record(`${connectionId}:${method}`),
   }),
-  onStatus: () => () => {},
+  onStatus: (handler: (status: string) => void) => {
+    float.statusHandlers.add(handler);
+    return () => float.statusHandlers.delete(handler);
+  },
 });
 const deskStore = new WorldDeskStore({
   call: async () => null,
@@ -239,7 +254,11 @@ async function run() {
             onHold={() => {}}
           />
         </div>
-        <FloatShellOverlay terminalTheme={{}} terminalFontScale={100} />
+        <FloatShellOverlay
+          terminalTheme={{}}
+          terminalFontScale={100}
+          authority={(id) => (id === "core-fixture" ? float.generation : null)}
+        />
       </>,
     ),
   );
@@ -330,6 +349,8 @@ async function floatShell(scout: WorldLeafObject) {
     townShell?.disabled === false && boardShell?.disabled === false,
     "a core agent's peeks offer its room's shell, enabled",
   );
+  float.generation = scout.generation;
+  float.room = scout.workspaceId;
   boardShell?.click();
   if (
     !(await until(
@@ -343,6 +364,7 @@ async function floatShell(scout: WorldLeafObject) {
     open.connection_id === "core-fixture" &&
       open.terminal_id === scout.pane.terminal_id &&
       open.connection_generation === scout.generation &&
+      open.room === scout.workspaceId &&
       Number.isInteger(open.cols) &&
       Number(open.cols) > 20 &&
       Number.isInteger(open.rows) &&
@@ -410,40 +432,86 @@ async function floatShell(scout: WorldLeafObject) {
     float.stopped.join() === "float-2" && !float.running,
     "End shell ends exactly the open stream",
   );
-  // A stream that closes without the shell ending says why, and reopens.
+  // Core reconnects: the stream closes without the shell ending, says why,
+  // and Open again takes the connection's new generation, never the old one.
   boardShell?.click();
   await until(
     () => rowsText().includes("scout-room$"),
     "the shell opens again",
   );
+  float.generation = scout.generation + 1;
   float.push({
     type: "float_closed",
-    stream: "float-3",
+    stream: `float-${float.stream}`,
     reason: "herdr-core reconnected; open the float shell again",
     ended: false,
   });
   await until(
-    () =>
-      document
-        .querySelector(".float-shell-reason")
-        ?.textContent?.includes("reconnected") === true,
+    () => reasonText().includes("reconnected"),
     "a lost stream says why",
   );
-  [...document.querySelectorAll<HTMLButtonElement>(".float-shell-action")]
-    .find((button) => button.textContent?.includes("Open again"))
-    ?.click();
+  const before = float.opens.length;
+  openAgain()?.click();
   await until(
-    () =>
-      float.opens.length === 4 &&
-      !document.querySelector(".float-shell-reason"),
-    "Open again reopens",
+    () => float.opens.length === before + 1 && !reasonText(),
+    () => `Open again reopens: ${reasonText()}`,
+  );
+  const reopened = float.opens[before] ?? {};
+  check(
+    reopened.connection_generation === float.generation &&
+      reopened.connection_id === "core-fixture" &&
+      reopened.room === scout.workspaceId,
+    `Open again uses the connection's current authority: ${JSON.stringify(reopened)}`,
   );
   await until(
     () => rowsText().includes("scout-room$"),
     "the reopened shell paints",
   );
+  // World's own socket drops (a phone resuming): the service has left the
+  // view, so it closes, keys go nowhere, and Open again works on return.
+  const typed = float.typed.length;
+  float.status("disconnected");
+  await until(
+    () => reasonText().includes("connection was lost"),
+    () => `a lost World connection closes the view: ${reasonText()}`,
+  );
+  check(
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(".float-shell-action"),
+    ].find((button) => button.textContent?.includes("End shell"))?.disabled ===
+      true,
+    "End shell is not offered for a view that is gone",
+  );
+  document
+    .querySelector<HTMLTextAreaElement>(
+      ".float-shell-screen .xterm-helper-textarea",
+    )
+    ?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "x", keyCode: 88, bubbles: true }),
+    );
+  await frame();
+  check(float.typed.length === typed, "keys are not sent to a gone stream");
+  float.status("connecting");
+  float.status("connected");
+  const resumed = float.opens.length;
+  openAgain()?.click();
+  await until(
+    () => float.opens.length === resumed + 1 && !reasonText(),
+    () => `Open again works after World reconnects: ${reasonText()}`,
+  );
+  await until(
+    () => rowsText().includes("scout-room$"),
+    "the shell paints after World reconnects",
+  );
   // The shell stays open for the evidence captures.
 }
+
+const reasonText = () =>
+  document.querySelector(".float-shell-reason")?.textContent ?? "";
+const openAgain = () =>
+  [...document.querySelectorAll<HTMLButtonElement>(".float-shell-action")].find(
+    (button) => button.textContent?.includes("Open again"),
+  );
 
 void run()
   .catch((error) => failures.push(String(error)))

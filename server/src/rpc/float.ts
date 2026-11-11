@@ -48,6 +48,7 @@ export async function handleFloatRpc(rpc: BridgeRpcContext): Promise<void> {
         connectionId: String(p.connection_id),
         generation: Number(p.connection_generation),
         terminal: String(p.terminal_id),
+        ...(typeof p.room === "string" ? { room: p.room } : {}),
         size: { cols: Number(p.cols), rows: Number(p.rows) },
       });
       // A browser that left while it opened never gets a view.

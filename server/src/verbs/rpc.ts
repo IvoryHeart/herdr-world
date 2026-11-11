@@ -281,6 +281,8 @@ export const rpcVerbs = [
       connection_id: text,
       connection_generation: Type.Integer({ minimum: 0 }),
       terminal_id: text,
+      // The agent's room (World workspace); the service refuses another.
+      room: Type.Optional(Type.String({ minLength: 1, maxLength: 600 })),
       cols: Type.Integer({ minimum: 1, maximum: 65535 }),
       rows: Type.Integer({ minimum: 1, maximum: 65535 }),
     }),

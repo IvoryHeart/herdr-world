@@ -2020,8 +2020,11 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     browser makes that browser's size count; once every view is hidden, core
     returns it to its headless size. World attaches only to a live terminal
     with its own label for that room, and ends only that occupant; a core that
-    restarts or loses ordering closes the view with the reason and **Open
-    again**. A slow browser holds core's stream rather than buffering it.
+    restarts or loses ordering, or a lost connection to World (a phone
+    resuming), closes the view with the reason and **Open again**, which uses
+    the host's current connection and refuses if the agent has moved to
+    another room. A paste of any size reaches the shell whole and in order. A
+    slow browser holds core's stream rather than buffering it.
   - **Stale.** When core stops, its agents stay where they were, marked
     offline with their last state, and return at the same addresses when it
     is back. Lost ordering shows them stale until World has a fresh snapshot.

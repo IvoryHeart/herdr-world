@@ -1,11 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   canOpenRoomShell,
+  coreAuthorityFrom,
   floatShellTarget,
   type HerdrFloatRoute,
   hideFloatShell,
   openRoomShell,
 } from "./floatShell";
+import type { WorldRuntimeConnection } from "./runtimeStore";
 
 // The TUI path goes through the same qualified plugin toggle as Ctrl+Alt+F;
 // what matters here is which runtime gets which equivalent, with what context.
@@ -51,6 +53,7 @@ test("a core agent opens World's float shell for its room, with no TUI call", as
       runtime: "herdr-core",
       actionable: false,
       viewOnly: "View only",
+      workspaceId: "hc:space:s1",
       pane: { pane_id: "t3", terminal_id: "t3", workspace_id: "hc:space:s1" },
     } as Partial<Leaf>),
     route,
@@ -59,6 +62,7 @@ test("a core agent opens World's float shell for its room, with no TUI call", as
     connectionId: "studio",
     generation: 4,
     terminalId: "t3",
+    room: "hc:space:s1",
     label: "reviewer",
   });
   expect(calls).toEqual([]);
@@ -87,4 +91,37 @@ test("offline agents offer no shell; live core agents do although view-only", ()
     ),
   ).toBe(true);
   expect(canOpenRoomShell(null)).toBe(false);
+});
+
+test("Open again takes a core connection's current generation, only while it is ready", () => {
+  const connections = [
+    {
+      connectionId: "core",
+      runtime: "herdr-core",
+      state: "ready",
+      generation: 7,
+      stale: false,
+    },
+    { connectionId: "tui", state: "ready", generation: 3, stale: false },
+    {
+      connectionId: "down",
+      runtime: "herdr-core",
+      state: "reconnecting",
+      generation: 9,
+      stale: true,
+    },
+    {
+      connectionId: "cached",
+      runtime: "herdr-core",
+      state: "ready",
+      generation: 2,
+      stale: true,
+    },
+  ] as unknown as WorldRuntimeConnection[];
+  const authority = coreAuthorityFrom({ get: () => ({ connections }) });
+  expect(authority("core")).toBe(7);
+  expect(authority("tui")).toBeNull();
+  expect(authority("down")).toBeNull();
+  expect(authority("cached")).toBeNull();
+  expect(authority("gone")).toBeNull();
 });

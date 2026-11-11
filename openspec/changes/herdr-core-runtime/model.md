@@ -121,7 +121,8 @@ occupant for end, deliberately not its foreground), so it inherits this seam
 and its tests. One shell per room is core's own live-name uniqueness, observed
 by World rather than decided by it; the first paint waiting for the open reply
 and credit returned only as a browser drains are one socket's framing and flow,
-outside this model's claims. `float-shell.test.ts` injects each fault
+outside this model's claims, as is a view cancelled while it opens (its late
+attachment is detached at once). `float-shell.test.ts` injects each fault
 (`kill -9` mid-stream, EOF, a split UTF-8 character, an oversized `missed`,
 exhausted credit, a replaced occupant, a foreign terminal holding the name) and
 `core.live.test.ts` repeats the flow against the release.

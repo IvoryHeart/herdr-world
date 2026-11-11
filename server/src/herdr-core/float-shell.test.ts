@@ -558,6 +558,112 @@ describe("World float shell on herdr-core", () => {
     expect(w.floats.openStreams).toBe(0);
   });
 
+  test("a browser that leaves while core attaches: the late attachment is left at once", async () => {
+    const w = await world();
+    const agent = w.fake.create(agentFields);
+    const lease = await w.connect();
+    const shells = lease.runtime.shells;
+    const attach = shells.attach.bind(shells);
+    let detached = 0;
+    let arrive!: () => void;
+    const held = new Promise<void>((done) => {
+      arrive = done;
+    });
+    let attaching!: () => void;
+    const started = new Promise<void>((done) => {
+      attaching = done;
+    });
+    Object.assign(shells, {
+      attach: async (...args: Parameters<typeof attach>) => {
+        attaching();
+        await held;
+        const attachment = await attach(...args);
+        return Object.assign(Object.create(attachment), {
+          detach: () => {
+            detached += 1;
+            attachment.detach();
+          },
+        });
+      },
+    });
+    const tab = browser();
+    const opening = w.floats.open(tab, {
+      connectionId: "box",
+      generation: lease.generation,
+      terminal: agent,
+      size: { cols: 80, rows: 24 },
+    });
+    await started;
+    w.floats.release(tab);
+    arrive();
+    await expect(opening).rejects.toThrow("closed while it opened");
+    expect(detached).toBe(1);
+    expect(w.floats.openStreams).toBe(0);
+    // The shell it started keeps running, with no viewer left behind.
+    const name = floatShellName(CORE_UNPLACED_WORKSPACE);
+    await until(() =>
+      lease.runtime.core.mirror.terminals().some((t) => t.name === name),
+    );
+    const shell = lease.runtime.core.mirror
+      .terminals()
+      .find((t) => t.name === name)!;
+    expect(w.fake.terminal(shell.address)?.state).toBe("live");
+    await until(() => w.fake.viewersOf(shell.address).length === 0);
+    expect(tab.pushes).toEqual([]);
+  });
+
+  test("a browser that leaves while the shell starts never attaches", async () => {
+    const w = await world();
+    const agent = w.fake.create(agentFields);
+    const lease = await w.connect();
+    const shells = lease.runtime.shells;
+    const run = shells.run.bind(shells);
+    let attaches = 0;
+    const tab = browser();
+    Object.assign(shells, {
+      run: async (...args: Parameters<typeof run>) => {
+        const record = await run(...args);
+        w.floats.release(tab);
+        return record;
+      },
+      attach: async () => {
+        attaches += 1;
+        throw new Error("attached after the browser left");
+      },
+    });
+    await expect(
+      w.floats.open(tab, {
+        connectionId: "box",
+        generation: lease.generation,
+        terminal: agent,
+        size: { cols: 80, rows: 24 },
+      }),
+    ).rejects.toThrow("closed while it opened");
+    expect(attaches).toBe(0);
+    expect(w.floats.openStreams).toBe(0);
+  });
+
+  test("a reopen names its room: an address now in another room is refused", async () => {
+    const w = await world();
+    const agent = w.fake.create(agentFields);
+    const lease = await w.connect();
+    const request = {
+      connectionId: "box",
+      generation: lease.generation,
+      terminal: agent,
+      size: { cols: 80, rows: 24 },
+    };
+    await expect(
+      w.floats.open(browser(), { ...request, room: "hc:space:elsewhere" }),
+    ).rejects.toThrow("another room");
+    expect(runCalls(w.fake)).toEqual([]);
+    const opened = await w.floats.open(browser(), {
+      ...request,
+      room: CORE_UNPLACED_WORKSPACE,
+    });
+    expect(opened.room).toBe(CORE_UNPLACED_WORKSPACE);
+  });
+
   test("refusals: a core without shells, a connection not ready, an agent gone", async () => {
     const trimmed = await world();
     trimmed.fake.withoutMethods.add("terminal.run");

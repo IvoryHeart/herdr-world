@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { bridge } from "../api";
 import { pluginActionShortcutFor } from "../pluginActionShortcuts";
 import { operationalStore } from "../store/operations";
+import type { WorldRuntimeConnection } from "./runtimeStore";
 import type { WorldLeafObject } from "./worldObject";
 
 /**
@@ -19,9 +20,34 @@ export type FloatShellTarget = {
   generation: number;
   /** The agent (`tN`) whose room and folder the shell belongs to. */
   terminalId: string;
+  /** That agent's room (its World workspace), rechecked on every open. */
+  room: string;
   /** The agent's name, shown in the shell's title. */
   label: string;
 };
+
+/** The connection's current generation while it is ready, else null. */
+export type FloatShellAuthority = (connectionId: string) => number | null;
+
+/**
+ * Authority for reopening a core connection's float shell, from World's read
+ * model (where core connections and their agents live): its current
+ * generation, never the one a closed view kept.
+ */
+export function coreAuthorityFrom(store: {
+  get(): { connections: readonly WorldRuntimeConnection[] };
+}): FloatShellAuthority {
+  return (connectionId) => {
+    const connection = store
+      .get()
+      .connections.find((each) => each.connectionId === connectionId);
+    return connection?.runtime === "herdr-core" &&
+      connection.state === "ready" &&
+      !connection.stale
+      ? connection.generation
+      : null;
+  };
+}
 
 let target: FloatShellTarget | null = null;
 const listeners = new Set<() => void>();
@@ -91,6 +117,7 @@ export async function openRoomShell(
       connectionId: leaf.connectionId,
       generation: leaf.generation,
       terminalId: leaf.pane.terminal_id,
+      room: leaf.workspaceId,
       label: leaf.label,
     });
     return;

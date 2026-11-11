@@ -39,6 +39,7 @@ const HIGH_WATER_BYTES = 1 << 20;
 const CREDIT_RETRY_MS = 50;
 /** How long a lost start race waits to see the winner's terminal. */
 const JOIN_WAIT_MS = 3_000;
+const OPEN_CANCELLED = "The float shell was closed while it opened";
 
 export function floatShellName(room: string): string {
   const hash = createHash("sha256").update(room).digest("hex");
@@ -67,6 +68,12 @@ export type FloatShellOpen = {
   generation: number;
   /** The agent (`tN`) whose room and folder the shell belongs to. */
   terminal: string;
+  /**
+   * The room the browser means (the agent's World workspace). A reopen after
+   * core reconnected names the new generation; an address core reused for
+   * an agent in another room is refused rather than opening that room.
+   */
+  room?: string;
   size: CoreCellSize;
 };
 
@@ -190,6 +197,10 @@ export class FloatShellService {
     const agent = runtime.core.terminal(request.terminal);
     if (!room || !agent)
       throw new FloatShellRefusal("That agent is no longer running");
+    if (request.room !== undefined && request.room !== room)
+      throw new FloatShellRefusal(
+        "That agent is in another room now; open its shell from its peek",
+      );
     if (Buffer.byteLength(room) > MAX_ROOM_BYTES)
       throw new FloatShellRefusal(
         "That room's name is too long for a float shell",
@@ -220,6 +231,10 @@ export class FloatShellService {
       closed: false,
       held: [],
     };
+    // Registered before the first wait, so a browser that leaves meanwhile
+    // (`release`) cancels this open too.
+    this.sessions.set(session.id, session);
+    const cancelled = () => this.sessions.get(session.id) !== session;
     try {
       let created = false;
       let fence: CoreOperationFence<CoreConnectionRuntime>;
@@ -264,8 +279,8 @@ export class FloatShellService {
         // reused, and a float shell is never kept, so nothing can replace it.
         fence = CoreOperationFence.admit(lease);
       }
-      this.sessions.set(session.id, session);
-      session.attachment = await runtime.shells.attach(
+      if (cancelled()) throw new FloatShellRefusal(OPEN_CANCELLED);
+      const attachment = await runtime.shells.attach(
         fence,
         session.address,
         size,
@@ -274,10 +289,15 @@ export class FloatShellService {
           end: (reason) => this.ended(session, reason),
         },
       );
-      if (session.closed && !session.held) {
-        session.attachment.detach();
-        throw new FloatShellRefusal("The float shell ended; open it again");
+      if (cancelled()) {
+        // Hidden or released while core attached: leave at once, or core
+        // keeps an untracked viewer holding this shell's size.
+        attachment.detach();
+        throw new FloatShellRefusal(OPEN_CANCELLED);
       }
+      // A shell that ended while attaching stays closed: `start` delivers
+      // its close after the reply.
+      if (!session.closed) session.attachment = attachment;
       return {
         stream: session.id,
         address: session.address,
