@@ -18,6 +18,10 @@ the path changes. A stale lock or disappearing socket means unavailable.
 Check socket-directory ownership and private mode (0700 on Unix), otherwise refuse.
 
 Windows SSH uses a fixed PowerShell named-pipe relay with no CLI autostart path.
+A probe reads `core.lock` (past the mandatory lock core holds on its first byte)
+and the relay opens exactly that existing pipe at identification level; a pipe
+owned by or granted to anyone but the user, SYSTEM or Administrators is refused,
+the Windows form of the Unix 0700 check.
 Verify pipe discovery, EOF, cleanup, reconnect and win32-input-mode on real Windows
 with the owner. It is an implementation obligation, not an upstream-blocked scope
 exception. Do not call `hc connect`, `server status` or other CLI probes. EOF may

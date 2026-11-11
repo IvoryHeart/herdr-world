@@ -117,7 +117,10 @@ function implicitDefault(
 
 function describe(profile: ManagedConnectionProfile): string {
   if (isCoreProfile(profile)) {
-    const where = profile.type === "ssh" ? ` ${profile.ssh_destination}` : "";
+    const where =
+      profile.type === "ssh"
+        ? ` ${profile.ssh_destination}${profile.remote_platform === "windows" ? " (Windows)" : ""}`
+        : "";
     return `${profile.type === "ssh" ? "ssh  " : "local"}  herdr-core${where} (session ${profile.core_session})`;
   }
   if (profile.type === "local") return `local  ${profile.control_socket_path}`;
