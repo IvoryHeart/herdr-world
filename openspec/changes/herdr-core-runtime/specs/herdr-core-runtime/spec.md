@@ -151,3 +151,43 @@ popups and verify Windows named-pipe/key behavior on a real owner test host.
 - **WHEN** the user types in focused World and later clicks the desktop app pane
 - **THEN** World sends the first key once and takes the interactive size, then the
   desktop app can reclaim its own size
+
+#### Scenario: Room shell on either runtime
+
+- **WHEN** the user opens an agent's room shell (Herdr Float, the one TUI plugin
+  popup World invokes)
+- **THEN** a TUI agent toggles the Herdr Float plugin in its own Space and
+  folder through the same qualified plugin action as the shortcut, and a core
+  agent gets World's float shell: core runs that machine's shell unplaced,
+  without parent or notes, named for the room and labelled `world.float`, in the
+  agent's current folder; it never becomes a desk
+
+#### Scenario: One room shell, shared and kept
+
+- **WHEN** two browsers open the same room's shell at once, or one hides it
+- **THEN** core's live-name uniqueness keeps one shell that both join; hiding
+  leaves it running at core's headless size once no view remains; every view
+  closes when it exits or is ended
+
+#### Scenario: Room shell authority
+
+- **WHEN** a terminal World did not label for that room holds the name, the
+  shell's own programs change its foreground, core restarts, or ordering is lost
+- **THEN** World never attaches to or ends the foreign terminal; a foreground
+  change in the shell keeps its view and End shell (only the program occupant
+  is bound); the stream's lease, connection generation and core process are
+  checked at dispatch and publication, so a restarted core closes the view
+  with its reason and never resumes it on the new process; Open again takes
+  the connection's current generation and the service refuses it when the
+  agent's address now belongs to another room
+- **AND** a browser whose socket closes while its view opens gets none: an
+  attachment that arrives after the browser left is detached at once, and a
+  browser that sees its own socket drop closes the view with Open again
+
+#### Scenario: Room shell ordering and flow
+
+- **WHEN** core's first paint arrives before the browser has the open reply, or
+  a browser falls behind the stream
+- **THEN** the paint is held until the reply naming the stream is sent, and
+  World returns core's stream window only as the browser drains, so a slow
+  browser holds core's stream instead of World buffering it

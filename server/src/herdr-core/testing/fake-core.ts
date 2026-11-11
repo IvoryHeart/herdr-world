@@ -37,6 +37,14 @@ type FakeConnection = {
   heartbeat: ReturnType<typeof setInterval> | null;
 };
 
+/** An attached viewer: input is echoed as a shell would, like `sh` on a pty. */
+type FakeViewer = {
+  connection: FakeConnection;
+  channel: number;
+  address: string;
+  size: { cols: number; rows: number };
+};
+
 export type FakeCoreOptions = {
   coreId?: string;
   name?: string;
@@ -57,6 +65,14 @@ export class FakeCore {
   private readonly terminals = new Map<string, FakeTerminal>();
   private readonly connections = new Set<FakeConnection>();
   private readonly subscribers: Subscriber[] = [];
+  private readonly viewers: FakeViewer[] = [];
+  /** Keys each terminal received from viewers, for assertions. */
+  readonly typed = new Map<string, string>();
+  /** Runs as a request arrives, before core handles and answers it. */
+  onCall: ((method: string, params: Record<string, unknown>) => void) | null =
+    null;
+  /** Methods to leave out of `hello`, as an older or trimmed core would. */
+  withoutMethods = new Set<string>();
   private listener: { stop(closeActive?: boolean): void } | null = null;
   private running = false;
   private heldReads: Array<() => void> | null = null;
@@ -195,6 +211,7 @@ export class FakeCore {
     for (const connection of [...this.connections]) connection.stream.close();
     this.connections.clear();
     this.subscribers.length = 0;
+    this.viewers.length = 0;
     this.listener?.stop(true);
     this.listener = null;
     if (socketPath) rmSync(socketPath, { force: true });
@@ -349,6 +366,67 @@ export class FakeCore {
     this.terminals.delete(address);
   }
 
+  /**
+   * The program ends as core reports it (`rm` terminals are removed at once):
+   * every viewer's stream closes with the finish facts.
+   */
+  finish(address: string, reason = "exited", exitCode: number | null = 0) {
+    const record = this.require(address);
+    const facts = {
+      exit_code: exitCode,
+      finished_ms: Date.now(),
+      reason,
+      signal: reason === "killed" ? 1 : null,
+    };
+    Object.assign(record, { state: "finished", pid: null, ...facts });
+    delete record.foreground;
+    this.emit("finished", address, facts);
+    for (const viewer of this.viewers.filter((v) => v.address === address))
+      this.closeViewer(viewer, JSON.stringify(facts));
+    if (record.rm === true) this.remove(address);
+  }
+
+  /** Program output to every viewer of `address`. */
+  output(address: string, bytes: Uint8Array | string): void {
+    const data =
+      typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes;
+    for (const viewer of this.viewers.filter((v) => v.address === address))
+      this.enqueue(viewer, data);
+  }
+
+  viewersOf(address: string): Array<{ cols: number; rows: number }> {
+    return this.viewers
+      .filter((v) => v.address === address)
+      .map((v) => ({ ...v.size }));
+  }
+
+  private closeViewer(viewer: FakeViewer, payload = "") {
+    const at = this.viewers.indexOf(viewer);
+    if (at >= 0) this.viewers.splice(at, 1);
+    viewer.connection.streams.delete(viewer.channel);
+    this.write(
+      viewer.connection,
+      encodeFrame(
+        viewer.channel,
+        FrameKind.CLOSE,
+        new TextEncoder().encode(payload),
+      ),
+    );
+  }
+
+  /** Like core's `apply_size`: the latest typing viewer's size, else headless. */
+  private applySize(address: string) {
+    const record = this.terminals.get(address);
+    if (!record) return;
+    const viewing = this.viewers.filter((v) => v.address === address);
+    const leader = viewing[viewing.length - 1];
+    const size = leader?.size ?? { cols: 200, rows: 120 };
+    if (record.cols === size.cols && record.rows === size.rows) return;
+    record.cols = size.cols;
+    record.rows = size.rows;
+    this.emit("size", address, size);
+  }
+
   /** Loses events silently, as core does when a `missed` exceeds 4 MiB. */
   suppressEvents(count: number): void {
     this.seq += count;
@@ -447,6 +525,43 @@ export class FakeCore {
           connection,
           JSON.parse(new TextDecoder().decode(frame.payload)),
         );
+      } else if (frame.channel !== 0 && frame.kind === FrameKind.DATA) {
+        const viewer = this.viewerOn(connection, frame.channel);
+        if (!viewer) continue;
+        this.raise(viewer);
+        const text = new TextDecoder().decode(frame.payload);
+        this.typed.set(
+          viewer.address,
+          (this.typed.get(viewer.address) ?? "") + text,
+        );
+        // A shell's line discipline echoes keys; Enter runs `exit`.
+        this.output(viewer.address, text.replace(/\r/g, "\r\n"));
+        const line = (this.typed.get(viewer.address) ?? "").split("\r");
+        if (line.length > 1 && line[line.length - 2] === "exit")
+          this.finish(viewer.address);
+      } else if (
+        frame.channel !== 0 &&
+        frame.kind === FrameKind.RESIZE &&
+        frame.payload.byteLength === 4
+      ) {
+        const viewer = this.viewerOn(connection, frame.channel);
+        if (!viewer) continue;
+        const view = new DataView(
+          frame.payload.buffer,
+          frame.payload.byteOffset,
+          4,
+        );
+        viewer.size = {
+          cols: view.getUint16(0, true),
+          rows: view.getUint16(2, true),
+        };
+        this.raise(viewer);
+        this.applySize(viewer.address);
+      } else if (frame.channel !== 0 && frame.kind === FrameKind.CLOSE) {
+        const viewer = this.viewerOn(connection, frame.channel);
+        if (!viewer) continue;
+        this.closeViewer(viewer);
+        this.applySize(viewer.address);
       } else if (
         frame.kind === FrameKind.CREDIT &&
         frame.payload.byteLength === 4
@@ -473,12 +588,15 @@ export class FakeCore {
       methods: [
         "hello",
         "server.status",
+        "terminal.run",
         "terminal.list",
         "terminal.get",
+        "terminal.kill",
         "terminal.read",
+        "terminal.attach",
         "terminal.label",
         "events.subscribe",
-      ],
+      ].filter((method) => !this.withoutMethods.has(method)),
       features: [
         "framed",
         "attach",
@@ -496,6 +614,7 @@ export class FakeCore {
     request: { id: number; method: string; params: Record<string, unknown> },
   ) {
     this.calls.push({ method: request.method, params: request.params });
+    this.onCall?.(request.method, request.params ?? {});
     const reply = (result: unknown) =>
       this.write(
         connection,
@@ -578,6 +697,85 @@ export class FakeCore {
         else send();
         return;
       }
+      case "terminal.run": {
+        const p = request.params ?? {};
+        const name = typeof p.name === "string" ? p.name : null;
+        if (
+          name &&
+          [...this.terminals.values()].some(
+            (t) => t.state === "live" && t.name === name,
+          )
+        )
+          return error(
+            -32000,
+            `a live terminal is already named "${name}"`,
+            "name_taken",
+          );
+        if (typeof p.cwd === "string" && p.cwd.startsWith("/nonexistent"))
+          return error(
+            -32000,
+            'cannot start "/bin/sh": No such file or directory (os error 2)',
+            "spawn_failed",
+          );
+        const size = (p.size ?? {}) as { cols?: number; rows?: number };
+        const address = this.create({
+          name,
+          labels: { ...((p.labels as Record<string, string>) ?? {}) },
+          cwd: String(p.cwd ?? "/tmp/example"),
+          cols: size.cols ?? 200,
+          rows: size.rows ?? 120,
+          rm: p.rm === true,
+          notify: p.no_notify !== true,
+          parent: null,
+        });
+        return reply(this.terminals.get(address));
+      }
+      case "terminal.attach": {
+        const address = String(request.params?.terminal);
+        const record = this.terminals.get(address);
+        if (!record)
+          return error(-32000, `no terminal "${address}"`, "not_found");
+        if (record.state !== "live")
+          return error(-32000, `${address} has finished`, "finished");
+        const channel = connection.nextChannel++;
+        connection.streams.set(channel, {
+          pending: [],
+          bytes: 0,
+          credit: STREAM_WINDOW,
+        });
+        const viewer: FakeViewer = {
+          connection,
+          channel,
+          address,
+          size: {
+            cols: Number(request.params?.cols),
+            rows: Number(request.params?.rows),
+          },
+        };
+        this.viewers.push(viewer);
+        this.applySize(address);
+        // Core opens the stream paused and resumes it after the reply.
+        reply({
+          channel,
+          terminal: { ...record },
+          resize_notifications: false,
+          automatic_input: true,
+        });
+        this.enqueue(viewer, new TextEncoder().encode("\x1b[H\x1b[2J$ "));
+        return;
+      }
+      case "terminal.kill": {
+        const address = String(request.params?.terminal);
+        const record = this.terminals.get(address);
+        if (!record)
+          return error(-32000, `no terminal "${address}"`, "not_found");
+        const removing = record.rm === true;
+        this.finish(address, "killed", null);
+        // With `rm`, core removes it before answering (verified on 0.1.20).
+        return removing
+          ? error(-32000, `${address} was removed`, "not_found")
+          : reply({ ...record });
+      }
       case "terminal.label": {
         const address = String(request.params?.terminal);
         const labels = request.params?.labels;
@@ -595,6 +793,20 @@ export class FakeCore {
       default:
         return error(-32601, `method not found: ${request.method}`, "usage");
     }
+  }
+
+  private viewerOn(connection: FakeConnection, channel: number) {
+    return this.viewers.find(
+      (v) => v.connection === connection && v.channel === channel,
+    );
+  }
+
+  /** Typing or resizing makes a viewer the one whose size counts. */
+  private raise(viewer: FakeViewer) {
+    const at = this.viewers.indexOf(viewer);
+    if (at >= 0) this.viewers.splice(at, 1);
+    this.viewers.push(viewer);
+    this.applySize(viewer.address);
   }
 
   private queued(sub: Subscriber): number {
@@ -650,6 +862,12 @@ export class FakeCore {
   private drop(connection: FakeConnection) {
     if (connection.heartbeat) clearInterval(connection.heartbeat);
     this.connections.delete(connection);
+    for (const viewer of this.viewers.filter(
+      (v) => v.connection === connection,
+    )) {
+      this.viewers.splice(this.viewers.indexOf(viewer), 1);
+      this.applySize(viewer.address);
+    }
     for (let i = this.subscribers.length - 1; i >= 0; i--)
       if (this.subscribers[i]!.connection === connection)
         this.subscribers.splice(i, 1);

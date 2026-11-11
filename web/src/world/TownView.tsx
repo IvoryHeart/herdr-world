@@ -867,6 +867,7 @@ export default function TownView({
               setPeek(null);
               openOfficeTerminal(peekAgent.key);
             }}
+            leaf={peekLeaf}
             onNext={
               reception.step(peekAgent.key, peek!.anchor) ??
               (nextCall(peekAgent.key)

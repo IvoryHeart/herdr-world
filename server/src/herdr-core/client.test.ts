@@ -247,4 +247,113 @@ describe("core client", () => {
       "terminal.read",
     ]);
   });
+
+  test("attach: frames core writes after World leaves are dropped uncredited, never held as unclaimed", async () => {
+    const [core, world] = memoryStreamPair();
+    const decoder = new FrameDecoder();
+    const credits: number[] = [];
+    let hello = false;
+    core.onData((bytes) => {
+      if (!hello) {
+        hello = true;
+        core.write(
+          json({
+            jsonrpc: "2.0",
+            id: 0,
+            result: helloResult({
+              methods: [...helloResult().methods, "terminal.attach"],
+              features: ["framed", "events", "attach"],
+            }),
+          }),
+        );
+        core.write(new Uint8Array([0x0a]));
+        return;
+      }
+      for (const frame of decoder.push(bytes)) {
+        if (frame.kind === FrameKind.CREDIT)
+          credits.push(
+            new DataView(
+              frame.payload.buffer,
+              frame.payload.byteOffset,
+            ).getUint32(0, true),
+          );
+        if (frame.channel === 7 && frame.kind === FrameKind.CLOSE) {
+          // Output already in flight when core reads World's CLOSE: more
+          // than the unclaimed limit, then core's own CLOSE.
+          for (let i = 0; i < 10; i++)
+            core.write(encodeFrame(7, FrameKind.DATA, new Uint8Array(1 << 20)));
+          core.write(encodeFrame(7, FrameKind.CLOSE));
+        }
+        if (frame.channel !== 0) continue;
+        const request = JSON.parse(new TextDecoder().decode(frame.payload));
+        core.write(
+          encodeFrame(
+            0,
+            FrameKind.DATA,
+            json({
+              jsonrpc: "2.0",
+              id: request.id,
+              result: {
+                channel: 7,
+                terminal: {
+                  address: "t3",
+                  labels: {},
+                  argv: [],
+                  state: "live",
+                },
+                resize_notifications: false,
+                automatic_input: true,
+              },
+            }),
+          ),
+        );
+        core.write(
+          encodeFrame(7, FrameKind.DATA, new TextEncoder().encode("$ ")),
+        );
+      }
+    });
+    const client = await CoreClient.open(world);
+    expect(client.offersFloatShells).toBe(false);
+    const seen: string[] = [];
+    const ends: string[] = [];
+    const attachment = await client.attach(
+      "t3",
+      { cols: 80, rows: 24 },
+      {
+        data: (bytes) => seen.push(new TextDecoder().decode(bytes)),
+        end: (reason) => ends.push(reason),
+      },
+    );
+    await Bun.sleep(5);
+    expect(seen).toEqual(["$ "]);
+    // Nothing is credited until the consumer says it delivered the bytes.
+    expect(credits).toEqual([]);
+    attachment.credit(2);
+    attachment.detach();
+    attachment.detach();
+    await Bun.sleep(20);
+    expect(ends).toEqual(["detached"]);
+    expect(seen).toEqual(["$ "]);
+    expect(credits).toEqual([2]);
+    expect(client.closed).toBe(false);
+    client.close();
+  });
+
+  test("attach: a connection that ends mid-stream ends the viewer once", async () => {
+    const { fake, client } = await connected();
+    const address = fake.create({ name: "shell" });
+    const ends: string[] = [];
+    await client.attach(
+      address,
+      { cols: 80, rows: 24 },
+      {
+        data: () => {},
+        end: (reason) => ends.push(reason),
+      },
+    );
+    fake.kill();
+    await Bun.sleep(10);
+    expect(ends.length).toBe(1);
+    expect(client.closed).toBe(true);
+  });
 });

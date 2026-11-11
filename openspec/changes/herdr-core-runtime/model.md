@@ -114,6 +114,19 @@ occupant at dispatch from the actual one at core's input boundary (where the
 owner rulings place the queued-send window, upstream Q3). Until then, fence
 behaviour is checked by unit and integration tests, not by this replay.
 
+World's float shell (the room shell that replaces Herdr Float on core) adds no
+model action. Its run, attach and end go through the same `CoreOperationFence`
+(lease, generation and core process at dispatch and publication; the program
+occupant for end, deliberately not its foreground), so it inherits this seam
+and its tests. One shell per room is core's own live-name uniqueness, observed
+by World rather than decided by it; the first paint waiting for the open reply
+and credit returned only as a browser drains are one socket's framing and flow,
+outside this model's claims, as is a view cancelled while it opens (its late
+attachment is detached at once). `float-shell.test.ts` injects each fault
+(`kill -9` mid-stream, EOF, a split UTF-8 character, an oversized `missed`,
+exhausted credit, a replaced occupant, a foreign terminal holding the name) and
+`core.live.test.ts` repeats the flow against the release.
+
 ## Shared seen (issue #868)
 
 [`quint/herdr-core-seen.qnt`](../../../quint/herdr-core-seen.qnt) is a separate

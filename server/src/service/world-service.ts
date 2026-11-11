@@ -199,6 +199,7 @@ async function compose(
     closed: (socket) => {
       focusedAcquisition.release(socket);
       deskWatches.release(socket);
+      core.floats.releaseFor(socket);
     },
     countChanged: publishConnectionsChanged,
   });
@@ -781,8 +782,7 @@ async function compose(
     clients,
     connectionManager,
     connectionProfiles,
-    coreConnections: core.manager,
-    coreFixture: core.fixture,
+    core,
     focusedAcquisition,
     agentActivity,
     deskWatches,
