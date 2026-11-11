@@ -275,8 +275,8 @@ async function compose(
     publishBoardChanged,
   );
 
-  /** The agent CLI (world-cli-service.ts). */
   const worldCli = createWorldCliService({
+    core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
     attention: () => storage.attention(),
@@ -286,8 +286,6 @@ async function compose(
     now: () => clock.now(),
     incarnation: storage.incarnation,
     connections: () => connectionManager,
-    // herdr-core callers (P4); composed below, read only when a call arrives.
-    core: () => coreCallers,
     snapshots: () => worldSnapshots,
     sources: async () => worldSources.current(),
     townMoveQueues,

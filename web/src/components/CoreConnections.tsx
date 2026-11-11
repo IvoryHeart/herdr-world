@@ -378,7 +378,16 @@ export function CoreFixturePanel({
 }: {
   pending: string | null;
   run: (
-    action: "start" | "kill" | "remove" | "pane" | "turn" | "unread" | "pin",
+    action:
+      | "start"
+      | "kill"
+      | "remove"
+      | "pane"
+      | "turn"
+      | "unread"
+      | "pin"
+      | "replace"
+      | "lose-reply",
     success: string,
   ) => void;
 }) {
@@ -402,6 +411,30 @@ export function CoreFixturePanel({
           onClick={() => run("start", "Fixture core is running.")}
         >
           Start fixture core
+        </button>
+        <button
+          type="button"
+          disabled={!!pending}
+          onClick={() =>
+            run(
+              "replace",
+              "Reviewer was replaced with a shell. Its open Chat must refuse sending.",
+            )
+          }
+        >
+          Replace reviewer with shell
+        </button>
+        <button
+          type="button"
+          disabled={!!pending}
+          onClick={() =>
+            run(
+              "lose-reply",
+              "The next input loses its reply. Expect Uncertain; it will not retry.",
+            )
+          }
+        >
+          Lose next input reply
         </button>
         <button
           type="button"

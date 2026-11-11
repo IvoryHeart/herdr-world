@@ -48,6 +48,7 @@ export function projectAgent(
           : "bar",
     stale: leaf.stale,
     canOpenInSpaces: leaf.capabilities.openSpaces,
+    ...(leaf.pane.runtime === "herdr-core" ? { coreChat: true } : {}),
     ...(leaf.viewOnly
       ? {
           viewOnly: {

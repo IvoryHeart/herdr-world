@@ -21,7 +21,7 @@ module herdr_core_runtime {
     queue: List[Event], seq: int, cursor: int, epoch: int, generation: int, owner: int,
     connected: bool, ready: bool, running: bool, changes: int, replaced: bool,
     captured: bool, leaseGen: int, leaseOwner: int, leaseEpoch: int, session: int,
-    pending: bool, queued: bool, uncertain: bool, attempts: int, delivered: int,
+    foreground: bool, pending: bool, queued: bool, uncertain: bool, attempts: int, delivered: int,
     admitted: bool, dispatched: bool, published: bool, safe: bool,
     child: bool, planned: bool, confirmedChild: bool, confirmedOccupant: int, killed: bool,
     planGen: int, planOwner: int, planEpoch: int, tornDown: bool, removed: bool,
@@ -43,7 +43,7 @@ module herdr_core_runtime {
       seq: 0, cursor: -1, epoch: 0, generation: 0, owner: 0,
       connected: false, ready: false, running: true, changes: 0, replaced: false,
       captured: false, leaseGen: -1, leaseOwner: -1, leaseEpoch: -1, session: -1,
-      pending: false, queued: false, uncertain: false, attempts: 0, delivered: 0,
+      foreground: true, pending: false, queued: false, uncertain: false, attempts: 0, delivered: 0,
       admitted: false, dispatched: false, published: false, safe: true,
       // Terminal 1, once born, is a child core ends with terminal 0 (M7).
       child: choice == 2 or choice == 3, planned: false, confirmedChild: false,
@@ -161,14 +161,18 @@ module herdr_core_runtime {
       leaseEpoch: c.epoch, session: c.source[0].occupant,
       admitted: true, safe: c.safe and c.connected }, "capture", 0),
   }
+  action loseForeground = all {
+    family == "authority", c.foreground,
+    change({ ...c, foreground: false }, "loseForeground", 0),
+  }
   action dispatch = all {
     c.captured, c.attempts == 0,
     val allowed = (lease or (fault("same-core-stale") and c.ready) or
       (fault("profile-fallback") and c.ready and c.generation == c.leaseGen) or
-      fault("not-ready")) and (occupant or fault("stale-session"))
+      fault("not-ready")) and (occupant or fault("stale-session")) and (c.foreground or fault("missing-foreground"))
     change({ ...c, attempts: if (allowed) 1 else 0,
       pending: allowed, queued: allowed, dispatched: allowed,
-      safe: c.safe and (not(allowed) or (lease and occupant)) }, "dispatch", 0),
+      safe: c.safe and (not(allowed) or (lease and occupant and c.foreground)) }, "dispatch", 0),
   }
   action deliver = all {
     c.queued,
@@ -192,6 +196,9 @@ module herdr_core_runtime {
   action queuedReplacement = all { c.queued, replace }
   // Sampling weight only: a child core starts after World planned a kill.
   action childAfterPlan = all { c.planned, not(c.killed), emit(1, "create") }
+  // Exercise a dropped nonlast delta followed by its later event explicitly.
+  action dropFirst = all { c.queue.length() > 1, drop }
+  action receiveGap = all { c.queue.length() > 0, c.queue.head().seq > c.cursor + 1, receive }
   // M7: World names everything a kill ends from its observation; the kill
   // is sent only while that observation still matches what was confirmed:
   // no unconfirmed child would die and the terminal runs the same program.
@@ -337,7 +344,7 @@ module herdr_core_runtime {
     nondet t = Set(0, 1).oneOf()
     nondet kind = Set("create", "remove", "x", "y").oneOf()
     any { connect, baseline, emit(t, kind), receive, missed, drop, heartbeat,
-      disconnect, restart, absent, switchProfile, replace, capture, dispatch, deliver, complete, recover,
+      disconnect, restart, absent, switchProfile, replace, loseForeground, capture, dispatch, deliver, complete, recover,
       plan, kill, teardown, removeCheckout }
   }
   // The observe family's own choices. The simulator's weighting depends on
@@ -356,6 +363,7 @@ module herdr_core_runtime {
     else if (family == "observe") any { observeChoices,
       watch, watch, frame, frame, frame, stall, stall, drain, drain, baseline, baseline }
     else any { choices, capture, dispatch,
+      dropFirst, dropFirst, receiveGap, receiveGap,
       queuedReplacement, queuedReplacement, queuedReplacement, queuedReplacement,
       plan, plan, kill, kill, childAfterPlan, childAfterPlan, childAfterPlan,
       teardown, teardown, teardown, removeCheckout, removeCheckout, removeCheckout }
@@ -373,6 +381,11 @@ module herdr_core_runtime {
   // retirement guard, which would mask a missing sequence-gap guard.
   val noReceiveGap = not(op == "receive" and c.connected and not(c.ready) and
     c.mirror[target].born and c.mirror[target].alive)
+  // Worktree actions change sampling weights; explicitly find the old-plan
+  // replacement refusal for the production pid-only kill control. Use no
+  // child so the independent unconfirmed-cascade guard cannot mask it.
+  val noStaleKillAttempt = not(op == "kill" and not(c.child) and c.ready and c.planned and
+    c.mirror[0].alive and c.mirror[0].occupant != c.confirmedOccupant)
   val reconnected = op == "baseline" and c.generation == 2 and c.ready
   val replacementFenced = op == "dispatch" and c.replaced and c.attempts == 0
   val queueFenced = op == "deliver" and c.replaced and c.delivered == 0

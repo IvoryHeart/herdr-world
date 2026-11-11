@@ -1,3 +1,5 @@
+import { CliError } from "./world-cli-errors";
+import type { WorldCliRequest } from "./world-cli-protocol";
 import { createHash } from "node:crypto";
 import {
   paneRoots,
@@ -173,7 +175,7 @@ export async function identifyCaller(
   paneId: string | undefined,
   locate: CallerLocator | null,
   core?: { terminal?: string; source: CoreCallerSource | null },
-): Promise<{ actor: CliActor; host?: CliHost }> {
+): Promise<{ actor: CliActor; host?: CliHost; distance?: number }> {
   const coreTerminal =
     core?.terminal && CORE_TERMINAL.test(core.terminal)
       ? core.terminal
@@ -182,7 +184,7 @@ export async function identifyCaller(
     return { actor: { label: NO_PANE, verified: false } };
   const matches: {
     distance: number;
-    resolve(): Promise<{ actor: CliActor; host?: CliHost }>;
+    resolve(): Promise<{ actor: CliActor; host?: CliHost; distance?: number }>;
   }[] = [];
   if (locate && paneId)
     for (const host of hosts) {
@@ -220,7 +222,8 @@ export async function identifyCaller(
       });
   const nearest = Math.min(...matches.map((match) => match.distance));
   const winners = matches.filter((match) => match.distance === nearest);
-  if (winners.length === 1) return winners[0]!.resolve();
+  if (winners.length === 1)
+    return { ...(await winners[0]!.resolve()), distance: nearest };
   if (paneId)
     return {
       actor: {
@@ -295,4 +298,66 @@ export async function paneActor(
       ...(agent ? { agent } : {}),
     },
   };
+}
+
+/** Verify both inherited runtime claims and choose the nearest ancestor PTY. */
+export async function identifyWorldCaller(
+  hosts: readonly CliHost[],
+  caller: WorldCliRequest["caller"],
+  locate: CallerLocator | null,
+  identifyCore:
+    | ((
+        terminal: string,
+        locate: CallerLocator | null,
+      ) => Promise<{ actor: CliActor; distance: number } | undefined>)
+    | undefined,
+  source?: CoreCallerSource | null,
+): Promise<{ actor: CliActor; host?: CliHost }> {
+  const usage = (message: string): never => {
+    throw new CliError("usage", message);
+  };
+  const paneId =
+    typeof caller?.pane_id === "string" && caller.pane_id.trim()
+      ? caller.pane_id.trim()
+      : undefined;
+  if (
+    paneId !== undefined &&
+    !/^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}$/.test(paneId)
+  )
+    usage("HERDR_PANE_ID is not a Herdr pane ID");
+  const coreTerminal = caller?.core_terminal_id ?? caller?.core_terminal;
+  if (
+    coreTerminal !== undefined &&
+    (typeof coreTerminal !== "string" || !CORE_TERMINAL.test(coreTerminal))
+  )
+    usage("HC_TERMINAL_ID is not a core terminal ID");
+  if (source || caller?.core_terminal !== undefined)
+    return identifyCaller(hosts, paneId, locate, {
+      terminal: typeof coreTerminal === "string" ? coreTerminal : undefined,
+      source: source ?? null,
+    });
+  const core =
+    typeof coreTerminal === "string"
+      ? await identifyCore?.(coreTerminal, locate)
+      : undefined;
+  const tui = await identifyCaller(hosts, paneId, locate);
+  if (core && tui.actor.verified) {
+    if (
+      tui.distance === undefined ||
+      tui.distance < 0 ||
+      core.distance === tui.distance
+    )
+      return { actor: { label: "ambiguous runtime claims", verified: false } };
+    return core.distance < tui.distance ? { actor: core.actor } : tui;
+  }
+  if (core) return { actor: core.actor };
+  return typeof coreTerminal !== "string"
+    ? tui
+    : {
+        actor: {
+          label: `unverified ${coreTerminal}`,
+          verified: false,
+          pane_id: coreTerminal,
+        },
+      };
 }

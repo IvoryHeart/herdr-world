@@ -131,6 +131,7 @@ export function createCoreConnections(args: {
       if (!attention)
         attentions.set(profile.id, (attention = new CoreAttention()));
       return createCoreConnectionRuntime({
+        local: profile.type === "local",
         firstSight,
         attention,
         onAlerts: (alerts, terminals, coreName) => {

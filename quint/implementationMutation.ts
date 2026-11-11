@@ -36,7 +36,8 @@ export type ImplementationFault =
   | "seen-forget-look"
   | "seen-hidden-look"
   | "seen-stale-look"
-  | "seen-blind-write";
+  | "seen-blind-write"
+  | "core-missing-foreground";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
@@ -54,6 +55,7 @@ export async function mutateImplementation(
       "core-watch-interactive",
       "core-watch-unconfirmed",
       "core-watch-order",
+      "core-missing-foreground",
     ],
     "herdr-core-seen": [
       "seen-forget-look",
@@ -115,21 +117,23 @@ export async function mutateImplementation(
       ? "server/src/storage/effect-transitions.ts"
       : name === "herdr-core-runtime" && fault === "core-view-retired"
         ? "server/src/herdr-core/topology.ts"
-        : name === "herdr-core-runtime" && fault.startsWith("core-kill-")
-          ? "server/src/herdr-core/kill-plan.ts"
-          : name === "herdr-core-runtime" &&
-              (fault === "core-watch-interactive" ||
-                fault === "core-watch-unconfirmed")
-            ? "server/src/herdr-core/client.ts"
-            : name === "herdr-core-runtime" && fault === "core-watch-order"
-              ? "web/src/coreWatch.ts"
-              : name === "herdr-core-seen" && fault === "seen-blind-write"
-                ? "server/src/herdr-core/shared-state.ts"
-                : name === "observation-base" && fault === "incarnation-reset"
-                  ? "web/src/world/observationBase.ts"
-                  : name === "creation-flow" && fault === "admission-fence"
-                    ? "web/src/world/createdTerminalAdmission.ts"
-                    : owners[name];
+        : name === "herdr-core-runtime" && fault === "core-missing-foreground"
+          ? "server/src/herdr-core/recipient.ts"
+          : name === "herdr-core-runtime" && fault.startsWith("core-kill-")
+            ? "server/src/herdr-core/kill-plan.ts"
+            : name === "herdr-core-runtime" &&
+                (fault === "core-watch-interactive" ||
+                  fault === "core-watch-unconfirmed")
+              ? "server/src/herdr-core/client.ts"
+              : name === "herdr-core-runtime" && fault === "core-watch-order"
+                ? "web/src/coreWatch.ts"
+                : name === "herdr-core-seen" && fault === "seen-blind-write"
+                  ? "server/src/herdr-core/shared-state.ts"
+                  : name === "observation-base" && fault === "incarnation-reset"
+                    ? "web/src/world/observationBase.ts"
+                    : name === "creation-flow" && fault === "admission-fence"
+                      ? "web/src/world/createdTerminalAdmission.ts"
+                      : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "herdr-core-runtime") {
@@ -153,6 +157,10 @@ export async function mutateImplementation(
       "core-kill-pid-only": [
         "if (was.pid !== ending.pid || (was.occupant ?? null) !== ending.occupant)",
         "if (was.pid !== ending.pid)",
+      ],
+      "core-missing-foreground": [
+        'return known && foreground === nowForeground ? null : "changed";',
+        'return !known || foreground === nowForeground ? null : "changed";',
       ],
       // A child started after the confirmation passes unnamed.
       "core-kill-plan-once": [

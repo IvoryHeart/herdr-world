@@ -94,3 +94,8 @@ export function harnessOfArgv(argv: unknown, depth = 0): string | null {
   }
   return harnessName(program);
 }
+
+/** Every harness World recognises in core (Herdr's and the desktop app's). */
+export function coreHarnessNames(): string[] {
+  return [...new Set(NAMES.values())];
+}

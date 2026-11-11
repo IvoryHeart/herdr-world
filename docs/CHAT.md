@@ -1,5 +1,24 @@
 # Chat and the conversation read model
 
+For an agent on **herdr-core**, opening it in Town, Board, Desk or Needs you
+opens core Chat. **Send** uses core's native send, **Answer** forces a typed
+answer only while core reports it blocked, and the answer keys use core's own
+key encoding. Every harness uses this same path. The conversation transcript
+is currently unavailable; **Read question screen** is a separate, screen-only
+read with no history or injected input.
+
+World keeps the recipient you opened, checks a fresh native terminal record and
+its observed foreground before dispatch, and refuses if the program changed or
+evidence is missing. Reopen Chat to address a newly verified occupant. **Sent**
+means core accepted the input; it does not prove the agent read it.
+**Uncertain** means the reply was lost or the recipient changed during delivery;
+World clears that submitted text and never retries it automatically. A core
+send may wait for a person's draft or quiet. World requests cancellation on an
+observed replacement, but core can still type queued input into a replacement
+between World's check and execution (upstream Q3).
+
+The transcript and harness-specific features below describe the TUI provider.
+
 The Inspector's **Chat** tab shows an agent's conversation as messages and lets
 you reply. Chat replaces the History tab. The **Terminal** tab remains a separate
 view that you open on purpose.

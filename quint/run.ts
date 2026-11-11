@@ -496,7 +496,9 @@ async function command(
     assert.notEqual(code, 0, `${label}: faulty model unexpectedly passed`);
     assert.match(
       log,
-      /Invariant violated|invariant.*violat/i,
+      args[0] === "verify"
+        ? /Invariant violated|invariant.*violat|\[violation\] Found an issue/i
+        : /Invariant violated|invariant.*violat/i,
       `${label}: failed without invariant counterexample`,
     );
   } else {

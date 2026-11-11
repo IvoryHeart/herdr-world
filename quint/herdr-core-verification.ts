@@ -142,6 +142,26 @@ export async function runCoreVerification(h: Harness) {
     await h.command(
       `core-${fault}-control`,
       [
+        "verify",
+        mutant,
+        "--main",
+        "herdr_core_runtime",
+        "--backend",
+        "tlc",
+        "--invariant",
+        "safety",
+        "--verbosity",
+        "1",
+        "--out-itf",
+        counterexample,
+      ],
+      true,
+    );
+    // TLC establishes the violation exhaustively; its backend emits no ITF.
+    // Collect a concrete replay witness separately through the simulator.
+    await h.command(
+      `core-${fault}-trace`,
+      [
         "run",
         mutant,
         "--main",
@@ -151,7 +171,7 @@ export async function runCoreVerification(h: Harness) {
         "--seed",
         "42",
         "--max-samples",
-        "10000",
+        "200000",
         "--max-steps",
         "25",
         "--invariant",
@@ -221,35 +241,42 @@ export async function runCoreVerification(h: Harness) {
   assert(fixtureControl, "ungated fake input must diverge on a valid trace");
   // Production negative controls: each mutant CoreMirror must be rejected by
   // a valid model trace, through the same core.state observation. A receive
-  // gap is rare under sampling, so a valid witness of it is searched for.
-  const gapWitness = `${h.artifacts}/core-receive-gap-witness.itf.json`;
-  await h.command(
-    "core-receive-gap-witness",
-    [
-      "run",
-      model,
-      "--main",
-      "herdr_core_runtime",
-      "--backend",
-      "typescript",
-      "--seed",
-      "42",
-      "--max-samples",
-      "20000",
-      "--max-steps",
-      "25",
-      "--invariant",
-      "noReceiveGap",
-      "--verbosity",
-      "1",
-      "--out-itf",
-      gapWitness,
-    ],
-    true,
-  );
-  const gapStates = await load(resolve(h.root, gapWitness));
-  replayCore(gapStates);
-  const candidates = [gapStates, ...allStates];
+  // gap and an old kill plan after replacement are rare under the combined
+  // worktree/send sampling, so search explicitly for both valid witnesses.
+  const candidates = [...allStates];
+  for (const [name, invariant, samples] of [
+    ["receive-gap", "noReceiveGap", 20000],
+    ["stale-kill", "noStaleKillAttempt", 200000],
+  ] as const) {
+    const witness = `${h.artifacts}/core-${name}-witness.itf.json`;
+    await h.command(
+      `core-${name}-witness`,
+      [
+        "run",
+        model,
+        "--main",
+        "herdr_core_runtime",
+        "--backend",
+        "typescript",
+        "--seed",
+        "42",
+        "--max-samples",
+        String(samples),
+        "--max-steps",
+        "25",
+        "--invariant",
+        invariant,
+        "--verbosity",
+        "1",
+        "--out-itf",
+        witness,
+      ],
+      true,
+    );
+    const states = await load(resolve(h.root, witness));
+    replayCore(states);
+    candidates.unshift(states);
+  }
   const implementationControls = [];
   for (const fault of coreImplementationFaults) {
     const subjects = (await import(await h.mutate(fault))) as CoreSubjects;

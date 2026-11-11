@@ -1,3 +1,8 @@
+export {
+  coreFaults,
+  coreWitnesses,
+  coreImplementationFaults,
+} from "./herdr-core-cases";
 import assert from "node:assert/strict";
 import { observe } from "./observations";
 import * as productionSubjects from "./herdr-core-subjects";
@@ -8,47 +13,6 @@ import type { CoreEventLine } from "../server/src/herdr-core/client";
 export type CoreSubjects = typeof productionSubjects;
 type ProductionMirror = InstanceType<CoreSubjects["CoreMirror"]>;
 
-export const coreFaults = [
-  "keep-cursor",
-  "stale-after-missed",
-  "replay-write",
-  "same-core-stale",
-  "profile-fallback",
-  "lost-delta",
-  "gap-admitted",
-  "not-ready",
-  "stale-session",
-  "ungated-queue",
-  "heartbeat-ignored",
-  "unconfirmed-cascade",
-  "stale-confirmation",
-  "teardown-unconfirmed",
-  "remove-before-kill",
-  "remove-after-retire",
-  "interactive-attach",
-  "unconfirmed-accepted",
-  "paint-before-resize",
-  "stale-stream",
-  "observer-input",
-] as const;
-export const coreWitnesses: readonly string[] = [
-  "orderedDelta",
-  "missedCut",
-  "gapRetired",
-  "reconnected",
-  "replacementFenced",
-  "queueFenced",
-  "existingOnly",
-  "cascadeConfirmed",
-  "unconfirmedCascadeRefused",
-  "watchAdopted",
-  "observerAlone",
-  "headlessFollowed",
-  "stallReleased",
-  "unconfirmedRefused",
-  "worktreeRemoved",
-  "teardownFenced",
-];
 type Terminal = {
   alive: boolean;
   born: boolean;
@@ -83,6 +47,7 @@ export type CoreState = {
   leaseOwner: number;
   leaseEpoch: number;
   session: number;
+  foreground: boolean;
   pending: boolean;
   queued: boolean;
   uncertain: boolean;
@@ -159,6 +124,7 @@ export class CoreProtocolFake {
     leaseOwner: -1,
     leaseEpoch: -1,
     session: -1,
+    foreground: true,
     pending: false,
     queued: false,
     uncertain: false,
@@ -454,9 +420,28 @@ export class CoreProtocolFake {
         s.session = s.source[0]!.occupant;
         s.admitted = true;
         break;
+      case "loseForeground":
+        assert(s.foreground);
+        s.foreground = false;
+        break;
       case "dispatch": {
         assert(s.captured && s.attempts === 0);
-        const allowed = this.lease() && this.occupant();
+        // Drive the production recipient comparison as well as the original lease.
+        const original = {
+          ...this.record(0, { ...s.source[0]!, occupant: s.session }),
+          remote: false,
+          foreground: { pid: 101, name: "agent" },
+        };
+        const token = this.subjects.coreRecipientToken("core", original)!;
+        const current = {
+          ...this.record(0, s.source[0]!),
+          remote: false,
+          foreground: s.foreground ? { pid: 101, name: "agent" } : null,
+        };
+        const allowed =
+          this.lease() &&
+          this.occupant() &&
+          this.subjects.coreRecipientChange(token, "core", current) === null;
         s.attempts = allowed ? 1 : 0;
         s.pending = allowed;
         s.queued = allowed;
@@ -592,6 +577,7 @@ export function validateCoreTrace(
         "switchProfile",
         "replace",
         "capture",
+        "loseForeground",
         "dispatch",
         "deliver",
         "complete",
@@ -647,7 +633,15 @@ export function validateCoreTrace(
         ]);
         for (const key of ["x", "y", "occupant"])
           assert(
-            Number.isSafeInteger(t[key]) && t[key] >= 0 && t[key] <= eventBound,
+            Number.isSafeInteger(t[key]) &&
+              t[key] >= 0 &&
+              // A stale-after-missed mutant can apply each source delta twice.
+              // Admit its counterexample so production replay, not parsing,
+              // rejects it. Source history retains its exact event bound.
+              t[key] <=
+                (group === item.c.mirror && key !== "occupant"
+                  ? 2 * eventBound
+                  : eventBound),
           );
       }
     }
@@ -755,16 +749,3 @@ export function replayCore(
   }
   return witnesses;
 }
-
-export const coreImplementationFaults = [
-  "core-gap",
-  "core-heartbeat",
-  "core-stale",
-  "core-missed-cut",
-  "core-view-retired",
-  "core-kill-pid-only",
-  "core-kill-plan-once",
-  "core-watch-interactive",
-  "core-watch-unconfirmed",
-  "core-watch-order",
-] as const;

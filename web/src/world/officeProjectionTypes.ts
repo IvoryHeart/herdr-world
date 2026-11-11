@@ -41,6 +41,7 @@ export type OfficeAgent = {
   placement: OfficeAgentPlacement;
   stale: boolean;
   canOpenInSpaces: boolean;
+  coreChat?: boolean;
   /** Why World only watches this agent (herdr-core), and its own words. */
   /** `watch`: its terminal can be watched (never typed into). */
   viewOnly?: { reason: string; message: string; watch: boolean };

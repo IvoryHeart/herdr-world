@@ -1,3 +1,4 @@
+import { deliverCore } from "../herdr-core/delivery";
 import { CoreFenceError } from "../herdr-core/fence";
 import { CoreRpcError } from "../herdr-core/client";
 import {
@@ -155,6 +156,39 @@ export function createAnswerDispatcher(deps: {
           reason: "Original answer binding is unavailable",
         };
       const prompt = answerPrompt(ask);
+      if (binding.core) {
+        try {
+          const result = await deliverCore(
+            binding.lease,
+            recipient.pane_id,
+            recipient.conversation.fingerprint,
+            { kind: "message", text: prompt.text },
+            {
+              beforeSubmit: () => context.beforeSubmit(),
+              guard: () => actorAllowed(entry) && context.guard(),
+            },
+          );
+          if (result.status === "sent")
+            return {
+              state: "delivered",
+              receipt: {
+                source: "herdr-core",
+                turn: result.turn,
+                fingerprint: recipient.conversation.fingerprint,
+                pointer: prompt.pointer,
+              },
+            };
+          if (result.status === "uncertain")
+            return { state: "uncertain", reason: result.message };
+          return {
+            state: "refused",
+            reason: result.message,
+            not_submitted: true,
+          };
+        } finally {
+          bindings.delete(entry.id);
+        }
+      }
       let marked = false,
         confirmed = false;
       try {

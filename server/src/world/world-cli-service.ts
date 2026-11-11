@@ -1,3 +1,7 @@
+import {
+  identifyCoreAsker,
+  type CoreAnswerConnections,
+} from "../herdr-core/ask-recipient";
 import { createAskRecipients, type AnswerLease } from "./ask-recipient";
 import type { CoreCallerSource } from "./world-cli-actor";
 import { createAnswerRecorder } from "./answer-record";
@@ -31,6 +35,7 @@ import type { TownMoveContext } from "./town-move";
 type Lease = AnswerLease;
 
 export function createWorldCliService(deps: {
+  core?(): CoreAnswerConnections | CoreCallerSource | null;
   ledger(): LedgerStore;
   attention?(): WorldLedgerStorage["outbox"];
   effects?(): WorldLedgerStorage["effects"];
@@ -48,11 +53,6 @@ export function createWorldCliService(deps: {
   snapshots(): {
     snapshot(params: Record<string, never>): Promise<WorldSnapshotResult>;
   } | null;
-  /**
-   * herdr-core connections (P4), read when a call arrives: callers inside
-   * core terminals are verified and bound to their program there.
-   */
-  core?(): CoreCallerSource | null;
   sources?(): Promise<WorldSourcesSnapshot>;
   townMoveQueues: TownMoveContext["queues"];
   publishBoard(revision: number): void;
@@ -76,7 +76,7 @@ export function createWorldCliService(deps: {
   let deliveryRevision = 0;
   const recipients = createAskRecipients({
     connections: deps.connections,
-    ...(deps.core ? { core: deps.core } : {}),
+    core: deps.core,
     clock: deps.clock ?? { now, monotonic: () => performance.now() },
     incarnation,
   });
@@ -200,6 +200,12 @@ export function createWorldCliService(deps: {
       log: (message) => console.warn(message),
     });
   const cli = createWorldCli({
+    identifyCore: async (terminal, locate) => {
+      const core = deps.core?.();
+      return core && "list" in core
+        ? identifyCoreAsker(core, terminal, locate)
+        : undefined;
+    },
     recordAnswer: recordAnswer
       ? async (id, text, actor, recheck) => {
           const revision = await recordAnswer(
@@ -284,7 +290,10 @@ export function createWorldCliService(deps: {
             },
           ];
         }),
-    ...(deps.core ? { core: deps.core } : {}),
+    core: () => {
+      const core = deps.core?.();
+      return core && "hosts" in core ? core : null;
+    },
     defaultConnectionId: () => deps.connections().defaultId(),
     snapshot: async () => {
       const snapshots = deps.snapshots();

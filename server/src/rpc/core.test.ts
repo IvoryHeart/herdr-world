@@ -74,6 +74,39 @@ async function world() {
 }
 
 describe("world.core.* answers only the core connection it names", () => {
+  test("browser input binds the original recipient, rejects replacement, and checks generation", async () => {
+    const w = await world();
+    const t = w.fake.create({
+      argv: ["claude"],
+      foreground: { pid: 77, name: "claude", argv: ["claude"] },
+    });
+    await w.settle();
+    const pane = (await w.rows()).panes.find((p) => p.pane_id === t)!;
+    const params = {
+      connection_id: "box",
+      connection_generation: w.lease().generation,
+      terminal: t,
+      recipient: pane.core_recipient,
+      text: "hello",
+    };
+    expect(
+      (await call(w, "world.core.send", params)).reply?.result,
+    ).toMatchObject({ status: "sent" });
+    expect(
+      (
+        await call(w, "world.core.send", {
+          ...params,
+          connection_generation: -1,
+        })
+      ).error,
+    ).toContain("reconnected");
+    w.fake.replaceWithShell(t);
+    await w.settle();
+    expect(
+      (await call(w, "world.core.send", params)).reply?.result,
+    ).toMatchObject({ status: "refused", reason: "changed" });
+    expect(w.fake.deliveredInput).toHaveLength(1);
+  });
   test("a stale generation or a TUI connection is refused, nothing sent", async () => {
     const w = await world();
     const generation = w.lease().generation;

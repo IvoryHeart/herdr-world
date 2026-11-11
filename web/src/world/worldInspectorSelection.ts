@@ -166,7 +166,12 @@ export function worldNodeOpenView(
  * takes a view, or null for this default (Chat, else terminal).
  */
 export const defaultOpenView = (node: WorldObjectNode) =>
-  worldNodeOpenView(node, readOfficePreferences(worldLocalStorage).townOpens);
+  node.kind === "agent" && node.pane.runtime === "herdr-core"
+    ? "history"
+    : worldNodeOpenView(
+        node,
+        readOfficePreferences(worldLocalStorage).townOpens,
+      );
 
 /** Whether the selected node's host is still ready at its generation. */
 export function ownerReady(
@@ -471,4 +476,22 @@ export function reconcileObservedInspectors(
     const replacement = after.get(id);
     return replacement ? [replacement] : [];
   });
+}
+
+/** Bind the selection owner once; abort cannot cancel a later intent. */
+export function bindWorldIntentAbort(
+  intentRequestRef: { current: number },
+  onAbort: (opening: boolean) => void,
+) {
+  return (signal: AbortSignal | undefined, requestId: number) => {
+    if (!signal) return () => {};
+    const abort = () => {
+      if (intentRequestRef.current !== requestId) return;
+      intentRequestRef.current += 1;
+      onAbort(false);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    return () => signal.removeEventListener("abort", abort);
+  };
 }
