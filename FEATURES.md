@@ -1993,14 +1993,46 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     World first saw the terminal count as seen, so done means a turn that
     ended while World watched. Marking a turn seen or unread in a Herdr app
     changes World within moments.
+  - **Seen, shared with Herdr's apps.** Looking at a core agent in World
+    clears its Done in Herdr's phone and desktop apps too: open its peek in
+    Town (tap or hover the agent) or Board (rest the mouse on its row, or
+    **Preview** on a phone) on a page that is in front of you (visible and
+    focused) for about half a second. World shares each
+    finished turn once per look: if someone marks it unread in an app while
+    the peek stays open, it stays unread until the agent finishes another
+    turn or you look again (close and reopen the peek, or come back to the
+    page). Needs you, Desk and hover cards are lists and glances, not looks,
+    and a page in the background or a host that is offline or reconnecting
+    shares nothing. Sharing is best effort: World writes only Herdr's shared
+    `herdr.seen` label, only to raise it, and only while it still holds what
+    World saw when you looked, so an app's newer look or unread wins; a write
+    that fails is not retried and the next look shares it.
+  - **Favourite.** The star in a core agent's Town or Board peek is Herdr's
+    favourite (`herdr.pinned`), shared with every Herdr app: star it in World
+    and the apps pin it; pin it in an app and World's star fills. If the
+    change fails, World says "Couldn't change the favourite in Herdr's apps".
+    Pinned desks and Board cards and Mark reviewed stay World's own.
+  - **Push.** Core agents send the same Web Push notifications as Herdr
+    agents (Menu → Behavior & automation → Task notifications): one when an
+    agent that was working finishes, one when it starts needing you
+    (blocked or error), from core's own status events under the same rule as
+    Herdr's apps. Sub-agents, linked-machine terminals, agents World sees for
+    the first time and a program that replaced another at the same address
+    are quiet. A turn that ends while World is disconnected from core pushes
+    once when it reconnects, unless someone already saw it in a Herdr app.
+    The `--notification-source herdr` setting does not apply to core: core
+    has no notifications of its own, so its pushes always follow status.
+    When World has more than one connection, Herdr or herdr-core, every push
+    names the connection it came from.
   - **View only for now.** World cannot control core agents yet: Open
     terminal, Chat, answers, Mark reviewed, New agent, Add room, rename and
     close stay visible but disabled, with "View only: World can't control
     herdr-core agents yet"; Board's bin and opening a core card say the same.
     Tapping a core agent in Town shows its peek; Needs you, Desk and peeks show the program's own status message
     (or why it waits: permission, a question, sign-in) instead of a
-    conversation. World reads only core's event stream: it never types,
-    resizes, labels or writes status.
+    conversation. World reads core's event stream and writes only the two
+    shared labels below (`herdr.seen`, `herdr.pinned`): it never types,
+    resizes, writes other labels or writes status.
   - **Stale.** When core stops, its agents stay where they were, marked
     offline with their last state, and return at the same addresses when it
     is back. Lost ordering shows them stale until World has a fresh snapshot.
@@ -2011,7 +2043,11 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   waiting for an answer and *builder* (Codex) is working; *scout* (Gemini)
   finishes its turn about three seconds after the start (done); *helper*
   (OpenCode, no status reporting) and a shell are unplaced. **Kill fixture
-  core** stops it like `kill -9`, and **Remove fixture** deletes both. The
+  core** stops it like `kill -9`, and **Remove fixture** deletes both. Three
+  more buttons stand in for a person using Herdr's apps on *scout*: **Scout:
+  finish another turn** (working, then done about three seconds later),
+  **Another app: mark scout unread** (`herdr.seen` = turn − 1; refused until
+  scout has finished a turn) and **Another app: pin or unpin scout**. The
   stand-in runs inside the World service and starts no program. The fixture
   only touches its own connection: if a connection you made already uses the
   ID `core-fixture`, **Start fixture core** and **Remove fixture** refuse and
