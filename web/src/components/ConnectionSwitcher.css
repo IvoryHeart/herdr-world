@@ -345,6 +345,30 @@
   white-space: nowrap;
 }
 
+/* A herdr-core connection's observed terminals (live or stale). */
+.connection-core-terminals {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  font-size: 11px;
+}
+
+.connection-core-terminals code {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-code);
+}
+
+.modal fieldset.form-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
 .connection-profile-error {
   display: flex;
   align-items: flex-start;

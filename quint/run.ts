@@ -676,6 +676,8 @@ export async function runReviewedQuintModels(
           output,
           artifacts,
           command,
+          mutate: (fault) =>
+            implementationMutation("herdr-core-runtime", fault),
         });
         results.push(result);
         console.log(JSON.stringify(result));

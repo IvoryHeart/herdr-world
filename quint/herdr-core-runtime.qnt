@@ -174,6 +174,8 @@ module herdr_core_runtime {
   val orderedDelta = op == "receive" and c.ready and c.cursor > 0
   val missedCut = op == "missed"
   val gapRetired = (op == "heartbeat" or op == "receive") and not(c.ready)
+  // Rare under sampling; production controls search for it directly.
+  val noReceiveGap = not(op == "receive" and c.connected and not(c.ready))
   val reconnected = op == "baseline" and c.generation == 2 and c.ready
   val replacementFenced = op == "dispatch" and c.replaced and c.attempts == 0
   val queueFenced = op == "deliver" and c.replaced and c.delivered == 0

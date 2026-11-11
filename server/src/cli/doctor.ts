@@ -7,7 +7,7 @@ import {
   testConnectionSockets,
 } from "../connections/profile-service";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
-import { ConnectionProfileStore } from "../connections/profiles";
+import { ConnectionProfileStore, isCoreProfile } from "../connections/profiles";
 import { herdrServiceStatus } from "../herdr/service";
 import {
   compareVersion,
@@ -294,6 +294,12 @@ async function herdrCheck(
     const profile = bootstrap.registrations.find(
       ({ profile }) => profile.id === bootstrap.defaultConnectionId,
     )?.profile;
+    if (isCoreProfile(profile))
+      return {
+        name: "Herdr",
+        status: "skip",
+        detail: "the default connection is herdr-core",
+      };
     if (profile?.type === "ssh")
       return {
         name: "Herdr",

@@ -3,6 +3,12 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { decodeItf } from "./replay";
 import { observe, expectObservationMismatch } from "./observations";
+import * as productionSubjects from "./herdr-core-subjects";
+import type { CoreEventLine } from "../server/src/herdr-core/client";
+
+/** The production modules a replay drives; mutant bundles replace them. */
+export type CoreSubjects = typeof productionSubjects;
+type ProductionMirror = InstanceType<CoreSubjects["CoreMirror"]>;
 
 export const coreFaults = [
   "keep-cursor",
@@ -84,9 +90,11 @@ const terminal = (): Terminal => ({
   occupant: 0,
 });
 
-// In-process protocol fake for the design seam. It is deliberately not a core
-// provider or live-core conformance claim. The model uses lists/history cuts;
-// the fake applies delta commands and retains an immutable original recipient.
+// Replay adapter. The synthetic source, queue and delayed operation are
+// simulated here; every mirror, cursor and readiness transition is decided by
+// World's production CoreMirror, fed the same baseline, event, missed and
+// heartbeat lines a core sends. Authority decisions (capture/dispatch/
+// deliver) remain the design seam: see model.md "Production mapping".
 export class CoreProtocolFake {
   state: CoreState = {
     source: [terminal(), { ...terminal(), alive: false, born: false }],
@@ -118,10 +126,82 @@ export class CoreProtocolFake {
     published: false,
     safe: true,
   };
+  /** The current connection's subscription (fresh on every connect). */
+  private latest: ProductionMirror | null = null;
+  /** The last mirror that accepted a baseline: the facts World shows. */
+  private facts: ProductionMirror | null = null;
+  /** Whether the mirror's last cut or applied creation knew each terminal. */
+  private known = [true, false];
+  /** What each queued event carried when the source emitted it. */
+  private readonly emitted = new Map<string, Terminal>();
   constructor(
     private readonly skipGate = false,
     private readonly eventBound = 2,
+    private readonly subjects: CoreSubjects = productionSubjects,
   ) {}
+  private record(index: number, t: Terminal) {
+    return {
+      address: `t${index + 1}`,
+      labels: { x: String(t.x), y: String(t.y) },
+      // A kept replacement may reuse the pid; argv still tells them apart.
+      argv: [t.occupant === 0 ? "agent" : "/bin/sh"],
+      state: "live",
+      pid: 100,
+      reported: false,
+    };
+  }
+  private snapshot() {
+    return this.state.source.flatMap((t, index) =>
+      t.alive ? [this.record(index, t)] : [],
+    );
+  }
+  private line(e: Event): CoreEventLine {
+    const address = `t${e.target + 1}`;
+    const at = this.emitted.get(`${e.epoch}:${e.seq}`)!;
+    const data =
+      e.kind === "create"
+        ? this.record(e.target, at)
+        : e.kind === "remove"
+          ? {}
+          : { labels: { x: String(at.x), y: String(at.y) } };
+    const type =
+      e.kind === "create"
+        ? "created"
+        : e.kind === "remove"
+          ? "removed"
+          : "labels";
+    return {
+      method: "event",
+      params: { seq: e.seq, type, terminal: address, data },
+    };
+  }
+  /** Projects production observation onto the model's mirror/cursor/ready. */
+  private sync() {
+    const s = this.state;
+    if (this.facts) {
+      s.mirror = s.mirror.map((_, index) => {
+        const found = this.facts!.terminal(`t${index + 1}`);
+        if (found) {
+          const labels = found.labels as Record<string, string>;
+          return {
+            alive: true,
+            born: true,
+            x: Number(labels.x),
+            y: Number(labels.y),
+            occupant: found.argv[0] === "agent" ? 0 : 1,
+          };
+        }
+        // A removed terminal has no observable facts. Removal is permanent,
+        // so once the mirror knew it, its retained values are the source's
+        // final ones; a terminal it never knew is still unborn there.
+        return this.known[index]
+          ? { ...structuredClone(s.source[index]!), alive: false }
+          : { alive: false, born: false, x: 0, y: 0, occupant: 0 };
+      });
+    }
+    if (this.latest) s.cursor = this.latest.cursor;
+    s.ready = s.connected && Boolean(this.latest?.actionable);
+  }
   private lease() {
     const s = this.state;
     return (
@@ -157,15 +237,16 @@ export class CoreProtocolFake {
       case "connect":
         assert(!s.connected && s.generation < 2);
         s.connected = s.running;
-        s.ready = false;
         s.generation++;
-        s.cursor = -1;
+        // Reconnect never keeps a cursor: a fresh subscription, unbaselined.
+        this.latest = new this.subjects.CoreMirror();
         break;
       case "baseline":
         assert(s.connected && !s.ready);
-        s.mirror = structuredClone(s.source);
-        s.cursor = s.seq;
-        s.ready = true;
+        if (this.latest!.baseline(s.seq, this.snapshot())) {
+          this.facts = this.latest;
+          this.known = s.source.map((t) => t.born);
+        }
         break;
       case "create":
       case "remove":
@@ -179,6 +260,10 @@ export class CoreProtocolFake {
         s.history.push(structuredClone(s.source));
         s.seq++;
         s.changes++;
+        this.emitted.set(
+          `${s.epoch}:${s.seq}`,
+          structuredClone(s.source[target]!),
+        );
         if (s.connected)
           s.queue.push({
             epoch: s.epoch,
@@ -191,21 +276,26 @@ export class CoreProtocolFake {
       case "receive": {
         assert(s.connected && s.ready && s.queue.length > 0);
         const e = s.queue.shift()!;
-        if (e.epoch !== s.epoch || e.gen !== s.generation || e.seq <= s.cursor)
-          break;
-        if (e.seq !== s.cursor + 1) {
-          s.ready = false;
-          break;
-        }
-        s.mirror = this.delta(s.mirror, e.target, e.kind);
-        s.cursor = e.seq;
+        // An earlier connection's bytes never reach this subscription.
+        if (e.epoch !== s.epoch || e.gen !== s.generation) break;
+        if (
+          this.latest!.apply(this.line(e)) === "applied" &&
+          e.kind === "create"
+        )
+          this.known[e.target] = true;
         break;
       }
       case "missed":
         assert(s.connected && s.queue.length > 0);
-        s.mirror = structuredClone(s.source);
-        s.cursor = s.seq;
-        s.ready = true;
+        if (
+          this.latest!.apply({
+            method: "missed",
+            params: { seq: s.seq, terminals: this.snapshot() as never },
+          }) === "applied"
+        ) {
+          this.facts = this.latest;
+          this.known = s.source.map((t) => t.born);
+        }
         break;
       case "drop":
         assert(s.queue.length > 0);
@@ -213,12 +303,12 @@ export class CoreProtocolFake {
         break;
       case "heartbeat":
         assert(s.connected && s.ready && s.seq > s.cursor);
-        s.ready = false;
+        this.latest!.apply({ method: "heartbeat", params: { seq: s.seq } });
         break;
       case "disconnect":
         assert(s.connected);
         s.connected = false;
-        s.ready = false;
+        this.latest?.retire("disconnected");
         s.uncertain ||= s.pending;
         break;
       case "restart":
@@ -227,7 +317,7 @@ export class CoreProtocolFake {
         s.seq = 0;
         s.history = [structuredClone(s.source)];
         s.connected = false;
-        s.ready = false;
+        this.latest?.retire("disconnected");
         s.uncertain ||= s.pending;
         break;
       case "absent":
@@ -243,7 +333,10 @@ export class CoreProtocolFake {
         s.source[0]!.occupant = 1;
         s.replaced = true;
         s.history[s.seq] = structuredClone(s.source);
-        s.ready = false;
+        // The model abstracts the kept replacement's lost/restarted events as
+        // a silent source change that withdraws readiness until fresh
+        // acquisition; production detects it through the occupancy token.
+        this.latest?.retire("divergence");
         break;
       case "capture":
         assert(s.ready && !s.captured && s.source[0]!.alive);
@@ -280,6 +373,7 @@ export class CoreProtocolFake {
       default:
         assert.fail(`unknown core action: ${op}`);
     }
+    this.sync();
   }
 }
 
@@ -377,11 +471,13 @@ export function replayCore(
   states: CoreTraceState[],
   skipGate = false,
   eventBound = 2,
+  subjects: CoreSubjects = productionSubjects,
 ) {
   validateCoreTrace(states, eventBound);
   const fake = new CoreProtocolFake(
     skipGate,
     states[0]!.family === "authority" ? 1 : eventBound,
+    subjects,
   );
   const witnesses = new Set<string>();
   for (const state of states) {
@@ -405,10 +501,18 @@ export function replayCore(
   return witnesses;
 }
 
+export const coreImplementationFaults = [
+  "core-gap",
+  "core-heartbeat",
+  "core-stale",
+  "core-missed-cut",
+] as const;
 type Harness = {
   root: string;
   output: string;
   artifacts: string;
+  /** Bundles production subjects with one implementation fault. */
+  mutate(fault: (typeof coreImplementationFaults)[number]): Promise<string>;
   command(
     label: string,
     args: string[],
@@ -584,9 +688,63 @@ export async function runCoreVerification(h: Harness) {
     }
   }
   assert(fixtureControl, "ungated fake input must diverge on a valid trace");
+  // Production negative controls: each mutant CoreMirror must be rejected by
+  // a valid model trace, through the same core.state observation. A receive
+  // gap is rare under sampling, so a valid witness of it is searched for.
+  const gapWitness = `${h.artifacts}/core-receive-gap-witness.itf.json`;
+  await h.command(
+    "core-receive-gap-witness",
+    [
+      "run",
+      model,
+      "--main",
+      "herdr_core_runtime",
+      "--backend",
+      "typescript",
+      "--seed",
+      "42",
+      "--max-samples",
+      "20000",
+      "--max-steps",
+      "25",
+      "--invariant",
+      "noReceiveGap",
+      "--verbosity",
+      "1",
+      "--out-itf",
+      gapWitness,
+    ],
+    true,
+  );
+  const gapStates = await load(resolve(h.root, gapWitness));
+  replayCore(gapStates);
+  const candidates = [gapStates, ...allStates];
+  const implementationControls = [];
+  for (const fault of coreImplementationFaults) {
+    const subjects = (await import(await h.mutate(fault))) as CoreSubjects;
+    let killed: { trace: number; observation: string } | null = null;
+    for (const [index, states] of candidates.entries()) {
+      try {
+        replayCore(states, false, 2, subjects);
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          !("observation" in error) ||
+          error.observation !== "core.state"
+        )
+          throw error;
+        killed = { trace: index, observation: String(error.observation) };
+        break;
+      }
+    }
+    assert(killed, `production mutant ${fault} survived every trace`);
+    implementationControls.push({ fault, ...killed });
+  }
   return {
     name: "herdr-core-runtime",
-    evidence: "design-contract; in-process fake, no production core provider",
+    evidence:
+      "production CoreMirror replay for ordering/recovery; authority decisions use the design seam",
+    implementationControls,
     traces: allStates.length,
     sensitivityTraces: sensitivityFiles.length,
     replayWitnessesBySeed,

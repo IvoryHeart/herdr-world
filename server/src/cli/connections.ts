@@ -7,6 +7,7 @@ import {
   CONNECTION_PROFILE_FILE_VERSION,
   type ConnectionProfile,
   ConnectionProfileStore,
+  isCoreProfile,
   type PersistedConnectionRegistry,
   validateConnectionProfile,
 } from "../connections/profiles";
@@ -115,6 +116,10 @@ function implicitDefault(
 }
 
 function describe(profile: ManagedConnectionProfile): string {
+  if (isCoreProfile(profile)) {
+    const where = profile.type === "ssh" ? ` ${profile.ssh_destination}` : "";
+    return `${profile.type === "ssh" ? "ssh  " : "local"}  herdr-core${where} (session ${profile.core_session})`;
+  }
   if (profile.type === "local") return `local  ${profile.control_socket_path}`;
   const remote =
     profile.remote_platform === "windows"
@@ -309,6 +314,10 @@ export function createConnectionsCommand(
         const results = await Promise.all(
           selected.map(async (profile) => {
             try {
+              if (isCoreProfile(profile))
+                throw new Error(
+                  "herdr-core connections are tested from the Connections page",
+                );
               const result = await test(profile);
               return {
                 id: profile.id,

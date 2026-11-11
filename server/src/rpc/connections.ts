@@ -22,6 +22,7 @@ async function dispatchConnectionsRpc(
         result: {
           default_connection_id: connectionManager.defaultId(),
           connections: connectionProfiles.list(),
+          core_connections: connectionProfiles.coreList(),
         },
       },
       "connections-list",
@@ -48,6 +49,19 @@ async function dispatchConnectionsRpc(
         result = await connectionProfiles.disconnect(params?.id);
       } else if (method === "connections.test") {
         result = await connectionProfiles.test(params?.profile ?? params);
+      } else if (method === "connections.core_fixture") {
+        // Testing switch: an in-process herdr-core double, never a real core.
+        const fixture = rpc.services.coreFixture;
+        if (!fixture) throw new Error("the core fixture is not available");
+        const action = params?.action;
+        result =
+          action === "start"
+            ? await fixture.start()
+            : action === "kill"
+              ? fixture.kill()
+              : action === "remove"
+                ? await fixture.remove()
+                : fixture.status();
       } else {
         throw new Error(`unknown bridge-global method: ${method}`);
       }

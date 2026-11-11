@@ -26,10 +26,12 @@ import {
   loadConnectionProfileBootstrap,
   type StartupLocalProfile,
 } from "../connections/profile-service";
+import { connectionFailureReporters } from "../connections/failure-reporters";
 import {
-  type ConnectionProfile,
   connectionRecoveryFingerprint,
+  type TuiConnectionProfile,
 } from "../connections/profiles";
+import { createCoreConnections } from "../herdr-core/connections";
 import {
   createLegacyRoutingLogger,
   serializeHerdrEventEnvelope,
@@ -55,11 +57,7 @@ import { CheckoutResolver } from "../sources/links";
 import { readSourceSecrets, writeSourceSecrets } from "../sources/secrets";
 import { SourcesService } from "../sources/service";
 import { herdrEventName } from "../utils/herdr-events";
-import {
-  createRecoveryReporter,
-  type RecoveryReporter,
-  serverLogger,
-} from "../utils/logger";
+import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { createWorkspaceWorktree } from "../worktree/create";
 import { afterHerdrClose } from "../world/board-closing";
@@ -252,7 +250,6 @@ async function compose(
     };
   }
 
-  const connectionFailureReporters = new Map<string, RecoveryReporter>();
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null =
     null;
@@ -348,18 +345,9 @@ async function compose(
     broadcast(line, "world-invalidation");
   }
 
-  function connectionFailureReporter(connectionId: string): RecoveryReporter {
-    let reporter = connectionFailureReporters.get(connectionId);
-    if (!reporter) {
-      reporter = createRecoveryReporter({
-        logger: logger.child("connections"),
-        failureMessage: "connection degraded",
-        recoveryMessage: "connection recovered",
-      });
-      connectionFailureReporters.set(connectionId, reporter);
-    }
-    return reporter;
-  }
+  const connectionFailureReporter = connectionFailureReporters(
+    logger.child("connections"),
+  );
 
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
@@ -578,7 +566,7 @@ async function compose(
   });
 
   function runtimeFactoryForProfile(
-    profile: ConnectionProfile | StartupLocalProfile,
+    profile: TuiConnectionProfile | StartupLocalProfile,
   ) {
     const identity = connectionIdentityForProfile(profile);
     return (context: ConnectionRuntimeContext) => {
@@ -692,8 +680,15 @@ async function compose(
     };
   }
 
+  // herdr-core connections: never started by World, observed read-only here.
+  const core = createCoreConnections({
+    logger: logger.child("connections"),
+    changed: publishConnectionsChanged,
+    profiles: () => connectionProfiles,
+  });
   const connectionProfiles = new ConnectionProfileService({
     manager: connectionManager,
+    core: core.support,
     store: storage.connections,
     changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
@@ -780,6 +775,7 @@ async function compose(
     clients,
     connectionManager,
     connectionProfiles,
+    coreFixture: core.fixture,
     focusedAcquisition,
     agentActivity,
     deskWatches,
@@ -979,6 +975,7 @@ async function compose(
       await forwards.stop();
       await disposeAssistant();
       await connectionManager.stopAll();
+      await core.stop();
       await usageStopped;
       await startTask?.catch(() => {});
       await disposeAssistant();

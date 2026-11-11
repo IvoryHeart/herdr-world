@@ -1934,6 +1934,42 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   forwarding. See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
+- **herdr-core connections.** **Hosts → Manage connections → Add herdr-core**
+  watches a herdr-core that is already running, on this computer or on a Unix
+  host over SSH (an OpenSSH alias or `user@host`). Set the core session
+  (`default` unless core was started with `HC_SESSION`) and, only if core uses
+  a non-default `XDG_STATE_HOME`, its state directory. On every connect World
+  reads `<state>/core.lock` and opens exactly that socket (over SSH: a plain
+  remote `cat`, then a stream-local forward). It never runs `hc connect` or
+  `hc server status`, which would start a core: a stopped core stays **Not
+  running · retrying** and nothing starts. The core's socket directory must be
+  yours and private (mode 0700), otherwise World refuses it.
+  A connected core shows its version, live-terminal count and up to eight
+  terminals by address (`t1 agent · working`). If core stops or is killed, the
+  card turns **Stale**: the last facts stay, marked stale, and World keeps
+  retrying. When core is back (holders keep programs through a core crash),
+  the same terminals return at the same addresses. Lost ordering (a gap in
+  core's event sequence, or a heartbeat above the last applied event, as when
+  core silently drops an oversized update) also turns the card stale and
+  reacquires afresh. A host may have a Herdr connection and a herdr-core
+  connection; each keeps its own generation and identity. A connection's
+  runtime cannot be changed (add another), and the default connection stays a
+  Herdr one. Limits: 4,096 terminals, 64 KiB of labels and 256 KiB per
+  terminal, 32 MiB per core; beyond them the card is stale, never partly
+  shown. Core agents do not appear in Town, Board or Desk yet; World only
+  observes core (it reads screens with `lines: 0`, so it never types, scrolls
+  or resizes). A screen read keeps the connection generation, core process
+  and occupant it started with; if the agent at that address is replaced
+  before the reply arrives, the read is refused rather than shown as the new
+  occupant's screen. Windows SSH hosts are not supported for core yet.
+  Testing switch: open World with `?coreFixture`, then **Hosts → Manage
+  connections** shows **Fixture core (testing)**: **Start fixture core** adds a
+  "Fixture core" connection to a stand-in core with two synthetic terminals,
+  **Kill fixture core** stops it like `kill -9`, and **Remove fixture** deletes
+  both. The stand-in runs inside the World service and starts no program. The
+  fixture only touches its own connection: if a connection you made already
+  uses the ID `core-fixture`, **Start fixture core** and **Remove fixture**
+  refuse and leave it in place.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
   **Open agent** follows **Agents open** (Chat by default when supported,

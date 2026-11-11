@@ -73,6 +73,34 @@ both an invariant violation and rejection of that counterexample by correct repl
 A separate ungated-fake control must diverge on a valid model trace. It checks
 adapter sensitivity without claiming mutation of a production core provider.
 
+## Production mapping (issue #865)
+
+The replay adapter now feeds World's production `CoreMirror`
+(`server/src/herdr-core/mirror.ts`) the same subscribe snapshot, event,
+`missed` and heartbeat lines a core sends, and projects its terminals, cursor
+and actionability onto the model's `mirror`, `cursor` and `ready`. Each
+connect is a fresh production subscription. Values carried by an event are
+the source's at emission, as core sends whole records and label maps; removed
+terminals have no observable facts, so their retained model values come from
+the cut. The adapter still simulates the source, its queue and the delayed
+operation, and `replace` withdraws readiness as the model abstracts it
+(production sees a kept replacement as `lost` and `restarted` events that
+change the occupancy token).
+
+Four production negative controls bundle a mutated mirror and must each be
+rejected by a valid trace through `core.state`: a gap admitted, a heartbeat
+jump ignored, a stale event applied and a `missed` cut ignored. Receive-side
+gaps are rare under sampling, so the runner also searches for a valid witness
+(`noReceiveGap` violated) and replays it with correct and mutant mirrors.
+
+Capture, dispatch and delivery remain the design seam. The model's dispatch
+checks the source's actual occupant; World can check only its observation,
+which may lag a queued removal or replacement. Mapping the production
+`CoreOperationFence` therefore needs the model to separate the observed
+occupant at dispatch from the actual one at core's input boundary (where the
+owner rulings place the queued-send window, upstream Q3). Until then, fence
+behaviour is checked by unit and integration tests, not by this replay.
+
 ## Bounds, evidence and acceptance
 
 The single module has two explicitly bounded schedule families. Ordering explores
@@ -99,9 +127,10 @@ retains source/model/adapter/tool hashes, command logs, traces and counterexampl
 in ignored verification artifacts with existing deadlines and process cleanup.
 Unit tests exercise fake transition/rejection and trace validation independently.
 
-This is a P0 design contract with independent review pending PR review. Coverage
-is pending for production implementation: there is no core provider to replay yet.
-No claim covers framing/credit/UTF-8/budgets, actual core release behavior, every
+This is a P0 design contract with independent review pending PR review. The
+ordering/recovery transitions replay against the production mirror (above).
+The model makes no claim about framing/credit/UTF-8/budgets (they have unit,
+recorded-traffic and live-release tests instead), actual core release behavior, every
 occupant-evidence detector, SQLite persistence, core send/keys integration or the
 upstream Q3 execution-time fence, OS/SSH/Windows named pipes, app placement/seen, browser grids, performance or
 temporal recovery. P1–P6 consumer/platform checks in [delivery](delivery.md) remain

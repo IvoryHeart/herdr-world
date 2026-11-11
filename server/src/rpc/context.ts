@@ -1,3 +1,4 @@
+import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import type { ServerWebSocket } from "bun";
 import type {
   ConnectionRpcRequest,
@@ -40,7 +41,12 @@ export type RpcServices = {
   board(): BoardStorePort;
   clients: Set<Socket>;
   connectionManager: ConnectionManager<LegacyConnectionRuntime>;
-  connectionProfiles: ConnectionProfileService<LegacyConnectionRuntime>;
+  connectionProfiles: ConnectionProfileService<
+    LegacyConnectionRuntime,
+    CoreConnectionRuntime
+  >;
+  /** Testing switch: the in-process herdr-core preview fixture. */
+  coreFixture?: import("../herdr-core/fixture").CoreFixture;
   focusedAcquisition: FocusedAcquisition<Socket>;
   agentActivity: AgentActivityCache;
   deskWatches: DeskWatches<Socket>;

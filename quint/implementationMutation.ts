@@ -22,17 +22,23 @@ export type ImplementationFault =
   | "incarnation-reset"
   | "effect-authorization"
   | "effect-generation"
-  | "effect-not-sent";
+  | "effect-not-sent"
+  | "core-gap"
+  | "core-heartbeat"
+  | "core-stale"
+  | "core-missed-cut";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
   { root, output }: { root: string; output: string },
 ) {
-  assert(
-    name !== "herdr-core-runtime",
-    "Core design uses protocol fake controls, not a production mutation",
-  );
   const allowed: Partial<Record<Model, readonly ImplementationFault[]>> = {
+    "herdr-core-runtime": [
+      "core-gap",
+      "core-heartbeat",
+      "core-stale",
+      "core-missed-cut",
+    ],
     "effect-recovery": [
       "primary",
       "effect-authorization",
@@ -64,7 +70,8 @@ export async function mutateImplementation(
     (allowed[name] ?? ["primary"]).includes(fault),
     "Unsupported model/fault combination",
   );
-  const owners: Record<Exclude<Model, "herdr-core-runtime">, string> = {
+  const owners: Record<Model, string> = {
+    "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
     "runtime-leases": "server/src/connections/manager.ts",
@@ -90,7 +97,26 @@ export async function mutateImplementation(
           : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "effect-recovery") {
+  if (name === "herdr-core-runtime") {
+    const guards: Record<string, [string, string]> = {
+      "core-gap": ["if (seq !== this.cursorValue + 1) {", "if (false) {"],
+      "core-heartbeat": [
+        'if (seq === this.cursorValue) return "alive";',
+        'return "alive";',
+      ],
+      "core-stale": [
+        'if (seq <= this.cursorValue) return "stale";',
+        'if (false) return "stale";',
+      ],
+      "core-missed-cut": [
+        'if (line.method === "missed") {\n      if (seq < this.cursorValue) {',
+        "if (false) {\n      if (seq < this.cursorValue) {",
+      ],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "effect-recovery") {
     if (fault === "effect-authorization") {
       const guard = /await driver\.authorize\((claimed|current)\)/g;
       assert.equal(
@@ -337,9 +363,11 @@ export async function mutateImplementation(
           ? "quint/effect-subjects.ts"
           : name === "creation-flow"
             ? "quint/creation-subjects.ts"
-            : name === "observation-base"
-              ? "quint/observation-subjects.ts"
-              : owner,
+            : name === "herdr-core-runtime"
+              ? "quint/herdr-core-subjects.ts"
+              : name === "observation-base"
+                ? "quint/observation-subjects.ts"
+                : owner,
       ),
     ],
     target: "bun",
