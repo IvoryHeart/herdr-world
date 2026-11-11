@@ -9,7 +9,7 @@
 
 - [ ] P1: inventory parity consumers, extract typed seam and implement core mirror.
 - [ ] P2: observer streams, shared seen/favourite and event push.
-- [ ] P3: core-default launches, placement, session channels and occupant fences.
+- [ ] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
 - [ ] P4: files/Git/worktrees, asks and Ranger.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.
 - [ ] P6: latest-release smoke, usage docs and final device/parity acceptance.

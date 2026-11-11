@@ -87,13 +87,19 @@ inject input and therefore require current control authority.
 
 ### 8. Session input
 
-Chat, answers and asks for Claude and Codex use each harness's own trusted session
-channel. Check the original session at the actual input boundary. A native
-`terminal.send`/`keys` queue can outlive its connection and execute in a kept
-replacement shell; checking just before enqueueing does not solve that race.
-Never substitute terminal typing when a session channel is unavailable. Expose
-unavailable/uncertain truthfully, retain the original recipient, and never retry
-an unanswered possible write automatically. Deadlines include quiet and draft
+Messages, answers and asks use core's own `terminal.send` and `terminal.keys`
+for every harness supported by herdr-core and herdr, not only Claude and Codex.
+Immediately before each send/keys dispatch, World checks the original occupant
+and its current foreground on the captured connection lease. Changed or missing
+evidence refuses dispatch until freshly verified. World builds no per-harness
+side channel and does not take over core's input scheduling.
+
+A native send queue can outlive its connection and execute in a kept replacement
+shell. World's pre-send check is required but cannot close that later window;
+core owns closing it (Q3). The model's execution-time source gate is that upstream
+assumption, not a World delivery mechanism or a claim about current core.
+Show a timeout as "uncertain", retain the original recipient and never retry an
+unanswered possible write automatically. Deadlines include quiet and draft
 windows; `SendResult.started` proves observed activity, not recipient identity.
 Interactive terminal input and Details keys retain their terminal uncertainty
 contract and do not grant session delivery authority.
@@ -142,11 +148,11 @@ drift and fix World as core and TUI evolve. World never runs `hc update`.
 | M1 | World SQLite owns workspace → tab → split topology, order, empty rooms and geometry. Render with existing Spaces/windows; moves stay World-local. Neither read nor write the app's layout document. `where` may be a caption. |
 | M2 | App placement defaults on for agent launches and off for plain shells. Write `herdr.space`/`herdr.tab` once at launch, never on World moves. Explain independent layouts, adoption's `keep:true`, pane close ending the terminal and parent death still applying. World-started reporting agents must appear in the apps; verify desktop and phone separately. |
 | M3 | Compile existing agent profiles, resolve an absolute host executable, then run explicit argv/cwd/env/size/keep/outlive_parent. No caller; default no_parent and no_notify. Templates are a separate explicit mode. Readiness is not session evidence. |
-| M4 | Chat send, answers, ask delivery, summaries, checkout claims and stamps require verified occupant-bound session evidence. Labels cache it without granting authority. Chat is transcript-only; missing evidence/transcript offers unavailable or manual linking. Session input follows §8. |
-| M5 | Asks/results remain in World's ledger and are delivered only to the original verified recipient under M4. Never rewrite native status to represent an ask. |
+| M4 | Chat send, answers, ask delivery, summaries, checkout claims and stamps require verified occupant-bound session evidence. Labels cache it without granting authority. Chat is transcript-only; missing evidence/transcript offers unavailable or manual linking. For every supported harness, messages/answers/asks use core send/keys with an immediate occupant+foreground check, timeout shown as uncertain and no per-harness side channel (§8); the queued replacement window belongs to core (Q3). |
+| M5 | Asks/results remain in World's ledger, capture the original verified recipient and dispatch through core under M4/§8 without retargeting or automatically retrying uncertain writes. Core owns the queued-send race (Q3). Never rewrite native status to represent an ask. |
 | M6 | Task summaries work without a World service: a verified runtime-local CLI writes one namespaced label with normalized summary, session fingerprint and absolute expiry. Readers check both; reconnect does not renew TTL. |
 | M7 | Spawn stamps are World display relations. Native parentage is only for deliberate verified same-core children. Before every native kill, room close or bin action, list descendants whose parent/die_with_parent means they die, name them in confirmation and kill no more than the confirmed set. |
 | M8 | cwd, checkout reports and Git provide evidence; consequential worktree binding still requires session proof. |
 | M9 | Share herdr.seen and herdr.pinned best-effort. Seen is raise-only once per visibly seen turn; missing is not zero; unread is turn−1; blocked/error outrank seen. Viewing done clears done across apps. Re-read before writes, preserve explicit unread and disclose last-writer races without CAS. Review receipts and desk/card pins remain World-only. |
 | M10 | World's own SSH connection per host owns authority. Linked machines are discovery only; hide their actionable entities/counts when a direct connection has the same core ID, while consuming all event positions. |
-| M11 | World writes status only for harness integrations World installed and declared as reporting owner. Never inject for self-reporting agents or select an injector after a timeout. Otherwise status is unknown. |
+| M11 | World reads agent status from core and never writes it, including for integrations World installed. Missing status remains unknown; a reporting timeout never authorizes injection. |

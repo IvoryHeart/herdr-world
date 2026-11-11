@@ -7,7 +7,12 @@ automatic existing-only reconnect; restart keeping addresses; source completion
 without stale publication. Forbidden: stale callbacks rolling back a cut; dropped
 deltas silently becoming current; actionability after unexplained gaps; replacing
 an operation's lease/profile/session; blind replay of an unanswered opaque write;
-source input reaching a kept replacement.
+source input reaching a kept replacement under the core-side Q3 assumption.
+World must check occupant and foreground immediately before dispatch for every
+harness. The later execution-time gate belongs to core: current core can deliver
+a queued send to a replacement, so this model does not prove that race closed.
+The ungated-queue mutant exposes that gap; it is not permission to add a World
+harness side channel or gate read-write support on an upstream fix.
 
 [The composed model](../../../quint/herdr-core-runtime.qnt) imports
 `capturedLeaseCurrent` from `runtime-leases` and `opaqueReplayBlocked` from
@@ -29,7 +34,7 @@ replays remain required in the complete gate.
 | owner, generation, connected, running | Two profiles on the same durable core; two transport attempts; absent endpoint. Connection identity cannot be replaced by durable core identity. No start operation exists in automatic connection. |
 | leaseOwner/Gen/Epoch, captured, session | One original operation's immutable profile, runtime/epoch and occupant proof, retained after retirement. Capture, dispatch and publication are distinct transitions. |
 | occupant, replaced | One kept replacement of terminal 0 without changing its address. It abstracts pid/argv/template/reported/foreground/session evidence changes, including reused-pid and in-shell replacements. |
-| pending, queued, uncertain, attempts, delivered | Dispatch commits once; the source can execute later, even disconnected. The source gate checks the captured session at delivery. Completion only publishes under the original current authority. Recovery never blindly replays possible opaque writes. |
+| pending, queued, uncertain, attempts, delivered | Dispatch commits once; the source can execute later, even disconnected. The assumed core-side Q3 gate checks the captured occupant at execution; this is not a World harness channel. Completion only publishes under the original current authority. Recovery never blindly replays possible opaque writes. |
 
 `projection` checks the exact mirror at its accepted source cut, including both
 terminals, existence and independent facts. `safe` records admission, dispatch,
@@ -97,7 +102,7 @@ Unit tests exercise fake transition/rejection and trace validation independently
 This is a P0 design contract with independent review pending PR review. Coverage
 is pending for production implementation: there is no core provider to replay yet.
 No claim covers framing/credit/UTF-8/budgets, actual core release behavior, every
-occupant-evidence detector, SQLite persistence, harness session implementations,
-OS/SSH/Windows named pipes, app placement/seen, browser grids, performance or
+occupant-evidence detector, SQLite persistence, core send/keys integration or the
+upstream Q3 execution-time fence, OS/SSH/Windows named pipes, app placement/seen, browser grids, performance or
 temporal recovery. P1–P6 consumer/platform checks in [delivery](delivery.md) remain
 mandatory before their paths ship. Do not promote a fake into production evidence.

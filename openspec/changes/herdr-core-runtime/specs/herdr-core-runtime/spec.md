@@ -64,24 +64,46 @@ reset sequence interpretation while preserving durable terminal identity.
 
 ### Requirement: Occupant-bound session delivery
 
-Chat, answers and asks to Claude and Codex SHALL use their own trusted harness
-session channels, conditioned on the original recipient at the input boundary.
-Kept replacement, changed session/foreground evidence and retired runtime leases
-SHALL invalidate authority even when address, pid or labels survive. Possible
-writes without answers SHALL remain uncertain and SHALL NOT retry automatically.
+Messages, answers and asks SHALL use core's own send/keys for every harness
+supported by herdr-core and herdr. World SHALL check the original occupant and
+its foreground immediately before each send/keys dispatch on the captured lease
+and SHALL NOT build per-harness side channels. Kept replacement, changed
+session/foreground evidence and retired leases SHALL invalidate World dispatch
+authority even when address, pid or labels survive. A timeout SHALL be shown as
+"uncertain"; unanswered possible writes SHALL NOT retry automatically. Closing
+the queued-send replacement window belongs to core (Q3), not World's pre-send check.
+
+#### Scenario: Every supported harness
+
+- **WHEN** a user sends a message, answer or ask to any supported harness,
+  including Aider, OpenCode or Gemini
+- **THEN** World checks occupant and foreground immediately before using core
+  send/keys, without requiring a Claude/Codex-specific delivery channel
+
+#### Scenario: Replacement before dispatch
+
+- **WHEN** the original occupant or foreground changes before World dispatches
+- **THEN** World refuses the send until fresh evidence verifies its recipient
 
 #### Scenario: Replacement after enqueue
 
-- **WHEN** a message waits at the source and the agent becomes a kept shell
-- **THEN** the original session gate refuses delivery to that shell, including
-  after disconnect, without terminal-typing fallback
+- **WHEN** a message waits in core's queue and the agent becomes a kept shell
+- **THEN** execution-time recipient fencing is core's Q3 obligation; World's
+  pre-send check alone provides no guarantee against this race, including after
+  disconnect, and World does not substitute a harness side channel
+
+#### Scenario: Send timeout
+
+- **WHEN** core does not answer a send before its deadline
+- **THEN** World shows "uncertain", retains the original recipient and never
+  automatically retries the possible write
 
 ### Requirement: Shared app state with independent World ownership
 
 World SHALL own topology, asks/results, review receipts and card pins; it SHALL
-share app placement at launch, seen and favourite under M1–M11. World SHALL write
-status only for its installed harness integration when the agent does not report
-its own status. Native destructive actions SHALL confirm all dying descendants.
+share app placement at launch, seen and favourite under M1–M11. World SHALL read
+agent status from core and SHALL NOT write it, including for integrations World
+installed. Native destructive actions SHALL confirm all dying descendants.
 
 #### Scenario: Review a finished turn
 
@@ -89,10 +111,11 @@ its own status. Native destructive actions SHALL confirm all dying descendants.
 - **THEN** shared seen clears done in the apps while blocked/error precedence,
   missing-seen semantics and explicit unread remain respected
 
-#### Scenario: Self-reporting agent
+#### Scenario: Missing agent status
 
-- **WHEN** a harness reports its own status
-- **THEN** World does not inject status, even after a reporting timeout
+- **WHEN** a harness has no reported status or its reporting times out, including
+  a harness whose integration World installed
+- **THEN** World leaves status unknown and never injects or writes status to core
 
 ### Requirement: Observe and control with app coexistence
 

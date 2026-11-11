@@ -140,7 +140,8 @@ module herdr_core_runtime {
   }
   action deliver = all {
     c.queued,
-    // The trusted harness session channel checks the original recipient HERE.
+    // Q3 assumption: CORE fences the original recipient at queued execution.
+    // World checks before dispatch; current core may lack this later gate.
     val allowed = occupant or fault("ungated-queue")
     change({ ...c, queued: false, delivered: if (allowed) c.delivered + 1 else c.delivered,
       safe: c.safe and (not(allowed) or occupant) }, "deliver", 0),

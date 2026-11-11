@@ -11,7 +11,7 @@ the third boundary by itself. The original feature-parity baseline is `15baa482`
 | P0 | This single OpenSpec change, owner decisions and composed delta model; feature matrix core-involvement classification | Model passes, all eleven planned mutants fail, and design/mapping receive independent review. Per-bullet parity inventory/classification is a later implementation planning task, outside issue #863's bounded file scope. |
 | P1 | Typed seam preserving TUI; core provider, existing-only transport, bounded mirror; initial observation in Town/Desk/Needs you | Required Bun fake/recorded-traffic suite and provider replay; TUI suites green. App-started agent appears in World; crash makes it stale then recovers the same addresses; absent/stopped core never starts. This is an intermediate phase, not the final read-only scope. |
 | P2 | Observe streams, shared seen/favourite and event-driven push | No World-to-core RESIZE, FOCUS or human DATA on observer streams. Core-to-World RESIZE precedes paint and xterm adopts that grid. Owner checks A/B below. |
-| P3 | SQLite topology CRUD, core-default launch with placement, harness session channels, occupant fencing, M6–M8 and descendant kill confirmation | Replacement, stale-report, draft-delay, session-selection, parent-death and read-side-effect cases below. Placed reporting World agent appears in desktop space/Agents; phone visibility recorded separately. World answer unblocks the original agent. |
+| P3 | SQLite topology CRUD, core-default launch with placement, core send/keys for every supported harness, pre-send occupant/foreground checks, M6–M8 and descendant kill confirmation | Replacement, stale-report, draft-delay, session-selection, parent-death and read-side-effect cases below. Placed reporting World agent appears in desktop space/Agents; phone visibility recorded separately. World answer unblocks the original agent. |
 | P4 | Guarded host files/Git/worktrees/hooks, asks and Ranger | Consumer fixtures for both providers, colliding IDs and retired leases; disposable repository worktree create/open/remove for a core agent. |
 | P5 | Interactive streams, mobile, host uploads, World popup equivalents, Unix/Windows SSH and mixed hosts | Both-provider browser suites; first key once, win32-input-mode, owner Windows named-pipe relay checks. Owner C/D; TUI/core on one host without duplicate agents. |
 | P6 | Newest-release smoke, final parity review and FEATURES/TUTORIAL/README updates | Full gates, independent review and separate owner device evidence. Full read-write on each release without pins or certification gating. Ready PR; merge only on owner instruction. |
@@ -27,9 +27,11 @@ the third boundary by itself. The original feature-parity baseline is `15baa482`
   through actual World/browser consumers; shared seen/unread/favourite races.
 - P3: kept replacement and exit to shell connected/disconnected, reused pid,
   never-reported shell-wrapped agent; queued input after connection close and
-  replacement refused at harness session boundary; draft-held timeout/cancellation/
-  later completion; stale reports; app-started agents and inherited runtime
-  markers; parent with a dying child and an outliving child in different rooms;
+  replacement documented as the core-owned Q3 race (source-gated model assumption
+  and ungated control); pre-send occupant/foreground refusal for every supported
+  harness; draft-held timeout shown as uncertain without automatic retry,
+  cancellation and later completion; no World status writes or per-harness side
+  channels; stale reports; app-started agents and inherited runtime markers; parent with a dying child and an outliving child in different rooms;
   `lines:0` side-effect guard. Source completion and World publication are separate.
 - P5: first genuine key exactly once after attach; Windows pipe discovery, EOF,
   reconnect, process cleanup and win32-input-mode on a real host. Required CI uses
@@ -62,12 +64,15 @@ this worker to post upstream messages.
 2. Q2, Existing-only connect: can connect/server status accept no-autostart
    (upstream #203/#209)? The fixed Windows PowerShell relay proceeds independently.
 3. Q3, Safe input: can a public program incarnation condition send/keys, checked
-   when a queued send actually executes? World uses harness session channels now.
+   when a queued send actually executes? Core owns closing this replacement
+   window. World uses core send/keys for every harness with an immediate
+   occupant/foreground check and uncertain timeouts; no harness side channel.
 4. Q4, Observer resize: is observer-alone attachment resetting to headless intended?
 5. Q5, Oversized recovery: can suppressed missed snapshots be explicit, labels
    capped or snapshots paginated?
-6. Q6, Status ownership: is there a supported external reporter with a declared
-   root-record owner (upstream #826)? M11 is the binding default meanwhile.
+6. Q6, Status coverage: how will core expose status for every supported harness,
+   including non-reporting agents (upstream #826)? World reads core status only
+   and never becomes an external reporter; missing status stays unknown (M11).
 7. Q7, Labels: can seen use CAS or numeric-max rather than last-writer wins?
 8. Q8, Placement: can space/tab names be labels (app #43), and does the phone
    Inbox include agents without herdr.space? Verify the promised app visibility.
@@ -75,6 +80,8 @@ this worker to post upstream messages.
 10. Q10, TUI evolution: what is the TUI-on-core timeline or import path (app #63)?
 
 No unresolved owner decision blocks this design. O1–O3 select core coexistence,
-default placement and shared seen; O4/M11 chooses installed reporter ownership;
+default placement and shared seen; O4 is overridden by status read-only (M11);
 O5 removes certification gates; O6 includes Windows relay; O7 requires popup
-equivalents; O8 selects per-harness session delivery, never the weaker guarantee.
+equivalents; O8 is overridden by core send/keys for every harness, immediate
+occupant/foreground checks, uncertain timeouts and no per-harness side channel.
+The queued-send replacement window is core's to close under Q3.

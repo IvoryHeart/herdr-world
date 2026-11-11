@@ -7,20 +7,32 @@ This change fixes the contract before product code depends on it.
 
 ## Owner rulings (2026-11-11; verbatim)
 
-- "I need full support": read and write, not read-only.
-- herdr-core is a second runtime beside herdr (the TUI). Both co-exist until the TUI moves onto core.
-- "core will be our primary runtime (if installed)": World starts new agents in core when core is present, and World-started agents appear in Herdr's apps (placement on for agents; plain shells start in core unplaced). The TUI stays a per-launch choice.
-- "world view would clear 'done'": seen and favourite are shared with Herdr's apps.
-- "we should support latest version and assume it won't be breaking changes" and "we should not explicitly pin ... adopt as herdr-core and herdr-tui evolves": no version pins and no certification gate; every core release gets full read-write, and a smoke test against the newest release flags changes.
-- "we can have world equivalents and give best of both": TUI-only popups get World equivalents.
-- Windows SSH hosts are in scope through a PowerShell named-pipe relay; the owner verifies on a real Windows host.
-- Defaults until the owner says otherwise: status is written to core only for harnesses whose integration World installed, never for an agent that reports its own status (plan O4/M11); Chat, answers and asks to Claude and Codex go through each harness's own session channel, never typed into a terminal that may have been replaced (plan O8 option a).
+- **Full support.** "I need full support": read and write, not read-only.
+- **Two runtimes.** herdr-core is a second runtime beside herdr (the TUI). Both co-exist until the TUI moves onto core.
+- **Core first.** "core will be our primary runtime (if installed)":
+  - When core is present, World starts new agents in core.
+  - World-started agents appear in Herdr's apps: placement is on for agents, and plain shells start in core unplaced.
+  - The TUI stays a per-launch choice.
+- **Shared seen.** "world view would clear 'done'": seen and favourite are shared with Herdr's apps.
+- **No duplication.** "we should not duplicate and rely on herdr-core to do the things it does":
+  - World reads agent status from core and never writes it.
+  - Messages, answers and asks go through core's own send and keys, for every harness. World checks the occupant and its foreground right before each send, shows a timeout as "uncertain", and builds no per-harness side channel.
+  - The window in which a queued send can reach a replacement shell is core's to close (upstream question Q3).
+- **Every harness.** World supports every harness that herdr-core and herdr support, not only Claude and Codex.
+- **Latest core.** "we should support latest version and assume it won't be breaking changes" and "we should not explicitly pin ... adopt as herdr-core and herdr-tui evolves":
+  - no version pins and no certification gate;
+  - every core release gets full read-write;
+  - a smoke test against the newest release flags changes.
+- **Popups.** "we can have world equivalents and give best of both": TUI-only popups get World equivalents.
+- **Windows.** Windows SSH hosts are in scope through a fixed PowerShell named-pipe relay. The owner verifies it on a real Windows host.
 
-These rulings supersede the planning alternatives. There is no uncertified-version
-read-only mode, version allowlist, Windows exclusion, popup gap or acceptance of
-terminal-queued Chat reaching a replacement. Core is a Herdr runtime for World's
-runtime-selection rules. Installation alone selects the launch default; it does
-not authorize automatic startup of a stopped core during observation/reconnect.
+These rulings supersede the planning alternatives, including O4's status injector
+and O8's per-harness delivery channels. World uses core send/keys for every
+harness and checks the occupant and foreground immediately before sending. The
+remaining queued-send replacement race belongs to core (Q3); this design does
+not claim that World's pre-send check closes it. Core is a Herdr runtime for
+World's runtime-selection rules. Installation alone selects the launch default;
+it does not authorize automatic startup during observation/reconnect.
 
 ## What Changes
 
@@ -36,7 +48,7 @@ not authorize automatic startup of a stopped core during observation/reconnect.
 ### New Capabilities
 
 - `herdr-core-runtime`: full qualified runtime support, recovery, shared app state,
-  native terminal streams and harness session delivery.
+  native terminal streams and core-native delivery for every supported harness.
 
 ### Modified Capabilities
 

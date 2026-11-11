@@ -2939,7 +2939,7 @@
       "area": "Herdr-core composed ordering and runtime authority (design)",
       "owner": "quint/herdr-core-runtime.qnt",
       "requirement": "openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md",
-      "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, occupant/source-queue fencing and existing-only connect",
+      "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, pre-send occupant fencing, core-side source-queue fencing assumed under Q3 and existing-only connect",
       "existingTests": ["quint/herdr-core-runtime.test.ts"],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "composed-design-model",
