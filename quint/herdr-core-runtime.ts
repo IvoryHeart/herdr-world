@@ -24,6 +24,9 @@ export const coreFaults = [
   "heartbeat-ignored",
   "unconfirmed-cascade",
   "stale-confirmation",
+  "teardown-unconfirmed",
+  "remove-before-kill",
+  "remove-after-retire",
 ] as const;
 export const coreWitnesses: readonly string[] = [
   "orderedDelta",
@@ -35,6 +38,8 @@ export const coreWitnesses: readonly string[] = [
   "existingOnly",
   "cascadeConfirmed",
   "unconfirmedRefused",
+  "worktreeRemoved",
+  "teardownFenced",
 ];
 type Terminal = {
   alive: boolean;
@@ -85,6 +90,10 @@ export type CoreState = {
   confirmedChild: boolean;
   confirmedOccupant: number;
   killed: boolean;
+  /** P4 worktree removal: the generation it was planned in, then its steps. */
+  planGen: number;
+  tornDown: boolean;
+  removed: boolean;
 };
 export type CoreTraceState = {
   c: CoreState;
@@ -140,6 +149,9 @@ export class CoreProtocolFake {
     confirmedChild: false,
     confirmedOccupant: -1,
     killed: false,
+    planGen: -1,
+    tornDown: false,
+    removed: false,
   };
   /** What the person confirmed, as World's production plan named it. */
   private confirmation: Parameters<CoreSubjects["coreKillRefusal"]>[1] | null =
@@ -428,6 +440,7 @@ export class CoreProtocolFake {
           })),
         };
         s.planned = true;
+        s.planGen = s.generation;
         s.confirmedChild = plan.descendants.some((e) => e.address === "t2");
         s.confirmedOccupant =
           this.latest!.terminal("t1")?.argv?.[0] === "agent" ? 0 : 1;
@@ -455,6 +468,26 @@ export class CoreProtocolFake {
         this.latest?.retire("divergence");
         break;
       }
+      case "teardown": {
+        // removeCoreWorktree checks the confirmation with the production
+        // plan and refusal (assertCoreKillConfirmed) before the hook runs.
+        assert(s.planned && !s.killed && !s.tornDown);
+        if (!s.ready || !s.mirror[0]!.alive) break;
+        const plan = this.subjects.coreKillPlan(
+          "core",
+          this.latest!.terminals(),
+          ["t1"],
+        );
+        s.tornDown =
+          plan.roots.length > 0 &&
+          this.subjects.coreKillRefusal(plan, this.confirmation!) === null;
+        break;
+      }
+      case "removeCheckout":
+        // Removal follows the confirmed kill, under the planned generation.
+        assert(s.tornDown && !s.removed);
+        s.removed = s.killed && s.connected && s.generation === s.planGen;
+        break;
       default:
         assert.fail(`unknown core action: ${op}`);
     }
@@ -495,6 +528,8 @@ export function validateCoreTrace(
         "recover",
         "plan",
         "kill",
+        "teardown",
+        "removeCheckout",
       ].includes(item.op),
       "unknown core trace action",
     );
@@ -604,6 +639,10 @@ export function replayCore(
       !c.confirmedChild
     )
       witnesses.add("unconfirmedRefused");
+    if (state.op === "removeCheckout" && c.removed)
+      witnesses.add("worktreeRemoved");
+    if (state.op === "teardown" && !c.tornDown && c.ready)
+      witnesses.add("teardownFenced");
   }
   return witnesses;
 }

@@ -27,6 +27,7 @@ import {
 } from "../roomRenameClose";
 import { TextInputDialog } from "../../components/ModalDialogs";
 import { createCoreRoom } from "../coreControl";
+import { openCoreWorktrees } from "../CoreWorktrees";
 import { store } from "../../store";
 import type { WorldObject } from "../worldObject";
 import type { TownRoomActions } from "./TownCanvas";
@@ -289,6 +290,25 @@ export function useTownRoomActions({
           },
         });
       }
+    },
+    canManageWorktrees: (roomKey) => {
+      const room = roomForKey(roomKey);
+      return Boolean(
+        room && officeRoomActionCapabilities(world, room).worktrees,
+      );
+    },
+    onWorktrees: (roomKey) => {
+      const room = roomForKey(roomKey);
+      if (!room) return;
+      const capabilities = officeRoomActionCapabilities(world, room);
+      if (!capabilities.worktrees) return;
+      openCoreWorktrees({
+        connectionId: room.workspaceRef.connectionId,
+        generation: room.observedGeneration,
+        workspaceId: room.workspaceRef.nativeId,
+        label: room.displayLabel,
+        linked: capabilities.linkedWorktree === true,
+      });
     },
     canCloseRoom: (roomKey) => canManageRoom(roomKey, "close"),
     onCloseRoom: (roomKey) => {

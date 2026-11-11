@@ -5,8 +5,11 @@ import type { CliErrorCode } from "./world-cli-errors";
 export type WorldCliRequest = {
   command: string;
   params?: Record<string, unknown>;
-  /** What the caller claims: its HERDR_PANE_ID. */
-  caller?: { pane_id?: unknown };
+  /**
+   * What the caller claims: its HERDR_PANE_ID, and inside a herdr-core
+   * terminal its HC_TERMINAL_ID (`core_terminal`). Both are only claims.
+   */
+  caller?: { pane_id?: unknown; core_terminal?: unknown };
 };
 
 export type WorldCliResponse = (

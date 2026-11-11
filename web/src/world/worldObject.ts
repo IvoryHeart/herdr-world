@@ -79,6 +79,35 @@ type WorldObjectBase = {
 export const CORE_VIEW_ONLY_REASON =
   "World can't open herdr-core terminals or chat with them yet";
 
+/**
+ * A live herdr-core node World can show Files and Changes for: its window
+ * opens with only those views (no terminal, chat or history).
+ */
+export function isCoreResourceNode(node: {
+  stale: boolean;
+  viewOnly?: string;
+  coreControl?: true;
+  capabilities: Pick<WorldActionCapabilities, "files" | "changes">;
+}): boolean {
+  return (
+    !node.stale &&
+    node.coreControl === true &&
+    node.viewOnly !== undefined &&
+    (node.capabilities.files || node.capabilities.changes)
+  );
+}
+
+/** A node the World window (inspector) may open: actionable, or core resources. */
+export function inspectorAdmits(node: {
+  stale: boolean;
+  actionable: boolean;
+  viewOnly?: string;
+  coreControl?: true;
+  capabilities: Pick<WorldActionCapabilities, "files" | "changes">;
+}): boolean {
+  return node.actionable || isCoreResourceNode(node);
+}
+
 /** Live in the view: current, whether or not World can control it. */
 export function isLiveNode(node: {
   stale: boolean;
@@ -386,16 +415,18 @@ function actionCapabilities(
   state: WorldHostState,
   viewOnly: string | undefined,
 ): WorldActionCapabilities {
-  const operational =
-    !viewOnly && (state === "active" || state === "ready-inactive");
+  const live = state === "active" || state === "ready-inactive";
+  const operational = !viewOnly && live;
   const leaf = kind === "agent" || kind === "terminal";
   const space = kind === "space";
   return {
     activateHost: !viewOnly && state === "ready-inactive",
     openTerminal: operational && leaf,
     openSpaces: operational && (leaf || space),
-    files: operational && (leaf || space),
-    changes: operational && (leaf || space),
+    // A live herdr-core node's Files and Changes come from World's own host
+    // helpers (P4), so they open even though its terminal and chat cannot.
+    files: live && (leaf || space),
+    changes: live && (leaf || space),
     agentHistory: operational && kind === "agent",
     roomMutation: operational && space,
     launcher: operational && space,

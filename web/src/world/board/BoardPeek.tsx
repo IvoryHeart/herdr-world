@@ -54,7 +54,10 @@ export function BoardPeek({
   target: BoardPeekTarget;
   notify(kind: "ok" | "error", text: string): void;
   deskStore?: WorldDeskStore;
-  /** Open the agent as the user opens agents: its Chat or its terminal. */
+  /**
+   * Open the agent as the user opens agents: its Chat or its terminal (a
+   * herdr-core agent's window opens on Files).
+   */
   onOpen(): void;
   onClose(): void;
   /** The pointer is over the peek: keep it while it is. */
@@ -266,6 +269,18 @@ export function BoardPeek({
         {done && report.review.failed && !leaf.viewOnly ? (
           <button type="button" onClick={report.review.onRetry}>
             <span>Retry</span>
+          </button>
+        ) : null}
+        {leaf.viewOnly && leaf.capabilities.files && !leaf.stale ? (
+          // A herdr-core agent: World shows its folder (Files and Changes)
+          // even though it cannot open its terminal or chat with it.
+          <button
+            type="button"
+            title="Files and Changes"
+            aria-label={`Open ${name}'s files`}
+            onClick={onOpen}
+          >
+            <span>Files</span>
           </button>
         ) : null}
         {leaf.viewOnly ? (

@@ -13,6 +13,8 @@ import { type WorldRuntimePriority } from "./runtimeStore";
 import { readOfficePreferences, type TownOpens } from "./officePreferences";
 import { worldLocalStorage } from "../browserStorage";
 import {
+  inspectorAdmits,
+  isCoreResourceNode,
   type WorldHostObject,
   type WorldObject,
   type WorldObjectNode,
@@ -63,7 +65,8 @@ export function worldNodeForInspectorConversation(
   conversation: WorldInspectorConversation,
 ): WorldObjectNode | null {
   const valid = (node: WorldObjectNode) =>
-    node.actionable &&
+    node.kind !== "host" &&
+    inspectorAdmits(node) &&
     node.connectionId === conversation.connectionId &&
     node.generation === conversation.runtimeGeneration &&
     worldInspectorWindowIdForNode(node) ===
@@ -86,7 +89,7 @@ export function worldNodeForInspectorPaneFocus(
     world.leaves.find(
       (node) =>
         node.nativeId === paneId &&
-        node.actionable &&
+        inspectorAdmits(node) &&
         worldInspectorWindowIdForNode(node) === windowId,
     ) ?? null
   );
@@ -186,7 +189,8 @@ export const selectionShowsProfile = (
   selected: WorldObjectNode | null,
   current: boolean,
 ) =>
-  !!selected && (selected.kind === "host" || !current || !selected.actionable);
+  !!selected &&
+  (selected.kind === "host" || !current || !inspectorAdmits(selected));
 
 export function worldSnapshotPriorityForNode(
   node: WorldObjectNode,
@@ -361,6 +365,9 @@ export async function focusWorldNode(
 ) {
   if (isCurrent?.() === false)
     throw new Error("Inspector activation was superseded");
+  // A herdr-core node has no Herdr pane to focus: its window shows Files
+  // and Changes through its own generation-qualified client.
+  if (!node.actionable && isCoreResourceNode(node)) return;
   const agentSessionId =
     typeof agentSession === "string" ? agentSession : agentSession?.value;
   const target = workspaceTarget(node);

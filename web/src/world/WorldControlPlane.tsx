@@ -26,6 +26,7 @@ import { terminalColorKey } from "./terminalColor";
 import { setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
 import { CoreKillConfirmHost } from "./CoreKillConfirm";
+import { CoreWorktreesHost } from "./CoreWorktrees";
 import { BoardHub } from "./board/BoardHub";
 import { requestTownSummary } from "./town/townSummaryRequest";
 import { useTerminalColorChoices } from "./useTerminalColors";
@@ -408,6 +409,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         />
       ) : null}
       <CoreKillConfirmHost />
+      <CoreWorktreesHost />
       <WorldBin
         always={view === "town" || view === "board"}
         bus={view === "town"}

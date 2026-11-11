@@ -29,6 +29,7 @@ import type {
   ConnectionRpcContext,
   RpcServices,
 } from "../rpc/context";
+import { answersOnCore, callCoreHost } from "../rpc/core-host";
 import { handleFilesRpc } from "../rpc/files";
 import { handleGitRpc } from "../rpc/git";
 import { handleLauncherRpc } from "../rpc/launcher";
@@ -176,6 +177,21 @@ async function handleRpc(
     return;
   }
   const evidence = commandEvidence(verb);
+  // A herdr-core connection answers only its host methods, from its own
+  // manager: a Herdr (TUI) connection of any ID never reaches it.
+  if (
+    validationConnectionId !== undefined &&
+    !connectionManager.has(validationConnectionId) &&
+    services.coreControl?.manager.has(validationConnectionId)
+  )
+    return dispatchCoreHostRpc(
+      services,
+      ws,
+      req,
+      validationConnectionId,
+      admission,
+      evidence,
+    );
   let route: ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;
   try {
     route = resolveRpcRoute({
@@ -516,5 +532,79 @@ async function handleRpc(
         reason: (e as Error).message,
       });
     sendError(`${method}-error`, e);
+  }
+}
+
+/**
+ * A connection method naming a herdr-core connection (P4: Files, Git and an
+ * agent's worktree). It must name the runtime generation it saw: the reply
+ * is published only while that generation is current, and a retired one
+ * answers "connection changed", never another generation's result.
+ */
+async function dispatchCoreHostRpc(
+  services: RpcServices,
+  ws: ServerWebSocket<unknown>,
+  req: RpcRequest,
+  connectionId: string,
+  admission: Admission,
+  evidence: ReturnType<typeof commandEvidence>,
+) {
+  const { id, method } = req;
+  const params = req.params ?? {};
+  const core = services.coreControl!;
+  const lease = core.manager.readyRuntimeLease(connectionId);
+  const generation = lease?.generation ?? req.connection_generation;
+  const refuse = (message: string) => {
+    services.markRpcError(ws, id, message);
+    services.safeSend(
+      ws,
+      serializeConnectionEnvelope(
+        connectionId,
+        { id, error: { message }, command_evidence: { stage: "refused" } },
+        typeof generation === "number" ? generation : undefined,
+      ),
+      "core-host-refused",
+    );
+  };
+  if (!lease?.isCurrent())
+    return refuse("The host's herdr-core is not connected.");
+  if (req.connection_generation !== lease.generation)
+    return refuse("The host's herdr-core reconnected; look again and retry.");
+  if (!answersOnCore(method))
+    return refuse(
+      `${method} is not available on a herdr-core connection; World offers its files, Git and worktrees.`,
+    );
+  admission.preconditions = () => services.clients.has(ws) && lease.isCurrent();
+  admission.capabilities = () => routeCapabilities("connection");
+  const verb = registeredVerb("rpc", method);
+  const publisher = createConnectionReplyPublisher({
+    connectionId,
+    generation: lease.generation,
+    requestId: id,
+    isCurrent: () => services.clients.has(ws) && lease.isCurrent(),
+    send: (payload, context) => services.safeSend(ws, payload, context),
+    markError: (message) => services.markRpcError(ws, id, message),
+  });
+  try {
+    admitVerb(verb, params, admission);
+    const host = core.hostRuntime(lease);
+    const result = await callCoreHost(host, method, params, ws.remoteAddress);
+    checkVerbResult(verb, result);
+    publisher.send(
+      { id, result, command_evidence: evidence.get() },
+      `core-${method}`,
+    );
+  } catch (error) {
+    const message = (error as Error).message;
+    services.markRpcError(ws, id, message);
+    if (evidence.get().stage !== "uncertain")
+      evidence.record({
+        stage: error instanceof VerbRefusal ? "refused" : "failed",
+        reason: message,
+      });
+    publisher.send(
+      { id, error: { message }, command_evidence: evidence.get() },
+      `core-${method}-error`,
+    );
   }
 }

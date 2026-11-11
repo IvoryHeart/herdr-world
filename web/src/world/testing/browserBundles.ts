@@ -10,6 +10,7 @@ export type WorldBrowserEntry =
   | "CoreViewOnly"
   | "CoreControl"
   | "CoreSharedState"
+  | "CoreFiles"
   | "QuestionCards";
 export type WorldBrowserBundle = {
   directory: string;

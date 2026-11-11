@@ -1,3 +1,4 @@
+import { RuntimeGenerationCatalogue } from "./runtimeGenerations";
 import { createConnectionBackgroundLanes, type RpcLane } from "./rpcLanes";
 import { isBridgeHello } from "./bridgeHello";
 import type { BridgeControlMsg } from "./bridgeControl";
@@ -379,6 +380,10 @@ export class Bridge {
   private helloAcceptedForSocket = false;
   private readonly runtimeGenerations = new Map<string, number>();
   private readonly runtimeLeases = new Map<string, object>();
+  private readonly runtimeCatalogue = new RuntimeGenerationCatalogue(
+    this.runtimeGenerations,
+    this.runtimeLeases,
+  );
   /** Page-local hosts (`?scene=town-scale`), served instead of the service. */
   synthetic: ((id: string) => ConnectionClient | null) | null = null;
 
@@ -410,24 +415,16 @@ export class Bridge {
         Partial<Pick<ConnectionSummary, "state">>
     >,
   ): void {
-    const nextGenerations = new Map<string, number>();
-    for (const connection of connections) {
-      if (connection.state === undefined || connection.state === "ready") {
-        nextGenerations.set(connection.id, connection.generation);
-      }
-    }
-    for (const [id, generation] of nextGenerations) {
-      if (this.runtimeGenerations.get(id) !== generation) {
-        this.runtimeLeases.set(id, {});
-      }
-    }
-    this.runtimeGenerations.clear();
-    for (const [id, generation] of nextGenerations) {
-      this.runtimeGenerations.set(id, generation);
-    }
-    for (const id of this.runtimeLeases.keys()) {
-      if (!nextGenerations.has(id)) this.runtimeLeases.delete(id);
-    }
+    this.runtimeCatalogue.setHosts(connections);
+    this.rejectRetiredRuntimeRequests();
+  }
+  setCoreRuntimeGenerations(
+    connections: Array<{ id: string; generation: number }>,
+  ): void {
+    this.runtimeCatalogue.setCore(connections);
+    this.rejectRetiredRuntimeRequests();
+  }
+  private rejectRetiredRuntimeRequests(): void {
     this.rejectPending(
       "connection runtime generation is unavailable",
       (pending) =>

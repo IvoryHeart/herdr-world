@@ -15,7 +15,8 @@ module herdr_core_runtime {
     captured: bool, leaseGen: int, leaseOwner: int, leaseEpoch: int, session: int,
     pending: bool, queued: bool, uncertain: bool, attempts: int, delivered: int,
     admitted: bool, dispatched: bool, published: bool, safe: bool,
-    child: bool, planned: bool, confirmedChild: bool, confirmedOccupant: int, killed: bool }
+    child: bool, planned: bool, confirmedChild: bool, confirmedOccupant: int, killed: bool,
+    planGen: int, tornDown: bool, removed: bool }
   var family: str
   var c: State
   var op: str
@@ -34,7 +35,8 @@ module herdr_core_runtime {
       admitted: false, dispatched: false, published: false, safe: true,
       // Terminal 1, once born, is a child core ends with terminal 0 (M7).
       child: choice >= 2, planned: false, confirmedChild: false,
-      confirmedOccupant: -1, killed: false },
+      confirmedOccupant: -1, killed: false,
+      planGen: -1, tornDown: false, removed: false },
     op' = "init", target' = 0,
     }
   }
@@ -172,7 +174,7 @@ module herdr_core_runtime {
   action plan = all {
     family == "authority", c.ready, c.mirror[0].alive, not(c.planned),
     change({ ...c, planned: true, confirmedChild: c.child and c.mirror[1].alive,
-      confirmedOccupant: c.mirror[0].occupant }, "plan", 0),
+      confirmedOccupant: c.mirror[0].occupant, planGen: c.generation }, "plan", 0),
   }
   action kill = all {
     c.planned, not(c.killed),
@@ -191,17 +193,41 @@ module herdr_core_runtime {
       ready: c.ready and not(allowed),
       safe: c.safe and (not(allowed) or not(unconfirmed or replaced)) }, "kill", 0),
   }
+  // P4: removing a worktree room whose terminal 0 World confirmed ending.
+  // The teardown hook runs only while that confirmation still matches the
+  // observation (a stale one runs nothing and ends nothing). The checkout
+  // goes only after the teardown and after every confirmed terminal ended,
+  // and only under the generation the removal was planned in: a reconnect
+  // between steps stops it, so no folder is removed under a live program.
+  action teardown = all {
+    family == "authority", c.planned, not(c.killed), not(c.tornDown),
+    val unconfirmed = c.child and c.mirror[1].alive and not(c.confirmedChild)
+    val replaced = c.mirror[0].occupant != c.confirmedOccupant
+    val allowed = c.ready and c.mirror[0].alive and
+      (not(unconfirmed or replaced) or fault("teardown-unconfirmed"))
+    change({ ...c, tornDown: allowed,
+      safe: c.safe and (not(allowed) or not(unconfirmed or replaced)) }, "teardown", 0),
+  }
+  action removeCheckout = all {
+    c.tornDown, not(c.removed),
+    val current = c.connected and c.generation == c.planGen
+    val allowed = (c.killed or fault("remove-before-kill")) and
+      (current or fault("remove-after-retire"))
+    change({ ...c, removed: allowed,
+      safe: c.safe and (not(allowed) or (c.killed and current)) }, "removeCheckout", 0),
+  }
   action choices = {
     nondet t = Set(0, 1).oneOf()
     nondet kind = Set("create", "remove", "x", "y").oneOf()
     any { connect, baseline, emit(t, kind), receive, missed, drop, heartbeat,
       disconnect, restart, absent, switchProfile, replace, capture, dispatch, deliver, complete, recover,
-      plan, kill }
+      plan, kill, teardown, removeCheckout }
   }
   // Simulation weights do not multiply the checker's successor computation.
   action step = if (CHECKING) choices else any { choices, capture, dispatch,
     queuedReplacement, queuedReplacement, queuedReplacement, queuedReplacement,
-    plan, plan, kill, kill, childAfterPlan, childAfterPlan, childAfterPlan }
+    plan, plan, kill, kill, childAfterPlan, childAfterPlan, childAfterPlan,
+    teardown, teardown, teardown, removeCheckout, removeCheckout, removeCheckout }
   val projection = not(c.ready) or (c.connected and c.cursor >= 0 and
     c.cursor <= c.seq and c.mirror == c.history[c.cursor])
   val safety = c.safe and projection and c.attempts <= 1 and
@@ -216,6 +242,8 @@ module herdr_core_runtime {
   val queueFenced = op == "deliver" and c.replaced and c.delivered == 0
   val existingOnly = op == "connect" and not(c.running) and not(c.connected)
   val cascadeConfirmed = op == "kill" and c.killed and c.child and c.confirmedChild
+  val worktreeRemoved = op == "removeCheckout" and c.removed
+  val teardownFenced = op == "teardown" and not(c.tornDown) and c.ready
   val unconfirmedRefused = op == "kill" and not(c.killed) and c.child and
     c.mirror[1].alive and not(c.confirmedChild)
 }

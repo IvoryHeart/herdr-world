@@ -20,6 +20,7 @@ import {
   requestWorkspaceStep,
 } from "../herdrOrder";
 import { spaceRoomActionCapabilities } from "../officeRoomActions";
+import { openCoreWorktrees } from "../CoreWorktrees";
 import {
   closeCoreRoomConfirmed,
   closeRoom,
@@ -360,9 +361,26 @@ export function useBoardHerdrActions({
     if (space) {
       const can = spaceRoomActionCapabilities(space.space);
       const host = model.hostByKey.get(space.hostKey);
-      if (!can.rename && !can.close) return null;
+      if (!can.rename && !can.close && !can.worktrees) return null;
       return (
         <>
+          {can.worktrees ? (
+            <button
+              type="button"
+              title="Worktrees: new, open or remove"
+              onClick={() =>
+                openCoreWorktrees({
+                  connectionId: space.connectionId,
+                  generation: space.generation,
+                  workspaceId: space.nativeId,
+                  label: space.label,
+                  linked: can.linkedWorktree === true,
+                })
+              }
+            >
+              Worktrees…
+            </button>
+          ) : null}
           {can.rename ? (
             <button type="button" onClick={() => openDialog("rename", space)}>
               Rename…

@@ -20,6 +20,18 @@ import {
   renameCoreRoom,
 } from "../herdr-core/operations";
 import type { CoreConnectionRuntime } from "../herdr-core/runtime";
+import {
+  createCoreWorktree,
+  listCoreWorktrees,
+  openCoreWorktree,
+  removeCoreWorktree,
+} from "../herdr-core/worktrees";
+import {
+  type CoreHostRuntime,
+  coreHostRuntimes,
+} from "../herdr-core/host-runtime";
+import type { ReadyRuntimeLease } from "../connections/manager";
+import { defaultGuiSettings, type GuiSettings } from "../config/gui-settings";
 import type { CoreTopologyPort } from "../storage/core-topology";
 import type { BridgeRpcContext } from "./context";
 
@@ -27,6 +39,8 @@ import type { BridgeRpcContext } from "./context";
 export type CoreRpcServices = {
   manager: ConnectionManager<CoreConnectionRuntime>;
   topology: CoreTopologyPort;
+  /** Files, Git, hooks and worktrees of a core connection's generation (P4). */
+  hostRuntime(lease: ReadyRuntimeLease<CoreConnectionRuntime>): CoreHostRuntime;
   /** Where the core of a connection runs, for finding executables. */
   host(connectionId: string): CoreHost | null;
   /** Test seam: how the readiness probe runs. */
@@ -49,20 +63,35 @@ export function composeCore(
       coreList(): Array<CoreConnectionProfile & { state: string }>;
     };
     topology?: CoreTopologyPort;
+    /** The service's settings (repository hooks, worktree commands). */
+    readSettings?(): Promise<GuiSettings>;
   },
 ) {
   const topology = args.topology ?? memoryCoreTopologyPort();
-  const core = createCoreConnections({ ...args, topology: () => topology });
+  const { readSettings, ...connections } = args;
+  const core = createCoreConnections({
+    ...connections,
+    topology: () => topology,
+  });
+  const host = (connectionId: string) => {
+    const profile = args
+      .profiles()
+      .coreList()
+      .find((item) => item.id === connectionId);
+    return profile ? coreHostForProfile(profile) : null;
+  };
   const rpc: CoreRpcServices = {
     manager: core.manager,
     topology,
-    host: (connectionId) => {
-      const profile = args
-        .profiles()
-        .coreList()
-        .find((item) => item.id === connectionId);
-      return profile ? coreHostForProfile(profile) : null;
-    },
+    host,
+    hostRuntime: coreHostRuntimes({
+      host,
+      readSettings: async (id) =>
+        core.fixture.settingsFor(
+          id,
+          await (readSettings ?? (async () => defaultGuiSettings()))(),
+        ),
+    }),
   };
   return { core, rpc };
 }
@@ -105,6 +134,10 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
       throw new CoreOperationRefused(
         "The host's herdr-core reconnected; look again and retry.",
       );
+    const worktreeDeps = () => ({
+      topology: core.topology,
+      host: core.hostRuntime(lease),
+    });
     const invalidate = () => {
       if (lease.isCurrent())
         rpc.services.publishWorldInvalidation(connectionId, lease.generation);
@@ -208,6 +241,42 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         );
         invalidate();
         return reply(outcome);
+      }
+      case "world.core.worktree.list":
+        return reply(
+          await listCoreWorktrees(
+            lease,
+            worktreeDeps(),
+            String(p.workspace_id ?? ""),
+          ),
+        );
+      case "world.core.worktree.create": {
+        const result = await createCoreWorktree(lease, worktreeDeps(), {
+          workspaceId: String(p.workspace_id ?? ""),
+          branch: String(p.branch ?? ""),
+        });
+        invalidate();
+        return reply(result);
+      }
+      case "world.core.worktree.open": {
+        const result = await openCoreWorktree(lease, worktreeDeps(), {
+          workspaceId: String(p.workspace_id ?? ""),
+          path: String(p.path ?? ""),
+        });
+        invalidate();
+        return reply(result);
+      }
+      case "world.core.worktree.remove": {
+        const result = await removeCoreWorktree(lease, worktreeDeps(), {
+          workspaceId: String(p.workspace_id ?? ""),
+          force: p.force === true,
+          confirmation:
+            p.confirmation === undefined
+              ? null
+              : parseCoreKillConfirmation(p.confirmation),
+        });
+        invalidate();
+        return reply(result);
       }
       default:
         throw new CoreOperationRefused("Unknown herdr-core operation.");

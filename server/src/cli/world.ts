@@ -210,6 +210,8 @@ export function httpTransport(context: CliContext): WorldCliTransport {
     // mismatched instance can be found.
     const where = `${new URL(url).origin} (token from ${secretPath ?? "HERDR_WORLD_TOKEN"})`;
     const paneId = context.runtime.env.HERDR_PANE_ID;
+    // Inside a herdr-core terminal: its address, a claim the service checks.
+    const coreTerminal = context.runtime.env.HC_TERMINAL_ID;
     let response: Response;
     try {
       response = await fetch(url, {
@@ -221,7 +223,10 @@ export function httpTransport(context: CliContext): WorldCliTransport {
         body: JSON.stringify({
           command,
           params,
-          caller: paneId ? { pane_id: paneId } : {},
+          caller: {
+            ...(paneId ? { pane_id: paneId } : {}),
+            ...(coreTerminal ? { core_terminal: coreTerminal } : {}),
+          },
         }),
         // The service is on this machine; its certificate is often self-signed.
         tls: { rejectUnauthorized: false },

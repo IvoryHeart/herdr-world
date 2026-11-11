@@ -104,8 +104,8 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
   );
 });
 
-test("all thirteen required faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(13);
+test("all sixteen required faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(16);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;
@@ -168,5 +168,72 @@ describe("a kill ends only what was confirmed (M7)", () => {
     );
     expect(states.at(-1)!.c).toMatchObject({ killed: false, ready: true });
     replayCore(states);
+  });
+});
+
+describe("a worktree's checkout goes only after its confirmed terminals (P4)", () => {
+  const authority = (states: ReturnType<typeof trace>) =>
+    states.map((state) => ({ ...state, family: "authority" }));
+
+  test("teardown, the confirmed kill, then the checkout", () => {
+    const states = authority(
+      trace(
+        [
+          "connect",
+          "baseline",
+          ["create", 1],
+          "receive",
+          "plan",
+          "teardown",
+          "kill",
+          "baseline",
+          "removeCheckout",
+        ],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      tornDown: true,
+      killed: true,
+      removed: true,
+    });
+    expect(replayCore(states).has("worktreeRemoved")).toBe(true);
+  });
+
+  test("a child seen after the confirmation runs no teardown and removes nothing", () => {
+    const states = authority(
+      trace(
+        ["connect", "baseline", "plan", ["create", 1], "receive", "teardown"],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      tornDown: false,
+      killed: false,
+      removed: false,
+    });
+    expect(replayCore(states).has("teardownFenced")).toBe(true);
+  });
+
+  test("a reconnect after the kill stops the removal; the checkout stays", () => {
+    const states = authority(
+      trace([
+        "connect",
+        "baseline",
+        "plan",
+        "teardown",
+        "kill",
+        "disconnect",
+        "connect",
+        "baseline",
+        "removeCheckout",
+      ]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({ killed: true, removed: false });
+    replayCore(states);
+    // The model's own mutant would remove it: the replay rejects that.
+    const broken = structuredClone(states);
+    broken.at(-1)!.c.removed = true;
+    return expectObservationMismatch(() => replayCore(broken), ["core.state"]);
   });
 });

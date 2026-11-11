@@ -61,6 +61,7 @@ const WRITE_METHODS = new Set([
   "terminal.run",
   "terminal.kill",
   "terminal.label",
+  "terminal.send",
   "terminal.attach",
 ]);
 
@@ -630,6 +631,7 @@ export class FakeCore {
         "terminal.read",
         "terminal.attach",
         "terminal.label",
+        "terminal.send",
         "events.subscribe",
       ].filter(
         (method) =>
@@ -735,6 +737,17 @@ export class FakeCore {
         if (this.heldReads) this.heldReads.push(send);
         else send();
         return;
+      }
+      case "terminal.send": {
+        if (this.options.observeOnly) break;
+        const record = this.terminals.get(String(request.params.terminal));
+        if (!record || record.state !== "live")
+          return error(-32000, "no terminal", "not_found");
+        if (this.dropNextWriteReply) {
+          this.dropNextWriteReply = false;
+          return;
+        }
+        return reply({ status: null, turn: record.turn ?? 0, started: null });
       }
       case "terminal.run": {
         if (this.options.observeOnly) break;

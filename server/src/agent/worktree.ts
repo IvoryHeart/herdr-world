@@ -101,6 +101,9 @@ export function createAgentWorktree(args: {
       session ?? pane.terminal_title ?? null,
       metadata,
       report,
+      // A runtime without session evidence (herdr-core) names the program
+      // occupying the address instead; Herdr's panes have none.
+      ...(pane.occupant === undefined ? [] : [pane.occupant]),
     ]);
     return {
       pane,

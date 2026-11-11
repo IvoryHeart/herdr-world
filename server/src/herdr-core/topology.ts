@@ -8,7 +8,9 @@ import { CoreUnavailableError } from "./client";
 import { harnessName, harnessOfArgv } from "./harness";
 import type { CoreMirror, CoreMirrorTerminal } from "./mirror";
 import { coreSpawnedBy, coreSummaryOf } from "./labels";
+import { coreOccupantFingerprint } from "./occupant";
 import type {
+  CoreRoomCheckout,
   CoreTopologyDocument,
   CoreTopologyRoom,
   CoreTopologyTab,
@@ -243,6 +245,29 @@ function worldTabsOf(
   return worldTabs;
 }
 
+/**
+ * A worktree room's folder, in the TUI's workspace shape: Files, Git,
+ * hooks and Ranger read a room's checkout from `worktree`, as they read a
+ * Herdr workspace's.
+ */
+export function coreCheckoutFields(
+  checkout: CoreRoomCheckout | undefined,
+): Pick<WorkspaceRow, "cwd" | "worktree"> {
+  if (!checkout) return {};
+  const repoName = checkout.source.replace(/\/+$/, "").split("/").pop() || "";
+  return {
+    cwd: checkout.path,
+    worktree: {
+      checkout_path: checkout.path,
+      repo_root: checkout.source,
+      ...(repoName ? { repo_name: repoName } : {}),
+      ...(checkout.branch ? { branch: checkout.branch } : {}),
+      // The repository's own checkout opened as a room is not a linked one.
+      is_linked_worktree: checkout.path !== checkout.source,
+    },
+  };
+}
+
 export type CoreTopology = {
   workspaces: WorkspaceRow[];
   tabs: RuntimeRow[];
@@ -321,6 +346,7 @@ export function coreTopology(
       workspace_id: id,
       label: room.label || (room.id === CORE_MAIN_ROOM ? coreName : "Room"),
       focused: false,
+      ...coreCheckoutFields(room.checkout),
     });
   }
   const panes: TerminalRow[] = [];
@@ -402,6 +428,10 @@ export function coreTopology(
         ? coreAgentStatus(record, firstSight.turn(record.address))
         : "unknown",
     };
+    // The program at this address, as a verified core caller's asks name it
+    // (ask-caller.ts): Town puts a question on the desk of that program only.
+    const occupant = coreId ? coreOccupantFingerprint(coreId, record) : null;
+    if (occupant) pane.core_occupant_fingerprint = occupant;
     panes.push(pane);
     if (!harness) continue;
     pane.agent = harness;

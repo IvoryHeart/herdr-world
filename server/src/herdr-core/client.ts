@@ -27,14 +27,14 @@ type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
  * shared `herdr.seen`/`herdr.pinned`, and placement at launch). None is
  * required for observation: on a core without one, that action fails and
  * World keeps observing. World's own float shells (`float-shell.ts`) also
- * view theirs (`terminal.attach`). Never `terminal.send`/`keys` (the
- * delivery item), `machine.*`, `file.*`, `server.stop`/`restart` or
+ * view theirs (`terminal.attach`). Native `terminal.send` delivers asks and Ranger prompts. Never `terminal.keys`, `machine.*`, `file.*`, `server.stop`/`restart` or
  * `terminal.put`.
  */
 export type CoreWriteMethod =
   | "terminal.run"
   | "terminal.kill"
-  | "terminal.label";
+  | "terminal.label"
+  | "terminal.send";
 /** Optional for float shells: a core without them refuses only that. */
 const FLOAT_SHELL_METHODS = [
   "terminal.run",
@@ -515,6 +515,26 @@ export class CoreClient {
       { terminal: localAddress(address), labels: checkLabels(labels) },
       timeoutMs,
     ) as Promise<CoreTerminalRecord>;
+  }
+
+  /** Core owns paste, Enter and harness-specific delivery. No caller or force. */
+  sendText(address: string, text: string, timeoutMs = 15_000) {
+    if (!text.trim() || text.length > 32_000 || text.includes("\0"))
+      throw new CoreProtocolError("invalid message text");
+    return this.write(
+      "terminal.send",
+      {
+        terminal: localAddress(address),
+        text,
+        force: false,
+        wait: false,
+      },
+      timeoutMs,
+    ) as Promise<{
+      status: string | null;
+      turn: number;
+      started: boolean | null;
+    }>;
   }
 
   private async write(

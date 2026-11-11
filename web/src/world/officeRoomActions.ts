@@ -12,6 +12,13 @@ export type OfficeRoomActionCapabilities = {
   manageReason?: string;
   /** A herdr-core room: its actions go through world.core.* (coreControl). */
   core?: true;
+  /**
+   * A herdr-core room's Git worktrees (create, open, remove): World runs
+   * Git on the core's host and makes each worktree one of its own rooms.
+   */
+  worktrees?: true;
+  /** A herdr-core room that is a linked worktree World opened: removable. */
+  linkedWorktree?: true;
 };
 
 export type OfficeCreationActionState = {
@@ -90,6 +97,10 @@ export function spaceRoomActionCapabilities(
       rename: own,
       close: own,
       core: true,
+      worktrees: true,
+      ...(own && space.workspace.worktree?.is_linked_worktree === true
+        ? { linkedWorktree: true as const }
+        : {}),
       ...(own ? {} : { manageReason: CORE_APP_SPACE_REASON }),
     };
   }

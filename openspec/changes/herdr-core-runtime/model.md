@@ -53,7 +53,7 @@ and cleanup failures abort; only the named `core.state` mismatch kills a control
 Required replay witnesses cover ordered deltas, missed cuts, gap retirement,
 reconnect, occupant refusal, late queued refusal and an absent endpoint per seed.
 
-The maintained command checks all thirteen plan mutants individually and requires
+The maintained command checks all sixteen plan mutants individually and requires
 both an invariant violation and rejection of that counterexample by correct replay:
 
 | Mutant | Forbidden outcome |
@@ -71,6 +71,9 @@ both an invariant violation and rejection of that counterexample by correct repl
 | heartbeat-ignored | Jump leaves the host actionable |
 | unconfirmed-cascade | Kill sent while an observed die-with-parent child is unconfirmed |
 | stale-confirmation | Kill sent after the confirmed program was replaced |
+| teardown-unconfirmed | Worktree teardown hook run on a confirmation that no longer matches |
+| remove-before-kill | Worktree checkout removed while a confirmed terminal still runs |
+| remove-after-retire | Worktree checkout removed after the planning generation retired |
 
 A separate ungated-fake control must diverge on a valid model trace. It checks
 adapter sensitivity without claiming mutation of a production core provider.
@@ -190,6 +193,29 @@ attention rule from the ordered mirror; both are checked by unit, RPC,
 recorded 0.1.20 and live-release tests, not by this model.
 
 Run `bun quint/run.ts --case herdr-core-seen` during development.
+## Worktree removal (issue #871, P4)
+
+Removing a worktree room reuses the kill confirmation: `plan` also records
+the generation it was planned in (`planGen`). `teardown` (the worktree's
+teardown hook) runs only while the observation still matches the
+confirmation, as `kill` is sent; a stale one runs nothing and ends nothing.
+`removeCheckout` removes the checkout only after the teardown, after the
+confirmed kill, and only while the planning generation is still the
+connected one: a reconnect between steps stops the removal and keeps the
+checkout and room. Sampling weights add the two actions without adding
+transitions.
+
+The replay adapter decides `teardown` with the production `coreKillPlan` and
+`coreKillRefusal`, which `removeCoreWorktree` calls through
+`assertCoreKillConfirmed` before its hook
+(`server/src/herdr-core/worktrees.ts`). `removeCheckout` is the design seam:
+`removeCoreWorktree` checks the original lease (`guard`) before every host
+step and after each one, and kills through `killCore`; the Bun suite
+`worktrees.test.ts` (stale confirmation runs no teardown and ends nothing;
+failed teardown ends and removes nothing; retired lease stops between steps)
+and the live suite `worktrees.live.test.ts` against the core release are its
+production mapping. Witnesses `worktreeRemoved` and `teardownFenced` are
+required per seed.
 
 ## Bounds, evidence and acceptance
 

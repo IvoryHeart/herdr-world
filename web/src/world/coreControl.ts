@@ -212,3 +212,149 @@ export function coreKillDescendantsText(plan: CoreKillPlan): string[] {
     return where ? `${entry.label} (${where})` : entry.label;
   });
 }
+
+/* ---------- Worktrees of a core room (P4) ---------- */
+
+/** A Paseo/World worktree hook's outcome, as the service reports it. */
+export type CoreWorktreeHookResult = {
+  event:
+    | "worktree.created"
+    | "worktree.opened"
+    | "worktree.before_remove"
+    | "worktree.removed";
+  status: "skipped" | "succeeded" | "failed";
+  exit_code?: number;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+};
+
+export type CoreWorktreeEntry = {
+  path: string;
+  branch: string | null;
+  bare: boolean;
+  prunable: boolean;
+  /** Already one of World's rooms. */
+  open: boolean;
+  workspaceId: string | null;
+};
+
+export function parseCoreWorktrees(value: unknown): CoreWorktreeEntry[] {
+  const list = (value as { worktrees?: unknown } | null)?.worktrees;
+  if (!Array.isArray(list)) throw new Error("herdr-core sent no worktree list");
+  return list.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const e = item as Record<string, unknown>;
+    if (typeof e.path !== "string" || !e.path.startsWith("/")) return [];
+    return [
+      {
+        path: e.path,
+        branch: typeof e.branch === "string" && e.branch ? e.branch : null,
+        bare: e.is_bare === true,
+        prunable: e.is_prunable === true,
+        open: e.open === true,
+        workspaceId: typeof e.workspace_id === "string" ? e.workspace_id : null,
+      },
+    ];
+  });
+}
+
+export async function listCoreWorktrees(
+  target: CoreTarget,
+  workspaceId: string,
+): Promise<CoreWorktreeEntry[]> {
+  return parseCoreWorktrees(
+    await bridge.call(
+      "world.core.worktree.list",
+      { ...fenced(target), workspace_id: workspaceId },
+      30_000,
+    ),
+  );
+}
+
+export type CoreWorktreeCreated = {
+  workspace_id: string;
+  label: string;
+  checkout_path: string;
+  branch: string;
+  base_sync?: { base?: string; commit?: string };
+  setup_hook?: CoreWorktreeHookResult;
+  command_fallback?: string;
+};
+
+/** A new linked worktree as a room; the service runs Git and the setup hook. */
+export async function createCoreWorktree(
+  target: CoreTarget,
+  workspaceId: string,
+  branch: string,
+): Promise<CoreWorktreeCreated> {
+  return (await bridge.call(
+    "world.core.worktree.create",
+    { ...fenced(target), workspace_id: workspaceId, branch },
+    // A worktree command may run for minutes; the service bounds it.
+    null,
+  )) as CoreWorktreeCreated;
+}
+
+export type CoreWorktreeOpened = {
+  workspace_id: string;
+  label: string;
+  checkout_path: string;
+  already_open?: boolean;
+  opened_hook?: CoreWorktreeHookResult;
+};
+
+export async function openCoreWorktree(
+  target: CoreTarget,
+  workspaceId: string,
+  path: string,
+): Promise<CoreWorktreeOpened> {
+  return (await bridge.call(
+    "world.core.worktree.open",
+    { ...fenced(target), workspace_id: workspaceId, path },
+    120_000,
+  )) as CoreWorktreeOpened;
+}
+
+export type CoreWorktreeRemoved =
+  | {
+      ok: true;
+      checkout_path: string;
+      killed: string[];
+      alsoEnded?: Array<{ address: string; name: string | null }>;
+      before_remove_hook?: CoreWorktreeHookResult;
+      removed_hook?: CoreWorktreeHookResult;
+      command_fallback?: string;
+    }
+  | {
+      ok: false;
+      skipped_remove: true;
+      checkout_path: string;
+      killed: string[];
+      alsoEnded?: Array<{ address: string; name: string | null }>;
+      uncertain?: string[];
+      before_remove_hook?: CoreWorktreeHookResult;
+      message: string;
+    };
+
+/**
+ * Removes a worktree room's checkout. `confirmation` names every terminal
+ * that ends with it (the plan of `world.core.kill_plan` for the room).
+ */
+export async function removeCoreWorktree(
+  target: CoreTarget,
+  workspaceId: string,
+  confirmation: CoreKillConfirmation | null,
+  force = false,
+): Promise<CoreWorktreeRemoved> {
+  return (await bridge.call(
+    "world.core.worktree.remove",
+    {
+      ...fenced(target),
+      workspace_id: workspaceId,
+      ...(force ? { force: true } : {}),
+      ...(confirmation ? { confirmation } : {}),
+    },
+    null,
+  )) as CoreWorktreeRemoved;
+}
