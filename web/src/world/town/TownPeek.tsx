@@ -1,10 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { SquareTerminal } from "lucide-react";
+import { SquareTerminal, Terminal as ShellIcon } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { agentStateWord } from "../agentMarks";
 import { AgentLatestMessage } from "../AgentHoverCard";
 import type { TownChoice, TownConversation } from "./townChat";
 import { townPortrait } from "./townSprites";
+import { store } from "../../store";
+import { canOpenRoomShell, openRoomShell } from "../floatShell";
+import type { WorldLeafObject } from "../worldObject";
 import { ContextFillBar } from "../../components/ContextFillBar";
 import { useAgentContextFill } from "../agentContextFill";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
@@ -40,6 +43,7 @@ export function TownPeek({
   onAnswer,
   onChat,
   onTerminal,
+  leaf = null,
   onNext,
   onClose,
   onHold,
@@ -75,6 +79,11 @@ export function TownPeek({
   /** Open the agent's one window on Chat. */
   onChat(): void;
   onTerminal(): void;
+  /**
+   * The agent's live World object: its peek offers the room's floating
+   * shell (Herdr Float, or World's own on core).
+   */
+  leaf?: WorldLeafObject | null;
   onNext: (() => void) | null;
   onClose(): void;
   onHold(hold: boolean): void;
@@ -178,6 +187,28 @@ export function TownPeek({
           <SquareTerminal size={15} aria-hidden="true" />
           <span>Open terminal</span>
         </button>
+        {leaf && canOpenRoomShell(leaf) ? (
+          <button
+            type="button"
+            className="town-peek-terminal town-peek-shell"
+            aria-label={`Open a shell in ${agent.displayLabel}'s room`}
+            title="A shell in this room's folder that keeps running when hidden"
+            onClick={() => {
+              onClose();
+              openRoomShell(leaf).catch((cause: unknown) =>
+                store.notify({
+                  kind: "error",
+                  message: `No shell for ${agent.displayLabel}`,
+                  detail:
+                    cause instanceof Error ? cause.message : String(cause),
+                }),
+              );
+            }}
+          >
+            <ShellIcon size={15} aria-hidden="true" />
+            <span>Shell</span>
+          </button>
+        ) : null}
         <button
           type="button"
           className="town-peek-close"

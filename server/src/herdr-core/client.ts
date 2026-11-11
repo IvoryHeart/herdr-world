@@ -20,6 +20,17 @@ const OBSERVATION_METHODS = [
   "events.subscribe",
 ] as const;
 type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
+/**
+ * World's own float shells (`float-shell.ts`), the only terminals World
+ * starts, types into or ends here. Optional: a core without them refuses
+ * that one operation, never the connection.
+ */
+const FLOAT_SHELL_METHODS = [
+  "terminal.run",
+  "terminal.attach",
+  "terminal.kill",
+] as const;
+type CoreMethod = ObservationMethod | (typeof FLOAT_SHELL_METHODS)[number];
 /** Required for observation; absence is an unsupported operation, not a pin. */
 export const REQUIRED_CORE_METHODS: readonly string[] = OBSERVATION_METHODS;
 export const REQUIRED_CORE_FEATURES = ["framed", "events"] as const;
@@ -105,6 +116,38 @@ type Pending = {
 type ChannelSink = {
   data(bytes: Uint8Array): void;
   close(reason: string): void;
+  /** The consumer returns credit itself (`CoreAttachment.credit`). */
+  manualCredit?: boolean;
+};
+
+/** Size of a viewer in cells; core takes it from the latest typing viewer. */
+export type CoreCellSize = { cols: number; rows: number };
+
+/** One interactive viewer of a terminal World started (a float shell). */
+export type CoreAttachment = {
+  readonly channel: number;
+  readonly terminal: CoreTerminalRecord;
+  /** Keys typed by a person, sent as they are. */
+  input(bytes: Uint8Array): void;
+  resize(size: CoreCellSize): void;
+  /** Return `bytes` of consumed stream window, once they were delivered on. */
+  credit(bytes: number): void;
+  /** Leave: the terminal keeps running and returns to its headless size. */
+  detach(): void;
+};
+
+export type CoreAttachHandlers = {
+  /** First paint, then live output, in order. */
+  data(bytes: Uint8Array): void;
+  /** The stream ended: detached, finished, lost or the connection closed. */
+  end(reason: string): void;
+};
+
+export type CoreRunParams = {
+  name: string;
+  cwd: string;
+  labels: Record<string, string>;
+  size: CoreCellSize;
 };
 
 export type CoreClientOptions = {
@@ -160,8 +203,9 @@ function parseHello(value: unknown): CoreHello {
 }
 
 /**
- * One framed connection to an already-running core. It never starts a core,
- * never calls a mutating method and never sends `caller`.
+ * One framed connection to an already-running core. It never starts a core
+ * and never sends `caller`. Its only mutating calls start, view and end
+ * World's own float shells (`runShell`, `attach`, `kill`).
  */
 export class CoreClient {
   private readonly decoder = new FrameDecoder();
@@ -365,8 +409,123 @@ export class CoreClient {
     return { channel };
   }
 
+  /**
+   * Starts that machine's own shell (no argv) in a new, unplaced terminal:
+   * no parent, no notes, removed when it ends. A taken `name` is core's
+   * refusal (`name_taken`), which is what keeps one shell per name.
+   */
+  runShell(params: CoreRunParams, timeoutMs = 15_000) {
+    return this.call(
+      "terminal.run",
+      {
+        name: params.name,
+        cwd: params.cwd,
+        labels: params.labels,
+        size: params.size,
+        no_parent: true,
+        no_notify: true,
+        rm: true,
+      },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  /**
+   * An interactive viewer. Core opens the stream paused and resumes it after
+   * its reply, so the first paint always follows the reply; the stream's
+   * window is returned only as the consumer reports bytes delivered.
+   */
+  async attach(
+    address: string,
+    size: CoreCellSize,
+    handlers: CoreAttachHandlers,
+    timeoutMs = 10_000,
+  ): Promise<CoreAttachment> {
+    const reply = await this.call(
+      "terminal.attach",
+      { terminal: localAddress(address), cols: size.cols, rows: size.rows },
+      timeoutMs,
+    );
+    if (
+      !isRecord(reply) ||
+      typeof reply.channel !== "number" ||
+      !Number.isSafeInteger(reply.channel) ||
+      reply.channel <= 0 ||
+      !isRecord(reply.terminal) ||
+      reply.terminal.address !== address
+    )
+      throw new CoreProtocolError("attach reply is invalid");
+    if (this.closedError) throw this.closedError;
+    const channel = reply.channel;
+    let open = true;
+    const finish = (reason: string) => {
+      if (!open) return;
+      open = false;
+      handlers.end(reason);
+    };
+    this.claim(channel, {
+      data: (bytes) => {
+        if (open) handlers.data(bytes);
+      },
+      close: finish,
+      manualCredit: true,
+    });
+    const cellSize = (next: CoreCellSize) => {
+      const payload = new Uint8Array(4);
+      const view = new DataView(payload.buffer);
+      view.setUint16(0, next.cols, true);
+      view.setUint16(2, next.rows, true);
+      return payload;
+    };
+    return {
+      channel,
+      terminal: reply.terminal as CoreTerminalRecord,
+      input: (bytes) => {
+        if (!open || bytes.byteLength === 0) return;
+        this.send(encodeFrame(channel, FrameKind.DATA, bytes));
+      },
+      resize: (next) => {
+        if (open)
+          this.send(encodeFrame(channel, FrameKind.RESIZE, cellSize(next)));
+      },
+      credit: (bytes) => {
+        if (open && bytes > 0) this.send(creditFrame(channel, bytes));
+      },
+      detach: () => {
+        if (!open) return;
+        // Frames core wrote before it read our CLOSE are dropped, uncredited,
+        // until its own CLOSE ends the channel; never held as unclaimed.
+        if (this.sinks.has(channel))
+          this.sinks.set(channel, {
+            data: () => {},
+            close: () => {},
+            manualCredit: true,
+          });
+        this.send(encodeFrame(channel, FrameKind.CLOSE));
+        finish("detached");
+      },
+    };
+  }
+
+  /** Hangup, then terminate, then kill; core reports what it observed. */
+  kill(address: string, timeoutMs = 15_000) {
+    return this.call(
+      "terminal.kill",
+      { terminal: localAddress(address) },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  /** Whether this core offers World's float shells at all. */
+  get offersFloatShells(): boolean {
+    return (
+      FLOAT_SHELL_METHODS.every((m) => this.hello.methods.includes(m)) &&
+      this.hello.features.includes("attach")
+    );
+  }
+
   private call(
-    method: ObservationMethod,
+    method: CoreMethod,
     params: Record<string, unknown>,
     timeoutMs: number,
   ): Promise<unknown> {
@@ -448,7 +607,7 @@ export class CoreClient {
       if (frame.kind === FrameKind.DATA) {
         sink.data(frame.payload);
         // Credit what was consumed, so core keeps the stream flowing.
-        if (frame.payload.byteLength > 0)
+        if (frame.payload.byteLength > 0 && !sink.manualCredit)
           this.send(creditFrame(frame.channel, frame.payload.byteLength));
       } else if (frame.kind === FrameKind.CLOSE) {
         this.sinks.delete(frame.channel);

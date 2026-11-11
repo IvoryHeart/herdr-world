@@ -112,19 +112,28 @@ export class CoreOperationFence<R extends CoreFencedRuntime> {
     this.epoch = epoch;
   }
 
+  /**
+   * `foreground: false` binds the program but not what runs in its
+   * foreground: a person's own shell legitimately starts and ends programs.
+   */
   static admit<R extends CoreFencedRuntime>(
     lease: ReadyRuntimeLease<R>,
     address?: string,
     session: string | null = null,
+    options: { foreground?: boolean } = {},
   ): CoreOperationFence<R> {
     if (!lease.isCurrent()) throw new CoreFenceError("admission", "lease");
     const view = lease.runtime.core;
     if (!view.actionable || !view.epoch)
       throw new CoreFenceError("admission", "not-actionable");
-    const occupant =
+    const captured =
       address === undefined ? null : captureOccupant(view, address, session);
-    if (address !== undefined && !occupant)
+    if (address !== undefined && !captured)
       throw new CoreFenceError("admission", "occupant-gone");
+    const occupant =
+      captured && options.foreground === false
+        ? { ...captured, foreground: null }
+        : captured;
     return new CoreOperationFence<R>(lease, { ...view.epoch }, occupant);
   }
 

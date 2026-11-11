@@ -23,6 +23,9 @@ import {
 } from "../town/townChat";
 import type { WorldLeafObject } from "../worldObject";
 import "./boardPeek.css";
+import { Terminal as ShellIcon } from "lucide-react";
+import { store } from "../../store";
+import { canOpenRoomShell, openRoomShell } from "../floatShell";
 
 /** The agent being peeked at and where its card sits on screen. */
 export type BoardPeekTarget = {
@@ -144,6 +147,27 @@ export function BoardPeek({
             {where}
           </small>
         </div>
+        {canOpenRoomShell(leaf) ? (
+          <button
+            type="button"
+            className="board-peek-icon"
+            aria-label={`Open a shell in ${name}'s room`}
+            title="Shell: a shell in this room's folder that keeps running when hidden"
+            onClick={() => {
+              onClose();
+              openRoomShell(leaf).catch((cause: unknown) =>
+                store.notify({
+                  kind: "error",
+                  message: `No shell for ${name}`,
+                  detail:
+                    cause instanceof Error ? cause.message : String(cause),
+                }),
+              );
+            }}
+          >
+            <ShellIcon size={15} aria-hidden="true" />
+          </button>
+        ) : null}
         <button
           type="button"
           className="board-peek-icon"

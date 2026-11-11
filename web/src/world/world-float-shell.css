@@ -1,0 +1,123 @@
+/*
+ * World's float shell on herdr-core (components/FloatShellOverlay.tsx): the
+ * Herdr Float popup's place over any view. It opens only from World's views,
+ * which load these styles.
+ */
+.float-shell-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--modal-backdrop);
+}
+
+.float-shell-window {
+  display: flex;
+  flex-direction: column;
+  width: min(85vw, 1100px);
+  height: min(80vh, 760px);
+  max-width: 96vw;
+  max-height: 92vh;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--terminal-bg);
+  box-shadow: var(--shadow-modal);
+}
+
+.float-shell-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.float-shell-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.float-shell-note {
+  color: var(--muted);
+}
+
+.float-shell-action,
+.float-shell-hide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.float-shell-action {
+  padding: 0 9px;
+}
+
+.float-shell-hide {
+  width: 28px;
+  padding: 0;
+}
+
+.float-shell-action:hover:not(:disabled),
+.float-shell-hide:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.float-shell-action:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.float-shell-reason {
+  margin: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: 12.5px;
+}
+
+.float-shell-screen {
+  flex: 1;
+  min-height: 0;
+  padding: 4px;
+  /* Like normal panes, cancel interface zoom only for terminal content. */
+  zoom: calc(1 / var(--ui-scale, 1));
+}
+
+@media (max-width: 720px) {
+  .float-shell-backdrop {
+    align-items: flex-start;
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+
+  .float-shell-window {
+    width: 96vw;
+    /* Leaves room for the on-screen keyboard below. */
+    height: 60dvh;
+  }
+
+  .float-shell-action,
+  .float-shell-hide {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
