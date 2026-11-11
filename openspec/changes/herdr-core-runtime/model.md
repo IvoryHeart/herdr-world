@@ -257,7 +257,13 @@ Three
 seeds (42/73/103) sample 500 ordering/authority traces and 200 observe traces
 of up to 25 transitions each, all replayed. The simulator samples the observe
 family on its own (`OBSERVE`), because its action list changes how the
-simulator weights the others; TLC explores all three families together.
+simulator weights the others. TLC explores every family, each with the actions
+its simulation takes, and runs sends only in the authority family without a
+child and kills only in the one with a child. The send fence (lease, occupant,
+queued delivery) and the kill fence (plan, confirmation) read disjoint fields
+and each still meets every source, cursor, replacement and connection change,
+so this drops only their product (769,597 to 288,538 distinct states). Every
+model fault below still yields a TLC counterexample in this quotient.
 Fault searches use 10,000 samples with seed 42 and the same transition bound
 (observe faults in the observe-only simulation);
 missing counterexamples fail. Increasing source changes to three adds 100 replayed sensitivity traces.
