@@ -1,6 +1,7 @@
 // Larger independent cases start first to keep a bounded worker pool occupied.
 export const verificationModels = [
   "effect-recovery",
+  "herdr-core-runtime",
   "space-admission",
   "browser-preparation",
   "observation-base",

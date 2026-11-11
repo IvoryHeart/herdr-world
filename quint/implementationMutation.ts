@@ -28,6 +28,10 @@ export async function mutateImplementation(
   fault: ImplementationFault,
   { root, output }: { root: string; output: string },
 ) {
+  assert(
+    name !== "herdr-core-runtime",
+    "Core design uses protocol fake controls, not a production mutation",
+  );
   const allowed: Partial<Record<Model, readonly ImplementationFault[]>> = {
     "effect-recovery": [
       "primary",
@@ -60,7 +64,7 @@ export async function mutateImplementation(
     (allowed[name] ?? ["primary"]).includes(fault),
     "Unsupported model/fault combination",
   );
-  const owners: Record<Model, string> = {
+  const owners: Record<Exclude<Model, "herdr-core-runtime">, string> = {
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
     "runtime-leases": "server/src/connections/manager.ts",

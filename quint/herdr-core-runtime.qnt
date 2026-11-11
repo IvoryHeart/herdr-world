@@ -1,0 +1,180 @@
+module herdr_core_runtime {
+  import runtime_leases.capturedLeaseCurrent from "./runtime-leases"
+  import effect_recovery.opaqueReplayBlocked from "./effect-recovery"
+  // TLC omits replay-only labels/receipts, never guard or invariant inputs.
+  pure val CHECKING = false
+  pure val BROKEN = false
+  pure val FAULT = "none"
+  pure def fault(name) = FAULT == name or (BROKEN and name == "lost-delta")
+  pure val EVENT_BOUND = 2
+  type Terminal = { alive: bool, born: bool, x: int, y: int, occupant: int }
+  type Event = { epoch: int, gen: int, seq: int, target: int, kind: str }
+  type State = { source: List[Terminal], mirror: List[Terminal], history: List[List[Terminal]],
+    queue: List[Event], seq: int, cursor: int, epoch: int, generation: int, owner: int,
+    connected: bool, ready: bool, running: bool, changes: int, replaced: bool,
+    captured: bool, leaseGen: int, leaseOwner: int, leaseEpoch: int, session: int,
+    pending: bool, queued: bool, uncertain: bool, attempts: int, delivered: int,
+    admitted: bool, dispatched: bool, published: bool, safe: bool }
+  var family: str
+  var c: State
+  var op: str
+  var target: int
+  pure val terminal = { alive: true, born: true, x: 0, y: 0, occupant: 0 }
+  pure val initial = List(terminal, { ...terminal, alive: false, born: false })
+  action init = {
+    nondet choice = Set(0, 1, 2, 3).oneOf()
+    all {
+    family' = if (choice == 0) "ordering" else "authority",
+    c' = { source: initial, mirror: initial, history: List(initial), queue: List(),
+      seq: 0, cursor: -1, epoch: 0, generation: 0, owner: 0,
+      connected: false, ready: false, running: true, changes: 0, replaced: false,
+      captured: false, leaseGen: -1, leaseOwner: -1, leaseEpoch: -1, session: -1,
+      pending: false, queued: false, uncertain: false, attempts: 0, delivered: 0,
+      admitted: false, dispatched: false, published: false, safe: true },
+    op' = "init", target' = 0,
+    }
+  }
+  action change(updated, name, t) = all {
+    family' = family,
+    c' = if (CHECKING) { ...updated, admitted: false, dispatched: false, published: false } else updated,
+    op' = if (CHECKING) "step" else name, target' = if (CHECKING) 0 else t,
+  }
+  val lease = capturedLeaseCurrent(c.ready and c.connected, c.owner, c.generation, c.leaseOwner, c.leaseGen)
+    and c.epoch == c.leaseEpoch
+  val occupant = c.source[0].alive and c.source[0].occupant == c.session
+  action connect = all {
+    not(c.connected), c.generation < 2,
+    // An absent endpoint is a failed direct connection, never a CLI autostart.
+    change({ ...c, connected: c.running, ready: false, generation: c.generation + 1,
+      cursor: if (fault("keep-cursor")) c.cursor else -1 }, "connect", 0),
+  }
+  action baseline = all {
+    c.connected, not(c.ready),
+    val accept = not(fault("keep-cursor")) or c.seq >= c.cursor
+    change({ ...c, mirror: if (accept) c.source else c.mirror,
+      cursor: if (accept) c.seq else c.cursor, ready: accept,
+      safe: c.safe and accept }, "baseline", 0),
+  }
+  pure def delta(ts, t, kind) = ts.replaceAt(t,
+    if (kind == "create") { ...terminal, occupant: ts[t].occupant }
+    else if (kind == "remove") { ...ts[t], alive: false }
+    else if (kind == "x") { ...ts[t], x: ts[t].x + 1 }
+    else { ...ts[t], y: ts[t].y + 1 })
+  action emit(t, kind) = all {
+    c.running, c.changes < (if (family == "ordering") EVENT_BOUND else 1),
+    if (kind == "create") not(c.source[t].born) else c.source[t].alive,
+    val updated = delta(c.source, t, kind)
+    change({ ...c, source: updated, history: c.history.append(updated), seq: c.seq + 1,
+      changes: c.changes + 1,
+      queue: if (c.connected) c.queue.append({ epoch: c.epoch, gen: c.generation,
+        seq: c.seq + 1, target: t, kind: kind }) else c.queue }, kind, t),
+  }
+  action receive = all {
+    c.connected, c.ready, c.queue.length() > 0,
+    val e = c.queue.head()
+    val current = e.gen == c.generation and e.epoch == c.epoch
+    val stale = e.seq <= c.cursor
+    val gap = e.seq > c.cursor + 1
+    val apply = current and ((not(stale) and not(gap)) or
+      (stale and fault("stale-after-missed")) or (gap and fault("gap-admitted")))
+    change({ ...c, queue: c.queue.tail(),
+      ready: not(current and gap) or fault("gap-admitted"),
+      mirror: if (apply and not(fault("lost-delta") and c.queue.length() > 1))
+        delta(c.mirror, e.target, e.kind) else c.mirror,
+      cursor: if (apply) e.seq else c.cursor }, "receive", e.target),
+  }
+  action missed = all {
+    c.connected, c.queue.length() > 0,
+    // Already queued callbacks survive; all events at/below this cut are discarded.
+    change({ ...c, mirror: c.source, cursor: c.seq, ready: true }, "missed", 0),
+  }
+  action drop = all {
+    c.queue.length() > 0,
+    change({ ...c, queue: c.queue.tail() }, "drop", 0),
+  }
+  action heartbeat = all {
+    c.connected, c.ready, c.seq > c.cursor,
+    change({ ...c, ready: fault("heartbeat-ignored"), safe: c.safe and not(fault("heartbeat-ignored")) }, "heartbeat", 0),
+  }
+  action disconnect = all {
+    c.connected,
+    change({ ...c, connected: false, ready: false,
+      uncertain: c.uncertain or c.pending }, "disconnect", 0),
+  }
+  action restart = all {
+    c.epoch == 0,
+    // Holders preserve terminals/occupants; a core process resets the sequence.
+    change({ ...c, epoch: 1, seq: 0, history: List(c.source), connected: false,
+      ready: false, uncertain: c.uncertain or c.pending }, "restart", 0),
+  }
+  action absent = all {
+    c.generation == 0, c.running,
+    change({ ...c, running: false }, "absent", 0),
+  }
+  action switchProfile = all {
+    family == "authority", c.owner == 0,
+    // Both profiles point at the SAME durable core; ownership still differs.
+    change({ ...c, owner: 1 }, "switchProfile", 0),
+  }
+  action replace = all {
+    family == "authority", c.source[0].alive, not(c.replaced),
+    // Kept replacement keeps tN (and may reuse a pid); session evidence changes.
+    val updated = c.source.replaceAt(0, { ...c.source[0], occupant: 1 })
+    change({ ...c, source: updated, replaced: true,
+      history: c.history.replaceAt(c.seq, updated), ready: false }, "replace", 0),
+  }
+  action capture = all {
+    family == "authority", c.ready, not(c.captured), c.source[0].alive,
+    change({ ...c, captured: true, leaseGen: c.generation, leaseOwner: c.owner,
+      leaseEpoch: c.epoch, session: c.source[0].occupant,
+      admitted: true, safe: c.safe and c.connected }, "capture", 0),
+  }
+  action dispatch = all {
+    c.captured, c.attempts == 0,
+    val allowed = (lease or (fault("same-core-stale") and c.ready) or
+      (fault("profile-fallback") and c.ready and c.generation == c.leaseGen) or
+      fault("not-ready")) and (occupant or fault("stale-session"))
+    change({ ...c, attempts: if (allowed) 1 else 0,
+      pending: allowed, queued: allowed, dispatched: allowed,
+      safe: c.safe and (not(allowed) or (lease and occupant)) }, "dispatch", 0),
+  }
+  action deliver = all {
+    c.queued,
+    // The trusted harness session channel checks the original recipient HERE.
+    val allowed = occupant or fault("ungated-queue")
+    change({ ...c, queued: false, delivered: if (allowed) c.delivered + 1 else c.delivered,
+      safe: c.safe and (not(allowed) or occupant) }, "deliver", 0),
+  }
+  action complete = all {
+    c.pending,
+    change({ ...c, pending: false, published: lease and occupant,
+      uncertain: c.uncertain or not(lease and occupant) }, "complete", 0),
+  }
+  action recover = all {
+    c.uncertain, c.ready,
+    val replay = not(opaqueReplayBlocked(c.attempts > 0, "opaque", false)) or fault("replay-write")
+    change({ ...c, attempts: if (replay) c.attempts + 1 else c.attempts,
+      safe: c.safe and not(replay) }, "recover", 0),
+  }
+  action queuedReplacement = all { c.queued, replace }
+  action choices = {
+    nondet t = Set(0, 1).oneOf()
+    nondet kind = Set("create", "remove", "x", "y").oneOf()
+    any { connect, baseline, emit(t, kind), receive, missed, drop, heartbeat,
+      disconnect, restart, absent, switchProfile, replace, capture, dispatch, deliver, complete, recover }
+  }
+  // Simulation weights do not multiply the checker's successor computation.
+  action step = if (CHECKING) choices else any { choices, capture, dispatch,
+    queuedReplacement, queuedReplacement, queuedReplacement, queuedReplacement }
+  val projection = not(c.ready) or (c.connected and c.cursor >= 0 and
+    c.cursor <= c.seq and c.mirror == c.history[c.cursor])
+  val safety = c.safe and projection and c.attempts <= 1 and
+    (c.running or not(c.connected))
+  val orderedDelta = op == "receive" and c.ready and c.cursor > 0
+  val missedCut = op == "missed"
+  val gapRetired = (op == "heartbeat" or op == "receive") and not(c.ready)
+  val reconnected = op == "baseline" and c.generation == 2 and c.ready
+  val replacementFenced = op == "dispatch" and c.replaced and c.attempts == 0
+  val queueFenced = op == "deliver" and c.replaced and c.delivered == 0
+  val existingOnly = op == "connect" and not(c.running) and not(c.connected)
+}

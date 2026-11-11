@@ -75,7 +75,7 @@ approval. Future contract/gate changes require their own applicable review.
 
 ## Candidate commands and promotion
 
-The separate Behavioral verification candidate CI workflow runs all 14 models,
+The separate Behavioral verification candidate CI workflow runs 14 production-connected models and the herdr-core design model,
 actual replay, required per-seed witnesses, model/implementation fault controls
 and larger-bound/host-order sensitivity. It installs locked tooling and the
 hash-validated checker, records exact tool/input identities and retains manifests
@@ -248,3 +248,16 @@ failure diagnostics. Focused success output follows publication. Private checker
 teardown similarly drains first and checks the external signal before returning.
 Deterministic regressions use completed synthetic worker records to isolate
 finalization; they do not claim a fresh checker exploration.
+
+## Herdr-core design contract (Q52)
+
+[herdr-core-runtime](../openspec/changes/herdr-core-runtime/model.md) adds a composed
+delta/lease/opaque-recovery design case to the canonical inventory. Run
+`bun quint/run.ts --case herdr-core-runtime` during development; the complete
+`bun run verification:gate` retains every foundation case. The new case exhaustively
+checks its finite graph, replays three seeds against an in-process protocol fake,
+and requires all eleven ordering/recovery mutants to violate safety and diverge
+on correct replay. A separate fake mutation checks the adapter. This is design
+evidence with independent review pending; it is not production core conformance.
+Coverage remains pending until the provider and its consumers exist and pass the
+separate acceptance in the active OpenSpec change.

@@ -1,0 +1,103 @@
+## Intended behavior and composition
+
+Requirements come from the [delta spec](specs/herdr-core-runtime/spec.md), especially
+ordered mirror recovery and original operation/occupant authority. Allowed:
+ordered relative deltas; created/removed terminals; atomic missed replacement;
+automatic existing-only reconnect; restart keeping addresses; source completion
+without stale publication. Forbidden: stale callbacks rolling back a cut; dropped
+deltas silently becoming current; actionability after unexplained gaps; replacing
+an operation's lease/profile/session; blind replay of an unanswered opaque write;
+source input reaching a kept replacement.
+
+[The composed model](../../../quint/herdr-core-runtime.qnt) imports
+`capturedLeaseCurrent` from `runtime-leases` and `opaqueReplayBlocked` from
+`effect-recovery`. Those predicates also participate in the maintained foundation
+models' capture/recovery transitions. Composition here shares those producer
+rules at the consumer's admission/dispatch/recovery boundaries; it does not take
+the Cartesian product of unrelated foundation administration/storage states.
+The core model retains delayed operations and source-queued sends through
+disconnect/restart/replacement. Foundation models and their real implementation
+replays remain required in the complete gate.
+
+## State and transition mapping
+
+| State | Meaning and boundary |
+| --- | --- |
+| source, history, seq, epoch | Synthetic source truth at each sequence cut, independent of the mirror; one initially live address and one never-created address, with a born bit preventing address reuse; restart resets the process epoch/sequence while holders retain terminal facts. History is a specification oracle, never delivered with an event. |
+| queue | Delivered/buffered events containing only operation, target and ordering identity. Relative x/y deltas cannot restore an earlier lost fact. Old callbacks remain queued after missed/reconnect. |
+| mirror, cursor, ready | Admitted observation; baseline and missed replace it atomically. Receive/drop/heartbeat separate transport loss from detection. Non-actionable observation is retained. |
+| owner, generation, connected, running | Two profiles on the same durable core; two transport attempts; absent endpoint. Connection identity cannot be replaced by durable core identity. No start operation exists in automatic connection. |
+| leaseOwner/Gen/Epoch, captured, session | One original operation's immutable profile, runtime/epoch and occupant proof, retained after retirement. Capture, dispatch and publication are distinct transitions. |
+| occupant, replaced | One kept replacement of terminal 0 without changing its address. It abstracts pid/argv/template/reported/foreground/session evidence changes, including reused-pid and in-shell replacements. |
+| pending, queued, uncertain, attempts, delivered | Dispatch commits once; the source can execute later, even disconnected. The source gate checks the captured session at delivery. Completion only publishes under the original current authority. Recovery never blindly replays possible opaque writes. |
+
+`projection` checks the exact mirror at its accepted source cut, including both
+terminals, existence and independent facts. `safe` records admission, dispatch,
+baseline postcondition, heartbeat retirement and late delivery validity at the
+moment of each effect; later recovery cannot erase a violation. `attempts <= 1`
+checks opaque replay. `running`/`connected` excludes auto-start or connection to an
+absent endpoint. This is safety exploration without temporal fairness/liveness.
+
+## Replay, witnesses and fault controls
+
+[The replay adapter](../../../quint/herdr-core-runtime.ts) drives an in-process
+protocol fake with real delta commands and immutable recipient capture. It uses
+a keyed terminal map to apply changes, not the model's source-cut oracle. It checks
+every observable state after each action. Decode, malformed state/action, process
+and cleanup failures abort; only the named `core.state` mismatch kills a control.
+Required replay witnesses cover ordered deltas, missed cuts, gap retirement,
+reconnect, occupant refusal, late queued refusal and an absent endpoint per seed.
+
+The maintained command checks all eleven plan mutants individually and requires
+both an invariant violation and rejection of that counterexample by correct replay:
+
+| Mutant | Forbidden outcome |
+| --- | --- |
+| keep-cursor | Restart baseline below the old cursor rejected |
+| stale-after-missed | Old relative delta applied after the snapshot cut |
+| replay-write | Unanswered possible write dispatched again |
+| same-core-stale | Delayed operation dispatched through a new generation/epoch |
+| profile-fallback | Profile A's work dispatched through B on the same core |
+| lost-delta | Nonlast relative delta skipped while the cursor advances |
+| gap-admitted | Later event applied over an unexplained missing delta |
+| not-ready | Dispatch while the original connection is non-actionable |
+| stale-session | Old session dispatch after replacement and fresh acquisition |
+| ungated-queue | Queued source input delivered to a replacement occupant |
+| heartbeat-ignored | Jump leaves the host actionable |
+
+A separate ungated-fake control must diverge on a valid model trace. It checks
+adapter sensitivity without claiming mutation of a production core provider.
+
+## Bounds, evidence and acceptance
+
+The single module has two explicitly bounded schedule families. Ordering explores
+two independent source deltas, created/removed terminals and recovery. Authority
+interleaves one source delta with the delayed operation, profile switch and kept
+replacement. This avoids multiplying irrelevant data permutations into every
+operation state; it does not claim arbitrary two-delta/operation schedules.
+Both families have two terminals, independent integer x/y facts, two connection
+attempts, two profiles sharing one core, one process restart, one replacement,
+one captured operation and one source queue. Created/removed events and delayed
+callbacks are explicit. TLC explores the reachable bounded state graph after quotienting replay-only
+action/target labels and admitted/dispatched/published receipts. None of those
+fields participates in a transition guard or safety invariant; all authority,
+source state, cuts, pending work and safe-effect history remain. Sampling weights
+favor the queued-replacement race without adding or removing any transition.
+Three
+seeds (42/73/103) sample 500 traces of up to 25 transitions each, all replayed.
+Fault searches use 10,000 samples with seed 42 and the same transition bound;
+missing counterexamples fail. Increasing source changes to three adds 100 replayed sensitivity traces.
+
+Run `bun quint/run.ts --case herdr-core-runtime` for development and
+`bun run verification:gate` for complete canonical evidence. The maintained runner
+retains source/model/adapter/tool hashes, command logs, traces and counterexamples
+in ignored verification artifacts with existing deadlines and process cleanup.
+Unit tests exercise fake transition/rejection and trace validation independently.
+
+This is a P0 design contract with independent review pending PR review. Coverage
+is pending for production implementation: there is no core provider to replay yet.
+No claim covers framing/credit/UTF-8/budgets, actual core release behavior, every
+occupant-evidence detector, SQLite persistence, harness session implementations,
+OS/SSH/Windows named pipes, app placement/seen, browser grids, performance or
+temporal recovery. P1–P6 consumer/platform checks in [delivery](delivery.md) remain
+mandatory before their paths ship. Do not promote a fake into production evidence.

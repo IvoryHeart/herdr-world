@@ -1,5 +1,8 @@
 module runtime_leases {
   pure val BROKEN = false
+  // Shared by composed runtime consumers; identity includes the connection owner.
+  pure def capturedLeaseCurrent(ready, owner, generation, capturedOwner, capturedGeneration) =
+    ready and owner == capturedOwner and generation == capturedGeneration
   pure val GENERATION_BOUND = 4
   type Host = { gen: int, startGen: int, phase: str, pending: bool, lease: int }
   var hosts: List[Host]
@@ -33,7 +36,7 @@ module runtime_leases {
     obsoleteErrorSeen' = obsoleteErrorSeen,
   }
   action capture(h) = all {
-    hosts[h].phase == "ready", hosts[h].lease != hosts[h].gen,
+    hosts[h].phase == "ready", not(capturedLeaseCurrent(true, h, hosts[h].gen, h, hosts[h].lease)),
     change(h, { ...hosts[h], lease: hosts[h].gen }, "capture"),
   }
   action stop(h) = all {
