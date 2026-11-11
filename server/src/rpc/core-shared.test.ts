@@ -43,7 +43,7 @@ async function until(predicate: () => boolean | Promise<boolean>, ms = 3_000) {
   }
 }
 
-async function world() {
+async function world(ordinal = 1) {
   const root = mkdtempSync(join(tmpdir(), "hcw-s-"));
   roots.push(root);
   const fake = new FakeCore({ heartbeatMs: 60_000 });
@@ -94,6 +94,7 @@ async function world() {
     }),
     retry: { baseDelayMs: 5, maxDelayMs: 20, random: () => 0 },
   });
+  for (let n = 1; n < ordinal; n++) fake.create();
   const scout = fake.create({
     name: "scout",
     argv: ["gemini"],
@@ -153,32 +154,35 @@ async function world() {
 }
 
 describe("world.core.seen and world.core.favourite", () => {
-  test("looking clears done for every client; a repeat writes nothing", async () => {
-    const w = await world();
-    w.fake.report(w.scout, { state: "done", app: "gemini" });
-    await until(() => w.record()?.turn === 1);
-    expect(await w.call("world.core.seen", w.target({ turn: 1 }))).toEqual({
-      result: { written: true },
-    });
-    await until(() => w.record()?.labels["herdr.seen"] === "1");
-    expect(w.labelCalls()).toEqual([
-      {
-        method: "terminal.label",
-        params: { terminal: w.scout, labels: { "herdr.seen": "1" } },
-      },
-    ]);
-    expect(await w.call("world.core.seen", w.target({ turn: 1 }))).toEqual({
-      result: { written: false },
-    });
-    // Never lower and never a turn core has not reached.
-    expect(await w.call("world.core.seen", w.target({ turn: 0 }))).toEqual({
-      result: { written: false },
-    });
-    expect(await w.call("world.core.seen", w.target({ turn: 2 }))).toEqual({
-      result: { written: false },
-    });
-    expect(w.labelCalls()).toHaveLength(1);
-  });
+  test.each([1, 20])(
+    "looking clears done for every client; a repeat writes nothing (ordinal %i)",
+    async (ordinal) => {
+      const w = await world(ordinal);
+      w.fake.report(w.scout, { state: "done", app: "gemini" });
+      await until(() => w.record()?.turn === 1);
+      expect(await w.call("world.core.seen", w.target({ turn: 1 }))).toEqual({
+        result: { written: true },
+      });
+      await until(() => w.record()?.labels["herdr.seen"] === "1");
+      expect(w.labelCalls()).toEqual([
+        {
+          method: "terminal.label",
+          params: { terminal: w.scout, labels: { "herdr.seen": "1" } },
+        },
+      ]);
+      expect(await w.call("world.core.seen", w.target({ turn: 1 }))).toEqual({
+        result: { written: false },
+      });
+      // Never lower and never a turn core has not reached.
+      expect(await w.call("world.core.seen", w.target({ turn: 0 }))).toEqual({
+        result: { written: false },
+      });
+      expect(await w.call("world.core.seen", w.target({ turn: 2 }))).toEqual({
+        result: { written: false },
+      });
+      expect(w.labelCalls()).toHaveLength(1);
+    },
+  );
 
   test("a label another client moved after the browser's look is left alone", async () => {
     const w = await world();
@@ -199,46 +203,53 @@ describe("world.core.seen and world.core.favourite", () => {
     ).toEqual({ result: { written: true } });
   });
 
-  test("favourite sets and removes herdr.pinned, and nothing else", async () => {
-    const w = await world();
-    w.fake.label(w.scout, { where: "web / research", "herdr.space": "s1" });
-    await until(() => w.record()?.labels.where === "web / research");
-    await w.call("world.core.favourite", w.target({ favourite: true }));
-    await until(() => w.record()?.labels["herdr.pinned"] === "1");
-    await w.call("world.core.favourite", w.target({ favourite: false }));
-    await until(() => w.record()?.labels["herdr.pinned"] === undefined);
-    expect(w.record()?.labels).toEqual({
-      where: "web / research",
-      "herdr.space": "s1",
-    });
-    expect(w.labelCalls().map((c) => c.params)).toEqual([
-      { terminal: w.scout, labels: { "herdr.pinned": "1" } },
-      { terminal: w.scout, labels: { "herdr.pinned": "" } },
-    ]);
-  });
+  test.each([1, 20])(
+    "favourite sets and removes herdr.pinned, and nothing else (ordinal %i)",
+    async (ordinal) => {
+      const w = await world(ordinal);
+      w.fake.label(w.scout, { where: "web / research", "herdr.space": "s1" });
+      await until(() => w.record()?.labels.where === "web / research");
+      await w.call("world.core.favourite", w.target({ favourite: true }));
+      await until(() => w.record()?.labels["herdr.pinned"] === "1");
+      await w.call("world.core.favourite", w.target({ favourite: false }));
+      await until(() => w.record()?.labels["herdr.pinned"] === undefined);
+      expect(w.record()?.labels).toEqual({
+        where: "web / research",
+        "herdr.space": "s1",
+      });
+      expect(w.labelCalls().map((c) => c.params)).toEqual([
+        { terminal: w.scout, labels: { "herdr.pinned": "1" } },
+        { terminal: w.scout, labels: { "herdr.pinned": "" } },
+      ]);
+    },
+  );
 
-  test("refuses anything but a live local terminal of the observed generation", async () => {
-    const w = await world();
-    w.fake.report(w.scout, { state: "done", app: "gemini" });
-    await until(() => w.record()?.turn === 1);
-    for (const params of [
-      w.target({ turn: 1, connection_generation: w.generation() + 1 }),
-      w.target({ turn: 1, terminal: "scout" }),
-      w.target({ turn: 1, terminal: "m/t1" }),
-      w.target({ turn: 1, connection_id: "startup-default" }),
-      w.target({ turn: 1, terminal: "t99" }),
-      w.target({ turn: "1" }),
-      w.target({ turn: 1, seen: "0" }),
-      w.target({ turn: 1, seen: undefined }),
-    ])
-      expect((await w.call("world.core.seen", params)).error).toBeInstanceOf(
-        Error,
-      );
-    expect(
-      (await w.call("world.core.favourite", w.target({ favourite: 1 }))).error,
-    ).toBeInstanceOf(Error);
-    expect(w.labelCalls()).toHaveLength(0);
-  });
+  test.each([1, 20])(
+    "refuses anything but a live local terminal of the observed generation (ordinal %i)",
+    async (ordinal) => {
+      const w = await world(ordinal);
+      w.fake.report(w.scout, { state: "done", app: "gemini" });
+      await until(() => w.record()?.turn === 1);
+      for (const params of [
+        w.target({ turn: 1, connection_generation: w.generation() + 1 }),
+        w.target({ turn: 1, terminal: "scout" }),
+        w.target({ turn: 1, terminal: "m/t1" }),
+        w.target({ turn: 1, connection_id: "startup-default" }),
+        w.target({ turn: 1, terminal: "t99" }),
+        w.target({ turn: "1" }),
+        w.target({ turn: 1, seen: "0" }),
+        w.target({ turn: 1, seen: undefined }),
+      ])
+        expect((await w.call("world.core.seen", params)).error).toBeInstanceOf(
+          Error,
+        );
+      expect(
+        (await w.call("world.core.favourite", w.target({ favourite: 1 })))
+          .error,
+      ).toBeInstanceOf(Error);
+      expect(w.labelCalls()).toHaveLength(0);
+    },
+  );
 
   test("a replaced occupant is not an agent: its old turn is not shared", async () => {
     const w = await world();

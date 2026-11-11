@@ -1965,7 +1965,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   as when core was started elevated; stop it with `hc server stop` in an
   elevated terminal there, then start Herdr normally.
   A connected core shows its version, live-terminal count and up to eight
-  terminals by address (`t1 agent · working`). If core stops or is killed, the
+  terminals by address (`t1 agent · working`). Native IDs use core's digit and
+  consonant alphabet: terminal 20 is `t1b`, following `t19`. These IDs work in
+  Terminal, Files, placement, shared labels and verified caller claims.
+  Linked-machine addresses remain observations; direct actions require a local
+  ID on the exact connection and generation, with the same occupant checks.
+  If core stops or is killed, the
   card turns **Stale**: the last facts stay, marked stale, and World keeps
   retrying. When core is back (holders keep programs through a core crash),
   the same terminals return at the same addresses. Lost ordering (a gap in
@@ -2228,6 +2233,13 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   only touches its own connection: if a connection you made already uses the
   ID `core-fixture`, **Start fixture core** and **Remove fixture** refuse and
   leave it in place.
+  For the native-address boundary, open `?coreFixture=alphabet` (the parameter
+  disappears immediately), choose **Manage connections → Fixture core → Start
+  fixture core**, close the manager and open **reviewer** (`t1b`), then its
+  **Terminal** and **Files**. Terminal shows the synthetic review and Files
+  shows the disposable repository, including `README.md`. A shell at `t19`
+  sits beside the reviewer. This scenario replaces an earlier owned fixture
+  when started; it installs nothing and runs no core programs.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
   **Open agent** follows **Agents open** (Chat by default when supported,

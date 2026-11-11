@@ -189,19 +189,23 @@ describe("world.core.* answers only the core connection it names", () => {
     expect(value.readiness.map((r) => r.kind)).toEqual(value.kinds);
   });
 
-  test("a kill plan names the child that would end with its parent", async () => {
-    const w = await world();
-    const lead = w.fake.create({ name: "lead" });
-    w.fake.create({ parent: lead, die_with_parent: true, name: "helper" });
-    await w.settle();
-    const result = await call(w, "world.core.kill_plan", {
-      connection_id: "box",
-      connection_generation: w.lease().generation,
-      terminals: [lead],
-    });
-    expect(result.reply?.result).toMatchObject({
-      roots: [{ address: lead, name: "lead" }],
-      descendants: [{ name: "helper", parent: lead }],
-    });
-  });
+  test.each([1, 20])(
+    "a kill plan names the child that would end with its parent (ordinal %i)",
+    async (ordinal) => {
+      const w = await world();
+      for (let n = 1; n < ordinal; n++) w.fake.create();
+      const lead = w.fake.create({ name: "lead" });
+      w.fake.create({ parent: lead, die_with_parent: true, name: "helper" });
+      await w.settle();
+      const result = await call(w, "world.core.kill_plan", {
+        connection_id: "box",
+        connection_generation: w.lease().generation,
+        terminals: [lead],
+      });
+      expect(result.reply?.result).toMatchObject({
+        roots: [{ address: lead, name: "lead" }],
+        descendants: [{ name: "helper", parent: lead }],
+      });
+    },
+  );
 });

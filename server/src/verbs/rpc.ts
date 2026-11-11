@@ -1,3 +1,4 @@
+import { CORE_LOCAL_ADDRESS_PATTERN } from "../../../shared/coreAddress";
 import { Type } from "typebox";
 import { declare, object, policies, text } from "./declaration";
 import { rpcInput, rpcOutput } from "./rpc-contracts";
@@ -399,7 +400,7 @@ export const rpcVerbs = [
     object({
       connection_id: text,
       connection_generation: Type.Integer({ minimum: 0 }),
-      terminal: Type.String({ pattern: "^t[0-9]{1,9}$" }),
+      terminal: Type.String({ pattern: CORE_LOCAL_ADDRESS_PATTERN }),
       favourite: Type.Boolean(),
     }),
   ),
@@ -410,7 +411,7 @@ export const rpcVerbs = [
     object({
       connection_id: text,
       connection_generation: Type.Integer({ minimum: 0 }),
-      terminal: Type.String({ pattern: "^t[0-9]{1,9}$" }),
+      terminal: Type.String({ pattern: CORE_LOCAL_ADDRESS_PATTERN }),
       turn: Type.Integer({ minimum: 0 }),
       seen: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
     }),

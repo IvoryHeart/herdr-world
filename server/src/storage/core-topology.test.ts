@@ -47,6 +47,23 @@ const doc = (revision: number, label = "Review") => ({
 });
 
 describe("World's layout of a core lives in its SQLite (M1)", () => {
+  test("native alphabet placement survives a durable round trip", () => {
+    const db = database();
+    try {
+      const value = doc(0);
+      value.rooms[0]!.tabs[0]!.terminals = ["t19", "t1b", "t1z", "t100"];
+      const saved = writeCoreTopology(db, 0, value);
+      expect(readCoreTopologies(db)).toEqual([saved]);
+      expect(saved.rooms[0]!.tabs[0]!.terminals).toEqual(
+        value.rooms[0]!.tabs[0]!.terminals,
+      );
+      value.rooms[0]!.tabs[0]!.terminals = ["box/t1b"];
+      expect(() => parseCoreTopology(value)).toThrow("terminal");
+    } finally {
+      db.close();
+    }
+  });
+
   test("written with compare-and-set and read back in order", () => {
     const db = database();
     expect(readCoreTopologies(db)).toEqual([]);

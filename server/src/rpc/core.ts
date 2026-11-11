@@ -1,3 +1,4 @@
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import { harnessReadiness } from "../agent/harness-readiness";
 import { profileLaunch } from "../agent/profile-launch";
 import { WORLD_HARNESSES } from "../cli/harness-names";
@@ -96,13 +97,11 @@ export function composeCore(
   return { core, rpc };
 }
 
-const ADDRESS = /^t[1-9][0-9]{0,9}$/;
-
 function addresses(value: unknown): string[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 64)
     throw new CoreOperationRefused("Name the terminals to end.");
   return value.map((item) => {
-    if (typeof item !== "string" || !ADDRESS.test(item))
+    if (typeof item !== "string" || !isLocalCoreAddress(item))
       throw new CoreOperationRefused("Name the terminals to end.");
     return item;
   });

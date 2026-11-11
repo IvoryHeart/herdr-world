@@ -1,3 +1,4 @@
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 export { worldObjectWithWatches } from "./worldWatches";
 import { agentActivityAt } from "../../../shared/agentMetadata";
 import { sha256 } from "./worldDigest";
@@ -836,7 +837,7 @@ function* constructHost(
         stale: connection.stale || !live,
         actionable: operational,
         ...(viewOnly ? { viewOnly, coreControl: true as const } : {}),
-        ...(viewOnly && !connection.stale && /^t[1-9][0-9]*$/.test(pane.pane_id)
+        ...(viewOnly && !connection.stale && isLocalCoreAddress(pane.pane_id)
           ? {
               watch: {
                 connectionId: connection.connectionId,

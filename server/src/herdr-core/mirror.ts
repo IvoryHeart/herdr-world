@@ -1,3 +1,4 @@
+import { isCoreAddress } from "../../../shared/coreAddress";
 import type { CoreEventLine, CoreTerminalRecord } from "./client";
 
 export type CoreMirrorLimits = {
@@ -219,9 +220,7 @@ export class CoreMirror {
     if (
       !isRecord(value) ||
       typeof value.address !== "string" ||
-      !/^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)*t[1-9][0-9]{0,9}$/.test(
-        value.address,
-      ) ||
+      !isCoreAddress(value.address) ||
       !isRecord(value.labels) ||
       !Array.isArray(value.argv) ||
       typeof value.state !== "string"
