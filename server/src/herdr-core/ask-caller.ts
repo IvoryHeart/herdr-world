@@ -44,7 +44,11 @@ function cliHost(
       const record = runtime.core.terminal(address);
       if (!coreId || !record || record.remote || record.state !== "live")
         return null;
-      const fingerprint = coreOccupantFingerprint(coreId, record);
+      const fingerprint = coreOccupantFingerprint(
+        coreId,
+        record,
+        runtime.core.occupancy(address) ?? -1,
+      );
       if (!fingerprint || typeof record.pid !== "number") return null;
       const foreground = record.foreground as
         | { pid?: unknown; name?: unknown }
@@ -65,8 +69,11 @@ function cliHost(
       const record = runtime.core.terminal(address);
       if (
         !record ||
-        coreOccupantFingerprint(runtime.core.epoch?.coreId ?? "", record) !==
-          fingerprint
+        coreOccupantFingerprint(
+          runtime.core.epoch?.coreId ?? "",
+          record,
+          runtime.core.occupancy(address) ?? -1,
+        ) !== fingerprint
       )
         return null;
       let fence: CoreOperationFence<CoreConnectionRuntime>;

@@ -311,6 +311,7 @@ export type CoreTopologyOptions = {
   /** World's own layout of this core (M1). */
   world?: CoreTopologyDocument | null;
   coreId?: string;
+  occupancy?(address: string): number | null;
   now?: number;
 };
 
@@ -324,6 +325,7 @@ export function coreTopology(
     world = null,
     coreId = world?.core_id ?? "",
     now = Date.now(),
+    occupancy,
   } = "turn" in options ? { firstSight: options } : options;
   const local = terminals
     .filter(
@@ -430,7 +432,13 @@ export function coreTopology(
     };
     // The program at this address, as a verified core caller's asks name it
     // (ask-caller.ts): Town puts a question on the desk of that program only.
-    const occupant = coreId ? coreOccupantFingerprint(coreId, record) : null;
+    const occupant = coreId
+      ? coreOccupantFingerprint(
+          coreId,
+          record,
+          occupancy?.(record.address) ?? 1,
+        )
+      : null;
     if (occupant) pane.core_occupant_fingerprint = occupant;
     panes.push(pane);
     if (!harness) continue;
@@ -514,6 +522,7 @@ export function coreReadModel(source: CoreReadModelSource): CoreTopology {
     world: source.world?.() ?? null,
     coreId: source.coreId?.() ?? undefined,
     now: source.now?.(),
+    occupancy: (address) => source.mirror.occupancy(address),
   });
 }
 

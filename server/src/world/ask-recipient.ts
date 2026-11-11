@@ -141,6 +141,11 @@ export function createAskRecipients(deps: {
         state: "ended",
         reason: "The original herdr-core was replaced; use ask get",
       };
+    if (host.generation !== recipient.connection_generation)
+      return {
+        state: "unconfirmed",
+        reason: "The original core connection retired; use ask get",
+      };
     const occupant = coreOccupant(host, recipient.pane_id);
     if (!occupant)
       return {

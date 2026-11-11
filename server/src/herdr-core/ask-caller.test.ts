@@ -441,6 +441,57 @@ describe("a core asker's recipient (M5)", () => {
     }
   });
 
+  test("an old core ask cannot regain input or CLI-ack authority after reconnect", async () => {
+    const w = await world();
+    const { actor, recipients } = await asker(w, 56001);
+    const recipient = (await recipients.capture(actor))!;
+    const old = w.lease();
+    await w.service.disconnect("box");
+    await w.service.connect("box");
+    await until(() =>
+      Boolean(w.core.manager.readyRuntimeLease("box")?.isCurrent()),
+    );
+    expect(w.lease().generation).not.toBe(old.generation);
+    expect(await recipients.resolve(recipient)).toMatchObject({
+      state: "unconfirmed",
+    });
+    expect(
+      originalAsker(recipient, {
+        ...actor,
+        connection_generation: w.lease().generation,
+      }),
+    ).toBe(false);
+  });
+
+  test("a restarted program with identical native fields cannot inherit an ask", async () => {
+    const w = await world();
+    const { address, actor, recipients } = await asker(w, 55001);
+    const recipient = (await recipients.capture(actor))!;
+    const record = { ...w.fake.terminal(address)! };
+    w.fake.suppressEvents(1);
+    w.fake.injectEventBytes(
+      new TextEncoder().encode(
+        JSON.stringify({
+          method: "event",
+          params: {
+            seq: w.fake.currentSeq,
+            type: "restarted",
+            terminal: address,
+            data: record,
+          },
+        }) + "\n",
+      ),
+    );
+    await w.settle();
+    expect(await recipients.resolve(recipient)).toMatchObject({
+      state: "unconfirmed",
+    });
+    const rows = await w.rows();
+    expect(
+      rows.panes.find((p) => p.pane_id === address)?.core_occupant_fingerprint,
+    ).not.toBe(actor.agent_session_fingerprint);
+  });
+
   test("a replacement shell at the address is another asker, even with the same pid", async () => {
     for (const reusePid of [false, true]) {
       const w = await world();

@@ -198,7 +198,9 @@ core lifecycle controls SHALL remain in World's dedicated controls.
 
 - **WHEN** the program that asked is replaced at the same address, even with
   the same pid
-- **THEN** World does not treat the new program as the asker
+- **THEN** World does not treat the new program as the asker, including a
+  restart event with identical native fields; a retired connection generation
+  cannot restore automatic answer input or acknowledge as that original asker
 
 ### Requirement: Observe and control with app coexistence
 

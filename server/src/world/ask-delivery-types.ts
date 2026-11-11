@@ -25,7 +25,7 @@ export type HerdrAnswerRecipient = {
 /**
  * A herdr-core asker (P4, M5): bound to its program, not a transcript.
  * `reported` holds the occupant fingerprint the verified caller had
- * (`coreOccupantFingerprint`: core, address, pid, argv, template), so a kept
+ * (`coreOccupantFingerprint`: core, address, pid, argv, template and occupancy), so a kept
  * terminal's replacement shell, even one reusing the pid, is another asker.
  * World sends saved answers only to this original program and foreground;
  * `ask get`/`--wait` remain available when delivery cannot be established.
@@ -165,6 +165,8 @@ export function originalAsker(
   return Boolean(
     validRecipient(recipient) &&
       actor.verified &&
+      (recipient.adapter !== "herdr-core" ||
+        actor.connection_generation === recipient.connection_generation) &&
       actor.connection_id === recipient.connection_id &&
       actor.pane_id === recipient.pane_id &&
       actor.terminal_id === recipient.terminal_id &&

@@ -274,6 +274,7 @@ export function createCoreConnectionRuntime(
     const key = JSON.stringify(
       coreTopology(terminals, coreSummary?.name ?? "herdr-core", {
         firstSight,
+        occupancy: (address) => mirror.occupancy(address),
         world: layout(),
         coreId: epoch?.coreId,
         now: at,

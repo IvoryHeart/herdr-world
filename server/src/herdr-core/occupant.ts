@@ -1,12 +1,10 @@
 import { createHash } from "node:crypto";
 
 /**
- * The occupant fingerprint of a herdr-core terminal (P4, M5): the durable,
- * public evidence of which program holds an address on one core: core ID,
- * address, pid, argv and template. A kept terminal's replacement shell
- * changes argv (and usually pid); a reused pid with a different program
- * changes argv. It survives World reconnects and core restarts that keep
- * the program (holders keep pids), unlike the mirror's occupancy token.
+ * The observed program at one core address: native identity plus the mirror's
+ * occupancy token. A restarted event retires it even with identical pid/argv.
+ * This evidence belongs to one connection generation; reconnects do not prove
+ * asker continuity and therefore leave saved answers available through ask get.
  */
 export function coreOccupantFingerprint(
   coreId: string,
@@ -16,6 +14,7 @@ export function coreOccupantFingerprint(
     argv?: unknown;
     template?: unknown;
   },
+  occupancy = 1,
 ): string | null {
   if (typeof record.pid !== "number" || !Number.isSafeInteger(record.pid))
     return null;
@@ -24,6 +23,7 @@ export function coreOccupantFingerprint(
       JSON.stringify([
         "herdr-core-occupant-v1",
         coreId,
+        occupancy,
         record.address,
         record.pid,
         Array.isArray(record.argv) ? record.argv : [],

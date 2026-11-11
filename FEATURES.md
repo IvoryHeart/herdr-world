@@ -2122,7 +2122,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     the saved answer through core's own send after three seconds, under the
     original program and foreground. A replaced program or foreground is
     refused; a lost reply stays uncertain in Summary's Outbox and is never
-    replayed automatically. On a core reached over
+    replayed automatically. A restart event, even with identical PID and
+    command line, or a core reconnect retires that asking binding; `ask get`
+    still reads the answer. On a core reached over
     SSH, or when a Herdr pane and a core terminal claim the command equally,
     the caller stays unverified.
   - **Ranger.** Ranger lists core rooms beside Herdr workspaces and reads
