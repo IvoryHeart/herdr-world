@@ -1,3 +1,4 @@
+import { deliverLaunchBrief } from "./launch-brief";
 import { randomBytes } from "node:crypto";
 import { agentNameFor, AGENT_KIND } from "../../../shared/agentProfile";
 import type { ReadyRuntimeLease } from "../connections/manager";
@@ -372,8 +373,17 @@ export async function launchCore(
   });
   lease.runtime.layoutChanged();
   const workspaceId = request.workspaceId;
+  const delivery =
+    text && kind && !promptArgument
+      ? await deliverLaunchBrief(lease, record, text)
+      : null;
+  if (delivery?.status === "uncertain")
+    return { status: "uncertain", runtime, message: delivery.message };
   return {
-    status: text && promptArgument ? "sent" : "started",
+    status:
+      text && (promptArgument || delivery?.status === "sent")
+        ? "sent"
+        : "started",
     runtime,
     workspace_id: workspaceId,
     tab_id: `${workspaceId}:tab:world-${tabId}`,
@@ -381,11 +391,8 @@ export async function launchCore(
     terminal_id: address,
     ...(name ? { agent_name: name } : {}),
     placed,
-    ...(text && !promptArgument
-      ? {
-          message:
-            "Started in herdr-core. World can't send its first message to this harness yet: type it in the agent.",
-        }
+    ...(delivery && delivery.status !== "sent"
+      ? { message: delivery.message }
       : {}),
   };
 }

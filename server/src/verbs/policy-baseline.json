@@ -181,6 +181,7 @@
   "rpc:world.core.room.close": "allow deny deny deny deny deny",
   "rpc:world.core.room.create": "allow deny deny deny deny deny",
   "rpc:world.core.room.rename": "allow deny deny deny deny deny",
+  "rpc:world.core.history": "allow deny deny deny deny deny",
   "rpc:world.core.screen": "allow deny deny deny deny deny",
   "rpc:world.core.send": "allow deny deny deny deny deny",
   "rpc:world.core.keys": "allow deny deny deny deny deny",

@@ -10,6 +10,7 @@ export const coreFaults = [
   "not-ready",
   "stale-session",
   "missing-foreground",
+  "publication-foreground",
   "ungated-queue",
   "heartbeat-ignored",
   "unconfirmed-cascade",

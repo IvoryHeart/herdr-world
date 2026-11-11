@@ -459,6 +459,11 @@ export class FakeCore {
     this.emit("foreground", address, foreground);
   }
 
+  title(address: string, title: string): void {
+    this.require(address).title = title;
+    this.emit("title", address, { title });
+  }
+
   /** A kept terminal whose program is lost gets a shell at the same address. */
   /** `reusePid`: the shell gets the lost program's pid, as an OS may give. */
   replaceWithShell(address: string, { reusePid = false } = {}): void {

@@ -46,6 +46,25 @@ const confirmAll = (plan: CoreKillPlanView): CoreKillConfirmation => ({
 });
 
 describe("launching in herdr-core (M2, M3)", () => {
+  test("a non-Claude/Codex profile sends its role and brief through native delivery", async () => {
+    const w = await world();
+    const room = await createCoreRoom(w.lease(), w.topology, "Review");
+    const outcome = await launchCore(
+      w.lease(),
+      {
+        workspaceId: room.workspace_id,
+        kind: "pi",
+        label: "Scout",
+        text: "Review the tests",
+      },
+      { topology: w.topology, resolveExecutable },
+    );
+    expect(outcome).toMatchObject({ status: "sent" });
+    expect(w.fake.deliveredInput).toEqual([
+      expect.objectContaining({ input: "Review the tests" }),
+    ]);
+  });
+
   test("an agent starts with explicit native parameters, placed in the app", async () => {
     const w = await world();
     const room = await createCoreRoom(w.lease(), w.topology, "Review");

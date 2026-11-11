@@ -338,3 +338,20 @@ consumer. Native send/keys bytes captured from scratch core 0.1.20 replay at
 one-byte boundaries in `delivery-replay.test.ts`. Core stream ordering and credit
 rules are unchanged; the existing EOF/UTF-8/oversized-missed/exhausted-credit
 cases remain required. No terminal/stream throughput improvement is claimed.
+
+## Harness and transcript mapping (issue #874, M11)
+
+The harness inventory, binary aliases and native transcript formats are data,
+checked exhaustively against the 30-name catalog and the eight shared TUI format
+fixtures. They introduce no ordering mechanism. A transcript operation follows
+`capture`, `dispatch`, `complete`; completion now checks foreground evidence as
+well as the original lease/occupant, including loss during a file read. The
+`publication-foreground` mutant must violate safety. The production replay drives
+`coreRecipientChange` at completion too; history integration tests additionally
+exercise native get before/after, title changes, disconnect and a kept replacement.
+Reading links never change the modeled source or grant delivery authority. The
+startup brief waits for native foreground events and then uses the same production
+dispatch gate (#870); a startup replacement is not a new recipient.
+
+Q3 remains a core-side queued-execution assumption. No test here certifies vendor
+harness credentials or creates status where a program sends no OSC 7501 report.

@@ -1,6 +1,15 @@
 import { harnessReadiness } from "../agent/harness-readiness";
 import { profileLaunch } from "../agent/profile-launch";
-import { WORLD_HARNESSES } from "../cli/harness-names";
+import {
+  readCoreHistory,
+  parseCoreHistorySession,
+} from "../herdr-core/history";
+import {
+  createAgentSessionFileAccess,
+  type AgentSessionFileAccess,
+} from "../agent/session-file-access";
+import { runBinaryProcessWithTimeout } from "../workspace/process";
+import { coreHarnessNames } from "../herdr-core/harness";
 import { shQuote, runProcessWithCodeTimeout } from "../utils/process-utils";
 import type { ConnectionManager } from "../connections/manager";
 import type { CoreHost } from "../herdr-core/host";
@@ -50,6 +59,7 @@ export type CoreRpcServices = {
   host(connectionId: string): CoreHost | null;
   /** Test seam: how the readiness probe runs. */
   run?: typeof runProcessWithCodeTimeout;
+  historyFiles?(connectionId: string): AgentSessionFileAccess;
 };
 
 /**
@@ -158,7 +168,7 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         // Every harness Herdr integrates, and whether this host has it: the
         // launcher offers the installed ones (core runs any program).
         const host = core.host(connectionId);
-        const kinds = [...WORLD_HARNESSES];
+        const kinds = coreHarnessNames();
         const readiness = await harnessReadiness({
           kinds,
           ...(host?.destination ? { host: host.destination } : {}),
@@ -272,6 +282,29 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
             },
           ),
         );
+      case "world.core.history": {
+        const host = core.host(connectionId);
+        if (!host)
+          throw new CoreOperationRefused("World cannot reach that host.");
+        return reply(
+          await readCoreHistory(
+            lease,
+            address(p.terminal),
+            String(p.recipient ?? ""),
+            {
+              files:
+                core.historyFiles?.(connectionId) ??
+                createAgentSessionFileAccess({
+                  sshHost: host.destination,
+                  runBinaryProcessWithTimeout,
+                  shQuote,
+                }),
+              windows: host.windows,
+              session: parseCoreHistorySession(p.session),
+            },
+          ),
+        );
+      }
       case "world.core.screen": {
         const terminal = address(p.terminal);
         const view = lease.runtime.core;

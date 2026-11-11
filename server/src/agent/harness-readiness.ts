@@ -20,6 +20,7 @@ export type { HarnessReadiness } from "../../../shared/harnessReadiness";
 export type HarnessSpec = {
   /** The executable, as Herdr starts it for the kind. */
   binary: string;
+  aliases?: string[];
   /** Default install locations, for service PATHs that lack them. */
   paths: string[];
   /**
@@ -52,6 +53,20 @@ export const HARNESS_SPECS: Record<string, HarnessSpec> = {
   // Pi checks readiness per provider (`pi auth check --provider`), so World
   // reports only whether it is installed.
   pi: { binary: "pi", paths: ["$HOME/.local/bin/pi"] },
+  // Herdr's integration registry / desktop programs use these commands.
+  cursor: { binary: "cursor-agent", paths: ["$HOME/.local/bin/cursor-agent"] },
+  "antigravity-cli": { binary: "agy", paths: ["$HOME/.local/bin/agy"] },
+  kilo: {
+    binary: "kilo",
+    aliases: ["kilo-code"],
+    paths: ["$HOME/.local/bin/kilo", "$HOME/.local/bin/kilo-code"],
+  },
+  qodercli: {
+    binary: "qodercli",
+    aliases: ["qoder", "qoderclicn", "qodercn"],
+    paths: ["$HOME/.local/bin/qodercli"],
+  },
+  kiro: { binary: "kiro-cli", paths: ["$HOME/.local/bin/kiro-cli"] },
 };
 
 export const harnessSpec = (kind: string): HarnessSpec =>
@@ -73,6 +88,9 @@ const path = (value: string) =>
  */
 export const resolveExecutable = (spec: HarnessSpec) => [
   `b=$(command -v ${q(spec.binary)} 2>/dev/null)`,
+  ...(spec.aliases ?? []).map(
+    (binary) => `[ -z "$b" ] && b=$(command -v ${q(binary)} 2>/dev/null)`,
+  ),
   ...spec.paths.map((p) => `[ -z "$b" ] && [ -x ${path(p)} ] && b=${path(p)}`),
 ];
 

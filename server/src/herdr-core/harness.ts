@@ -3,23 +3,28 @@ import { WORLD_HARNESSES } from "../cli/harness-names";
 /**
  * Agent harnesses as World names them, with the other names herdr-core
  * programs report (OSC 7501 `app=`) or run as. The union of Herdr's
- * integration names and the agents Herdr's desktop app ships
+ * integration/detection names and the agents Herdr's desktop app ships
  * (`defaults/programs.json`): every harness either runtime supports.
  */
 const ALIASES: Record<string, readonly string[]> = {
   claude: ["claude-code"],
+  omp: ["oh-my-pi"],
+  kilo: ["kilo-code"],
   cursor: ["cursor-agent"],
   copilot: ["github-copilot"],
   grok: ["grok-build"],
   "antigravity-cli": ["antigravity", "agy"],
   kimi: ["kimi-code", "kimicodecli"],
   kiro: ["kiro-cli"],
-  qodercli: ["qoder"],
+  qodercli: ["qoder", "qoderclicn", "qodercn"],
   pi: ["pi-agent", "pi-coding-agent"],
   hermes: ["hermes-agent"],
 };
-/** Agents Herdr's desktop app lists that are not Herdr integrations. */
-const APP_AGENTS = [
+/** Detection/desktop harnesses outside World's integration-name list. */
+const EXTRA_HARNESSES = [
+  "cline",
+  "maki",
+  "kiro",
   "pig",
   "amp",
   "dsh-tui",
@@ -32,7 +37,11 @@ const APP_AGENTS = [
 ] as const;
 
 const NAMES = new Map<string, string>();
-for (const name of [...WORLD_HARNESSES, ...APP_AGENTS, ...Object.keys(ALIASES)])
+for (const name of [
+  ...WORLD_HARNESSES,
+  ...EXTRA_HARNESSES,
+  ...Object.keys(ALIASES),
+])
   NAMES.set(name, name);
 for (const [name, aliases] of Object.entries(ALIASES))
   for (const alias of aliases) NAMES.set(alias, name);

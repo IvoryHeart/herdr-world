@@ -184,8 +184,13 @@ module herdr_core_runtime {
   }
   action complete = all {
     c.pending,
-    change({ ...c, pending: false, published: lease and occupant,
-      uncertain: c.uncertain or not(lease and occupant) }, "complete", 0),
+    // A transcript read also follows capture/dispatch/complete. Its contents
+    // publish only while the original foreground still holds; a reading link
+    // grants no write authority and changes no modeled source state.
+    val allowed = lease and occupant and (c.foreground or fault("publication-foreground"))
+    change({ ...c, pending: false, published: allowed,
+      safe: c.safe and (not(allowed) or c.foreground),
+      uncertain: c.uncertain or not(allowed) }, "complete", 0),
   }
   action recover = all {
     c.uncertain, c.ready,
