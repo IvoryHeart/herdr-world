@@ -85,6 +85,8 @@ export type WorldRuntimeConnection = {
   connectionId: string;
   label: string;
   source: string;
+  /** herdr-core agents are observed only; absent means Herdr (TUI). */
+  runtime?: "herdr-core";
   isDefault: boolean;
   state: ConnectionLifecycleState;
   generation: number;
@@ -296,6 +298,9 @@ function parseConnection(value: unknown): WorldRuntimeConnection | null {
     connectionId: item.connection_id,
     label: item.label,
     source: item.source,
+    ...(item.runtime === "herdr-core"
+      ? { runtime: "herdr-core" as const }
+      : {}),
     isDefault: item.is_default,
     state: item.state as ConnectionLifecycleState,
     generation: item.generation as number,
@@ -704,8 +709,11 @@ export class WorldRuntimeStore {
             changed = true;
             return observed;
           }
+          // A core connection has no browser runtime lease: World only
+          // observes it, and its health arrives with the snapshot.
           if (
             !connection.actionable ||
+            connection.runtime === "herdr-core" ||
             !this.client.connection ||
             this.client
               .connection(connection.connectionId, connection.generation)

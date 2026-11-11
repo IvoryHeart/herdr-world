@@ -93,6 +93,19 @@ jump ignored, a stale event applied and a `missed` cut ignored. Receive-side
 gaps are rare under sampling, so the runner also searches for a valid witness
 (`noReceiveGap` violated) and replays it with correct and mutant mirrors.
 
+World's views (issue #866) read core through the production read model
+(`coreReadModel`, `server/src/herdr-core/topology.ts`), the rows Town, Desk,
+Board and Needs you are built from. After every replayed transition the adapter
+reads it against the same production mirror: while the model is `ready` it
+must list exactly the model mirror's live terminals, and otherwise it must
+refuse, so a retired or unbaselined observation is never shown as current
+(World shows the last facts only as stale). A fifth production negative
+control, a read model that ignores actionability, must be rejected through
+`core.view`. The view is a function of `ready` and `mirror`, so the model needs
+no new action; status words, harness names, placement and World's first-sight
+seen rule are display data with unit and recorded-traffic tests, not model
+claims.
+
 Capture, dispatch and delivery remain the design seam. The model's dispatch
 checks the source's actual occupant; World can check only its observation,
 which may lag a queued removal or replacement. Mapping the production

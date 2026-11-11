@@ -13,7 +13,12 @@
     streaming UTF-8, ordered mirror with missed/heartbeat/gap rules, liveness,
     lease/core/occupant fences, profile runtime kind, connection status,
     recorded 0.1.20 replay and a production-mirror model replay.
-  - [ ] Core agents in Town, Desk and Needs you (read-only views).
+  - [x] Issue #866: core agents in Town, Desk, Board and Needs you as a
+    provider-neutral read model (both runtimes in one aggregate snapshot, each
+    under its own connection), status from core's 7501 records with Herdr's
+    shared seen rule and World's first sight, every Herdr/app harness, rooms
+    from the desktop app's placement, view-only controls with a reason, and a
+    production read-model replay with its own negative control.
 - [ ] P2: observer streams, shared seen/favourite and event push.
 - [ ] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
 - [ ] P4: files/Git/worktrees, asks and Ranger.

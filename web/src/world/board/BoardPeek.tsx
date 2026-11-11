@@ -7,6 +7,7 @@
  * action too.
  */
 
+import { viewOnlyMessage } from "../viewOnly";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AgentLatestMessage } from "../AgentHoverCard";
 import { agentStateWord } from "../agentMarks";
@@ -167,6 +168,14 @@ export function BoardPeek({
           conversation={report.conversation}
           taskSummary={leaf.taskSummary}
           question={question}
+          {...(leaf.viewOnly
+            ? {
+                viewOnly: {
+                  message: viewOnlyMessage(leaf),
+                  reason: leaf.viewOnly,
+                },
+              }
+            : {})}
         />
       </div>
       {choices.length && canReply ? (
@@ -188,13 +197,14 @@ export function BoardPeek({
         {done ? (
           <button
             type="button"
-            disabled={!report.review.ready}
+            disabled={!report.review.ready || Boolean(leaf.viewOnly)}
             title={
-              report.review.ready
+              leaf.viewOnly ??
+              (report.review.ready
                 ? undefined
                 : report.review.failed
                   ? "The latest report could not be read"
-                  : "Reading the latest report…"
+                  : "Reading the latest report…")
             }
             onClick={() =>
               void report
@@ -211,12 +221,16 @@ export function BoardPeek({
             <span>Mark reviewed</span>
           </button>
         ) : null}
-        {done && report.review.failed ? (
+        {done && report.review.failed && !leaf.viewOnly ? (
           <button type="button" onClick={report.review.onRetry}>
             <span>Retry</span>
           </button>
         ) : null}
-        {canReply ? (
+        {leaf.viewOnly ? (
+          <button type="button" disabled title={leaf.viewOnly}>
+            <span>{done ? "Follow up" : "Open"}</span>
+          </button>
+        ) : canReply ? (
           <button type="button" onClick={onOpen}>
             <span>{done ? "Follow up" : "Open"}</span>
           </button>

@@ -20,6 +20,8 @@ import type { CoreObservation } from "./observations";
 import { connectUnixStream } from "./stream";
 import { ScratchCore, scratchCoreBinary } from "./testing/scratch-core";
 import { localCoreTransport } from "./transport";
+import { worldRuntimeRegistry } from "../world/runtime-registry";
+import { WorldSnapshotService } from "../world/snapshot";
 
 // Opt in with HERDR_CORE_BIN=<official herdr-core binary>. Linux only; every
 // process runs under scratch HOME/XDG directories and is killed afterwards.
@@ -140,6 +142,103 @@ describe("herdr-core live (real release binary)", () => {
       expect(after.terminals.map((t) => [t.address, t.name])).toEqual(
         before.terminals.map((t) => [t.address, t.name]),
       );
+      w.service.stopSupervision();
+      await w.core.manager.stopAll();
+    },
+    60_000,
+  );
+
+  live(
+    "core agents reach World's read model with core's status and the app's rooms",
+    async () => {
+      const core = new ScratchCore(bin!);
+      scratch.push(core);
+      await core.start();
+      const msg = Buffer.from("Which branch?").toString("base64");
+      // OSC 7501 as a harness hook writes it: a blocked Claude Code asking.
+      await core.hc(
+        "run",
+        "--bg",
+        "--keep",
+        "--name",
+        "reviewer",
+        "--label",
+        "herdr.space=s1",
+        "--label",
+        "herdr.tab=c1",
+        "--label",
+        "where=web / review",
+        "--",
+        "sh",
+        "-c",
+        `printf '\\033]7501;state=blocked:kind=question:app=claude-code:msg=${msg}\\033\\\\'; exec sleep 600`,
+      );
+      // A turn that ends while World watches, then a plain shell.
+      await core.hc(
+        "run",
+        "--bg",
+        "--keep",
+        "--name",
+        "scout",
+        "--",
+        "sh",
+        "-c",
+        "sleep 1; printf '\\033]7501;state=working:app=gemini\\033\\\\'; sleep 0.3; printf '\\033]7501;state=idle:app=gemini\\033\\\\'; exec sleep 600",
+      );
+      await core.hc("run", "--bg", "--name", "shell", "--", "sh");
+      const w = worldFor(core.stateDir);
+      const registry = worldRuntimeRegistry(
+        new ConnectionManager<never>("startup-default"),
+        w.core.manager,
+      );
+      const snapshots = new WorldSnapshotService(registry);
+      await w.service.create(w.profile);
+      const rows = async () => {
+        snapshots.invalidate("core");
+        const result = await snapshots.snapshot();
+        return result.connections.find((c) => c.connection_id === "core")
+          ?.snapshot;
+      };
+      let view = await rows();
+      const deadline = Date.now() + 10_000;
+      while (
+        Date.now() < deadline &&
+        view?.panes.find((p) => p.agent === "gemini")?.agent_status !== "done"
+      ) {
+        await Bun.sleep(50);
+        view = await rows();
+      }
+      const byName = new Map(
+        view!.agents.map((agent) => [agent.name, agent.pane_id]),
+      );
+      const pane = (name: string) =>
+        view!.panes.find((p) => p.pane_id === byName.get(name));
+      expect(pane("reviewer")).toMatchObject({
+        agent: "claude",
+        agent_status: "blocked",
+        blocked_kind: "question",
+        status_message: "Which branch?",
+        workspace_id: "hc:space:s1",
+        runtime: "herdr-core",
+      });
+      expect(
+        view!.workspaces.find((s) => s.workspace_id === "hc:space:s1")?.label,
+      ).toBe("web");
+      // Finished while World watched, no client has marked it seen: done.
+      expect(pane("scout")).toMatchObject({
+        agent: "gemini",
+        agent_status: "done",
+      });
+      // Another Herdr client looks at it: idle everywhere.
+      await core.hc("label", String(byName.get("scout")), "herdr.seen=1");
+      const seenBy = Date.now() + 5_000;
+      while (Date.now() < seenBy && pane("scout")?.agent_status !== "idle") {
+        await Bun.sleep(50);
+        view = await rows();
+      }
+      expect(pane("scout")?.agent_status).toBe("idle");
+      expect(view!.panes).toHaveLength(3);
+      expect(view!.panes.filter((p) => !p.agent)).toHaveLength(1);
       w.service.stopSupervision();
       await w.core.manager.stopAll();
     },

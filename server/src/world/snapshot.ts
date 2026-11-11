@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
 import type { WorldWatchlist } from "./watchlist";
+import type { WorldRuntimeStatus } from "./runtime-registry";
 
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
@@ -81,6 +82,8 @@ export type WorldConnectionSnapshot = {
   connection_id: string;
   label: string;
   source: string;
+  /** Present only for herdr-core: its agents are observed, not controlled. */
+  runtime?: "herdr-core";
   is_default: boolean;
   state: ConnectionStatus["state"];
   generation: number;
@@ -99,7 +102,7 @@ export type WorldSnapshotResult = {
 };
 
 type Registry<Runtime> = {
-  list(): ConnectionStatus[];
+  list(): WorldRuntimeStatus[];
   readyRuntimeLease(connectionId: ConnectionId): RuntimeLease<Runtime> | null;
 };
 
@@ -116,7 +119,7 @@ type CachedSnapshot = {
 type RawHostSnapshot = readonly [unknown, unknown, unknown, unknown];
 type HostOutcome = { raw: RawHostSnapshot } | { error: string };
 type HostWork<Runtime> = {
-  status: ConnectionStatus;
+  status: WorldRuntimeStatus;
   lease: RuntimeLease<Runtime>;
   priorities: readonly WorldSnapshotPriority[];
   invalidationVersion: number;
@@ -201,6 +204,10 @@ function boundedReservedRelevantRecords(
     admitted.add(record);
   }
   return records.filter((record) => admitted.has(record));
+}
+
+function runtimeOf(status: WorldRuntimeStatus) {
+  return status.runtime === "herdr-core" ? { runtime: status.runtime } : {};
 }
 
 function emptyStatusCounts(): WorldAgentStatusCounts {
@@ -481,7 +488,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   }
 
   private freshCachedConnection(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     priorities: readonly WorldSnapshotPriority[],
   ): WorldConnectionSnapshot | null {
     const cached = this.cache.get(status.id);
@@ -512,6 +519,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       connection_id: status.id,
       label: status.label,
       source: status.source,
+      ...runtimeOf(status),
       is_default: status.is_default,
       state: status.state,
       generation: status.generation,
@@ -523,7 +531,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   }
 
   private workFor(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     priorities: readonly WorldSnapshotPriority[],
     selected: boolean,
   ): HostWork<Runtime> | null {
@@ -727,7 +735,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   }
 
   private async observe(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     work: HostWork<Runtime>,
     priorities: readonly WorldSnapshotPriority[],
   ): Promise<WorldConnectionSnapshot> {
@@ -743,6 +751,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       connection_id: status.id,
       label: status.label,
       source: status.source,
+      ...runtimeOf(status),
       is_default: status.is_default,
       state: status.state,
       generation: work.lease.generation,
@@ -759,7 +768,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   }
 
   private fallback(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     snapshotError?: string,
   ): WorldConnectionSnapshot {
     const cached = this.cache.get(status.id);
@@ -767,6 +776,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       connection_id: status.id,
       label: status.label,
       source: status.source,
+      ...runtimeOf(status),
       is_default: status.is_default,
       state: status.state,
       generation: status.generation,
@@ -780,7 +790,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   }
 
   private projectSnapshot(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     raw: RawHostSnapshot,
     priorities: readonly WorldSnapshotPriority[],
     watchlist: WorldWatchlist,

@@ -34,6 +34,8 @@ export type BoardHost = {
 
 export type BoardWorkspace = {
   key: string;
+  /** A herdr-core room: shown live, controls disabled with this reason. */
+  viewOnly?: string;
   hostKey: string;
   connectionId: string;
   generation: number;
@@ -63,6 +65,8 @@ export type BoardPane = {
 
 export type BoardTab = {
   key: string;
+  /** A herdr-core room: shown live, controls disabled with this reason. */
+  viewOnly?: string;
   workspaceKey: string;
   hostKey: string;
   nativeId: string;

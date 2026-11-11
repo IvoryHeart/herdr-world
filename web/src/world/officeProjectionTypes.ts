@@ -41,6 +41,8 @@ export type OfficeAgent = {
   placement: OfficeAgentPlacement;
   stale: boolean;
   canOpenInSpaces: boolean;
+  /** Why World only watches this agent (herdr-core), and its own words. */
+  viewOnly?: { reason: string; message: string };
   characterIndex: number;
 };
 

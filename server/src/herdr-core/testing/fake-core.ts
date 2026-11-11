@@ -273,6 +273,42 @@ export class FakeCore {
     };
   }
 
+  /**
+   * A full OSC 7501 root report, applied as core does (`status.rs`): the
+   * record replaces the last, and leaving `working` ends a turn, announced
+   * after the status as a `turn` event.
+   */
+  report(address: string, status: Record<string, unknown> | null): void {
+    const record = this.require(address);
+    const wasWorking =
+      (record.status as { state?: unknown } | null)?.state === "working";
+    record.status = status;
+    record.reported = true;
+    this.emit("status", address, {
+      status,
+      records: {},
+      reported: true,
+    });
+    if (wasWorking && status?.state !== "working") {
+      record.turn = (typeof record.turn === "number" ? record.turn : 0) + 1;
+      this.emit("turn", address, {
+        turn: record.turn,
+        state: status?.state ?? null,
+      });
+    }
+  }
+
+  /** What runs in the terminal now, as core reads it about twice a second. */
+  foreground(
+    address: string,
+    foreground: Record<string, unknown> | null,
+  ): void {
+    const record = this.require(address);
+    if (foreground) record.foreground = foreground;
+    else delete record.foreground;
+    this.emit("foreground", address, foreground);
+  }
+
   /** A kept terminal whose program is lost gets a shell at the same address. */
   replaceWithShell(address: string): void {
     const record = this.require(address);

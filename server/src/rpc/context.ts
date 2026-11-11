@@ -27,6 +27,11 @@ type Socket = ServerWebSocket<unknown>;
 type DeskService = ReturnType<typeof createWorldDeskService>;
 
 /** What the rpc/ namespace handlers share with their World service. */
+/** World's aggregate snapshot over Herdr (TUI) and herdr-core connections. */
+export type ObservedSnapshots = WorldSnapshotService<
+  LegacyConnectionRuntime | CoreConnectionRuntime
+>;
+
 export type RpcServices = {
   persistentMarks?: import("../world/persistent-terminal-marks").PersistentTerminalMarks;
   clock: import("../service/ports").Clock;
@@ -89,7 +94,7 @@ export type RpcServices = {
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
-  worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null;
+  worldSnapshots: ObservedSnapshots | null;
   worldUsage?: import("../usage/service").WorldUsageService;
 };
 

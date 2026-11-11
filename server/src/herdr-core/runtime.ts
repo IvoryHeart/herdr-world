@@ -5,6 +5,7 @@ import type {
 } from "../connections/manager";
 import type { ConnectionIdentity } from "../connections/types";
 import {
+  type CoreEventLine,
   CoreClient,
   CoreIncompatibleError,
   type CoreServerStatus,
@@ -27,6 +28,8 @@ import {
   summarizeMirror,
 } from "./observations";
 import { connectUnixStream, type CoreStreamConnector } from "./stream";
+import { CoreFirstSight, coreRuntimeReader, coreTopology } from "./topology";
+import type { RuntimeReader } from "../adapters/runtime-ports";
 
 /** How World reaches a core: never by starting one. */
 export type CoreTransport = {
@@ -44,6 +47,10 @@ export type CoreRuntimeOptions = {
   onFailure(error: Error): void;
   connect?: CoreStreamConnector;
   limits?: CoreMirrorLimits;
+  /** World's own seen baseline, kept across this connection's reconnects. */
+  firstSight?: CoreFirstSight;
+  /** What World's views are built from changed (not every event does). */
+  onReadModel?(): void;
   livenessIntervalMs?: number;
   livenessTimeoutMs?: number;
   publishDelayMs?: number;
@@ -56,6 +63,8 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
     readonly version: string | null;
     readonly mirror: CoreMirror;
   };
+  /** World's read model: the TUI runtime's lists, from the mirror. */
+  readonly operations: RuntimeReader;
   /**
    * Screen only (`lines: 0`). The fence's original lease, core process and
    * occupant must hold when the read is sent and again when its reply is
@@ -92,6 +101,24 @@ export function createCoreConnectionRuntime(
   const connect = options.connect ?? connectUnixStream;
   const identity = { ...options.identity };
   const mirror = new CoreMirror(options.limits ?? DEFAULT_CORE_MIRROR_LIMITS);
+  const firstSight = options.firstSight ?? new CoreFirstSight();
+  /** Every terminal World sees, as it first sees it (World's own seen rule). */
+  const sight = (
+    line: CoreEventLine | null,
+    terminals?: readonly unknown[],
+  ) => {
+    const coreId = epoch?.coreId;
+    if (!coreId) return;
+    if (terminals) return firstSight.observe(coreId, terminals);
+    if (line?.method === "missed")
+      return firstSight.observe(coreId, line.params.terminals);
+    if (line?.method !== "event") return;
+    const { type, terminal, data } = line.params;
+    if (type === "created" || type === "restarted")
+      firstSight.observe(coreId, [data]);
+    else if (type === "removed" && typeof terminal === "string")
+      firstSight.forget(terminal);
+  };
   const abort = new AbortController();
   let client: CoreClient | null = null;
   let epoch: CoreEpoch | null = null;
@@ -114,11 +141,29 @@ export function createCoreConnectionRuntime(
     lastPublished = key;
     options.observations.publish(identity.id, observation);
   };
+  // Labels, turns and folders shape Town and Needs you but not the
+  // Connections page: World re-reads whenever its own rows would differ.
+  let lastReadModel = "";
+  const readModelChanged = () => {
+    if (!options.context.isCurrent() || !mirror.baselined) return;
+    const key = JSON.stringify(
+      coreTopology(
+        mirror.terminals(),
+        coreSummary?.name ?? "herdr-core",
+        firstSight,
+      ),
+    );
+    if (key === lastReadModel) return;
+    lastReadModel = key;
+    options.onReadModel?.();
+  };
   const schedulePublish = () => {
     if (publishTimer) return;
     publishTimer = setTimeout(() => {
       publishTimer = null;
-      if (!failed && !stopped) publish();
+      if (failed || stopped) return;
+      publish();
+      readModelChanged();
     }, options.publishDelayMs ?? 200);
   };
 
@@ -185,9 +230,11 @@ export function createCoreConnectionRuntime(
       baseline: (seq, terminals) => {
         if (!mirror.baseline(seq, terminals))
           throw new CoreMirrorRetiredError(mirror.retired ?? "baseline");
+        sight(null, terminals);
       },
       line: (line) => {
         const outcome = mirror.apply(line);
+        if (outcome === "applied") sight(line);
         if (outcome === "retired") {
           // Ordering is lost: stop acting, keep facts, reacquire afresh.
           fail(new CoreMirrorRetiredError(mirror.retired ?? "gap"));
@@ -200,6 +247,7 @@ export function createCoreConnectionRuntime(
     if (failed) throw new CoreMirrorRetiredError(mirror.retired ?? "closed");
     ready = true;
     publish(true);
+    readModelChanged();
     const interval = options.livenessIntervalMs ?? 10_000;
     liveness = setInterval(() => {
       if (failed || stopped) return;
@@ -239,23 +287,32 @@ export function createCoreConnectionRuntime(
     return stopTask;
   }
 
+  const view = {
+    get epoch() {
+      return epoch;
+    },
+    get actionable() {
+      return ready && !failed && !stopped && mirror.actionable;
+    },
+    get version() {
+      return version;
+    },
+    mirror,
+    terminal: (address: string) => mirror.terminal(address),
+    occupancy: (address: string) => mirror.occupancy(address),
+  };
   const self: CoreConnectionRuntime = {
     identity,
     runtime: "herdr-core",
-    core: {
-      get epoch() {
-        return epoch;
-      },
-      get actionable() {
-        return ready && !failed && !stopped && mirror.actionable;
-      },
-      get version() {
-        return version;
-      },
+    core: view,
+    operations: coreRuntimeReader({
       mirror,
-      terminal: (address) => mirror.terminal(address),
-      occupancy: (address) => mirror.occupancy(address),
-    },
+      get actionable() {
+        return view.actionable;
+      },
+      coreName: () => coreSummary?.name ?? "herdr-core",
+      firstSight,
+    }),
     readScreen,
     startTransport,
     startBackground,

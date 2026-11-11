@@ -41,6 +41,8 @@ export type TownRoomActions = {
   };
   /** New room on this building's host, from its + Add room doorway. */
   onAddRoom(hostKey: string, selectedRoomKey: string | null): void;
+  /** Why a room's actions are disabled: World only watches herdr-core. */
+  roomViewOnly?(roomKey: string): string | undefined;
   canRenameRoom(roomKey: string): boolean;
   onRenameRoom(roomKey: string): void;
   canCloseRoom(roomKey: string): boolean;

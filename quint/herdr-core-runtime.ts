@@ -202,6 +202,24 @@ export class CoreProtocolFake {
     if (this.latest) s.cursor = this.latest.cursor;
     s.ready = s.connected && Boolean(this.latest?.actionable);
   }
+  /**
+   * World's view of this core through the production read model (Town,
+   * Desk, Board and Needs you rows): the live addresses while the model is
+   * ready, otherwise a refusal, so stale facts are never shown as current.
+   */
+  view(): string[] | "refused" {
+    try {
+      return this.subjects
+        .coreReadModel({
+          mirror: this.latest ?? new this.subjects.CoreMirror(),
+          actionable: this.state.connected && Boolean(this.latest?.actionable),
+          coreName: () => "core",
+        })
+        .panes.map((pane) => String(pane.pane_id));
+    } catch {
+      return "refused";
+    }
+  }
   private lease() {
     const s = this.state;
     return (
@@ -467,6 +485,13 @@ export function validateCoreTrace(
   }
 }
 
+/** The model's view: its mirror's live terminals, only while ready. */
+function expectedView(c: CoreState): string[] | "refused" {
+  return c.ready
+    ? c.mirror.flatMap((t, index) => (t.alive ? [`t${index + 1}`] : []))
+    : "refused";
+}
+
 export function replayCore(
   states: CoreTraceState[],
   skipGate = false,
@@ -483,6 +508,7 @@ export function replayCore(
   for (const state of states) {
     fake.apply(state.op, state.target);
     observe("core.state", fake.state, state.c, state.op);
+    observe("core.view", fake.view(), expectedView(state.c), state.op);
     const c = fake.state;
     if (state.op === "receive" && c.ready && c.cursor > 0)
       witnesses.add("orderedDelta");
@@ -506,6 +532,7 @@ export const coreImplementationFaults = [
   "core-heartbeat",
   "core-stale",
   "core-missed-cut",
+  "core-view-retired",
 ] as const;
 type Harness = {
   root: string;
@@ -730,7 +757,7 @@ export async function runCoreVerification(h: Harness) {
         if (
           !(error instanceof Error) ||
           !("observation" in error) ||
-          error.observation !== "core.state"
+          !["core.state", "core.view"].includes(String(error.observation))
         )
           throw error;
         killed = { trace: index, observation: String(error.observation) };
@@ -743,7 +770,7 @@ export async function runCoreVerification(h: Harness) {
   return {
     name: "herdr-core-runtime",
     evidence:
-      "production CoreMirror replay for ordering/recovery; authority decisions use the design seam",
+      "production CoreMirror and read-model replay for ordering/recovery; authority decisions use the design seam",
     implementationControls,
     traces: allStates.length,
     sensitivityTraces: sensitivityFiles.length,

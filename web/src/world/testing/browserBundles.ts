@@ -7,6 +7,7 @@ export type WorldBrowserEntry =
   | "ProductionContexts"
   | "AnswerDeliveries"
   | "NeedsYouCard"
+  | "CoreViewOnly"
   | "QuestionCards";
 export type WorldBrowserBundle = {
   directory: string;

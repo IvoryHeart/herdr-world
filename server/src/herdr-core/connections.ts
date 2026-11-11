@@ -6,6 +6,7 @@ import type { Logger } from "../utils/logger";
 import { CORE_PROTOCOL_GENERATION, CoreClient } from "./client";
 import { type CoreFixture, createCoreFixture } from "./fixture";
 import { CoreObservationStore } from "./observations";
+import { CoreFirstSight } from "./topology";
 import {
   type CoreConnectionRuntime,
   type CoreTransport,
@@ -44,6 +45,8 @@ type CoreSupervisor = {
 export function createCoreConnections(args: {
   logger: Logger;
   changed(): void;
+  /** World's read model of this connection changed: re-read it. */
+  observed?(connectionId: string, generation: number): void;
   /** The profile service: failure supervision and the preview fixture. */
   profiles: () => CoreSupervisor;
   transportFor?: (
@@ -52,13 +55,21 @@ export function createCoreConnections(args: {
   ) => CoreTransport;
   connect?: CoreStreamConnector;
 }): CoreConnections {
-  const observations = new CoreObservationStore(() => args.changed());
+  const observed = (connectionId: string) => {
+    if (manager.has(connectionId))
+      args.observed?.(connectionId, manager.status(connectionId).generation);
+  };
+  const observations = new CoreObservationStore((connectionId) => {
+    args.changed();
+    observed(connectionId);
+  });
   const manager = new ConnectionManager<CoreConnectionRuntime>(
     "",
     (status) => {
       if (status.state === "disconnected" || status.state === "error")
         observations.markStale(status.id, "disconnected");
       args.changed();
+      args.observed?.(status.id, status.generation);
     },
     args.logger.child("herdr-core"),
   );
@@ -69,6 +80,8 @@ export function createCoreConnections(args: {
         connectionId: profile.id,
         onTunnelExit,
       }));
+  // World's own seen baseline per connection, kept across its reconnects.
+  const firstSights = new Map<string, CoreFirstSight>();
   const support: CoreConnectionSupport<CoreConnectionRuntime> = {
     manager,
     createRuntime: (profile) => (context) => {
@@ -80,7 +93,12 @@ export function createCoreConnections(args: {
         });
         service.runtimeFailed(profile.id, error);
       };
+      let firstSight = firstSights.get(profile.id);
+      if (!firstSight)
+        firstSights.set(profile.id, (firstSight = new CoreFirstSight()));
       return createCoreConnectionRuntime({
+        firstSight,
+        onReadModel: () => observed(profile.id),
         identity: connectionIdentityForProfile(profile),
         context,
         transport: transportFor(profile, report),

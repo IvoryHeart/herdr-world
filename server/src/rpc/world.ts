@@ -75,6 +75,15 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.integration."))
     return handleWorldIntegrationRpc(rpc);
   if (method === "world.snapshot") {
+    // The snapshot lists herdr-core connections too; only Herdr (TUI)
+    // connections have runtimes these Board observers act through.
+    const tuiLease = (connectionId: string) => {
+      try {
+        return connectionManager.readyRuntimeLease(connectionId);
+      } catch {
+        return null; // not a Herdr connection: no runtime to act through
+      }
+    };
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {
       const base = parseObservationBase(params);
@@ -92,7 +101,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         beforeAppearanceRead,
         snapshot,
         (connectionId, generation) => {
-          const lease = connectionManager.readyRuntimeLease(connectionId);
+          const lease = tuiLease(connectionId);
           return lease && lease.generation === generation && lease.isCurrent()
             ? {
                 call: (method, params) =>
@@ -114,7 +123,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         logger,
         rpc.services.clock.now(),
         (id, generation) => {
-          const lease = connectionManager.readyRuntimeLease(id);
+          const lease = tuiLease(id);
           return Boolean(
             lease && lease.generation === generation && lease.isCurrent(),
           );
@@ -129,7 +138,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
               current,
               observations,
               (connectionId, generation) => {
-                const lease = connectionManager.readyRuntimeLease(connectionId);
+                const lease = tuiLease(connectionId);
                 return Boolean(
                   lease && lease.generation === generation && lease.isCurrent(),
                 );

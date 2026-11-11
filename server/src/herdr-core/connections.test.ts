@@ -343,9 +343,12 @@ describe("herdr-core connections", () => {
     await until(() => w.core.manager.status("core-fixture").state === "ready");
     const first = observed(w, "core-fixture")!;
     expect(first.state).toBe("live");
-    expect(first.terminals.map((t) => t.name)).toEqual([
-      "fixture-agent",
-      "fixture-shell",
+    expect(first.terminals.map((t) => [t.name, t.status])).toEqual([
+      ["reviewer", "blocked"],
+      ["builder", "working"],
+      ["scout", "working"],
+      ["helper", null],
+      ["fixture-shell", null],
     ]);
     expect(fixture.kill()).toMatchObject({ running: false });
     await until(() => observed(w, "core-fixture")?.state === "stale");

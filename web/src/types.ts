@@ -103,6 +103,12 @@ export interface Pane {
   /** Runtime-provided labels for known semantic agent states. */
   state_labels?: Record<string, string>;
   agent_status: string;
+  /** Present only on herdr-core terminals, which World observes only. */
+  runtime?: "herdr-core";
+  /** herdr-core: why a blocked program waits (permission, question, auth). */
+  blocked_kind?: string;
+  /** herdr-core: the program's own status message (OSC 7501 `msg`). */
+  status_message?: string;
   /** Herdr agent.list state-change sequence, scoped to this server lifetime. */
   state_change_seq?: number;
   /** Session file modification time in epoch milliseconds, from the bridge. */

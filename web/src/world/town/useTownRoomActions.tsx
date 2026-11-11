@@ -77,7 +77,8 @@ export function useTownRoomActions({
     () =>
       Object.fromEntries(
         office.rooms.map((room) => {
-          const admitted = officeRoomActionCapabilities(world, room).createSeat;
+          const capabilities = officeRoomActionCapabilities(world, room);
+          const admitted = capabilities.createSeat;
           return [
             room.key,
             officeCreationActionState(
@@ -101,6 +102,7 @@ export function useTownRoomActions({
                       room.workspaceRef.nativeId,
                     ))
                 : null,
+              capabilities.viewOnly,
             ),
           ];
         }),
@@ -133,6 +135,7 @@ export function useTownRoomActions({
             room?.workspaceRef.nativeId,
           )
         : null,
+      destination?.stale ? undefined : destination?.viewOnly,
     );
   };
   /**
@@ -162,6 +165,7 @@ export function useTownRoomActions({
             "workspace.create",
           )
         : null,
+      host?.stale ? undefined : host?.viewOnly,
     );
   };
   const canCreateRoom = (roomKey: string | null) =>
@@ -246,6 +250,12 @@ export function useTownRoomActions({
           runtimeGeneration: host.generation,
         },
       });
+    },
+    roomViewOnly: (roomKey) => {
+      const room = roomForKey(roomKey);
+      return room
+        ? officeRoomActionCapabilities(world, room).viewOnly
+        : undefined;
     },
     canRenameRoom: (roomKey) => canManageRoom(roomKey, "rename"),
     onRenameRoom: (roomKey) => {
