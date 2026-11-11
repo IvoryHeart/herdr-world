@@ -146,16 +146,110 @@ export async function captureCore(bin: string): Promise<CoreRecording> {
   }
 }
 
+/**
+ * Agents that keep running, as a real harness does: core clears a status
+ * once the root shell is back in the foreground (`exec sh` above).
+ */
+const FINISHING = [
+  "printf '\\033]7501;state=working\\033\\\\'",
+  "sleep 0.3",
+  "printf '\\033]7501;state=done\\033\\\\'",
+  "sleep 60",
+].join("; ");
+/** Works, then stops to ask a question (fields are `:`-separated). */
+const ASKING = [
+  "printf '\\033]7501;state=working\\033\\\\'",
+  "sleep 0.3",
+  "printf '\\033]7501;state=blocked:kind=question\\033\\\\'",
+  "sleep 60",
+].join("; ");
+
+/**
+ * Seen and favourite shared with another Herdr client: World raises
+ * `herdr.seen` for a finished turn, the other client (the CLI standing in
+ * for Herdr's app) marks it unread and pins it, World unpins it, and a
+ * second agent stops to ask (push). World's own calls are recorded.
+ */
+export async function captureSharedState(bin: string): Promise<CoreRecording> {
+  const core = new ScratchCore(bin, { heartbeatMs: 300 });
+  try {
+    await core.start();
+    let version = "";
+    const connection = await recordConnection(
+      core,
+      "shared-seen-and-favourite",
+      async (client, calls) => {
+        version = client.hello.version;
+        calls.push("server.status");
+        await client.status();
+        calls.push("events.subscribe");
+        await client.subscribe({
+          baseline: () => {},
+          line: () => {},
+          end: () => {},
+        });
+        await core.hc(
+          "run",
+          "--bg",
+          "--keep",
+          "--name",
+          "agent",
+          "--",
+          "sh",
+          "-c",
+          FINISHING,
+        );
+        await Bun.sleep(700);
+        calls.push("terminal.label t1 herdr.seen=1");
+        await client.shareLabel("t1", { "herdr.seen": "1" });
+        await Bun.sleep(300);
+        // The other client: mark unread (turn - 1), then pin.
+        await core.hc("label", "agent", "herdr.seen=0");
+        await Bun.sleep(300);
+        await core.hc("label", "agent", "herdr.pinned=1");
+        await Bun.sleep(300);
+        calls.push("terminal.label t1 herdr.pinned=");
+        await client.shareLabel("t1", { "herdr.pinned": "" });
+        await Bun.sleep(300);
+        await core.hc(
+          "run",
+          "--bg",
+          "--keep",
+          "--name",
+          "asker",
+          "--",
+          "sh",
+          "-c",
+          ASKING,
+        );
+        await Bun.sleep(700);
+        client.close();
+      },
+    );
+    return {
+      core_version: version,
+      scenario:
+        "subscribe; a kept agent works then finishes (turn 1); World writes herdr.seen=1; another client marks it unread (herdr.seen=0) and pins it (herdr.pinned=1); World unpins it (herdr.pinned=); a second agent works then blocks on a question",
+      connections: [scrubHello(connection)],
+    };
+  } finally {
+    await core.dispose();
+  }
+}
+
 if (import.meta.main) {
   const bin = scratchCoreBinary();
   const out = process.argv[2];
   if (!bin || !out) {
     console.error(
-      "usage: HERDR_CORE_BIN=<herdr-core> bun capture-core.ts <out.json>",
+      "usage: HERDR_CORE_BIN=<herdr-core> bun capture-core.ts <out.json> [shared]",
     );
     process.exit(2);
   }
-  const recording = await captureCore(bin);
+  const recording =
+    process.argv[3] === "shared"
+      ? await captureSharedState(bin)
+      : await captureCore(bin);
   writeFileSync(out, `${JSON.stringify(recording, null, 1)}\n`);
   console.log(`recorded ${recording.core_version}: ${out}`);
 }

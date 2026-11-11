@@ -22,6 +22,9 @@ import { ScratchCore, scratchCoreBinary } from "./testing/scratch-core";
 import { localCoreTransport } from "./transport";
 import { worldRuntimeRegistry } from "../world/runtime-registry";
 import { WorldSnapshotService } from "../world/snapshot";
+import type { TaskEvent } from "../notifications/task-events";
+import { handleCoreSharedRpc } from "../rpc/core-shared";
+import { coreAgentStatus } from "./topology";
 
 // Opt in with HERDR_CORE_BIN=<official herdr-core binary>. Linux only; every
 // process runs under scratch HOME/XDG directories and is killed afterwards.
@@ -43,7 +46,7 @@ async function until(predicate: () => boolean, ms = 10_000) {
   }
 }
 
-function worldFor(stateDir: string) {
+function worldFor(stateDir: string, pushed: TaskEvent[] = []) {
   const root = mkdtempSync(join(tmpdir(), "hcw-world-"));
   roots.push(root);
   const core = createCoreConnections({
@@ -51,6 +54,9 @@ function worldFor(stateDir: string) {
     changed: () => {},
     profiles: () => service,
     transportFor: () => localCoreTransport(stateDir),
+    push: (task, isCurrent) => {
+      if (isCurrent()) pushed.push(task);
+    },
   });
   const store = new ConnectionProfileStore({
     path: join(root, "connections.json"),
@@ -239,6 +245,118 @@ describe("herdr-core live (real release binary)", () => {
       expect(pane("scout")?.agent_status).toBe("idle");
       expect(view!.panes).toHaveLength(3);
       expect(view!.panes.filter((p) => !p.agent)).toHaveLength(1);
+      w.service.stopSupervision();
+      await w.core.manager.stopAll();
+    },
+    60_000,
+  );
+
+  live(
+    "seen, unread and favourite round-trip with another client; push follows status",
+    async () => {
+      const core = new ScratchCore(bin!);
+      scratch.push(core);
+      await core.start();
+      const pushed: TaskEvent[] = [];
+      const w = worldFor(core.stateDir, pushed);
+      await w.service.create(w.profile);
+      await until(() => w.observation()?.state === "live");
+      // A kept agent finishes a turn while World watches and nobody looks.
+      const address = (
+        await core.hc(
+          "run",
+          "--bg",
+          "--keep",
+          "--name",
+          "scout",
+          "--",
+          "sh",
+          "-c",
+          "sleep 0.3; printf '\\033]7501;state=working:app=gemini\\033\\\\'; sleep 0.3; printf '\\033]7501;state=done:app=gemini\\033\\\\'; exec sleep 600",
+        )
+      ).match(/\bt\d+\b/)![0];
+      const lease = () => w.core.manager.readyRuntimeLease("core")!;
+      const record = () => lease().runtime.core.terminal(address);
+      await until(() => record()?.turn === 1);
+      expect(coreAgentStatus(record()!, 0)).toBe("done");
+      await until(() => pushed.length === 1);
+      expect(pushed[0]).toMatchObject({ kind: "completed", paneId: address });
+      // What another Herdr client reads, from core's own CLI.
+      const labels = async () =>
+        (
+          JSON.parse(await core.hc("get", address, "--json")) as {
+            labels?: Record<string, string>;
+          }
+        ).labels ?? {};
+      const call = async (method: string, extra: Record<string, unknown>) => {
+        const out: { result?: unknown; error?: unknown } = {};
+        await handleCoreSharedRpc({
+          id: "1",
+          method,
+          params: {
+            connection_id: "core",
+            connection_generation: lease().generation,
+            terminal: address,
+            ...extra,
+          },
+          sendReply: (message) => {
+            out.result = message.result;
+            return true;
+          },
+          sendError: (_context, error) => {
+            out.error = error;
+          },
+          services: { coreConnections: w.core.manager },
+        });
+        return out;
+      };
+      // World looks: core accepts the write and every client sees idle.
+      const started = performance.now();
+      expect(await call("world.core.seen", { turn: 1, seen: null })).toEqual({
+        result: { written: true },
+      });
+      await until(() => coreAgentStatus(record()!, 0) === "idle");
+      const roundTripMs = performance.now() - started;
+      expect(roundTripMs).toBeLessThan(2_000);
+      expect(await labels()).toEqual({ "herdr.seen": "1" });
+      // A repeat writes nothing.
+      expect(await call("world.core.seen", { turn: 1, seen: 1 })).toEqual({
+        result: { written: false },
+      });
+      // Another client marks it unread: World shows done again.
+      await core.hc("label", address, "herdr.seen=0");
+      await until(() => coreAgentStatus(record()!, 0) === "done");
+      // ...and pins it: World shows the favourite; World unpins it.
+      await core.hc("label", address, "herdr.pinned=1");
+      await until(() => record()?.labels?.["herdr.pinned"] === "1");
+      expect(await call("world.core.favourite", { favourite: false })).toEqual({
+        result: { written: true },
+      });
+      await until(() => record()?.labels?.["herdr.pinned"] === undefined);
+      expect(await labels()).toEqual({ "herdr.seen": "0" });
+      // Core refuses nothing World sends, and World labels nothing else.
+      expect(await call("world.core.favourite", { favourite: true })).toEqual({
+        result: { written: true },
+      });
+      expect(await labels()).toEqual({
+        "herdr.seen": "0",
+        "herdr.pinned": "1",
+      });
+      // A second agent stops to ask: push says it needs you.
+      await core.hc(
+        "run",
+        "--bg",
+        "--keep",
+        "--name",
+        "asker",
+        "--",
+        "sh",
+        "-c",
+        "sleep 0.3; printf '\\033]7501;state=working:app=claude-code\\033\\\\'; sleep 0.3; printf '\\033]7501;state=blocked:kind=question:app=claude-code\\033\\\\'; exec sleep 600",
+      );
+      await until(() => pushed.length === 2);
+      expect(pushed[1]).toMatchObject({ kind: "blocked", agent: "claude" });
+      console.log(`core seen round trip: ${roundTripMs.toFixed(1)} ms`);
       w.service.stopSupervision();
       await w.core.manager.stopAll();
     },

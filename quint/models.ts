@@ -15,4 +15,5 @@ export const verificationModels = [
   "creation-flow",
   "chunk-assembly",
   "ranger-authority",
+  "herdr-core-seen",
 ] as const;

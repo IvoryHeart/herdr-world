@@ -1,0 +1,14 @@
+/* The favourite of a herdr-core agent, shared with Herdr's apps (herdr.pinned). */
+.town-peek .town-peek-favourite {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.town-peek .town-peek-favourite.is-favourite,
+.board-peek .board-peek-favourite.is-favourite {
+  color: #d39a12;
+}

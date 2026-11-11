@@ -10,6 +10,7 @@ import { handleDeskRpc } from "./desk";
 import { handleBinRpc } from "./bin";
 import { handleWorldIntegrationRpc } from "./integration";
 import { ownerPresence } from "./presence";
+import { handleCoreSharedRpc } from "./core-shared";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -69,6 +70,8 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     sendReply({ id, result: ownerPresence.seen() }, method);
     return;
   }
+  if (method === "world.core.seen" || method === "world.core.favourite")
+    return handleCoreSharedRpc(rpc);
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);

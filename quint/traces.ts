@@ -1,4 +1,5 @@
 import { validateCoreTrace } from "./herdr-core-runtime";
+import { validateSeenTrace } from "./herdr-core-seen";
 import { effectActions, validateEffectTrace } from "./effect-recovery";
 import { validateObservationTrace } from "./observation-traces";
 import { validateBindingTrace } from "./binding-resolution";
@@ -17,6 +18,7 @@ export type Model = (typeof verificationModels)[number];
 
 const actions = {
   "herdr-core-runtime": [],
+  "herdr-core-seen": [],
   "effect-recovery": effectActions,
   "binding-resolution": [],
   "observation-base": [
@@ -183,6 +185,7 @@ export function validateTrace(
     "unsupported request domain",
   );
   if (model === "herdr-core-runtime") return validateCoreTrace(value);
+  if (model === "herdr-core-seen") return validateSeenTrace(value);
   if (model === "effect-recovery") return validateEffectTrace(value);
   if (model === "observation-base") return validateObservationTrace(value);
   if (model === "binding-resolution") return validateBindingTrace(value);

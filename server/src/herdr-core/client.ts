@@ -1,4 +1,5 @@
 import type { CoreByteStream } from "./stream";
+import { isSharedLabelChange, type SharedLabelChange } from "./shared-state";
 import {
   CoreProtocolError,
   creditFrame,
@@ -11,7 +12,7 @@ import {
 
 /** The protocol generation World speaks; core refuses any other in `hello`. */
 export const CORE_PROTOCOL_GENERATION = 1;
-/** Methods this client may call: observation only, built from typed verbs. */
+/** Methods observation needs, built from typed verbs. */
 const OBSERVATION_METHODS = [
   "server.status",
   "terminal.list",
@@ -19,7 +20,12 @@ const OBSERVATION_METHODS = [
   "terminal.read",
   "events.subscribe",
 ] as const;
-type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
+/**
+ * Methods this client may call: observation, and the one write World sends,
+ * a shared label (`herdr.seen`, `herdr.pinned`). The write is not required:
+ * on a core without it, sharing fails and World keeps observing.
+ */
+type CoreMethod = (typeof OBSERVATION_METHODS)[number] | "terminal.label";
 /** Required for observation; absence is an unsupported operation, not a pin. */
 export const REQUIRED_CORE_METHODS: readonly string[] = OBSERVATION_METHODS;
 export const REQUIRED_CORE_FEATURES = ["framed", "events"] as const;
@@ -312,6 +318,20 @@ export class CoreClient {
   }
 
   /**
+   * Sets one shared label on a local terminal by its address (never a name,
+   * which another terminal could take). Nothing else is ever labelled.
+   */
+  shareLabel(address: string, change: SharedLabelChange, timeoutMs = 5_000) {
+    if (!/^t\d{1,9}$/.test(address) || !isSharedLabelChange(change))
+      return Promise.reject(new Error("not a shared label change"));
+    return this.call(
+      "terminal.label",
+      { terminal: address, labels: { ...change } },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  /**
    * Unfiltered subscription. Core registers the snapshot atomically but may
    * write stream frames before the reply: those are held, then delivered in
    * order right after `baseline` has applied the snapshot.
@@ -366,7 +386,7 @@ export class CoreClient {
   }
 
   private call(
-    method: ObservationMethod,
+    method: CoreMethod,
     params: Record<string, unknown>,
     timeoutMs: number,
   ): Promise<unknown> {
