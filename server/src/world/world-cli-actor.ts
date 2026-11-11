@@ -78,8 +78,8 @@ export type CoreCallerSource = {
   hosts(): CoreCliHost[];
 };
 
-/** What a caller inside a herdr-core terminal claims: `HC_TERMINAL_ID`. */
-export const CORE_TERMINAL = /^t[1-9][0-9]{0,9}$/;
+/** `HC_TERMINAL_ID`: core's 30-symbol alphabet, bounded for ledger labels. */
+export const CORE_TERMINAL = /^t[1-9][0-9bcdfghjkmnpqrstvwxyz]{0,9}$/;
 
 /**
  * How far up the caller's process chain `pids` first appears (0: the caller

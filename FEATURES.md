@@ -2116,7 +2116,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     commands run inside a herdr-core terminal on this computer are verified
     like a Herdr pane's: World checks that the command runs under that
     terminal's program, so the question is that agent's own and waits on its
-    desk with **?**. A program that replaced it at the same address, even
+    desk with **?**. CLI claims accept core's letter-bearing addresses such
+    as `t1b`; a claim without a matching local program stays unverified.
+    A program that replaced it at the same address, even
     one reusing its pid, is a different asker. The agent reads your answer
     with `ask get` or `--wait`. Without a CLI acknowledgement, World sends
     the saved answer through core's own send after three seconds, under the

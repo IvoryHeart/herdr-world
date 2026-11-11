@@ -19,3 +19,8 @@
   agent's visible screen. It can create a worktree from a core room, and
   send previewed prompts through core, and explain which lifecycle controls
   belong in World.
+
+### Fixed
+
+- Accept core CLI terminal claims such as `t1b`, including when no core
+  connection is configured, without weakening caller verification.
