@@ -18,6 +18,6 @@
 
 ### Changed
 
-- Core agents are no longer view only: only Open terminal, Chat, answers and
-  Mark reviewed stay disabled, with "World can't open herdr-core terminals or
-  chat with them yet".
+- Core agents are no longer view only: only Chat, answers and Mark reviewed
+  stay disabled, with "World can't type into herdr-core terminals or chat with
+  them yet".

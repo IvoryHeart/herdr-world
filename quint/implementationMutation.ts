@@ -30,6 +30,9 @@ export type ImplementationFault =
   | "core-view-retired"
   | "core-kill-pid-only"
   | "core-kill-plan-once"
+  | "core-watch-interactive"
+  | "core-watch-unconfirmed"
+  | "core-watch-order"
   | "seen-forget-look"
   | "seen-hidden-look"
   | "seen-stale-look"
@@ -48,6 +51,9 @@ export async function mutateImplementation(
       "core-view-retired",
       "core-kill-pid-only",
       "core-kill-plan-once",
+      "core-watch-interactive",
+      "core-watch-unconfirmed",
+      "core-watch-order",
     ],
     "herdr-core-seen": [
       "seen-forget-look",
@@ -111,13 +117,19 @@ export async function mutateImplementation(
         ? "server/src/herdr-core/topology.ts"
         : name === "herdr-core-runtime" && fault.startsWith("core-kill-")
           ? "server/src/herdr-core/kill-plan.ts"
-          : name === "herdr-core-seen" && fault === "seen-blind-write"
-            ? "server/src/herdr-core/shared-state.ts"
-            : name === "observation-base" && fault === "incarnation-reset"
-              ? "web/src/world/observationBase.ts"
-              : name === "creation-flow" && fault === "admission-fence"
-                ? "web/src/world/createdTerminalAdmission.ts"
-                : owners[name];
+          : name === "herdr-core-runtime" &&
+              (fault === "core-watch-interactive" ||
+                fault === "core-watch-unconfirmed")
+            ? "server/src/herdr-core/client.ts"
+            : name === "herdr-core-runtime" && fault === "core-watch-order"
+              ? "web/src/coreWatch.ts"
+              : name === "herdr-core-seen" && fault === "seen-blind-write"
+                ? "server/src/herdr-core/shared-state.ts"
+                : name === "observation-base" && fault === "incarnation-reset"
+                  ? "web/src/world/observationBase.ts"
+                  : name === "creation-flow" && fault === "admission-fence"
+                    ? "web/src/world/createdTerminalAdmission.ts"
+                    : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "herdr-core-runtime") {
@@ -146,6 +158,21 @@ export async function mutateImplementation(
       "core-kill-plan-once": [
         "if (!was)\n      return `${ending.name ?? ending.address} would end too, and you did not confirm it.`;",
         "if (!was) continue;",
+      ],
+      // World attaches as a typing viewer: it would lead core's size.
+      "core-watch-interactive": [
+        "    observe: true,\n    resize_notifications: true,",
+        "    observe: false,\n    resize_notifications: true,",
+      ],
+      // An unconfirmed path is watched anyway: paints at an unknown grid.
+      "core-watch-unconfirmed": [
+        "if (reply.resize_notifications !== true)",
+        "if (false)",
+      ],
+      // The page draws without adopting core's grid first.
+      "core-watch-order": [
+        "        this.surface.resize(cols, rows);",
+        "        void cols;",
       ],
     };
     const [guard, replacement] = guards[fault]!;

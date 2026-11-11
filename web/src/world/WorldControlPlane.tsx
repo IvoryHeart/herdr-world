@@ -69,6 +69,7 @@ import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
+import { useCoreTerminalWatch } from "./CoreTerminalWatch";
 
 /** Switch to lists the agents waiting on you, then finished ones, then the rest. */
 function switchToRank(status: WorldAgentStatus) {
@@ -260,8 +261,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     closeIntent,
     previewTerminalById,
     closeDeskReading,
-    openTerminalById,
-    openNodeById,
+    openTerminalById: openInspectorTerminalById,
+    openNodeById: openInspectorNodeById,
     closeInspector,
     focusFloatingInspector,
     retireInspectors,
@@ -360,6 +361,26 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     };
   };
 
+  // A herdr-core terminal opens as a watch: World adopts core's grid and
+  // sends nothing back. Files and Changes use a separate resource Inspector.
+  const coreWatch = useCoreTerminalWatch(
+    (id) => aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id),
+  );
+  const openTerminalById = (
+    id: string,
+    ...rest: Parameters<typeof openInspectorTerminalById> extends [
+      string,
+      ...infer Rest,
+    ]
+      ? Rest
+      : never
+  ) =>
+    coreWatch.watch(id)
+      ? Promise.resolve()
+      : openInspectorTerminalById(id, ...rest);
+  const openNodeById = (id: string, signal?: AbortSignal) =>
+    coreWatch.watch(id) ? Promise.resolve() : openInspectorNodeById(id, signal);
+
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
   const stableOpenNodeById = useStableCallback(openNodeById);
@@ -434,6 +455,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         world={aggregateWorld}
         onOpenTerminal={(id) => void openTerminalById(id)}
       />
+      {coreWatch.view}
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}
         initialDestination={workspaceCreationDestination}
@@ -547,6 +569,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         conversationNodeIds={conversationNodeIds}
                         onSelect={stableSelectNode}
                         onOpen={stableOpenNodeById}
+                        onOpenFiles={(id) =>
+                          stableOpenInspectorView(id, "files")
+                        }
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>

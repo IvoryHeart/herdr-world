@@ -109,8 +109,8 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
   );
 });
 
-test("all sixteen required faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(16);
+test("all twenty-one ordering, authority, worktree and observe faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(21);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;
@@ -164,7 +164,7 @@ describe("a kill ends only what was confirmed (M7)", () => {
       killed: false,
     });
     expect(states.at(-1)!.c.source.map((t) => t.alive)).toEqual([true, true]);
-    expect(replayCore(states).has("unconfirmedRefused")).toBe(true);
+    expect(replayCore(states).has("unconfirmedCascadeRefused")).toBe(true);
   });
 
   test("a kept replacement with the same pid is not the confirmed program", () => {
@@ -297,4 +297,48 @@ test("worktree steps retain the planning profile and core epoch", () => {
       beforeRemove.map((state) => ({ ...state, family: "authority" })),
     );
   }
+});
+
+test("a watch adopts the pane's grid before each paint and follows it to headless", () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    ["pane", 0],
+    ["watch", 1],
+    "frame",
+    "frame",
+    "stall",
+    ["pane", 1],
+    "output",
+    "drain",
+    "frame",
+    "frame",
+    ["pane", 2],
+    "frame",
+    "frame",
+    "viewport",
+  ]);
+  const last = states.at(-1)!.c;
+  expect(last).toMatchObject({
+    grid: 2,
+    shown: 2,
+    misdrawn: false,
+    typed: false,
+  });
+  const witnesses = replayCore(states);
+  for (const name of ["watchAdopted", "stallReleased", "headlessFollowed"])
+    expect(witnesses.has(name)).toBe(true);
+  // Recorded drawing on the wrong grid is caught by the replay.
+  const wrong = structuredClone(states);
+  wrong.at(-3)!.c.shown = 1;
+  return expectObservationMismatch(() => replayCore(wrong), ["core.state"]);
+});
+
+test("an unconfirmed path is refused; an observer alone goes headless", () => {
+  const refused = trace(["connect", "baseline", ["watch", 0]]);
+  expect(refused.at(-1)!.c.watching).toBe(false);
+  expect(replayCore(refused).has("unconfirmedRefused")).toBe(true);
+  const alone = trace(["connect", "baseline", ["watch", 1], "frame", "frame"]);
+  expect(alone.at(-1)!.c).toMatchObject({ grid: 2, shown: 2, misdrawn: false });
+  expect(replayCore(alone).has("observerAlone")).toBe(true);
 });

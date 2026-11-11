@@ -7,7 +7,7 @@
  * action too.
  */
 
-import { viewOnlyMessage } from "../viewOnly";
+import { CORE_WATCH_TITLE, viewOnlyMessage } from "../viewOnly";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AgentLatestMessage } from "../AgentHoverCard";
 import { agentStateWord } from "../agentMarks";
@@ -48,6 +48,7 @@ export function BoardPeek({
   notify,
   deskStore = sharedDeskStore(),
   onOpen,
+  onFiles,
   onClose,
   onHold,
 }: {
@@ -55,10 +56,10 @@ export function BoardPeek({
   notify(kind: "ok" | "error", text: string): void;
   deskStore?: WorldDeskStore;
   /**
-   * Open the agent as the user opens agents: its Chat or its terminal (a
-   * herdr-core agent's window opens on Files).
+   * Open the agent as the user opens agents: its Chat or its terminal watch.
    */
   onOpen(): void;
+  onFiles?: () => void;
   onClose(): void;
   /** The pointer is over the peek: keep it while it is. */
   onHold(hold: boolean): void;
@@ -271,19 +272,21 @@ export function BoardPeek({
             <span>Retry</span>
           </button>
         ) : null}
-        {leaf.viewOnly && leaf.capabilities.files && !leaf.stale ? (
-          // A herdr-core agent: World shows its folder (Files and Changes)
-          // even though it cannot open its terminal or chat with it.
+        {onFiles && leaf.viewOnly && leaf.capabilities.files && !leaf.stale ? (
           <button
             type="button"
             title="Files and Changes"
             aria-label={`Open ${name}'s files`}
-            onClick={onOpen}
+            onClick={onFiles}
           >
             <span>Files</span>
           </button>
         ) : null}
-        {leaf.viewOnly ? (
+        {leaf.watch ? (
+          <button type="button" title={CORE_WATCH_TITLE} onClick={onOpen}>
+            <span>Watch terminal</span>
+          </button>
+        ) : leaf.viewOnly ? (
           <button type="button" disabled title={leaf.viewOnly}>
             <span>{done ? "Follow up" : "Open"}</span>
           </button>

@@ -151,6 +151,7 @@ export function useBoardHerdrActions({
   boardRef,
   notify,
   onOpen,
+  onOpenFiles,
   deskStore = sharedDeskStore(),
 }: {
   model: BoardModel;
@@ -160,6 +161,7 @@ export function useBoardHerdrActions({
   notify: Notify;
   /** Open a pane as the user opens it: an agent's Chat, else its terminal. */
   onOpen(id: string): unknown;
+  onOpenFiles?: (id: string) => unknown;
   /** The one reviewed record; World's shared Desk store by default. */
   deskStore?: WorldDeskStore;
 }) {
@@ -486,6 +488,14 @@ export function useBoardHerdrActions({
           setPeek(null);
           void onOpen(peeked.pane.leaf.id);
         }}
+        onFiles={
+          onOpenFiles
+            ? () => {
+                setPeek(null);
+                void onOpenFiles(peeked.pane.leaf.id);
+              }
+            : undefined
+        }
         onClose={() => setPeek(null)}
         onHold={(held) => {
           hover.current.held = held;

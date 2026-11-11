@@ -136,7 +136,7 @@ function manager<Runtime>(id: string, runtime: Runtime) {
   };
 }
 
-async function worldOf() {
+async function worldOf(coreStale = false) {
   const mirror = new CoreMirror();
   const sight = new CoreFirstSight();
   mirror.baseline(1, coreTerminals);
@@ -181,7 +181,13 @@ async function worldOf() {
     async () => {},
   );
   await store.refresh();
-  return buildWorldObject(store.get().connections);
+  return buildWorldObject(
+    store
+      .get()
+      .connections.map((c) =>
+        coreStale && c.connectionId === "box-core" ? { ...c, stale: true } : c,
+      ),
+  );
 }
 
 const byName = (leaves: readonly WorldLeafObject[]) =>
@@ -219,7 +225,21 @@ describe("core agents in World's views", () => {
       expect(leaf.capabilities.files).toBe(true);
       expect(leaf.capabilities.changes).toBe(true);
       expect(leaf.capabilities.openTerminal).toBe(false);
+      // Its terminal can be watched on this connection generation only.
+      expect(leaf.watch).toEqual({
+        connectionId: "box-core",
+        generation: 3,
+        address: leaf.nativeId,
+      });
     }
+    expect(tui.some((leaf) => leaf.watch)).toBe(false);
+  });
+
+  test("a stale core connection's agents offer no watch", async () => {
+    const world = await worldOf(true);
+    const core = world.leaves.filter((l) => l.connectionId === "box-core");
+    expect(core.length).toBeGreaterThan(0);
+    expect(core.some((leaf) => leaf.watch)).toBe(false);
   });
 
   test("Needs you lists the waiting core agent; Desk lists every core agent", async () => {

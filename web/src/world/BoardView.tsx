@@ -474,6 +474,7 @@ export default function BoardView({
   selectedId,
   onSelect,
   onOpen,
+  onOpenFiles,
   store,
   sendNote = sendNoteThroughService,
   checkAnchor = checkAnchorThroughService,
@@ -491,6 +492,7 @@ export default function BoardView({
   onSelect(id: string): unknown;
   /** Open a pane as the user opens it: an agent's Chat, else its terminal. */
   onOpen(id: string): unknown;
+  onOpenFiles?: (id: string) => unknown;
   /** Board's saved state; World's own service store by default. */
   store?: BoardDocumentStore;
   /** Send a note to an agent's pane; World's service by default. */
@@ -683,6 +685,7 @@ export default function BoardView({
     boardRef,
     notify: (_kind, text) => setToast({ text }),
     onOpen,
+    onOpenFiles,
   });
   const worldRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -2389,7 +2392,7 @@ export default function BoardView({
     const pane =
       tab.panes.find((candidate) => candidate.key === paneKey) ??
       primaryPane(tab);
-    if (pane && tab.actionable) void onOpen(pane.leaf.id);
+    if (pane && (tab.actionable || pane.leaf.watch)) void onOpen(pane.leaf.id);
     else if (pane && tab.viewOnly) setToast({ text: tab.viewOnly });
   };
   /** Center a workspace and zoom in until its tabs show; unfold it if folded. */

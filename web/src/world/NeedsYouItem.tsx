@@ -1,4 +1,4 @@
-import { viewOnlyMessage } from "./viewOnly";
+import { CORE_WATCH_TITLE, viewOnlyMessage } from "./viewOnly";
 import { MessageSquare, Paperclip, SendHorizontal, X } from "lucide-react";
 import {
   type ReactNode,
@@ -178,6 +178,7 @@ export function NeedsYouMessage({
           kind={item.kind}
           reason={item.leaf.viewOnly}
           head={head}
+          onOpenTerminal={() => onOpenTerminal(item.leaf.id)}
         />
       ) : (
         <NeedsYouAgent
@@ -527,12 +528,14 @@ function NeedsYouViewOnly({
   kind,
   reason,
   head,
+  onOpenTerminal,
 }: {
   leaf: WorldLeafObject;
   name: string;
   kind: "needs" | "done";
   reason: string;
   head: Head;
+  onOpenTerminal(): void;
 }) {
   return (
     <>
@@ -576,9 +579,19 @@ function NeedsYouViewOnly({
       ) : null}
       <div className="needs-you-replies">
         <small className="needs-you-notice">{reason}</small>
-        <button type="button" disabled title={reason}>
-          Open Terminal
-        </button>
+        {leaf.watch ? (
+          <button
+            type="button"
+            title={CORE_WATCH_TITLE}
+            onClick={onOpenTerminal}
+          >
+            Watch Terminal
+          </button>
+        ) : (
+          <button type="button" disabled title={reason}>
+            Open Terminal
+          </button>
+        )}
       </div>
     </>
   );

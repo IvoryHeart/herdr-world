@@ -4,6 +4,7 @@ import { relative, resolve } from "node:path";
 import { decodeItf } from "./replay";
 import { observe, expectObservationMismatch } from "./observations";
 import * as productionSubjects from "./herdr-core-subjects";
+import { CoreWatchReplay, type Frame } from "./herdr-core-observe";
 import type { CoreEventLine } from "../server/src/herdr-core/client";
 
 /** The production modules a replay drives; mutant bundles replace them. */
@@ -27,7 +28,20 @@ export const coreFaults = [
   "teardown-unconfirmed",
   "remove-before-kill",
   "remove-after-retire",
+  "interactive-attach",
+  "unconfirmed-accepted",
+  "paint-before-resize",
+  "stale-stream",
+  "observer-input",
 ] as const;
+/** Faults of the observe family, searched in its own simulation. */
+const observeFaults: ReadonlySet<string> = new Set([
+  "interactive-attach",
+  "unconfirmed-accepted",
+  "paint-before-resize",
+  "stale-stream",
+  "observer-input",
+]);
 export const coreWitnesses: readonly string[] = [
   "orderedDelta",
   "missedCut",
@@ -37,6 +51,11 @@ export const coreWitnesses: readonly string[] = [
   "queueFenced",
   "existingOnly",
   "cascadeConfirmed",
+  "unconfirmedCascadeRefused",
+  "watchAdopted",
+  "observerAlone",
+  "headlessFollowed",
+  "stallReleased",
   "unconfirmedRefused",
   "worktreeRemoved",
   "teardownFenced",
@@ -96,6 +115,19 @@ export type CoreState = {
   planEpoch: number;
   tornDown: boolean;
   removed: boolean;
+  lead: number;
+  grid: number;
+  watching: boolean;
+  confirmed: boolean;
+  frames: Frame[];
+  credit: boolean;
+  pendingGrid: number;
+  backlog: boolean;
+  stream: number;
+  shown: number;
+  misdrawn: boolean;
+  typed: boolean;
+  outputs: number;
 };
 export type CoreTraceState = {
   c: CoreState;
@@ -103,6 +135,7 @@ export type CoreTraceState = {
   target: number;
   family?: string;
 };
+
 const terminal = (): Terminal => ({
   alive: true,
   born: true,
@@ -156,10 +189,25 @@ export class CoreProtocolFake {
     planEpoch: -1,
     tornDown: false,
     removed: false,
+    lead: -1,
+    grid: 3,
+    watching: false,
+    confirmed: false,
+    frames: [],
+    credit: true,
+    pendingGrid: -1,
+    backlog: false,
+    stream: 0,
+    shown: -1,
+    misdrawn: false,
+    typed: false,
+    outputs: 0,
   };
   /** What the person confirmed, as World's production plan named it. */
   private confirmation: Parameters<CoreSubjects["coreKillRefusal"]>[1] | null =
     null;
+  /** World's watch of terminal 0 (observe family). */
+  private readonly watcher: CoreWatchReplay;
   /** The current connection's subscription (fresh on every connect). */
   private latest: ProductionMirror | null = null;
   /** The last mirror that accepted a baseline: the facts World shows. */
@@ -172,7 +220,9 @@ export class CoreProtocolFake {
     private readonly skipGate = false,
     private readonly eventBound = 2,
     private readonly subjects: CoreSubjects = productionSubjects,
-  ) {}
+  ) {
+    this.watcher = new CoreWatchReplay(() => this.state, subjects);
+  }
   private record(index: number, t: Terminal) {
     return {
       address: `t${index + 1}`,
@@ -366,6 +416,7 @@ export class CoreProtocolFake {
         s.connected = false;
         this.latest?.retire("disconnected");
         s.uncertain ||= s.pending;
+        this.watcher.endWatch();
         break;
       case "restart":
         assert(s.epoch === 0);
@@ -375,6 +426,17 @@ export class CoreProtocolFake {
         s.connected = false;
         this.latest?.retire("disconnected");
         s.uncertain ||= s.pending;
+        this.watcher.endWatch();
+        break;
+      case "pane":
+      case "output":
+      case "watch":
+      case "unwatch":
+      case "stall":
+      case "drain":
+      case "frame":
+      case "viewport":
+        this.watcher.apply(op, target);
         break;
       case "absent":
         assert(s.generation === 0 && s.running);
@@ -549,17 +611,29 @@ export function validateCoreTrace(
         "kill",
         "teardown",
         "removeCheckout",
+        "pane",
+        "output",
+        "watch",
+        "unwatch",
+        "stall",
+        "drain",
+        "frame",
+        "viewport",
       ].includes(item.op),
       "unknown core trace action",
     );
     assert(index === 0 ? item.op === "init" : item.op !== "init");
     assert(
       item.family === undefined ||
-        ["ordering", "authority"].includes(item.family),
+        ["ordering", "authority", "observe"].includes(item.family),
       "unknown core family",
     );
     assert(item.family === value[0].family, "core family changed");
-    assert(item.target === 0 || item.target === 1);
+    assert(
+      item.target === 0 ||
+        item.target === 1 ||
+        (item.op === "pane" && item.target === 2),
+    );
     assert(item.c && typeof item.c === "object");
     assert.deepEqual(Object.keys(item.c).sort(), Object.keys(shape).sort());
     for (const [key, initial] of Object.entries(shape)) {
@@ -587,6 +661,18 @@ export function validateCoreTrace(
             Number.isSafeInteger(t[key]) && t[key] >= 0 && t[key] <= eventBound,
           );
       }
+    }
+    for (const frame of item.c.frames) {
+      assert.deepEqual(Object.keys(frame).sort(), ["grid", "kind", "stream"]);
+      assert(["resize", "data"].includes(frame.kind));
+      assert(
+        Number.isSafeInteger(frame.grid) && frame.grid >= 0 && frame.grid <= 3,
+      );
+      assert(
+        Number.isSafeInteger(frame.stream) &&
+          frame.stream >= 0 &&
+          frame.stream <= 2,
+      );
     }
     for (const event of item.c.queue) {
       assert.deepEqual(Object.keys(event).sort(), [
@@ -657,6 +743,21 @@ export function replayCore(
       c.mirror[1]!.alive &&
       !c.confirmedChild
     )
+      witnesses.add("unconfirmedCascadeRefused");
+    if (
+      state.op === "frame" &&
+      c.watching &&
+      c.shown >= 0 &&
+      c.shown === c.grid
+    )
+      witnesses.add("watchAdopted");
+    if (state.op === "watch" && c.watching && c.lead < 0)
+      witnesses.add("observerAlone");
+    if (state.op === "frame" && c.watching && c.shown === 2 && c.changes > 1)
+      witnesses.add("headlessFollowed");
+    if (state.op === "drain" && c.frames.length > 0)
+      witnesses.add("stallReleased");
+    if (state.op === "watch" && !c.watching)
       witnesses.add("unconfirmedRefused");
     if (state.op === "removeCheckout" && c.removed)
       witnesses.add("worktreeRemoved");
@@ -674,6 +775,9 @@ export const coreImplementationFaults = [
   "core-view-retired",
   "core-kill-pid-only",
   "core-kill-plan-once",
+  "core-watch-interactive",
+  "core-watch-unconfirmed",
+  "core-watch-order",
 ] as const;
 type Harness = {
   root: string;
@@ -726,40 +830,52 @@ export async function runCoreVerification(h: Harness) {
   );
   const replayWitnessesBySeed: Record<string, Record<string, number>> = {};
   const allStates: CoreTraceState[][] = [];
+  // The observe family is sampled on its own, so adding it leaves the other
+  // families' sampling (and their fault searches) exactly as before.
+  const observeSource = source.replace("OBSERVE = false", "OBSERVE = true");
+  assert.notEqual(observeSource, source, "observe switch missing");
+  const observeModel = `${h.artifacts}/core-observe.qnt`;
+  await writeFile(resolve(h.root, observeModel), materialize(observeSource));
   for (const seed of [42, 73, 103]) {
-    const prefix = `herdr-core-runtime-seed${seed}`;
-    await h.command(prefix, [
-      "run",
-      model,
-      "--backend",
-      "typescript",
-      "--seed",
-      String(seed),
-      "--max-samples",
-      "500",
-      "--max-steps",
-      "25",
-      "--n-traces",
-      "500",
-      "--invariant",
-      "safety",
-      "--verbosity",
-      "1",
-      "--out-itf",
-      `${h.artifacts}/${prefix}_{seq}.itf.json`,
-      "--witnesses",
-      ...coreWitnesses,
-    ]);
-    const files = (await readdir(h.output)).filter(
-      (file) => file.startsWith(`${prefix}_`) && file.endsWith(".itf.json"),
-    );
-    assert.equal(files.length, 500);
     const counts: Record<string, number> = {};
-    for (const file of files) {
-      const states = await load(resolve(h.output, file));
-      allStates.push(states);
-      for (const name of replayCore(states))
-        counts[name] = (counts[name] ?? 0) + 1;
+    for (const [prefix, path, traces] of [
+      [`herdr-core-runtime-seed${seed}`, model, 500],
+      [`herdr-core-observe-seed${seed}`, observeModel, 200],
+    ] as const) {
+      await h.command(prefix, [
+        "run",
+        path,
+        "--main",
+        "herdr_core_runtime",
+        "--backend",
+        "typescript",
+        "--seed",
+        String(seed),
+        "--max-samples",
+        String(traces),
+        "--max-steps",
+        "25",
+        "--n-traces",
+        String(traces),
+        "--invariant",
+        "safety",
+        "--verbosity",
+        "1",
+        "--out-itf",
+        `${h.artifacts}/${prefix}_{seq}.itf.json`,
+        "--witnesses",
+        ...coreWitnesses,
+      ]);
+      const files = (await readdir(h.output)).filter(
+        (file) => file.startsWith(`${prefix}_`) && file.endsWith(".itf.json"),
+      );
+      assert.equal(files.length, traces);
+      for (const file of files) {
+        const states = await load(resolve(h.output, file));
+        allStates.push(states);
+        for (const name of replayCore(states))
+          counts[name] = (counts[name] ?? 0) + 1;
+      }
     }
     for (const witness of coreWitnesses)
       assert(
@@ -774,7 +890,12 @@ export async function runCoreVerification(h: Harness) {
     const counterexample = `${h.artifacts}/core-${fault}.itf.json`;
     await writeFile(
       resolve(h.root, mutant),
-      materialize(source.replace('FAULT = "none"', `FAULT = "${fault}"`)),
+      materialize(
+        (observeFaults.has(fault) ? observeSource : source).replace(
+          'FAULT = "none"',
+          `FAULT = "${fault}"`,
+        ),
+      ),
     );
     await h.command(
       `core-${fault}-control`,

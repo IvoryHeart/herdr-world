@@ -4,6 +4,7 @@ import { bridge } from "../api";
 import { BoardPeek } from "./board/BoardPeek";
 import { WorldDeskStore } from "./deskStateStore";
 import { NeedsYouList } from "./NeedsYouTab";
+import { CORE_WATCH_TITLE } from "./viewOnly";
 import { needsYouLeafKey } from "./needsYou";
 import { projectAgent } from "./officeAgent";
 import { WorldRuntimeStore } from "./runtimeStore";
@@ -292,15 +293,24 @@ async function run() {
     .filter((button) => button.disabled)
     .map((button) => button.title);
   check(
-    disabled.filter((title) => title === CORE_VIEW_ONLY_REASON).length >= 5,
+    disabled.filter((title) => title === CORE_VIEW_ONLY_REASON).length >= 2,
     `controls stay visible, disabled with the reason: ${JSON.stringify(disabled)}`,
+  );
+  // Its terminal can be watched (never typed into) from every surface.
+  const watchButtons = [
+    ...document.querySelectorAll<HTMLButtonElement>("button"),
+  ].filter((button) => button.title === CORE_WATCH_TITLE);
+  check(
+    // Needs you lists two core agents (one waiting, one finished).
+    watchButtons.length === 4 && watchButtons.every((b) => !b.disabled),
+    `Needs you, Town and Board offer the watch: ${watchButtons.length}`,
   );
   const terminal = document.querySelector<HTMLButtonElement>(
     ".town-peek-terminal",
   );
   check(
-    terminal?.disabled === true && terminal.title === CORE_VIEW_ONLY_REASON,
-    "Town's Open terminal is disabled with the reason",
+    terminal?.disabled === false && terminal.title === CORE_WATCH_TITLE,
+    "Town's Open terminal watches",
   );
   check(
     document.querySelector(".town-peek .is-view-only") !== null &&
@@ -316,6 +326,16 @@ async function run() {
   check(
     calls.length === 0,
     `World sent nothing for view-only agents: ${calls.join(", ")}`,
+  );
+  for (const button of watchButtons) button.click();
+  await frame();
+  check(
+    calls.length === 4 &&
+      ["board-open", "town-terminal", `terminal:${reviewer.id}`].every((c) =>
+        calls.includes(c),
+      ) &&
+      calls.every((c) => /^(board-open|town-terminal|terminal:)/.test(c)),
+    `watching opens the terminal and reads nothing: ${calls.join(", ")}`,
   );
   check(
     !document.body.textContent?.includes("Loading conversation"),

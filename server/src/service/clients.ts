@@ -39,12 +39,22 @@ export function summarizeHerdrEvent(event: any): string {
 }
 
 /** The browsers connected to one service: labels, sends, cleanup, RPC logs. */
+/** Per-socket state a page's socket holds elsewhere in the service. */
+export type SocketOwner = {
+  release(socket: Socket): void;
+  drained?(socket: Socket): void;
+};
+
 export function createBrowserClients(deps: {
   logger: Logger;
   clock: Clock;
   /** Every current connection runtime, for terminal views and counts. */
   forEachRuntime(visit: (runtime: LegacyConnectionRuntime) => void): void;
-  closed?(socket: Socket): void;
+  /**
+   * What holds per-socket state: each is released when its page's socket
+   * closes and told when the socket's send buffer drains after backpressure.
+   */
+  sockets?(): readonly SocketOwner[];
   countChanged?(): void;
 }) {
   const { logger } = deps;
@@ -140,7 +150,7 @@ export function createBrowserClients(deps: {
       viewedTerminals,
     };
     clients.delete(ws);
-    deps.closed?.(ws);
+    for (const owner of deps.sockets?.() ?? []) owner.release(ws);
     notifyBrowserClientCount();
     return snapshot;
   });
@@ -170,6 +180,9 @@ export function createBrowserClients(deps: {
   }
 
   return {
+    drained: (ws: Socket) => {
+      for (const owner of deps.sockets?.() ?? []) owner.drained?.(ws);
+    },
     clients,
     clientSessions,
     conversationWatchers,

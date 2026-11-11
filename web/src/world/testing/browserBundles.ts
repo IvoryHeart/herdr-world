@@ -9,6 +9,7 @@ export type WorldBrowserEntry =
   | "NeedsYouCard"
   | "CoreViewOnly"
   | "CoreControl"
+  | "CoreTerminalWatch"
   | "CoreSharedState"
   | "CoreFiles"
   | "QuestionCards";

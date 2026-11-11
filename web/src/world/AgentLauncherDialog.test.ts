@@ -201,7 +201,8 @@ if (process.env.HERDR_LAUNCH_TARGET_DOM_TEST !== "1") {
       nativeId: "hc:unplaced",
       label: "box",
       actionable: false,
-      viewOnly: "World can't open herdr-core terminals or chat with them yet",
+      viewOnly:
+        "World can't type into herdr-core terminals or chat with them yet",
       coreControl: true,
     } as WorldSpaceObject;
     const host = document.createElement("div");

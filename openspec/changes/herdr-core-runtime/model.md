@@ -53,7 +53,8 @@ and cleanup failures abort; only the named `core.state` mismatch kills a control
 Required replay witnesses cover ordered deltas, missed cuts, gap retirement,
 reconnect, occupant refusal, late queued refusal and an absent endpoint per seed.
 
-The maintained command checks all sixteen plan mutants individually and requires
+The maintained command checks all twenty-one mutants (sixteen plan mutants and
+five observe mutants, below) individually and requires
 both an invariant violation and rejection of that counterexample by correct replay:
 
 | Mutant | Forbidden outcome |
@@ -74,6 +75,11 @@ both an invariant violation and rejection of that counterexample by correct repl
 | teardown-unconfirmed | Worktree teardown hook run on a confirmation that no longer matches |
 | remove-before-kill | Worktree checkout removed while a confirmed terminal still runs |
 | remove-after-retire | Worktree checkout removed after the planning generation retired |
+| interactive-attach | World's watch leads core's size, as a typing viewer would |
+| unconfirmed-accepted | A path without confirmed resize notifications is watched |
+| paint-before-resize | A paint is drawn before the grid core announced for it |
+| stale-stream | Frames of an ended watch reach the new one |
+| observer-input | A rotation or keyboard sends core input, size or focus |
 
 A separate ungated-fake control must diverge on a valid model trace. It checks
 adapter sensitivity without claiming mutation of a production core provider.
@@ -142,7 +148,7 @@ The replay adapter decides `plan` and `kill` with the production
 the production mirror, whose child record carries core's `parent` and
 `die_with_parent`. A kept replacement keeps pid 100 and changes only argv, so a
 pid-only confirmation diverges. Witnesses `cascadeConfirmed` and
-`unconfirmedRefused` are required per seed. Two production negative controls
+`unconfirmedCascadeRefused` are required per seed. Two production negative controls
 must be rejected through `core.state`: a refusal that compares pids only and one
 that lets an unconfirmed terminal pass.
 
@@ -158,6 +164,45 @@ attachment is detached at once). `float-shell.test.ts` injects each fault
 (`kill -9` mid-stream, EOF, a split UTF-8 character, an oversized `missed`,
 exhausted credit, a replaced occupant, a foreign terminal holding the name) and
 `core.live.test.ts` repeats the flow against the release.
+
+## Observe family (issue #867)
+
+Watching a terminal adds a third schedule family. The source is core's size
+rule (`viewers.rs`): the most recently active typing viewer sets the grid, an
+observer never does, and with no typing viewer the terminal is headless. Every
+attach re-applies the rule, so an observer attaching alone moves an unviewed
+terminal to headless; that is allowed and reported, never hidden. A confirmed
+observer receives RESIZE and then a repaint for every grid change; while it has
+no credit core keeps only the newest grid and repaints instead of replaying
+the backlog.
+
+| State | Meaning and boundary |
+| --- | --- |
+| lead, grid | The desktop pane's size (two sizes, or closed) and core's grid. Grid ids: pane sizes, headless, a size no pane set. |
+| watching, confirmed, stream | One World watch, whether its attach reply confirmed resize notifications, and the stream it belongs to (a new one after unwatch, disconnect or restart). |
+| frames, credit, pendingGrid, backlog | Core-to-World frames in order (`resize` then `data`, each tagged with the grid it was drawn for), World's credit, and what core holds while credit is exhausted. |
+| shown, misdrawn, typed | The grid World's terminal has adopted; whether any paint was drawn on a grid other than its own; whether World ever sent input, size or focus. |
+
+Transitions: `pane` (open, resize, close), `output`, `watch` (path confirmed or
+not), `unwatch`, `stall`/`drain` (credit), `frame` (the page consumes the next
+frame) and `viewport` (rotation or keyboard). `watched` joins `safety`: no paint
+lands on another grid, World never types, and while watching core's grid is
+the pane's, or headless when there is none, whatever World did. Witnesses:
+`watchAdopted`, `observerAlone`, `headlessFollowed`, `stallReleased` and
+`unconfirmedRefused`.
+
+Production mapping: the replay builds every attach with World's
+`watchAttachParams`, accepts or refuses it with `acceptWatchReply`
+(`server/src/herdr-core/client.ts`), and feeds every frame through the page's
+`CoreWatchScreen` (`web/src/coreWatch.ts`), whose surface records the grid each
+paint is drawn on. Three production negative controls must each be rejected
+through `core.state`: an attach as a typing viewer, an unconfirmed reply
+accepted, and a page that draws without adopting the announced grid. Credit,
+detach and the drop of an ended stream's frames are covered by the client and
+relay tests (`watch.test.ts`, `watches.test.ts`), the recorded 0.1.20 replay
+with a 4-byte character split across frames (`watch-replay.test.ts`), the
+browser suite (`CoreTerminalWatch.browser.test.ts`, including a paint that a
+following grid must not overtake) and the live release check.
 
 ## Shared seen (issue #868)
 
@@ -225,12 +270,14 @@ required per seed.
 
 ## Bounds, evidence and acceptance
 
-The single module has two explicitly bounded schedule families. Ordering explores
+The single module has three explicitly bounded schedule families. Ordering explores
 two independent source deltas, created/removed terminals and recovery. Authority
 interleaves one source delta with the delayed operation, profile switch and kept
 replacement. This avoids multiplying irrelevant data permutations into every
 operation state; it does not claim arbitrary two-delta/operation schedules.
-Both families have two terminals, independent integer x/y facts, two connection
+Observe has two pane sizes plus closed, three pane changes, two outputs (none
+while four frames are in flight) and two watch streams. Ordering and authority have
+two terminals, independent integer x/y facts, two connection
 attempts, two profiles sharing one core, one process restart, one replacement,
 one captured operation and one source queue. Created/removed events and delayed
 callbacks are explicit. TLC explores the reachable bounded state graph after quotienting replay-only
@@ -239,8 +286,12 @@ fields participates in a transition guard or safety invariant; all authority,
 source state, cuts, pending work and safe-effect history remain. Sampling weights
 favor the queued-replacement race without adding or removing any transition.
 Three
-seeds (42/73/103) sample 500 traces of up to 25 transitions each, all replayed.
-Fault searches use 10,000 samples with seed 42 and the same transition bound;
+seeds (42/73/103) sample 500 ordering/authority traces and 200 observe traces
+of up to 25 transitions each, all replayed. The simulator samples the observe
+family on its own (`OBSERVE`), because its action list changes how the
+simulator weights the others; TLC explores all three families together.
+Fault searches use 10,000 samples with seed 42 and the same transition bound
+(observe faults in the observe-only simulation);
 missing counterexamples fail. Increasing source changes to three adds 100 replayed sensitivity traces.
 
 Run `bun quint/run.ts --case herdr-core-runtime` for development and
