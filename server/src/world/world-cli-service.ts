@@ -173,7 +173,7 @@ export function createWorldCliService(deps: {
             generation: lease.generation,
             isCurrent: () => lease.isCurrent(),
             call: (method, params, beforeSend) =>
-              lease.runtime.herdr.call(method, params, 5000, beforeSend),
+              lease.runtime.tui.call(method, params, 5000, beforeSend),
           }
         );
       },
@@ -261,7 +261,7 @@ export function createWorldCliService(deps: {
                 params: Record<string, unknown>,
                 recheck?: () => void,
               ) =>
-                lease.runtime.herdr.call(method, params, 5_000, () => {
+                lease.runtime.tui.call(method, params, 5_000, () => {
                   if (stopped.signal.aborted)
                     throw new CliError(
                       "refused",
@@ -304,7 +304,7 @@ export function createWorldCliService(deps: {
             return lease.isCurrent();
           },
           call: (method, params) =>
-            lease.runtime.herdr.call(method, params, 10_000, () => {
+            lease.runtime.tui.call(method, params, 10_000, () => {
               recheck?.();
               if (!lease.isCurrent())
                 throw new CliError(

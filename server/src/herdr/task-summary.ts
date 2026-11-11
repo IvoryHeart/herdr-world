@@ -1,3 +1,4 @@
+import { createHerdrControlPorts } from "../adapters/herdr-runtime";
 import { createHash } from "node:crypto";
 import { HerdrClient } from "../bridge/herdr-client";
 import { createSshTunnelManager } from "../bridge/ssh-tunnel";
@@ -199,7 +200,8 @@ async function reportTaskSummary(
   client: TaskSummaryClient,
   command: TaskSummaryCommand,
 ) {
-  const pane = await client.call("pane.get", { pane_id: command.paneId });
+  const { operations, sessions } = createHerdrControlPorts(client);
+  const pane = await operations.getTerminal({ pane_id: command.paneId });
   if (!pane || typeof pane !== "object" || Array.isArray(pane)) {
     usage("Herdr returned an invalid pane response");
   }
@@ -214,7 +216,7 @@ async function reportTaskSummary(
     usage("Herdr did not return the requested pane");
   }
   const session = parseAgentSession(paneRecord.agent_session);
-  await client.call("pane.report_metadata", {
+  await sessions.reportMetadata({
     pane_id: command.paneId,
     source: TASK_SUMMARY_SOURCE,
     tokens: {

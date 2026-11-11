@@ -241,7 +241,7 @@ export async function createWorkspaceWorktree(
           assertCurrent,
           beforeSend,
         })
-      : await runtime.herdr.call(
+      : await runtime.tui.call(
           "worktree.create",
           rpcParams,
           undefined,
@@ -350,7 +350,7 @@ async function runWorktreeCommand(
     "trust_repository",
   ])
     if (rpcParams[name] !== undefined) openParams[name] = rpcParams[name];
-  const opened = await runtime.herdr.call(
+  const opened = await runtime.tui.call(
     "worktree.open",
     openParams,
     undefined,

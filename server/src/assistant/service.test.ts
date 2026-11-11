@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, describe, expect, jest, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
@@ -876,7 +877,7 @@ describe("Ranger scheduled task service", () => {
       ];
       const runtime = {
         sshHost: () => undefined,
-        herdr: {
+        ...herdrRuntimeFixture({
           async call(
             method: string,
             params: Record<string, unknown> = {},
@@ -925,7 +926,7 @@ describe("Ranger scheduled task service", () => {
               };
             throw new Error(`Unexpected fixture method: ${method}`);
           },
-        },
+        }),
       } as unknown as LegacyConnectionRuntime;
       const f = setup({}, () => ({
         catalog: async () => catalog,

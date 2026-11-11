@@ -209,6 +209,11 @@ route accepts an omitted connection ID by selecting the process default, and
 compares generation only when supplied. Legacy HTTP paths have the same default
 route; do not use either omission for new browser work.
 
+Runtime operation ownership and the remaining TUI-only callback areas are mapped
+in [Runtime adapters](world-adapters.md#typed-runtime-operations). The typed
+ports live in `server/src/adapters/runtime-ports.ts`; their TUI translation is in
+`server/src/adapters/herdr-runtime.ts`.
+
 The aggregate observation path is read-only: `server/src/world/snapshot.ts` schedules
 at most four per-host observations, rotates open-context priorities with background
 progress, and returns a

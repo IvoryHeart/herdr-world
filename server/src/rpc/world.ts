@@ -96,7 +96,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
           return lease && lease.generation === generation && lease.isCurrent()
             ? {
                 call: (method, params) =>
-                  lease.runtime.herdr.call(method, params, 10_000),
+                  lease.runtime.tui.call(method, params, 10_000),
                 isCurrent: () => lease.isCurrent(),
               }
             : null;
@@ -356,7 +356,10 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
       if (!lease || lease.generation !== generation || !lease.isCurrent()) {
         throw new Error("World watch target is unavailable");
       }
-      const paneResult = await lease.runtime.herdr.call("pane.list", {}, 5_000);
+      const paneResult = await lease.runtime.operations.listTerminals(
+        {},
+        { timeoutMs: 5_000 },
+      );
       const panes = (paneResult as { panes?: unknown })?.panes;
       const matches = Array.isArray(panes)
         ? panes.filter(

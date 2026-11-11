@@ -18,7 +18,7 @@ export async function probeLauncher(
   };
   current();
   const { connection } = rpc;
-  const { herdr } = connection;
+  const { tui } = connection;
   const host = connection.sshHost();
   const options = {
     host,
@@ -29,7 +29,7 @@ export async function probeLauncher(
     shQuote,
   };
   const call = (method: string, params: Record<string, unknown>) =>
-    herdr.call(method, params, 10_000);
+    tui.call(method, params, 10_000);
   const kinds = await agentKinds(call);
   current();
   let cwd = "";

@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -133,7 +134,7 @@ test.skipIf(!chrome)(
                         generation: 3,
                         isCurrent: () => true,
                         runtime: {
-                          herdr: {
+                          ...herdrRuntimeFixture({
                             call: async (
                               method: string,
                               params: Record<string, unknown>,
@@ -181,7 +182,7 @@ test.skipIf(!chrome)(
                               }
                               throw new Error("unexpected native method");
                             },
-                          },
+                          }),
                         },
                       },
               },

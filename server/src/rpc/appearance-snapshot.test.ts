@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -78,7 +79,7 @@ for (const mode of [
             generation: 3,
             isCurrent: () => current,
             runtime: {
-              herdr: {
+              ...herdrRuntimeFixture({
                 call: async () => {
                   if (mode === "held-read") return heldNative.promise;
                   if (mode === "unknown-read") throw new Error("unavailable");
@@ -91,7 +92,7 @@ for (const mode of [
                         : [],
                   };
                 },
-              },
+              }),
             },
           }),
         },

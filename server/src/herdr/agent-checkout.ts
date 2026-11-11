@@ -1,3 +1,4 @@
+import { createHerdrControlPorts } from "../adapters/herdr-runtime";
 import { createHash } from "node:crypto";
 import { isAbsolute } from "node:path";
 import { HerdrClient } from "../bridge/herdr-client";
@@ -221,14 +222,15 @@ export async function runAgentCheckoutCommand(
       dependencies.createClient ??
       ((socketPath: string) => new HerdrClient(socketPath))
     )(config.socketPath);
-    const response = await client.call("pane.get", { pane_id: command.paneId });
+    const { operations, sessions } = createHerdrControlPorts(client);
+    const response = await operations.getTerminal({ pane_id: command.paneId });
     const pane =
       response?.pane && typeof response.pane === "object"
         ? (response.pane as Record<string, unknown>)
         : (response as Record<string, unknown>);
     if (pane?.pane_id !== command.paneId)
       usage("Herdr did not return the requested pane");
-    await client.call("pane.report_metadata", {
+    await sessions.reportMetadata({
       pane_id: command.paneId,
       source: AGENT_CHECKOUT_SOURCE,
       tokens: agentCheckoutTokens(

@@ -9,6 +9,21 @@ import { AssistantUserError, surfaceAssistantUserError } from "./errors";
 
 export const ASSISTANT_DEFAULT_TERMINAL_LINES = 120;
 export const ASSISTANT_MAX_TERMINAL_LINES = 1000;
+
+export function terminalReadLines(value: unknown): number {
+  if (
+    value !== undefined &&
+    (!Number.isInteger(value) ||
+      Number(value) < 1 ||
+      Number(value) > ASSISTANT_MAX_TERMINAL_LINES)
+  ) {
+    throw new Error(
+      `Terminal lines must be between 1 and ${ASSISTANT_MAX_TERMINAL_LINES}`,
+    );
+  }
+  return Number(value ?? ASSISTANT_DEFAULT_TERMINAL_LINES);
+}
+
 const UNIX_ONLY_NOTE =
   'Unavailable for workspaces that workspace_status reports with remote_platform "windows".';
 

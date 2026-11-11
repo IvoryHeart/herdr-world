@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { deskSessionFingerprint } from "./desk-observation";
@@ -23,7 +24,7 @@ function fixture() {
   const calls: { method: string; params: any }[] = [];
   const started = Promise.withResolvers<void>();
   const connection = {
-    herdr: {
+    ...herdrRuntimeFixture({
       async call(method: string, params: unknown) {
         calls.push({ method, params });
         const pane = {
@@ -41,7 +42,7 @@ function fixture() {
         await pending;
         return { text: "synthetic screen" };
       },
-    },
+    }),
     agentSessions: {
       async readTurn(params: unknown) {
         calls.push({ method: "agent_turn.get", params });

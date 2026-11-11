@@ -16,7 +16,7 @@ export type AnswerLease = {
   runtime: {
     sshHost(): unknown;
     remotePlatform?: string;
-    herdr: {
+    tui: {
       call(
         method: string,
         params: Record<string, unknown>,
@@ -45,7 +45,7 @@ const host = (lease: AnswerLease) => ({
   generation: lease.generation,
   local: !lease.runtime.sshHost(),
   call: (method: string, params: Record<string, unknown>) =>
-    lease.runtime.herdr.call(method, params, 5000),
+    lease.runtime.tui.call(method, params, 5000),
 });
 
 /** Resolve only captured source evidence, never a replacement pane or connection. */

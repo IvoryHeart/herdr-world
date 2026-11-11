@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import {
   runProcessWithInputTimeout,
   runBinaryProcessWithTimeout,
@@ -49,9 +50,9 @@ async function fixture(sshHost?: string) {
     runBinaryProcessWithTimeout,
     bindProcess: (argv) => argv,
     runProcessWithInputTimeout,
-    herdr: {
+    ...herdrRuntimeFixture({
       call: async () => ({ workspace: { cwd: checkout } }),
-    } as unknown as HerdrClient,
+    } as unknown as HerdrClient),
     sshHost: () => sshHost,
     runProcessWithCodeTimeout: async (argv) => {
       expect(argv).toEqual([

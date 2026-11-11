@@ -248,10 +248,9 @@ export class TerminalSettings {
       if (!lease || lease.generation !== host.generation || !lease.isCurrent())
         continue;
       // Another client may have moved the terminal since our observation.
-      const listed = (await lease.runtime.herdr.call(
-        "pane.list",
+      const listed = (await lease.runtime.operations.listTerminals(
         {},
-        10_000,
+        { timeoutMs: 10_000 },
       )) as { panes?: PaneRow[] };
       if (!lease.isCurrent() || !Array.isArray(listed.panes))
         throw new Error("terminal settings cleanup observation is unavailable");

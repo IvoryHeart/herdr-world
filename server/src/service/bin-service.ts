@@ -10,7 +10,7 @@ type Lease = {
   generation: number;
   isCurrent(): boolean;
   runtime: {
-    herdr: {
+    tui: {
       call(
         method: string,
         params: Record<string, unknown>,
@@ -47,7 +47,7 @@ export function createBinService(deps: {
           generation: current.generation,
           isCurrent: () => current.isCurrent(),
           call: (method, params, timeoutMs, beforeSend) =>
-            current.runtime.herdr.call(method, params, timeoutMs, beforeSend),
+            current.runtime.tui.call(method, params, timeoutMs, beforeSend),
         }
       : null;
   };

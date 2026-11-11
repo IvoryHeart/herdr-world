@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -32,7 +33,7 @@ describe("worktree hook runner", () => {
 
       const runner = createWorktreeHookRunner({
         hooksEnabled: async () => true,
-        herdr: { call: async () => ({}) },
+        ...herdrRuntimeFixture({ call: async () => ({}) }),
         sshHost: () => undefined,
         runProcess: async () => ({ stdout: "", stderr: "" }),
         runProcessWithCode: async () => ({ code: 0, stdout: "", stderr: "" }),
@@ -67,7 +68,7 @@ describe("worktree hook runner", () => {
 
       const runner = createWorktreeHookRunner({
         hooksEnabled: async () => true,
-        herdr: { call: async () => ({}) },
+        ...herdrRuntimeFixture({ call: async () => ({}) }),
         sshHost: () => undefined,
         runProcess: async () => ({ stdout: "", stderr: "" }),
         runProcessWithCode: async (argv) => {
@@ -99,7 +100,7 @@ describe("worktree hook runner", () => {
     await withTempDir(async (root) => {
       await writeFile(join(root, "roamgate.json"), "invalid JSON");
       const runner = createWorktreeHookRunner({
-        herdr: { call: async () => ({}) },
+        ...herdrRuntimeFixture({ call: async () => ({}) }),
         sshHost: () => undefined,
         runProcess: async () => ({ stdout: "", stderr: "" }),
         runProcessWithCode: async () => {
@@ -165,7 +166,7 @@ describe("confirmed worktree setup hooks", () => {
       );
       let executions = 0;
       const runner = createWorktreeHookRunner({
-        herdr: { call: async () => ({}) },
+        ...herdrRuntimeFixture({ call: async () => ({}) }),
         sshHost: () => undefined,
         runProcess: async () => ({ stdout: "", stderr: "" }),
         runProcessWithCode: async () => {
@@ -210,7 +211,7 @@ describe("confirmed worktree setup hooks", () => {
         );
         let executions = 0;
         const runner = createWorktreeHookRunner({
-          herdr: { call: async () => ({}) },
+          ...herdrRuntimeFixture({ call: async () => ({}) }),
           sshHost: () => undefined,
           runProcess: async () => ({ stdout: "", stderr: "" }),
           runProcessWithCode: async () => {
@@ -245,7 +246,7 @@ describe("confirmed worktree setup hooks", () => {
       const commands: string[][] = [];
       let enabledReads = 0;
       const runner = createWorktreeHookRunner({
-        herdr: { call: async () => ({}) },
+        ...herdrRuntimeFixture({ call: async () => ({}) }),
         sshHost: () => undefined,
         runProcess: async () => ({ stdout: "", stderr: "" }),
         runProcessWithCode: async (argv) => {
@@ -286,7 +287,7 @@ describe("confirmed worktree setup hooks", () => {
         let current = true;
         let executions = 0;
         const runner = createWorktreeHookRunner({
-          herdr: { call: async () => ({}) },
+          ...herdrRuntimeFixture({ call: async () => ({}) }),
           sshHost: () => undefined,
           runProcess: async () => ({ stdout: "", stderr: "" }),
           runProcessWithCode: async () => {
@@ -326,7 +327,7 @@ describe("confirmed worktree setup hooks", () => {
         "invalid synthetic-private-config",
       );
       const runner = createWorktreeHookRunner({
-        herdr: { call: async () => ({}) },
+        ...herdrRuntimeFixture({ call: async () => ({}) }),
         sshHost: () => undefined,
         runProcess: async () => ({ stdout: "", stderr: "" }),
         runProcessWithCode: async () => {
@@ -364,7 +365,7 @@ function testRunner(ssh = false) {
     return runProcessWithCode(argv);
   };
   const runner = createWorktreeHookRunner({
-    herdr: { call: async () => ({}) },
+    ...herdrRuntimeFixture({ call: async () => ({}) }),
     sshHost: () => (ssh ? "hook-test-host" : undefined),
     runProcess: async (argv) => {
       const result = await execute(argv);

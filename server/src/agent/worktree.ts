@@ -1,3 +1,4 @@
+import type { HostResources } from "../adapters/runtime-ports";
 import { createHash } from "node:crypto";
 import type {
   AgentWorktreeCandidate,
@@ -12,9 +13,6 @@ import { agentSessionOf, parseAgentCheckoutTokens } from "./checkout-context";
 import type { ListedWorktree, WorktreeGitRoot } from "./worktree-git";
 
 type Metadata = { cwd?: string; branch?: string | null; sourceRef: string };
-type Herdr = {
-  call(method: string, params?: Record<string, unknown>): Promise<unknown>;
-};
 const digest = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const rank: Record<AgentWorktreeSource, number> = {
@@ -34,7 +32,7 @@ const paneOf = (value: unknown) => record(record(value)?.pane) ?? record(value);
 export function createAgentWorktree(args: {
   connectionId: string;
   generation: number;
-  herdr: Herdr;
+  resources: HostResources;
   inspect(path: string): Promise<WorktreeGitRoot | null>;
   list(root: string): Promise<ListedWorktree[]>;
   readSessionMetadata(
@@ -70,7 +68,7 @@ export function createAgentWorktree(args: {
   }
   async function context(subject: AgentWorktreeSubject) {
     const pane = paneOf(
-      await args.herdr.call("pane.get", { pane_id: subject.paneId }),
+      await args.resources.getTerminal({ pane_id: subject.paneId }),
     );
     const session = agentSessionOf(pane?.agent_session);
     const fingerprint = session
@@ -224,7 +222,7 @@ export function createAgentWorktree(args: {
         )[0]?.canonicalRoot ?? null;
       if (!seed && current.workspaceId) {
         // A known workspace scopes discovery; it is never an agent-worktree fallback.
-        const result = await args.herdr.call("workspace.get", {
+        const result = await args.resources.getWorkspace({
           workspace_id: current.workspaceId,
         });
         const workspace = record(record(result)?.workspace) ?? record(result);
