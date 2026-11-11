@@ -21,7 +21,6 @@ import {
 } from "./runtime";
 import { connectUnixStream, type CoreStreamConnector } from "./stream";
 import { coreTransportForProfile } from "./transport";
-import { coreUploadsForProfile } from "./uploads";
 
 export type CoreConnections = {
   manager: ConnectionManager<CoreConnectionRuntime>;
@@ -131,19 +130,8 @@ export function createCoreConnections(args: {
       let attention = attentions.get(profile.id);
       if (!attention)
         attentions.set(profile.id, (attention = new CoreAttention()));
-      const transport = transportFor(profile, report);
       return createCoreConnectionRuntime({
         local: profile.type === "local",
-        uploads: (signal) =>
-          coreUploadsForProfile(profile, {
-            signal,
-            sshControlPath: transport.sshControlPath,
-            onCleanupError: (error) =>
-              args.logger.warn("core upload cleanup failed", {
-                connection: profile.id,
-                error: (error as Error)?.message ?? String(error),
-              }),
-          }),
         firstSight,
         attention,
         onAlerts: (alerts, terminals, coreName) => {
@@ -168,7 +156,7 @@ export function createCoreConnections(args: {
         layout: (coreId) => args.topology?.()?.get(coreId) ?? null,
         identity: connectionIdentityForProfile(profile),
         context,
-        transport,
+        transport: transportFor(profile, report),
         observations,
         onFailure: report,
         connect: args.connect,

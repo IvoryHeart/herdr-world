@@ -1,3 +1,4 @@
+import { handleCoreFileHttpRequest } from "./core-files-http";
 import type { Server, ServerWebSocket } from "bun";
 import { runInSshLane } from "../bridge/ssh-sessions";
 import { isHtmlPath } from "../../../shared/filePreview";
@@ -25,10 +26,7 @@ import {
   serializeConnectionEnvelope,
   validateConnectionId,
 } from "../connections/protocol";
-import type { ReadyConnectionRegistry } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
-import type { CoreConnectionRuntime } from "../herdr-core/runtime";
-import { handleCoreUploadRequest } from "../herdr-core/uploads";
 import {
   type createAuthHandlers,
   unauthenticatedLoginRedirect,
@@ -70,8 +68,8 @@ export type ListenerDeps = {
   auth: ReturnType<typeof createAuthHandlers>;
   browsers: BrowserClients;
   connectionManager: ConnectionManager<LegacyConnectionRuntime>;
-  /** herdr-core connections: only uploads to the agent's machine route here. */
-  coreConnections?: ReadyConnectionRegistry<CoreConnectionRuntime>;
+  /** herdr-core connections: their file transfers (P4). */
+  core?: import("../rpc/context").RpcServices["coreControl"];
   legacyRoutingLogger: ReturnType<typeof createLegacyRoutingLogger>;
   snapshotAdmission: WorldSnapshotAdmission;
   handleRpc(ws: ServerWebSocket<unknown>, raw: string): Promise<unknown>;
@@ -144,6 +142,13 @@ export function listen(deps: ListenerDeps) {
     if (route.kind === "error") {
       return connectionRoutingErrorResponse(route.error);
     }
+    const coreId = route.requestedConnectionId;
+    if (
+      coreId !== undefined &&
+      !connectionManager.has(coreId) &&
+      deps.core?.manager.has(coreId)
+    )
+      return handleCoreFileHttpRequest(deps.core, route, url, req);
 
     let resolved: ReturnType<
       typeof resolveConnectionHttpRoute<LegacyConnectionRuntime>
@@ -155,20 +160,6 @@ export function listen(deps: ListenerDeps) {
         : /^(0|[1-9]\d*)$/.test(generationText)
           ? Number(generationText)
           : generationText;
-    const core = deps.coreConnections;
-    if (
-      core &&
-      !route.legacy &&
-      typeof route.requestedConnectionId === "string" &&
-      core.has(route.requestedConnectionId)
-    )
-      return handleCoreUploadRequest({
-        registry: core,
-        route,
-        requestedGeneration,
-        url,
-        req,
-      });
     try {
       resolved = resolveConnectionHttpRoute({
         route,

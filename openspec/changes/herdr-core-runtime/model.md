@@ -54,8 +54,8 @@ and cleanup failures abort; only the named `core.state` mismatch kills a control
 Required replay witnesses cover ordered deltas, missed cuts, gap retirement,
 reconnect, occupant refusal, late queued refusal and an absent endpoint per seed.
 
-The maintained command explores all twenty-four mutants (fourteen plan mutants,
-five observe mutants and five typing mutants, below) individually with TLC and requires
+The maintained command checks all twenty-seven mutants (seventeen plan mutants,
+five observe mutants and five typing mutants, below) individually and requires
 both an invariant violation and rejection of that counterexample by correct replay:
 
 | Mutant | Forbidden outcome |
@@ -74,6 +74,9 @@ both an invariant violation and rejection of that counterexample by correct repl
 | heartbeat-ignored | Jump leaves the host actionable |
 | unconfirmed-cascade | Kill sent while an observed die-with-parent child is unconfirmed |
 | stale-confirmation | Kill sent after the confirmed program was replaced |
+| teardown-unconfirmed | Worktree teardown hook run on a confirmation that no longer matches |
+| remove-before-kill | Worktree checkout removed while a confirmed terminal still runs |
+| remove-after-retire | Worktree checkout removed after the planning generation retired |
 | interactive-attach | World's watch leads core's size, as a typing viewer would |
 | unconfirmed-accepted | A path without confirmed resize notifications is watched |
 | paint-before-resize | A paint is drawn before the grid core announced for it |
@@ -276,6 +279,40 @@ attention rule from the ordered mirror; both are checked by unit, RPC,
 recorded 0.1.20 and live-release tests, not by this model.
 
 Run `bun quint/run.ts --case herdr-core-seen` during development.
+The production gap control searches for a receive gap on an already observed
+terminal. An unknown terminal has an independent retirement guard and could
+otherwise mask a missing sequence-gap guard; the focused replay test also kills
+that production mutant with a lost delta on an existing terminal.
+The combined send/worktree runner also searches explicitly for a stale kill plan
+after replacement, without a child whose separate guard could mask the fault,
+to kill the production pid-only confirmation mutant. Trace
+admission keeps source/history deltas bounded while allowing the doubled mirror
+delta of a stale-after-missed counterexample; correct production replay rejects it.
+
+## Worktree removal (issue #871, P4)
+
+Removing a worktree room reuses the kill confirmation: `plan` also records
+the generation, profile and core epoch it was planned in (`planGen`,
+`planOwner`, `planEpoch`). `teardown` (the worktree's
+teardown hook) runs only while the observation still matches the
+confirmation, as `kill` is sent; a stale one runs nothing and ends nothing.
+`removeCheckout` removes the checkout only after the teardown, after the
+confirmed kill, and only while the planning generation is still the
+connected one: a reconnect between steps stops the removal and keeps the
+checkout and room. Sampling weights add the two actions without adding
+transitions.
+
+The replay adapter decides `teardown` with the production `coreKillPlan` and
+`coreKillRefusal`, which `removeCoreWorktree` calls through
+`assertCoreKillConfirmed` before its hook
+(`server/src/herdr-core/worktrees.ts`). `removeCheckout` is the design seam:
+`removeCoreWorktree` checks the original lease (`guard`) before every host
+step and after each one, and kills through `killCore`; the Bun suite
+`worktrees.test.ts` (stale confirmation runs no teardown and ends nothing;
+failed teardown ends and removes nothing; retired lease stops between steps)
+and the live suite `worktrees.live.test.ts` against the core release are its
+production mapping. Witnesses `worktreeRemoved` and `teardownFenced` are
+required per seed.
 
 ## Bounds, evidence and acceptance
 
@@ -305,8 +342,9 @@ its simulation takes, and runs sends only in the authority family without a
 child and kills only in the one with a child. The send fence (lease, occupant,
 queued delivery) and the kill fence (plan, confirmation) read disjoint fields
 and each still meets every source, cursor, replacement and connection change,
-so this drops only their product (769,597 to 288,538 distinct states; the
-typing family brings the quotient to 754,688). Every
+so this drops only their product. Worktree teardown/removal stays in the kill
+family with its planning generation, profile and core epoch; with the typing
+family the quotient has 770,814 distinct states. Every
 model fault below still yields a TLC counterexample in this quotient.
 Each fault is checked exhaustively with TLC; a simulator search of up to
 200,000 samples with seed 42 extracts its ITF replay with the same transition bound
@@ -314,7 +352,7 @@ Each fault is checked exhaustively with TLC; a simulator search of up to
 missing counterexamples fail. Increasing source changes to three adds 100 replayed sensitivity traces.
 
 Run `bun quint/run.ts --case herdr-core-runtime` for development and
-`bun run verification:gate` for complete canonical evidence. The maintained runner
+`bun run verification:gate` for complete canonical evidence. The [verification runner](../../../quint/herdr-core-verification.ts)
 retains source/model/adapter/tool hashes, command logs, traces and counterexamples
 in ignored verification artifacts with existing deadlines and process cleanup.
 Unit tests exercise fake transition/rejection and trace validation independently.

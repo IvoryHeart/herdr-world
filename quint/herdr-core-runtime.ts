@@ -1,47 +1,105 @@
-import {
-  coreFaults,
-  coreWitnesses,
-  coreImplementationFaults,
-} from "./herdr-core-cases";
 export {
   coreFaults,
   coreWitnesses,
   coreImplementationFaults,
 } from "./herdr-core-cases";
 import assert from "node:assert/strict";
-import { readFile, readdir, writeFile } from "node:fs/promises";
-import { relative, resolve } from "node:path";
-import { decodeItf } from "./replay";
-import { observe, expectObservationMismatch } from "./observations";
+import { observe } from "./observations";
 import * as productionSubjects from "./herdr-core-subjects";
-import { CoreWatchReplay } from "./herdr-core-observe";
+import { CoreWatchReplay, type Frame } from "./herdr-core-observe";
 import type { CoreEventLine } from "../server/src/herdr-core/client";
-import {
-  type CoreState,
-  type CoreTraceState,
-  checkCoreTrace,
-  type Event,
-  type Terminal,
-} from "./herdr-core-trace";
-export type { CoreState, CoreTraceState } from "./herdr-core-trace";
 
 /** The production modules a replay drives; mutant bundles replace them. */
 export type CoreSubjects = typeof productionSubjects;
 type ProductionMirror = InstanceType<CoreSubjects["CoreMirror"]>;
 
-/** Faults of the observe family, searched in its own simulation. */
-const observeFaults: ReadonlySet<string> = new Set([
-  "interactive-attach",
-  "unconfirmed-accepted",
-  "paint-before-resize",
-  "stale-stream",
-  "observer-input",
-  "key-twice",
-  "key-before-attach",
-  "typed-replacement",
-  "leave-overtakes",
-  "automatic-opens",
-]);
+type Terminal = {
+  alive: boolean;
+  born: boolean;
+  x: number;
+  y: number;
+  occupant: number;
+};
+type Event = {
+  epoch: number;
+  gen: number;
+  seq: number;
+  target: number;
+  kind: string;
+};
+export type CoreState = {
+  source: Terminal[];
+  mirror: Terminal[];
+  history: Terminal[][];
+  queue: Event[];
+  seq: number;
+  cursor: number;
+  epoch: number;
+  generation: number;
+  owner: number;
+  connected: boolean;
+  ready: boolean;
+  running: boolean;
+  changes: number;
+  replaced: boolean;
+  captured: boolean;
+  leaseGen: number;
+  leaseOwner: number;
+  leaseEpoch: number;
+  session: number;
+  foreground: boolean;
+  pending: boolean;
+  queued: boolean;
+  uncertain: boolean;
+  attempts: number;
+  delivered: number;
+  admitted: boolean;
+  dispatched: boolean;
+  published: boolean;
+  safe: boolean;
+  /** Terminal 2 (index 1) dies with terminal 1 when core ends it (M7). */
+  child: boolean;
+  planned: boolean;
+  confirmedChild: boolean;
+  confirmedOccupant: number;
+  killed: boolean;
+  /** P4 worktree removal: the generation it was planned in, then its steps. */
+  planGen: number;
+  planOwner: number;
+  planEpoch: number;
+  tornDown: boolean;
+  removed: boolean;
+  lead: number;
+  grid: number;
+  watching: boolean;
+  confirmed: boolean;
+  frames: Frame[];
+  credit: boolean;
+  pendingGrid: number;
+  backlog: boolean;
+  stream: number;
+  shown: number;
+  misdrawn: boolean;
+  typed: boolean;
+  outputs: number;
+  /** World's keyboard (typing family): 0 none, 1 attach in flight, 2 open. */
+  keys: number;
+  waiting: number;
+  left: boolean;
+  asked: boolean;
+  pressed: number;
+  sent: number;
+  refused: number;
+  replies: number;
+  worldLeads: boolean;
+  stray: boolean;
+};
+export type CoreTraceState = {
+  c: CoreState;
+  op: string;
+  target: number;
+  family?: string;
+};
 
 const terminal = (): Terminal => ({
   alive: true,
@@ -92,6 +150,11 @@ export class CoreProtocolFake {
     confirmedChild: false,
     confirmedOccupant: -1,
     killed: false,
+    planGen: -1,
+    planOwner: -1,
+    planEpoch: -1,
+    tornDown: false,
+    removed: false,
     lead: -1,
     grid: 3,
     watching: false,
@@ -446,6 +509,9 @@ export class CoreProtocolFake {
           })),
         };
         s.planned = true;
+        s.planGen = s.generation;
+        s.planOwner = s.owner;
+        s.planEpoch = s.epoch;
         s.confirmedChild = plan.descendants.some((e) => e.address === "t2");
         s.confirmedOccupant =
           this.latest!.terminal("t1")?.argv?.[0] === "agent" ? 0 : 1;
@@ -473,6 +539,39 @@ export class CoreProtocolFake {
         this.latest?.retire("divergence");
         break;
       }
+      case "teardown": {
+        // removeCoreWorktree checks the confirmation with the production
+        // plan and refusal (assertCoreKillConfirmed) before the hook runs.
+        assert(s.planned && !s.killed && !s.tornDown);
+        if (
+          !s.ready ||
+          !s.mirror[0]!.alive ||
+          !s.connected ||
+          s.generation !== s.planGen ||
+          s.owner !== s.planOwner ||
+          s.epoch !== s.planEpoch
+        )
+          break;
+        const plan = this.subjects.coreKillPlan(
+          "core",
+          this.latest!.terminals(),
+          ["t1"],
+        );
+        s.tornDown =
+          plan.roots.length > 0 &&
+          this.subjects.coreKillRefusal(plan, this.confirmation!) === null;
+        break;
+      }
+      case "removeCheckout":
+        // Removal follows the confirmed kill, under the planned generation.
+        assert(s.tornDown && !s.removed);
+        s.removed =
+          s.killed &&
+          s.connected &&
+          s.generation === s.planGen &&
+          s.owner === s.planOwner &&
+          s.epoch === s.planEpoch;
+        break;
       default:
         assert.fail(`unknown core action: ${op}`);
     }
@@ -484,7 +583,135 @@ export function validateCoreTrace(
   value: unknown,
   eventBound = 2,
 ): asserts value is CoreTraceState[] {
-  checkCoreTrace(value, new CoreProtocolFake().state, eventBound);
+  assert(Array.isArray(value) && value.length > 1, "empty core trace");
+  const shape = new CoreProtocolFake().state;
+  for (const [index, item] of value.entries()) {
+    assert(item && typeof item === "object" && typeof item.op === "string");
+    assert(
+      [
+        "init",
+        "connect",
+        "baseline",
+        "create",
+        "remove",
+        "x",
+        "y",
+        "receive",
+        "missed",
+        "drop",
+        "heartbeat",
+        "disconnect",
+        "restart",
+        "absent",
+        "switchProfile",
+        "replace",
+        "capture",
+        "loseForeground",
+        "dispatch",
+        "deliver",
+        "complete",
+        "recover",
+        "plan",
+        "kill",
+        "teardown",
+        "removeCheckout",
+        "pane",
+        "output",
+        "watch",
+        "unwatch",
+        "stall",
+        "drain",
+        "frame",
+        "viewport",
+        "paneTouch",
+        "key",
+        "attached",
+        "attachRefused",
+        "leave",
+        "reply",
+        "keyboardLost",
+        "reoccupy",
+      ].includes(item.op),
+      "unknown core trace action",
+    );
+    assert(index === 0 ? item.op === "init" : item.op !== "init");
+    assert(
+      item.family === undefined ||
+        ["ordering", "authority", "observe", "typing"].includes(item.family),
+      "unknown core family",
+    );
+    assert(item.family === value[0].family, "core family changed");
+    assert(
+      item.target === 0 ||
+        item.target === 1 ||
+        (item.op === "pane" && item.target === 2),
+    );
+    assert(item.c && typeof item.c === "object");
+    assert.deepEqual(Object.keys(item.c).sort(), Object.keys(shape).sort());
+    for (const [key, initial] of Object.entries(shape)) {
+      const field = item.c[key];
+      if (typeof initial === "number")
+        assert(Number.isSafeInteger(field) && field >= -1 && field <= 3);
+      else if (typeof initial === "boolean") assert(typeof field === "boolean");
+      else assert(Array.isArray(field));
+    }
+    for (const group of [item.c.source, item.c.mirror, ...item.c.history]) {
+      assert(Array.isArray(group) && group.length === 2);
+      for (const t of group) {
+        assert(
+          t && typeof t.alive === "boolean" && typeof t.born === "boolean",
+        );
+        assert.deepEqual(Object.keys(t).sort(), [
+          "alive",
+          "born",
+          "occupant",
+          "x",
+          "y",
+        ]);
+        for (const key of ["x", "y", "occupant"])
+          assert(
+            Number.isSafeInteger(t[key]) &&
+              t[key] >= 0 &&
+              // A stale-after-missed mutant can apply each source delta twice.
+              // Admit its counterexample so production replay, not parsing,
+              // rejects it. Source history retains its exact event bound.
+              t[key] <=
+                (group === item.c.mirror && key !== "occupant"
+                  ? 2 * eventBound
+                  : eventBound),
+          );
+      }
+    }
+    for (const frame of item.c.frames) {
+      assert.deepEqual(Object.keys(frame).sort(), ["grid", "kind", "stream"]);
+      assert(["resize", "data"].includes(frame.kind));
+      assert(
+        Number.isSafeInteger(frame.grid) && frame.grid >= 0 && frame.grid <= 3,
+      );
+      assert(
+        Number.isSafeInteger(frame.stream) &&
+          frame.stream >= 0 &&
+          frame.stream <= 2,
+      );
+    }
+    for (const event of item.c.queue) {
+      assert.deepEqual(Object.keys(event).sort(), [
+        "epoch",
+        "gen",
+        "kind",
+        "seq",
+        "target",
+      ]);
+      assert(["create", "remove", "x", "y"].includes(event.kind));
+      assert(event.target === 0 || event.target === 1);
+      for (const key of ["epoch", "gen", "seq", "target"])
+        assert(
+          Number.isSafeInteger(event[key]) &&
+            event[key] >= 0 &&
+            event[key] <= eventBound,
+        );
+    }
+  }
 }
 
 /** The model's view: its mirror's live terminals, only while ready. */
@@ -567,289 +794,10 @@ export function replayCore(
       witnesses.add("leftAfterKeys");
     if (state.op === "key" && c.replaced && !c.watching)
       witnesses.add("replacementRefused");
+    if (state.op === "removeCheckout" && c.removed)
+      witnesses.add("worktreeRemoved");
+    if (state.op === "teardown" && !c.tornDown && c.ready)
+      witnesses.add("teardownFenced");
   }
   return witnesses;
-}
-
-type Harness = {
-  root: string;
-  output: string;
-  artifacts: string;
-  /** Bundles production subjects with one implementation fault. */
-  mutate(fault: (typeof coreImplementationFaults)[number]): Promise<string>;
-  command(
-    label: string,
-    args: string[],
-    expectedViolation?: boolean,
-  ): Promise<string>;
-};
-export async function runCoreVerification(h: Harness) {
-  const model = "quint/herdr-core-runtime.qnt";
-  const source = await readFile(resolve(h.root, model), "utf8");
-  const materialize = (text: string) =>
-    text.replaceAll(
-      'from "./',
-      `from "${relative(h.output, resolve(h.root, "quint"))}/`,
-    );
-  const load = async (path: string, eventBound = 2) => {
-    const itf = JSON.parse(await readFile(path, "utf8"));
-    const states = decodeItf(itf.states);
-    validateCoreTrace(states, eventBound);
-    return states;
-  };
-  await h.command("herdr-core-runtime-types", ["typecheck", model]);
-  const quotient = `${h.artifacts}/core-quotient.qnt`;
-  await writeFile(
-    resolve(h.root, quotient),
-    materialize(source.replace("CHECKING = false", "CHECKING = true")),
-  );
-  const verification = await h.command("herdr-core-runtime-verification", [
-    "verify",
-    quotient,
-    "--main",
-    "herdr_core_runtime",
-    "--backend",
-    "tlc",
-    "--invariant",
-    "safety",
-    "--verbosity",
-    "3",
-  ]);
-  assert.match(
-    verification,
-    /No violation found/,
-    "core exploration did not complete",
-  );
-  const replayWitnessesBySeed: Record<string, Record<string, number>> = {};
-  const allStates: CoreTraceState[][] = [];
-  // The observe family is sampled on its own, so adding it leaves the other
-  // families' sampling (and their fault searches) exactly as before.
-  const observeSource = source.replace("OBSERVE = false", "OBSERVE = true");
-  assert.notEqual(observeSource, source, "observe switch missing");
-  const observeModel = `${h.artifacts}/core-observe.qnt`;
-  await writeFile(resolve(h.root, observeModel), materialize(observeSource));
-  for (const seed of [42, 73, 103]) {
-    const counts: Record<string, number> = {};
-    for (const [prefix, path, traces] of [
-      [`herdr-core-runtime-seed${seed}`, model, 500],
-      [`herdr-core-observe-seed${seed}`, observeModel, 200],
-    ] as const) {
-      await h.command(prefix, [
-        "run",
-        path,
-        "--main",
-        "herdr_core_runtime",
-        "--backend",
-        "typescript",
-        "--seed",
-        String(seed),
-        "--max-samples",
-        String(traces),
-        "--max-steps",
-        "25",
-        "--n-traces",
-        String(traces),
-        "--invariant",
-        "safety",
-        "--verbosity",
-        "1",
-        "--out-itf",
-        `${h.artifacts}/${prefix}_{seq}.itf.json`,
-        "--witnesses",
-        ...coreWitnesses,
-      ]);
-      const files = (await readdir(h.output)).filter(
-        (file) => file.startsWith(`${prefix}_`) && file.endsWith(".itf.json"),
-      );
-      assert.equal(files.length, traces);
-      for (const file of files) {
-        const states = await load(resolve(h.output, file));
-        allStates.push(states);
-        for (const name of replayCore(states))
-          counts[name] = (counts[name] ?? 0) + 1;
-      }
-    }
-    for (const witness of coreWitnesses)
-      assert(
-        (counts[witness] ?? 0) > 0,
-        `missing core replay witness ${seed}/${witness}`,
-      );
-    replayWitnessesBySeed[seed] = counts;
-  }
-  const controls = [];
-  for (const fault of coreFaults) {
-    const mutant = `${h.artifacts}/core-${fault}.qnt`;
-    const counterexample = `${h.artifacts}/core-${fault}.itf.json`;
-    await writeFile(
-      resolve(h.root, mutant),
-      materialize(
-        (observeFaults.has(fault) ? observeSource : source).replace(
-          'FAULT = "none"',
-          `FAULT = "${fault}"`,
-        ),
-      ),
-    );
-    await h.command(
-      `core-${fault}-control`,
-      [
-        "verify",
-        mutant,
-        "--main",
-        "herdr_core_runtime",
-        "--backend",
-        "tlc",
-        "--invariant",
-        "safety",
-        "--verbosity",
-        "1",
-        "--out-itf",
-        counterexample,
-      ],
-      true,
-    );
-    // TLC establishes the violation exhaustively; its backend emits no ITF.
-    // Collect a concrete replay witness separately through the simulator.
-    await h.command(
-      `core-${fault}-trace`,
-      [
-        "run",
-        mutant,
-        "--main",
-        "herdr_core_runtime",
-        "--backend",
-        "typescript",
-        "--seed",
-        "42",
-        "--max-samples",
-        "200000",
-        "--max-steps",
-        "25",
-        "--invariant",
-        "safety",
-        "--verbosity",
-        "1",
-        "--out-itf",
-        counterexample,
-      ],
-      true,
-    );
-    const states = await load(resolve(h.root, counterexample));
-    const mismatch = await expectObservationMismatch(
-      () => replayCore(states),
-      ["core.state"],
-    );
-    controls.push({ fault, observation: mismatch.observation });
-  }
-  const sensitivityModel = `${h.artifacts}/core-larger.qnt`;
-  await writeFile(
-    resolve(h.root, sensitivityModel),
-    materialize(source.replace("EVENT_BOUND = 2", "EVENT_BOUND = 3")),
-  );
-  await h.command("core-larger-sensitivity", [
-    "run",
-    sensitivityModel,
-    "--main",
-    "herdr_core_runtime",
-    "--backend",
-    "typescript",
-    "--seed",
-    "103",
-    "--max-samples",
-    "500",
-    "--max-steps",
-    "25",
-    "--n-traces",
-    "100",
-    "--invariant",
-    "safety",
-    "--verbosity",
-    "1",
-    "--out-itf",
-    `${h.artifacts}/core-larger_{seq}.itf.json`,
-  ]);
-  const sensitivityFiles = (await readdir(h.output)).filter((file) =>
-    /^core-larger_\d+\.itf\.json$/.test(file),
-  );
-  assert.equal(sensitivityFiles.length, 100);
-  for (const file of sensitivityFiles)
-    replayCore(await load(resolve(h.output, file), 3), false, 3);
-  let fixtureControl = false;
-  for (const states of allStates) {
-    try {
-      replayCore(states, true);
-    } catch (error) {
-      if (
-        !(error instanceof Error) ||
-        !("observation" in error) ||
-        error.observation !== "core.state"
-      )
-        throw error;
-      fixtureControl = true;
-      break;
-    }
-  }
-  assert(fixtureControl, "ungated fake input must diverge on a valid trace");
-  // Production negative controls: each mutant CoreMirror must be rejected by
-  // a valid model trace, through the same core.state observation. A receive
-  // gap is rare under sampling, so a valid witness of it is searched for.
-  const gapWitness = `${h.artifacts}/core-receive-gap-witness.itf.json`;
-  await h.command(
-    "core-receive-gap-witness",
-    [
-      "run",
-      model,
-      "--main",
-      "herdr_core_runtime",
-      "--backend",
-      "typescript",
-      "--seed",
-      "42",
-      "--max-samples",
-      "20000",
-      "--max-steps",
-      "25",
-      "--invariant",
-      "noReceiveGap",
-      "--verbosity",
-      "1",
-      "--out-itf",
-      gapWitness,
-    ],
-    true,
-  );
-  const gapStates = await load(resolve(h.root, gapWitness));
-  replayCore(gapStates);
-  const candidates = [gapStates, ...allStates];
-  const implementationControls = [];
-  for (const fault of coreImplementationFaults) {
-    const subjects = (await import(await h.mutate(fault))) as CoreSubjects;
-    let killed: { trace: number; observation: string } | null = null;
-    for (const [index, states] of candidates.entries()) {
-      try {
-        replayCore(states, false, 2, subjects);
-      } catch (error) {
-        if (
-          !(error instanceof Error) ||
-          !("observation" in error) ||
-          !["core.state", "core.view"].includes(String(error.observation))
-        )
-          throw error;
-        killed = { trace: index, observation: String(error.observation) };
-        break;
-      }
-    }
-    assert(killed, `production mutant ${fault} survived every trace`);
-    implementationControls.push({ fault, ...killed });
-  }
-  return {
-    name: "herdr-core-runtime",
-    evidence:
-      "production CoreMirror and read-model replay for ordering/recovery; authority decisions use the design seam",
-    implementationControls,
-    traces: allStates.length,
-    sensitivityTraces: sensitivityFiles.length,
-    replayWitnessesBySeed,
-    controls,
-    fixtureMutationDetected: fixtureControl,
-  };
 }

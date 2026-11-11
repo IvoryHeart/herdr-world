@@ -1,168 +1,127 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { defaultGuiSettings } from "../config/gui-settings";
 import { parseConnectionHttpRoute } from "../connections/http-routing";
-import type { CoreConnectionProfile } from "../connections/profiles";
-import type { CoreUploads } from "./runtime";
-import { coreUploadsForProfile, handleCoreUploadRequest } from "./uploads";
+import type { CoreRpcServices } from "../rpc/core";
+import { handleCoreFileHttpRequest } from "../service/core-files-http";
+import { type CoreHostRuntime, createCoreHostRuntime } from "./host-runtime";
+import { coreWorld, until } from "./testing/core-world";
+import { createCoreUploads } from "./uploads";
 
-const roots: string[] = [];
+const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
-  await Promise.all(
-    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  for (const cleanup of cleanups.splice(0)) await cleanup();
+});
+
+/** A connected local core whose uploads stage in a scratch directory. */
+async function uploadWorld(host: { windows: boolean } | null = null) {
+  const w = await coreWorld();
+  const staged = mkdtempSync(join(tmpdir(), "hcw-up-"));
+  cleanups.push(
+    () => w.dispose(),
+    () => rmSync(staged, { recursive: true, force: true }),
   );
-});
-
-const profile = (
-  fields: Partial<CoreConnectionProfile> = {},
-): CoreConnectionProfile => ({
-  id: "box",
-  label: "box",
-  type: "local",
-  runtime: "herdr-core",
-  core_session: "default",
-  core_state_dir: "/tmp/example-core",
-  auto_connect: false,
-  ...fields,
-});
-
-/** One core connection's registry, at generation 3 unless replaced. */
-function registry(uploads: CoreUploads | null) {
-  let current = true;
-  return {
-    retire: () => {
-      current = false;
+  await w.connect();
+  // The production host runtime, with only its staging root redirected.
+  const runtimes = new WeakMap<object, CoreHostRuntime>();
+  const core = {
+    manager: w.core.manager,
+    hostRuntime: (lease: Parameters<CoreRpcServices["hostRuntime"]>[0]) => {
+      let runtime = runtimes.get(lease.runtime);
+      if (!runtime || runtime.generation !== lease.generation) {
+        runtime = createCoreHostRuntime({
+          lease,
+          host,
+          readSettings: async () => defaultGuiSettings(),
+          uploadTempRoot: () => staged,
+        });
+        runtimes.set(lease.runtime, runtime);
+      }
+      return runtime;
     },
-    registry: {
-      defaultId: () => "box",
-      has: (id: string) => id === "box",
-      readyRuntimeLease: (id: string) =>
-        id === "box"
-          ? {
-              connectionId: "box",
-              generation: 3,
-              runtime: { uploads },
-              isCurrent: () => current,
-            }
-          : null,
-    },
+  } as unknown as CoreRpcServices;
+  const post = async (
+    path: string,
+    body: Uint8Array<ArrayBuffer>,
+    headers: Record<string, string> = {},
+  ) => {
+    const url = new URL(`http://world.example.invalid${path}`);
+    const route = parseConnectionHttpRoute(url.pathname, "POST");
+    if (!route || route.kind !== "connection") throw new Error("not a route");
+    return handleCoreFileHttpRequest(
+      core,
+      route,
+      url,
+      new Request(url, { method: "POST", headers, body }),
+    );
   };
+  return { w, staged, post };
 }
 
-function request(path: string, body: Uint8Array<ArrayBuffer>, headers = {}) {
-  const url = new URL(`http://localhost${path}`);
-  const route = parseConnectionHttpRoute(url.pathname, "POST");
-  if (!route || route.kind !== "connection") throw new Error("not a route");
-  const generation = url.searchParams.get("connection_generation");
-  return {
-    route,
-    url,
-    requestedGeneration: generation === null ? undefined : Number(generation),
-    req: new Request(url, { method: "POST", headers, body }),
-  };
-}
-
-async function localUploads() {
-  const root = await mkdtemp(join(tmpdir(), "hcw-up-"));
-  roots.push(root);
-  const uploads = coreUploadsForProfile(profile(), {
-    signal: new AbortController().signal,
-    onCleanupError: () => {},
-    tempRoot: () => root,
-  });
-  if (!uploads) throw new Error("local cores take uploads");
-  return { root, uploads };
-}
-
-test("an image for a local core agent is staged on this machine for its generation", async () => {
-  const { root, uploads } = await localUploads();
-  const { registry: reg } = registry(uploads);
-  const response = await handleCoreUploadRequest({
-    registry: reg,
-    ...request(
-      "/api/connections/box/upload-image?connection_generation=3",
-      new Uint8Array([137, 80, 78, 71]),
-      { "x-image-ext": "png" },
-    ),
-  });
+test("an image for a local core agent is staged on this computer for its generation", async () => {
+  const { w, staged, post } = await uploadWorld();
+  const { generation } = w.lease();
+  const response = await post(
+    `/api/connections/box/upload-image?connection_generation=${generation}`,
+    new Uint8Array([137, 80, 78, 71]),
+    { "x-image-ext": "png" },
+  );
   expect(response.status).toBe(200);
   expect(response.headers.get("X-Herdr-Connection-Id")).toBe("box");
-  expect(response.headers.get("X-Herdr-Connection-Generation")).toBe("3");
+  expect(response.headers.get("X-Herdr-Connection-Generation")).toBe(
+    String(generation),
+  );
   const body = (await response.json()) as { path: string; remote: boolean };
   expect(body.remote).toBe(false);
-  expect(body.path.startsWith(root)).toBe(true);
-  expect([...(await readFile(body.path))]).toEqual([137, 80, 78, 71]);
-  uploads.stop();
+  expect(body.path.startsWith(staged)).toBe(true);
+  expect([...readFileSync(body.path)]).toEqual([137, 80, 78, 71]);
+  // Core is never asked to move files.
+  expect(w.fake.calls.filter((c) => c.method.startsWith("file."))).toEqual([]);
 });
 
-test("a file upload names its file; a stale generation or retired runtime is refused", async () => {
-  const { uploads } = await localUploads();
-  const conn = registry(uploads);
-  const ok = await handleCoreUploadRequest({
-    registry: conn.registry,
-    ...request(
-      "/api/connections/box/terminal-upload?filename=notes.txt&connection_generation=3",
-      new TextEncoder().encode("hello"),
-    ),
-  });
+test("a file upload names its file; a stale generation or lost core is refused", async () => {
+  const { w, post } = await uploadWorld();
+  const lease = w.lease();
+  const ok = await post(
+    `/api/connections/box/terminal-upload?filename=notes.txt&connection_generation=${lease.generation}`,
+    new TextEncoder().encode("hello"),
+  );
   expect(ok.status).toBe(200);
   const { path } = (await ok.json()) as { path: string };
   expect(path.endsWith("notes.txt")).toBe(true);
-  expect(await readFile(path, "utf8")).toBe("hello");
+  expect(readFileSync(path, "utf8")).toBe("hello");
 
-  const stale = await handleCoreUploadRequest({
-    registry: conn.registry,
-    ...request(
-      "/api/connections/box/upload-image?connection_generation=2",
-      new Uint8Array([1]),
-    ),
-  });
+  const stale = await post(
+    `/api/connections/box/upload-image?connection_generation=${lease.generation + 1}`,
+    new Uint8Array([1]),
+  );
   expect(stale.status).toBe(409);
 
-  conn.retire();
-  const retired = await handleCoreUploadRequest({
-    registry: conn.registry,
-    ...request(
-      "/api/connections/box/upload-image?connection_generation=3",
-      new Uint8Array([1]),
-    ),
-  });
-  expect(retired.status).toBe(409);
-  uploads.stop();
+  w.fake.kill(w.socket);
+  await until(() => !lease.isCurrent());
+  const lost = await post(
+    `/api/connections/box/upload-image?connection_generation=${lease.generation}`,
+    new Uint8Array([1]),
+  );
+  expect(lost.status).toBe(503);
 });
 
-test("a Windows core takes no uploads, and other connection routes are not offered", async () => {
+test("a Windows core host takes no uploads", async () => {
   expect(
-    coreUploadsForProfile(
-      profile({
-        type: "ssh",
-        ssh_destination: "agent@example.invalid",
-        remote_platform: "windows",
-      }),
-      { signal: new AbortController().signal, onCleanupError: () => {} },
+    createCoreUploads(
+      { destination: "agent@example.invalid", windows: true },
+      { signal: new AbortController().signal },
     ),
   ).toBeNull();
-  const none = await handleCoreUploadRequest({
-    registry: registry(null).registry,
-    ...request(
-      "/api/connections/box/upload-image?connection_generation=3",
-      new Uint8Array([1]),
-    ),
-  });
-  expect(none.status).toBe(501);
-  const { uploads } = await localUploads();
-  const url = new URL(
-    "http://localhost/api/connections/box/file/upload?connection_generation=3",
+  const { w, post } = await uploadWorld({ windows: true });
+  const refused = await post(
+    `/api/connections/box/upload-image?connection_generation=${w.lease().generation}`,
+    new Uint8Array([1]),
   );
-  const route = parseConnectionHttpRoute(url.pathname, "POST");
-  if (!route || route.kind !== "connection") throw new Error("route");
-  const other = await handleCoreUploadRequest({
-    registry: registry(uploads).registry,
-    route,
-    url,
-    requestedGeneration: 3,
-    req: new Request(url, { method: "POST", body: "x" }),
-  });
-  expect(other.status).toBe(501);
+  expect(refused.status).toBe(501);
+  expect(((await refused.json()) as { error: string }).error).toContain(
+    "Unix SSH host",
+  );
 });

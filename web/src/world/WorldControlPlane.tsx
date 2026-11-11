@@ -27,6 +27,7 @@ import { terminalColorKey } from "./terminalColor";
 import { setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
 import { CoreKillConfirmHost } from "./CoreKillConfirm";
+import { CoreWorktreesHost } from "./CoreWorktrees";
 import { BoardHub } from "./board/BoardHub";
 import { requestTownSummary } from "./town/townSummaryRequest";
 import { useTerminalColorChoices } from "./useTerminalColors";
@@ -242,6 +243,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     inspectorConversationsRef,
     currentSelectionGeneration,
     selected,
+    coreChatSelected,
     selectedId,
     setWindowLayer,
     windowStage,
@@ -361,9 +363,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     };
   };
 
-  // A herdr-core terminal opens as a watch that you can type into: World
-  // adopts core's grid and takes it only while you type. Chat uses its
-  // separate core send route.
+  // A herdr-core terminal opens as a watch you can type into: World adopts
+  // core's grid and takes it only while you type. Chat has its own route.
   const coreWatch = useCoreTerminalWatch(
     (id) => aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id),
   );
@@ -437,9 +438,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         />
       ) : null}
       <CoreKillConfirmHost />
-      {selected?.kind === "agent" && selected.pane.runtime === "herdr-core" ? (
+      {coreChatSelected &&
+      selected?.kind === "agent" &&
+      selected.pane.runtime === "herdr-core" ? (
         <CoreChatWindow leaf={selected} onClose={closeIntent} />
       ) : null}
+      <CoreWorktreesHost />
       <WorldBin
         always={view === "town" || view === "board"}
         bus={view === "town"}
@@ -578,6 +582,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         conversationNodeIds={conversationNodeIds}
                         onSelect={stableSelectNode}
                         onOpen={stableOpenNodeById}
+                        onOpenFiles={(id) =>
+                          stableOpenInspectorView(id, "files")
+                        }
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>

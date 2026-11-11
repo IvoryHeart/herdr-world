@@ -1,0 +1,11 @@
+{
+  "core_version": "0.1.20",
+  "scenario": "Native paste and Enter into a disposable shell; no caller or force",
+  "request": "AAAAAACGAAAAeyJqc29ucnBjIjoiMi4wIiwiaWQiOjEsIm1ldGhvZCI6InRlcm1pbmFsLnNlbmQiLCJwYXJhbXMiOnsidGVybWluYWwiOiJ0MSIsInRleHQiOiJwcmludGYgZXhhbXBsZV9hbnN3ZXIiLCJmb3JjZSI6ZmFsc2UsIndhaXQiOmZhbHNlfX0=",
+  "reply": "AAAAAABJAAAAeyJpZCI6MSwianNvbnJwYyI6IjIuMCIsInJlc3VsdCI6eyJzdGFydGVkIjpudWxsLCJzdGF0dXMiOm51bGwsInR1cm4iOjB9fQ==",
+  "result": {
+    "started": null,
+    "status": null,
+    "turn": 0
+  }
+}

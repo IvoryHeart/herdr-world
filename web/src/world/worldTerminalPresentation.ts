@@ -3,7 +3,11 @@ import type {
   InspectorView,
   WorkspaceInspectorContext,
 } from "../workspaceResource";
-import type { WorldObject, WorldObjectNode } from "./worldObject";
+import {
+  inspectorAdmits,
+  type WorldObject,
+  type WorldObjectNode,
+} from "./worldObject";
 import type { ChatFocusIntent } from "../chatFocus";
 
 /** One independently navigable Inspector backed by the shared app runtime. */
@@ -228,7 +232,7 @@ export function worldInspectorForNode(
 ): WorldInspectorConversation | null {
   if (
     node.kind === "host" ||
-    !node.actionable ||
+    !inspectorAdmits(node) ||
     !availableViews.includes(view)
   ) {
     return null;

@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { SquareTerminal, Terminal as ShellIcon } from "lucide-react";
+import {
+  FolderOpen,
+  SquareTerminal,
+  Terminal as ShellIcon,
+} from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { agentStateWord } from "../agentMarks";
 import { AgentLatestMessage } from "../AgentHoverCard";
@@ -47,6 +51,7 @@ export function TownPeek({
   onChat,
   onTerminal,
   leaf = null,
+  onFiles,
   onNext,
   onClose,
   onHold,
@@ -87,6 +92,11 @@ export function TownPeek({
    * shell (Herdr Float, or World's own on core).
    */
   leaf?: WorldLeafObject | null;
+  /**
+   * Open the agent's window on Files: offered for a herdr-core agent, whose
+   * terminal World cannot open, but whose folder it can show.
+   */
+  onFiles?: (() => void) | null;
   onNext: (() => void) | null;
   onClose(): void;
   onHold(hold: boolean): void;
@@ -227,6 +237,18 @@ export function TownPeek({
           >
             <ShellIcon size={15} aria-hidden="true" />
             <span>Shell</span>
+          </button>
+        ) : null}
+        {onFiles ? (
+          <button
+            type="button"
+            className="town-peek-terminal town-peek-files"
+            aria-label={`Open ${agent.displayLabel}'s files`}
+            title="Files and Changes"
+            onClick={onFiles}
+          >
+            <FolderOpen size={15} aria-hidden="true" />
+            <span>Files</span>
           </button>
         ) : null}
         <button

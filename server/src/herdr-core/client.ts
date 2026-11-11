@@ -463,8 +463,19 @@ export class CoreClient {
   sendText(
     address: string,
     text: string,
-    options: { force: boolean; cancel?: AbortSignal; timeoutMs?: number },
+    options:
+      | { force: boolean; cancel?: AbortSignal; timeoutMs?: number }
+      | number = 15_000,
   ) {
+    if (typeof options === "number") {
+      if (!text.trim() || text.length > 32_000 || text.includes("\0"))
+        throw new CoreProtocolError("invalid message text");
+      return this.write(
+        "terminal.send",
+        { terminal: localAddress(address), text, force: false, wait: false },
+        options,
+      ) as Promise<CoreSendResult>;
+    }
     return this.write(
       ...coreSendRequest(address, text, options),
     ) as Promise<CoreSendResult>;
@@ -654,8 +665,7 @@ export class CoreClient {
    * An interactive viewer. Core opens the stream paused and resumes it after
    * its reply, so the first paint always follows the reply; the stream's
    * window is returned only as the consumer reports bytes delivered.
-   * Automatic replies are sent only where core confirmed it tells them
-   * apart (hello and the attach reply).
+   * Automatic replies go only where hello and the attach reply allow them.
    */
   async attach(
     address: string,

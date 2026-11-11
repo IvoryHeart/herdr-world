@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mutateImplementation } from "./implementationMutation";
+import type { CoreSubjects } from "./herdr-core-runtime";
 import { validateTrace } from "./traces";
 import { describe, expect, test } from "bun:test";
 import {
@@ -38,6 +43,26 @@ test("relative deltas and creation survive missed and old callbacks", () => {
   const lost = structuredClone(states);
   lost.at(-1)!.c.mirror[0]!.x = 0;
   return expectObservationMismatch(() => replayCore(lost), ["core.state"]);
+});
+
+test("stale-after-missed counterexamples may double a bounded source delta", () => {
+  const states = trace([
+    "restart",
+    "connect",
+    "disconnect",
+    "x",
+    "connect",
+    "x",
+    "missed",
+    "receive",
+  ]);
+  // The composed model's seed-42 mutant reapplied the delta after the cut.
+  states.at(-1)!.c.mirror[0]!.x = 3;
+  validateCoreTrace(states);
+  const malformed = structuredClone(states);
+  malformed.at(-1)!.c.source[0]!.x = 3;
+  expect(() => validateCoreTrace(malformed)).toThrow();
+  return expectObservationMismatch(() => replayCore(states), ["core.state"]);
 });
 
 test("queued session delivery is refused after kept replacement", async () => {
@@ -116,8 +141,8 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
   );
 });
 
-test("the eleven ordering/authority, two kill, one missing-foreground, five observe and five typing faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(24);
+test("all twenty-seven ordering, authority, foreground, worktree, observe and typing faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(27);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;
@@ -174,13 +199,151 @@ describe("a kill ends only what was confirmed (M7)", () => {
     expect(replayCore(states).has("unconfirmedCascadeRefused")).toBe(true);
   });
 
-  test("a kept replacement with the same pid is not the confirmed program", () => {
+  test("a kept replacement with the same pid is not the confirmed program", async () => {
     const states = authority(
       trace(["connect", "baseline", "plan", "replace", "baseline", "kill"]),
     );
     expect(states.at(-1)!.c).toMatchObject({ killed: false, ready: true });
     replayCore(states);
+    const output = await mkdtemp(join(tmpdir(), "core-kill-control-"));
+    try {
+      const mutant = await mutateImplementation(
+        "herdr-core-runtime",
+        "core-kill-pid-only",
+        { root: process.cwd(), output },
+      );
+      const subjects = (await import(mutant)) as CoreSubjects;
+      await expectObservationMismatch(
+        () => replayCore(states, false, 2, subjects),
+        ["core.state"],
+      );
+    } finally {
+      await rm(output, { recursive: true, force: true });
+    }
   });
+});
+
+describe("a worktree's checkout goes only after its confirmed terminals (P4)", () => {
+  const authority = (states: ReturnType<typeof trace>) =>
+    states.map((state) => ({ ...state, family: "authority" }));
+
+  test("teardown, the confirmed kill, then the checkout", () => {
+    const states = authority(
+      trace(
+        [
+          "connect",
+          "baseline",
+          ["create", 1],
+          "receive",
+          "plan",
+          "teardown",
+          "kill",
+          "baseline",
+          "removeCheckout",
+        ],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      tornDown: true,
+      killed: true,
+      removed: true,
+    });
+    expect(replayCore(states).has("worktreeRemoved")).toBe(true);
+  });
+
+  test("a child seen after the confirmation runs no teardown and removes nothing", () => {
+    const states = authority(
+      trace(
+        ["connect", "baseline", "plan", ["create", 1], "receive", "teardown"],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      tornDown: false,
+      killed: false,
+      removed: false,
+    });
+    expect(replayCore(states).has("teardownFenced")).toBe(true);
+  });
+
+  test("a reconnect after the kill stops the removal; the checkout stays", () => {
+    const states = authority(
+      trace([
+        "connect",
+        "baseline",
+        "plan",
+        "teardown",
+        "kill",
+        "disconnect",
+        "connect",
+        "baseline",
+        "removeCheckout",
+      ]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({ killed: true, removed: false });
+    replayCore(states);
+    // The model's own mutant would remove it: the replay rejects that.
+    const broken = structuredClone(states);
+    broken.at(-1)!.c.removed = true;
+    return expectObservationMismatch(() => replayCore(broken), ["core.state"]);
+  });
+});
+
+test("a gap on an already observed terminal kills the production gap mutant", async () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    ["x", 0],
+    "drop",
+    ["y", 0],
+    "receive",
+  ]);
+  expect(states.at(-1)!.c.ready).toBe(false);
+  replayCore(states);
+  const output = await mkdtemp(join(tmpdir(), "core-gap-control-"));
+  try {
+    const mutant = await mutateImplementation(
+      "herdr-core-runtime",
+      "core-gap",
+      { root: process.cwd(), output },
+    );
+    const subjects = (await import(mutant)) as CoreSubjects;
+    await expectObservationMismatch(
+      () => replayCore(states, false, 2, subjects),
+      ["core.state"],
+    );
+  } finally {
+    await rm(output, { recursive: true, force: true });
+  }
+});
+
+test("worktree steps retain the planning profile and core epoch", () => {
+  for (const retire of ["switchProfile", "restart"] as const) {
+    const beforeHook = trace([
+      "connect",
+      "baseline",
+      "plan",
+      retire,
+      ...(retire === "restart" ? ["connect", "baseline"] : []),
+      "teardown",
+    ]);
+    expect(beforeHook.at(-1)!.c.tornDown).toBe(false);
+    replayCore(beforeHook.map((state) => ({ ...state, family: "authority" })));
+    const beforeRemove = trace([
+      "connect",
+      "baseline",
+      "plan",
+      "teardown",
+      "kill",
+      retire,
+      "removeCheckout",
+    ]);
+    expect(beforeRemove.at(-1)!.c.removed).toBe(false);
+    replayCore(
+      beforeRemove.map((state) => ({ ...state, family: "authority" })),
+    );
+  }
 });
 
 test("a watch adopts the pane's grid before each paint and follows it to headless", () => {

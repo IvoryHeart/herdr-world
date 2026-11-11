@@ -97,7 +97,6 @@ export function sshCoreTransport(
       signal.throwIfAborted();
       return config.socketPath;
     },
-    sshControlPath: config.masterControlPath,
     close: async () => {
       if (tunnel) await tunnel.cleanupAutoSshTunnel();
       else if (config.ownedRuntimeDirectory)

@@ -14,6 +14,9 @@ export const coreFaults = [
   "heartbeat-ignored",
   "unconfirmed-cascade",
   "stale-confirmation",
+  "teardown-unconfirmed",
+  "remove-before-kill",
+  "remove-after-retire",
   "interactive-attach",
   "unconfirmed-accepted",
   "paint-before-resize",
@@ -45,6 +48,8 @@ export const coreWitnesses: readonly string[] = [
   "sizeReturned",
   "leftAfterKeys",
   "replacementRefused",
+  "worktreeRemoved",
+  "teardownFenced",
 ];
 
 export const coreImplementationFaults = [

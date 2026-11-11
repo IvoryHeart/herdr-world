@@ -2,7 +2,9 @@ import { randomBytes } from "node:crypto";
 import { agentNameFor, AGENT_KIND } from "../../../shared/agentProfile";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import {
+  type CoreRoomCheckout,
   type CoreTopologyDocument,
+  type CoreTopologyRoom,
   type CoreTopologyPort,
   CORE_TOPOLOGY_LIMITS,
 } from "./layout";
@@ -167,10 +169,12 @@ function folderOf(
   doc: CoreTopologyDocument,
   workspaceId: string,
 ): string | undefined {
-  // The folder of a terminal already in that room, like a new TUI tab.
+  // A worktree room's checkout; else the folder of a terminal already in
+  // that room, like a new TUI tab.
   const terminals = lease.runtime.core.mirror.terminals();
   for (const room of doc.rooms) {
     if (coreRoomWorkspaceId(room) !== workspaceId) continue;
+    if (room.checkout) return room.checkout.path;
     for (const tab of room.tabs)
       for (const address of tab.terminals) {
         const record = terminals.find((t) => t.address === address);
@@ -522,6 +526,26 @@ export type CoreKillOutcome = {
  * the kill (with the new plan) instead of ending unconfirmed. Core's own
  * cascade then ends the confirmed descendants.
  */
+/**
+ * Refuses, with the plan as it is now, unless `confirmation` names exactly
+ * the terminals that ending `addresses` would end. Nothing is ended.
+ */
+export async function assertCoreKillConfirmed(
+  lease: Lease,
+  addresses: readonly string[],
+  confirmation: CoreKillConfirmation,
+): Promise<void> {
+  const coreId = coreIdOf(lease);
+  const terminals = lease.runtime.core.mirror.terminals();
+  const plan = coreKillPlan(coreId, terminals, addresses);
+  const refusal = coreKillRefusal(plan, confirmation);
+  if (refusal)
+    throw new CoreOperationRefused(
+      `${refusal} Nothing was ended.`,
+      describe(plan, terminals, await placesOf(lease)),
+    );
+}
+
 export async function killCore(
   lease: Lease,
   addresses: readonly string[],
@@ -636,6 +660,68 @@ export async function renameCoreRoom(
       next.rooms.unshift((target = { id, label: name, tabs: [] }));
     }
     target.label = name;
+    return next;
+  });
+  lease.runtime.layoutChanged();
+}
+
+/**
+ * The room World shows a checkout as (P4): the room already standing for
+ * that checkout (`opened: false`), else a new one at the end.
+ */
+export async function coreCheckoutRoom(
+  lease: Lease,
+  topology: CoreTopologyPort,
+  checkout: CoreRoomCheckout,
+  label: string,
+): Promise<{ workspace_id: string; label: string; opened: boolean }> {
+  const coreId = coreIdOf(lease);
+  const name = label.trim().slice(0, CORE_TOPOLOGY_LIMITS.label) || "Worktree";
+  const live = liveLocal(lease);
+  let room: CoreTopologyRoom | undefined;
+  let opened = false;
+  await topology.update(coreId, (current) => {
+    const next = pruned(current, live);
+    room = next.rooms.find((r) => r.checkout?.path === checkout.path);
+    if (room) return null;
+    if (next.rooms.length >= CORE_TOPOLOGY_LIMITS.rooms)
+      throw new CoreOperationRefused("This host has too many rooms.");
+    room = { id: newCoreLayoutId("r"), label: name, checkout, tabs: [] };
+    next.rooms.push(room);
+    opened = true;
+    return next;
+  });
+  if (opened) lease.runtime.layoutChanged();
+  return {
+    workspace_id: coreRoomWorkspaceId(room!),
+    label: room!.label,
+    opened,
+  };
+}
+
+/** World's worktree room a read-model workspace ID names, if it is one. */
+export function coreCheckoutOf(
+  lease: Lease,
+  topology: CoreTopologyPort,
+  workspaceId: string,
+): { roomId: string; checkout: CoreRoomCheckout } | null {
+  const room = coreRoomOfWorkspace(topology.get(coreIdOf(lease)), workspaceId);
+  return room?.kind === "world" && room.room.checkout
+    ? { roomId: room.room.id, checkout: room.room.checkout }
+    : null;
+}
+
+/** Drops one of World's rooms from its layout (its terminals have ended). */
+export async function dropCoreRoom(
+  lease: Lease,
+  topology: CoreTopologyPort,
+  roomId: string,
+): Promise<void> {
+  const coreId = coreIdOf(lease);
+  const live = liveLocal(lease);
+  await topology.update(coreId, (current) => {
+    const next = pruned(current, live);
+    next.rooms = next.rooms.filter((r) => r.app_space || r.id !== roomId);
     return next;
   });
   lease.runtime.layoutChanged();

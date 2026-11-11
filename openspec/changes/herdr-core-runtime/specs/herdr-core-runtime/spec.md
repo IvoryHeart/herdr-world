@@ -175,6 +175,46 @@ only while its current observation ends no more than that confirmed set.
 - **AND** World's kill outcome names every unconfirmed terminal that ended or
   is ending in that cascade, never one that had ended before the kill
 
+### Requirement: Host resources, asks and Ranger for core agents
+
+World SHALL serve a core connection's Files, Changes, Git actions, file
+transfers and an agent's worktree from World's read model of that core and
+World's own guarded host helpers on the core's host, never from core's
+`file.*`, and only under the connection and runtime generation the request
+names. An agent's worktree selection SHALL be bound to the program occupying
+its address. A core room MAY be a Git worktree World created or opened; its
+checkout is the room's folder. Removing it SHALL ask to confirm every
+terminal that ends with it, run the teardown hook only while that
+confirmation holds, end the confirmed terminals, and only then remove the
+checkout under the same generation. A `herdr-world` command inside a core
+terminal SHALL be a verified caller only when that terminal's program is an
+ancestor of the calling process; its ask SHALL be bound to that program.
+World SHALL deliver saved core ask answers and confirmed Ranger prompts
+through core's native send, with a fresh program/foreground check before
+submission. Lost replies SHALL remain uncertain and SHALL NOT automatically
+replay. Ranger SHALL read core rooms (screen only, never a scrolling read);
+core lifecycle controls SHALL remain in World's dedicated controls.
+
+#### Scenario: Two cores with the same address
+
+- **WHEN** two core connections both have `t1` and a request names one
+- **THEN** only that connection's host runtime answers, under its generation
+
+#### Scenario: Worktree removal after a new child
+
+- **WHEN** a child that would end with the room's terminal appears after the
+  confirmation
+- **THEN** no hook runs, nothing ends, nothing is removed and World shows the
+  new list
+
+#### Scenario: Replaced asker
+
+- **WHEN** the program that asked is replaced at the same address, even with
+  the same pid
+- **THEN** World does not treat the new program as the asker, including a
+  restart event with identical native fields; a retired connection generation
+  cannot restore automatic answer input or acknowledge as that original asker
+
 ### Requirement: Observe and control with app coexistence
 
 Observe streams SHALL be independent per browser, negotiate resize notifications,
