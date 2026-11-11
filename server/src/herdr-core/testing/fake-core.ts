@@ -45,7 +45,8 @@ type FakeConnection = {
 /**
  * A viewer of one terminal, as core's `viewers.rs` keeps it. A synthetic
  * desktop pane has no connection. The most recently active non-observe
- * viewer sets the size; with none, the terminal runs headless.
+ * viewer sets the size; with none, the terminal runs headless. Typed input
+ * is echoed as a shell would, like `sh` on a pty.
  */
 type FakeViewer = {
   connection: FakeConnection | null;
@@ -90,6 +91,13 @@ export class FakeCore {
   private readonly terminals = new Map<string, FakeTerminal>();
   private readonly connections = new Set<FakeConnection>();
   private readonly subscribers: Subscriber[] = [];
+  /** Keys each terminal received from viewers, for assertions. */
+  readonly typed = new Map<string, string>();
+  /** Runs as a request arrives, before core handles and answers it. */
+  onCall: ((method: string, params: Record<string, unknown>) => void) | null =
+    null;
+  /** Methods to leave out of `hello`, as an older or trimmed core would. */
+  withoutMethods = new Set<string>();
   private listener: { stop(closeActive?: boolean): void } | null = null;
   private running = false;
   private heldReads: Array<() => void> | null = null;
@@ -397,6 +405,25 @@ export class FakeCore {
     this.terminals.delete(address);
   }
 
+  /**
+   * The program ends as core reports it (`rm` terminals are removed at once):
+   * every viewer's stream closes with the finish facts.
+   */
+  finish(address: string, reason = "exited", exitCode: number | null = 0) {
+    const record = this.require(address);
+    const facts = {
+      exit_code: exitCode,
+      finished_ms: Date.now(),
+      reason,
+      signal: reason === "killed" ? 1 : null,
+    };
+    Object.assign(record, { state: "finished", pid: null, ...facts });
+    delete record.foreground;
+    this.emit("finished", address, facts);
+    this.endViewers(address, facts);
+    if (record.rm === true) this.remove(address);
+  }
+
   /** Loses events silently, as core does when a `missed` exceeds 4 MiB. */
   suppressEvents(count: number): void {
     this.seq += count;
@@ -459,11 +486,14 @@ export class FakeCore {
   }
 
   /** The program prints: every viewer receives the bytes in order. */
-  output(address: string, text: string): void {
+  output(address: string, output: Uint8Array | string): void {
     this.require(address);
+    const text =
+      typeof output === "string" ? output : new TextDecoder().decode(output);
     const screen = `${this.screens.get(address) ?? ""}${text}`;
     this.screens.set(address, screen.slice(-16_384));
-    const bytes = new TextEncoder().encode(text);
+    const bytes =
+      typeof output === "string" ? new TextEncoder().encode(output) : output;
     for (const v of this.viewers.get(address) ?? []) {
       if (!v.connection) continue;
       const stream = v.connection.streams.get(v.channel);
@@ -599,8 +629,20 @@ export class FakeCore {
       }
       if (kind !== FrameKind.AUTOMATIC_INPUT) v.activeAt = ++this.activity;
       this.applySize(address);
+      if (kind === FrameKind.DATA) this.typedInput(address, payload);
       return;
     }
+  }
+
+  /** A shell's line discipline echoes keys; Enter on `exit` ends it. */
+  private typedInput(address: string, payload: Uint8Array) {
+    const text = new TextDecoder().decode(payload);
+    const typed = (this.typed.get(address) ?? "") + text;
+    this.typed.set(address, typed);
+    this.output(address, text.replace(/\r/g, "\r\n"));
+    const line = typed.split("\r");
+    if (line.length > 1 && line[line.length - 2] === "exit")
+      this.finish(address);
   }
 
   /** Loss or removal: core closes every attach stream with its reason. */
@@ -742,13 +784,15 @@ export class FakeCore {
       methods: [
         "hello",
         "server.status",
+        "terminal.run",
         "terminal.list",
         "terminal.get",
+        "terminal.kill",
         "terminal.read",
         "terminal.attach",
         "terminal.label",
         "events.subscribe",
-      ],
+      ].filter((method) => !this.withoutMethods.has(method)),
       features: [
         "framed",
         "attach",
@@ -766,6 +810,7 @@ export class FakeCore {
     request: { id: number; method: string; params: Record<string, unknown> },
   ) {
     this.calls.push({ method: request.method, params: request.params });
+    this.onCall?.(request.method, request.params ?? {});
     const reply = (result: unknown) =>
       this.write(
         connection,
@@ -849,6 +894,53 @@ export class FakeCore {
         if (this.heldReads) this.heldReads.push(send);
         else send();
         return;
+      }
+      case "terminal.run": {
+        const p = request.params ?? {};
+        const name = typeof p.name === "string" ? p.name : null;
+        if (
+          name &&
+          [...this.terminals.values()].some(
+            (t) => t.state === "live" && t.name === name,
+          )
+        )
+          return error(
+            -32000,
+            `a live terminal is already named "${name}"`,
+            "name_taken",
+          );
+        if (typeof p.cwd === "string" && p.cwd.startsWith("/nonexistent"))
+          return error(
+            -32000,
+            'cannot start "/bin/sh": No such file or directory (os error 2)',
+            "spawn_failed",
+          );
+        const size = (p.size ?? {}) as { cols?: number; rows?: number };
+        const address = this.create({
+          name,
+          labels: { ...((p.labels as Record<string, string>) ?? {}) },
+          cwd: String(p.cwd ?? "/tmp/example"),
+          cols: size.cols ?? 200,
+          rows: size.rows ?? 120,
+          rm: p.rm === true,
+          notify: p.no_notify !== true,
+          parent: null,
+        });
+        // The shell's prompt is its first screen.
+        this.screens.set(address, "$ ");
+        return reply(this.terminals.get(address));
+      }
+      case "terminal.kill": {
+        const address = String(request.params?.terminal);
+        const record = this.terminals.get(address);
+        if (!record)
+          return error(-32000, `no terminal "${address}"`, "not_found");
+        const removing = record.rm === true;
+        this.finish(address, "killed", null);
+        // With `rm`, core removes it before answering (verified on 0.1.20).
+        return removing
+          ? error(-32000, `${address} was removed`, "not_found")
+          : reply({ ...record });
       }
       case "terminal.label": {
         const address = String(request.params?.terminal);

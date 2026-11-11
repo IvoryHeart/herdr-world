@@ -13,6 +13,11 @@ import {
 import { ConnectionProfileStore } from "../connections/profiles";
 import { silentLogger } from "../utils/logger";
 import { CoreClient, type CoreWatchSink } from "./client";
+import {
+  type FloatShellPush,
+  FloatShellService,
+  floatShellName,
+} from "./float-shell";
 import { createCoreConnections } from "./connections";
 import { resolveLocalCoreEndpoint } from "./endpoint";
 import { CoreMirror } from "./mirror";
@@ -313,7 +318,7 @@ describe("herdr-core live (real release binary)", () => {
           sendError: (_context, error) => {
             out.error = error;
           },
-          services: { coreConnections: w.core.manager },
+          services: { core: { manager: w.core.manager } },
         });
         return out;
       };
@@ -743,5 +748,141 @@ describe("herdr-core live (real release binary)", () => {
       await manager.stopAll();
     },
     90_000,
+  );
+
+  live(
+    "World's float shell: one per room, typed, joined, hidden at core's size, ended; hc lists it unplaced",
+    async () => {
+      const core = new ScratchCore(bin!);
+      scratch.push(core);
+      await core.start();
+      await core.hc(
+        "run",
+        "--bg",
+        "--keep",
+        "--name",
+        "agent",
+        "--label",
+        "herdr.space=s1",
+        "--label",
+        "where=web / main",
+        "--",
+        "sh",
+        "-c",
+        "printf '\\033]7501;state=idle:app=claude-code\\033\\\\'; exec sleep 600",
+      );
+      const w = worldFor(core.stateDir);
+      await w.service.create(w.profile);
+      await until(() => w.observation()?.counts.live === 1);
+      const manager = w.core
+        .manager as unknown as ConnectionManager<CoreConnectionRuntime>;
+      const lease = manager.readyRuntimeLease("core")!;
+      const agent = lease.runtime.core.mirror
+        .terminals()
+        .find((t) => t.name === "agent")!;
+      const agentSize = [agent.cols, agent.rows];
+      const floats = new FloatShellService({
+        lease: (id) => manager.readyRuntimeLease(id),
+      });
+      const tab = (() => {
+        const pushes: FloatShellPush[] = [];
+        return {
+          pushes,
+          send: (push: FloatShellPush) => {
+            pushes.push(push);
+            return true;
+          },
+          buffered: () => 0,
+          text: () =>
+            new TextDecoder().decode(
+              Buffer.concat(
+                pushes
+                  .filter((p) => p.type === "float_output")
+                  .map((p) =>
+                    Buffer.from((p as { data: string }).data, "base64"),
+                  ),
+              ),
+            ),
+        };
+      })();
+      const request = {
+        connectionId: "core",
+        generation: lease.generation,
+        terminal: agent.address,
+        size: { cols: 90, rows: 20 },
+      };
+      const other = { ...tab, send: () => true };
+      const [first, second] = await Promise.all([
+        floats.open(tab, request),
+        floats.open(other, request),
+      ]);
+      floats.start(tab, first.stream);
+      expect(first.name).toBe(floatShellName("hc:space:s1"));
+      expect(first.address).toBe(second.address);
+      expect([first.created, second.created].sort()).toEqual([false, true]);
+      floats.input(
+        tab,
+        first.stream,
+        new TextEncoder().encode("echo hé-€ $((6*7))\r"),
+      );
+      await until(() => tab.text().includes("hé-€ 42"));
+      // Throughput through core's credit window and World's own credit return.
+      const outputBytes = () =>
+        tab.pushes.reduce(
+          (sum, p) =>
+            p.type === "float_output"
+              ? sum + Buffer.from(p.data, "base64").length
+              : sum,
+          0,
+        );
+      const before = outputBytes();
+      const started = performance.now();
+      floats.input(
+        tab,
+        first.stream,
+        new TextEncoder().encode("head -c 4000000 /dev/zero | tr '\\0' x\r"),
+      );
+      await until(() => outputBytes() - before >= 4_000_000, 30_000);
+      const seconds = (performance.now() - started) / 1000;
+      console.log(
+        `herdr-core: float shell stream ${((outputBytes() - before) / seconds / 1e6).toFixed(1)} MB/s (4 MB through a ${90}x${20} view)`,
+      );
+      // Herdr's own CLI sees World's shell: unplaced, labelled, never a parent.
+      const listed = JSON.parse(await core.hc("get", first.address, "--json"));
+      expect(listed).toMatchObject({
+        name: first.name,
+        labels: { "world.float": "hc:space:s1" },
+        parent: null,
+        rm: true,
+      });
+      expect(listed.labels["herdr.space"]).toBeUndefined();
+      // It never becomes a desk, and the agent's size is never touched.
+      const { panes } = await lease.runtime.operations.listTerminals();
+      expect((panes ?? []).map((p) => p.terminal_id)).toEqual([agent.address]);
+      floats.hide(tab, first.stream);
+      floats.release(other);
+      await until(() => {
+        const t = lease.runtime.core.terminal(first.address);
+        return t?.cols === 200 && t?.rows === 120;
+      });
+      const reopened = await floats.open(tab, request);
+      expect(reopened).toMatchObject({
+        address: first.address,
+        created: false,
+      });
+      floats.start(tab, reopened.stream);
+      await floats.stop(tab, reopened.stream);
+      await until(() =>
+        tab.pushes.some(
+          (p) => p.type === "float_closed" && p.stream === reopened.stream,
+        ),
+      );
+      await until(() => !lease.runtime.core.terminal(first.address));
+      const after = lease.runtime.core.terminal(agent.address)!;
+      expect([after.cols, after.rows]).toEqual(agentSize);
+      w.service.stopSupervision();
+      await w.core.manager.stopAll();
+    },
+    60_000,
   );
 });

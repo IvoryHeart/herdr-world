@@ -196,7 +196,7 @@ async function compose(
     logger,
     clock,
     forEachRuntime: (visit) => connectionManager.forEachCurrentRuntime(visit),
-    sockets: () => [focusedAcquisition, deskWatches, core.watches],
+    sockets: () => [focusedAcquisition, deskWatches, core.pages],
     countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
@@ -782,7 +782,6 @@ async function compose(
     connectionManager,
     connectionProfiles,
     core,
-    coreConnections: core.manager,
     focusedAcquisition,
     agentActivity,
     deskWatches,

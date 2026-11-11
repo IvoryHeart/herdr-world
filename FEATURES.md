@@ -1509,6 +1509,13 @@ to search.
   a modal interaction. A plugin popup first focuses Herdr on the Space it was
   opened for, so it shows where you are looking even when Herdr's own focus
   was elsewhere.
+- **Shell** in an agent's Town or Board peek (on a phone: Board → tap a card →
+  **Preview**) opens its room's floating shell, on either runtime. On Herdr it
+  toggles the [Herdr Float](https://github.com/meerzulee/herdr-float) plugin
+  in the agent's Space and folder, exactly as `Ctrl+Alt+F` does; without that
+  plugin installed in Herdr, World shows Herdr's refusal. On herdr-core, which
+  has no plugins or popups, World runs its own float shell instead (see
+  herdr-core connections below).
 - Switch back to a recently viewed pane without waiting: the service keeps up
   to 20 recently viewed terminal streams open for 10 minutes without viewers.
   They belong to their connection's runtime and close with it.
@@ -2031,8 +2038,8 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     peek; Needs you, Desk and peeks show the program's own status message (or
     why it waits: permission, a question, sign-in) instead of a conversation.
     World reads core's event stream and writes only the two shared labels
-    above (`herdr.seen`, `herdr.pinned`): it never types, resizes, writes
-    other labels or writes status.
+    above (`herdr.seen`, `herdr.pinned`) and, apart from the room shell below,
+    never types, resizes, writes other labels or writes status.
   - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek),
     Town's terminal button and opening a core agent in Desk or Board show its
     live terminal at the size core holds: the size of the Herdr app pane (or
@@ -2056,6 +2063,22 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     until it catches up; core then repaints the latest screen instead of
     replaying the backlog. A core that cannot announce its grid
     (`resize_notifications`) is refused rather than shown at a guessed size.
+  - **Room shell.** **Shell** in a core agent's peek opens World's float
+    shell, the equivalent of Herdr Float: that machine's own shell, started
+    by core in the agent's current folder, one per room. It shows over any
+    view; **×**, a click outside it or `Ctrl+Alt+F` hides it and leaves it
+    running, so opening it again (from any browser, which share it) shows the
+    same shell; **End shell** or `exit` ends it. Core lists it in Herdr's apps
+    as an unplaced terminal named `world-float-…` with the label
+    `world.float`; World never shows it as a desk. Typing or resizing in a
+    browser makes that browser's size count; once every view is hidden, core
+    returns it to its headless size. World attaches only to a live terminal
+    with its own label for that room, and ends only that occupant; a core that
+    restarts or loses ordering, or a lost connection to World (a phone
+    resuming), closes the view with the reason and **Open again**, which uses
+    the host's current connection and refuses if the agent has moved to
+    another room. A paste of any size reaches the shell whole and in order. A
+    slow browser holds core's stream rather than buffering it.
   - **Stale.** When core stops, its agents stay where they were, marked
     offline with their last state, and return at the same addresses when it
     is back. Lost ordering shows them stale until World has a fresh snapshot.
@@ -2070,12 +2093,13 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   is live; *helper* has no pane and shows the headless size. **Resize
   reviewer's app pane** steps the reviewer's pane through 132×40, 72×24,
   closed (headless) and back to 96×28, as a person resizing or closing it in
-  the desktop app would. **Kill fixture core** stops it like `kill -9`, and
-  **Remove fixture** deletes both. Three more buttons stand in for a person
-  using Herdr's apps on *scout*: **Scout: finish another turn** (working, then
-  done about three seconds later), **Another app: mark scout unread**
-  (`herdr.seen` = turn − 1; refused until scout has finished a turn) and
-  **Another app: pin or unpin scout**. The
+  the desktop app would. **Shell** in a fixture agent's peek opens a stand-in
+  float shell that echoes what you type (`exit` ends it). **Kill fixture
+  core** stops it like `kill -9`, and **Remove fixture** deletes both. Three
+  more buttons stand in for a person using Herdr's apps on *scout*: **Scout:
+  finish another turn** (working, then done about three seconds later),
+  **Another app: mark scout unread** (`herdr.seen` = turn − 1; refused until
+  scout has finished a turn) and **Another app: pin or unpin scout**. The
   stand-in runs inside the World service and starts no program. The fixture
   only touches its own connection: if a connection you made already uses the
   ID `core-fixture`, **Start fixture core** and **Remove fixture** refuse and

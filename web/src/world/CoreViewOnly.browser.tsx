@@ -9,6 +9,7 @@ import { needsYouLeafKey } from "./needsYou";
 import { projectAgent } from "./officeAgent";
 import { WorldRuntimeStore } from "./runtimeStore";
 import { TownPeek } from "./town/TownPeek";
+import { FloatShellOverlay } from "../components/FloatShellOverlay";
 import {
   buildWorldObject,
   CORE_VIEW_ONLY_REASON,
@@ -17,6 +18,8 @@ import {
 import type { WorldAsksStore } from "./worldAsks";
 import "../styles/tokens.css";
 import "../styles/base.css";
+// The app loads xterm's styles with TerminalView's chunk before the overlay.
+import "@xterm/xterm/css/xterm.css";
 import "./world.css";
 import "./town/town.css";
 import "./town/townAsks.css";
@@ -44,16 +47,103 @@ const record = async (method: string) => {
   calls.push(method);
   return null;
 };
+/**
+ * World's float shell as the service answers it (`server/src/rpc/float.ts`):
+ * the reply, then the stream's pushes as control messages. The shell echoes
+ * what is typed; its prompt's last character arrives split across pushes.
+ */
+const float = {
+  opens: [] as Record<string, unknown>[],
+  typed: [] as string[],
+  hidden: [] as string[],
+  stopped: [] as string[],
+  resized: 0,
+  running: false,
+  stream: 0,
+  /** The core connection's current generation and agent room. */
+  generation: -1,
+  room: "",
+  handlers: new Set<(control: unknown) => void>(),
+  statusHandlers: new Set<(status: string) => void>(),
+  status(status: string) {
+    for (const handler of float.statusHandlers) handler(status);
+  },
+  push(control: Record<string, unknown>) {
+    for (const handler of float.handlers) handler(control);
+  },
+  output(stream: string, bytes: Uint8Array) {
+    let text = "";
+    for (const byte of bytes) text += String.fromCharCode(byte);
+    float.push({ type: "float_output", stream, data: btoa(text) });
+  },
+};
+async function floatCall(method: string, params: Record<string, unknown>) {
+  if (method === "world.float.open") {
+    float.opens.push(params);
+    // The service's own refusals (`FloatShellService.open`).
+    if (params.connection_generation !== float.generation)
+      throw new Error("herdr-core reconnected; open the float shell again");
+    if (params.room !== float.room)
+      throw new Error("That agent is in another room now");
+    const stream = `float-${++float.stream}`;
+    const created = !float.running;
+    float.running = true;
+    // After the reply, as the service sends them.
+    setTimeout(() => {
+      const prompt = new TextEncoder().encode("scout-room$ café ");
+      const split = prompt.length - 2; // between the two bytes of "é"
+      float.output(stream, prompt.slice(0, split));
+      float.output(stream, prompt.slice(split));
+    }, 0);
+    return {
+      stream,
+      address: "t9",
+      name: "world-float-fixture",
+      room: "hc:space:fx-web",
+      created,
+    };
+  }
+  const stream = String(params.stream);
+  if (method === "world.float.input") {
+    const text = atob(String(params.data));
+    float.typed.push(text);
+    float.output(
+      stream,
+      Uint8Array.from(text.replace(/\r/g, "\r\n"), (c) => c.charCodeAt(0)),
+    );
+  } else if (method === "world.float.resize") float.resized += 1;
+  else if (method === "world.float.hide") float.hidden.push(stream);
+  else if (method === "world.float.stop") {
+    float.stopped.push(stream);
+    float.running = false;
+    setTimeout(() =>
+      float.push({
+        type: "float_closed",
+        stream,
+        reason: "The shell was ended",
+        ended: true,
+      }),
+    );
+  }
+  return { ok: true };
+}
 Object.assign(bridge, {
   // World-wide reads (asks, usage) are not about any agent.
-  call: async () => null,
+  call: async (method: string, params: Record<string, unknown> = {}) =>
+    method.startsWith("world.float.") ? floatCall(method, params) : null,
+  onControl: (handler: (control: unknown) => void) => {
+    float.handlers.add(handler);
+    return () => float.handlers.delete(handler);
+  },
   connection: (connectionId: string) => ({
     connectionId,
     isCurrent: () => false,
     call: (method: string) => record(`${connectionId}:${method}`),
   }),
-  onControl: () => () => {},
-  onStatus: () => () => {},
+  onStatus: (handler: (status: string) => void) => {
+    float.statusHandlers.add(handler);
+    return () => float.statusHandlers.delete(handler);
+  },
 });
 const deskStore = new WorldDeskStore({
   call: async () => null,
@@ -122,7 +212,8 @@ async function run() {
           style={{
             position: "absolute",
             inset: "0 auto auto 0",
-            width: 420,
+            // Within a phone, so the page keeps the device width.
+            width: "min(420px, 100vw)",
             height: 320,
           }}
         >
@@ -137,6 +228,7 @@ async function run() {
             onAnswer={() => calls.push("answer")}
             onChat={() => calls.push("town-chat")}
             onTerminal={() => calls.push("town-terminal")}
+            leaf={reviewer}
             onNext={null}
             onClose={() => {}}
             onHold={() => {}}
@@ -163,6 +255,11 @@ async function run() {
             onHold={() => {}}
           />
         </div>
+        <FloatShellOverlay
+          terminalTheme={{}}
+          terminalFontScale={100}
+          authority={(id) => (id === "core-fixture" ? float.generation : null)}
+        />
       </>,
     ),
   );
@@ -244,7 +341,197 @@ async function run() {
     !document.body.textContent?.includes("Loading conversation"),
     "nothing waits on a conversation World cannot read",
   );
+  await floatShell(scout);
 }
+
+const rowsText = () =>
+  [...document.querySelectorAll(".float-shell-screen .xterm-rows > div")]
+    .map((row) => row.textContent ?? "")
+    .join("\n");
+async function until(predicate: () => boolean, what: string | (() => string)) {
+  for (let i = 0; i < 120; i++) {
+    if (predicate()) return true;
+    await frame();
+  }
+  check(false, typeof what === "string" ? what : what());
+  return false;
+}
+
+/** World's equivalent of Herdr Float on a core agent, from both peeks. */
+async function floatShell(scout: WorldLeafObject) {
+  const townShell = document.querySelector<HTMLButtonElement>(
+    ".town-peek .town-peek-shell",
+  );
+  const boardShell = document.querySelector<HTMLButtonElement>(
+    '.board-peek button[aria-label^="Open a shell"]',
+  );
+  check(
+    townShell?.disabled === false && boardShell?.disabled === false,
+    "a core agent's peeks offer its room's shell, enabled",
+  );
+  float.generation = scout.generation;
+  float.room = scout.workspaceId;
+  boardShell?.click();
+  if (
+    !(await until(
+      () => rowsText().includes("scout-room$ café"),
+      "the float shell shows its first paint",
+    ))
+  )
+    return;
+  const open = float.opens[0] ?? {};
+  check(
+    open.connection_id === "core-fixture" &&
+      open.terminal_id === scout.pane.terminal_id &&
+      open.connection_generation === scout.generation &&
+      open.room === scout.workspaceId &&
+      Number.isInteger(open.cols) &&
+      Number(open.cols) > 20 &&
+      Number.isInteger(open.rows) &&
+      Number(open.rows) > 4,
+    `opened for the agent's own room at the window's size: ${JSON.stringify(open)}`,
+  );
+  check(
+    !rowsText().includes("\ufffd"),
+    "a character split across pushes arrives whole",
+  );
+  const textarea = document.querySelector<HTMLTextAreaElement>(
+    ".float-shell-screen .xterm-helper-textarea",
+  );
+  check(document.activeElement === textarea, "the shell has the keyboard");
+  for (const key of ["p", "w", "d"]) {
+    textarea?.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        keyCode: key.toUpperCase().charCodeAt(0),
+        bubbles: true,
+      }),
+    );
+    textarea?.dispatchEvent(
+      new KeyboardEvent("keyup", {
+        key,
+        keyCode: key.toUpperCase().charCodeAt(0),
+        bubbles: true,
+      }),
+    );
+  }
+  textarea?.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Enter", keyCode: 13, bubbles: true }),
+  );
+  await until(
+    () => float.typed.join("") === "pwd\r",
+    () => `keys reach the shell in order: ${JSON.stringify(float.typed)}`,
+  );
+  await until(() => rowsText().includes("café pwd"), "the shell's echo shows");
+  // Hide: the view goes, the shell keeps running.
+  document.querySelector<HTMLButtonElement>(".float-shell-hide")?.click();
+  await until(
+    () => !document.querySelector(".float-shell-window"),
+    "Hide closes the window",
+  );
+  check(
+    float.hidden.join() === "float-1" && float.running,
+    "hiding leaves the shell running",
+  );
+  // Town's peek reopens the same room's shell; End shell ends it.
+  townShell?.click();
+  await until(
+    () => rowsText().includes("scout-room$"),
+    "Town's peek reopens the shell",
+  );
+  const end = [
+    ...document.querySelectorAll<HTMLButtonElement>(".float-shell-action"),
+  ].find((button) => button.textContent?.includes("End shell"));
+  await until(() => end?.disabled === false, "End shell is offered once open");
+  end?.click();
+  await until(
+    () => !document.querySelector(".float-shell-window"),
+    "an ended shell closes its window",
+  );
+  check(
+    float.stopped.join() === "float-2" && !float.running,
+    "End shell ends exactly the open stream",
+  );
+  // Core reconnects: the stream closes without the shell ending, says why,
+  // and Open again takes the connection's new generation, never the old one.
+  boardShell?.click();
+  await until(
+    () => rowsText().includes("scout-room$"),
+    "the shell opens again",
+  );
+  float.generation = scout.generation + 1;
+  float.push({
+    type: "float_closed",
+    stream: `float-${float.stream}`,
+    reason: "herdr-core reconnected; open the float shell again",
+    ended: false,
+  });
+  await until(
+    () => reasonText().includes("reconnected"),
+    "a lost stream says why",
+  );
+  const before = float.opens.length;
+  openAgain()?.click();
+  await until(
+    () => float.opens.length === before + 1 && !reasonText(),
+    () => `Open again reopens: ${reasonText()}`,
+  );
+  const reopened = float.opens[before] ?? {};
+  check(
+    reopened.connection_generation === float.generation &&
+      reopened.connection_id === "core-fixture" &&
+      reopened.room === scout.workspaceId,
+    `Open again uses the connection's current authority: ${JSON.stringify(reopened)}`,
+  );
+  await until(
+    () => rowsText().includes("scout-room$"),
+    "the reopened shell paints",
+  );
+  // World's own socket drops (a phone resuming): the service has left the
+  // view, so it closes, keys go nowhere, and Open again works on return.
+  const typed = float.typed.length;
+  float.status("disconnected");
+  await until(
+    () => reasonText().includes("connection was lost"),
+    () => `a lost World connection closes the view: ${reasonText()}`,
+  );
+  check(
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(".float-shell-action"),
+    ].find((button) => button.textContent?.includes("End shell"))?.disabled ===
+      true,
+    "End shell is not offered for a view that is gone",
+  );
+  document
+    .querySelector<HTMLTextAreaElement>(
+      ".float-shell-screen .xterm-helper-textarea",
+    )
+    ?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "x", keyCode: 88, bubbles: true }),
+    );
+  await frame();
+  check(float.typed.length === typed, "keys are not sent to a gone stream");
+  float.status("connecting");
+  float.status("connected");
+  const resumed = float.opens.length;
+  openAgain()?.click();
+  await until(
+    () => float.opens.length === resumed + 1 && !reasonText(),
+    () => `Open again works after World reconnects: ${reasonText()}`,
+  );
+  await until(
+    () => rowsText().includes("scout-room$"),
+    "the shell paints after World reconnects",
+  );
+  // The shell stays open for the evidence captures.
+}
+
+const reasonText = () =>
+  document.querySelector(".float-shell-reason")?.textContent ?? "";
+const openAgain = () =>
+  [...document.querySelectorAll<HTMLButtonElement>(".float-shell-action")].find(
+    (button) => button.textContent?.includes("Open again"),
+  );
 
 void run()
   .catch((error) => failures.push(String(error)))

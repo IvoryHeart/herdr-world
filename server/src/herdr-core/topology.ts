@@ -22,6 +22,11 @@ import { coreTurn, isFavourite, sharedSeen } from "./shared-state";
  *   Herdr's shared seen rule (`herdr.seen`) deciding done versus idle.
  */
 export const CORE_UNPLACED_WORKSPACE = "hc:unplaced";
+/**
+ * World's own float shells carry this label (its value is their room). They
+ * are a view's scratch shell, not a desk: they never join the read model.
+ */
+export const CORE_FLOAT_LABEL = "world.float";
 const SPACE_PREFIX = "hc:space:";
 const TAB_SUFFIX = ":tab:";
 const DEFAULT_TAB = "main";
@@ -166,6 +171,27 @@ function addressOrder(a: string, b: string) {
   return Number(a.slice(1)) - Number(b.slice(1));
 }
 
+/**
+ * The room (World workspace) a live local terminal sits in, as the read model
+ * places it, or null when it is not one of its rows.
+ */
+export function coreRoomOf(
+  terminals: readonly CoreMirrorTerminal[],
+  address: string,
+): string | null {
+  const local = terminals.filter(
+    (record) =>
+      !record.remote &&
+      record.state === "live" &&
+      record.labels?.[CORE_FLOAT_LABEL] === undefined,
+  );
+  const record = local.find((candidate) => candidate.address === address);
+  if (!record) return null;
+  const byAddress = new Map(local.map((each) => [each.address, each]));
+  const place = placementOf(record, byAddress);
+  return place.space ? SPACE_PREFIX + place.space : CORE_UNPLACED_WORKSPACE;
+}
+
 export type CoreTopology = {
   workspaces: WorkspaceRow[];
   tabs: RuntimeRow[];
@@ -179,7 +205,12 @@ export function coreTopology(
   firstSight: Pick<CoreFirstSight, "turn"> = { turn: () => null },
 ): CoreTopology {
   const local = terminals
-    .filter((record) => !record.remote && record.state === "live")
+    .filter(
+      (record) =>
+        !record.remote &&
+        record.state === "live" &&
+        record.labels?.[CORE_FLOAT_LABEL] === undefined,
+    )
     .sort((a, b) => addressOrder(a.address, b.address));
   const byAddress = new Map(local.map((record) => [record.address, record]));
   const workspaces = new Map<string, WorkspaceRow>();

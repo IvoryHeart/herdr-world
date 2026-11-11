@@ -103,6 +103,8 @@ export type WorldLeafObject = WorldObjectBase & {
   appearance?: { status?: string; avatar?: string };
   kind: "agent" | "terminal";
   parentId: string;
+  /** Set for an agent herdr-core runs; absent on the TUI (herdr). */
+  runtime?: "herdr-core";
   pane: Pane;
   workspaceId: string;
   tabId: string;
@@ -804,6 +806,9 @@ function* constructHost(
                 address: pane.pane_id,
               },
             }
+          : {}),
+        ...(connection.runtime === "herdr-core"
+          ? { runtime: "herdr-core" as const }
           : {}),
         capabilities,
         pane,

@@ -16,6 +16,9 @@ import { isMobileLayout } from "../layoutPreferences";
 import { terminalPushMatches } from "../terminalConnection";
 import { terminalCellAt, terminalWheelScroll } from "../terminalScroll";
 
+// World's float shell (herdr-core) shares this lazy chunk: both overlays.
+export { FloatShellOverlay } from "./FloatShellOverlay";
+
 const RESIZE_DEBOUNCE_MS = 150;
 
 function b64toBytes(b64: string): Uint8Array {
