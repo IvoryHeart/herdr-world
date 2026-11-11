@@ -395,7 +395,7 @@ describe("herdr-core connections", () => {
         sendError: (_context, failure) => {
           error = failure;
         },
-        services: { coreConnections: w.core.manager },
+        services: { core: { manager: w.core.manager } },
       });
       expect(error).toBeNull();
     };

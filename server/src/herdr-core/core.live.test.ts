@@ -312,7 +312,7 @@ describe("herdr-core live (real release binary)", () => {
           sendError: (_context, error) => {
             out.error = error;
           },
-          services: { coreConnections: w.core.manager },
+          services: { core: { manager: w.core.manager } },
         });
         return out;
       };

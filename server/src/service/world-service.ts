@@ -783,7 +783,6 @@ async function compose(
     connectionManager,
     connectionProfiles,
     core,
-    coreConnections: core.manager,
     focusedAcquisition,
     agentActivity,
     deskWatches,

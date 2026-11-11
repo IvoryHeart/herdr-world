@@ -113,7 +113,7 @@ async function coreWorld(root: string) {
       sendError: (_context: string, error: unknown) => {
         out.error = String(error);
       },
-      services: { coreConnections: manager },
+      services: { core: { manager } },
     });
     return out;
   };
