@@ -11,6 +11,7 @@ export {
   watchAttachParams,
 } from "../server/src/herdr-core/client";
 export { CoreWatchScreen } from "../web/src/coreWatch";
+export { CoreTypingSession } from "../server/src/herdr-core/typing";
 
 export {
   coreRecipientToken,

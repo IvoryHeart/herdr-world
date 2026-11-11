@@ -195,6 +195,12 @@ popups and verify Windows named-pipe/key behavior on a real owner test host.
 - **THEN** World sends the first key once and takes the interactive size, then the
   desktop app can reclaim its own size
 
+#### Scenario: Leaving gives the size back
+
+- **WHEN** the user stops typing, moves focus out of the view or closes it
+- **THEN** World leaves after the keys typed before, and core returns the grid to
+  the app's pane or its headless size; a terminal reply never takes the size
+
 #### Scenario: Room shell on either runtime
 
 - **WHEN** the user opens an agent's room shell (Herdr Float, the one TUI plugin

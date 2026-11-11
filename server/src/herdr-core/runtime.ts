@@ -18,7 +18,9 @@ import {
   type CoreServerStatus,
   CoreUnavailableError,
   type CoreWriteMethod,
+  type CoreKeyboard,
   type CoreWatch,
+  CoreWatchRefusedError,
   type CoreWatchSink,
 } from "./client";
 import {
@@ -58,6 +60,19 @@ export type CoreTransport = {
   /** Re-reads the endpoint (core.lock) and returns a local socket path. */
   open(signal: AbortSignal): Promise<string>;
   close(): Promise<void>;
+  /** The SSH master this transport's tunnel runs, for uploads to that host. */
+  readonly sshControlPath?: string;
+};
+
+/** Uploads to a core connection's host (uploads.ts); null where unsupported. */
+export type CoreUploads = {
+  image(req: Request): Promise<Response>;
+  file(
+    req: Request,
+    filename: string | null,
+    isCurrent: () => boolean,
+  ): Promise<Response>;
+  stop(): void;
 };
 
 export type CoreRuntimeOptions = {
@@ -88,11 +103,15 @@ export type CoreRuntimeOptions = {
   livenessTimeoutMs?: number;
   publishDelayMs?: number;
   now?: () => number;
+  /** Staging files on the agent's machine; `signal` ends with the runtime. */
+  uploads?: (signal: AbortSignal) => CoreUploads | null;
 };
 
 export type CoreConnectionRuntime = ConnectionRuntime & {
   readonly runtime: "herdr-core";
   readonly local: boolean;
+  /** Image and file uploads to the agent's machine; null where unsupported. */
+  readonly uploads: CoreUploads | null;
   readonly core: CoreFenceView & {
     readonly version: string | null;
     readonly mirror: CoreMirror;
@@ -143,6 +162,17 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
     fence: CoreOperationFence<CoreConnectionRuntime>,
     sink: CoreWatchSink,
   ): Promise<CoreWatch>;
+  /**
+   * World's keyboard on the fenced terminal (`CoreClient.keyboard`): an
+   * interactive viewer for input only. Lease, core process and program must
+   * hold at dispatch and publication; the caller re-checks them before
+   * every frame it sends. Refused where core offers no interactive attach.
+   */
+  keyboard(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    size: CoreCellSize,
+    ended: (reason: string) => void,
+  ): Promise<CoreKeyboard>;
   /**
    * Session input (delivery.ts). Checked at dispatch only: the caller
    * decides what a reply that outlived its occupant means. `cancel` asks
@@ -276,6 +306,7 @@ export function createCoreConnectionRuntime(
       alert(attention.event(coreId, type, terminal, mirror.terminal(terminal)));
   };
   const abort = new AbortController();
+  const uploads = options.uploads?.(abort.signal) ?? null;
   let client: CoreClient | null = null;
   let epoch: CoreEpoch | null = null;
   let version: string | null = null;
@@ -505,6 +536,30 @@ export function createCoreConnectionRuntime(
     return watch;
   }
 
+  async function keyboard(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    size: CoreCellSize,
+    ended: (reason: string) => void,
+  ) {
+    if (fence.lease.runtime !== self || !fence.occupant)
+      throw new CoreFenceError("dispatch", "lease");
+    const current = client;
+    if (!current) throw new CoreFenceError("dispatch", "not-actionable");
+    if (!current.offersKeyboard)
+      throw new CoreWatchRefusedError(
+        `core ${current.hello.version} cannot take typing from World`,
+      );
+    fence.check("dispatch", "program");
+    const keys = await current.keyboard(fence.occupant.address, size, ended);
+    try {
+      fence.check("publication", "program");
+    } catch (error) {
+      keys.detach();
+      throw error;
+    }
+    return keys;
+  }
+
   async function shareLabel(
     fence: CoreOperationFence<CoreConnectionRuntime>,
     decide: (
@@ -571,6 +626,7 @@ export function createCoreConnectionRuntime(
     if (stopTask) return stopTask;
     stopped = true;
     abort.abort(new Error("connection runtime retired"));
+    uploads?.stop();
     if (liveness) clearInterval(liveness);
     if (expiryTimer) clearTimeout(expiryTimer);
     if (!failed) withdraw();
@@ -598,6 +654,7 @@ export function createCoreConnectionRuntime(
     identity,
     runtime: "herdr-core",
     local: options.local === true,
+    uploads,
     core: view,
     operations: coreRuntimeReader({
       mirror,
@@ -631,6 +688,7 @@ export function createCoreConnectionRuntime(
         await current.label(fence.occupant!.address, labels);
       }),
     watchTerminal,
+    keyboard,
     shareLabel,
     shells,
     send: (fence, request, sendOptions) =>

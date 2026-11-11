@@ -77,7 +77,12 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     return handleCoreSharedRpc(rpc);
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
-  if (method === "world.core.watch" || method === "world.core.unwatch")
+  if (
+    method === "world.core.watch" ||
+    method === "world.core.unwatch" ||
+    method === "world.core.input" ||
+    method === "world.core.leave"
+  )
     return handleCoreWatchRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);

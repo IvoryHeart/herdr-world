@@ -156,6 +156,35 @@ export type CoreAttachment = {
   detach(): void;
 };
 
+/**
+ * World typing into a terminal it watches (`keyboard`): input only. Every
+ * call is a no-op once the channel closed.
+ */
+export type CoreKeyboard = {
+  readonly channel: number;
+  readonly terminal: CoreTerminalRecord;
+  /** Core tells automatic replies from typing on this channel. */
+  readonly automatic: boolean;
+  readonly open: boolean;
+  /** Bytes a person typed: makes this viewer core's size leader. */
+  input(bytes: Uint8Array): void;
+  /** A terminal's own answer (a query reply); dropped unless `automatic`. */
+  automaticInput(bytes: Uint8Array): void;
+  resize(size: CoreCellSize): void;
+  focus(focused: boolean): void;
+  /** Leave: core gives the size back to the next typing viewer, or headless. */
+  detach(): void;
+};
+
+/** A RESIZE payload: cols and rows as u16 LE. */
+function cellSizePayload(size: CoreCellSize): Uint8Array {
+  const payload = new Uint8Array(4);
+  const view = new DataView(payload.buffer);
+  view.setUint16(0, size.cols, true);
+  view.setUint16(2, size.rows, true);
+  return payload;
+}
+
 export type CoreAttachHandlers = {
   /** First paint, then live output, in order. */
   data(bytes: Uint8Array): void;
@@ -721,13 +750,6 @@ export class CoreClient {
       close: finish,
       manualCredit: true,
     });
-    const cellSize = (next: CoreCellSize) => {
-      const payload = new Uint8Array(4);
-      const view = new DataView(payload.buffer);
-      view.setUint16(0, next.cols, true);
-      view.setUint16(2, next.rows, true);
-      return payload;
-    };
     return {
       channel,
       terminal: reply.terminal as CoreTerminalRecord,
@@ -737,7 +759,9 @@ export class CoreClient {
       },
       resize: (next) => {
         if (open)
-          this.send(encodeFrame(channel, FrameKind.RESIZE, cellSize(next)));
+          this.send(
+            encodeFrame(channel, FrameKind.RESIZE, cellSizePayload(next)),
+          );
       },
       credit: (bytes) => {
         if (open && bytes > 0) this.send(creditFrame(channel, bytes));
@@ -758,6 +782,88 @@ export class CoreClient {
     };
   }
 
+  /**
+   * World's keyboard on a terminal someone watches: an interactive viewer
+   * whose only job is input. It never displays (the watch does, from its
+   * observe stream), so its stream is dropped and never credited: core then
+   * bounds it at its own pending limit and repaints instead of replaying,
+   * and program output is never held back. Core makes it the size leader
+   * the moment it attaches (not `resumed`), so it is opened only for a key
+   * a person typed. Automatic replies (query answers) are only sent where
+   * core confirmed it tells them apart (hello and the attach reply).
+   */
+  async keyboard(
+    address: string,
+    size: CoreCellSize,
+    ended: (reason: string) => void,
+    timeoutMs = 10_000,
+  ): Promise<CoreKeyboard> {
+    const reply = await this.call(
+      "terminal.attach",
+      {
+        terminal: localAddress(address),
+        cols: size.cols,
+        rows: size.rows,
+        history: 0,
+      },
+      timeoutMs,
+    );
+    if (
+      !isRecord(reply) ||
+      typeof reply.channel !== "number" ||
+      !Number.isSafeInteger(reply.channel) ||
+      reply.channel <= 0 ||
+      !isRecord(reply.terminal) ||
+      reply.terminal.address !== address
+    ) {
+      if (isRecord(reply) && typeof reply.channel === "number")
+        this.release(reply.channel);
+      throw new CoreProtocolError("attach reply is invalid");
+    }
+    if (this.closedError) throw this.closedError;
+    const channel = reply.channel;
+    const automatic =
+      this.hello.features.includes("automatic_input") &&
+      reply.automatic_input === true;
+    let open = true;
+    this.claim(channel, {
+      manualCredit: true,
+      data: () => {},
+      close: (reason) => {
+        if (!open) return;
+        open = false;
+        ended(reason);
+      },
+    });
+    const frame = (kind: number, payload: Uint8Array) => {
+      if (open && this.sinks.has(channel))
+        this.send(encodeFrame(channel, kind, payload));
+    };
+    return {
+      channel,
+      terminal: reply.terminal as CoreTerminalRecord,
+      automatic,
+      get open() {
+        return open;
+      },
+      input: (bytes) => {
+        if (bytes.byteLength > 0) frame(FrameKind.DATA, bytes);
+      },
+      automaticInput: (bytes) => {
+        if (automatic && bytes.byteLength > 0)
+          frame(FrameKind.AUTOMATIC_INPUT, bytes);
+      },
+      resize: (next) => frame(FrameKind.RESIZE, cellSizePayload(next)),
+      focus: (focused) =>
+        frame(FrameKind.FOCUS, new Uint8Array([focused ? 1 : 0])),
+      detach: () => {
+        if (!open) return;
+        open = false;
+        this.release(channel);
+      },
+    };
+  }
+
   /** World ends a stream: CLOSE once, then drop its frames until core's CLOSE. */
   private release(channel: number) {
     this.sinks.delete(channel);
@@ -767,6 +873,14 @@ export class CoreClient {
     if (this.closedError) return;
     this.retired.add(channel);
     this.send(encodeFrame(channel, FrameKind.CLOSE));
+  }
+
+  /** Whether this core takes typing from an interactive viewer. */
+  get offersKeyboard(): boolean {
+    return (
+      this.hello.methods.includes(WATCH_METHOD) &&
+      this.hello.features.includes("attach")
+    );
   }
 
   /** Whether this core offers World's float shells at all. */

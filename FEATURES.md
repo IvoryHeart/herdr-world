@@ -2107,12 +2107,31 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     Town's terminal button and opening a core agent in Desk or Board show its
     live terminal at the size core holds: the size of the Herdr app pane (or
     other typing viewer) that has it open, or core's headless size (200×120
-    by default) when none does. The line under the name says which. World
-    only watches: it sends core no keys, size or focus, so rotating a phone,
-    opening its keyboard or resizing the window only scales the drawing (down
-    to 45%, then the view scrolls) and never changes the agent's terminal.
-    When the app resizes or closes its pane, World follows before the next
-    paint. **Exception:** if no Herdr app or typing viewer has the terminal
+    by default) when none does. The line under the name says which. Until you
+    type, World only watches: it sends core no keys, size or focus, so
+    rotating a phone, opening its keyboard or resizing the window only scales
+    the drawing (down to 45%, then the view scrolls) and never changes the
+    agent's terminal. When the app resizes or closes its pane, World follows
+    before the next paint.
+  - **Type into its terminal.** The first key you type in the view (or send
+    from the phone's composer) opens World's keyboard for it: core gives the
+    terminal World's fitted size, the line says World has the size, and that
+    key and every key typed while the keyboard opens arrive once, in order.
+    Terminal replies (cursor reports) never open it, and xterm's own focus
+    reports are not sent. Typing in the Herdr app's pane, or clicking it,
+    takes the size back there; the next key in World takes it again. World
+    leaves, and core returns the size to the app's pane or its headless size,
+    3 seconds after focus moves out of the view, after a minute with no key,
+    and on Back or closing the view; anything typed before is sent first.
+    A key World could not send says "Not sent" and drops the keys queued
+    behind it, so nothing lands out of order; typed bytes are never replayed.
+    A replaced program, a lost core connection or a watch that ends refuses
+    further keys. Requests carry at most 64 KiB (longer pastes go in pieces,
+    in order) and at most 256 KiB waits for the keyboard to open. A browser
+    whose terminal cannot tell typing from replies stays watch-only and says
+    so. On a phone the Terminal's composer, key rows, drafts and image or file
+    uploads work as on a Herdr terminal: uploads go to the core connection's
+    host and come back as paths. A Windows SSH host cannot take uploads. **Exception:** if no Herdr app or typing viewer has the terminal
     open, core moves it to its headless size when World starts watching (its
     rule for every observer); World says "herdr-core moved it from C×R to its
     headless size" while that grid lasts; once an app's pane opens and sets

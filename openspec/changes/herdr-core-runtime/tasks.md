@@ -46,6 +46,11 @@
     traffic, browser captures and production recipient model control. Q3 remains.
 - [ ] P4: files/Git/worktrees, asks and Ranger.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.
+  - [x] Typing and mobile (#872): the first genuine key opens World's interactive
+    viewer and is sent once after the attach; leave on blur (3 s), idle (60 s)
+    and close; replies never take the size; the phone composer and uploads to
+    the core host. The typing model family drives the production typing session
+    with five plan mutants and two production controls.
   - [x] Popup equivalents (#873): the room shell on both runtimes; Herdr Float
     is the one TUI plugin popup World invokes, and generic plugin popups have
     no core source. World's float shell is fenced like screen reads and tested

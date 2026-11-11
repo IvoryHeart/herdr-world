@@ -138,9 +138,16 @@ RESIZE or FOCUS. An observer attaching alone may trigger core's headless grid
 Open an interactive stream on the first genuine key in a focused terminal; queue
 that key and send it exactly once after confirmed attach. FOCUS accompanies real
 input only. Send terminal replies as AUTOMATIC_INPUT at their source only when
-hello and attach both confirm support. Keep interactive while visible and focused;
-after focus/visibility loss detach on idle. Core may return to headless size when
-no other interactive viewer remains. Windows encoding obeys win32-input-mode.
+hello and attach both confirm support, and only while World's viewer is open or
+opening; a reply never opens it. The observe watch stays the display (core sends
+an interactive viewer no RESIZE) and the interactive output is drained uncredited.
+Keep interactive while visible and focused; leave 3 s after focus leaves the view,
+after 60 s with no key, and on Back, close or hide. A leave waits behind the keys
+typed before it. Core may return to headless size when no other interactive
+viewer remains. A key typed in or a click on the app's pane retakes its size by
+core's own rule. Every batch is re-fenced (lease, generation, occupant) before it
+is written; a key not sent is reported and drops the keys queued behind it, never
+replayed. Windows encoding obeys win32-input-mode.
 
 ### 10. Runtime and session selection
 

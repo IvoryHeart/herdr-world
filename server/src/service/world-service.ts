@@ -885,6 +885,7 @@ async function compose(
             auth,
             browsers,
             connectionManager,
+            coreConnections: core.manager,
             legacyRoutingLogger,
             snapshotAdmission,
             handleRpc,

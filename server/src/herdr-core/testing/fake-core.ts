@@ -80,6 +80,8 @@ export type FakeCoreOptions = {
   attachFramesFirst?: boolean;
   /** Answers observe attaches without confirming resize notifications. */
   denyResizeNotifications?: boolean;
+  /** A core (or relay) that cannot tell automatic replies from typing. */
+  noAutomaticInput?: boolean;
 };
 
 /** What an observe-only core leaves out of `hello`. */
@@ -105,6 +107,9 @@ export class FakeCore {
   private readonly subscribers: Subscriber[] = [];
   /** Keys each terminal received from viewers, for assertions. */
   readonly typed = new Map<string, string>();
+  private readonly decoders = new Map<string, TextDecoder>();
+  /** Automatic replies (query answers) each terminal received from viewers. */
+  readonly answered = new Map<string, string>();
   /** Runs as a request arrives, before core handles and answers it. */
   onCall: ((method: string, params: Record<string, unknown>) => void) | null =
     null;
@@ -701,7 +706,7 @@ export class FakeCore {
       channel,
       terminal: { ...record },
       resize_notifications: notify,
-      automatic_input: true,
+      automatic_input: !this.options.noAutomaticInput,
     };
     // The reply precedes stream frames unless a fault says otherwise.
     if (!this.options.attachFramesFirst) reply(result);
@@ -744,16 +749,29 @@ export class FakeCore {
         const view = new DataView(payload.buffer, payload.byteOffset, 4);
         v.size = [view.getUint16(0, true), view.getUint16(2, true)];
       }
-      if (kind !== FrameKind.AUTOMATIC_INPUT) v.activeAt = ++this.activity;
+      // Typing, resizing and focus gained lead; automatic input and focus
+      // lost do not (core's touch()).
+      const focusLost = kind === FrameKind.FOCUS && payload[0] !== 1;
+      if (kind !== FrameKind.AUTOMATIC_INPUT && !focusLost)
+        v.activeAt = ++this.activity;
       this.applySize(address);
       if (kind === FrameKind.DATA) this.typedInput(address, payload);
+      if (kind === FrameKind.AUTOMATIC_INPUT)
+        this.answered.set(
+          address,
+          (this.answered.get(address) ?? "") +
+            new TextDecoder().decode(payload),
+        );
       return;
     }
   }
 
   /** A shell's line discipline echoes keys; Enter on `exit` ends it. */
   private typedInput(address: string, payload: Uint8Array) {
-    const text = new TextDecoder().decode(payload);
+    // A pty passes bytes on: a character split across frames stays whole.
+    let decoder = this.decoders.get(address);
+    if (!decoder) this.decoders.set(address, (decoder = new TextDecoder()));
+    const text = decoder.decode(payload, { stream: true });
     const typed = (this.typed.get(address) ?? "") + text;
     this.typed.set(address, typed);
     this.output(address, text.replace(/\r/g, "\r\n"));
@@ -923,7 +941,7 @@ export class FakeCore {
         "status",
         "shell",
         "resize_notifications",
-        "automatic_input",
+        ...(this.options.noAutomaticInput ? [] : ["automatic_input"]),
       ],
     };
   }

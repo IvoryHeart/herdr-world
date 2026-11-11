@@ -25,7 +25,10 @@ import {
   serializeConnectionEnvelope,
   validateConnectionId,
 } from "../connections/protocol";
+import type { ReadyConnectionRegistry } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
+import type { CoreConnectionRuntime } from "../herdr-core/runtime";
+import { handleCoreUploadRequest } from "../herdr-core/uploads";
 import {
   type createAuthHandlers,
   unauthenticatedLoginRedirect,
@@ -67,6 +70,8 @@ export type ListenerDeps = {
   auth: ReturnType<typeof createAuthHandlers>;
   browsers: BrowserClients;
   connectionManager: ConnectionManager<LegacyConnectionRuntime>;
+  /** herdr-core connections: only uploads to the agent's machine route here. */
+  coreConnections?: ReadyConnectionRegistry<CoreConnectionRuntime>;
   legacyRoutingLogger: ReturnType<typeof createLegacyRoutingLogger>;
   snapshotAdmission: WorldSnapshotAdmission;
   handleRpc(ws: ServerWebSocket<unknown>, raw: string): Promise<unknown>;
@@ -150,6 +155,20 @@ export function listen(deps: ListenerDeps) {
         : /^(0|[1-9]\d*)$/.test(generationText)
           ? Number(generationText)
           : generationText;
+    const core = deps.coreConnections;
+    if (
+      core &&
+      !route.legacy &&
+      typeof route.requestedConnectionId === "string" &&
+      core.has(route.requestedConnectionId)
+    )
+      return handleCoreUploadRequest({
+        registry: core,
+        route,
+        requestedGeneration,
+        url,
+        req,
+      });
     try {
       resolved = resolveConnectionHttpRoute({
         route,

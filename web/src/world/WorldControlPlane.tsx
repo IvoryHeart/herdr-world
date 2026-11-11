@@ -361,8 +361,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     };
   };
 
-  // A herdr-core terminal opens as a watch: World adopts core's grid and
-  // sends nothing back. Chat uses its separate core input route.
+  // A herdr-core terminal opens as a watch that you can type into: World
+  // adopts core's grid and takes it only while you type. Chat uses its
+  // separate core send route.
   const coreWatch = useCoreTerminalWatch(
     (id) => aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id),
   );

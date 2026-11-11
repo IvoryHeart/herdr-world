@@ -28,6 +28,11 @@ const observeFaults: ReadonlySet<string> = new Set([
   "paint-before-resize",
   "stale-stream",
   "observer-input",
+  "key-twice",
+  "key-before-attach",
+  "typed-replacement",
+  "leave-overtakes",
+  "automatic-opens",
 ]);
 
 type Terminal = {
@@ -93,6 +98,17 @@ export type CoreState = {
   misdrawn: boolean;
   typed: boolean;
   outputs: number;
+  /** World's keyboard (typing family): 0 none, 1 attach in flight, 2 open. */
+  keys: number;
+  waiting: number;
+  left: boolean;
+  asked: boolean;
+  pressed: number;
+  sent: number;
+  refused: number;
+  replies: number;
+  worldLeads: boolean;
+  stray: boolean;
 };
 export type CoreTraceState = {
   c: CoreState;
@@ -163,6 +179,16 @@ export class CoreProtocolFake {
     misdrawn: false,
     typed: false,
     outputs: 0,
+    keys: 0,
+    waiting: 0,
+    left: false,
+    asked: false,
+    pressed: 0,
+    sent: 0,
+    refused: 0,
+    replies: 0,
+    worldLeads: false,
+    stray: false,
   };
   /** What the person confirmed, as World's production plan named it. */
   private confirmation: Parameters<CoreSubjects["coreKillRefusal"]>[1] | null =
@@ -397,6 +423,14 @@ export class CoreProtocolFake {
       case "drain":
       case "frame":
       case "viewport":
+      case "paneTouch":
+      case "key":
+      case "attached":
+      case "attachRefused":
+      case "leave":
+      case "reply":
+      case "keyboardLost":
+      case "reoccupy":
         this.watcher.apply(op, target);
         break;
       case "absent":
@@ -562,13 +596,21 @@ export function validateCoreTrace(
         "drain",
         "frame",
         "viewport",
+        "paneTouch",
+        "key",
+        "attached",
+        "attachRefused",
+        "leave",
+        "reply",
+        "keyboardLost",
+        "reoccupy",
       ].includes(item.op),
       "unknown core trace action",
     );
     assert(index === 0 ? item.op === "init" : item.op !== "init");
     assert(
       item.family === undefined ||
-        ["ordering", "authority", "observe"].includes(item.family),
+        ["ordering", "authority", "observe", "typing"].includes(item.family),
       "unknown core family",
     );
     assert(item.family === value[0].family, "core family changed");
@@ -702,6 +744,21 @@ export function replayCore(
       witnesses.add("stallReleased");
     if (state.op === "watch" && !c.watching)
       witnesses.add("unconfirmedRefused");
+    if (state.op === "frame" && c.watching && c.keys === 2 && c.shown === 3)
+      witnesses.add("typingLed");
+    if (
+      state.op === "frame" &&
+      c.watching &&
+      c.keys === 0 &&
+      c.sent > 0 &&
+      c.shown >= 0 &&
+      c.shown === c.grid
+    )
+      witnesses.add("sizeReturned");
+    if (state.op === "attached" && c.keys === 0 && c.sent > 0)
+      witnesses.add("leftAfterKeys");
+    if (state.op === "key" && c.replaced && !c.watching)
+      witnesses.add("replacementRefused");
   }
   return witnesses;
 }

@@ -73,7 +73,7 @@ function recordedPushes(): CoreTerminalPush[] {
 }
 
 test.skipIf(!chrome)(
-  "a watched core terminal adopts core's grid; rotation and keyboard only rescale it",
+  "a core terminal adopts core's grid, rescales on rotation, and takes World's size only while you type",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "core-watch-"));
     const { assets } = await buildWorldBrowserBundle("CoreTerminalWatch", dir);
@@ -82,6 +82,12 @@ test.skipIf(!chrome)(
     let requested = Promise.withResolvers<void>();
     let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
     let mobile = true;
+    const uploads: Array<{ path: string; generation: string | null }> = [];
+    /** CDP key presses: real, trusted events into the focused element. */
+    const KEYS: Record<string, { code: string; vk: number; text?: string }> = {
+      a: { code: "KeyA", vk: 65, text: "a" },
+      Escape: { code: "Escape", vk: 27 },
+    };
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -93,6 +99,41 @@ test.skipIf(!chrome)(
           return new Response("ok");
         }
         if (path === "/pushes") return new Response(pushes);
+        if (path === "/key") {
+          const key = url.searchParams.get("key")!;
+          const { code, vk, text } = KEYS[key]!;
+          for (const type of ["keyDown", "keyUp"] as const)
+            await connection!.command("Input.dispatchKeyEvent", {
+              type: type === "keyDown" && text ? "keyDown" : type,
+              key,
+              code,
+              windowsVirtualKeyCode: vk,
+              ...(type === "keyDown" && text ? { text } : {}),
+            });
+          return new Response("ok");
+        }
+        if (path === "/insert") {
+          await connection!.command("Input.insertText", {
+            text: url.searchParams.get("text") ?? "",
+          });
+          return new Response("ok");
+        }
+        if (path === "/uploads") return Response.json(uploads);
+        if (path.startsWith("/api/connections/")) {
+          // The core connection's upload route, as World's listener answers.
+          await request.arrayBuffer();
+          const generation = url.searchParams.get("connection_generation");
+          uploads.push({ path, generation });
+          return Response.json(
+            { path: "/tmp/herdr-world-uploads-example/shot.png" },
+            {
+              headers: {
+                "X-Herdr-Connection-Id": "core-fixture",
+                "X-Herdr-Connection-Generation": String(generation),
+              },
+            },
+          );
+        }
         if (path === "/viewport") {
           await connection!.command("Emulation.setDeviceMetricsOverride", {
             width: Number(url.searchParams.get("width")),
@@ -156,41 +197,42 @@ test.skipIf(!chrome)(
       const captures = Bun.env.HERDR_WORLD_CORE_CAPTURES;
       if (!captures) return;
       await mkdir(captures, { recursive: true });
-      for (const theme of ["light", "dark"] as const)
-        for (const viewport of VIEWPORTS) {
-          mobile = viewport.mobile;
-          await connection.command("Emulation.setDeviceMetricsOverride", {
-            width: viewport.width,
-            height: viewport.height,
-            deviceScaleFactor: 1,
-            mobile: viewport.mobile,
-          });
-          result = Promise.withResolvers<string[]>();
-          requested = Promise.withResolvers<void>();
-          await connection.command("Page.navigate", {
-            url: `${server.url.href}?capture`,
-          });
-          expect(
-            await waitForBrowserFixture(
-              requested.promise,
-              result.promise,
-              exited,
-              "Core terminal watch",
-              BROWSER_STARTUP_TIMEOUT_MS,
-            ),
-          ).toEqual([]);
-          await connection.command("Runtime.evaluate", {
-            expression: `document.documentElement.dataset.theme = ${JSON.stringify(theme)}; new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`,
-            awaitPromise: true,
-          });
-          const shot = await connection.command("Page.captureScreenshot", {
-            format: "png",
-          });
-          await writeFile(
-            join(captures, `watch-${viewport.name}-${theme}.png`),
-            Buffer.from(shot.data, "base64"),
-          );
-        }
+      for (const scene of ["watch", "typing"] as const)
+        for (const theme of ["light", "dark"] as const)
+          for (const viewport of VIEWPORTS) {
+            mobile = viewport.mobile;
+            await connection.command("Emulation.setDeviceMetricsOverride", {
+              width: viewport.width,
+              height: viewport.height,
+              deviceScaleFactor: 1,
+              mobile: viewport.mobile,
+            });
+            result = Promise.withResolvers<string[]>();
+            requested = Promise.withResolvers<void>();
+            await connection.command("Page.navigate", {
+              url: `${server.url.href}?capture=${scene}`,
+            });
+            expect(
+              await waitForBrowserFixture(
+                requested.promise,
+                result.promise,
+                exited,
+                "Core terminal watch",
+                BROWSER_STARTUP_TIMEOUT_MS,
+              ),
+            ).toEqual([]);
+            await connection.command("Runtime.evaluate", {
+              expression: `document.documentElement.dataset.theme = ${JSON.stringify(theme)}; new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`,
+              awaitPromise: true,
+            });
+            const shot = await connection.command("Page.captureScreenshot", {
+              format: "png",
+            });
+            await writeFile(
+              join(captures, `${scene}-${viewport.name}-${theme}.png`),
+              Buffer.from(shot.data, "base64"),
+            );
+          }
     } finally {
       connection?.close();
       await stopChrome(child);

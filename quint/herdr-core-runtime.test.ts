@@ -116,8 +116,8 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
   );
 });
 
-test("the eleven ordering/authority, two kill, one missing-foreground and five observe faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(19);
+test("the eleven ordering/authority, two kill, one missing-foreground, five observe and five typing faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(24);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;
@@ -225,4 +225,140 @@ test("an unconfirmed path is refused; an observer alone goes headless", () => {
   const alone = trace(["connect", "baseline", ["watch", 1], "frame", "frame"]);
   expect(alone.at(-1)!.c).toMatchObject({ grid: 2, shown: 2, misdrawn: false });
   expect(replayCore(alone).has("observerAlone")).toBe(true);
+});
+
+describe("typing into a watched terminal (typing family)", () => {
+  const typing = (states: ReturnType<typeof trace>) =>
+    states.map((state) => ({ ...state, family: "typing" }));
+  const drain = (n: number) => Array<string>(n).fill("frame");
+
+  test("the first key waits for the attach and goes once; World leads, then gives the size back", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["pane", 0],
+        ["watch", 1],
+        ...drain(2),
+        "key",
+        "key",
+        "reply",
+        "attached",
+        ...drain(2),
+        "leave",
+        ...drain(2),
+      ]),
+    );
+    const sent = states.find((state) => state.op === "attached")!.c;
+    expect(sent).toMatchObject({ keys: 2, sent: 2, waiting: 0, grid: 3 });
+    expect(states.at(-1)!.c).toMatchObject({
+      keys: 0,
+      pressed: 2,
+      sent: 2,
+      refused: 0,
+      grid: 0,
+      shown: 0,
+      stray: false,
+    });
+    const witnesses = replayCore(states);
+    for (const name of ["typingLed", "sizeReturned"])
+      expect(witnesses.has(name)).toBe(true);
+    // A key recorded as sent twice is caught by the replay.
+    const twice = structuredClone(states);
+    for (const state of twice.slice(
+      twice.findIndex((x) => x.op === "attached"),
+    ))
+      state.c.sent++;
+    return expectObservationMismatch(() => replayCore(twice), ["core.state"]);
+  });
+
+  test("a reply alone never opens the keyboard", () => {
+    const states = typing(
+      trace(["connect", "baseline", ["watch", 1], ...drain(2), "reply"]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({ keys: 0, sent: 0, grid: 2 });
+    const opened = structuredClone(states);
+    opened.at(-1)!.c.keys = 1;
+    return expectObservationMismatch(() => replayCore(opened), ["core.state"]);
+  });
+
+  test("a leave during the attach waits for the keys before it", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["pane", 1],
+        ["watch", 1],
+        "key",
+        "leave",
+        "attached",
+      ]),
+    );
+    expect(states.at(-2)!.c).toMatchObject({ keys: 1, left: true });
+    expect(states.at(-1)!.c).toMatchObject({ keys: 0, sent: 1, grid: 1 });
+    expect(replayCore(states).has("leftAfterKeys")).toBe(true);
+  });
+
+  test("the desktop pane takes its size back; the next key retakes it", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["pane", 0],
+        ["watch", 1],
+        "key",
+        "attached",
+        "paneTouch",
+        "key",
+      ]),
+    );
+    expect(states.at(-2)!.c).toMatchObject({ grid: 0, worldLeads: false });
+    expect(states.at(-1)!.c).toMatchObject({ grid: 3, sent: 2 });
+    replayCore(states);
+  });
+
+  test("a key for a replaced program is refused and ends the watch", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["watch", 1],
+        "key",
+        "attached",
+        "reoccupy",
+        "key",
+      ]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      watching: false,
+      sent: 1,
+      refused: 1,
+      keys: 0,
+      stray: false,
+    });
+    expect(replayCore(states).has("replacementRefused")).toBe(true);
+  });
+
+  test("a refused attach or a lost keyboard sends nothing more; the next key reopens", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["watch", 1],
+        "key",
+        "attachRefused",
+        "key",
+        "attached",
+        "keyboardLost",
+      ]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      keys: 0,
+      pressed: 2,
+      sent: 1,
+      refused: 1,
+      grid: 2,
+    });
+    replayCore(states);
+  });
 });

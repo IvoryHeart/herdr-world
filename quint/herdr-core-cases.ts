@@ -19,6 +19,11 @@ export const coreFaults = [
   "paint-before-resize",
   "stale-stream",
   "observer-input",
+  "key-twice",
+  "key-before-attach",
+  "typed-replacement",
+  "leave-overtakes",
+  "automatic-opens",
 ] as const;
 
 export const coreWitnesses: readonly string[] = [
@@ -36,6 +41,10 @@ export const coreWitnesses: readonly string[] = [
   "headlessFollowed",
   "stallReleased",
   "unconfirmedRefused",
+  "typingLed",
+  "sizeReturned",
+  "leftAfterKeys",
+  "replacementRefused",
 ];
 
 export const coreImplementationFaults = [
@@ -49,5 +58,7 @@ export const coreImplementationFaults = [
   "core-watch-interactive",
   "core-watch-unconfirmed",
   "core-watch-order",
+  "core-typing-replay",
+  "core-typing-leave",
   "core-missing-foreground",
 ] as const;

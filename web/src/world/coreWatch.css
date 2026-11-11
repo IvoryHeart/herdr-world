@@ -104,8 +104,25 @@
   width: max-content;
 }
 
-.core-watch-host .xterm-helper-textarea {
-  display: none;
+.core-watch-notice {
+  margin: 0;
+  padding: 6px 12px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.core-watch[data-typing] .core-watch-frame {
+  outline-style: solid;
+  outline-color: var(--accent);
+}
+
+.core-watch-composer {
+  flex: none;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--panel);
+  border-top: 1px solid var(--border);
 }
 
 .core-watch-ended {

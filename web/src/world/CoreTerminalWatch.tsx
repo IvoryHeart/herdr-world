@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowLeft, Eye } from "lucide-react";
+import { ArrowLeft, Eye, Keyboard } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
 import "@xterm/xterm/css/xterm.css";
@@ -21,6 +21,13 @@ import {
 } from "../coreWatch";
 import type { ResolvedTheme } from "../appearance";
 import { terminalThemeFor } from "../terminalThemes";
+import {
+  CoreTyping,
+  fittedGrid,
+  isFocusReport,
+  userInputSignal,
+} from "../coreTyping";
+import { CoreTerminalComposer } from "./CoreTerminalComposer";
 import "./coreWatch.css";
 
 /** Which herdr-core terminal to watch, as World's snapshot names it. */
@@ -66,10 +73,13 @@ function useBridgeEpoch() {
 }
 
 /**
- * A herdr-core terminal, watched. Core's grid is adopted exactly (the
- * desktop pane's size, or headless); the drawing is only scaled to fit, so
- * rotating a phone or opening its keyboard never changes the terminal. The
- * page sends core nothing but its watch: no keys, size or focus.
+ * A herdr-core terminal, watched and typed into. Core's grid is adopted
+ * exactly (the desktop pane's size, World's while you type, or headless);
+ * the drawing is only scaled to fit, so rotating a phone or opening its
+ * keyboard never changes the terminal by itself. The first real key opens
+ * core's keyboard at the size that fits this view; leaving (focus away for
+ * a few seconds, a minute without keys, Back) gives the size back. xterm's
+ * own replies to the program go only while World holds the keyboard.
  */
 export function CoreTerminalWatch({
   target,
@@ -89,15 +99,18 @@ export function CoreTerminalWatch({
   const [scale, setScale] = useState(1);
   const [drawn, setDrawn] = useState({ width: 0, height: 0 });
   const [attempt, setAttempt] = useState(0);
+  const [canType, setCanType] = useState(true);
+  const [typed, setTyped] = useState<CoreGrid | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const typingRef = useRef<CoreTyping | null>(null);
   const visible = usePageVisible();
   const epoch = useBridgeEpoch();
 
-  // One xterm for the view's lifetime: display only, never an input source.
+  // One xterm for the view's lifetime. Its input goes to core's keyboard.
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const term = new Terminal({
-      disableStdin: true,
       cursorBlink: false,
       allowProposedApi: true,
       scrollback: 2000,
@@ -109,11 +122,30 @@ export function CoreTerminalWatch({
     });
     term.loadAddon(new UnicodeGraphemesAddon());
     term.open(host);
-    if (term.textarea) {
-      term.textarea.readOnly = true;
-      term.textarea.tabIndex = -1;
-    }
     termRef.current = term;
+    // Keys and pastes are genuine; xterm's answers to the program's queries
+    // are not, so they never take the size. Without a way to tell them apart
+    // the view stays watch-only.
+    const signal = userInputSignal(term);
+    if (!signal) {
+      term.options.disableStdin = true;
+      setCanType(false);
+    }
+    const typedData = term.onData((data) => {
+      const genuine = signal?.take() ?? false;
+      if (!genuine && isFocusReport(data)) return;
+      if (genuine) setNotice(null);
+      void typingRef.current?.type(data, !genuine).catch(() => undefined);
+    });
+    const typedBinary = term.onBinary((data) => {
+      const genuine = signal?.take() ?? false;
+      void typingRef.current
+        ?.type(
+          Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff),
+          !genuine,
+        )
+        .catch(() => undefined);
+    });
     const themes = new MutationObserver(() => {
       term.options.theme = terminalThemeFor(pageTheme());
     });
@@ -123,6 +155,9 @@ export function CoreTerminalWatch({
     });
     return () => {
       themes.disconnect();
+      typedData.dispose();
+      typedBinary.dispose();
+      signal?.dispose();
       termRef.current = null;
       term.dispose();
     };
@@ -139,6 +174,41 @@ export function CoreTerminalWatch({
     setGrid(null);
     setMoved(null);
     setEnded(null);
+    setTyped(null);
+    const typing = new CoreTyping(
+      {
+        input: (batch) => bridge.call("world.core.input", { stream, ...batch }),
+        leave: () => bridge.call("world.core.leave", { stream }),
+      },
+      {
+        size: () => {
+          const drawing =
+            hostRef.current?.querySelector<HTMLElement>(".xterm-screen");
+          const view = viewRef.current;
+          const pad = view ? getComputedStyle(view) : null;
+          return fittedGrid(
+            { cols: term.cols, rows: term.rows },
+            {
+              width: drawing?.offsetWidth ?? 0,
+              height: drawing?.offsetHeight ?? 0,
+            },
+            {
+              width:
+                (view?.clientWidth ?? 0) -
+                parseFloat(pad?.paddingLeft ?? "0") -
+                parseFloat(pad?.paddingRight ?? "0"),
+              height:
+                (view?.clientHeight ?? 0) -
+                parseFloat(pad?.paddingTop ?? "0") -
+                parseFloat(pad?.paddingBottom ?? "0"),
+            },
+          );
+        },
+        refused: (message) => live && setNotice(message),
+        changed: (held) => live && setTyped(held),
+      },
+    );
+    typingRef.current = typing;
     const screen = new CoreWatchScreen({
       resize: (cols, rows) => {
         // xterm's resize first parses every write before it (flushSync), so
@@ -160,7 +230,10 @@ export function CoreTerminalWatch({
         return;
       }
       setMoved(screen.moved);
-      if ("closed" in push) setEnded(watchEndedText(push.closed));
+      if ("closed" in push) {
+        typing.stop();
+        setEnded(watchEndedText(push.closed));
+      }
     });
     bridge
       .call("world.core.watch", {
@@ -175,10 +248,13 @@ export function CoreTerminalWatch({
         setMoved(screen.moved);
       })
       .catch((error: Error) => {
+        typing.stop();
         if (live) setEnded(error.message);
       });
     return () => {
       live = false;
+      typing.stop();
+      if (typingRef.current === typing) typingRef.current = null;
       off();
       void bridge.call("world.core.unwatch", { stream }).catch(() => undefined);
     };
@@ -221,8 +297,11 @@ export function CoreTerminalWatch({
   }, [drawn]);
 
   useEffect(() => {
+    // Escape is a key for the program while you type in it or its composer.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      const target = event.target as Element | null;
+      if (event.key === "Escape" && !target?.closest?.("textarea, input"))
+        onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -235,6 +314,12 @@ export function CoreTerminalWatch({
       aria-modal="true"
       aria-label={`${title}'s terminal`}
       data-core-watch={target.address}
+      data-typing={typed ? "" : undefined}
+      onFocus={() => typingRef.current?.focus(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          typingRef.current?.focus(false);
+      }}
     >
       <header className="core-watch-head">
         <button
@@ -248,16 +333,39 @@ export function CoreTerminalWatch({
         </button>
         <div className="core-watch-title">
           <strong>{title}</strong>
-          <small data-core-watch-grid>{watchGridText(grid, moved)}</small>
+          <small data-core-watch-grid>
+            {watchGridText(grid, moved, typed)}
+          </small>
         </div>
-        <span
-          className="core-watch-badge"
-          title="World can't type into herdr-core agents yet"
-        >
-          <Eye size={14} aria-hidden="true" />
-          Watching
-        </span>
+        {typed ? (
+          <span
+            className="core-watch-badge"
+            data-core-watch-badge="typing"
+            title="World has this terminal's size while you type. It goes back when you leave."
+          >
+            <Keyboard size={14} aria-hidden="true" />
+            Typing
+          </span>
+        ) : (
+          <span
+            className="core-watch-badge"
+            data-core-watch-badge="watching"
+            title={
+              canType
+                ? "Type to send keys. World takes the terminal's size while you type."
+                : "This browser can't tell typing from terminal replies, so World only watches."
+            }
+          >
+            <Eye size={14} aria-hidden="true" />
+            Watching
+          </span>
+        )}
       </header>
+      {notice ? (
+        <p className="core-watch-notice" role="alert">
+          {notice}
+        </p>
+      ) : null}
       <div className="core-watch-view" ref={viewRef}>
         <div
           className="core-watch-frame"
@@ -282,6 +390,17 @@ export function CoreTerminalWatch({
           </div>
         ) : null}
       </div>
+      {canType && !ended ? (
+        <CoreTerminalComposer
+          target={target}
+          type={(data) =>
+            typingRef.current?.type(data) ??
+            Promise.reject(new Error("The terminal closed"))
+          }
+          terminal={termRef}
+          onError={setNotice}
+        />
+      ) : null}
     </section>
   );
 }

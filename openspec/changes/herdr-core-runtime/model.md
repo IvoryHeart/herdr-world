@@ -54,8 +54,8 @@ and cleanup failures abort; only the named `core.state` mismatch kills a control
 Required replay witnesses cover ordered deltas, missed cuts, gap retirement,
 reconnect, occupant refusal, late queued refusal and an absent endpoint per seed.
 
-The maintained command explores all nineteen mutants (fourteen plan mutants and
-five observe mutants, below) individually with TLC and requires
+The maintained command explores all twenty-four mutants (fourteen plan mutants,
+five observe mutants and five typing mutants, below) individually with TLC and requires
 both an invariant violation and rejection of that counterexample by correct replay:
 
 | Mutant | Forbidden outcome |
@@ -79,6 +79,11 @@ both an invariant violation and rejection of that counterexample by correct repl
 | paint-before-resize | A paint is drawn before the grid core announced for it |
 | stale-stream | Frames of an ended watch reach the new one |
 | observer-input | A rotation or keyboard sends core input, size or focus |
+| key-twice | The first key is sent twice once the keyboard opens |
+| key-before-attach | A key is written before core answered the attach |
+| typed-replacement | A key reaches the program that replaced the watched one |
+| leave-overtakes | A leave sent during the attach loses the keys before it |
+| automatic-opens | A terminal reply opens the keyboard and takes the size |
 
 A separate ungated-fake control must diverge on a valid model trace. It checks
 adapter sensitivity without claiming mutation of a production core provider.
@@ -203,6 +208,40 @@ with a 4-byte character split across frames (`watch-replay.test.ts`), the
 browser suite (`CoreTerminalWatch.browser.test.ts`, including a paint that a
 following grid must not overtake) and the live release check.
 
+## Typing family (issue #872)
+
+Typing adds a fourth family on the observe state. World watches the terminal
+and a person types into it: the first key opens World's interactive viewer,
+which core's rule makes the most recent typing viewer, so core takes World's
+fitted grid (grid id 3). The pane retakes it by typing or a click
+(`paneTouch`), and World leaving or losing the keyboard re-applies the rule:
+the pane's size, or headless.
+
+| State | Meaning and boundary |
+| --- | --- |
+| keys, waiting, left, asked | World's keyboard (closed, opening, open), keys typed while it opens, a leave queued behind them, and whether World asked core to open it. |
+| pressed, sent, refused, replies | Keys a person pressed (two), keys core received, keys reported not sent, terminal replies (one). |
+| worldLeads, stray | Whether World was the last typing viewer, and whether any key reached core without an open keyboard or after the program was replaced. |
+
+Transitions: `key`, `attached`, `attachRefused`, `leave`, `reply`,
+`keyboardLost` (EOF or a killed connection), `reoccupy` (another program takes
+the address) and `paneTouch`, plus the observe family's watch transitions.
+`keyed` joins `safety`: no stray key, every pressed key is sent, waiting or
+refused exactly once, an open keyboard was asked for by a key, and only an
+opening keyboard has keys or a leave waiting. `watched` now expects grid 3 while
+World leads. Witnesses: `typingLed`, `sizeReturned`, `leftAfterKeys` and
+`replacementRefused`.
+
+Production mapping: every key, reply and leave in a trace goes through
+World's production `CoreTypingSession` (`server/src/herdr-core/typing.ts`),
+the queue and fence the service's watch relay uses, over a fake interactive
+viewer that records what it was sent. Two production negative controls must
+each be rejected through `core.state`: a session that replays the first
+queued key, and one whose leave during the attach drops the keys before it.
+The page's single in-flight queue, leave timers and reply detection
+(`web/src/coreTyping.ts`), framing and the 64 KiB request limit are covered by
+unit, relay and browser tests, not by this model.
+
 ## Shared seen (issue #868)
 
 [`quint/herdr-core-seen.qnt`](../../../quint/herdr-core-seen.qnt) is a separate
@@ -240,13 +279,15 @@ Run `bun quint/run.ts --case herdr-core-seen` during development.
 
 ## Bounds, evidence and acceptance
 
-The single module has three explicitly bounded schedule families. Ordering explores
+The single module has four explicitly bounded schedule families. Ordering explores
 two independent source deltas, created/removed terminals and recovery. Authority
 interleaves one source delta with the delayed operation, profile switch and kept
 replacement. This avoids multiplying irrelevant data permutations into every
 operation state; it does not claim arbitrary two-delta/operation schedules.
 Observe has two pane sizes plus closed, three pane changes, two outputs (none
-while four frames are in flight) and two watch streams. Ordering and authority have
+while four frames are in flight) and two watch streams. Typing adds two keys,
+one reply and one replacement, with two pane changes (open, resize or close, and
+a touch share them) and no rotation, which the page's queue tests cover. Ordering and authority have
 two terminals, independent integer x/y facts, two connection
 attempts, two profiles sharing one core, one process restart, one replacement,
 one captured operation and one source queue. Created/removed events and delayed
@@ -258,13 +299,14 @@ favor the queued-replacement race without adding or removing any transition.
 Three
 seeds (42/73/103) sample 500 ordering/authority traces and 200 observe traces
 of up to 25 transitions each, all replayed. The simulator samples the observe
-family on its own (`OBSERVE`), because its action list changes how the
+and typing families on their own (`OBSERVE`), because its action list changes how the
 simulator weights the others. TLC explores every family, each with the actions
 its simulation takes, and runs sends only in the authority family without a
 child and kills only in the one with a child. The send fence (lease, occupant,
 queued delivery) and the kill fence (plan, confirmation) read disjoint fields
 and each still meets every source, cursor, replacement and connection change,
-so this drops only their product (769,597 to 288,538 distinct states). Every
+so this drops only their product (769,597 to 288,538 distinct states; the
+typing family brings the quotient to 754,688). Every
 model fault below still yields a TLC counterexample in this quotient.
 Each fault is checked exhaustively with TLC; a simulator search of up to
 200,000 samples with seed 42 extracts its ITF replay with the same transition bound
