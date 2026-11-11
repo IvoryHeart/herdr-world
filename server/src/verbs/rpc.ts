@@ -123,6 +123,8 @@ export const rpcVerbs = [
   rpc("bridge.ui_settings.get", "read", "world"),
   rpc("bridge.ui_settings.update", "reconcilable", "world"),
   rpc("connections.connect", "reconcilable", "world"),
+  // Testing switch: the in-process herdr-core stand-in (start/kill/remove).
+  rpc("connections.core_fixture", "reconcilable", "world"),
   rpc("connections.create", "reconcilable", "world"),
   rpc("connections.disconnect", "reconcilable", "world"),
   rpc("connections.list", "read", "world"),

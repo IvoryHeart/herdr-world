@@ -16,6 +16,7 @@ import {
   connectionIdentityForProfile,
   loadConnectionProfileBootstrap,
   type ManagedConnectionProfile,
+  type TuiManagedProfile,
   type StartupLocalProfile,
   testLocalConnectionProfile,
 } from "./profile-service";
@@ -101,7 +102,7 @@ type FakeRuntime = ConnectionRuntime & {
 };
 
 function runtimeFactory(created: Map<string, FakeRuntime[]>) {
-  return (profile: ManagedConnectionProfile) =>
+  return (profile: TuiManagedProfile) =>
     (context: ConnectionRuntimeContext): FakeRuntime => {
       const runtime: FakeRuntime = {
         identity: {

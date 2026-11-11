@@ -2940,16 +2940,21 @@
     },
     {
       "id": "Q52",
-      "area": "Herdr-core composed ordering and runtime authority (design)",
+      "area": "Herdr-core composed ordering and runtime authority",
       "owner": "quint/herdr-core-runtime.qnt",
       "requirement": "openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md",
       "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, pre-send occupant fencing, core-side source-queue fencing assumed under Q3 and existing-only connect",
-      "existingTests": ["quint/herdr-core-runtime.test.ts"],
+      "existingTests": [
+        "quint/herdr-core-runtime.test.ts",
+        "server/src/herdr-core/mirror.test.ts",
+        "server/src/herdr-core/replay.test.ts",
+        "server/src/herdr-core/connections.test.ts"
+      ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "composed-design-model",
-      "assessment": "P0 bounded design model with in-process protocol fake; foundation delivery history is not acceptance of this new contract or future core provider",
+      "assessment": "Bounded composed model. Replay drives the production CoreMirror for every mirror, cursor and readiness transition, with four production negative controls (gap, heartbeat, stale, missed cut); capture/dispatch/deliver still use the design seam because the model checks the source occupant at dispatch while World can check only its observation. Foundation delivery history is not acceptance of this contract.",
       "status": "pending",
-      "remaining": "Independent design/model review and actual provider, harness, browser/app and Windows consumer acceptance remain required in P1–P6.",
+      "remaining": "Independent design/model review; a model split of observed versus actual occupant before the production fence can replace the authority seam; harness, browser/app and Windows consumer acceptance in P2–P6.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": [
@@ -2958,7 +2963,12 @@
           "quint/effect-recovery.qnt"
         ],
         "contracts": ["openspec/changes/herdr-core-runtime/model.md"],
-        "tests": ["quint/herdr-core-runtime.test.ts"],
+        "tests": [
+          "quint/herdr-core-runtime.test.ts",
+          "server/src/herdr-core/mirror.test.ts",
+          "server/src/herdr-core/replay.test.ts",
+          "server/src/herdr-core/connections.test.ts"
+        ],
         "checks": [
           "bun quint/run.ts --case herdr-core-runtime",
           "bun run verification:gate"

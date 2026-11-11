@@ -62,6 +62,7 @@
   "rpc:bridge.ui_settings.get": "allow deny deny deny deny deny",
   "rpc:bridge.ui_settings.update": "allow deny deny deny deny deny",
   "rpc:connections.connect": "allow deny deny deny deny deny",
+  "rpc:connections.core_fixture": "allow deny deny deny deny deny",
   "rpc:connections.create": "allow deny deny deny deny deny",
   "rpc:connections.disconnect": "allow deny deny deny deny deny",
   "rpc:connections.list": "allow deny deny deny deny deny",

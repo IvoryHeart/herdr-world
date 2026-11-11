@@ -8,6 +8,12 @@
 ## Following implementation (outside issue #863)
 
 - [ ] P1: inventory parity consumers, extract typed seam and implement core mirror.
+  - [x] Issue #865: existing-only local and Unix SSH connections (core.lock on
+    every attempt, private socket directory), framed client with credit and
+    streaming UTF-8, ordered mirror with missed/heartbeat/gap rules, liveness,
+    lease/core/occupant fences, profile runtime kind, connection status,
+    recorded 0.1.20 replay and a production-mirror model replay.
+  - [ ] Core agents in Town, Desk and Needs you (read-only views).
 - [ ] P2: observer streams, shared seen/favourite and event push.
 - [ ] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
 - [ ] P4: files/Git/worktrees, asks and Ranger.

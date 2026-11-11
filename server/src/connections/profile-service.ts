@@ -7,6 +7,11 @@ import { createSshTunnelManager, SshTunnelError } from "../bridge/ssh-tunnel";
 import { ThinClient } from "../bridge/thin-client";
 import { systemScheduler, type Scheduler } from "../service/ports";
 import { runProcess } from "../utils/process-utils";
+import type {
+  CoreConnectionListItem,
+  CoreConnectionSupport,
+  RoutedManager,
+} from "./core-support";
 import {
   ConnectionManager,
   type ConnectionRuntime,
@@ -14,11 +19,13 @@ import {
 } from "./manager";
 import {
   type ConnectionProfile,
+  type CoreConnectionProfile,
+  isCoreProfile,
+  type TuiConnectionProfile,
   ConnectionProfileStore,
   CONNECTION_PROFILE_FILE_VERSION,
   type LocalConnectionProfile,
   type PersistedConnectionRegistry,
-  type PublicConnectionProfile,
   publicConnectionProfile,
   validateConnectionProfile,
 } from "./profiles";
@@ -33,6 +40,8 @@ export type StartupLocalProfile = LocalConnectionProfile & {
 };
 
 export type ManagedConnectionProfile = ConnectionProfile | StartupLocalProfile;
+/** A Herdr (TUI) profile, including the implicit startup default. */
+export type TuiManagedProfile = TuiConnectionProfile | StartupLocalProfile;
 
 export type ConnectionProfileBootstrap = {
   defaultConnectionId: string;
@@ -100,12 +109,12 @@ export function connectionIdentityForProfile(
 }
 
 export type ConnectionProfileRuntimeFactory<Runtime extends ConnectionRuntime> =
-  (profile: ManagedConnectionProfile) => ConnectionRuntimeFactory<Runtime>;
+  (profile: TuiManagedProfile) => ConnectionRuntimeFactory<Runtime>;
 
 export type ConnectionProfileListItem = ReturnType<
   ConnectionManager<ConnectionRuntime>["status"]
 > &
-  PublicConnectionProfile;
+  TuiConnectionProfile & { read_only: boolean };
 
 type RetryTimer = ReturnType<Scheduler["schedule"]>;
 
@@ -209,7 +218,7 @@ export function testLocalConnectionProfile(
   );
 }
 
-export async function testConnectionProfile(profile: ManagedConnectionProfile) {
+export async function testConnectionProfile(profile: TuiManagedProfile) {
   if (profile.type === "local") return testLocalConnectionProfile(profile);
   const config = createSshProfileRuntimeConfig(profile);
   const tunnel = createSshTunnelManager({ config, runProcess });
@@ -226,6 +235,7 @@ export async function testConnectionProfile(profile: ManagedConnectionProfile) {
 
 export class ConnectionProfileService<
   Runtime extends ConnectionRuntime = ConnectionRuntime,
+  CoreRuntime extends ConnectionRuntime = ConnectionRuntime,
 > {
   private readonly profiles = new Map<
     string,
@@ -255,6 +265,7 @@ export class ConnectionProfileService<
       store: ConnectionProfileStore;
       bootstrap: ConnectionProfileBootstrap;
       createRuntime: ConnectionProfileRuntimeFactory<Runtime>;
+      core?: CoreConnectionSupport<CoreRuntime>;
       testProfile?: typeof testConnectionProfile;
       retry?: ConnectionRetryOptions;
       changed?(): void;
@@ -278,20 +289,89 @@ export class ConnectionProfileService<
     this.retrySchedule = args.retry?.schedule ?? systemScheduler.schedule;
     for (const registration of args.bootstrap.registrations) {
       this.profiles.set(registration.profile.id, registration);
-      args.manager.register({
-        identity: connectionIdentityForProfile(registration.profile),
-        createRuntime: args.createRuntime(registration.profile),
-      });
+      this.registerRuntime(registration.profile);
     }
   }
 
+  /** Herdr (TUI) connections: every existing consumer's catalogue. */
   list(): ConnectionProfileListItem[] {
     return this.args.manager.list().map((status) => {
       const entry = this.requireProfile(status.id);
       return {
         ...status,
-        ...publicConnectionProfile(entry.profile, entry.readOnly),
+        ...(publicConnectionProfile(
+          entry.profile,
+          entry.readOnly,
+        ) as TuiConnectionProfile & { read_only: boolean }),
       };
+    });
+  }
+
+  /** herdr-core connections with their observation, for the Connections page. */
+  coreList(): CoreConnectionListItem[] {
+    const core = this.args.core;
+    if (!core) return [];
+    return core.manager.list().map((status) => {
+      const entry = this.requireProfile(status.id);
+      return {
+        ...status,
+        ...(publicConnectionProfile(
+          entry.profile,
+          entry.readOnly,
+        ) as CoreConnectionProfile & { read_only: boolean }),
+        observation: core.observation?.(status.id) ?? null,
+      };
+    });
+  }
+
+  private core(): CoreConnectionSupport<CoreRuntime> {
+    if (!this.args.core)
+      throw new Error("herdr-core connections are not available");
+    return this.args.core;
+  }
+
+  private managerOf(connectionId: string): RoutedManager {
+    const entry = this.profiles.get(connectionId);
+    return entry && isCoreProfile(entry.profile)
+      ? this.core().manager
+      : this.args.manager;
+  }
+
+  private hasRuntime(connectionId: string): boolean {
+    return (
+      this.managerOf(connectionId).has(connectionId) ||
+      (this.args.core?.manager.has(connectionId) ?? false)
+    );
+  }
+
+  private registerRuntime(profile: ManagedConnectionProfile): void {
+    const identity = connectionIdentityForProfile(profile);
+    if (isCoreProfile(profile)) {
+      const core = this.core();
+      core.manager.register({
+        identity,
+        createRuntime: core.createRuntime(profile),
+      });
+    } else {
+      this.args.manager.register({
+        identity,
+        createRuntime: this.args.createRuntime(profile as TuiManagedProfile),
+      });
+    }
+  }
+
+  private replaceRuntime(profile: ConnectionProfile): Promise<void> {
+    const identity = connectionIdentityForProfile(profile);
+    if (isCoreProfile(profile)) {
+      const core = this.core();
+      return core.manager.replace({
+        identity,
+        createRuntime: core.createRuntime(profile),
+      });
+    }
+    return this.args.manager.replace({
+      identity,
+      createRuntime: this.args.createRuntime(profile),
     });
   }
 
@@ -307,13 +387,19 @@ export class ConnectionProfileService<
           error instanceof SshTunnelError &&
           error.retryable) ||
           (error instanceof ConnectionProbeError && error.retryable) ||
-          (entry.profile.type === "local" && retryableLocalSocketError(error))),
+          (isCoreProfile(entry.profile)
+            ? (error as { retryable?: unknown } | null)?.retryable === true ||
+              (entry.profile.type === "ssh" &&
+                error instanceof SshTunnelError &&
+                error.retryable)
+            : entry.profile.type === "local" &&
+              retryableLocalSocketError(error))),
     );
   }
 
   runtimeFailed(connectionId: string, error: unknown): void {
     this.scheduleRetry(connectionId, error);
-    void this.args.manager.retireFailedRuntime(connectionId);
+    void this.managerOf(connectionId).retireFailedRuntime(connectionId);
   }
 
   stopSupervision(): void {
@@ -335,11 +421,13 @@ export class ConnectionProfileService<
     );
   }
 
-  create(value: unknown): Promise<ConnectionProfileListItem> {
+  create(
+    value: unknown,
+  ): Promise<ConnectionProfileListItem | CoreConnectionListItem> {
     return this.mutate(async () => {
       this.requireWritableRegistryState();
       const profile = validateConnectionProfile(value);
-      if (this.profiles.has(profile.id) || this.args.manager.has(profile.id)) {
+      if (this.profiles.has(profile.id) || this.hasRuntime(profile.id)) {
         throw new Error(`connection already exists: ${profile.id}`);
       }
       const previousRegistry = this.registry;
@@ -351,6 +439,12 @@ export class ConnectionProfileService<
       const migrationSeed = migration
         ? this.localMigrationSeed(profile.id)
         : null;
+      // The default stays a Herdr connection: a first herdr-core profile
+      // keeps the local Herdr server as the default it already was.
+      const defaultId =
+        isCoreProfile(profile) && migration ? migrationSeed?.id : profile.id;
+      if (!defaultId)
+        throw new Error("add a Herdr connection before a herdr-core one");
       const nextRegistry: PersistedConnectionRegistry = previousRegistry
         ? {
             ...previousRegistry,
@@ -359,26 +453,20 @@ export class ConnectionProfileService<
           }
         : {
             version: CONNECTION_PROFILE_FILE_VERSION,
-            default_connection_id: profile.id,
+            default_connection_id: defaultId,
             profiles: migrationSeed ? [migrationSeed, profile] : [profile],
           };
       await this.args.store.save(nextRegistry);
       try {
-        if (migrationSeed) {
-          this.args.manager.register({
-            identity: connectionIdentityForProfile(migrationSeed),
-            createRuntime: this.args.createRuntime(migrationSeed),
-          });
-        }
-        this.args.manager.register({
-          identity: connectionIdentityForProfile(profile),
-          createRuntime: this.args.createRuntime(profile),
-        });
+        if (migrationSeed) this.registerRuntime(migrationSeed);
+        this.registerRuntime(profile);
       } catch (error) {
         try {
           if (migrationSeed && this.args.manager.has(migrationSeed.id)) {
             await this.args.manager.unregister(migrationSeed.id);
           }
+          if (isCoreProfile(profile) && this.args.core?.manager.has(profile.id))
+            await this.args.core.manager.unregister(profile.id);
           if (previousRegistry) await this.args.store.save(previousRegistry);
           else await this.args.store.clear();
         } catch (rollbackError) {
@@ -400,7 +488,7 @@ export class ConnectionProfileService<
       this.profiles.set(profile.id, { profile, readOnly: false });
       this.registry = nextRegistry;
       if (migration) {
-        this.args.manager.setDefault(profile.id);
+        this.args.manager.setDefault(defaultId);
         this.disableRetry(STARTUP_DEFAULT_CONNECTION_ID);
         await this.args.manager.unregister(STARTUP_DEFAULT_CONNECTION_ID);
         this.profiles.delete(STARTUP_DEFAULT_CONNECTION_ID);
@@ -425,7 +513,12 @@ export class ConnectionProfileService<
       (registration) =>
         registration.profile.id === STARTUP_DEFAULT_CONNECTION_ID,
     )?.profile;
-    if (!startupProfile || startupProfile.type !== "local") return null;
+    if (
+      !startupProfile ||
+      startupProfile.type !== "local" ||
+      isCoreProfile(startupProfile)
+    )
+      return null;
     return {
       id: newProfileId === "local" ? "localhost" : "local",
       label: "Local",
@@ -439,7 +532,7 @@ export class ConnectionProfileService<
   update(
     connectionId: unknown,
     value: unknown,
-  ): Promise<ConnectionProfileListItem> {
+  ): Promise<ConnectionProfileListItem | CoreConnectionListItem> {
     return this.mutate(async () => {
       this.requireWritableRegistryState();
       if (typeof connectionId !== "string")
@@ -449,8 +542,13 @@ export class ConnectionProfileService<
       if (replacement.id !== connectionId) {
         throw new Error("connection profile id cannot be changed");
       }
+      if (isCoreProfile(replacement) !== isCoreProfile(current))
+        throw new Error(
+          "a connection's runtime cannot be changed; add another connection",
+        );
       const registry = this.requireRegistry();
-      const previousState = this.args.manager.status(connectionId).state;
+      const previousState =
+        this.managerOf(connectionId).status(connectionId).state;
       const wasReady = previousState === "ready";
       const shouldRemainConnected =
         wasReady ||
@@ -468,10 +566,7 @@ export class ConnectionProfileService<
       await this.args.store.save(nextRegistry);
       this.disableRetry(connectionId);
       try {
-        await this.args.manager.replace({
-          identity: connectionIdentityForProfile(replacement),
-          createRuntime: this.args.createRuntime(replacement),
-        });
+        await this.replaceRuntime(replacement);
         this.profiles.set(connectionId, {
           profile: replacement,
           readOnly: false,
@@ -502,10 +597,7 @@ export class ConnectionProfileService<
           });
           this.registry = registry;
           try {
-            await this.args.manager.replace({
-              identity: connectionIdentityForProfile(current),
-              createRuntime: this.args.createRuntime(current),
-            });
+            await this.replaceRuntime(current);
             if (shouldRemainConnected) {
               await this.startManaged(connectionId, true);
             }
@@ -522,7 +614,7 @@ export class ConnectionProfileService<
           });
           this.registry = nextRegistry;
           try {
-            await this.args.manager.stop(connectionId);
+            await this.managerOf(connectionId).stop(connectionId);
           } catch (rollbackError) {
             rollbackFailures.push(rollbackError);
           }
@@ -564,7 +656,8 @@ export class ConnectionProfileService<
       if (!nextRegistry && !this.args.bootstrap.explicitStartupOverride) {
         throw new Error("cannot remove the last persisted connection");
       }
-      const previousState = this.args.manager.status(connectionId).state;
+      const previousState =
+        this.managerOf(connectionId).status(connectionId).state;
       const shouldRecoverConnection =
         previousState === "ready" ||
         previousState === "connecting" ||
@@ -575,17 +668,14 @@ export class ConnectionProfileService<
       // registry still describes the old profile and we can safely restore its
       // factory without ever exposing a profile that disk says was removed.
       this.disableRetry(connectionId);
-      await this.args.manager.unregister(connectionId);
+      await this.managerOf(connectionId).unregister(connectionId);
       try {
         if (nextRegistry) await this.args.store.save(nextRegistry);
         else await this.args.store.clear();
       } catch (error) {
         const recoveryFailures: unknown[] = [];
         try {
-          this.args.manager.register({
-            identity: connectionIdentityForProfile(current),
-            createRuntime: this.args.createRuntime(current),
-          });
+          this.registerRuntime(current);
           if (shouldRecoverConnection) {
             await this.startManaged(connectionId, true);
           }
@@ -619,7 +709,8 @@ export class ConnectionProfileService<
           "explicit CLI/environment connection remains the process default",
         );
       }
-      this.requireWritableProfile(connectionId);
+      if (isCoreProfile(this.requireWritableProfile(connectionId)))
+        throw new Error("the default connection must be a Herdr connection");
       const registry = this.requireRegistry();
       const nextRegistry: PersistedConnectionRegistry = {
         ...registry,
@@ -647,7 +738,9 @@ export class ConnectionProfileService<
     });
   }
 
-  connect(connectionId: unknown): Promise<ConnectionProfileListItem> {
+  connect(
+    connectionId: unknown,
+  ): Promise<ConnectionProfileListItem | CoreConnectionListItem> {
     return this.mutate(async () => {
       if (typeof connectionId !== "string")
         throw new Error("connection id is required");
@@ -657,13 +750,15 @@ export class ConnectionProfileService<
     });
   }
 
-  disconnect(connectionId: unknown): Promise<ConnectionProfileListItem> {
+  disconnect(
+    connectionId: unknown,
+  ): Promise<ConnectionProfileListItem | CoreConnectionListItem> {
     return this.mutate(async () => {
       if (typeof connectionId !== "string")
         throw new Error("connection id is required");
       this.requireProfile(connectionId);
       this.disableRetry(connectionId);
-      await this.args.manager.stop(connectionId);
+      await this.managerOf(connectionId).stop(connectionId);
       return this.item(connectionId);
     });
   }
@@ -682,6 +777,11 @@ export class ConnectionProfileService<
       profile = this.requireProfile((value as { id: string }).id).profile;
     } else {
       profile = validateConnectionProfile(value);
+    }
+    if (isCoreProfile(profile)) {
+      const test = this.core().test;
+      if (!test) throw new Error("herdr-core connections cannot be tested");
+      return test(profile);
     }
     return (this.args.testProfile ?? testConnectionProfile)(profile);
   }
@@ -747,10 +847,10 @@ export class ConnectionProfileService<
     }
     const token = this.retryStates.get(connectionId)?.token;
     const generationBeforeStart =
-      this.args.manager.status(connectionId).generation;
+      this.managerOf(connectionId).status(connectionId).generation;
     try {
-      await this.args.manager.start(connectionId);
-      if (this.args.manager.status(connectionId).state === "ready") {
+      await this.managerOf(connectionId).start(connectionId);
+      if (this.managerOf(connectionId).status(connectionId).state === "ready") {
         this.markStable(connectionId);
       }
     } catch (error) {
@@ -758,14 +858,14 @@ export class ConnectionProfileService<
       // startup settles. Its old continuation must not schedule new work.
       if (
         this.retryStates.get(connectionId)?.token !== token ||
-        !this.args.manager.has(connectionId)
+        !this.managerOf(connectionId).has(connectionId)
       )
         throw error;
       // A transport can report its own exit while startup is still awaiting a
       // functional socket probe. That callback advances the generation and
       // marks reconnecting before it queues a retry. Use that durable manager
       // state rather than timer timing to avoid consuming a second attempt.
-      const status = this.args.manager.status(connectionId);
+      const status = this.managerOf(connectionId).status(connectionId);
       const transportAlreadyReported =
         status.state === "reconnecting" &&
         status.generation > generationBeforeStart;
@@ -781,7 +881,8 @@ export class ConnectionProfileService<
     state.stableTimer?.cancel();
     state.retryTimer = null;
     state.stableTimer = null;
-    if (!this.args.manager.markReconnecting(connectionId, error)) return false;
+    if (!this.managerOf(connectionId).markReconnecting(connectionId, error))
+      return false;
 
     const windowMs = Math.min(
       this.retryMaxDelayMs,
@@ -791,7 +892,8 @@ export class ConnectionProfileService<
     const delayMs = Math.floor(windowMs / 2 + random * (windowMs / 2));
     state.attempt += 1;
     const token = state.token;
-    const generation = this.args.manager.status(connectionId).generation;
+    const generation =
+      this.managerOf(connectionId).status(connectionId).generation;
     state.retryTimer = this.retrySchedule(() => {
       if (!this.retryCurrent(connectionId, state, token, generation)) return;
       state.retryTimer = null;
@@ -810,7 +912,7 @@ export class ConnectionProfileService<
       // A timer may fire before the failed runtime has finished cleanup. Wait
       // here, then re-check the retry token, instead of queueing an
       // uncancellable manager.start() behind stopTask.
-      await this.args.manager.retireFailedRuntime(connectionId);
+      await this.managerOf(connectionId).retireFailedRuntime(connectionId);
     } catch (cleanupError) {
       if (this.retryCurrent(connectionId, state, token, generation)) {
         this.scheduleRetry(connectionId, cleanupError);
@@ -832,19 +934,26 @@ export class ConnectionProfileService<
     return (
       state.enabled &&
       state.token === token &&
-      this.args.manager.has(connectionId) &&
-      this.args.manager.status(connectionId).generation === generation &&
-      this.args.manager.status(connectionId).state === "reconnecting"
+      this.managerOf(connectionId).has(connectionId) &&
+      this.managerOf(connectionId).status(connectionId).generation ===
+        generation &&
+      this.managerOf(connectionId).status(connectionId).state === "reconnecting"
     );
   }
 
-  private item(connectionId: string): ConnectionProfileListItem {
-    const status = this.args.manager.status(connectionId);
+  private item(
+    connectionId: string,
+  ): ConnectionProfileListItem | CoreConnectionListItem {
+    const status = this.managerOf(connectionId).status(connectionId);
     const entry = this.requireProfile(connectionId);
-    return {
-      ...status,
-      ...publicConnectionProfile(entry.profile, entry.readOnly),
-    };
+    const profile = publicConnectionProfile(entry.profile, entry.readOnly);
+    if (isCoreProfile(profile))
+      return {
+        ...status,
+        ...profile,
+        observation: this.args.core?.observation?.(connectionId) ?? null,
+      };
+    return { ...status, ...profile };
   }
 
   private requireProfile(connectionId: string) {
