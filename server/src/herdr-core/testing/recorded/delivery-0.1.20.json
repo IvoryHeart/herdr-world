@@ -34,6 +34,26 @@
         "status": "blocked",
         "turn": 0
       }
+    },
+    {
+      "method": "brief-blocked",
+      "request": "AAAAAAB5AAAAeyJqc29ucnBjIjoiMi4wIiwiaWQiOjQsIm1ldGhvZCI6InRlcm1pbmFsLnNlbmQiLCJwYXJhbXMiOnsidGVybWluYWwiOiJ0MSIsInRleHQiOiJjYWbDqSDinJMiLCJmb3JjZSI6ZmFsc2UsImlmIjoiaWRsZSJ9fQ==",
+      "response": [
+        "AAAAAADGAAAAeyJlcnJvciI6eyJjb2RlIjotMzIwMDAsImRhdGEiOnsiaGludCI6InR5cGluZyB3b3VsZCBhbnN3ZXIgaXRzIGRpYWxvZzsgcmVhZCBpdHMgc2NyZWVuIGZpcnN0IChoYyByZWFkIHQxKSwgb3IgLS1mb3JjZSIsImtpbmQiOiJibG9ja2VkIn0sIm1lc3NhZ2UiOiJ0MSBpcyBibG9ja2VkICh3YWl0aW5nKSJ9LCJpZCI6NCwianNvbnJwYyI6IjIuMCJ9"
+      ],
+      "outcome": {
+        "refused": "blocked"
+      }
+    },
+    {
+      "method": "brief-unknown",
+      "request": "AAAAAAB5AAAAeyJqc29ucnBjIjoiMi4wIiwiaWQiOjUsIm1ldGhvZCI6InRlcm1pbmFsLnNlbmQiLCJwYXJhbXMiOnsidGVybWluYWwiOiJ0MiIsInRleHQiOiJjYWbDqSDinJMiLCJmb3JjZSI6ZmFsc2UsImlmIjoiaWRsZSJ9fQ==",
+      "response": [
+        "AAAAAACQAAAAeyJlcnJvciI6eyJjb2RlIjotMzIwMDAsImRhdGEiOnsiaGludCI6Im5vdGhpbmcgd2FzIHR5cGVkIiwia2luZCI6InN0YXR1c19taXNtYXRjaCJ9LCJtZXNzYWdlIjoidDIgaXMgc2lsZW50LCBub3QgaWRsZSJ9LCJpZCI6NSwianNvbnJwYyI6IjIuMCJ9"
+      ],
+      "outcome": {
+        "refused": "status_mismatch"
+      }
     }
   ]
 }

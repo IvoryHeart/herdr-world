@@ -69,6 +69,8 @@ export type FakeViewerFrame = {
 };
 
 export type FakeCoreOptions = {
+  /** Synthetic harness status already reported when a run is observed. */
+  runStatus?: string;
   coreId?: string;
   name?: string;
   version?: string;
@@ -147,6 +149,7 @@ export class FakeCore {
     address: string;
     text: string;
     force: boolean;
+    onlyIfIdle: boolean;
     reply(result: unknown): void;
     error(code: number, message: string, kind: string): void;
   }> = [];
@@ -380,6 +383,7 @@ export class FakeCore {
     address: string;
     text: string;
     force: boolean;
+    onlyIfIdle: boolean;
     reply(result: unknown): void;
     error(code: number, message: string, kind: string): void;
   }) {
@@ -396,6 +400,12 @@ export class FakeCore {
     const word = (record.status as { state?: unknown } | null)?.state ?? null;
     if (word === "blocked" && !held.force)
       return held.error(-32000, `${held.address} is blocked`, "blocked");
+    if (held.onlyIfIdle && word !== "idle")
+      return held.error(
+        -32000,
+        `${held.address} is not idle`,
+        "status_mismatch",
+      );
     this.deliveredInput.push({
       address: held.address,
       input: held.text,
@@ -458,6 +468,11 @@ export class FakeCore {
     if (foreground) record.foreground = foreground;
     else delete record.foreground;
     this.emit("foreground", address, foreground);
+  }
+
+  title(address: string, title: string): void {
+    this.require(address).title = title;
+    this.emit("title", address, { title });
   }
 
   /** A kept terminal whose program is lost gets a shell at the same address. */
@@ -1077,6 +1092,12 @@ export class FakeCore {
           die_with_parent: parent !== null && p.outlive_parent !== true,
           notify: p.no_notify !== true,
           pid,
+          ...(this.options.runStatus
+            ? {
+                reported: true,
+                status: { state: this.options.runStatus },
+              }
+            : {}),
           foreground: {
             pid,
             name: program.split("/").pop() ?? "sh",
@@ -1115,7 +1136,7 @@ export class FakeCore {
         if (
           p.caller !== undefined ||
           (p.wait !== undefined && p.wait !== false) ||
-          p.if !== undefined ||
+          (p.if !== undefined && p.if !== "idle") ||
           typeof p.text !== "string" ||
           typeof p.force !== "boolean"
         )
@@ -1130,6 +1151,7 @@ export class FakeCore {
           address: String(p.terminal),
           text: p.text,
           force: p.force,
+          onlyIfIdle: p.if === "idle",
           reply: (result: unknown) => {
             if (this.dropNextWriteReply) {
               this.dropNextWriteReply = false;

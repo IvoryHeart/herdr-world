@@ -76,7 +76,7 @@ the queued-send replacement window belongs to core (Q3), not World's pre-send ch
 #### Scenario: Every supported harness
 
 - **WHEN** a user sends a message, answer or ask to any supported harness,
-  including Aider, OpenCode or Gemini
+  including Pi, OpenCode or Gemini
 - **THEN** World checks occupant and foreground immediately before using core
   send/keys, without requiring a Claude/Codex-specific delivery channel
 
@@ -274,3 +274,48 @@ popups and verify Windows named-pipe/key behavior on a real owner test host.
 - **THEN** the paint is held until the reply naming the stream is sent, and
   World returns core's stream window only as the browser drains, so a slow
   browser holds core's stream instead of World buffering it
+
+### Requirement: Every supported harness and shared transcript readers
+
+World SHALL offer a core launch kind for every harness in Herdr's integration
+registry, detection manifest, desktop program list and World's profiles. World
+SHALL read status only from core records, showing unknown without a report,
+without running TUI screen inference or status-writing integrations for core.
+Generic profile briefs SHALL use the same native delivery path as Chat after
+core has observed the original program's foreground, with native `if: "idle"`
+so core checks readiness after its queue/startup/draft waits, before typing.
+Unknown, blocked or other non-idle status SHALL NOT receive an automatic brief.
+Startup timeout or native refusal SHALL leave the program running with an
+explicit unsent-brief notice. Uncertain brief delivery SHALL retain the started
+terminal's identity and distinguish it from an uncertain launch.
+
+#### Scenario: Unreported startup trust prompt
+
+- **WHEN** a generic harness opens a folder-trust dialog without reporting status
+- **THEN** core refuses the automatic brief without pasting text or Enter;
+  World reports it started and offers Chat for explicit delivery
+
+#### Scenario: Readiness changes during a queued brief
+
+- **WHEN** core holds a brief for startup or a person's unfinished draft and
+  the status becomes unknown, blocked or working
+- **THEN** core's idle condition refuses it before any text or Enter is typed
+
+#### Scenario: Harness with a different executable name
+
+- **WHEN** a profile names Cursor, Antigravity or Kiro
+- **THEN** World resolves cursor-agent, agy or kiro-cli on that host before launch
+
+#### Scenario: Reading a core conversation
+
+- **WHEN** a supported TUI transcript reader can resolve a native session or an
+  explicit reading link on the core host
+- **THEN** core Chat uses that same reader, checks the original lease, occupant
+  and foreground before and after reading, and discards a changed title or session
+
+#### Scenario: Transcript unavailable or linked only for reading
+
+- **WHEN** the harness/platform has no reader or a link selects another transcript
+- **THEN** World explains the reading limitation and retains native send/keys
+  bound to the originally opened recipient; transcript evidence grants no input
+  authority and never changes core status

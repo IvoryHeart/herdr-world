@@ -59,7 +59,12 @@ function screen(program: string, lines: string[]) {
  * finishes soon after World connects, one harness with no status
  * integration, and a plain shell. Returns the agents the fixture drives.
  */
-function populate(fake: FakeCore, cwd: string, alphabet: boolean) {
+function populate(
+  fake: FakeCore,
+  cwd: string,
+  root: string,
+  alphabet: boolean,
+) {
   if (alphabet) {
     // Allocate through the native boundary, keeping t19 beside reviewer at
     // t1b. Removed earlier shells consumed IDs, exactly as they do in core.
@@ -73,24 +78,60 @@ function populate(fake: FakeCore, cwd: string, alphabet: boolean) {
     "herdr.tab": tab,
     where,
   });
-  const agent = (name: string, program: string, labels = {}) =>
+  const agent = (
+    name: string,
+    program: string,
+    labels = {},
+    args: string[] = [],
+  ) =>
     fake.create({
       name,
-      argv: [program],
+      argv: [program, ...args],
       keep: true,
       cwd,
       labels,
       foreground: {
         pid: 1,
         name: program,
-        argv: [program],
+        argv: [program, ...args],
         cwd,
       },
     });
+  const transcript = join(root, "reviewer.jsonl");
+  writeFileSync(
+    transcript,
+    [
+      {
+        type: "user",
+        uuid: "u1",
+        parentUuid: null,
+        timestamp: "2026-11-11T09:00:00Z",
+        message: { role: "user", content: "Review the merge plan." },
+      },
+      {
+        type: "assistant",
+        uuid: "a1",
+        parentUuid: "u1",
+        timestamp: "2026-11-11T09:01:00Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "The tests pass. Which branch should I merge into?",
+            },
+          ],
+        },
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join("\n") + "\n",
+  );
   const reviewer = agent(
     "reviewer",
     "claude",
     space("fx-review", "web / review"),
+    ["--resume", transcript],
   );
   fake.output(
     reviewer,
@@ -323,7 +364,7 @@ export function createCoreFixture(
         }
         paneStep = 0;
         scenario = value;
-        agents = populate(fake, repo, scenario === "alphabet");
+        agents = populate(fake, repo, root, scenario === "alphabet");
         scout = agents.scout;
         fake.onTyped = () => {
           if (fake && agents)

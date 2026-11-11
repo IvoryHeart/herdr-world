@@ -369,6 +369,24 @@ export const rpcVerbs = [
       }),
     }),
   ),
+  // A transcript reading choice, never input or a session-authority update.
+  rpc(
+    "world.core.history",
+    "read",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminal: text,
+      recipient: text,
+      session: Type.Optional(
+        object({
+          kind: Type.Union([Type.Literal("id"), Type.Literal("path")]),
+          value: Type.String({ minLength: 1, maxLength: 4096 }),
+        }),
+      ),
+    }),
+  ),
   // The screen only (`lines: 0`, no caller): a waiting agent's question.
   rpc(
     "world.core.screen",

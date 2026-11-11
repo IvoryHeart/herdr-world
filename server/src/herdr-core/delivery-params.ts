@@ -27,13 +27,23 @@ export const MAX_CORE_SEND_TEXT = 16_000;
 const ANSWER_KEY =
   /^(?:[a-z0-9]|enter|esc|tab|space|backspace|up|down|left|right)$/;
 
-/** Fresh native `terminal.send` parameters: no caller, wait or condition. */
-export function coreSendParams(address: string, text: string, force: boolean) {
+/** Fresh native parameters; automatic briefs require core's idle condition. */
+export function coreSendParams(
+  address: string,
+  text: string,
+  force: boolean,
+  onlyIfIdle = false,
+) {
   if (typeof text !== "string" || !text.trim())
     throw new CoreProtocolError("there is nothing to send");
   if (text.length > MAX_CORE_SEND_TEXT || text.includes("\0"))
     throw new CoreProtocolError("the message is too long or invalid");
-  return { terminal: localAddress(address), text, force: force === true };
+  return {
+    terminal: localAddress(address),
+    text,
+    force: force === true,
+    ...(onlyIfIdle ? { if: "idle" as const } : {}),
+  };
 }
 
 /** Fresh native `terminal.keys` parameters from World's answer keys. */
@@ -67,11 +77,16 @@ export function coreCancelFrame(id: number) {
 export function coreSendRequest(
   address: string,
   text: string,
-  options: { force: boolean; cancel?: AbortSignal; timeoutMs?: number },
+  options: {
+    force: boolean;
+    onlyIfIdle?: boolean;
+    cancel?: AbortSignal;
+    timeoutMs?: number;
+  },
 ) {
   return [
     "terminal.send",
-    coreSendParams(address, text, options.force),
+    coreSendParams(address, text, options.force, options.onlyIfIdle),
     options.timeoutMs ?? 90000,
     options.cancel,
   ] as const;

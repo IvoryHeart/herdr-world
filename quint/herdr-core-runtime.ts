@@ -193,6 +193,21 @@ export class CoreProtocolFake {
         : {}),
     };
   }
+  private recipientCurrent() {
+    const s = this.state;
+    const record = (occupant: number, foreground: boolean) => ({
+      ...this.record(0, { ...s.source[0]!, occupant }),
+      remote: false,
+      foreground: foreground ? { pid: 101, name: "agent" } : null,
+    });
+    return (
+      this.subjects.coreRecipientChange(
+        this.subjects.coreRecipientToken("core", record(s.session, true))!,
+        "core",
+        record(s.source[0]!.occupant, s.foreground),
+      ) === null
+    );
+  }
   private snapshot() {
     return this.state.source.flatMap((t, index) =>
       t.alive ? [this.record(index, t)] : [],
@@ -427,21 +442,8 @@ export class CoreProtocolFake {
       case "dispatch": {
         assert(s.captured && s.attempts === 0);
         // Drive the production recipient comparison as well as the original lease.
-        const original = {
-          ...this.record(0, { ...s.source[0]!, occupant: s.session }),
-          remote: false,
-          foreground: { pid: 101, name: "agent" },
-        };
-        const token = this.subjects.coreRecipientToken("core", original)!;
-        const current = {
-          ...this.record(0, s.source[0]!),
-          remote: false,
-          foreground: s.foreground ? { pid: 101, name: "agent" } : null,
-        };
         const allowed =
-          this.lease() &&
-          this.occupant() &&
-          this.subjects.coreRecipientChange(token, "core", current) === null;
+          this.lease() && this.occupant() && this.recipientCurrent();
         s.attempts = allowed ? 1 : 0;
         s.pending = allowed;
         s.queued = allowed;
@@ -453,12 +455,28 @@ export class CoreProtocolFake {
         s.queued = false;
         if (this.skipGate || this.occupant()) s.delivered++;
         break;
-      case "complete":
+      case "launchBrief": {
+        assert(s.queued);
+        // Drive World's parameter builder; the source-side idle comparison
+        // is a core-owned seam, checked against input.rs and the live suite.
+        const params = this.subjects.coreSendParams("t1", "Brief", false, true);
+        const status = target === 1 ? "idle" : null;
+        s.queued = false;
+        if (
+          (this.skipGate || this.occupant()) &&
+          (!params.if || params.if === status)
+        )
+          s.delivered++;
+        break;
+      }
+      case "complete": {
         assert(s.pending);
         s.pending = false;
-        s.published = this.lease() && this.occupant();
+        s.published =
+          this.lease() && this.occupant() && this.recipientCurrent();
         s.uncertain ||= !s.published;
         break;
+      }
       case "recover":
         assert(s.uncertain && s.ready);
         break;
@@ -580,6 +598,7 @@ export function validateCoreTrace(
         "loseForeground",
         "dispatch",
         "deliver",
+        "launchBrief",
         "complete",
         "recover",
         "plan",

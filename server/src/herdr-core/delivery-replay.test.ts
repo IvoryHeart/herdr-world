@@ -41,6 +41,18 @@ for (const split of [1, 7, 65536])
       expect(recording.steps[2]!.outcome).toEqual(
         await client.keys("t1", ["enter"]),
       );
+      for (const [index, address, kind] of [
+        [3, "t1", "blocked"],
+        [4, "t2", "status_mismatch"],
+      ] as const) {
+        expect(recording.steps[index]!.outcome).toEqual({ refused: kind });
+        await expect(
+          client.sendText(address, "café ✓", {
+            force: false,
+            onlyIfIdle: true,
+          }),
+        ).rejects.toMatchObject({ kind });
+      }
     } finally {
       client.close();
     }
