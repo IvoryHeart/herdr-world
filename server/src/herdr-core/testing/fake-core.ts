@@ -59,6 +59,7 @@ export class FakeCore {
   private readonly subscribers: Subscriber[] = [];
   private listener: { stop(closeActive?: boolean): void } | null = null;
   private running = false;
+  private heldReads: Array<() => void> | null = null;
   /** Calls received on channel 0, for assertions about what World sends. */
   readonly calls: Array<{ method: string; params: unknown }> = [];
 
@@ -260,6 +261,16 @@ export class FakeCore {
       records: {},
       reported: record.reported,
     });
+  }
+
+  /** Holds `terminal.read` replies until the returned release sends them. */
+  holdReads(): () => void {
+    const held: Array<() => void> = [];
+    this.heldReads = held;
+    return () => {
+      if (this.heldReads === held) this.heldReads = null;
+      for (const send of held.splice(0)) send();
+    };
   }
 
   /** A kept terminal whose program is lost gets a shell at the same address. */
@@ -520,7 +531,10 @@ export class FakeCore {
       case "terminal.read": {
         const record = this.terminals.get(String(request.params?.terminal));
         if (!record) return error(-32000, "no terminal", "not_found");
-        return reply({ complete: true, how: "screen", text: "$" });
+        const send = () => reply({ complete: true, how: "screen", text: "$" });
+        if (this.heldReads) this.heldReads.push(send);
+        else send();
+        return;
       }
       default:
         return error(-32601, `method not found: ${request.method}`, "usage");

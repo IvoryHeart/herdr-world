@@ -1,13 +1,20 @@
-import { chmodSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { FakeCore } from "./testing/fake-core";
 
 /** The connection the fixture adds; its runtime kind is herdr-core. */
 export const CORE_FIXTURE_CONNECTION_ID = "core-fixture";
 
+const ROOT_PREFIX = "hcw-fixture-";
+
 type Profiles = {
-  coreList(): Array<{ id: string; state: string }>;
+  coreList(): Array<{
+    id: string;
+    state: string;
+    type: string;
+    core_state_dir: string;
+  }>;
   create(value: unknown): Promise<unknown>;
   connect(id: unknown): Promise<unknown>;
   remove(id: unknown): Promise<unknown>;
@@ -29,6 +36,31 @@ export function createCoreFixture(profiles: () => Profiles) {
   let fake: FakeCore | null = null;
   let root: string | null = null;
   let socket: string | null = null;
+  const stateDir = () => (root ? join(root, "state") : null);
+  /**
+   * Whether a profile under the fixture's ID is the fixture's own: a local
+   * core profile at this fixture's private directory, or one an earlier run
+   * left at a fixture directory that no longer exists. Anything else under
+   * that ID belongs to the user and is never adopted or removed.
+   */
+  const ownership = (
+    profile: ReturnType<Profiles["coreList"]>[number] | undefined,
+  ): "none" | "current" | "leftover" | "foreign" => {
+    if (!profile) return "none";
+    if (profile.type !== "local") return "foreign";
+    const dir = profile.core_state_dir;
+    if (dir && dir === stateDir()) return "current";
+    const parent = dirname(dir);
+    return dir &&
+      basename(dir) === "state" &&
+      dirname(parent) === tmpdir() &&
+      basename(parent).startsWith(ROOT_PREFIX) &&
+      !existsSync(parent)
+      ? "leftover"
+      : "foreign";
+  };
+  const fixtureProfile = (service: Profiles) =>
+    service.coreList().find((item) => item.id === CORE_FIXTURE_CONNECTION_ID);
   const status = (): CoreFixtureStatus => ({
     running: fake?.isRunning ?? false,
     connection_id: CORE_FIXTURE_CONNECTION_ID,
@@ -41,9 +73,16 @@ export function createCoreFixture(profiles: () => Profiles) {
   return {
     status,
     async start(): Promise<CoreFixtureStatus> {
+      const service = profiles();
+      const existing = fixtureProfile(service);
+      const owner = ownership(existing);
+      if (owner === "foreign")
+        throw new Error(
+          `the connection with ID ${CORE_FIXTURE_CONNECTION_ID} is not the fixture's; remove it or use another ID first`,
+        );
       if (!fake || !root) {
         // Short: Unix socket paths are limited to about 100 bytes.
-        root = mkdtempSync(join(tmpdir(), "hcw-fixture-"));
+        root = mkdtempSync(join(tmpdir(), ROOT_PREFIX));
         chmodSync(root, 0o700);
         fake = new FakeCore({ name: "fixture-host" });
         fake.revive();
@@ -60,11 +99,10 @@ export function createCoreFixture(profiles: () => Profiles) {
         fake.revive();
       }
       socket ??= await fake.listen(join(root, "state"), join(root, "run"));
-      const service = profiles();
-      const existing = service
-        .coreList()
-        .find((item) => item.id === CORE_FIXTURE_CONNECTION_ID);
-      if (!existing)
+      // An earlier run's profile at a directory that is gone: replace it.
+      if (owner === "leftover")
+        await service.remove(CORE_FIXTURE_CONNECTION_ID);
+      if (owner !== "current")
         await service.create({
           id: CORE_FIXTURE_CONNECTION_ID,
           label: "Fixture core",
@@ -74,7 +112,7 @@ export function createCoreFixture(profiles: () => Profiles) {
           core_state_dir: join(root, "state"),
           auto_connect: true,
         });
-      else if (["disconnected", "error"].includes(existing.state))
+      else if (["disconnected", "error"].includes(existing?.state ?? ""))
         await service.connect(CORE_FIXTURE_CONNECTION_ID);
       return status();
     },
@@ -86,12 +124,18 @@ export function createCoreFixture(profiles: () => Profiles) {
     async remove(): Promise<CoreFixtureStatus> {
       stop();
       const service = profiles();
-      if (service.coreList().some((c) => c.id === CORE_FIXTURE_CONNECTION_ID))
+      const existing = fixtureProfile(service);
+      const owner = ownership(existing);
+      if (existing && owner !== "foreign")
         await service.remove(CORE_FIXTURE_CONNECTION_ID);
       if (root) rmSync(root, { recursive: true, force: true });
       fake = null;
       root = null;
       socket = null;
+      if (owner === "foreign")
+        throw new Error(
+          `the connection with ID ${CORE_FIXTURE_CONNECTION_ID} is not the fixture's; it was left in place`,
+        );
       return status();
     },
     dispose(): void {

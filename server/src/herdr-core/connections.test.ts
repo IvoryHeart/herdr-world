@@ -23,8 +23,9 @@ import { ConnectionProfileStore } from "../connections/profiles";
 import { silentLogger } from "../utils/logger";
 import { createCoreConnections } from "./connections";
 import { CoreFenceError, CoreOperationFence } from "./fence";
-import { createCoreFixture } from "./fixture";
+import { CORE_FIXTURE_CONNECTION_ID, createCoreFixture } from "./fixture";
 import type { CoreObservation } from "./observations";
+import { readCoreScreen } from "./runtime";
 import { localCoreTransport } from "./transport";
 import { FakeCore } from "./testing/fake-core";
 
@@ -229,6 +230,61 @@ describe("herdr-core connections", () => {
     expect(() => fresh.check("dispatch")).toThrow("lease");
   });
 
+  test("a screen read whose occupant is replaced before its reply is refused at publication", async () => {
+    const w = world();
+    const { fake, stateDir, socket } = await servedCore(w.root);
+    const t1 = fake.create({
+      argv: ["claude"],
+      reported: true,
+      foreground: { pid: 7, name: "claude", argv: ["claude"], cwd: "/tmp" },
+    });
+    await w.service.create(coreProfile("r", stateDir));
+    const lease = w.core.manager.readyRuntimeLease("r")!;
+    expect(await readCoreScreen(lease, t1)).toMatchObject({ how: "screen" });
+    const reads = () =>
+      fake.calls.filter((c) => c.method === "terminal.read").length;
+    const release = fake.holdReads();
+    const pending = readCoreScreen(lease, t1);
+    pending.catch(() => {});
+    await until(() => reads() === 2);
+    const pid = lease.runtime.core.terminal(t1)?.pid;
+    fake.replaceWithShell(t1);
+    await until(() => lease.runtime.core.terminal(t1)?.pid !== pid);
+    release();
+    await expect(pending).rejects.toMatchObject({
+      stage: "publication",
+      reason: "occupant-replaced",
+    });
+    expect(fake.calls.at(-1)?.params).toMatchObject({ terminal: t1, lines: 0 });
+    // The new occupant is a new admission; a lapsed lease admits nothing.
+    expect(await readCoreScreen(lease, t1)).toMatchObject({ how: "screen" });
+    fake.kill(socket);
+    await until(() => !lease.isCurrent());
+    await expect(readCoreScreen(lease, t1)).rejects.toMatchObject({
+      stage: "admission",
+      reason: "lease",
+    });
+    expect(reads()).toBe(3);
+  });
+
+  test("a fence never dispatches through another runtime", async () => {
+    const w = world();
+    const { fake, stateDir } = await servedCore(w.root);
+    const t1 = fake.create({ argv: ["claude"] });
+    await w.service.create(coreProfile("a", stateDir));
+    await w.service.create(coreProfile("b", stateDir));
+    const fromA = CoreOperationFence.admit(
+      w.core.manager.readyRuntimeLease("a")!,
+      t1,
+    );
+    const b = w.core.manager.readyRuntimeLease("b")!;
+    await expect(b.runtime.readScreen(fromA)).rejects.toMatchObject({
+      stage: "dispatch",
+      reason: "lease",
+    });
+    expect(fake.calls.some((c) => c.method === "terminal.read")).toBe(false);
+  });
+
   test("profile A's delayed work never dispatches through profile B on the same core", async () => {
     const w = world();
     const { fake, stateDir } = await servedCore(w.root);
@@ -302,6 +358,50 @@ describe("herdr-core connections", () => {
     expect(
       observed(w, "core-fixture")!.terminals.map((t) => [t.address, t.name]),
     ).toEqual(first.terminals.map((t) => [t.address, t.name]));
+    await fixture.remove();
+    expect(w.service.coreList()).toEqual([]);
+  });
+
+  test("the fixture never adopts or removes a profile it does not own", async () => {
+    const w = world();
+    const { stateDir } = await servedCore(w.root);
+    const mine = coreProfile(CORE_FIXTURE_CONNECTION_ID, stateDir);
+    await w.service.create({ ...mine, label: "Existing user core" });
+    const fixture = createCoreFixture(() => w.service);
+    // Remove without ever starting, then start: both refuse to touch it.
+    await expect(fixture.remove()).rejects.toThrow("left in place");
+    await expect(fixture.start()).rejects.toThrow("is not the fixture's");
+    expect(fixture.status().running).toBe(false);
+    await expect(fixture.remove()).rejects.toThrow("left in place");
+    const kept = w.service.coreList();
+    expect(kept.map((c) => [c.id, c.label, c.core_state_dir])).toEqual([
+      [CORE_FIXTURE_CONNECTION_ID, "Existing user core", stateDir],
+    ]);
+    const saved = JSON.parse(
+      readFileSync(join(w.root, "data", "connections.json"), "utf8"),
+    );
+    expect(
+      saved.profiles.find(
+        (p: { id: string }) => p.id === CORE_FIXTURE_CONNECTION_ID,
+      )?.label,
+    ).toBe("Existing user core");
+  });
+
+  test("the fixture replaces only its own leftover from an earlier run", async () => {
+    const w = world();
+    const earlier = createCoreFixture(() => w.service);
+    await earlier.start();
+    const leftDir = w.service.coreList()[0]!.core_state_dir;
+    // An earlier World stopped without removing the fixture's profile.
+    earlier.dispose();
+    const fixture = createCoreFixture(() => w.service);
+    await fixture.start();
+    await until(
+      () => w.core.manager.status(CORE_FIXTURE_CONNECTION_ID).state === "ready",
+    );
+    const now = w.service.coreList();
+    expect(now).toHaveLength(1);
+    expect(now[0]!.core_state_dir).not.toBe(leftDir);
     await fixture.remove();
     expect(w.service.coreList()).toEqual([]);
   });

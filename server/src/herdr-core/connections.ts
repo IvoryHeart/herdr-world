@@ -25,7 +25,12 @@ export type CoreConnections = {
 type CoreSupervisor = {
   willRetry(connectionId: string, error: unknown): boolean;
   runtimeFailed(connectionId: string, error: unknown): void;
-  coreList(): Array<{ id: string; state: string }>;
+  coreList(): Array<{
+    id: string;
+    state: string;
+    type: string;
+    core_state_dir: string;
+  }>;
   create(value: unknown): Promise<unknown>;
   connect(connectionId: unknown): Promise<unknown>;
   remove(connectionId: unknown): Promise<unknown>;

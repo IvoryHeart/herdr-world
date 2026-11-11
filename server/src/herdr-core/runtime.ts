@@ -1,6 +1,7 @@
 import type {
   ConnectionRuntime,
   ConnectionRuntimeContext,
+  ReadyRuntimeLease,
 } from "../connections/manager";
 import type { ConnectionIdentity } from "../connections/types";
 import {
@@ -9,7 +10,12 @@ import {
   type CoreServerStatus,
   CoreUnavailableError,
 } from "./client";
-import type { CoreEpoch, CoreFenceView } from "./fence";
+import {
+  type CoreEpoch,
+  CoreFenceError,
+  type CoreFenceView,
+  CoreOperationFence,
+} from "./fence";
 import {
   type CoreMirrorLimits,
   CoreMirror,
@@ -50,9 +56,27 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
     readonly version: string | null;
     readonly mirror: CoreMirror;
   };
-  /** Screen only (`lines: 0`), fenced by this runtime's current authority. */
-  readScreen(address: string): Promise<Record<string, unknown>>;
+  /**
+   * Screen only (`lines: 0`). The fence's original lease, core process and
+   * occupant must hold when the read is sent and again when its reply is
+   * published; a reply that outlives them is refused, never returned.
+   */
+  readScreen(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+  ): Promise<Record<string, unknown>>;
 };
+
+/** Admits a screen read of `address` under `lease` and runs it fenced. */
+export function readCoreScreen(
+  lease: ReadyRuntimeLease<CoreConnectionRuntime>,
+  address: string,
+): Promise<Record<string, unknown>> {
+  try {
+    return lease.runtime.readScreen(CoreOperationFence.admit(lease, address));
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
 
 export class CoreMirrorRetiredError extends CoreUnavailableError {
   constructor(reason: string) {
@@ -192,11 +216,16 @@ export function createCoreConnectionRuntime(
     }, interval);
   }
 
-  async function readScreen(address: string) {
+  async function readScreen(fence: CoreOperationFence<CoreConnectionRuntime>) {
+    // Another runtime's authority never dispatches through this one.
+    if (fence.lease.runtime !== self || !fence.occupant)
+      throw new CoreFenceError("dispatch", "lease");
     const current = client;
-    if (!current || failed || !mirror.actionable)
-      throw new CoreUnavailableError("herdr-core is not connected");
-    return current.readScreen(address);
+    if (!current) throw new CoreFenceError("dispatch", "not-actionable");
+    fence.check("dispatch");
+    const screen = await current.readScreen(fence.occupant.address);
+    fence.check("publication");
+    return screen;
   }
 
   function stop() {
@@ -210,7 +239,7 @@ export function createCoreConnectionRuntime(
     return stopTask;
   }
 
-  return {
+  const self: CoreConnectionRuntime = {
     identity,
     runtime: "herdr-core",
     core: {
@@ -232,4 +261,5 @@ export function createCoreConnectionRuntime(
     startBackground,
     stop,
   };
+  return self;
 }

@@ -1958,12 +1958,18 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   terminal, 32 MiB per core; beyond them the card is stale, never partly
   shown. Core agents do not appear in Town, Board or Desk yet; World only
   observes core (it reads screens with `lines: 0`, so it never types, scrolls
-  or resizes). Windows SSH hosts are not supported for core yet.
+  or resizes). A screen read keeps the connection generation, core process
+  and occupant it started with; if the agent at that address is replaced
+  before the reply arrives, the read is refused rather than shown as the new
+  occupant's screen. Windows SSH hosts are not supported for core yet.
   Testing switch: open World with `?coreFixture`, then **Hosts → Manage
   connections** shows **Fixture core (testing)**: **Start fixture core** adds a
   "Fixture core" connection to a stand-in core with two synthetic terminals,
   **Kill fixture core** stops it like `kill -9`, and **Remove fixture** deletes
-  both. The stand-in runs inside the World service and starts no program.
+  both. The stand-in runs inside the World service and starts no program. The
+  fixture only touches its own connection: if a connection you made already
+  uses the ID `core-fixture`, **Start fixture core** and **Remove fixture**
+  refuse and leave it in place.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
   **Open agent** follows **Agents open** (Chat by default when supported,
