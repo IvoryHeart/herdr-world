@@ -25,6 +25,7 @@ import {
 import {
   type CoreMirrorLimits,
   CoreMirror,
+  type CoreMirrorTerminal,
   DEFAULT_CORE_MIRROR_LIMITS,
 } from "./mirror";
 import {
@@ -34,6 +35,11 @@ import {
 } from "./observations";
 import { connectUnixStream, type CoreStreamConnector } from "./stream";
 import { CoreFirstSight, coreRuntimeReader, coreTopology } from "./topology";
+import {
+  type CoreAlert,
+  CoreAttention,
+  type SharedLabelChange,
+} from "./shared-state";
 import type { RuntimeReader } from "../adapters/runtime-ports";
 
 /** How World reaches a core: never by starting one. */
@@ -56,6 +62,14 @@ export type CoreRuntimeOptions = {
   firstSight?: CoreFirstSight;
   /** What World's views are built from changed (not every event does). */
   onReadModel?(): void;
+  /** Push decisions, kept across this connection's reconnects. */
+  attention?: CoreAttention;
+  /** An agent finished or needs you (Herdr's attention rule). */
+  onAlerts?(
+    alerts: CoreAlert[],
+    terminals: CoreMirrorTerminal[],
+    coreName: string,
+  ): void;
   livenessIntervalMs?: number;
   livenessTimeoutMs?: number;
   publishDelayMs?: number;
@@ -78,6 +92,18 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
   readScreen(
     fence: CoreOperationFence<CoreConnectionRuntime>,
   ): Promise<Record<string, unknown>>;
+  /**
+   * Shares seen or favourite with Herdr's apps (`herdr.seen`,
+   * `herdr.pinned`). `decide` reads the occupant's current record right
+   * before the write and returns the change, or null to write nothing.
+   * The fence must hold at dispatch; the write is never retried.
+   */
+  shareLabel(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    decide: (
+      record: CoreMirrorTerminal | undefined,
+    ) => SharedLabelChange | null,
+  ): Promise<"written" | "unchanged">;
   /** World's own float shells (`float-shell.ts`), each call fenced. */
   readonly shells: CoreShellControl;
 };
@@ -133,22 +159,42 @@ export function createCoreConnectionRuntime(
   const identity = { ...options.identity };
   const mirror = new CoreMirror(options.limits ?? DEFAULT_CORE_MIRROR_LIMITS);
   const firstSight = options.firstSight ?? new CoreFirstSight();
-  /** Every terminal World sees, as it first sees it (World's own seen rule). */
+  const attention = options.attention ?? new CoreAttention();
+  /** Alerts go out only from the current generation's ordered mirror. */
+  const alert = (alerts: CoreAlert[]) => {
+    if (!alerts.length || !options.context.isCurrent()) return;
+    options.onAlerts?.(
+      alerts,
+      mirror.terminals(),
+      coreSummary?.name ?? "herdr-core",
+    );
+  };
+  /**
+   * Every terminal World sees, as it first sees it (World's own seen rule),
+   * and every change of a program's word (push), after the mirror applied it.
+   */
   const sight = (
     line: CoreEventLine | null,
     terminals?: readonly unknown[],
   ) => {
     const coreId = epoch?.coreId;
     if (!coreId) return;
-    if (terminals) return firstSight.observe(coreId, terminals);
-    if (line?.method === "missed")
-      return firstSight.observe(coreId, line.params.terminals);
+    if (terminals || line?.method === "missed") {
+      firstSight.observe(
+        coreId,
+        terminals ??
+          (line as { params: { terminals: unknown[] } }).params.terminals,
+      );
+      return alert(attention.cut(coreId, mirror.terminals()));
+    }
     if (line?.method !== "event") return;
     const { type, terminal, data } = line.params;
     if (type === "created" || type === "restarted")
       firstSight.observe(coreId, [data]);
     else if (type === "removed" && typeof terminal === "string")
       firstSight.forget(terminal);
+    if (typeof terminal === "string" && !line.params.machine)
+      alert(attention.event(coreId, type, terminal, mirror.terminal(terminal)));
   };
   const abort = new AbortController();
   let client: CoreClient | null = null;
@@ -307,6 +353,25 @@ export function createCoreConnectionRuntime(
     return screen;
   }
 
+  async function shareLabel(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    decide: (
+      record: CoreMirrorTerminal | undefined,
+    ) => SharedLabelChange | null,
+  ): Promise<"written" | "unchanged"> {
+    if (fence.lease.runtime !== self || !fence.occupant)
+      throw new CoreFenceError("dispatch", "lease");
+    const current = client;
+    if (!current) throw new CoreFenceError("dispatch", "not-actionable");
+    fence.check("dispatch");
+    // Re-read: the mirror is current up to the last event core sent.
+    const address = fence.occupant.address;
+    const change = decide(mirror.terminal(address));
+    if (!change) return "unchanged";
+    await current.shareLabel(address, change);
+    return "written";
+  }
+
   /** The current client, under a fence that belongs to this runtime. */
   const dispatchThrough = (
     fence: CoreOperationFence<CoreConnectionRuntime>,
@@ -388,6 +453,7 @@ export function createCoreConnectionRuntime(
       firstSight,
     }),
     readScreen,
+    shareLabel,
     shells,
     startTransport,
     startBackground,

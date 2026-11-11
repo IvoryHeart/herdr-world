@@ -43,6 +43,8 @@ export type OfficeAgent = {
   canOpenInSpaces: boolean;
   /** Why World only watches this agent (herdr-core), and its own words. */
   viewOnly?: { reason: string; message: string };
+  /** herdr-core: seen and favourite, shared with Herdr's apps. */
+  coreShared?: import("./coreShared").CoreShared;
   characterIndex: number;
 };
 

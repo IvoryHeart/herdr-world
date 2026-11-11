@@ -7,6 +7,7 @@ import type {
 import { CoreUnavailableError } from "./client";
 import { harnessName, harnessOfArgv } from "./harness";
 import type { CoreMirror, CoreMirrorTerminal } from "./mirror";
+import { coreTurn, isFavourite, sharedSeen } from "./shared-state";
 
 /**
  * World's read model of one core: the same rows the TUI runtime lists, so
@@ -93,7 +94,7 @@ export class CoreFirstSight {
       const record = object(value);
       if (typeof record?.address !== "string" || this.turns.has(record.address))
         continue;
-      this.turns.set(record.address, turnOf(record.turn));
+      this.turns.set(record.address, coreTurn(record));
     }
   }
 
@@ -105,12 +106,6 @@ export class CoreFirstSight {
   turn(address: string): number | null {
     return this.turns.get(address) ?? null;
   }
-}
-
-function turnOf(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
-    ? value
-    : 0;
 }
 
 /**
@@ -127,11 +122,9 @@ export function coreAgentStatus(
   if (!word) return "unknown";
   if (word === "working") return "working";
   if (word === "blocked" || word === "error") return "blocked";
-  const seenText = label(record, "herdr.seen");
-  const shared =
-    seenText && /^\d{1,15}$/.test(seenText) ? Number(seenText) : null;
-  const seen = shared ?? firstSight ?? turnOf(record.turn);
-  return turnOf(record.turn) > seen ? "done" : "idle";
+  const turn = coreTurn(record);
+  const seen = sharedSeen(record) ?? firstSight ?? turn;
+  return turn > seen ? "done" : "idle";
 }
 
 /** The harness in a terminal: its report, else what runs in it now. */
@@ -269,6 +262,13 @@ export function coreTopology(
     if (report?.word === "blocked" && report.kind)
       pane.blocked_kind = report.kind;
     if (report?.message) pane.status_message = report.message;
+    // What a World view needs to share seen and favourite with Herdr's apps.
+    if (report) {
+      pane.turn = coreTurn(record);
+      const seen = sharedSeen(record);
+      if (seen !== null) pane.seen_turn = seen;
+    }
+    if (isFavourite(record)) pane.favourite = true;
     const name = text(record.name, 64);
     const title = text(record.title);
     agents.push({

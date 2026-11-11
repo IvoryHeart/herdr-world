@@ -61,7 +61,11 @@ async function dispatchConnectionsRpc(
               ? fixture.kill()
               : action === "remove"
                 ? await fixture.remove()
-                : fixture.status();
+                : action === "turn"
+                  ? fixture.turn()
+                  : action === "unread" || action === "pin"
+                    ? fixture.otherApp(action)
+                    : fixture.status();
       } else {
         throw new Error(`unknown bridge-global method: ${method}`);
       }

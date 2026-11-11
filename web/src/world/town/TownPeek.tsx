@@ -8,6 +8,8 @@ import { townPortrait } from "./townSprites";
 import { store } from "../../store";
 import { canOpenRoomShell, openRoomShell } from "../floatShell";
 import type { WorldLeafObject } from "../worldObject";
+import { useCoreSeen } from "../coreSeen";
+import { CoreFavouriteButton } from "../CoreFavourite";
 import { ContextFillBar } from "../../components/ContextFillBar";
 import { useAgentContextFill } from "../agentContextFill";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
@@ -94,6 +96,10 @@ export function TownPeek({
   const follow = useRef(true);
   const latest = conversation?.latest ?? null;
   const text = `${latest?.id ?? ""}${question.join("\n")}`;
+  // A herdr-core agent drawn here is seen in Herdr's apps too.
+  useCoreSeen(
+    agent.coreShared ? { ...agent.coreShared, stale: agent.stale } : null,
+  );
   const contextFill = useAgentContextFill({
     connectionId: agent.currentPaneRef.connectionId,
     generation: agent.currentPaneRef.generation,
@@ -174,6 +180,13 @@ export function TownPeek({
                   : null,
               )
             }
+          />
+        ) : null}
+        {agent.coreShared ? (
+          <CoreFavouriteButton
+            className="town-peek-favourite"
+            target={agent.coreShared}
+            disabled={agent.stale}
           />
         ) : null}
         <button

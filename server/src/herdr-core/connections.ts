@@ -8,6 +8,10 @@ import { type CoreFixture, createCoreFixture } from "./fixture";
 import { FloatShellService } from "./float-shell";
 import { CoreObservationStore } from "./observations";
 import { CoreFirstSight } from "./topology";
+import { CoreAttention } from "./shared-state";
+import { coreTaskEvents } from "./push";
+import type { PushTask } from "../notifications/web-push";
+import { connectionTaskPush } from "../notifications/task-push";
 import {
   type CoreConnectionRuntime,
   type CoreTransport,
@@ -31,10 +35,13 @@ type CoreSupervisor = {
   runtimeFailed(connectionId: string, error: unknown): void;
   coreList(): Array<{
     id: string;
+    label: string;
     state: string;
     type: string;
     core_state_dir: string;
   }>;
+  /** Herdr (TUI) connections: a push names its host when there are several. */
+  list?(): Array<{ id: string; label: string }>;
   create(value: unknown): Promise<unknown>;
   connect(connectionId: unknown): Promise<unknown>;
   remove(connectionId: unknown): Promise<unknown>;
@@ -50,6 +57,12 @@ export function createCoreConnections(args: {
   changed(): void;
   /** World's read model of this connection changed: re-read it. */
   observed?(connectionId: string, generation: number): void;
+  /**
+   * A core agent finished or needs you, from core's status events (Herdr's
+   * attention rule), qualified by connection and generation like a Herdr
+   * push. `isCurrent` turns false once its generation retires.
+   */
+  push?(task: PushTask, isCurrent: () => boolean): void;
   /** The profile service: failure supervision and the preview fixture. */
   profiles: () => CoreSupervisor;
   transportFor?: (
@@ -83,8 +96,10 @@ export function createCoreConnections(args: {
         connectionId: profile.id,
         onTunnelExit,
       }));
-  // World's own seen baseline per connection, kept across its reconnects.
+  // World's own seen baseline and push decisions per connection, kept
+  // across its reconnects.
   const firstSights = new Map<string, CoreFirstSight>();
+  const attentions = new Map<string, CoreAttention>();
   const support: CoreConnectionSupport<CoreConnectionRuntime> = {
     manager,
     createRuntime: (profile) => (context) => {
@@ -99,8 +114,30 @@ export function createCoreConnections(args: {
       let firstSight = firstSights.get(profile.id);
       if (!firstSight)
         firstSights.set(profile.id, (firstSight = new CoreFirstSight()));
+      let attention = attentions.get(profile.id);
+      if (!attention)
+        attentions.set(profile.id, (attention = new CoreAttention()));
       return createCoreConnectionRuntime({
         firstSight,
+        attention,
+        onAlerts: (alerts, terminals, coreName) => {
+          const service = args.profiles();
+          const connections = [
+            ...(service.list?.() ?? []),
+            ...service.coreList(),
+          ];
+          for (const event of coreTaskEvents(alerts, terminals, coreName))
+            args.push?.(
+              connectionTaskPush(
+                event,
+                profile.id,
+                context.generation,
+                connections,
+                profile.label,
+              ),
+              context.isCurrent,
+            );
+        },
         onReadModel: () => observed(profile.id),
         identity: connectionIdentityForProfile(profile),
         context,

@@ -1,4 +1,5 @@
 import type { CoreByteStream } from "./stream";
+import { isSharedLabelChange, type SharedLabelChange } from "./shared-state";
 import {
   CoreProtocolError,
   creditFrame,
@@ -11,7 +12,7 @@ import {
 
 /** The protocol generation World speaks; core refuses any other in `hello`. */
 export const CORE_PROTOCOL_GENERATION = 1;
-/** Methods this client may call: observation only, built from typed verbs. */
+/** Methods observation needs, built from typed verbs. */
 const OBSERVATION_METHODS = [
   "server.status",
   "terminal.list",
@@ -30,7 +31,15 @@ const FLOAT_SHELL_METHODS = [
   "terminal.attach",
   "terminal.kill",
 ] as const;
-type CoreMethod = ObservationMethod | (typeof FLOAT_SHELL_METHODS)[number];
+/**
+ * The one other write World sends: a shared label (`herdr.seen`,
+ * `herdr.pinned`). Not required: on a core without it, sharing fails and
+ * World keeps observing.
+ */
+type CoreMethod =
+  | ObservationMethod
+  | (typeof FLOAT_SHELL_METHODS)[number]
+  | "terminal.label";
 /** Required for observation; absence is an unsupported operation, not a pin. */
 export const REQUIRED_CORE_METHODS: readonly string[] = OBSERVATION_METHODS;
 export const REQUIRED_CORE_FEATURES = ["framed", "events"] as const;
@@ -353,6 +362,20 @@ export class CoreClient {
       { terminal: localAddress(address), lines: 0 },
       timeoutMs,
     ) as Promise<Record<string, unknown>>;
+  }
+
+  /**
+   * Sets one shared label on a local terminal by its address (never a name,
+   * which another terminal could take). Nothing else is ever labelled.
+   */
+  shareLabel(address: string, change: SharedLabelChange, timeoutMs = 5_000) {
+    if (!/^t\d{1,9}$/.test(address) || !isSharedLabelChange(change))
+      return Promise.reject(new Error("not a shared label change"));
+    return this.call(
+      "terminal.label",
+      { terminal: address, labels: { ...change } },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
   }
 
   /**

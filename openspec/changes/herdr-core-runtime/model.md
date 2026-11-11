@@ -127,6 +127,41 @@ attachment is detached at once). `float-shell.test.ts` injects each fault
 exhausted credit, a replaced occupant, a foreign terminal holding the name) and
 `core.live.test.ts` repeats the flow against the release.
 
+## Shared seen (issue #868)
+
+[`quint/herdr-core-seen.qnt`](../../../quint/herdr-core-seen.qnt) is a separate
+bounded case for the app label contract (`herdr.seen`, plan M9): one core
+agent, one World look and one other Herdr client, turns 0–2. World's browser
+decides when a person looks (`refresh`): only a looking, foreground page on a
+current host decides, and it decides each turn once per look. A look ends when
+the peek closes or the page leaves the foreground. A decision to write carries
+the label it saw; World's service writes (`dispatch`) only while its ordered
+observation still holds that label, only to raise and never past core's turn.
+A failed write (`lose`) is not retried. The other client looks (`appSeen`) or
+marks a seen turn unread (`appUnread`, turn − 1).
+
+Safety forbids a write over a label other than the decided one, a lowering
+write, a decision over an unread made during the look, and a decision from a
+hidden page or stale host. TLC explores the whole graph (3,339 distinct states).
+Three seeds sample 500 traces each; every trace replays through the production
+`CoreSeenSharer` (`web/src/world/coreShared.ts`) and `seenToShare`
+(`server/src/herdr-core/shared-state.ts`), through `seen.decision` and
+`seen.dispatch`. The browser updates on every step that can end a look, as
+`useCoreSeen` does on unmount, blur and visibility change. Five model faults
+(forgotten look, hidden page, stale host, blind write, unchecked write) must
+violate safety and diverge, and four production faults (the first four) must be
+rejected by a valid trace. Turns 0–3 add 100 sensitivity traces.
+
+The model's label is World's ordered observation. Core has no compare-and-set
+(upstream Q7): another client's change that World has not yet received, or an
+unread that returns the label to the decided value between decision and
+dispatch, can still be overwritten. Favourite (`herdr.pinned`) is a one-key
+last-writer-wins change with no ordering rule, and push follows Herdr's
+attention rule from the ordered mirror; both are checked by unit, RPC,
+recorded 0.1.20 and live-release tests, not by this model.
+
+Run `bun quint/run.ts --case herdr-core-seen` during development.
+
 ## Bounds, evidence and acceptance
 
 The single module has two explicitly bounded schedule families. Ordering explores
@@ -158,6 +193,6 @@ ordering/recovery transitions replay against the production mirror (above).
 The model makes no claim about framing/credit/UTF-8/budgets (they have unit,
 recorded-traffic and live-release tests instead), actual core release behavior, every
 occupant-evidence detector, SQLite persistence, core send/keys integration or the
-upstream Q3 execution-time fence, OS/SSH/Windows named pipes, app placement/seen, browser grids, performance or
+upstream Q3 execution-time fence, OS/SSH/Windows named pipes, app placement (shared seen is the separate case above), browser grids, performance or
 temporal recovery. P1–P6 consumer/platform checks in [delivery](delivery.md) remain
 mandatory before their paths ship. Do not promote a fake into production evidence.

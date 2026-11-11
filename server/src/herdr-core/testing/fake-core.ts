@@ -263,9 +263,14 @@ export class FakeCore {
     return address;
   }
 
+  /** As core's `terminal.label`: a patch; an empty value removes the key. */
   label(address: string, labels: Record<string, string>): void {
     const record = this.require(address);
-    record.labels = { ...record.labels, ...labels };
+    const next = { ...record.labels };
+    for (const [key, value] of Object.entries(labels))
+      if (value) next[key] = value;
+      else delete next[key];
+    record.labels = next;
     this.emit("labels", address, { labels: record.labels });
   }
 
@@ -413,7 +418,8 @@ export class FakeCore {
   private applySize(address: string) {
     const record = this.terminals.get(address);
     if (!record) return;
-    const leader = this.viewers.filter((v) => v.address === address).at(-1);
+    const viewing = this.viewers.filter((v) => v.address === address);
+    const leader = viewing[viewing.length - 1];
     const size = leader?.size ?? { cols: 200, rows: 120 };
     if (record.cols === size.cols && record.rows === size.rows) return;
     record.cols = size.cols;
@@ -531,7 +537,7 @@ export class FakeCore {
         // A shell's line discipline echoes keys; Enter runs `exit`.
         this.output(viewer.address, text.replace(/\r/g, "\r\n"));
         const line = (this.typed.get(viewer.address) ?? "").split("\r");
-        if (line.length > 1 && line.at(-2) === "exit")
+        if (line.length > 1 && line[line.length - 2] === "exit")
           this.finish(viewer.address);
       } else if (
         frame.channel !== 0 &&
@@ -588,6 +594,7 @@ export class FakeCore {
         "terminal.kill",
         "terminal.read",
         "terminal.attach",
+        "terminal.label",
         "events.subscribe",
       ].filter((method) => !this.withoutMethods.has(method)),
       features: [
@@ -768,6 +775,20 @@ export class FakeCore {
         return removing
           ? error(-32000, `${address} was removed`, "not_found")
           : reply({ ...record });
+      }
+      case "terminal.label": {
+        const address = String(request.params?.terminal);
+        const labels = request.params?.labels;
+        if (!this.terminals.has(address))
+          return error(-32000, "not_found", "not_found");
+        if (
+          !labels ||
+          typeof labels !== "object" ||
+          Object.values(labels).some((value) => typeof value !== "string")
+        )
+          return error(-32602, "invalid_params", "invalid_params");
+        this.label(address, labels as Record<string, string>);
+        return reply(this.terminals.get(address));
       }
       default:
         return error(-32601, `method not found: ${request.method}`, "usage");

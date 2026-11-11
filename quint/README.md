@@ -86,7 +86,9 @@ The maintained suite also includes [chunk credits](../verification/contracts/chu
 contract for real consumers, faults, finite domains and exclusions. All 14 production-connected models and the
 [herdr-core design case](../openspec/changes/herdr-core-runtime/model.md) run in the
 unfiltered required CI workflow. The design case uses a protocol fake and remains
-pending production-provider mapping acceptance. The original eleven retain their accepted bounds;
+pending production-provider mapping acceptance. The
+[shared seen case](../openspec/changes/herdr-core-runtime/model.md#shared-seen-issue-868)
+replays the production browser and service rules for Herdr's `herdr.seen` label. The original eleven retain their accepted bounds;
 [observation-base](../verification/contracts/observation-base.md) adds v1 admission and its
 independent candidate mapping and review.
 
