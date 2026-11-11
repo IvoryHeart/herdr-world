@@ -94,6 +94,41 @@ test("missing foreground refuses dispatch through the production recipient gate"
   expect(states.at(-1)!.c.attempts).toBe(0);
 });
 
+test("automatic briefs require core idle at execution, including after a queue wait", async () => {
+  for (const idle of [0, 1]) {
+    const states = trace([
+      "connect",
+      "baseline",
+      "capture",
+      "dispatch",
+      ["launchBrief", idle],
+    ]);
+    replayCore(states);
+    expect(states.at(-1)!.c.delivered).toBe(idle);
+    if (!idle) {
+      const broken = structuredClone(states);
+      broken.at(-1)!.c.delivered = 1;
+      await expectObservationMismatch(() => replayCore(broken), ["core.state"]);
+    }
+  }
+});
+
+test("history publication refuses a foreground lost during the read", async () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    "capture",
+    "dispatch",
+    "loseForeground",
+    "complete",
+  ]);
+  expect(states.at(-1)!.c.published).toBe(false);
+  expect(states.at(-1)!.c.uncertain).toBe(true);
+  const broken = structuredClone(states);
+  broken.at(-1)!.c.published = true;
+  await expectObservationMismatch(() => replayCore(broken), ["core.state"]);
+});
+
 test("original leases cannot be replaced by another profile on the same core", () => {
   for (const retire of [
     ["switchProfile"],
@@ -141,8 +176,8 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
   );
 });
 
-test("all twenty-seven ordering, authority, foreground, worktree, observe and typing faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(27);
+test("all ordering, authority, foreground, worktree, observe, launch-brief and typing faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(29);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;

@@ -95,6 +95,8 @@ function statusWord(record: CoreTerminalRecord | undefined): string | null {
 }
 
 export type CoreDeliveryOptions = {
+  /** Automatic launch briefs: core checks readiness after its queue/draft wait. */
+  onlyIfIdle?: boolean;
   /** Core's whole send window; a later reply is uncertain. */
   timeoutMs?: number;
   /** Durable asks mark the possible write after all native preparation. */
@@ -224,7 +226,11 @@ export async function deliverCore(
         ? await lease.runtime.keys(fence, input.keys)
         : await lease.runtime.send(
             fence,
-            { text: input.text, force: input.kind === "answer" },
+            {
+              text: input.text,
+              force: input.kind === "answer",
+              onlyIfIdle: options.onlyIfIdle,
+            },
             { cancel: cancel.signal, timeoutMs: options.timeoutMs },
           );
     // Core typed it. Say "sent" only while the same program is there.
@@ -285,6 +291,11 @@ export async function deliverCore(
       // Core's refusal: it typed nothing.
       const typed = "Nothing was typed.";
       switch (error.kind) {
+        case "status_mismatch":
+          return refused(
+            "unavailable",
+            `Core has not confirmed the program is idle. ${typed}`,
+          );
         case "cancelled":
           return cancelledFor === "lease"
             ? refused(

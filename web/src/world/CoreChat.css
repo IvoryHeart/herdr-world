@@ -40,3 +40,39 @@
   white-space: pre;
   font-size: 12px;
 }
+
+.core-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.core-history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.core-history-entries {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 45vh;
+  overflow: auto;
+}
+.core-history-entries li {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+.core-history input,
+.core-history select {
+  max-width: 100%;
+  box-sizing: border-box;
+  color: inherit;
+  background: var(--bg-primary);
+}
+.core-history details > p {
+  margin: 8px 0;
+}

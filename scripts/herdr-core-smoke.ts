@@ -65,6 +65,8 @@ try {
       "server/src/herdr-core/operations.live.test.ts",
       // Files, screen reads and worktrees for a core agent (P4).
       "server/src/herdr-core/worktrees.live.test.ts",
+      "server/src/herdr-core/delivery.live.test.ts",
+      "server/src/herdr-core/harnesses.live.test.ts",
       // Windows relay checks; they run when HERDR_WORLD_PWSH names pwsh 7.
       "server/src/herdr-core/windows.live.test.ts",
     ],

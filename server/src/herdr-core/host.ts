@@ -92,21 +92,23 @@ export async function resolveCoreExecutable(
 ): Promise<string> {
   const spec = harnessSpec(kind);
   if (host.windows) {
-    const result = await host.run(windowsExecutableScript(spec.binary), 15_000);
-    const path =
-      result.stdout
-        .replace(/\r\n/g, "\n")
-        .split("\n")
-        .filter((line) => line.startsWith(WINDOWS_EXECUTABLE_MARKER))
-        .pop()
-        ?.slice(WINDOWS_EXECUTABLE_MARKER.length) ?? "";
-    if (
-      result.code !== 0 ||
-      path.length > 4096 ||
-      !WINDOWS_EXECUTABLE.test(path)
-    )
-      throw new Error(`no ${spec.binary} executable was found`);
-    return path;
+    for (const binary of [spec.binary, ...(spec.aliases ?? [])]) {
+      const result = await host.run(windowsExecutableScript(binary), 15_000);
+      const path =
+        result.stdout
+          .replace(/\r\n/g, "\n")
+          .split("\n")
+          .filter((line) => line.startsWith(WINDOWS_EXECUTABLE_MARKER))
+          .pop()
+          ?.slice(WINDOWS_EXECUTABLE_MARKER.length) ?? "";
+      if (
+        result.code === 0 &&
+        path.length <= 4096 &&
+        WINDOWS_EXECUTABLE.test(path)
+      )
+        return path;
+    }
+    throw new Error(`no ${spec.binary} executable was found`);
   }
   const script = [
     ...resolveExecutable(spec),

@@ -1,3 +1,4 @@
+import { deliverLaunchBrief } from "./launch-brief";
 import { randomBytes } from "node:crypto";
 import { agentNameFor, AGENT_KIND } from "../../../shared/agentProfile";
 import type { ReadyRuntimeLease } from "../connections/manager";
@@ -141,7 +142,7 @@ export type CoreLaunchRequest = {
 
 export type CoreLaunchOutcome =
   | {
-      status: "sent" | "started";
+      status: "sent" | "started" | "uncertain";
       runtime: "herdr-core";
       workspace_id: string;
       tab_id: string;
@@ -372,8 +373,17 @@ export async function launchCore(
   });
   lease.runtime.layoutChanged();
   const workspaceId = request.workspaceId;
+  const delivery =
+    text && kind && !promptArgument
+      ? await deliverLaunchBrief(lease, record, text)
+      : null;
   return {
-    status: text && promptArgument ? "sent" : "started",
+    status:
+      delivery?.status === "uncertain"
+        ? "uncertain"
+        : text && (promptArgument || delivery?.status === "sent")
+          ? "sent"
+          : "started",
     runtime,
     workspace_id: workspaceId,
     tab_id: `${workspaceId}:tab:world-${tabId}`,
@@ -381,10 +391,12 @@ export async function launchCore(
     terminal_id: address,
     ...(name ? { agent_name: name } : {}),
     placed,
-    ...(text && !promptArgument
+    ...(delivery && delivery.status !== "sent"
       ? {
           message:
-            "Started in herdr-core. World can't send its first message to this harness yet: type it in the agent.",
+            delivery.status === "uncertain"
+              ? `Started, but delivery of the brief is uncertain. ${delivery.message}`
+              : delivery.message,
         }
       : {}),
   };

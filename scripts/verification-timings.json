@@ -15,12 +15,12 @@
     "runtime-leases": 46.514,
     "space-admission": 225.083,
     "observation-base": 60.119497273,
-    "herdr-core-runtime": 346.967,
+    "herdr-core-runtime": 431.46,
     "effect-recovery": 199.5,
     "herdr-core-seen": 11.732
   },
   "localSources": {
-    "herdr-core-runtime": "Complete focused maintained run with the M7 kill fence, P4 worktree removal, the observe family and the typing family: sum of command elapsedMs, bounded exhaustive quotient with sends and kills checked in separate authority families (770,814 distinct states, 64 s), three seeds, twenty-seven invariant/replay controls, thirteen production controls and larger-bound sensitivity, on a machine running other model runs alongside (2026-11-11).",
+    "herdr-core-runtime": "Complete focused maintained run with the M7 kill fence, P4 worktree removal, launch briefs, the observe family and the typing family: sum of command elapsedMs, bounded exhaustive quotient with sends and kills checked in separate authority families (789,010 distinct states, 65 s), three seeds, twenty-nine invariant/replay controls, thirteen production controls and larger-bound sensitivity, on a machine running other model runs alongside (2026-11-11).",
     "binding-resolution": "Focused maintained run: sum of command elapsedMs, including private TLC startup, three seeds (500 replay traces each), model fault and six code controls (2026-10-31).",
     "observation-base": "Development exhaustive TLC with the pinned checker; 60.119497273 seconds including private checker startup. Existing entries retain their sourceRun.",
     "effect-recovery": "Complete local verification gate, all 13 canonical models; effect-recovery case 199.5 seconds including real SQLite replay and controls. Existing entries retain their sourceRun.",

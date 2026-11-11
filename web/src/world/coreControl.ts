@@ -197,7 +197,8 @@ export async function launchInCore(
       ...(choice.shell ? { shell: true } : {}),
       ...(choice.parentPaneId ? { parent_pane_id: choice.parentPaneId } : {}),
     },
-    90_000,
+    // Host resolution + run + foreground observation + native send window.
+    150_000,
   )) as CoreLaunchOutcome;
 }
 

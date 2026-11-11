@@ -26,8 +26,33 @@ const leaf = {
   },
 } as WorldLeafObject;
 const calls: { method: string; params: Record<string, unknown> }[] = [];
+const historyCalls: Record<string, unknown>[] = [];
 let outcome = "sent";
 bridge.call = (async (method: string, params: Record<string, unknown>) => {
+  if (method === "world.core.history") {
+    historyCalls.push(params);
+    return {
+      status: "ok",
+      detail: "Latest 200 transcript entries.",
+      source: "native",
+      entries: [
+        {
+          id: "user-1",
+          role: "user",
+          kind: "message",
+          text: "Review the merge plan.",
+          sent_at: "2026-11-11T09:00:00Z",
+        },
+        {
+          id: "agent-1",
+          role: "assistant",
+          kind: "message",
+          text: "The tests pass. Which branch should I merge into?",
+          sent_at: "2026-11-11T09:01:00Z",
+        },
+      ],
+    };
+  }
   calls.push({ method, params });
   if (method === "world.core.screen")
     return { text: "Which branch?\n1) main\n2) release" };
@@ -55,6 +80,7 @@ function Fixture() {
       flushSync(() => setScene((n) => n + 1));
     },
     coreChatCalls: calls,
+    coreHistoryCalls: historyCalls,
   });
   return (
     <main

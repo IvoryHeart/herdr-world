@@ -1,0 +1,142 @@
+{
+  "capturedAt": "2026-11-11T15:29:57.904Z",
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/156.0.8078.79",
+    "revision": "@a21ce95c24ce3964416f09ae1862f53f319eb4d0",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "jsVersion": "15.6.75.27"
+  },
+  "receipts": [
+    {
+      "name": "phone",
+      "label": "Phone",
+      "width": 390,
+      "height": 844,
+      "state": "uncertain-light",
+      "filename": "uncertain-light-phone.png",
+      "receipt": {
+        "view": "desk",
+        "owner": 1,
+        "revision": 49,
+        "width": 390,
+        "height": 844
+      },
+      "sanity": {
+        "foreground": 0.163818359375,
+        "width": 390,
+        "height": 844,
+        "sample": {
+          "x": 16,
+          "y": 99.6875,
+          "width": 358,
+          "height": 744.3125
+        }
+      }
+    },
+    {
+      "name": "mac-laptop",
+      "label": "Mac laptop",
+      "width": 1512,
+      "height": 982,
+      "state": "uncertain-light",
+      "filename": "uncertain-light-mac-laptop.png",
+      "receipt": {
+        "view": "desk",
+        "owner": 1,
+        "revision": 52,
+        "width": 1512,
+        "height": 982
+      },
+      "sanity": {
+        "foreground": 0.1533203125,
+        "width": 1512,
+        "height": 982,
+        "sample": {
+          "x": 446,
+          "y": 99.6875,
+          "width": 620,
+          "height": 729.96875
+        }
+      }
+    },
+    {
+      "name": "linux-half",
+      "label": "Half-width Linux window",
+      "width": 1280,
+      "height": 1440,
+      "state": "uncertain-light",
+      "filename": "uncertain-light-linux-half.png",
+      "receipt": {
+        "view": "desk",
+        "owner": 1,
+        "revision": 55,
+        "width": 1280,
+        "height": 1440
+      },
+      "sanity": {
+        "foreground": 0.1533203125,
+        "width": 1280,
+        "height": 1440,
+        "sample": {
+          "x": 330,
+          "y": 99.6875,
+          "width": 620,
+          "height": 729.96875
+        }
+      }
+    },
+    {
+      "name": "linux-wide",
+      "label": "Wide Linux monitor",
+      "width": 2560,
+      "height": 1440,
+      "state": "uncertain-light",
+      "filename": "uncertain-light-linux-wide.png",
+      "receipt": {
+        "view": "desk",
+        "owner": 1,
+        "revision": 58,
+        "width": 2560,
+        "height": 1440
+      },
+      "sanity": {
+        "foreground": 0.1533203125,
+        "width": 2560,
+        "height": 1440,
+        "sample": {
+          "x": 970,
+          "y": 99.6875,
+          "width": 620,
+          "height": 729.96875
+        }
+      }
+    },
+    {
+      "name": "portrait",
+      "label": "Portrait monitor",
+      "width": 1440,
+      "height": 2560,
+      "state": "uncertain-light",
+      "filename": "uncertain-light-portrait.png",
+      "receipt": {
+        "view": "desk",
+        "owner": 1,
+        "revision": 61,
+        "width": 1440,
+        "height": 2560
+      },
+      "sanity": {
+        "foreground": 0.1533203125,
+        "width": 1440,
+        "height": 2560,
+        "sample": {
+          "x": 410,
+          "y": 99.6875,
+          "width": 620,
+          "height": 729.96875
+        }
+      }
+    }
+  ]
+}

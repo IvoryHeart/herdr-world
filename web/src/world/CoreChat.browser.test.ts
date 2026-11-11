@@ -73,6 +73,23 @@ test.skipIf(!chrome)(
         return r.result.value;
       };
       const typeAndSend = `(() => {const input=document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'main'); input.dispatchEvent(new Event('input',{bubbles:true})); return new Promise(resolve => requestAnimationFrame(() => {document.querySelector('form').requestSubmit(); requestAnimationFrame(resolve)}))})()`;
+      await evaluate(
+        "new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))",
+      );
+      expect(
+        await evaluate("document.querySelector('.core-history').textContent"),
+      ).toContain("Review the merge plan.");
+      await evaluate(
+        `(() => { document.querySelector('.core-history details').open=true; const input=document.querySelector('.core-history input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'synthetic-session'); input.dispatchEvent(new Event('input',{bubbles:true})); return new Promise(r=>requestAnimationFrame(r)); })()`,
+      );
+      await evaluate(
+        `Array.from(document.querySelectorAll('.core-history button')).find(b=>b.textContent==='Read linked conversation').click(); new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+      );
+      expect(await evaluate("window.coreHistoryCalls.at(-1)")).toMatchObject({
+        session: { kind: "id", value: "synthetic-session" },
+        terminal: "t1",
+      });
+      expect(await evaluate("window.coreChatCalls.length")).toBe(0);
       await evaluate(typeAndSend);
       expect(await evaluate("window.coreChatCalls.length")).toBe(1);
       expect(await evaluate("window.coreChatCalls[0]")).toMatchObject({

@@ -32,6 +32,9 @@ export async function captureDelivery(bin: string): Promise<DeliveryRecording> {
       "-c",
       "printf '\\033]7501;state=blocked:app=probe\\033\\'; while IFS= read -r line; do printf '%s\\n' \"$line\"; done",
     );
+    // A silent program models an unreported startup dialog. No process/path
+    // records enter the recording, only the conditional native send reply.
+    await core.hc("run", "--bg", "--", "/bin/cat");
     const inbound: Uint8Array[] = [],
       outbound: Uint8Array[] = [];
     client = await CoreClient.open(
@@ -45,7 +48,13 @@ export async function captureDelivery(bin: string): Promise<DeliveryRecording> {
     if (hello.result.login_session)
       hello.result.login_session = { id: 1, user: 1000 };
     const steps: DeliveryRecording["steps"] = [];
-    for (const method of ["message", "answer", "keys"]) {
+    for (const method of [
+      "message",
+      "answer",
+      "keys",
+      "brief-blocked",
+      "brief-unknown",
+    ]) {
       inbound.length = 0;
       outbound.length = 0;
       let outcome: unknown;
@@ -53,9 +62,14 @@ export async function captureDelivery(bin: string): Promise<DeliveryRecording> {
         outcome =
           method === "keys"
             ? await client.keys("t1", ["enter"])
-            : await client.sendText("t1", "café ✓", {
-                force: method === "answer",
-              });
+            : await client.sendText(
+                method === "brief-unknown" ? "t2" : "t1",
+                "café ✓",
+                {
+                  force: method === "answer",
+                  onlyIfIdle: method.startsWith("brief-"),
+                },
+              );
       } catch (error) {
         if (!(error instanceof CoreRpcError)) throw error;
         outcome = { refused: error.kind };

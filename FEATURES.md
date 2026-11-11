@@ -2016,8 +2016,17 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     absolute path on that host (never a core template of the same name), no
     parent or notes, kept by core, and placed in the apps: its space and tab
     labels plus a `where` caption (`Room / Tab`) the desktop app shows, and
-    unseen. Claude Code and Codex get the task as their first message; other
-    harnesses start without it and World says to type it in the agent.
+    unseen. Claude Code and Codex get the task as a launch argument. Other
+    harnesses get their profile role and brief through core's native send after
+    its foreground is verified (up to ten seconds), with core's `if: "idle"`
+    condition checked after its startup, draft and quiet waits. Unknown,
+    blocked or other non-idle status leaves the brief unsent, so an unreported
+    folder-trust dialog receives no automatic paste or Enter. World says it
+    started without the brief; open Chat to send it after reviewing the terminal.
+    A lost send reply says the agent started but brief delivery is uncertain,
+    retains its terminal identity and is never retried. The full [harness inventory](./docs/core-harnesses.md)
+    includes the TUI detection list and desktop app programs; every listed kind
+    can be used in a profile, with its actual executable resolved on the host.
     **Terminal** starts a plain shell in the room, not placed in the apps and
     not kept. The quick-start list offers every harness Herdr integrates that
     the host has installed (no login tab for core yet). A lost reply says the
@@ -2026,6 +2035,21 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     one fixed PowerShell script (on the PATH, else `~\.local\bin` or
     `%APPDATA%\npm`) and starts its `.exe`, or its npm `.cmd` through
     `cmd.exe`; core refuses a multi-line first message to a `.cmd`.
+  - **Core Chat transcripts.** Chat reuses the TUI readers for Claude, Codex,
+    Kimi, Pi, OMP, Muse, Grok and Antigravity. It reads the session named by
+    native resume arguments or a Codex title, or uses the reader's existing
+    directory discovery (marked as a possible guess). **Link a conversation
+    for reading** accepts a session ID or an absolute transcript path on that
+    host and forgets the link when Chat closes. The browser can select any
+    absolute path the service account can read through these transcript readers;
+    links never authorize input.
+    **Refresh conversation** rereads the latest 200 entries; status and turn
+    changes refresh too. Entries are limited to 16,000 characters each and
+    256,000 characters in total, with shortening disclosed. A changed host,
+    occupant, foreground or title during the read discards it. Windows history
+    is unavailable, as on the TUI; SSH reader limits are in the inventory.
+    Every harness still sends messages, answers and keys through core, even
+    without a readable transcript. World never infers or writes core status.
   - **World's rooms of a core.** Rooms, their order and the tabs World
     started live in World's database under the core's ID, never in the apps'
     layout. **Add room**, **Rename** and **Close** work on World's rooms and

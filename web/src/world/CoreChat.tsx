@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { CoreHistory } from "./CoreHistory";
 import { WorldPanel } from "./windows/WorldPanel";
 import type { WorldLeafObject } from "./worldObject";
 import {
@@ -45,12 +46,7 @@ export function CoreChat({
   };
   return (
     <section className="core-chat" aria-label={`Chat with ${name}`}>
-      {!compact ? (
-        <p>
-          Conversation history is unavailable for this core agent. Messages go
-          to the agent through Herdr.
-        </p>
-      ) : null}
+      {!compact ? <CoreHistory recipient={recipient} leaf={leaf} /> : null}
       {leaf.pane.status_message ? (
         <p className="core-chat-question">{leaf.pane.status_message}</p>
       ) : null}
