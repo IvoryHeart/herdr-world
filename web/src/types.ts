@@ -109,6 +109,12 @@ export interface Pane {
   blocked_kind?: string;
   /** herdr-core: the program's own status message (OSC 7501 `msg`). */
   status_message?: string;
+  /** herdr-core agents: core's turn counter (it rises as a turn ends). */
+  turn?: number;
+  /** herdr-core: the last turn a person saw in any Herdr client (`herdr.seen`). */
+  seen_turn?: number;
+  /** herdr-core: a favourite in every Herdr client (`herdr.pinned`). */
+  favourite?: boolean;
   /** Herdr agent.list state-change sequence, scoped to this server lifetime. */
   state_change_seq?: number;
   /** Session file modification time in epoch milliseconds, from the bridge. */

@@ -345,6 +345,31 @@ export const rpcVerbs = [
     object({ ops: Type.Array(Type.Unknown()) }),
   ),
   rpc("world.chimes.save", "reconcilable", "world"),
+  // Seen and favourite shared with Herdr's apps: one label on one live local
+  // herdr-core agent, under the runtime fence (rpc/core-shared.ts).
+  rpc(
+    "world.core.favourite",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminal: Type.String({ pattern: "^t[0-9]{1,9}$" }),
+      favourite: Type.Boolean(),
+    }),
+  ),
+  rpc(
+    "world.core.seen",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminal: Type.String({ pattern: "^t[0-9]{1,9}$" }),
+      turn: Type.Integer({ minimum: 0 }),
+      seen: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
+    }),
+  ),
   rpc("world.desk.get", "read", "world"),
   rpc("world.desk.observe", "reconcilable", "world"),
   rpc("world.desk.open", "reconcilable", "world"),

@@ -20,6 +20,10 @@
     from the desktop app's placement, view-only controls with a reason, and a
     production read-model replay with its own negative control.
 - [ ] P2: observer streams, shared seen/favourite and event push.
+  - [x] Issue #868: shared `herdr.seen` from foreground World peeks (once per
+    turn per look, decided-label write, raise-only, best effort), favourite
+    as `herdr.pinned`, Web Push from core status events, the shared-seen
+    model with production replay, recorded 0.1.20 and live-release tests.
 - [ ] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
   - [x] Issue #869: core-first launches from World (absolute executable, no
     caller/parent/notes, explicit keep; agents placed with a `where` caption,

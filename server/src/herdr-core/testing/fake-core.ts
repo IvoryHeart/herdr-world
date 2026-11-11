@@ -248,9 +248,14 @@ export class FakeCore {
     return address;
   }
 
+  /** As core's `terminal.label`: a patch; an empty value removes the key. */
   label(address: string, labels: Record<string, string>): void {
     const record = this.require(address);
-    record.labels = { ...record.labels, ...labels };
+    const next = { ...record.labels };
+    for (const [key, value] of Object.entries(labels))
+      if (value) next[key] = value;
+      else delete next[key];
+    record.labels = next;
     this.emit("labels", address, { labels: record.labels });
   }
 
@@ -678,19 +683,20 @@ export class FakeCore {
       case "terminal.label": {
         if (this.options.observeOnly) break;
         const address = String(request.params?.terminal);
-        const record = this.terminals.get(address);
-        if (!record)
+        const labels = request.params?.labels;
+        if (!this.terminals.has(address))
           return error(-32000, `no terminal ${address}`, "not_found");
-        const next = { ...record.labels };
-        for (const [k, v] of Object.entries(
-          (request.params?.labels as Record<string, string>) ?? {},
-        ))
-          if (v === "") delete next[k];
-          else next[k] = v;
-        record.labels = next;
-        this.emit("labels", address, { labels: next });
-        return reply({ ...record });
+        if (
+          !labels ||
+          typeof labels !== "object" ||
+          Object.values(labels).some((value) => typeof value !== "string")
+        )
+          return error(-32602, "invalid_params", "invalid_params");
+        this.label(address, labels as Record<string, string>);
+        return reply({ ...this.terminals.get(address)! });
       }
+      default:
+        return error(-32601, `method not found: ${request.method}`, "usage");
     }
     return error(-32601, `method not found: ${request.method}`, "usage");
   }

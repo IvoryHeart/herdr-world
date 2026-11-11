@@ -107,7 +107,10 @@ export type CoreFixtureStatus = {
  * kill to watch a core connection go live, stale and back, without
  * installing core. World's real provider connects to it like any core.
  */
-export function createCoreFixture(profiles: () => Profiles) {
+export function createCoreFixture(
+  profiles: () => Profiles,
+  { finishMs = FIXTURE_FINISH_MS }: { finishMs?: number } = {},
+) {
   let fake: FakeCore | null = null;
   let root: string | null = null;
   let socket: string | null = null;
@@ -137,6 +140,24 @@ export function createCoreFixture(profiles: () => Profiles) {
     connection_id: CORE_FIXTURE_CONNECTION_ID,
     terminals: fake ? FIXTURE_TERMINALS : 0,
   });
+  const runningScout = () => {
+    if (!fake?.isRunning || !scout)
+      throw new Error("start the fixture core first");
+    return scout;
+  };
+  const finishScout = () => {
+    const finishing = scout;
+    const word = (
+      fake?.terminal(finishing ?? "")?.status as { state?: unknown } | null
+    )?.state;
+    if (!finishing || word !== "working") return;
+    if (finish) clearTimeout(finish);
+    finish = setTimeout(() => {
+      finish = null;
+      if (fake?.isRunning)
+        fake.report(finishing, { state: "idle", app: "gemini" });
+    }, finishMs);
+  };
   const stop = () => {
     if (finish) clearTimeout(finish);
     finish = null;
@@ -178,17 +199,35 @@ export function createCoreFixture(profiles: () => Profiles) {
       else if (["disconnected", "error"].includes(existing?.state ?? ""))
         await service.connect(CORE_FIXTURE_CONNECTION_ID);
       // Scout finishes its turn while World watches: done until seen.
-      const finishing = scout;
+      finishScout();
+      return status();
+    },
+    /** Scout works again and finishes another turn soon after. */
+    turn(): CoreFixtureStatus {
+      const running = runningScout();
       const word = (
-        fake.terminal(finishing ?? "")?.status as { state?: unknown } | null
+        fake!.terminal(running)?.status as { state?: unknown } | null
       )?.state;
-      if (finishing && word === "working") {
-        if (finish) clearTimeout(finish);
-        finish = setTimeout(() => {
-          finish = null;
-          if (fake?.isRunning)
-            fake.report(finishing, { state: "idle", app: "gemini" });
-        }, FIXTURE_FINISH_MS);
+      if (word !== "working")
+        fake!.report(running, { state: "working", app: "gemini" });
+      finishScout();
+      return status();
+    },
+    /**
+     * What Herdr's phone or desktop app writes when a person marks scout
+     * unread (`herdr.seen=<turn - 1>`) or pins it (`herdr.pinned`): the
+     * shared labels another client changes, as the app's label contract says.
+     */
+    otherApp(change: "unread" | "pin"): CoreFixtureStatus {
+      const running = runningScout();
+      const record = fake!.terminal(running)!;
+      if (change === "unread") {
+        const turn = typeof record.turn === "number" ? record.turn : 0;
+        if (turn < 1) throw new Error("scout has not finished a turn yet");
+        fake!.label(running, { "herdr.seen": String(turn - 1) });
+      } else {
+        const pinned = Boolean(record.labels?.["herdr.pinned"]);
+        fake!.label(running, { "herdr.pinned": pinned ? "" : "1" });
       }
       return status();
     },

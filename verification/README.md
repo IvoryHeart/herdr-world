@@ -75,7 +75,7 @@ approval. Future contract/gate changes require their own applicable review.
 
 ## Candidate commands and promotion
 
-The separate Behavioral verification candidate CI workflow runs 14 production-connected models and the herdr-core design model,
+The separate Behavioral verification candidate CI workflow runs 14 production-connected models, the herdr-core design model and the herdr-core shared-seen model,
 actual replay, required per-seed witnesses, model/implementation fault controls
 and larger-bound/host-order sensitivity. It installs locked tooling and the
 hash-validated checker, records exact tool/input identities and retains manifests
@@ -261,3 +261,14 @@ on correct replay. A separate fake mutation checks the adapter. This is design
 evidence with independent review pending; it is not production core conformance.
 Coverage remains pending until the provider and its consumers exist and pass the
 separate acceptance in the active OpenSpec change.
+
+## Herdr-core shared seen (Q53)
+
+[herdr-core-seen](../openspec/changes/herdr-core-runtime/model.md#shared-seen-issue-868)
+models World's share of Herdr's `herdr.seen` label with another client. Run
+`bun quint/run.ts --case herdr-core-seen` during development. TLC explores the
+whole bounded graph; three seeds replay through the production browser
+(`CoreSeenSharer`) and service (`seenToShare`) rules; five model faults must
+violate safety and diverge and four production faults must be rejected by a
+valid trace. Core's missing compare-and-set (upstream Q7) is the declared
+residual. Coverage stays pending independent review and owner device step B.

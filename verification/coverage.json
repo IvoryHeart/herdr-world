@@ -2991,6 +2991,42 @@
         ],
         "review": "New design contract pending PR review. PR #188 is foundation history only, not acceptance of core implementation."
       }
+    },
+    {
+      "id": "Q53",
+      "area": "Herdr-core shared seen and favourite",
+      "owner": "quint/herdr-core-seen.qnt",
+      "requirement": "openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md",
+      "properties": "A turn is shared once per foreground look on a current host; another client's mark unread during a look stands; World's service writes herdr.seen only while its ordered observation still holds the label the look was decided on, only to raise and never past core's turn; a lost write is not retried",
+      "existingTests": [
+        "quint/herdr-core-seen.test.ts",
+        "web/src/world/coreShared.test.ts",
+        "server/src/herdr-core/shared-state.test.ts",
+        "server/src/rpc/core-shared.test.ts",
+        "server/src/herdr-core/connections.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
+      "technique": "design-model-with-production-replay",
+      "assessment": "Bounded model of one core agent, one World look and one other Herdr client, checked exhaustively by TLC. Replay drives the production browser rule (CoreSeenSharer) and the production service rule (seenToShare) through every sampled trace; five model faults violate safety and diverge, and four production faults (forgotten look, hidden page, stale host, blind write) are rejected by valid traces. Favourite has no ordering rule (a one-key change, last writer wins) and is covered by unit, RPC, recorded 0.1.20 and live tests. Push follows Herdr's attention rule from the ordered mirror and is covered by unit, RPC and live tests.",
+      "status": "pending",
+      "remaining": "Independent review; owner device step B with Herdr's phone and desktop apps. Core has no compare-and-set (upstream Q7): a change another client makes that World's mirror has not yet received, or an unread that returns the label to the decided value within one write, can still be overwritten; a core-side CAS or numeric max would close it.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": ["quint/herdr-core-seen.qnt"],
+        "contracts": ["openspec/changes/herdr-core-runtime/model.md"],
+        "tests": [
+          "quint/herdr-core-seen.test.ts",
+          "web/src/world/coreShared.test.ts",
+          "server/src/herdr-core/shared-state.test.ts",
+          "server/src/rpc/core-shared.test.ts",
+          "server/src/herdr-core/connections.test.ts"
+        ],
+        "checks": [
+          "bun quint/run.ts --case herdr-core-seen",
+          "bun run verification:gate"
+        ],
+        "review": "New design contract pending PR review."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

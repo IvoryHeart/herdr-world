@@ -182,6 +182,8 @@
   "rpc:world.core.room.create": "allow deny deny deny deny deny",
   "rpc:world.core.room.rename": "allow deny deny deny deny deny",
   "rpc:world.chimes.save": "allow deny deny deny deny deny",
+  "rpc:world.core.favourite": "allow deny deny deny deny deny",
+  "rpc:world.core.seen": "allow deny deny deny deny deny",
   "rpc:world.desk.get": "allow deny deny deny deny deny",
   "rpc:world.desk.observe": "allow deny deny deny deny deny",
   "rpc:world.desk.open": "allow deny deny deny deny deny",

@@ -1,4 +1,5 @@
 import type { CoreByteStream } from "./stream";
+import { isSharedLabelChange, type SharedLabelChange } from "./shared-state";
 import {
   CoreProtocolError,
   creditFrame,
@@ -11,7 +12,7 @@ import {
 
 /** The protocol generation World speaks; core refuses any other in `hello`. */
 export const CORE_PROTOCOL_GENERATION = 1;
-/** Methods this client may call: observation only, built from typed verbs. */
+/** Methods observation needs, built from typed verbs. */
 const OBSERVATION_METHODS = [
   "server.status",
   "terminal.list",
@@ -22,9 +23,11 @@ const OBSERVATION_METHODS = [
 type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
 /**
  * The writes World makes, each built from a typed verb below: start a
- * program (`terminal.run`), end one (`terminal.kill`) and set labels.
- * Never `terminal.send`/`keys` (the delivery item), `machine.*`, `file.*`,
- * `server.stop`/`restart` or `terminal.put`.
+ * program (`terminal.run`), end one (`terminal.kill`) and set labels (the
+ * shared `herdr.seen`/`herdr.pinned`, and placement at launch). None is
+ * required for observation: on a core without one, that action fails and
+ * World keeps observing. Never `terminal.send`/`keys` (the delivery item),
+ * `machine.*`, `file.*`, `server.stop`/`restart` or `terminal.put`.
  */
 export type CoreWriteMethod =
   | "terminal.run"
@@ -483,6 +486,20 @@ export class CoreClient {
       if (error instanceof CoreRpcError) throw error;
       throw new CoreWriteUncertainError(method, { cause: error });
     }
+  }
+
+  /**
+   * Sets one shared label on a local terminal by its address (never a name,
+   * which another terminal could take). Nothing else is ever labelled.
+   */
+  shareLabel(address: string, change: SharedLabelChange, timeoutMs = 5_000) {
+    if (!/^t\d{1,9}$/.test(address) || !isSharedLabelChange(change))
+      return Promise.reject(new Error("not a shared label change"));
+    return this.call(
+      "terminal.label",
+      { terminal: address, labels: { ...change } },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
   }
 
   /**

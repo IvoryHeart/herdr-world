@@ -308,6 +308,8 @@ describe("rooms follow Herdr's desktop app placement", () => {
       agent: "claude",
       blocked_kind: "permission",
       status_message: "Run tests?",
+      // Shared with Herdr's apps: the turn to mark seen (no seen label yet).
+      turn: 0,
     });
     expect(topology.agents[0]).toEqual({
       pane_id: "t1",
@@ -321,6 +323,32 @@ describe("rooms follow Herdr's desktop app placement", () => {
       agent_status: "unknown",
     });
     expect(topology.panes[2]).not.toHaveProperty("agent");
+    // Shells have no turns to share.
+    expect(topology.panes[2]).not.toHaveProperty("turn");
+  });
+
+  test("seen and favourite come from the shared labels", () => {
+    const rows = coreTopology(
+      [
+        record({
+          address: "t1",
+          argv: ["claude"],
+          turn: 4,
+          status: { state: "done" },
+          labels: { "herdr.seen": "3", "herdr.pinned": "1" },
+        }),
+        record({ address: "t2", labels: { "herdr.pinned": "" } }),
+      ],
+      "box",
+    );
+    expect(rows.panes[0]).toMatchObject({
+      agent_status: "done",
+      turn: 4,
+      seen_turn: 3,
+      favourite: true,
+    });
+    expect(rows.panes[1]).not.toHaveProperty("favourite");
+    expect(rows.panes[1]).not.toHaveProperty("seen_turn");
   });
 });
 

@@ -1,4 +1,9 @@
 import { coreWitnesses, runCoreVerification } from "./herdr-core-runtime";
+import {
+  runSeenVerification,
+  seenMismatches,
+  seenWitnesses,
+} from "./herdr-core-seen";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
 import {
@@ -59,6 +64,11 @@ const cases = [
     name: "herdr-core-runtime",
     witnesses: coreWitnesses,
     mismatches: ["core.state"],
+  },
+  {
+    name: "herdr-core-seen",
+    witnesses: seenWitnesses,
+    mismatches: seenMismatches,
   },
   {
     name: "binding-resolution",
@@ -678,6 +688,18 @@ export async function runReviewedQuintModels(
           command,
           mutate: (fault) =>
             implementationMutation("herdr-core-runtime", fault),
+        });
+        results.push(result);
+        console.log(JSON.stringify(result));
+        continue;
+      }
+      if (item.name === "herdr-core-seen") {
+        const result = await runSeenVerification({
+          root,
+          output,
+          artifacts,
+          command,
+          mutate: (fault) => implementationMutation("herdr-core-seen", fault),
         });
         results.push(result);
         console.log(JSON.stringify(result));

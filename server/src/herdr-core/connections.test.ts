@@ -26,6 +26,8 @@ import { CoreFenceError, CoreOperationFence } from "./fence";
 import { CORE_FIXTURE_CONNECTION_ID, createCoreFixture } from "./fixture";
 import type { CoreObservation } from "./observations";
 import { readCoreScreen } from "./runtime";
+import { coreAgentStatus } from "./topology";
+import { handleCoreSharedRpc } from "../rpc/core-shared";
 import { localCoreTransport } from "./transport";
 import { FakeCore } from "./testing/fake-core";
 
@@ -365,6 +367,58 @@ describe("herdr-core connections", () => {
     ).toEqual(first.terminals.map((t) => [t.address, t.name]));
     await fixture.remove();
     expect(w.service.coreList()).toEqual([]);
+  });
+
+  test("the preview fixture walks the shared seen and favourite try-out", async () => {
+    const w = world();
+    const fixture = createCoreFixture(() => w.service, { finishMs: 20 });
+    expect(() => fixture.otherApp("unread")).toThrow("start");
+    await fixture.start();
+    await until(() => w.core.manager.status("core-fixture").state === "ready");
+    const lease = () => w.core.manager.readyRuntimeLease("core-fixture")!;
+    const address = observed(w, "core-fixture")!.terminals.find(
+      (t) => t.name === "scout",
+    )!.address;
+    const scout = () => lease().runtime.core.terminal(address)!;
+    const status = () => coreAgentStatus(scout(), 0);
+    await until(() => status() === "done");
+    const call = async (method: string, extra: Record<string, unknown>) => {
+      let error: unknown = null;
+      await handleCoreSharedRpc({
+        id: "1",
+        method,
+        params: {
+          connection_id: "core-fixture",
+          connection_generation: lease().generation,
+          terminal: address,
+          ...extra,
+        },
+        sendReply: () => true,
+        sendError: (_context, failure) => {
+          error = failure;
+        },
+        services: { coreConnections: w.core.manager },
+      });
+      expect(error).toBeNull();
+    };
+    // Looking in World clears done for every client.
+    await call("world.core.seen", { turn: 1, seen: null });
+    await until(() => status() === "idle");
+    // The phone marks it unread: done again in World too. (The browser
+    // shares a turn once per look, so a screen left on does not undo it.)
+    fixture.otherApp("unread");
+    await until(() => status() === "done");
+    expect(scout().labels).toMatchObject({ "herdr.seen": "0" });
+    // Another turn while hidden: done until looked at.
+    fixture.turn();
+    await until(() => scout().turn === 2);
+    expect(status()).toBe("done");
+    // Favourite both ways.
+    fixture.otherApp("pin");
+    await until(() => scout().labels?.["herdr.pinned"] === "1");
+    await call("world.core.favourite", { favourite: false });
+    await until(() => scout().labels?.["herdr.pinned"] === undefined);
+    await fixture.remove();
   });
 
   test("the fixture never adopts or removes a profile it does not own", async () => {

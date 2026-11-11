@@ -48,6 +48,7 @@ import {
 } from "../http/herdr-setup";
 import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
+import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import {
   createSourcesHttpHandler,
@@ -303,6 +304,8 @@ async function compose(
     observed: publishWorldInvalidation,
     profiles: () => connectionProfiles,
     topology: storage.coreTopology,
+    // Core has no notification of its own: push follows its status events.
+    push: (task, isCurrent) => webPush.notify(task, isCurrent),
   });
   /** The agent bin: reversible holding, a scheduled bus, then a durable fenced close. */
   const bin = createBinService({
@@ -613,23 +616,20 @@ async function compose(
           clientLabel,
           markRpcError,
           taskNotificationSource: config.taskNotificationSource,
-          onTaskEvent: (event) => {
-            const connections = connectionProfiles.list();
+          onTaskEvent: (event) =>
             webPush.notify(
-              {
-                ...event,
-                connectionId: identity.id,
-                connectionLabel:
-                  connections.length > 1
-                    ? (connections.find(
-                        (connection) => connection.id === identity.id,
-                      )?.label ?? identity.label)
-                    : undefined,
-                runtimeGeneration: context.generation,
-              },
+              connectionTaskPush(
+                event,
+                identity.id,
+                context.generation,
+                [
+                  ...connectionProfiles.list(),
+                  ...connectionProfiles.coreList(),
+                ],
+                identity.label,
+              ),
               context.isCurrent,
-            );
-          },
+            ),
           onEvent: (event, eventIdentity, kind) => {
             if (!context.isCurrent()) return;
             publishWorldInvalidation(
@@ -781,6 +781,7 @@ async function compose(
     clients,
     connectionManager,
     connectionProfiles,
+    coreConnections: core.manager,
     coreFixture: core.fixture,
     core: coreRpc,
     focusedAcquisition,
