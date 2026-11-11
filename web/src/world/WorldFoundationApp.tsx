@@ -34,6 +34,7 @@ import {
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   writeInspectorPreferences,
 } from "../workspaceResource";
+import { coreAuthorityFrom, provideFloatShellAuthority } from "./floatShell";
 import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
 import { buildWorldObject, type WorldObject } from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
@@ -250,7 +251,14 @@ export default function WorldFoundationApp() {
       () => store.get().activeConnectionId,
     );
     worldRuntimeStore.start();
-    return () => worldRuntimeStore.stop();
+    // Open again in a core float shell takes authority from this read model.
+    const offFloat = provideFloatShellAuthority(
+      coreAuthorityFrom(worldRuntimeStore),
+    );
+    return () => {
+      offFloat();
+      worldRuntimeStore.stop();
+    };
   }, []);
 
   useEffect(() => {

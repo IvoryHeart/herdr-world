@@ -8,20 +8,17 @@ import { isMobileLayout } from "../layoutPreferences";
 import { pluginActionShortcut } from "../pluginActionShortcuts";
 import { store } from "../store";
 import {
-  coreAuthorityFrom,
   type FloatShellAuthority,
+  floatShellAuthority,
   type FloatShellTarget,
   hideFloatShell,
   useFloatShellTarget,
 } from "../world/floatShell";
-import { worldRuntimeStore } from "../world/runtimeStore";
 import { FloatShellInput } from "./floatShellInput";
 
 const RESIZE_DEBOUNCE_MS = 150;
 const TRANSPORT_LOST = "World's connection was lost; open the shell again";
 const NOT_READY = "That host is not connected right now; try again";
-
-const readyGeneration = coreAuthorityFrom(worldRuntimeStore);
 
 type Phase =
   | { kind: "opening" }
@@ -57,7 +54,7 @@ export function FloatShellOverlay({
   terminalTheme,
   terminalFontFamily = TERMINAL_FONT_FAMILY,
   terminalFontScale,
-  authority = readyGeneration,
+  authority = floatShellAuthority,
 }: {
   terminalTheme: ITheme;
   terminalFontFamily?: string;

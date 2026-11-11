@@ -2,10 +2,12 @@ import { afterEach, expect, test } from "bun:test";
 import {
   canOpenRoomShell,
   coreAuthorityFrom,
+  floatShellAuthority,
   floatShellTarget,
   type HerdrFloatRoute,
   hideFloatShell,
   openRoomShell,
+  provideFloatShellAuthority,
 } from "./floatShell";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 
@@ -124,4 +126,12 @@ test("Open again takes a core connection's current generation, only while it is 
   expect(authority("down")).toBeNull();
   expect(authority("cached")).toBeNull();
   expect(authority("gone")).toBeNull();
+});
+
+test("Open again has no authority until World's read model provides it", () => {
+  expect(floatShellAuthority("core")).toBeNull();
+  const off = provideFloatShellAuthority((id) => (id === "core" ? 7 : null));
+  expect(floatShellAuthority("core")).toBe(7);
+  off();
+  expect(floatShellAuthority("core")).toBeNull();
 });

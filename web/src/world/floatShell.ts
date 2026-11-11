@@ -49,6 +49,23 @@ export function coreAuthorityFrom(store: {
   };
 }
 
+const NO_AUTHORITY: FloatShellAuthority = () => null;
+let authority = NO_AUTHORITY;
+
+/**
+ * World's read model (`WorldFoundationApp`) provides where Open again takes
+ * its authority; without it, a closed view cannot reopen.
+ */
+export function provideFloatShellAuthority(next: FloatShellAuthority) {
+  authority = next;
+  return () => {
+    if (authority === next) authority = NO_AUTHORITY;
+  };
+}
+
+export const floatShellAuthority: FloatShellAuthority = (connectionId) =>
+  authority(connectionId);
+
 let target: FloatShellTarget | null = null;
 const listeners = new Set<() => void>();
 
