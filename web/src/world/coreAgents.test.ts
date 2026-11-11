@@ -222,7 +222,9 @@ describe("core agents in World's views", () => {
         actionable: false,
         viewOnly: CORE_VIEW_ONLY_REASON,
       });
-      expect(Object.values(leaf.capabilities).some(Boolean)).toBe(false);
+      expect(leaf.capabilities.files).toBe(true);
+      expect(leaf.capabilities.changes).toBe(true);
+      expect(leaf.capabilities.openTerminal).toBe(false);
       // Its terminal can be watched on this connection generation only.
       expect(leaf.watch).toEqual({
         connectionId: "box-core",
@@ -292,6 +294,7 @@ describe("core agents in World's views", () => {
       rename: false,
       close: false,
       core: true,
+      worktrees: true,
       manageReason: CORE_APP_SPACE_REASON,
     });
     expect(
@@ -304,6 +307,7 @@ describe("core agents in World's views", () => {
         rename: true,
         close: true,
         core: true,
+        worktrees: true,
       });
     // A stale core room is history: nothing starts or ends there.
     expect(spaceRoomActionCapabilities(space, true)).toEqual({

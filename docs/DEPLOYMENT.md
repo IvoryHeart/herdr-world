@@ -1080,6 +1080,15 @@ terminal output, agent history or Git changes. New installations allow no
 workspaces. Manual approval is the default for proposed workspace actions; high
 permission is an explicit setting.
 
+Core rooms appear beside TUI workspaces. Allow the core room in Ranger's
+settings, then ask for its status, Git changes or an agent's terminal screen.
+Core reads use only the visible screen; history is explicitly unavailable.
+Ranger can preview a new worktree or prompt for confirmation; core handles
+prompt delivery under the original program and foreground, and uncertain
+sends never retry automatically. Use World's launch, bin and room controls
+for core lifecycle actions. A saved task retains core's durable identity and
+refuses a wiped or replaced core.
+
 Tasks run in separate service-owned conversations, either once, at an interval,
 or daily. Monitoring tasks can notify only when Ranger detects a meaningful
 change. Review and confirm proposed schedules before enabling them. Saved tasks

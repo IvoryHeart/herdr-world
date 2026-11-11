@@ -1,0 +1,75 @@
+.core-worktrees-new {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.core-worktrees-new .form-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.core-worktrees-new .form-field input {
+  width: 100%;
+}
+
+.core-worktrees-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.core-worktrees-list h3 {
+  margin: 16px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.core-worktrees-list ul {
+  display: grid;
+  gap: 4px;
+  max-height: 36vh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.core-worktrees-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.core-worktrees-entry {
+  display: grid;
+  min-width: 0;
+}
+
+.core-worktrees-entry b,
+.core-worktrees-entry small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-worktrees-entry small {
+  color: var(--muted);
+}
+
+.core-worktrees-error {
+  color: var(--danger, #d14343);
+}
+
+.core-worktrees .modal-actions {
+  flex-wrap: wrap;
+}
+
+.core-worktrees-remove {
+  margin-right: auto;
+}

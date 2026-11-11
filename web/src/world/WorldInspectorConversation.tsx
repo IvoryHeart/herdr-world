@@ -1,6 +1,7 @@
 import { watchConversation } from "../conversationWatch";
 import { harnessLabel } from "./agentProfiles";
 import { WorldLoader } from "./WorldLoader";
+import { useCoreRuntimeConnection } from "./runtimeStore";
 import { useEffectCallback } from "../useEffectCallback";
 import type { Conversation } from "../components/chat/types";
 import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
@@ -111,11 +112,21 @@ const emptyFile = (): ActiveFilePreviewSelection => ({
 export default function WorldInspectorConversationView(
   props: Parameters<typeof InspectorResources>[0],
 ) {
+  const core = useCoreRuntimeConnection(props.conversation.connectionId);
   return (
     <OperationalContext.Provider
       value={{
         connectionId: props.conversation.connectionId,
         runtimeGeneration: props.conversation.runtimeGeneration,
+        ...(core
+          ? {
+              resourceTopology: {
+                workspaces: core.snapshot?.workspaces ?? [],
+                tabs: core.snapshot?.tabs ?? [],
+                panes: core.snapshot?.panes ?? [],
+              },
+            }
+          : {}),
       }}
     >
       <InspectorResources {...props} />
@@ -206,7 +217,7 @@ function InspectorResources({
         }
       : null,
   );
-  const { workspaces, panes, tabs, status, catalogueReady } = useStoreSelector(
+  const hostTopology = useStoreSelector(
     (snapshot) => ({
       workspaces: snapshot.workspaces,
       tabs: snapshot.tabs,
@@ -216,6 +227,23 @@ function InspectorResources({
     }),
     shallowEqual,
   );
+  // A herdr-core window (Files and Changes) reads World's observation of
+  // its core: there is no Herdr session for it.
+  const core = useCoreRuntimeConnection(conversation.connectionId);
+  const coreLive =
+    core !== null &&
+    core.state === "ready" &&
+    !core.stale &&
+    core.generation === conversation.runtimeGeneration;
+  const { workspaces, panes, tabs, status, catalogueReady } = core
+    ? {
+        workspaces: core.snapshot?.workspaces ?? [],
+        tabs: core.snapshot?.tabs ?? [],
+        panes: core.snapshot?.panes ?? [],
+        status: coreLive ? hostTopology.status : ("disconnected" as const),
+        catalogueReady: coreLive,
+      }
+    : hostTopology;
   const workspace = workspaces.find(
     (candidate) => candidate.workspace_id === conversation.workspaceId,
   );

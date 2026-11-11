@@ -1113,7 +1113,7 @@ export class FakeCore {
         const p = request.params ?? {};
         if (
           p.caller !== undefined ||
-          p.wait !== undefined ||
+          (p.wait !== undefined && p.wait !== false) ||
           p.if !== undefined ||
           typeof p.text !== "string" ||
           typeof p.force !== "boolean"

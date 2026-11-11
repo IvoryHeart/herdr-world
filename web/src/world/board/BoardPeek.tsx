@@ -48,14 +48,18 @@ export function BoardPeek({
   notify,
   deskStore = sharedDeskStore(),
   onOpen,
+  onFiles,
   onClose,
   onHold,
 }: {
   target: BoardPeekTarget;
   notify(kind: "ok" | "error", text: string): void;
   deskStore?: WorldDeskStore;
-  /** Open the agent as the user opens agents: its Chat or its terminal. */
+  /**
+   * Open the agent as the user opens agents: its Chat or its terminal watch.
+   */
   onOpen(): void;
+  onFiles?: () => void;
   onClose(): void;
   /** The pointer is over the peek: keep it while it is. */
   onHold(hold: boolean): void;
@@ -266,6 +270,16 @@ export function BoardPeek({
         {done && report.review.failed && !leaf.viewOnly ? (
           <button type="button" onClick={report.review.onRetry}>
             <span>Retry</span>
+          </button>
+        ) : null}
+        {onFiles && leaf.viewOnly && leaf.capabilities.files && !leaf.stale ? (
+          <button
+            type="button"
+            title="Files and Changes"
+            aria-label={`Open ${name}'s files`}
+            onClick={onFiles}
+          >
+            <span>Files</span>
           </button>
         ) : null}
         {leaf.watch ? (

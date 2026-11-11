@@ -494,8 +494,19 @@ export class CoreClient {
   sendText(
     address: string,
     text: string,
-    options: { force: boolean; cancel?: AbortSignal; timeoutMs?: number },
+    options:
+      | { force: boolean; cancel?: AbortSignal; timeoutMs?: number }
+      | number = 15_000,
   ) {
+    if (typeof options === "number") {
+      if (!text.trim() || text.length > 32_000 || text.includes("\0"))
+        throw new CoreProtocolError("invalid message text");
+      return this.write(
+        "terminal.send",
+        { terminal: localAddress(address), text, force: false, wait: false },
+        options,
+      ) as Promise<CoreSendResult>;
+    }
     return this.write(
       ...coreSendRequest(address, text, options),
     ) as Promise<CoreSendResult>;

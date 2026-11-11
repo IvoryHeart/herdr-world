@@ -101,6 +101,8 @@ export type WorldCliDeps = {
   ): Promise<{ actor: CliActor; distance: number } | undefined>;
   incarnation?: string;
   hosts(): CliHost[];
+  /** herdr-core connections, for callers inside core terminals (P4). */
+  core?(): import("./world-cli-actor").CoreCallerSource | null;
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
@@ -914,6 +916,7 @@ export function createWorldCli(deps: WorldCliDeps) {
           request.caller,
           locate,
           deps.identifyCore,
+          deps.core?.(),
         );
         actor = identity.actor;
         admission.actor = actor.verified ? "cli_verified" : "cli_unverified";

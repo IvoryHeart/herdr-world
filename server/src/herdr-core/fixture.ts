@@ -1,4 +1,11 @@
-import { chmodSync, mkdtempSync, rmSync } from "node:fs";
+import { type GuiSettings, repoSettingsKey } from "../config/gui-settings";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeCore } from "./testing/fake-core";
@@ -52,7 +59,7 @@ function screen(program: string, lines: string[]) {
  * finishes soon after World connects, one harness with no status
  * integration, and a plain shell. Returns the agents the fixture drives.
  */
-function populate(fake: FakeCore) {
+function populate(fake: FakeCore, cwd: string) {
   const space = (tab: string, where: string) => ({
     "herdr.space": "fx-web",
     "herdr.tab": tab,
@@ -63,12 +70,13 @@ function populate(fake: FakeCore) {
       name,
       argv: [program],
       keep: true,
+      cwd,
       labels,
       foreground: {
         pid: 1,
         name: program,
         argv: [program],
-        cwd: "/tmp/example",
+        cwd,
       },
     });
   const reviewer = agent(
@@ -101,13 +109,14 @@ function populate(fake: FakeCore) {
   const tests = fake.create({
     name: "tests",
     argv: ["claude"],
+    cwd,
     parent: builder,
     die_with_parent: true,
     foreground: {
       pid: 1,
       name: "claude",
       argv: ["claude"],
-      cwd: "/tmp/example",
+      cwd,
     },
   });
   fake.report(tests, { state: "working", app: "claude-code" });
@@ -216,6 +225,27 @@ export function createCoreFixture(
   };
   return {
     status,
+    /** Synthetic preview settings, never persisted or applied to user repos. */
+    settingsFor(connectionId: string, settings: GuiSettings): GuiSettings {
+      if (
+        connectionId !== CORE_FIXTURE_CONNECTION_ID ||
+        !root ||
+        ownership(fixtureProfile(profiles())) !== "current"
+      )
+        return settings;
+      const repo = join(root, "example-repo");
+      const key = repoSettingsKey(repo, undefined, CORE_FIXTURE_CONNECTION_ID)!;
+      return {
+        ...settings,
+        repositories: {
+          ...settings.repositories,
+          [key]: {
+            worktree_directory: join(root, "worktrees"),
+            worktree_hooks_enabled: true,
+          },
+        },
+      };
+    },
     async start(): Promise<CoreFixtureStatus> {
       const service = profiles();
       const existing = fixtureProfile(service);
@@ -230,8 +260,52 @@ export function createCoreFixture(
         chmodSync(root, 0o700);
         fake = new FakeCore({ name: "fixture-host" });
         fake.revive();
+        const repo = join(root, "example-repo");
+        mkdirSync(repo);
+        writeFileSync(
+          join(repo, "README.md"),
+          "# Example core workspace\n\nFiles, worktrees and Ranger share this disposable repository.\n",
+        );
+        writeFileSync(
+          join(repo, "paseo.json"),
+          JSON.stringify({
+            worktree: {
+              setup: "printf 'Setup hook ran\\n'",
+              opened: "printf 'Opened hook ran\\n'",
+              teardown: "printf 'Teardown hook ran\\n'",
+              removed: "printf 'Removed hook ran\\n'",
+            },
+          }),
+        );
+        for (const args of [
+          ["init", "-q", "-b", "main"],
+          ["add", "."],
+          [
+            "-c",
+            "user.name=Example",
+            "-c",
+            "user.email=dev@example.com",
+            "commit",
+            "-q",
+            "-m",
+            "Example workspace",
+          ],
+        ]) {
+          const result = Bun.spawnSync(["git", "-C", repo, ...args], {
+            env: {
+              PATH: process.env.PATH ?? "/usr/bin:/bin",
+              HOME: root,
+              XDG_CONFIG_HOME: root,
+              GIT_CONFIG_NOSYSTEM: "1",
+            },
+          });
+          if (result.exitCode !== 0)
+            throw new Error(
+              "Cannot create disposable core fixture repository: Git is required.",
+            );
+        }
         paneStep = 0;
-        agents = populate(fake);
+        agents = populate(fake, repo);
         scout = agents.scout;
         fake.onTyped = () => {
           if (fake && agents)

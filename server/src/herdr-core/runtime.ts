@@ -1,4 +1,5 @@
 import type { CoreKeysResult, CoreSendResult } from "./delivery-params";
+import { coreOccupantFingerprint } from "./occupant";
 import type {
   ConnectionRuntime,
   ConnectionRuntimeContext,
@@ -17,6 +18,7 @@ import {
   type CoreRunRequest,
   type CoreServerStatus,
   CoreUnavailableError,
+  CoreUnsupportedError,
   type CoreWriteMethod,
   type CoreWatch,
   type CoreWatchSink,
@@ -93,6 +95,7 @@ export type CoreRuntimeOptions = {
 export type CoreConnectionRuntime = ConnectionRuntime & {
   readonly runtime: "herdr-core";
   readonly local: boolean;
+  readonly signal: AbortSignal;
   readonly core: CoreFenceView & {
     readonly version: string | null;
     readonly mirror: CoreMirror;
@@ -129,6 +132,14 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
     request: CoreRunRequest,
   ): Promise<CoreTerminalRecord>;
   kill(fence: CoreOperationFence<CoreConnectionRuntime>): Promise<void>;
+  /** Native answer/prompt delivery; fresh get and foreground check before send. */
+  send(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    text: string,
+    beforeSubmit: () => Promise<boolean>,
+    timeoutMs?: number,
+    authorized?: () => boolean,
+  ): Promise<{ status: string | null; turn: number; started: boolean | null }>;
   label(
     fence: CoreOperationFence<CoreConnectionRuntime>,
     labels: Record<string, string>,
@@ -363,6 +374,7 @@ export function createCoreConnectionRuntime(
   const fail = (error: Error) => {
     if (failed || stopped) return;
     failed = true;
+    abort.abort(error);
     withdraw();
     client?.close(error.message);
     notify();
@@ -598,6 +610,7 @@ export function createCoreConnectionRuntime(
     identity,
     runtime: "herdr-core",
     local: options.local === true,
+    signal: abort.signal,
     core: view,
     operations: coreRuntimeReader({
       mirror,
@@ -626,6 +639,74 @@ export function createCoreConnectionRuntime(
       write(fence, true, async (current) => {
         await current.kill(fence.occupant!.address);
       }),
+    send: async (
+      fence,
+      request: string | { text: string; force: boolean },
+      options:
+        | (() => Promise<boolean>)
+        | { cancel: AbortSignal; timeoutMs?: number },
+      timeoutMs?: number,
+      authorized?: () => boolean,
+    ) => {
+      if (typeof request !== "string")
+        return write(
+          fence,
+          true,
+          (current) =>
+            current.sendText(fence.occupant!.address, request.text, {
+              ...(options as { cancel: AbortSignal; timeoutMs?: number }),
+              force: request.force,
+            }),
+          false,
+        );
+      const text = request;
+      const beforeSubmit = options as () => Promise<boolean>;
+      if (!self.offers("terminal.send"))
+        throw new CoreUnsupportedError(
+          view.version ?? "unknown",
+          "terminal.send",
+        );
+      if (fence.lease.runtime !== self || !fence.occupant)
+        throw new CoreFenceError("dispatch", "lease");
+      fence.check("dispatch");
+      if (!fence.occupant.foreground)
+        throw new CoreFenceError("dispatch", "foreground-changed");
+      const current = client;
+      if (!current) throw new CoreFenceError("dispatch", "not-actionable");
+      const expected = coreOccupantFingerprint(
+        fence.occupant.coreId,
+        view.terminal(fence.occupant.address)!,
+      );
+      if (!(await beforeSubmit()))
+        throw new CoreFenceError("dispatch", "lease");
+      // Core resolves current OS foreground in get. Never use a history read,
+      // forced send, caller, or a harness side channel. The queue race after
+      // this check belongs to core (Q3).
+      const record = await current.getTerminal(fence.occupant.address);
+      fence.check("dispatch");
+      if (
+        coreOccupantFingerprint(fence.occupant.coreId, record) !== expected ||
+        record.state !== "live"
+      )
+        throw new CoreFenceError("dispatch", "occupant-replaced");
+      const foreground = record.foreground as
+        | { pid?: number; name?: string }
+        | undefined;
+      if (
+        foreground?.pid !== fence.occupant.foreground.pid ||
+        foreground.name !== fence.occupant.foreground.name
+      )
+        throw new CoreFenceError("dispatch", "foreground-changed");
+      if (authorized && !authorized())
+        throw new CoreFenceError("dispatch", "lease");
+      const result = await current.sendText(
+        fence.occupant.address,
+        text,
+        timeoutMs,
+      );
+      fence.check("publication");
+      return result;
+    },
     label: (fence, labels) =>
       write(fence, true, async (current) => {
         await current.label(fence.occupant!.address, labels);
@@ -633,20 +714,6 @@ export function createCoreConnectionRuntime(
     watchTerminal,
     shareLabel,
     shells,
-    send: (fence, request, sendOptions) =>
-      write(
-        fence,
-        true,
-        (current) =>
-          current.sendText(fence.occupant!.address, request.text, {
-            force: request.force,
-            cancel: sendOptions.cancel,
-            ...(sendOptions.timeoutMs !== undefined
-              ? { timeoutMs: sendOptions.timeoutMs }
-              : {}),
-          }),
-        false,
-      ),
     keys: (fence, keys) =>
       write(
         fence,

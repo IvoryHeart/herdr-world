@@ -117,6 +117,11 @@ export interface Pane {
   seen_turn?: number;
   /** herdr-core: a favourite in every Herdr client (`herdr.pinned`). */
   favourite?: boolean;
+  /**
+   * herdr-core: the service's fingerprint of the program in this terminal
+   * (core, address, pid, program); a verified ask from it carries the same.
+   */
+  core_occupant_fingerprint?: string;
   /** Herdr agent.list state-change sequence, scoped to this server lifetime. */
   state_change_seq?: number;
   /** Session file modification time in epoch milliseconds, from the bridge. */

@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { StorageWriteRejected, type StorageRequest } from "./world-protocol";
 import {
   CORE_TOPOLOGY_LIMITS,
+  type CoreRoomCheckout,
   type CoreTopologyDocument,
   type CoreTopologyPort,
 } from "../herdr-core/layout";
@@ -30,6 +31,8 @@ export const coreTopologyMigration = `CREATE TABLE core_topology (
 const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const ADDRESS = /^t[1-9][0-9]{0,9}$/;
 const CORE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+/** An absolute path on the core's host, one line, bounded. */
+const HOST_PATH = /^\/[^\0\r\n]{0,4095}$/;
 
 export function emptyCoreTopology(coreId: string): CoreTopologyDocument {
   return { core_id: coreId, revision: 0, rooms: [] };
@@ -53,6 +56,7 @@ export function parseCoreTopology(value: unknown): CoreTopologyDocument {
   const ids = new Set<string>();
   const placed = new Set<string>();
   const spaces = new Set<string>();
+  const checkouts = new Set<string>();
   let tabs = 0;
   const parsed = rooms.map((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value))
@@ -76,6 +80,35 @@ export function parseCoreTopology(value: unknown): CoreTopologyDocument {
         fail("app space");
       spaces.add(room.app_space as string);
     }
+    let checkout: CoreRoomCheckout | undefined;
+    if (room.checkout !== undefined) {
+      const value = (
+        room.checkout && typeof room.checkout === "object" ? room.checkout : {}
+      ) as Record<string, unknown>;
+      if (
+        Array.isArray(room.checkout) ||
+        room.app_space !== undefined ||
+        typeof value.path !== "string" ||
+        !HOST_PATH.test(value.path) ||
+        typeof value.source !== "string" ||
+        !HOST_PATH.test(value.source) ||
+        checkouts.has(value.path) ||
+        (value.branch !== undefined &&
+          (typeof value.branch !== "string" ||
+            !value.branch ||
+            value.branch.length > 255 ||
+            /[\0\r\n]/.test(value.branch)))
+      )
+        fail("checkout");
+      checkouts.add(value.path as string);
+      checkout = {
+        path: value.path as string,
+        source: value.source as string,
+        ...(value.branch !== undefined
+          ? { branch: value.branch as string }
+          : {}),
+      };
+    }
     if (!Array.isArray(room.tabs)) fail("tabs");
     return {
       id: room.id as string,
@@ -83,6 +116,7 @@ export function parseCoreTopology(value: unknown): CoreTopologyDocument {
       ...(room.app_space !== undefined
         ? { app_space: room.app_space as string }
         : {}),
+      ...(checkout ? { checkout } : {}),
       tabs: (room.tabs as unknown[]).map((value) => {
         if (!value || typeof value !== "object" || Array.isArray(value))
           fail("tab");

@@ -1,4 +1,5 @@
-import { coreWitnesses, runCoreVerification } from "./herdr-core-runtime";
+import { coreWitnesses } from "./herdr-core-runtime";
+import { runCoreVerification } from "./herdr-core-verification";
 import {
   runSeenVerification,
   seenMismatches,
