@@ -2943,7 +2943,7 @@
       "area": "Herdr-core composed ordering and runtime authority",
       "owner": "quint/herdr-core-runtime.qnt",
       "requirement": "openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md",
-      "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, pre-send occupant fencing, core-side source-queue fencing assumed under Q3, existing-only connect, kill confirmation (M7: no observed unconfirmed descendant and no replaced program ends; a child created after World's last observation is core's under Q11) and worktree removal order (P4: teardown only on a matching confirmation; the checkout only after the confirmed kill and under the planning generation)",
+      "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, pre-send occupant fencing, core-side source-queue fencing assumed under Q3, existing-only connect, kill confirmation (M7: no observed unconfirmed descendant and no replaced program ends; a child created after World's last observation is core's under Q11) and worktree removal order (P4: teardown only on a matching confirmation; the checkout only after the confirmed kill and under the planning generation, profile and core epoch)",
       "existingTests": [
         "quint/herdr-core-runtime.test.ts",
         "server/src/herdr-core/mirror.test.ts",

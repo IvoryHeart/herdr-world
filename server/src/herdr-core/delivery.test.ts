@@ -137,3 +137,29 @@ test("recorded release send traffic replays byte-for-byte across split reads", a
     }
   }
 });
+
+test("a core without native send refuses before marking possible input", async () => {
+  const w = await coreWorld({ observeOnly: true });
+  worlds.push(w);
+  await w.connect();
+  const address = w.fake.create({
+    argv: ["/usr/bin/codex"],
+    foreground: { pid: 51001, name: "codex" },
+  });
+  await w.settle();
+  let marked = false;
+  await expect(
+    w
+      .lease()
+      .runtime.send(
+        CoreOperationFence.admit(w.lease(), address),
+        "An answer",
+        async () => {
+          marked = true;
+          return true;
+        },
+      ),
+  ).rejects.toThrow("does not offer terminal.send");
+  expect(marked).toBe(false);
+  expect(w.fake.calls.filter((c) => c.method === "terminal.send")).toEqual([]);
+});

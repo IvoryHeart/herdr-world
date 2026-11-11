@@ -17,6 +17,7 @@ import {
   type CoreRunRequest,
   type CoreServerStatus,
   CoreUnavailableError,
+  CoreUnsupportedError,
   type CoreWriteMethod,
 } from "./client";
 import {
@@ -548,6 +549,11 @@ export function createCoreConnectionRuntime(
         await current.kill(fence.occupant!.address);
       }),
     send: async (fence, text, beforeSubmit, timeoutMs, authorized) => {
+      if (!self.offers("terminal.send"))
+        throw new CoreUnsupportedError(
+          view.version ?? "unknown",
+          "terminal.send",
+        );
       if (fence.lease.runtime !== self || !fence.occupant)
         throw new CoreFenceError("dispatch", "lease");
       fence.check("dispatch");

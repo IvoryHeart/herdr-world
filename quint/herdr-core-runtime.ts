@@ -92,6 +92,8 @@ export type CoreState = {
   killed: boolean;
   /** P4 worktree removal: the generation it was planned in, then its steps. */
   planGen: number;
+  planOwner: number;
+  planEpoch: number;
   tornDown: boolean;
   removed: boolean;
 };
@@ -150,6 +152,8 @@ export class CoreProtocolFake {
     confirmedOccupant: -1,
     killed: false,
     planGen: -1,
+    planOwner: -1,
+    planEpoch: -1,
     tornDown: false,
     removed: false,
   };
@@ -441,6 +445,8 @@ export class CoreProtocolFake {
         };
         s.planned = true;
         s.planGen = s.generation;
+        s.planOwner = s.owner;
+        s.planEpoch = s.epoch;
         s.confirmedChild = plan.descendants.some((e) => e.address === "t2");
         s.confirmedOccupant =
           this.latest!.terminal("t1")?.argv?.[0] === "agent" ? 0 : 1;
@@ -472,7 +478,15 @@ export class CoreProtocolFake {
         // removeCoreWorktree checks the confirmation with the production
         // plan and refusal (assertCoreKillConfirmed) before the hook runs.
         assert(s.planned && !s.killed && !s.tornDown);
-        if (!s.ready || !s.mirror[0]!.alive) break;
+        if (
+          !s.ready ||
+          !s.mirror[0]!.alive ||
+          !s.connected ||
+          s.generation !== s.planGen ||
+          s.owner !== s.planOwner ||
+          s.epoch !== s.planEpoch
+        )
+          break;
         const plan = this.subjects.coreKillPlan(
           "core",
           this.latest!.terminals(),
@@ -486,7 +500,12 @@ export class CoreProtocolFake {
       case "removeCheckout":
         // Removal follows the confirmed kill, under the planned generation.
         assert(s.tornDown && !s.removed);
-        s.removed = s.killed && s.connected && s.generation === s.planGen;
+        s.removed =
+          s.killed &&
+          s.connected &&
+          s.generation === s.planGen &&
+          s.owner === s.planOwner &&
+          s.epoch === s.planEpoch;
         break;
       default:
         assert.fail(`unknown core action: ${op}`);

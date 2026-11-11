@@ -16,7 +16,7 @@ module herdr_core_runtime {
     pending: bool, queued: bool, uncertain: bool, attempts: int, delivered: int,
     admitted: bool, dispatched: bool, published: bool, safe: bool,
     child: bool, planned: bool, confirmedChild: bool, confirmedOccupant: int, killed: bool,
-    planGen: int, tornDown: bool, removed: bool }
+    planGen: int, planOwner: int, planEpoch: int, tornDown: bool, removed: bool }
   var family: str
   var c: State
   var op: str
@@ -36,7 +36,7 @@ module herdr_core_runtime {
       // Terminal 1, once born, is a child core ends with terminal 0 (M7).
       child: choice >= 2, planned: false, confirmedChild: false,
       confirmedOccupant: -1, killed: false,
-      planGen: -1, tornDown: false, removed: false },
+      planGen: -1, planOwner: -1, planEpoch: -1, tornDown: false, removed: false },
     op' = "init", target' = 0,
     }
   }
@@ -174,7 +174,7 @@ module herdr_core_runtime {
   action plan = all {
     family == "authority", c.ready, c.mirror[0].alive, not(c.planned),
     change({ ...c, planned: true, confirmedChild: c.child and c.mirror[1].alive,
-      confirmedOccupant: c.mirror[0].occupant, planGen: c.generation }, "plan", 0),
+      confirmedOccupant: c.mirror[0].occupant, planGen: c.generation, planOwner: c.owner, planEpoch: c.epoch }, "plan", 0),
   }
   action kill = all {
     c.planned, not(c.killed),
@@ -199,18 +199,21 @@ module herdr_core_runtime {
   // goes only after the teardown and after every confirmed terminal ended,
   // and only under the generation the removal was planned in: a reconnect
   // between steps stops it, so no folder is removed under a live program.
+  val planningLease = c.connected and c.generation == c.planGen and
+    c.owner == c.planOwner and c.epoch == c.planEpoch
   action teardown = all {
     family == "authority", c.planned, not(c.killed), not(c.tornDown),
     val unconfirmed = c.child and c.mirror[1].alive and not(c.confirmedChild)
     val replaced = c.mirror[0].occupant != c.confirmedOccupant
     val allowed = c.ready and c.mirror[0].alive and
+      (planningLease or fault("teardown-unconfirmed")) and
       (not(unconfirmed or replaced) or fault("teardown-unconfirmed"))
     change({ ...c, tornDown: allowed,
-      safe: c.safe and (not(allowed) or not(unconfirmed or replaced)) }, "teardown", 0),
+      safe: c.safe and (not(allowed) or (planningLease and not(unconfirmed or replaced))) }, "teardown", 0),
   }
   action removeCheckout = all {
     c.tornDown, not(c.removed),
-    val current = c.connected and c.generation == c.planGen
+    val current = planningLease
     val allowed = (c.killed or fault("remove-before-kill")) and
       (current or fault("remove-after-retire"))
     change({ ...c, removed: allowed,
@@ -235,8 +238,10 @@ module herdr_core_runtime {
   val orderedDelta = op == "receive" and c.ready and c.cursor > 0
   val missedCut = op == "missed"
   val gapRetired = (op == "heartbeat" or op == "receive") and not(c.ready)
-  // Rare under sampling; production controls search for it directly.
-  val noReceiveGap = not(op == "receive" and c.connected and not(c.ready))
+  // Search a gap on a known terminal: an unknown terminal has its own
+  // retirement guard, which would mask a missing sequence-gap guard.
+  val noReceiveGap = not(op == "receive" and c.connected and not(c.ready) and
+    c.mirror[target].born and c.mirror[target].alive)
   val reconnected = op == "baseline" and c.generation == 2 and c.ready
   val replacementFenced = op == "dispatch" and c.replaced and c.attempts == 0
   val queueFenced = op == "deliver" and c.replaced and c.delivered == 0

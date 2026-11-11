@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mutateImplementation } from "./implementationMutation";
+import type { CoreSubjects } from "./herdr-core-runtime";
 import { validateTrace } from "./traces";
 import { describe, expect, test } from "bun:test";
 import {
@@ -236,4 +241,60 @@ describe("a worktree's checkout goes only after its confirmed terminals (P4)", (
     broken.at(-1)!.c.removed = true;
     return expectObservationMismatch(() => replayCore(broken), ["core.state"]);
   });
+});
+
+test("a gap on an already observed terminal kills the production gap mutant", async () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    ["x", 0],
+    "drop",
+    ["y", 0],
+    "receive",
+  ]);
+  expect(states.at(-1)!.c.ready).toBe(false);
+  replayCore(states);
+  const output = await mkdtemp(join(tmpdir(), "core-gap-control-"));
+  try {
+    const mutant = await mutateImplementation(
+      "herdr-core-runtime",
+      "core-gap",
+      { root: process.cwd(), output },
+    );
+    const subjects = (await import(mutant)) as CoreSubjects;
+    await expectObservationMismatch(
+      () => replayCore(states, false, 2, subjects),
+      ["core.state"],
+    );
+  } finally {
+    await rm(output, { recursive: true, force: true });
+  }
+});
+
+test("worktree steps retain the planning profile and core epoch", () => {
+  for (const retire of ["switchProfile", "restart"] as const) {
+    const beforeHook = trace([
+      "connect",
+      "baseline",
+      "plan",
+      retire,
+      ...(retire === "restart" ? ["connect", "baseline"] : []),
+      "teardown",
+    ]);
+    expect(beforeHook.at(-1)!.c.tornDown).toBe(false);
+    replayCore(beforeHook.map((state) => ({ ...state, family: "authority" })));
+    const beforeRemove = trace([
+      "connect",
+      "baseline",
+      "plan",
+      "teardown",
+      "kill",
+      retire,
+      "removeCheckout",
+    ]);
+    expect(beforeRemove.at(-1)!.c.removed).toBe(false);
+    replayCore(
+      beforeRemove.map((state) => ({ ...state, family: "authority" })),
+    );
+  }
 });

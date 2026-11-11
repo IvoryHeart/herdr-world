@@ -33,6 +33,10 @@ export async function prepareCoreSend(args: {
   const paneId = params.pane_id,
     prompt = params.prompt;
   const host = lease.runtime;
+  if (!host.lease.runtime.offers("terminal.send"))
+    throw new AssistantUserError(
+      "This core does not offer native send; nothing was submitted.",
+    );
   const pane = (await host.operations.getTerminal({ pane_id: paneId })).pane;
   if (
     !lease.isCurrent() ||

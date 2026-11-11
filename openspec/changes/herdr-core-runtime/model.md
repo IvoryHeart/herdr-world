@@ -193,10 +193,16 @@ attention rule from the ordered mirror; both are checked by unit, RPC,
 recorded 0.1.20 and live-release tests, not by this model.
 
 Run `bun quint/run.ts --case herdr-core-seen` during development.
+The production gap control searches for a receive gap on an already observed
+terminal. An unknown terminal has an independent retirement guard and could
+otherwise mask a missing sequence-gap guard; the focused replay test also kills
+that production mutant with a lost delta on an existing terminal.
+
 ## Worktree removal (issue #871, P4)
 
 Removing a worktree room reuses the kill confirmation: `plan` also records
-the generation it was planned in (`planGen`). `teardown` (the worktree's
+the generation, profile and core epoch it was planned in (`planGen`,
+`planOwner`, `planEpoch`). `teardown` (the worktree's
 teardown hook) runs only while the observation still matches the
 confirmation, as `kill` is sent; a stale one runs nothing and ends nothing.
 `removeCheckout` removes the checkout only after the teardown, after the

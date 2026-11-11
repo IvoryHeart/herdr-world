@@ -66,6 +66,7 @@ function cliHost(
       };
     },
     delivery: (address, fingerprint, foreground) => {
+      if (!runtime.offers("terminal.send")) return null;
       const record = runtime.core.terminal(address);
       if (
         !record ||
