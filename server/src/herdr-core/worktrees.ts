@@ -74,6 +74,9 @@ function guard(
   const current = () => {
     if (
       !lease.isCurrent() ||
+      !host.lease.isCurrent() ||
+      host.identity.id !== lease.connectionId ||
+      host.lease.runtime !== lease.runtime ||
       host.generation !== lease.generation ||
       (authorized && !authorized())
     )

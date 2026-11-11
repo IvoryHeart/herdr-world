@@ -121,6 +121,27 @@ async function agentIn(w: World, folder: string) {
 }
 
 describe("core worktrees (P4)", () => {
+  test("colliding connection IDs and generations cannot pair another core's host with the lease", async () => {
+    const original = await world();
+    const replacement = await world();
+    const { repo, hooks } = repository(replacement.root);
+    await agentIn(replacement, repo);
+    const host = hostOf(replacement, repo);
+    expect(host.identity.id).toBe(original.lease().connectionId);
+    expect(host.generation).toBe(original.lease().generation);
+    await expect(
+      createCoreWorktree(
+        original.lease(),
+        { topology: original.topology, host },
+        { workspaceId: "hc:unplaced", branch: "wrong-core" },
+      ),
+    ).rejects.toBeInstanceOf(CoreOperationRefused);
+    expect(git(repo, "worktree", "list", "--porcelain")).not.toContain(
+      "wrong-core",
+    );
+    expect(hooks()).toBe("");
+  });
+
   test("create makes a linked checkout as World's room, runs setup, and agents start in it", async () => {
     const w = await world();
     const { repo, hooks } = repository(w.root);
