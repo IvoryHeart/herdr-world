@@ -19,6 +19,7 @@ import {
   resolveLocalCoreEndpoint,
 } from "./endpoint";
 import type { CoreTransport } from "./runtime";
+import { windowsSshCoreTransport } from "./windows";
 
 /** A local core: the lock is read again on every connect. */
 export function localCoreTransport(stateDir: string): CoreTransport {
@@ -51,8 +52,8 @@ export function sshCoreTransport(
   dependencies: SshCoreTransportDependencies = {},
 ): CoreTransport {
   const destination = profile.ssh_destination;
-  if (profile.type !== "ssh" || !destination)
-    throw new Error("an SSH core connection needs an SSH destination");
+  if (profile.type !== "ssh" || profile.remote_platform || !destination)
+    throw new Error("a Unix SSH core connection needs an SSH destination");
   const config = (
     dependencies.createConfig ??
     ((value: CoreConnectionProfile) =>
@@ -111,6 +112,8 @@ export function coreTransportForProfile(
     onTunnelExit?: (error: SshTunnelError) => void;
   },
 ): CoreTransport {
+  if (profile.type === "ssh" && profile.remote_platform === "windows")
+    return windowsSshCoreTransport(profile);
   if (profile.type === "ssh") return sshCoreTransport(profile, options);
   return localCoreTransport(
     profile.core_state_dir || defaultCoreStateDir(profile.core_session),
