@@ -2000,6 +2000,58 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     World first saw the terminal count as seen, so done means a turn that
     ended while World watched. Marking a turn seen or unread in a Herdr app
     changes World within moments.
+  - **Starting agents in core.** When a host has a connected herdr-core, it
+    is the primary runtime: **New agent** with no room chosen picks a core
+    room, and each core room offers New agent (Town's seats, Board's **+**).
+    The launcher says where it starts: "Starts in herdr-core. Herdr's apps
+    show the agent and keep it running; closing its pane in an app ends it.
+    World and the apps arrange it separately."
+    Pick a Herdr (TUI) room in the launcher to start one there instead; core
+    rooms are marked `· herdr-core`. An agent starts with its harness's
+    absolute path on that host (never a core template of the same name), no
+    parent or notes, kept by core, and placed in the apps: its space and tab
+    labels plus a `where` caption (`Room / Tab`) the desktop app shows, and
+    unseen. Claude Code and Codex get the task as their first message; other
+    harnesses start without it and World says to type it in the agent.
+    **Terminal** starts a plain shell in the room, not placed in the apps and
+    not kept. The quick-start list offers every harness Herdr integrates that
+    the host has installed (no login tab for core yet). A lost reply says the
+    agent may have started and is never retried; a name taken meanwhile moves
+    to the next free one. On a Windows core host World finds the harness with
+    one fixed PowerShell script (on the PATH, else `~\.local\bin` or
+    `%APPDATA%\npm`) and starts its `.exe`, or its npm `.cmd` through
+    `cmd.exe`; core refuses a multi-line first message to a `.cmd`.
+  - **World's rooms of a core.** Rooms, their order and the tabs World
+    started live in World's database under the core's ID, never in the apps'
+    layout. **Add room**, **Rename** and **Close** work on World's rooms and
+    on the core's main room (named after the core); a room the desktop app
+    made stays the app's to rename or close, and says so. Ended terminals
+    leave their tab the next time the layout changes.
+  - **Ending core agents.** Core ends a program's children with it, so the
+    bin, **Close room** and every other native kill first name every terminal
+    that will end (its name or tab and room; children on a linked machine
+    are marked), to the end of every chain, including children of those
+    children on the linked machine. Putting an agent with children in the
+    bin asks first; one without children goes straight in. World ends
+    nothing beyond what you confirmed: if a child started since, or a
+    confirmed program was replaced (even by a shell that reused its pid, on
+    a linked machine too), nothing ends and World shows the new list. A
+    child started under a dying agent while core carries out the kill (by
+    the agent itself or another app, up to a few seconds while the program
+    exits) can still end with it, since core has no conditional kill; World
+    then names it: **Close room** shows "More ended than you confirmed" and
+    the bin's Recent line reads "Closed: herdr-core also ended …, started
+    after you confirmed."
+    Closing an agent's pane in the desktop app ends it, and World shows it
+    gone.
+  - **Summaries and stamps.** `herdr-world task-summary` inside a core
+    terminal writes its summary to that terminal on its own core, with no
+    World service: bound to the program running there and to an absolute
+    expiry. `herdr-world stamp CHILD PARENT` with core addresses (`t7`)
+    records a display relation; it never makes a native parent, so a kill
+    never follows it. Both check that the command really runs inside that
+    core terminal. Core's own parent and the stamp both group an agent with
+    its spawner. An agent's folder is shown from core's cwd as evidence only.
   - **Seen, shared with Herdr's apps.** Looking at a core agent in World
     clears its Done in Herdr's phone and desktop apps too: open its peek in
     Town (tap or hover the agent) or Board (rest the mouse on its row, or
@@ -2031,15 +2083,15 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     has no notifications of its own, so its pushes always follow status.
     When World has more than one connection, Herdr or herdr-core, every push
     names the connection it came from.
-  - **View only for now.** World cannot control core agents yet: Chat,
-    answers, Mark reviewed, New agent, Add room, rename and close stay visible
-    but disabled, with "View only: World can't control herdr-core agents
-    yet"; Board's bin says the same. Tapping a core agent in Town shows its
-    peek; Needs you, Desk and peeks show the program's own status message (or
-    why it waits: permission, a question, sign-in) instead of a conversation.
-    World reads core's event stream and writes only the two shared labels
-    above (`herdr.seen`, `herdr.pinned`) and, apart from the room shell below,
-    never types, resizes, writes other labels or writes status.
+  - **Still view only.** Chat, answers and Mark reviewed stay visible but
+    disabled for core agents, with "World can't type into herdr-core
+    terminals or chat with them yet". Tapping a core agent in Town shows its
+    peek; Needs you, Desk and peeks show the program's own status message
+    (or why it waits: permission, a question, sign-in) instead of a
+    conversation. World reads core's event stream; the labels it writes are
+    the two shared ones above (`herdr.seen`, `herdr.pinned`) and, once at
+    launch, an agent's placement. Apart from the room shell below, World
+    never types into core terminals, resizes them or writes status.
   - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek),
     Town's terminal button and opening a core agent in Desk or Board show its
     live terminal at the size core holds: the size of the Herdr app pane (or
@@ -2084,9 +2136,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     is back. Lost ordering shows them stale until World has a fresh snapshot.
   Testing switch: open World with `?coreFixture`, then **Hosts → Manage
   connections** shows **Fixture core (testing)**: **Start fixture core** adds a
-  "Fixture core" connection to a stand-in core with four synthetic agents and
+  "Fixture core" connection to a stand-in core with five synthetic agents and
   a shell: in the desktop app's "web" space, *reviewer* (Claude Code) is
-  waiting for an answer and *builder* (Codex) is working; *scout* (Gemini)
+  waiting for an answer and *builder* (Codex) is working, with its own
+  sub-agent *tests* (ends with it) and *preview-server* (outlives it); *scout* (Gemini)
   finishes its turn about three seconds after the start (done); *helper*
   (OpenCode, no status reporting) and a shell are unplaced. The placed agents
   have a desktop-app pane at 96×28 and the builder keeps printing, so a watch
@@ -2100,7 +2153,8 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   finish another turn** (working, then done about three seconds later),
   **Another app: mark scout unread** (`herdr.seen` = turn − 1; refused until
   scout has finished a turn) and **Another app: pin or unpin scout**. The
-  stand-in runs inside the World service and starts no program. The fixture
+  stand-in runs inside the World service and starts no program: agents you
+  start there appear as terminals but run nothing. The fixture
   only touches its own connection: if a connection you made already uses the
   ID `core-fixture`, **Start fixture core** and **Remove fixture** refuse and
   leave it in place.

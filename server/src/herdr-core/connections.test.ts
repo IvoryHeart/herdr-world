@@ -348,6 +348,8 @@ describe("herdr-core connections", () => {
     expect(first.terminals.map((t) => [t.name, t.status])).toEqual([
       ["reviewer", "blocked"],
       ["builder", "working"],
+      ["tests", "working"],
+      ["preview-server", null],
       ["scout", "working"],
       ["helper", null],
       ["fixture-shell", null],

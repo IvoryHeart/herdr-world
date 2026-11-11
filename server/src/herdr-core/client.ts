@@ -9,6 +9,9 @@ import {
   FrameKind,
   LineAssembler,
 } from "./wire";
+import { checkLabels, coreRunParams, type CoreRunRequest } from "./run-params";
+
+export type { CoreRunRequest } from "./run-params";
 
 /** The protocol generation World speaks; core refuses any other in `hello`. */
 export const CORE_PROTOCOL_GENERATION = 1;
@@ -22,24 +25,29 @@ const OBSERVATION_METHODS = [
 ] as const;
 type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
 /**
- * World's own float shells (`float-shell.ts`), the only terminals World
- * starts, types into or ends here. Optional: a core without them refuses
- * that one operation, never the connection.
+ * The writes World makes, each built from a typed verb below: start a
+ * program (`terminal.run`), end one (`terminal.kill`) and set labels (the
+ * shared `herdr.seen`/`herdr.pinned`, and placement at launch). None is
+ * required for observation: on a core without one, that action fails and
+ * World keeps observing. World's own float shells (`float-shell.ts`) also
+ * view theirs (`terminal.attach`). Never `terminal.send`/`keys` (the
+ * delivery item), `machine.*`, `file.*`, `server.stop`/`restart` or
+ * `terminal.put`.
  */
+export type CoreWriteMethod =
+  | "terminal.run"
+  | "terminal.kill"
+  | "terminal.label";
+/** Optional for float shells: a core without them refuses only that. */
 const FLOAT_SHELL_METHODS = [
   "terminal.run",
   "terminal.attach",
   "terminal.kill",
 ] as const;
-/**
- * The one other write World sends: a shared label (`herdr.seen`,
- * `herdr.pinned`). Not required: on a core without it, sharing fails and
- * World keeps observing.
- */
 type CoreMethod =
   | ObservationMethod
-  | (typeof FLOAT_SHELL_METHODS)[number]
-  | "terminal.label";
+  | CoreWriteMethod
+  | (typeof FLOAT_SHELL_METHODS)[number];
 /** Required for observation; absence is an unsupported operation, not a pin. */
 export const REQUIRED_CORE_METHODS: readonly string[] = OBSERVATION_METHODS;
 export const REQUIRED_CORE_FEATURES = ["framed", "events"] as const;
@@ -110,6 +118,28 @@ export class CoreUnavailableError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "CoreUnavailableError";
+  }
+}
+
+/**
+ * A write whose reply never came (timeout or a closed connection after it
+ * was sent): core may or may not have done it. Shown as uncertain and never
+ * retried automatically.
+ */
+export class CoreWriteUncertainError extends Error {
+  readonly outcome = "uncertain";
+  constructor(method: string, options?: ErrorOptions) {
+    super(`herdr-core may have done ${method}; its reply never came`, options);
+    this.name = "CoreWriteUncertainError";
+  }
+}
+
+/** The connected core does not offer an operation World needs. */
+export class CoreUnsupportedError extends Error {
+  readonly retryable = false;
+  constructor(version: string, method: string) {
+    super(`herdr-core ${version} does not offer ${method}`);
+    this.name = "CoreUnsupportedError";
   }
 }
 
@@ -294,8 +324,9 @@ function parseHello(value: unknown): CoreHello {
 
 /**
  * One framed connection to an already-running core. It never starts a core
- * and never sends `caller`. Its only mutating calls start, view and end
- * World's own float shells (`runShell`, `attach`, `kill`).
+ * and never sends `caller`. Its mutating calls are the typed writes
+ * (`run`, `kill`, `label`, `shareLabel`) and World's own float shells
+ * (`runShell`, `attach`).
  */
 export class CoreClient {
   private readonly decoder = new FrameDecoder();
@@ -447,6 +478,59 @@ export class CoreClient {
       { terminal: localAddress(address), lines: 0 },
       timeoutMs,
     ) as Promise<Record<string, unknown>>;
+  }
+
+  /** Whether the connected core offers `method` (negotiated, never pinned). */
+  offers(method: CoreWriteMethod): boolean {
+    return this.hello.methods.includes(method);
+  }
+
+  /** Starts a program; the reply is core's record of the new terminal. */
+  run(request: CoreRunRequest, timeoutMs = 15_000) {
+    return this.write(
+      "terminal.run",
+      coreRunParams(request),
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  /**
+   * Ends a program: hangup, then terminate, then kill; core reports what it
+   * observed. Core also ends every live child started with this terminal as
+   * parent that does not outlive it (see kill-plan.ts).
+   */
+  kill(address: string, timeoutMs = 15_000) {
+    return this.write(
+      "terminal.kill",
+      { terminal: localAddress(address) },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  /** Sets labels (an empty value removes one); core sends the whole map. */
+  label(address: string, labels: Record<string, string>, timeoutMs = 5_000) {
+    return this.write(
+      "terminal.label",
+      { terminal: localAddress(address), labels: checkLabels(labels) },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  private async write(
+    method: CoreWriteMethod,
+    params: Record<string, unknown>,
+    timeoutMs: number,
+  ): Promise<unknown> {
+    if (!this.offers(method))
+      throw new CoreUnsupportedError(this.hello.version, method);
+    if (this.closedError) throw this.closedError;
+    try {
+      return await this.call(method, params, timeoutMs);
+    } catch (error) {
+      // Sent: only core's own refusal proves nothing happened.
+      if (error instanceof CoreRpcError) throw error;
+      throw new CoreWriteUncertainError(method, { cause: error });
+    }
   }
 
   /**
@@ -687,15 +771,6 @@ export class CoreClient {
     if (this.closedError) return;
     this.retired.add(channel);
     this.send(encodeFrame(channel, FrameKind.CLOSE));
-  }
-
-  /** Hangup, then terminate, then kill; core reports what it observed. */
-  kill(address: string, timeoutMs = 15_000) {
-    return this.call(
-      "terminal.kill",
-      { terminal: localAddress(address) },
-      timeoutMs,
-    ) as Promise<CoreTerminalRecord>;
   }
 
   /** Whether this core offers World's float shells at all. */

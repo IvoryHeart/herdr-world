@@ -1,5 +1,5 @@
 import { useEffectCallback } from "../useEffectCallback";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
 import { dialogKeyAction } from "./dialogKeyboard";
@@ -98,6 +98,7 @@ export function ConfirmDialog({
   message,
   confirmLabel = "Confirm",
   danger = false,
+  details,
   onConfirm,
   onClose,
 }: {
@@ -106,6 +107,8 @@ export function ConfirmDialog({
   message: string;
   confirmLabel?: string;
   danger?: boolean;
+  /** More than a sentence: shown under the message (a list, for example). */
+  details?: ReactNode;
   onConfirm: () => void;
   onClose: () => void;
 }) {
@@ -165,6 +168,7 @@ export function ConfirmDialog({
         </div>
 
         <p className="modal-body-text">{message}</p>
+        {details}
 
         <div className="modal-actions">
           <button type="button" className="ghost" onClick={onClose}>

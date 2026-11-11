@@ -96,6 +96,26 @@ function populate(fake: FakeCore) {
   const builder = agent("builder", "codex", space("fx-review", "web / review"));
   fake.output(builder, screen("codex", ["Building the web bundle…"]));
   fake.report(builder, { state: "working", app: "codex" });
+  // The builder's own sub-agents (`hc run` inside it): *tests* ends with it,
+  // *preview-server* outlives it, so binning the builder names only *tests*.
+  const tests = fake.create({
+    name: "tests",
+    argv: ["claude"],
+    parent: builder,
+    die_with_parent: true,
+    foreground: {
+      pid: 1,
+      name: "claude",
+      argv: ["claude"],
+      cwd: "/tmp/example",
+    },
+  });
+  fake.report(tests, { state: "working", app: "claude-code" });
+  fake.create({
+    name: "preview-server",
+    parent: builder,
+    die_with_parent: false,
+  });
   const scout = agent(
     "scout",
     "gemini",

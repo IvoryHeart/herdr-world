@@ -9,6 +9,7 @@ import { type CoreFixture, createCoreFixture } from "./fixture";
 import { FloatShellService } from "./float-shell";
 import { CoreObservationStore } from "./observations";
 import { CoreFirstSight } from "./topology";
+import type { CoreTopologyPort } from "./layout";
 import { CoreAttention } from "./shared-state";
 import { coreTaskEvents } from "./push";
 import type { PushTask } from "../notifications/web-push";
@@ -78,6 +79,8 @@ export function createCoreConnections(args: {
     onTunnelExit: (error: Error) => void,
   ) => CoreTransport;
   connect?: CoreStreamConnector;
+  /** World's own layout of each core (M1), from its SQLite. */
+  topology?: () => CoreTopologyPort | null;
   /** Sends a watched terminal's push line to its page; false if it cannot. */
   sendToPage?(page: CorePage, line: string): boolean;
 }): CoreConnections {
@@ -149,6 +152,7 @@ export function createCoreConnections(args: {
             );
         },
         onReadModel: () => observed(profile.id),
+        layout: (coreId) => args.topology?.()?.get(coreId) ?? null,
         identity: connectionIdentityForProfile(profile),
         context,
         transport: transportFor(profile, report),

@@ -60,6 +60,8 @@ export type RpcServices = {
     import("../herdr-core/connections").CoreConnections,
     "manager" | "fixture" | "floats" | "watches"
   >;
+  /** Control of herdr-core connections (world.core.*). */
+  coreControl?: import("./core").CoreRpcServices;
   focusedAcquisition: FocusedAcquisition<Socket>;
   agentActivity: AgentActivityCache;
   deskWatches: DeskWatches<Socket>;

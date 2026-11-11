@@ -41,6 +41,7 @@ import {
   harnessLabel,
   type LauncherCatalog,
   launchAgent,
+  requestAgentLaunch,
   launcherCatalog,
   openProfileEditor,
   profilesSnapshot,
@@ -713,7 +714,7 @@ export default function BoardView({
         pane.isAgent &&
         pane.leaf.kind === "agent" &&
         !pane.leaf.stale &&
-        pane.leaf.actionable,
+        (pane.leaf.actionable || pane.leaf.coreControl),
     );
     if (!agents.length) {
       const viewOnly = panes.find((pane) => pane.leaf.viewOnly)?.leaf.viewOnly;
@@ -3600,10 +3601,28 @@ export default function BoardView({
                           type="button"
                           className="board-fold board-add"
                           aria-label={`New in ${space.label}`}
-                          title={space.viewOnly ?? "New terminal or agent"}
-                          disabled={Boolean(space.viewOnly)}
+                          title={
+                            space.space.coreControl
+                              ? "New agent or terminal in herdr-core"
+                              : (space.viewOnly ?? "New terminal or agent")
+                          }
+                          disabled={
+                            Boolean(space.viewOnly) && !space.space.coreControl
+                          }
                           onPointerDown={(event) => event.stopPropagation()}
-                          onClick={() => setAddTo(space.key)}
+                          onClick={() =>
+                            space.space.coreControl
+                              ? requestAgentLaunch(
+                                  {
+                                    connectionId: space.connectionId,
+                                    generation: space.generation,
+                                    workspaceId: space.nativeId,
+                                    workspaceLabel: space.label,
+                                  },
+                                  "elsewhere",
+                                )
+                              : setAddTo(space.key)
+                          }
                         >
                           <Plus size={14} aria-hidden="true" />
                         </button>

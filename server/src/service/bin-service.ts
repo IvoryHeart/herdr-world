@@ -4,6 +4,8 @@ import { createBinCloser, type BinLease } from "../world/bin-close";
 import { WorldBinRegistry } from "../world/bin";
 import type { LedgerStore } from "../world/world-ledger";
 import type { Clock, Scheduler } from "./ports";
+import type { ConnectionManager } from "../connections/manager";
+import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 
 type Lease = {
   connectionId: string;
@@ -38,6 +40,8 @@ export function createBinService(deps: {
   };
   publish(revision: number): void;
   log(message: string): void;
+  /** herdr-core connections, whose closes are native kills. */
+  core?: () => ConnectionManager<CoreConnectionRuntime> | null;
 }) {
   const lease = (id: string): BinLease | null => {
     const current = deps.connections().readyRuntimeLease(id);
@@ -73,6 +77,11 @@ export function createBinService(deps: {
         .list()
         .some((entry) => entry.id === id),
     lease,
+    hasCoreConnection: (id) => deps.core?.()?.has(id) ?? false,
+    coreLease: (id) => {
+      const manager = deps.core?.();
+      return manager?.has(id) ? manager.readyRuntimeLease(id) : null;
+    },
     settle: (id, outcome) => {
       if (registry.owns(id)) registry.settle(id, outcome);
     },
@@ -82,6 +91,10 @@ export function createBinService(deps: {
   return {
     registry,
     lease,
+    coreLease: (id: string) => {
+      const manager = deps.core?.();
+      return manager?.has(id) ? manager.readyRuntimeLease(id) : null;
+    },
     /** Intents left by an earlier run resume under their recovery rules. */
     start: () => closer.wake(),
     connectionStatus(status: {

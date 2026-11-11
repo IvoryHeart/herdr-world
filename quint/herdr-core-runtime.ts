@@ -23,6 +23,8 @@ export const coreFaults = [
   "stale-session",
   "ungated-queue",
   "heartbeat-ignored",
+  "unconfirmed-cascade",
+  "stale-confirmation",
   "interactive-attach",
   "unconfirmed-accepted",
   "paint-before-resize",
@@ -45,6 +47,8 @@ export const coreWitnesses: readonly string[] = [
   "replacementFenced",
   "queueFenced",
   "existingOnly",
+  "cascadeConfirmed",
+  "unconfirmedCascadeRefused",
   "watchAdopted",
   "observerAlone",
   "headlessFollowed",
@@ -94,6 +98,12 @@ export type CoreState = {
   dispatched: boolean;
   published: boolean;
   safe: boolean;
+  /** Terminal 2 (index 1) dies with terminal 1 when core ends it (M7). */
+  child: boolean;
+  planned: boolean;
+  confirmedChild: boolean;
+  confirmedOccupant: number;
+  killed: boolean;
   lead: number;
   grid: number;
   watching: boolean;
@@ -158,6 +168,11 @@ export class CoreProtocolFake {
     dispatched: false,
     published: false,
     safe: true,
+    child: false,
+    planned: false,
+    confirmedChild: false,
+    confirmedOccupant: -1,
+    killed: false,
     lead: -1,
     grid: 3,
     watching: false,
@@ -172,6 +187,9 @@ export class CoreProtocolFake {
     typed: false,
     outputs: 0,
   };
+  /** What the person confirmed, as World's production plan named it. */
+  private confirmation: Parameters<CoreSubjects["coreKillRefusal"]>[1] | null =
+    null;
   /** World's watch of terminal 0 (observe family). */
   private readonly watcher: CoreWatchReplay;
   /** The current connection's subscription (fresh on every connect). */
@@ -198,6 +216,10 @@ export class CoreProtocolFake {
       state: "live",
       pid: 100,
       reported: false,
+      // Core records the parent at creation; it ends this child with it.
+      ...(index === 1 && this.state.child
+        ? { parent: "t1", die_with_parent: true }
+        : {}),
     };
   }
   private snapshot() {
@@ -450,6 +472,51 @@ export class CoreProtocolFake {
       case "recover":
         assert(s.uncertain && s.ready);
         break;
+      case "plan": {
+        // World's production plan of what killing t1 ends, from its mirror.
+        assert(s.ready && s.mirror[0]!.alive && !s.planned);
+        const plan = this.subjects.coreKillPlan(
+          "core",
+          this.latest!.terminals(),
+          ["t1"],
+        );
+        this.confirmation = {
+          coreId: plan.coreId,
+          terminals: [...plan.roots, ...plan.descendants].map((e) => ({
+            address: e.address,
+            pid: e.pid,
+            occupant: e.occupant,
+            remote: e.remote,
+          })),
+        };
+        s.planned = true;
+        s.confirmedChild = plan.descendants.some((e) => e.address === "t2");
+        s.confirmedOccupant =
+          this.latest!.terminal("t1")?.argv?.[0] === "agent" ? 0 : 1;
+        break;
+      }
+      case "kill": {
+        // Planned again from the current observation; the production
+        // refusal decides whether the kill is sent.
+        assert(s.planned && !s.killed);
+        const plan = this.subjects.coreKillPlan(
+          "core",
+          s.ready ? this.latest!.terminals() : [],
+          ["t1"],
+        );
+        const allowed =
+          s.ready &&
+          plan.roots.length > 0 &&
+          this.subjects.coreKillRefusal(plan, this.confirmation!) === null;
+        if (!allowed) break;
+        s.source[0]!.alive = false;
+        if (s.child) s.source[1]!.alive = false;
+        s.history[s.seq] = structuredClone(s.source);
+        s.killed = true;
+        // A silent source change, as in replace: World reacquires.
+        this.latest?.retire("divergence");
+        break;
+      }
       default:
         assert.fail(`unknown core action: ${op}`);
     }
@@ -488,6 +555,8 @@ export function validateCoreTrace(
         "deliver",
         "complete",
         "recover",
+        "plan",
+        "kill",
         "pane",
         "output",
         "watch",
@@ -591,6 +660,8 @@ export function replayCore(
     subjects,
   );
   const witnesses = new Set<string>();
+  // An environment choice, like the family: whether terminal 2 is a child.
+  fake.state.child = states[0]!.c.child === true;
   for (const state of states) {
     fake.apply(state.op, state.target);
     observe("core.state", fake.state, state.c, state.op);
@@ -609,6 +680,16 @@ export function replayCore(
       witnesses.add("queueFenced");
     if (state.op === "connect" && !c.running && !c.connected)
       witnesses.add("existingOnly");
+    if (state.op === "kill" && c.killed && c.child && c.confirmedChild)
+      witnesses.add("cascadeConfirmed");
+    if (
+      state.op === "kill" &&
+      !c.killed &&
+      c.child &&
+      c.mirror[1]!.alive &&
+      !c.confirmedChild
+    )
+      witnesses.add("unconfirmedCascadeRefused");
     if (
       state.op === "frame" &&
       c.watching &&
@@ -634,6 +715,8 @@ export const coreImplementationFaults = [
   "core-stale",
   "core-missed-cut",
   "core-view-retired",
+  "core-kill-pid-only",
+  "core-kill-plan-once",
   "core-watch-interactive",
   "core-watch-unconfirmed",
   "core-watch-order",

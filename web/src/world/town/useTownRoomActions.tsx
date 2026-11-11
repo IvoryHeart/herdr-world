@@ -20,10 +20,14 @@ import {
   type OfficeCreationActionState,
 } from "../officeRoomActions";
 import {
+  closeCoreRoomConfirmed,
   closeRoom as closeSharedRoom,
   renameRoom,
   RoomRenameCloseDialogs,
 } from "../roomRenameClose";
+import { TextInputDialog } from "../../components/ModalDialogs";
+import { createCoreRoom } from "../coreControl";
+import { store } from "../../store";
 import type { WorldObject } from "../worldObject";
 import type { TownRoomActions } from "./TownCanvas";
 
@@ -32,6 +36,8 @@ export type TownRoomDialog =
       mode: "create";
       roomKey: string | null;
       owner?: { connectionId: string; runtimeGeneration: number };
+      /** On a herdr-core host: a room of World's own layout there. */
+      core?: true;
     }
   | {
       mode: "rename" | "close";
@@ -83,7 +89,8 @@ export function useTownRoomActions({
             room.key,
             officeCreationActionState(
               admitted,
-              admitted
+              // A core room starts through world.core.launch, not a TUI tab.
+              admitted && !capabilities.core
                 ? (creationPendingReason(
                     {
                       connectionId: room.workspaceRef.connectionId,
@@ -125,6 +132,8 @@ export function useTownRoomActions({
             host.generation === room.workspaceRef.generation,
         )
       : world.hosts.find((host) => host.actionable && !host.stale);
+    if (destination?.coreControl && !destination.stale)
+      return officeCreationActionState(true, null);
     const admitted = Boolean(destination?.actionable && !destination.stale);
     return officeCreationActionState(
       admitted,
@@ -156,6 +165,8 @@ export function useTownRoomActions({
   const addRoomState = (hostKey: string, selectedRoomKey: string | null) => {
     const { host, source } = addRoomTarget(hostKey, selectedRoomKey);
     if (source) return roomCreationState(source.key);
+    if (host?.coreControl && !host.stale)
+      return officeCreationActionState(true, null);
     const admitted = Boolean(host?.actionable && !host.stale);
     return officeCreationActionState(
       admitted,
@@ -182,6 +193,9 @@ export function useTownRoomActions({
               connectionId: roomForKey(roomKey)!.workspaceRef.connectionId,
               runtimeGeneration: roomForKey(roomKey)!.workspaceRef.generation,
             },
+            ...(officeRoomActionCapabilities(world, roomForKey(roomKey)!).core
+              ? { core: true as const }
+              : {}),
           }
         : {}),
     });
@@ -194,6 +208,9 @@ export function useTownRoomActions({
     connectionId: room.workspaceRef.connectionId,
     generation: room.observedGeneration,
     workspaceId: room.workspaceRef.nativeId,
+    ...(officeRoomActionCapabilities(world, room).core
+      ? { core: true as const }
+      : {}),
   });
   const submitRenameRoom = async (label: string) => {
     if (
@@ -249,13 +266,14 @@ export function useTownRoomActions({
           connectionId: host.connectionId,
           runtimeGeneration: host.generation,
         },
+        ...(host.coreControl ? { core: true as const } : {}),
       });
     },
     roomViewOnly: (roomKey) => {
       const room = roomForKey(roomKey);
-      return room
-        ? officeRoomActionCapabilities(world, room).viewOnly
-        : undefined;
+      if (!room) return undefined;
+      const capabilities = officeRoomActionCapabilities(world, room);
+      return capabilities.manageReason ?? capabilities.viewOnly;
     },
     canRenameRoom: (roomKey) => canManageRoom(roomKey, "rename"),
     onRenameRoom: (roomKey) => {
@@ -275,6 +293,11 @@ export function useTownRoomActions({
     canCloseRoom: (roomKey) => canManageRoom(roomKey, "close"),
     onCloseRoom: (roomKey) => {
       const room = roomForKey(roomKey);
+      // A core room names every terminal that ends in its own confirmation.
+      if (room && canManageRoom(roomKey, "close") && roomTarget(room).core) {
+        void closeCoreRoomConfirmed(roomTarget(room), room.displayLabel);
+        return;
+      }
       if (room) {
         setRoomDialog({
           mode: "close",
@@ -312,8 +335,34 @@ export function TownRoomDialogs({
 }) {
   return (
     <>
+      <TextInputDialog
+        open={dialog?.mode === "create" && dialog.core === true}
+        title="New room"
+        label="Room name"
+        initialValue=""
+        submitLabel="Create room"
+        onClose={() => setDialog(null)}
+        onSubmit={(label) => {
+          const owner = dialog?.mode === "create" ? dialog.owner : undefined;
+          setDialog(null);
+          if (owner)
+            void createCoreRoom(
+              {
+                connectionId: owner.connectionId,
+                generation: owner.runtimeGeneration,
+              },
+              label,
+            ).catch((cause: unknown) =>
+              store.notify({
+                kind: "error",
+                message: "Room creation failed",
+                detail: cause instanceof Error ? cause.message : String(cause),
+              }),
+            );
+        }}
+      />
       <CreateWorkspaceDialog
-        open={dialog?.mode === "create"}
+        open={dialog?.mode === "create" && dialog.core !== true}
         initialDestination={
           dialog?.owner
             ? {

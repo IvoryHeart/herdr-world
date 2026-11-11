@@ -2,6 +2,7 @@
   "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
   "units": "seconds; JUnit suite totals; Town groups sum their original testcase durations",
   "sourceNotes": {
+    "CoreControl.browser": "2026-11-11 local focused run: 1.05 s file duration, launcher and bin scenes across the standard viewports, bun run test web/src/world/CoreControl.browser.test.ts.",
     "CoreSharedState.browser": "2026-11-11 local focused run: 4.39 s testcase duration, one end-to-end fixture with nine checks plus three dwell waits, bun run test web/src/world/CoreSharedState.browser.test.ts.",
     "CoreTerminalWatch.browser": "2026-11-11 local focused run: 1.02 s file duration, one fixture across the standard viewports, bun run test web/src/world/CoreTerminalWatch.browser.test.ts.",
     "CoreViewOnly.browser": "2026-11-11 local focused run: 0.74 s testcase duration, one fixture with eight checks, bun run test web/src/world/CoreViewOnly.browser.test.ts.",
@@ -11,6 +12,7 @@
     "AnswerDeliveries.browser": 10,
     "BoardView": 21.518,
     "ConcurrentContexts": 31.58,
+    "CoreControl.browser": 1.05,
     "CoreSharedState.browser": 4.39,
     "CoreTerminalWatch.browser": 1.02,
     "CoreViewOnly.browser": 0.74,

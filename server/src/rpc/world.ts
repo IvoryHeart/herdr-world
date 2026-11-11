@@ -9,6 +9,7 @@ import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
 import { handleCoreWatchRpc } from "./core-watch";
 import { handleBinRpc } from "./bin";
+import { handleCoreRpc } from "./core";
 import { handleFloatRpc } from "./float";
 import { handleWorldIntegrationRpc } from "./integration";
 import { ownerPresence } from "./presence";
@@ -79,6 +80,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method === "world.core.watch" || method === "world.core.unwatch")
     return handleCoreWatchRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
+  if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.integration."))
     return handleWorldIntegrationRpc(rpc);

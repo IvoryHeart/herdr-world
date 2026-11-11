@@ -71,7 +71,7 @@ const path = (value: string) =>
  * POSIX lines that set `$b` to the harness's executable: on PATH, else the
  * first default location. Readiness and login resolve it the same way.
  */
-const resolveExecutable = (spec: HarnessSpec) => [
+export const resolveExecutable = (spec: HarnessSpec) => [
   `b=$(command -v ${q(spec.binary)} 2>/dev/null)`,
   ...spec.paths.map((p) => `[ -z "$b" ] && [ -x ${path(p)} ] && b=${path(p)}`),
 ];

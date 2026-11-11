@@ -193,7 +193,7 @@ export class FloatShellService {
         "herdr-core is not current right now; try again",
       );
     const terminals = runtime.core.mirror.terminals();
-    const room = coreRoomOf(terminals, request.terminal);
+    const room = coreRoomOf(terminals, request.terminal, runtime.layout());
     const agent = runtime.core.terminal(request.terminal);
     if (!room || !agent)
       throw new FloatShellRefusal("That agent is no longer running");

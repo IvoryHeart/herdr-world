@@ -53,7 +53,7 @@ and cleanup failures abort; only the named `core.state` mismatch kills a control
 Required replay witnesses cover ordered deltas, missed cuts, gap retirement,
 reconnect, occupant refusal, late queued refusal and an absent endpoint per seed.
 
-The maintained command checks all sixteen mutants (eleven plan mutants and
+The maintained command checks all eighteen mutants (thirteen plan mutants and
 five observe mutants, below) individually and requires
 both an invariant violation and rejection of that counterexample by correct replay:
 
@@ -70,6 +70,8 @@ both an invariant violation and rejection of that counterexample by correct repl
 | stale-session | Old session dispatch after replacement and fresh acquisition |
 | ungated-queue | Queued source input delivered to a replacement occupant |
 | heartbeat-ignored | Jump leaves the host actionable |
+| unconfirmed-cascade | Kill sent while an observed die-with-parent child is unconfirmed |
+| stale-confirmation | Kill sent after the confirmed program was replaced |
 | interactive-attach | World's watch leads core's size, as a typing viewer would |
 | unconfirmed-accepted | A path without confirmed resize notifications is watched |
 | paint-before-resize | A paint is drawn before the grid core announced for it |
@@ -119,6 +121,33 @@ which may lag a queued removal or replacement. Mapping the production
 occupant at dispatch from the actual one at core's input boundary (where the
 owner rulings place the queued-send window, upstream Q3). Until then, fence
 behaviour is checked by unit and integration tests, not by this replay.
+
+## Kill confirmation (issue #869, M7)
+
+The authority family chooses at init whether terminal 1, once created, is a
+child core ends with terminal 0 (`child`). `plan` records what World's
+production plan names from its mirror (`confirmedChild`, `confirmedOccupant`);
+`kill` plans again from the current mirror and is sent only while it is ready,
+the terminal is live, no observed child is unconfirmed and the occupant is the
+confirmed one. A sent kill ends terminal 0 and the child as a silent source
+change that withdraws readiness, as `replace` does. `safe` holds over World's
+observation: a child core creates after World's last applied event is outside
+this fence, since core has no conditional kill (upstream Q11), like the Q3
+queued-send window. A sampling-only weight (`childAfterPlan`) creates the child
+after planning; it adds no transition. Naming what core's cascade ended beyond
+the confirmation (`coreKillUnconfirmed`) is a report after the kill, not a
+decision, so it adds no action either; `operations.test.ts` and
+`bin-close-core.test.ts` drive it with a child core creates while it handles
+the kill, and a child that had ended before it is never named.
+
+The replay adapter decides `plan` and `kill` with the production
+`coreKillPlan` and `coreKillRefusal` (`server/src/herdr-core/kill-plan.ts`) over
+the production mirror, whose child record carries core's `parent` and
+`die_with_parent`. A kept replacement keeps pid 100 and changes only argv, so a
+pid-only confirmation diverges. Witnesses `cascadeConfirmed` and
+`unconfirmedCascadeRefused` are required per seed. Two production negative controls
+must be rejected through `core.state`: a refusal that compares pids only and one
+that lets an unconfirmed terminal pass.
 
 World's float shell (the room shell that replaces Herdr Float on core) adds no
 model action. Its run, attach and end go through the same `CoreOperationFence`
@@ -228,7 +257,13 @@ Three
 seeds (42/73/103) sample 500 ordering/authority traces and 200 observe traces
 of up to 25 transitions each, all replayed. The simulator samples the observe
 family on its own (`OBSERVE`), because its action list changes how the
-simulator weights the others; TLC explores all three families together.
+simulator weights the others. TLC explores every family, each with the actions
+its simulation takes, and runs sends only in the authority family without a
+child and kills only in the one with a child. The send fence (lease, occupant,
+queued delivery) and the kill fence (plan, confirmation) read disjoint fields
+and each still meets every source, cursor, replacement and connection change,
+so this drops only their product (769,597 to 288,538 distinct states). Every
+model fault below still yields a TLC counterexample in this quotient.
 Fault searches use 10,000 samples with seed 42 and the same transition bound
 (observe faults in the observe-only simulation);
 missing counterexamples fail. Increasing source changes to three adds 100 replayed sensitivity traces.

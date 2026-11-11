@@ -74,11 +74,21 @@ export type FakeCoreOptions = {
   heartbeatMs?: number;
   /** Splits every outbound write into pieces of at most this many bytes. */
   splitWritesAt?: number;
+  /** A core that offers no writes (to test negotiation, not a version pin). */
+  observeOnly?: boolean;
   /** Writes an attach's stream frames before its reply (a relay may). */
   attachFramesFirst?: boolean;
   /** Answers observe attaches without confirming resize notifications. */
   denyResizeNotifications?: boolean;
 };
+
+/** What an observe-only core leaves out of `hello`. */
+const WRITE_METHODS = new Set([
+  "terminal.run",
+  "terminal.kill",
+  "terminal.label",
+  "terminal.attach",
+]);
 
 export class FakeCore {
   readonly coreId: string;
@@ -368,8 +378,10 @@ export class FakeCore {
   }
 
   /** A kept terminal whose program is lost gets a shell at the same address. */
-  replaceWithShell(address: string): void {
+  /** `reusePid`: the shell gets the lost program's pid, as an OS may give. */
+  replaceWithShell(address: string, { reusePid = false } = {}): void {
     const record = this.require(address);
+    const lostPid = record.pid;
     record.pid = null;
     delete record.foreground;
     // Loss ends every attach stream, even for a kept terminal.
@@ -380,7 +392,8 @@ export class FakeCore {
       signal: 9,
       finished_ms: null,
     });
-    const shellPid = 60_000 + this.seq;
+    const shellPid =
+      reusePid && typeof lostPid === "number" ? lostPid : 60_000 + this.seq;
     Object.assign(record, {
       pid: shellPid,
       argv: ["/bin/sh"],
@@ -398,6 +411,9 @@ export class FakeCore {
     this.emit("restarted", address, { ...record });
   }
 
+  /** Holds the next `terminal.kill`/`terminal.run` reply (a lost reply). */
+  dropNextWriteReply = false;
+
   remove(address: string): void {
     this.require(address);
     this.endViewers(address, { reason: "killed", exit_code: null });
@@ -406,22 +422,41 @@ export class FakeCore {
   }
 
   /**
-   * The program ends as core reports it (`rm` terminals are removed at once):
-   * every viewer's stream closes with the finish facts.
+   * The program ends (it exits, or its pane is closed in an app), as core's
+   * `record_finish` does: `finished`, every viewer's stream closes with the
+   * finish facts, then every live child that dies with it, depth first
+   * (`notes.rs` Orphaned). `rm` terminals are removed at once.
    */
-  finish(address: string, reason = "exited", exitCode: number | null = 0) {
+  finish(
+    address: string,
+    reason = "exited",
+    exitCode: number | null = reason === "exited" ? 0 : null,
+  ): void {
     const record = this.require(address);
+    if (record.state !== "live") return;
     const facts = {
       exit_code: exitCode,
       finished_ms: Date.now(),
       reason,
       signal: reason === "killed" ? 1 : null,
     };
-    Object.assign(record, { state: "finished", pid: null, ...facts });
+    Object.assign(record, {
+      state: "finished",
+      status: null,
+      pid: null,
+      ...facts,
+    });
     delete record.foreground;
     this.emit("finished", address, facts);
     this.endViewers(address, facts);
     if (record.rm === true) this.remove(address);
+    for (const child of [...this.terminals.values()])
+      if (
+        child.state === "live" &&
+        child.die_with_parent === true &&
+        child.parent === address
+      )
+        this.finish(child.address, "killed");
   }
 
   /** Loses events silently, as core does when a `missed` exceeds 4 MiB. */
@@ -792,7 +827,11 @@ export class FakeCore {
         "terminal.attach",
         "terminal.label",
         "events.subscribe",
-      ].filter((method) => !this.withoutMethods.has(method)),
+      ].filter(
+        (method) =>
+          !this.withoutMethods.has(method) &&
+          !(this.options.observeOnly && WRITE_METHODS.has(method)),
+      ),
       features: [
         "framed",
         "attach",
@@ -896,7 +935,12 @@ export class FakeCore {
         return;
       }
       case "terminal.run": {
+        if (this.options.observeOnly) break;
         const p = request.params ?? {};
+        if (p.caller !== undefined || p.on !== undefined)
+          return error(-32602, "fixture refuses caller/on", "invalid_params");
+        const argv = Array.isArray(p.argv) ? (p.argv as string[]) : [];
+        const parent = typeof p.parent === "string" ? p.parent : null;
         const name = typeof p.name === "string" ? p.name : null;
         if (
           name &&
@@ -909,44 +953,71 @@ export class FakeCore {
             `a live terminal is already named "${name}"`,
             "name_taken",
           );
+        const program = argv[0] ?? "/bin/sh";
         if (typeof p.cwd === "string" && p.cwd.startsWith("/nonexistent"))
           return error(
             -32000,
-            'cannot start "/bin/sh": No such file or directory (os error 2)',
+            `cannot start "${program}": No such file or directory (os error 2)`,
             "spawn_failed",
           );
+        const cwd = typeof p.cwd === "string" ? p.cwd : "/tmp/example";
         const size = (p.size ?? {}) as { cols?: number; rows?: number };
+        const pid = 70_000 + this.nextTerminal;
         const address = this.create({
-          name,
-          labels: { ...((p.labels as Record<string, string>) ?? {}) },
-          cwd: String(p.cwd ?? "/tmp/example"),
+          argv: argv.length ? argv : ["/bin/sh"],
+          cwd,
           cols: size.cols ?? 200,
           rows: size.rows ?? 120,
+          labels: Object.fromEntries(
+            Object.entries((p.labels as Record<string, string>) ?? {}).filter(
+              ([, v]) => v !== "",
+            ),
+          ),
+          keep: p.keep === true,
           rm: p.rm === true,
+          name,
+          parent,
+          die_with_parent: parent !== null && p.outlive_parent !== true,
           notify: p.no_notify !== true,
-          parent: null,
+          pid,
+          foreground: {
+            pid,
+            name: program.split("/").pop() ?? "sh",
+            argv: argv.length ? argv : ["/bin/sh"],
+            cwd,
+          },
         });
         // The shell's prompt is its first screen.
         this.screens.set(address, "$ ");
-        return reply(this.terminals.get(address));
+        if (this.dropNextWriteReply) {
+          this.dropNextWriteReply = false;
+          return;
+        }
+        return reply({ ...this.terminals.get(address)! });
       }
       case "terminal.kill": {
+        if (this.options.observeOnly) break;
         const address = String(request.params?.terminal);
         const record = this.terminals.get(address);
         if (!record)
           return error(-32000, `no terminal "${address}"`, "not_found");
         const removing = record.rm === true;
-        this.finish(address, "killed", null);
+        this.finish(address, "killed");
+        if (this.dropNextWriteReply) {
+          this.dropNextWriteReply = false;
+          return;
+        }
         // With `rm`, core removes it before answering (verified on 0.1.20).
         return removing
           ? error(-32000, `${address} was removed`, "not_found")
           : reply({ ...record });
       }
       case "terminal.label": {
+        if (this.options.observeOnly) break;
         const address = String(request.params?.terminal);
         const labels = request.params?.labels;
         if (!this.terminals.has(address))
-          return error(-32000, "not_found", "not_found");
+          return error(-32000, `no terminal ${address}`, "not_found");
         if (
           !labels ||
           typeof labels !== "object" ||
@@ -954,11 +1025,12 @@ export class FakeCore {
         )
           return error(-32602, "invalid_params", "invalid_params");
         this.label(address, labels as Record<string, string>);
-        return reply(this.terminals.get(address));
+        return reply({ ...this.terminals.get(address)! });
       }
       default:
         return error(-32601, `method not found: ${request.method}`, "usage");
     }
+    return error(-32601, `method not found: ${request.method}`, "usage");
   }
 
   private queued(sub: Subscriber): number {

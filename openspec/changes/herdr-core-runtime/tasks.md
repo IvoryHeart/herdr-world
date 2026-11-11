@@ -32,6 +32,13 @@
     as `herdr.pinned`, Web Push from core status events, the shared-seen
     model with production replay, recorded 0.1.20 and live-release tests.
 - [ ] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
+  - [x] Issue #869: core-first launches from World (absolute executable, no
+    caller/parent/notes, explicit keep; agents placed with a `where` caption,
+    shells unplaced), World's rooms in SQLite (create, rename, close), kill,
+    room-close and bin confirmations naming every dying descendant bound to
+    its program print, core task summaries and spawn stamps, the model's kill
+    fence with two plan mutants and two production controls, and live checks
+    against the 0.1.20 release.
 - [ ] P4: files/Git/worktrees, asks and Ranger.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.
   - [x] Popup equivalents (#873): the room shell on both runtimes; Herdr Float

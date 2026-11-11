@@ -64,4 +64,41 @@ export const effectVerbs = [
     [],
     { queueable: true, version: 1 },
   ),
+  // The bin's close of a herdr-core terminal: a native kill (world/
+  // bin-close-core.ts). It carries the confirmation of every terminal that
+  // ends with it and is refused if more would end, or another program runs.
+  declare(
+    "effect",
+    "world.bin.close_core",
+    object({
+      bin_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      service_incarnation: text,
+      confirmation: object({
+        core_id: text,
+        terminals: Type.Array(
+          object({
+            address: text,
+            pid: Type.Union([Type.Integer(), Type.Null()]),
+            occupant: Type.Optional(
+              Type.Union([Type.String({ maxLength: 128 }), Type.Null()]),
+            ),
+            remote: Type.Optional(Type.Boolean()),
+          }),
+          { minItems: 1, maxItems: 256 },
+        ),
+      }),
+    }),
+    object(),
+    "reconcilable",
+    policies({ browser: "allow" }),
+    ["runtime"],
+    [
+      "captured runtime generation is current",
+      "the terminal still runs the confirmed program",
+      "nothing beyond the confirmed terminals would end",
+    ],
+    [],
+    { queueable: true, version: 1 },
+  ),
 ] as const;

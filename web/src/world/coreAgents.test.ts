@@ -20,6 +20,7 @@ import {
   type WorldLeafObject,
 } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
+import { CORE_APP_SPACE_REASON } from "./coreRooms";
 
 /**
  * Core agents through World's real read path into the objects Town, Desk,
@@ -278,21 +279,50 @@ describe("core agents in World's views", () => {
     ]);
   });
 
-  test("room actions stay visible, disabled with the reason", async () => {
+  test("a core room takes agents; an app space stays the app's to manage", async () => {
     const world = await worldOf();
     const space = world.spaces.find((s) => s.connectionId === "box-core")!;
+    expect(space.coreControl).toBe(true);
+    // Never admitted to TUI paths: World starts and ends core terminals
+    // only through world.core.*.
+    expect(space.actionable).toBe(false);
     const actions = spaceRoomActionCapabilities(space);
     expect(actions).toEqual({
-      createSeat: false,
+      createSeat: true,
       rename: false,
       close: false,
-      viewOnly: CORE_VIEW_ONLY_REASON,
+      core: true,
+      manageReason: CORE_APP_SPACE_REASON,
     });
     expect(
       officeCreationActionState(actions.createSeat, null, actions.viewOnly),
-    ).toEqual({ visible: true, enabled: false, reason: CORE_VIEW_ONLY_REASON });
-    // A stale core room is history, not view-only.
-    expect(spaceRoomActionCapabilities(space, true).viewOnly).toBeUndefined();
+    ).toEqual({ visible: true, enabled: true, reason: null });
+    // World's own rooms of a core, and its main room, are World's to manage.
+    for (const nativeId of ["hc:room:r0123456789ab", "hc:unplaced"])
+      expect(spaceRoomActionCapabilities({ ...space, nativeId })).toEqual({
+        createSeat: true,
+        rename: true,
+        close: true,
+        core: true,
+      });
+    // A stale core room is history: nothing starts or ends there.
+    expect(spaceRoomActionCapabilities(space, true)).toEqual({
+      createSeat: false,
+      rename: false,
+      close: false,
+    });
+  });
+
+  test("core agents keep the reason Chat and the terminal stay closed", async () => {
+    const world = await worldOf();
+    const leaf = world.leaves.find((l) => l.connectionId === "box-core")!;
+    expect(leaf).toMatchObject({
+      coreControl: true,
+      actionable: false,
+      viewOnly: CORE_VIEW_ONLY_REASON,
+    });
+    expect(leaf.capabilities.openTerminal).toBe(false);
+    expect(leaf.capabilities.agentHistory).toBe(false);
   });
 
   test("the view-only message prefers the program's words, then why it waits", async () => {
