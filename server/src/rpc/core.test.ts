@@ -113,7 +113,45 @@ describe("world.core.* answers only the core connection it names", () => {
     expect(result.invalidations).toEqual([generation]);
   });
 
-  test("an agent on a Windows core host is refused before core is asked", async () => {
+  test("an agent on a Windows core host starts with its Windows executable", async () => {
+    const w = await world();
+    const scripts: string[] = [];
+    const result = await call(
+      w,
+      "world.core.launch",
+      {
+        connection_id: "box",
+        connection_generation: w.lease().generation,
+        workspace_id: "hc:unplaced",
+        kind: "codex",
+        label: "Codex",
+      },
+      {
+        host: host({
+          windows: true,
+          run: async (script) => {
+            scripts.push(script);
+            return {
+              code: 0,
+              stdout:
+                "banner\r\nherdr-core-executable:C:\\Users\\example\\AppData\\Roaming\\npm\\codex.cmd\r\n",
+            };
+          },
+        }),
+      },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.reply?.result).toMatchObject({ runtime: "herdr-core" });
+    // The PowerShell resolver ran, never a POSIX probe.
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]).toContain("Get-Command");
+    const run = w.fake.calls.find((c) => c.method === "terminal.run");
+    expect((run!.params as { argv: string[] }).argv[0]).toBe(
+      "C:\\Users\\example\\AppData\\Roaming\\npm\\codex.cmd",
+    );
+  });
+
+  test("a Windows host without the harness starts nothing", async () => {
     const w = await world();
     const result = await call(
       w,
@@ -125,9 +163,14 @@ describe("world.core.* answers only the core connection it names", () => {
         kind: "claude",
         label: "Claude",
       },
-      { host: host({ windows: true }) },
+      {
+        host: host({
+          windows: true,
+          run: async () => ({ code: 0, stdout: "\r\n" }),
+        }),
+      },
     );
-    expect(result.error).toContain("Windows");
+    expect(result.reply?.result).toMatchObject({ status: "failed" });
     expect(w.fake.calls.some((c) => c.method === "terminal.run")).toBe(false);
   });
 

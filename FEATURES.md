@@ -2010,7 +2010,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     not kept. The quick-start list offers every harness Herdr integrates that
     the host has installed (no login tab for core yet). A lost reply says the
     agent may have started and is never retried; a name taken meanwhile moves
-    to the next free one. On a Windows core host only a plain shell starts.
+    to the next free one. On a Windows core host World finds the harness with
+    one fixed PowerShell script (on the PATH, else `~\.local\bin` or
+    `%APPDATA%\npm`) and starts its `.exe`, or its npm `.cmd` through
+    `cmd.exe`; core refuses a multi-line first message to a `.cmd`.
   - **World's rooms of a core.** Rooms, their order and the tabs World
     started live in World's database under the core's ID, never in the apps'
     layout. **Add room**, **Rename** and **Close** work on World's rooms and
@@ -2020,11 +2023,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   - **Ending core agents.** Core ends a program's children with it, so the
     bin, **Close room** and every other native kill first name every terminal
     that will end (its name or tab and room; children on a linked machine
-    are marked). Putting an agent with children in the bin asks first; one
-    without children goes straight in. World ends nothing beyond what you
-    confirmed: if a child started since, or a confirmed program was replaced
-    (even by a shell that reused its pid), nothing ends and World shows the
-    new list. A child core starts in the instant between World's last update
+    are marked), to the end of every chain, including children of those
+    children on the linked machine. Putting an agent with children in the
+    bin asks first; one without children goes straight in. World ends
+    nothing beyond what you confirmed: if a child started since, or a
+    confirmed program was replaced (even by a shell that reused its pid, on
+    a linked machine too), nothing ends and World shows the new list. A child core starts in the instant between World's last update
     and the kill can still end with it, since core has no conditional kill.
     Closing an agent's pane in the desktop app ends it, and World shows it
     gone.

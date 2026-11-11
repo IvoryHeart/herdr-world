@@ -383,6 +383,14 @@ export function coreTopology(
       agent_status: pane.agent_status,
     });
   }
+  // A core always offers a room to start in: with nothing else, its main
+  // room, empty, so a new agent can start in core on first sight.
+  if (workspaces.size === 0)
+    workspaces.set(CORE_UNPLACED_WORKSPACE, {
+      workspace_id: CORE_UNPLACED_WORKSPACE,
+      label: coreName,
+      focused: false,
+    });
   return {
     workspaces: [...workspaces.values()],
     tabs: [...tabs.values()],

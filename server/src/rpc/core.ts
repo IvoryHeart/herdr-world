@@ -142,10 +142,6 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
               text: String(p.text ?? "").slice(0, 16_000),
             });
         const host = core.host(connectionId);
-        if (launch && host?.windows)
-          throw new CoreOperationRefused(
-            "World starts only a plain shell on a Windows herdr-core host for now.",
-          );
         const result = await launchCore(
           lease,
           {

@@ -324,6 +324,40 @@ describe("rooms follow Herdr's desktop app placement", () => {
   });
 });
 
+describe("a core always has a room to start in", () => {
+  test("a new core with no terminals and no rooms offers its main room, empty", () => {
+    const empty = coreTopology([], "example-host");
+    expect(empty.workspaces).toEqual([
+      {
+        workspace_id: CORE_UNPLACED_WORKSPACE,
+        label: "example-host",
+        focused: false,
+      },
+    ]);
+    expect([empty.tabs, empty.panes, empty.agents]).toEqual([[], [], []]);
+    // Linked-machine and finished terminals show nowhere, so still empty.
+    expect(
+      coreTopology(
+        [
+          record({ address: "mac/t1", remote: true }),
+          record({ address: "t4", state: "finished" }),
+        ],
+        "example-host",
+      ).workspaces.map((w) => w.workspace_id),
+    ).toEqual([CORE_UNPLACED_WORKSPACE]);
+  });
+
+  test("any other room means no extra main room", () => {
+    const placed = coreTopology(
+      [record({ address: "t1", labels: { "herdr.space": "s1" } })],
+      "example-host",
+    );
+    expect(placed.workspaces.map((w) => w.workspace_id)).toEqual([
+      "hc:space:s1",
+    ]);
+  });
+});
+
 describe("the read model refuses a mirror that is not current", () => {
   test("a retired mirror lists nothing as current; one cut serves all four lists", async () => {
     const mirror = new CoreMirror();

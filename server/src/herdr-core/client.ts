@@ -170,14 +170,17 @@ function checkLabels(labels: Record<string, string>) {
   return Object.fromEntries(entries);
 }
 
+/** An absolute path on a Unix host (`/…`) or a Windows one (`C:\\…`). */
+const ABSOLUTE = /^(?:\/|[A-Za-z]:\\)[^\0]*$/;
+
 /** Fresh native `terminal.run` parameters from a typed request. */
 export function coreRunParams(request: CoreRunRequest) {
   const argv = request.argv.map(String);
-  if (argv.length > 0 && !/^\/[^\0]*$/.test(argv[0]!))
+  if (argv.length > 0 && !ABSOLUTE.test(argv[0]!))
     throw new CoreProtocolError("a program must be an absolute executable");
   if (argv.some((arg) => arg.length > MAX_ARG || arg.includes("\0")))
     throw new CoreProtocolError("a program argument is invalid");
-  if (request.cwd !== undefined && !/^\/[^\0]*$/.test(request.cwd))
+  if (request.cwd !== undefined && !ABSOLUTE.test(request.cwd))
     throw new CoreProtocolError("the working folder must be absolute");
   const env = Object.fromEntries(
     Object.entries(request.env ?? {}).map(([key, value]) => {
