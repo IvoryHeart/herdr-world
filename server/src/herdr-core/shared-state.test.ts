@@ -160,6 +160,67 @@ describe("push follows Herdr's attention rule", () => {
     ]);
     expect(attention.cut("c1", after)).toEqual([]);
   });
+
+  test("a whole turn inside the gap alerts, though the word reads the same", () => {
+    // Done at turn 1 and seen; the agent works and finishes turn 2 while
+    // World is away, so the reconnect cut reads done again with seen still 1.
+    const seenAt1 = { "herdr.seen": "1" };
+    const attention = new CoreAttention();
+    attention.cut("c1", [
+      agent({ turn: 1, labels: seenAt1 }),
+      agent({ address: "t2", turn: 1, status: { state: "idle" } }),
+      agent({ address: "t3", turn: 1, status: { state: "blocked" } }),
+      agent({ address: "t4", turn: 1 }),
+    ]);
+    const after = [
+      agent({ turn: 2, labels: seenAt1 }),
+      agent({ address: "t2", turn: 2, status: { state: "idle" } }),
+      // A new ask after working through another turn.
+      agent({ address: "t3", turn: 2, status: { state: "blocked" } }),
+      // Seen elsewhere already, or working on the next one: quiet.
+      agent({ address: "t4", turn: 2, labels: { "herdr.seen": "2" } }),
+    ];
+    const alerts = attention.cut("c1", after);
+    expect(alerts).toEqual([
+      { address: "t1", kind: "completed" },
+      { address: "t2", kind: "completed" },
+      { address: "t3", kind: "blocked" },
+    ]);
+    expect(
+      coreTaskEvents(alerts, after, "core").map((e) => [e.paneId, e.kind]),
+    ).toEqual([
+      ["t1", "completed"],
+      ["t2", "completed"],
+      ["t3", "blocked"],
+    ]);
+    expect(attention.cut("c1", after)).toEqual([]);
+    const busyAgain = new CoreAttention();
+    busyAgain.cut("c1", [agent({ turn: 1 })]);
+    expect(
+      busyAgain.cut("c1", [agent({ turn: 2, status: { state: "working" } })]),
+    ).toEqual([]);
+  });
+
+  test("a turn already pushed from its event is not pushed again after a gap", () => {
+    // Core sends the status event, then the turn event; World can lose the
+    // connection between them, or after both.
+    for (const turnEvent of [false, true]) {
+      const attention = new CoreAttention();
+      attention.cut("c1", [agent({ turn: 1, status: { state: "working" } })]);
+      expect(attention.event("c1", "status", "t1", agent({ turn: 1 }))).toEqual(
+        [{ address: "t1", kind: "completed" }],
+      );
+      if (turnEvent)
+        expect(attention.event("c1", "turn", "t1", agent({ turn: 2 }))).toEqual(
+          [],
+        );
+      expect(attention.cut("c1", [agent({ turn: 2 })])).toEqual([]);
+      // The next whole turn inside a gap still alerts.
+      expect(attention.cut("c1", [agent({ turn: 3 })])).toEqual([
+        { address: "t1", kind: "completed" },
+      ]);
+    }
+  });
 });
 
 // ---- Replay of World's traffic with a real herdr-core 0.1.20 ----

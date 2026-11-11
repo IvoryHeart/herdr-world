@@ -140,22 +140,32 @@ function wordOf(record: CoreMirrorTerminal | undefined): string | null {
 export type CoreAlert = { address: string; kind: CoreAlertKind };
 
 /**
+ * What World has accounted for at one address: the last status word, and
+ * how many turns have ended. Core raises `turn` when the root record leaves
+ * `working` and sends that as its own `turn` event right after the status
+ * event (herdr-core `status.rs`, `events_arrive_in_order_after_a_snapshot`),
+ * so a status event that leaves `working` already accounts for that turn.
+ */
+type Accounted = { word: string | null; turns: number };
+
+/**
  * Push decisions from core's status events, kept per core across one World
  * service's reconnects (like World's first sight): a turn that ends while
  * World is disconnected alerts once at the next cut, unless a person has
- * already seen it in some client. A terminal World has never seen, and a
- * kept replacement (`restarted`), is learned without alerting. Sub-agents
- * report to their parent and linked machines are discovery only, as in
- * Herdr's apps.
+ * already seen it in some client. A cut compares the turn as well as the
+ * word, because a whole turn can start and end inside the gap and leave the
+ * word as it was. A terminal World has never seen, and a kept replacement
+ * (`restarted`), is learned without alerting. Sub-agents report to their
+ * parent and linked machines are discovery only, as in Herdr's apps.
  */
 export class CoreAttention {
   private coreId: string | null = null;
-  private readonly words = new Map<string, string | null>();
+  private readonly accounted = new Map<string, Accounted>();
 
   private reset(coreId: string) {
     if (coreId === this.coreId) return;
     this.coreId = coreId;
-    this.words.clear();
+    this.accounted.clear();
   }
 
   private change(
@@ -163,19 +173,30 @@ export class CoreAttention {
     afterGap: boolean,
   ): CoreAlert | null {
     const address = record.address;
-    const known = this.words.has(address);
-    const previous = this.words.get(address) ?? null;
+    const before = this.accounted.get(address);
     const next = wordOf(record);
-    this.words.set(address, next);
-    if (!known || record.remote || record.state !== "live") return null;
+    const turn = coreTurn(record);
+    // A cut's turn is final; an event's turn trails its status by one event.
+    const turns =
+      afterGap || !before
+        ? turn
+        : Math.max(
+            before.turns,
+            before.word === "working" && next !== "working" ? turn + 1 : turn,
+          );
+    this.accounted.set(address, { word: next, turns });
+    if (!before || record.remote || record.state !== "live") return null;
     const parent = record.parent;
     if (typeof parent === "string" && parent) return null;
-    const kind = attentionFor(previous, next);
+    let kind = attentionFor(before.word, next);
+    // Turns ended unseen by World, and it is not working on another now.
+    if (!kind && afterGap && turn > before.turns && next && next !== "working")
+      kind = stuck(next) ? "blocked" : "completed";
     if (!kind) return null;
     // A cut's turn is final: a turn someone already saw is not news.
     if (kind === "completed" && afterGap) {
       const seen = sharedSeen(record);
-      if (seen !== null && seen >= coreTurn(record)) return null;
+      if (seen !== null && seen >= turn) return null;
     }
     return { address, kind };
   }
@@ -190,8 +211,8 @@ export class CoreAttention {
       const alert = this.change(record, true);
       if (alert) alerts.push(alert);
     }
-    for (const address of this.words.keys())
-      if (!live.has(address)) this.words.delete(address);
+    for (const address of this.accounted.keys())
+      if (!live.has(address)) this.accounted.delete(address);
     return alerts;
   }
 
@@ -204,14 +225,20 @@ export class CoreAttention {
   ): CoreAlert[] {
     this.reset(coreId);
     if (type === "removed" || !record) {
-      this.words.delete(address);
+      this.accounted.delete(address);
       return [];
     }
     if (type === "created" || type === "restarted") {
       // A new program at this address: its first word is not a change.
-      this.words.set(address, wordOf(record));
+      this.accounted.set(address, {
+        word: wordOf(record),
+        turns: coreTurn(record),
+      });
       return [];
     }
+    const before = this.accounted.get(address);
+    if (type === "turn" && before)
+      before.turns = Math.max(before.turns, coreTurn(record));
     if (type !== "status") return [];
     const alert = this.change(record, false);
     return alert ? [alert] : [];
