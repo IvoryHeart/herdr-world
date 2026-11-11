@@ -126,8 +126,17 @@ export function CoreProfileForm({
           />
           A Unix host over SSH
         </label>
+        <label className="connection-profile-checkbox">
+          <input
+            type="radio"
+            name="core-where"
+            checked={draft.where === "windows"}
+            onChange={() => update("where", "windows")}
+          />
+          A Windows host over SSH
+        </label>
       </fieldset>
-      {draft.where === "ssh" ? (
+      {draft.where !== "local" ? (
         <label className="form-field">
           <span>OpenSSH destination</span>
           <input
@@ -155,7 +164,11 @@ export function CoreProfileForm({
         <input
           value={draft.stateDir}
           onChange={(event) => update("stateDir", event.target.value)}
-          placeholder="~/.local/state/herdr-core/<session> when empty"
+          placeholder={
+            draft.where === "windows"
+              ? "%LOCALAPPDATA%\\herdr-core\\<session> when empty"
+              : "~/.local/state/herdr-core/<session> when empty"
+          }
           autoCapitalize="none"
           spellCheck={false}
         />
@@ -169,8 +182,9 @@ export function CoreProfileForm({
         Connect automatically when Herdr World starts
       </label>
       <p className="connection-profile-security-note">
-        World reads core.lock and connects to that socket on every attempt. A
-        core that is not running stays unavailable until you start it.
+        {draft.where === "windows"
+          ? "World reads core.lock with a fixed PowerShell script, then relays core's named pipe over SSH on every attempt. It runs no program there, so a core that is not running stays unavailable until you start it."
+          : "World reads core.lock and connects to that socket on every attempt. A core that is not running stays unavailable until you start it."}
       </p>
       {feedback ? (
         <div
@@ -242,7 +256,11 @@ export function CoreConnectionCards({
                 <span>
                   herdr-core ·{" "}
                   {connection.type === "ssh"
-                    ? connection.ssh_destination
+                    ? `${connection.ssh_destination}${
+                        connection.remote_platform === "windows"
+                          ? " (Windows)"
+                          : ""
+                      }`
                     : "this computer"}
                 </span>
               </div>
