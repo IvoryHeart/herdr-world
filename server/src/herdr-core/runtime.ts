@@ -20,7 +20,9 @@ import {
   CoreUnavailableError,
   CoreUnsupportedError,
   type CoreWriteMethod,
+  type CoreKeyboard,
   type CoreWatch,
+  CoreWatchRefusedError,
   type CoreWatchSink,
 } from "./client";
 import {
@@ -154,6 +156,17 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
     fence: CoreOperationFence<CoreConnectionRuntime>,
     sink: CoreWatchSink,
   ): Promise<CoreWatch>;
+  /**
+   * World's keyboard on the fenced terminal (`CoreClient.keyboard`): an
+   * interactive viewer for input only. Lease, core process and program must
+   * hold at dispatch and publication; the caller re-checks them before
+   * every frame it sends. Refused where core offers no interactive attach.
+   */
+  keyboard(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    size: CoreCellSize,
+    ended: (reason: string) => void,
+  ): Promise<CoreKeyboard>;
   /**
    * Session input (delivery.ts). Checked at dispatch only: the caller
    * decides what a reply that outlived its occupant means. `cancel` asks
@@ -517,6 +530,30 @@ export function createCoreConnectionRuntime(
     return watch;
   }
 
+  async function keyboard(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    size: CoreCellSize,
+    ended: (reason: string) => void,
+  ) {
+    if (fence.lease.runtime !== self || !fence.occupant)
+      throw new CoreFenceError("dispatch", "lease");
+    const current = client;
+    if (!current) throw new CoreFenceError("dispatch", "not-actionable");
+    if (!current.offersKeyboard)
+      throw new CoreWatchRefusedError(
+        `core ${current.hello.version} cannot take typing from World`,
+      );
+    fence.check("dispatch", "program");
+    const keys = await current.keyboard(fence.occupant.address, size, ended);
+    try {
+      fence.check("publication", "program");
+    } catch (error) {
+      keys.detach();
+      throw error;
+    }
+    return keys;
+  }
+
   async function shareLabel(
     fence: CoreOperationFence<CoreConnectionRuntime>,
     decide: (
@@ -713,6 +750,7 @@ export function createCoreConnectionRuntime(
         await current.label(fence.occupant!.address, labels);
       }),
     watchTerminal,
+    keyboard,
     shareLabel,
     shells,
     keys: (fence, keys) =>

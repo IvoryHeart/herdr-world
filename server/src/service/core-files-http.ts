@@ -8,8 +8,9 @@ import { ConnectionRoutingError } from "../connections/protocol";
 import { workspaceFileParams } from "../http/workspace-file-params";
 
 /**
- * A file transfer on a herdr-core connection: its generation must be
- * named and current, and the response is published only while it is.
+ * A file transfer on a herdr-core connection (Files, or a terminal
+ * upload): its generation must be named and current, and the response is
+ * published only while it is.
  */
 export async function handleCoreFileHttpRequest(
   core: CoreRpcServices,
@@ -36,6 +37,11 @@ export async function handleCoreFileHttpRequest(
     );
   const resolved = { ...lease, connectionId };
   const { endpoint } = route;
+  if (endpoint === "upload-image" || endpoint === "terminal-upload")
+    return publishConnectionHttpResponse(
+      resolved,
+      await coreTerminalUpload(core, lease, endpoint, url, req),
+    );
   if (
     endpoint !== "file-download" &&
     endpoint !== "file-upload" &&
@@ -75,4 +81,27 @@ export async function handleCoreFileHttpRequest(
         : Response.json({ error: (error as Error).message }, { status: 400 });
   }
   return publishConnectionHttpResponse(resolved, response);
+}
+
+/**
+ * The composer's image or file for a core agent, staged on the agent's
+ * machine for this generation and answered with the path to paste.
+ */
+async function coreTerminalUpload(
+  core: CoreRpcServices,
+  lease: Parameters<CoreRpcServices["hostRuntime"]>[0],
+  endpoint: "upload-image" | "terminal-upload",
+  url: URL,
+  req: Request,
+): Promise<Response> {
+  try {
+    const { uploads } = core.hostRuntime(lease);
+    return endpoint === "upload-image"
+      ? await uploads.image(req)
+      : await uploads.file(req, url.searchParams.get("filename"), () =>
+          lease.isCurrent(),
+        );
+  } catch (error) {
+    return Response.json({ error: (error as Error).message }, { status: 500 });
+  }
 }

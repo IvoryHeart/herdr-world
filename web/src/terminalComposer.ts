@@ -14,6 +14,8 @@ const selections = new Map<string, { start: number; end: number }>();
 const retiredDraftKeys = new Set<string>();
 const recoveredUploadKeys = new Set<string>();
 let activeDraftScopePrefixes: ReadonlySet<string> | null = null;
+/** Scopes an open view holds itself (a herdr-core terminal), by holder count. */
+const heldDraftScopePrefixes = new Map<string, number>();
 type TerminalComposerDraftListener = (text: string) => void;
 type TerminalComposerSubmissionListener = (pending: boolean) => void;
 type TerminalComposerUploadListener = (count: number) => void;
@@ -54,8 +56,43 @@ export function terminalComposerDraftKeyIsActive(key: string): boolean {
   return (
     !retiredDraftKeys.has(key) &&
     (activeDraftScopePrefixes === null ||
-      [...activeDraftScopePrefixes].some((prefix) => key.startsWith(prefix)))
+      [...activeDraftScopePrefixes, ...heldDraftScopePrefixes.keys()].some(
+        (prefix) => key.startsWith(prefix),
+      ))
   );
+}
+
+/**
+ * Admits drafts for a connection App's catalogue does not list (herdr-core)
+ * while a view on it is open. When the last holder lets go, that scope's
+ * drafts go with it.
+ */
+export function holdTerminalComposerDraftScope(
+  connectionId: string,
+  connectionGeneration: number,
+): () => void {
+  const prefix = terminalComposerDraftScopePrefix(
+    connectionId,
+    connectionGeneration,
+  );
+  heldDraftScopePrefixes.set(
+    prefix,
+    (heldDraftScopePrefixes.get(prefix) ?? 0) + 1,
+  );
+  let held = true;
+  return () => {
+    if (!held) return;
+    held = false;
+    const count = (heldDraftScopePrefixes.get(prefix) ?? 1) - 1;
+    if (count > 0) {
+      heldDraftScopePrefixes.set(prefix, count);
+      return;
+    }
+    heldDraftScopePrefixes.delete(prefix);
+    for (const key of [...drafts.keys(), ...selections.keys()])
+      if (key.startsWith(prefix) && !terminalComposerDraftKeyIsActive(key))
+        clearTerminalComposerDraft(key);
+  };
 }
 
 export function terminalComposerScopeGeneration(snapshot: {

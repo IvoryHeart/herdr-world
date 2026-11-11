@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { CoreKeyboard } from "../server/src/herdr-core/client";
 import type { CoreState, CoreSubjects } from "./herdr-core-runtime";
 
 /** A core-to-World frame on the watch stream, tagged with its grid. */
@@ -13,6 +14,10 @@ const GRIDS: ReadonlyArray<readonly [number, number]> = [
 ];
 const gridId = (cols: number, rows: number) =>
   GRIDS.findIndex(([c, r]) => c === cols && r === rows);
+/** World's fitted grid for its view: grid id 3. */
+const WORLD = { cols: GRIDS[3]![0], rows: GRIDS[3]![1] };
+const KEY = new TextEncoder().encode("a");
+const REPLY = new TextEncoder().encode("\x1b[1;1R");
 
 /**
  * The observe family's replay: core's size rule and credit behaviour as the
@@ -20,6 +25,14 @@ const gridId = (cols: number, rows: number) =>
  * production grid adoption (`CoreWatchScreen`) as the subjects.
  */
 export class CoreWatchReplay {
+  /**
+   * World's production typing session for the current watch, and the
+   * keyboard core attached for it (design seam: core's size rule).
+   */
+  private session: InstanceType<CoreSubjects["CoreTypingSession"]> | null =
+    null;
+  private keyboard: (CoreKeyboard & { end(): void }) | null = null;
+  private attaching = false;
   /**
    * The page's production watch model for the current stream; its surface
    * records which grid each paint is drawn on.
@@ -48,6 +61,24 @@ export class CoreWatchReplay {
     }
   }
 
+  /**
+   * Core's size rule (design seam): the viewer that last typed, resized or
+   * focused leads; World's keyboard leads alone once the pane closes.
+   */
+  private coreGrid(): number {
+    const s = this.state();
+    if (this.keyboard?.open && (s.worldLeads || s.lead < 0)) return 3;
+    return s.lead >= 0 ? s.lead : 2;
+  }
+
+  private regrid() {
+    const s = this.state();
+    const g = this.coreGrid();
+    if (g === s.grid) return;
+    s.grid = g;
+    this.wire(g);
+  }
+
   /** The watch ends with its stream (unwatch, disconnect or restart). */
   endWatch() {
     const s = this.state();
@@ -58,6 +89,76 @@ export class CoreWatchReplay {
     s.pendingGrid = -1;
     s.backlog = false;
     this.screen = null;
+    // World's keyboard goes with the watch (production session).
+    const session = this.session;
+    this.session = null;
+    this.attaching = false;
+    session?.close();
+    this.keyboard = null;
+    this.sync(null);
+  }
+
+  /** The model's view of the typing session. */
+  private sync(
+    session: InstanceType<CoreSubjects["CoreTypingSession"]> | null,
+  ) {
+    const s = this.state();
+    const state = session?.state ?? "no";
+    s.keys = state === "yes" ? 2 : state === "opening" ? 1 : 0;
+    const waiting = session?.waiting ?? { keys: 0, leave: false };
+    s.waiting = waiting.keys;
+    s.left = waiting.leave;
+    s.asked = s.keys > 0;
+    if (s.keys === 0) s.worldLeads = false;
+  }
+
+  /** Core's interactive viewer for World (design seam: core). */
+  private attach(): CoreKeyboard & { end(): void } {
+    const s = this.state();
+    const lead = () => {
+      s.worldLeads = true;
+      this.regrid();
+    };
+    const keyboard = {
+      channel: 2,
+      terminal: { address: "t0", labels: {}, argv: [], state: "running" },
+      automatic: true,
+      open: true,
+      input: () => {
+        s.sent++;
+        if (!keyboard.open || s.replaced) s.stray = true;
+        lead();
+      },
+      // Automatic input never touches the viewer.
+      automaticInput: () => {
+        if (!keyboard.open) s.stray = true;
+      },
+      resize: lead,
+      focus: (focused: boolean) => {
+        if (focused) lead();
+      },
+      detach: () => keyboard.end(),
+      end: () => {
+        if (!keyboard.open) return;
+        keyboard.open = false;
+        s.worldLeads = false;
+        this.regrid();
+      },
+    };
+    return keyboard;
+  }
+
+  /** One batch the page sends, through World's production session. */
+  private type(automatic: boolean) {
+    const s = this.state();
+    this.session!.input({
+      kind: automatic ? "automatic" : "input",
+      bytes: automatic ? REPLY : KEY,
+      size: { ...WORLD },
+      done: (sent) => {
+        if (!automatic && !sent) s.refused++;
+      },
+    });
   }
 
   /** A watch frame reaching the page, through the production page model. */
@@ -108,6 +209,23 @@ export class CoreWatchReplay {
     s.pendingGrid = -1;
     s.backlog = false;
     this.surfaceGrid = -1;
+    this.attaching = false;
+    this.keyboard = null;
+    const session = new this.subjects.CoreTypingSession({
+      open: (size) => {
+        assert.deepEqual(size, WORLD, "World's keyboard opens at its size");
+        this.attaching = true;
+      },
+      fenced: () => {
+        if (!this.state().replaced) return true;
+        // World's fence ends the watch: the program is not the one typed for.
+        if (this.session === session) this.endWatch();
+        return false;
+      },
+      maxQueuedBytes: 256 * 1024,
+      notSent: () => new Error("Not sent"),
+    });
+    this.session = session;
     this.screen = new this.subjects.CoreWatchScreen({
       resize: (cols: number, rows: number) => {
         this.surfaceGrid = gridId(cols, rows);
@@ -135,16 +253,63 @@ export class CoreWatchReplay {
         // The desktop pane (core's typing viewer) opens, resizes or closes.
         assert(s.running && s.changes < 3);
         const g = target === 2 ? -1 : target;
-        assert(g !== s.lead);
-        const led = g >= 0 ? g : 2;
+        assert(g !== s.lead && !s.replaced);
         s.lead = g;
         s.changes++;
-        if (led !== s.grid) {
-          s.grid = led;
-          this.wire(led);
-        }
+        // A pane that resizes was touched: it leads again.
+        if (g >= 0) s.worldLeads = false;
+        this.regrid();
         return;
       }
+      case "paneTouch":
+        assert(s.running && s.changes < 3 && s.lead >= 0 && s.worldLeads);
+        assert(!s.replaced);
+        s.changes++;
+        s.worldLeads = false;
+        this.regrid();
+        return;
+      case "key": {
+        assert(s.watching && s.pressed < 2 && !s.left);
+        const session = this.session!;
+        s.pressed++;
+        this.type(false);
+        return this.sync(this.session === session ? session : null);
+      }
+      case "attached": {
+        assert(this.attaching && this.session);
+        this.attaching = false;
+        // A fresh (not resumed) attach leads at once.
+        this.keyboard = this.attach();
+        s.worldLeads = true;
+        this.regrid();
+        this.session.opened(this.keyboard);
+        return this.sync(this.session);
+      }
+      case "attachRefused":
+        assert(this.attaching && this.session);
+        this.attaching = false;
+        this.session.failed(new Error("refused"));
+        return this.sync(this.session);
+      case "leave":
+        assert(this.session && s.keys > 0 && !s.left && !s.replaced);
+        this.session.leave();
+        return this.sync(this.session);
+      case "reply":
+        assert(this.session && s.watching && s.replies < 1 && !s.replaced);
+        s.replies++;
+        this.type(true);
+        return this.sync(this.session);
+      case "keyboardLost": {
+        const keyboard = this.keyboard;
+        assert(this.session && keyboard?.open && s.keys === 2 && !s.replaced);
+        keyboard.end();
+        this.session.ended(keyboard);
+        return this.sync(this.session);
+      }
+      case "reoccupy":
+        assert(s.keys === 2 && !s.replaced);
+        s.replaced = true;
+        return;
       case "output":
         assert(s.running && s.outputs < 2 && s.frames.length < 4);
         s.outputs++;

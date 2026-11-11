@@ -103,7 +103,7 @@ export interface Pane {
   /** Runtime-provided labels for known semantic agent states. */
   state_labels?: Record<string, string>;
   agent_status: string;
-  /** Present only on herdr-core terminals, which World observes only. */
+  /** Present only on herdr-core terminals (watched and typed into through world.core.*). */
   runtime?: "herdr-core";
   /** Opaque binding to the addressed core program and foreground. */
   core_recipient?: string;

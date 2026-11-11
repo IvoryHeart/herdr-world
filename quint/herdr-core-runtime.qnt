@@ -13,9 +13,10 @@ module herdr_core_runtime {
   pure val EVENT_BOUND = 2
   type Terminal = { alive: bool, born: bool, x: int, y: int, occupant: int }
   type Event = { epoch: int, gen: int, seq: int, target: int, kind: str }
-  // Observe family: a core-to-World frame on World's watch stream. Grids are
-  // ids: 0/1 the desktop pane's sizes, 2 core's headless grid, 3 a size no
-  // pane set (an unviewed terminal's creation size, or World's own).
+  // Observe and typing families: a core-to-World frame on World's watch
+  // stream. Grids are ids: 0/1 the desktop pane's sizes, 2 core's headless
+  // grid, 3 a size no pane set (an unviewed terminal's creation size, or
+  // World's own while a person types in World's view).
   type Frame = { kind: str, grid: int, stream: int }
   type State = { source: List[Terminal], mirror: List[Terminal], history: List[List[Terminal]],
     queue: List[Event], seq: int, cursor: int, epoch: int, generation: int, owner: int,
@@ -27,7 +28,9 @@ module herdr_core_runtime {
     planGen: int, planOwner: int, planEpoch: int, tornDown: bool, removed: bool,
     lead: int, grid: int, watching: bool, confirmed: bool, frames: List[Frame],
     credit: bool, pendingGrid: int, backlog: bool, stream: int, shown: int,
-    misdrawn: bool, typed: bool, outputs: int }
+    misdrawn: bool, typed: bool, outputs: int,
+    keys: int, waiting: int, left: bool, asked: bool, pressed: int, sent: int,
+    refused: int, replies: int, worldLeads: bool, stray: bool }
   var family: str
   var c: State
   var op: str
@@ -35,10 +38,11 @@ module herdr_core_runtime {
   pure val terminal = { alive: true, born: true, x: 0, y: 0, occupant: 0 }
   pure val initial = List(terminal, { ...terminal, alive: false, born: false })
   action init = {
-    nondet choice = (if (CHECKING) Set(0, 1, 2, 3, 4)
-      else if (OBSERVE) Set(4) else Set(0, 1, 2, 3)).oneOf()
+    nondet choice = (if (CHECKING) Set(0, 1, 2, 3, 4, 5)
+      else if (OBSERVE) Set(4, 5) else Set(0, 1, 2, 3)).oneOf()
     all {
-    family' = if (choice == 0) "ordering" else if (choice == 4) "observe" else "authority",
+    family' = if (choice == 0) "ordering" else if (choice == 4) "observe"
+      else if (choice == 5) "typing" else "authority",
     c' = { source: initial, mirror: initial, history: List(initial), queue: List(),
       seq: 0, cursor: -1, epoch: 0, generation: 0, owner: 0,
       connected: false, ready: false, running: true, changes: 0, replaced: false,
@@ -51,7 +55,9 @@ module herdr_core_runtime {
       planGen: -1, planOwner: -1, planEpoch: -1, tornDown: false, removed: false,
       lead: -1, grid: 3, watching: false, confirmed: false, frames: List(),
       credit: true, pendingGrid: -1, backlog: false, stream: 0, shown: -1,
-      misdrawn: false, typed: false, outputs: 0 },
+      misdrawn: false, typed: false, outputs: 0,
+      keys: 0, waiting: 0, left: false, asked: false, pressed: 0, sent: 0,
+      refused: 0, replies: 0, worldLeads: false, stray: false },
     op' = "init", target' = 0,
     }
   }
@@ -70,6 +76,8 @@ module herdr_core_runtime {
   // a child instead of their product. Simulation keeps both in both.
   val sends = not(CHECKING) or not(c.child)
   val kills = not(CHECKING) or c.child
+  // Both watch families share the watch, its frames and the desktop pane.
+  val viewer = family == "observe" or family == "typing"
   action connect = all {
     not(c.connected), c.generation < 2,
     // An absent endpoint is a failed direct connection, never a CLI autostart.
@@ -89,7 +97,7 @@ module herdr_core_runtime {
     else if (kind == "x") { ...ts[t], x: ts[t].x + 1 }
     else { ...ts[t], y: ts[t].y + 1 })
   action emit(t, kind) = all {
-    c.running, family != "observe", c.changes < (if (family == "ordering") EVENT_BOUND else 1),
+    c.running, not(viewer), c.changes < (if (family == "ordering") EVENT_BOUND else 1),
     if (kind == "create") not(c.source[t].born) else c.source[t].alive,
     val updated = delta(c.source, t, kind)
     change({ ...c, source: updated, history: c.history.append(updated), seq: c.seq + 1,
@@ -126,8 +134,13 @@ module herdr_core_runtime {
   }
   // A watch ends with its connection: its in-flight frames belong to a stream
   // World no longer has, and the next watch is a new stream with fresh credit.
+  // World's keyboard goes with it: nothing waiting is sent, and core gives
+  // the size back.
   pure def endWatch(s: State): State = if (s.watching) { ...s, watching: false,
-    stream: s.stream + 1, credit: true, pendingGrid: -1, backlog: false } else s
+    stream: s.stream + 1, credit: true, pendingGrid: -1, backlog: false,
+    keys: 0, waiting: 0, left: false, asked: false, worldLeads: false,
+    refused: s.refused + s.waiting,
+    grid: if (s.keys == 2) (if (s.lead >= 0) s.lead else 2) else s.grid } else s
   action disconnect = all {
     c.connected,
     change(endWatch({ ...c, connected: false, ready: false,
@@ -280,12 +293,21 @@ module herdr_core_runtime {
       .append({ kind: "data", grid: g, stream: s.stream }) }
     else { ...s, pendingGrid: g, backlog: false }
   // The desktop app's pane opens (g = 0/1), resizes, or closes (g = -1).
+  // Core's size rule with World's keyboard: the viewer that last typed,
+  // resized or focused leads; World leads alone once the pane closes.
+  pure def coreGrid(s: State): int =
+    if (s.keys == 2 and (s.worldLeads or s.lead < 0)) 3
+    else if (s.lead >= 0) s.lead else 2
+  pure def regrid(s: State): State = if (coreGrid(s) == s.grid) s
+    else wire({ ...s, grid: coreGrid(s) }, coreGrid(s))
+  // The desktop app's pane opens (g = 0/1), resizes, or closes (g = -1);
+  // a pane that resizes was touched, so it leads again.
   action pane(g) = all {
-    family == "observe", c.running, c.changes < 3, g != c.lead,
-    val led = if (g >= 0) g else 2
-    val moved = { ...c, lead: g, grid: led, changes: c.changes + 1 }
+    viewer, c.running, c.changes < (if (family == "typing") 2 else 3), g != c.lead,
+    not(c.replaced),
     // target: the pane's size id, 2 for closed.
-    change(if (led != c.grid) wire(moved, led) else moved, "pane", if (g < 0) 2 else g),
+    change(regrid({ ...c, lead: g, changes: c.changes + 1,
+      worldLeads: c.worldLeads and g < 0 }), "pane", if (g < 0) 2 else g),
   }
   // The program prints: bytes for the current grid, held while stalled.
   action output = all {
@@ -302,7 +324,7 @@ module herdr_core_runtime {
   action watch = {
     nondet path = Set(true, false).oneOf()
     all {
-      family == "observe", c.ready, not(c.watching), c.stream < 2,
+      viewer, c.ready, not(c.watching), c.stream < 2,
       val accept = path or fault("unconfirmed-accepted")
       val lead = if (fault("interactive-attach")) 3
         else if (c.lead >= 0) c.lead else 2
@@ -317,7 +339,7 @@ module herdr_core_runtime {
     }
   }
   action unwatch = all {
-    family == "observe", c.watching,
+    viewer, c.watching,
     change(endWatch(c), "unwatch", 0),
   }
   // The page's socket falls behind: World stops crediting core.
@@ -340,7 +362,7 @@ module herdr_core_runtime {
   // The page consumes the next frame: a grid resizes its terminal, data is
   // drawn on the grid it currently has. Frames of an ended stream are dropped.
   action frame = all {
-    family == "observe", c.frames.length() > 0,
+    viewer, c.frames.length() > 0,
     val f = c.frames.head()
     val current = (c.watching and f.stream == c.stream) or fault("stale-stream")
     val resize = current and f.kind == "resize" and not(fault("paint-before-resize"))
@@ -349,10 +371,77 @@ module herdr_core_runtime {
       shown: if (resize) f.grid else c.shown,
       misdrawn: c.misdrawn or (drawn and c.shown != f.grid) }, "frame", 0),
   }
-  // A phone rotates or opens its keyboard: only the drawing rescales.
+  // A phone rotates or opens its keyboard: only the drawing rescales. While
+  // World types, the new size goes with the next key, never on its own.
   action viewport = all {
-    family == "observe", c.watching, not(c.typed),
+    viewer, c.watching, not(c.typed),
     change({ ...c, typed: fault("observer-input") }, "viewport", 0),
+  }
+  // ---- Typing family: World's keyboard on a watched terminal ------------
+  // The watch stays the display; typing opens a second, interactive viewer
+  // on the first key a person types (never on a terminal's own reply).
+  // keys: 0 none, 1 attach in flight, 2 open. pressed = sent + waiting +
+  // refused: each key goes once, or is reported not sent.
+  action key = all {
+    family == "typing", c.watching, c.pressed < 2, not(c.left),
+    val p = { ...c, pressed: c.pressed + 1, asked: true }
+    val early = c.keys == 1 and fault("key-before-attach")
+    change(
+      // The program was replaced: the fence refuses the key and ends the watch.
+      if (c.replaced and not(fault("typed-replacement")))
+        endWatch({ ...p, refused: c.refused + 1 })
+      else if (c.keys == 0) { ...p, keys: 1, waiting: 1 }
+      else if (c.keys == 1 and not(early)) { ...p, waiting: c.waiting + 1 }
+      else regrid({ ...p, sent: c.sent + 1, worldLeads: true,
+        stray: c.stray or c.replaced or c.keys != 2 }),
+      "key", 0),
+  }
+  // Core answers the attach. A fresh attach leads at once; what waited goes
+  // in order, once, and a leave behind it gives the size back.
+  action attached = all {
+    family == "typing", c.keys == 1,
+    val extra = if (fault("key-twice") and c.waiting > 0) 1 else 0
+    val opened = regrid({ ...c, keys: 2, worldLeads: true,
+      sent: c.sent + c.waiting + extra, waiting: 0 })
+    change(if (c.left) regrid({ ...opened, keys: 0, left: false, asked: false,
+      worldLeads: false }) else opened, "attached", 0),
+  }
+  // Core refuses the attach: nothing that waited is sent.
+  action attachRefused = all {
+    family == "typing", c.keys == 1,
+    change({ ...c, keys: 0, refused: c.refused + c.waiting, waiting: 0,
+      left: false, asked: false }, "attachRefused", 0),
+  }
+  // The page stops typing (focus left, idle): leave after the keys before it.
+  action leave = all {
+    family == "typing", c.keys > 0, not(c.left), not(c.replaced),
+    change(if (c.keys == 1 and fault("leave-overtakes")) { ...c, asked: false }
+      else if (c.keys == 1) { ...c, left: true }
+      else regrid({ ...c, keys: 0, asked: false, worldLeads: false }), "leave", 0),
+  }
+  // The page's terminal answers a query (a cursor report): sent as
+  // automatic input only on an open keyboard, never opening one.
+  action reply = all {
+    family == "typing", c.watching, c.replies < 1, not(c.replaced),
+    change({ ...c, replies: c.replies + 1,
+      keys: if (c.keys == 0 and fault("automatic-opens")) 1 else c.keys }, "reply", 0),
+  }
+  // Core ends World's keyboard itself (its channel closed): the next key
+  // opens another.
+  action keyboardLost = all {
+    family == "typing", c.keys == 2, not(c.replaced),
+    change(regrid({ ...c, keys: 0, asked: false, worldLeads: false }), "keyboardLost", 0),
+  }
+  // The terminal's program is replaced while World holds its keyboard.
+  action reoccupy = all {
+    family == "typing", c.keys == 2, not(c.replaced),
+    change({ ...c, replaced: true }, "reoccupy", 0),
+  }
+  // A person clicks or types in the Herdr app's pane: it leads again.
+  action paneTouch = all {
+    family == "typing", c.running, c.changes < 2, c.lead >= 0, c.worldLeads,
+    not(c.replaced),
+    change(regrid({ ...c, worldLeads: false, changes: c.changes + 1 }), "paneTouch", 0),
   }
   action choices = {
     nondet t = Set(0, 1).oneOf()
@@ -368,14 +457,24 @@ module herdr_core_runtime {
     any { connect, baseline, disconnect, restart,
       pane(g), output, watch, unwatch, stall, drain, frame, viewport }
   }
+  action typingChoices = {
+    nondet g = Set(-1, 0, 1).oneOf()
+    // A rotation sends nothing while typing either (the size goes with the
+    // next key): the page's queue tests cover it, so viewport stays observe's.
+    any { connect, baseline, disconnect, pane(g), watch, unwatch, frame,
+      key, attached, attachRefused, leave, reply, keyboardLost, reoccupy, paneTouch }
+  }
   // Simulation weights do not multiply the checker's successor computation.
   // The checker gives each family the same actions simulation does: observe
   // actions are family-guarded, so the ordering and authority families lose
   // nothing, and the observe family is not multiplied by connection actions
   // (absent, heartbeat) that its own scenarios never take.
-  action step = if (CHECKING) (if (family == "observe") observeChoices else choices)
+  action step = if (CHECKING) (if (family == "observe") observeChoices
+      else if (family == "typing") typingChoices else choices)
     else if (family == "observe") any { observeChoices,
       watch, watch, frame, frame, frame, stall, stall, drain, drain, baseline, baseline }
+    else if (family == "typing") any { typingChoices,
+      watch, watch, baseline, baseline, key, key, attached, frame, frame, reoccupy }
     else any { choices, capture, dispatch,
       dropFirst, dropFirst, receiveGap, receiveGap,
       queuedReplacement, queuedReplacement, queuedReplacement, queuedReplacement,
@@ -384,10 +483,15 @@ module herdr_core_runtime {
   val projection = not(c.ready) or (c.connected and c.cursor >= 0 and
     c.cursor <= c.seq and c.mirror == c.history[c.cursor])
   // Watching never sizes, types or focuses, and every paint lands on its grid.
+  // Typing holds core's size only while a person types: each key goes once,
+  // after the attach, to the program it was typed for, and a leave never
+  // overtakes a key.
   val watched = not(c.misdrawn) and not(c.typed) and
-    (not(c.watching) or c.grid == (if (c.lead >= 0) c.lead else 2))
+    (not(c.watching) or c.grid == coreGrid(c))
+  val keyed = not(c.stray) and c.pressed == c.sent + c.waiting + c.refused and
+    (c.keys == 0 or c.asked) and (c.keys == 1 or (c.waiting == 0 and not(c.left)))
   val safety = c.safe and projection and c.attempts <= 1 and
-    (c.running or not(c.connected)) and watched
+    (c.running or not(c.connected)) and watched and keyed
   val orderedDelta = op == "receive" and c.ready and c.cursor > 0
   val missedCut = op == "missed"
   val gapRetired = (op == "heartbeat" or op == "receive") and not(c.ready)
@@ -414,4 +518,9 @@ module herdr_core_runtime {
   val headlessFollowed = op == "frame" and c.watching and c.shown == 2 and c.changes > 1
   val stallReleased = op == "drain" and c.frames.length() > 0
   val unconfirmedRefused = op == "watch" and not(c.watching)
+  val typingLed = op == "frame" and c.watching and c.keys == 2 and c.shown == 3
+  val sizeReturned = op == "frame" and c.watching and c.keys == 0 and c.sent > 0 and
+    c.shown >= 0 and c.shown == c.grid
+  val leftAfterKeys = op == "attached" and c.keys == 0 and c.sent > 0
+  val replacementRefused = op == "key" and c.replaced and not(c.watching)
 }

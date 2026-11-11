@@ -60,6 +60,12 @@
     over core; the model's worktree-removal order with three mutants; live
     checks against the 0.1.20 release.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.
+  - [x] Typing and mobile (#872): the first genuine key opens World's interactive
+    viewer and is sent once after the attach; leave on blur (3 s), idle (60 s)
+    and close; replies never take the size; the phone composer and uploads to
+    the core host (local, Unix and Windows SSH); composer drafts live while the
+    core generation does. The typing model family drives the production typing session
+    with five plan mutants and two production controls.
   - [x] Popup equivalents (#873): the room shell on both runtimes; Herdr Float
     is the one TUI plugin popup World invokes, and generic plugin popups have
     no core source. World's float shell is fenced like screen reads and tested

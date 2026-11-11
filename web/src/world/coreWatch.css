@@ -104,8 +104,42 @@
   width: max-content;
 }
 
-.core-watch-host .xterm-helper-textarea {
-  display: none;
+.core-watch-notice {
+  margin: 0;
+  padding: 6px 12px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.core-watch[data-typing] .core-watch-frame {
+  outline-style: solid;
+  outline-color: var(--accent);
+}
+
+.core-watch-composer {
+  flex: none;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+/* A phone keyboard can shrink only the visual viewport; the fixed view then
+   ends where the keyboard begins, as the World shell's content does, so the
+   composer and Send stay above it. */
+:where(html[data-layout="mobile"]) .core-watch {
+  bottom: var(--keyboard-inset-content, 0px);
+}
+
+@media (min-width: 900px) {
+  :where(html[data-layout="mobile"]) .core-watch {
+    bottom: calc(4vh + var(--keyboard-inset-content, 0px));
+  }
+}
+
+:where(html[data-layout="mobile"]) .core-watch-composer {
+  margin-bottom: var(--keyboard-inset-composer-gap, 0px);
 }
 
 .core-watch-ended {

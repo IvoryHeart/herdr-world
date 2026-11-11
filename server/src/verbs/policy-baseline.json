@@ -194,6 +194,8 @@
   "rpc:world.core.seen": "allow deny deny deny deny deny",
   "rpc:world.core.unwatch": "allow deny deny deny deny deny",
   "rpc:world.core.watch": "allow deny deny deny deny deny",
+  "rpc:world.core.input": "allow deny deny deny deny deny",
+  "rpc:world.core.leave": "allow deny deny deny deny deny",
   "rpc:world.float.open": "allow deny deny deny deny deny",
   "rpc:world.float.input": "allow deny deny deny deny deny",
   "rpc:world.float.resize": "allow deny deny deny deny deny",

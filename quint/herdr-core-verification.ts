@@ -13,13 +13,18 @@ import {
   type CoreTraceState,
 } from "./herdr-core-runtime";
 
-/** Faults of the observe family, searched in its own simulation. */
+/** Faults of the observe and typing families, searched in their own simulation. */
 const observeFaults: ReadonlySet<string> = new Set([
   "interactive-attach",
   "unconfirmed-accepted",
   "paint-before-resize",
   "stale-stream",
   "observer-input",
+  "key-twice",
+  "key-before-attach",
+  "typed-replacement",
+  "leave-overtakes",
+  "automatic-opens",
 ]);
 type Harness = {
   root: string;

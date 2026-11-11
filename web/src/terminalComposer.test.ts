@@ -7,6 +7,7 @@ import {
   clearTerminalComposerDrafts,
   finishTerminalComposerSubmission,
   finishTerminalComposerUpload,
+  holdTerminalComposerDraftScope,
   insertIntoTerminalComposerDraft,
   readTerminalComposerDraft,
   readTerminalComposerSelection,
@@ -237,6 +238,26 @@ describe("terminal composer drafts", () => {
     writeTerminalComposerDraft(inspector, "stale completion");
     expect(beginTerminalComposerUpload(inspector)).toBe(false);
     expect(readTerminalComposerDraft(inspector)).toBe("");
+  });
+
+  test("a herdr-core view holds its own draft scope while it is open", () => {
+    const core = terminalComposerDraftKey("core-example", 4, "t1");
+    activateTerminalComposerDraftScope("spaces-host", 3);
+    writeTerminalComposerDraft(core, "refused");
+    expect(readTerminalComposerDraft(core)).toBe("");
+    const release = holdTerminalComposerDraftScope("core-example", 4);
+    const second = holdTerminalComposerDraftScope("core-example", 4);
+    writeTerminalComposerDraft(core, "unsent core draft");
+    // App's catalogue changes do not retire a held scope.
+    activateTerminalComposerDraftScope("other-host", 1);
+    expect(readTerminalComposerDraft(core)).toBe("unsent core draft");
+    release();
+    release();
+    expect(readTerminalComposerDraft(core)).toBe("unsent core draft");
+    second();
+    expect(readTerminalComposerDraft(core)).toBe("");
+    writeTerminalComposerDraft(core, "after close");
+    expect(readTerminalComposerDraft(core)).toBe("");
   });
 
   test("retires drafts, submissions, uploads, and stale writes on scope changes", () => {

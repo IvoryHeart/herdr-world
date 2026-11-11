@@ -479,6 +479,21 @@ export const rpcVerbs = [
   // Observe-only streams of herdr-core terminals; the handler fences each.
   rpc("world.core.unwatch", "reconcilable", "world"),
   rpc("world.core.watch", "reconcilable", "world"),
+  // Typing into a watched core terminal: never retried (keys go once).
+  rpc(
+    "world.core.input",
+    "opaque",
+    "world",
+    // Base64 of at most 64 KiB of keys.
+    object({
+      stream: text,
+      data: Type.String({ minLength: 1, maxLength: 90_000 }),
+      cols: Type.Integer({ minimum: 1, maximum: 65535 }),
+      rows: Type.Integer({ minimum: 1, maximum: 65535 }),
+      automatic: Type.Optional(Type.Boolean()),
+    }),
+  ),
+  rpc("world.core.leave", "reconcilable", "world", object({ stream: text })),
   // World's float shell on herdr-core (the TUI's Herdr Float popup there).
   // The handler qualifies the named core connection's lease itself.
   rpc(

@@ -102,6 +102,10 @@ export function composeCore(
     host,
     hostRuntime: coreHostRuntimes({
       host,
+      onUploadCleanupError: (error) =>
+        args.logger.warn("core upload cleanup failed", {
+          error: (error as Error)?.message ?? String(error),
+        }),
       readSettings: async (id) =>
         core.fixture.settingsFor(
           id,

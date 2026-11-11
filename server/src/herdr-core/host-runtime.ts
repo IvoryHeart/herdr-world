@@ -30,6 +30,7 @@ import { createWorktreeHookRunner } from "../worktree/worktree-hooks";
 import { CoreUnavailableError } from "./client";
 import type { CoreHost } from "./host";
 import { readCoreScreen, type CoreConnectionRuntime } from "./runtime";
+import { createCoreUploads } from "./uploads";
 
 type Lease = ReadyRuntimeLease<CoreConnectionRuntime>;
 
@@ -77,6 +78,10 @@ export function createCoreHostRuntime(args: {
   readSettings(): Promise<GuiSettings>;
   /** Test seam: the process runners (production: World's own). */
   processes?: Partial<CoreHostProcesses>;
+  /** A sweep of expired uploads failed. */
+  onUploadCleanupError?(error: unknown): void;
+  /** Test seam: where local uploads are staged (the system temp directory). */
+  uploadTempRoot?: () => string;
 }) {
   const { lease } = args;
   const identity: ConnectionIdentity = { ...lease.runtime.identity };
@@ -84,13 +89,18 @@ export function createCoreHostRuntime(args: {
   const remotePlatform = args.host?.windows ? ("windows" as const) : undefined;
   const sshHost = () => destination;
   const abort = new AbortController();
-  // SSH children belong to this generation: they stop when it retires.
+  // SSH children and uploads belong to this generation: they stop when it
+  // retires.
+  const transfers = AbortSignal.any([abort.signal, lease.runtime.signal]);
   const forConnection = (argv: string[]) =>
-    bindSshCommand(
-      argv,
-      undefined,
-      AbortSignal.any([abort.signal, lease.runtime.signal]),
-    );
+    bindSshCommand(argv, undefined, transfers);
+  const uploads = createCoreUploads(args.host, {
+    signal: transfers,
+    onCleanupError: args.onUploadCleanupError,
+    tempRoot: args.uploadTempRoot,
+  });
+  // Upload sweeps belong to this generation too.
+  transfers.addEventListener("abort", () => uploads.stop(), { once: true });
   const base = args.processes ?? {};
   const guarded = async <T>(operation: () => Promise<T>) => {
     current();
@@ -343,6 +353,8 @@ export function createCoreHostRuntime(args: {
     operations,
     resources,
     files,
+    /** Terminal uploads (the composer's image and file). */
+    uploads,
     agentWorktree,
     worktreeHooks,
     worktreeGit,
@@ -368,6 +380,7 @@ export function coreHostRuntimes(args: {
   host(connectionId: string): Pick<CoreHost, "destination" | "windows"> | null;
   readSettings(connectionId: string): Promise<GuiSettings>;
   processes?: Partial<CoreHostProcesses>;
+  onUploadCleanupError?(error: unknown): void;
 }) {
   const runtimes = new WeakMap<CoreConnectionRuntime, CoreHostRuntime>();
   return (lease: Lease): CoreHostRuntime => {
@@ -383,6 +396,7 @@ export function coreHostRuntimes(args: {
       host: args.host(lease.runtime.identity.id),
       readSettings: () => args.readSettings(lease.connectionId),
       ...(args.processes ? { processes: args.processes } : {}),
+      onUploadCleanupError: args.onUploadCleanupError,
     });
     runtimes.set(lease.runtime, made);
     return made;

@@ -34,18 +34,19 @@ import {
 import { checkLabels, coreRunParams, type CoreRunRequest } from "./run-params";
 
 export type { CoreRunRequest } from "./run-params";
-
-/** The protocol generation World speaks; core refuses any other in `hello`. */
-export const CORE_PROTOCOL_GENERATION = 1;
-/** Methods observation needs, built from typed verbs. */
-const OBSERVATION_METHODS = [
-  "server.status",
-  "terminal.list",
-  "terminal.get",
-  "terminal.read",
-  "events.subscribe",
-] as const;
-type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
+import {
+  CORE_PROTOCOL_GENERATION,
+  type CoreHello,
+  isRecord,
+  type ObservationMethod,
+  parseHello,
+} from "./hello";
+export {
+  CORE_PROTOCOL_GENERATION,
+  type CoreHello,
+  REQUIRED_CORE_FEATURES,
+  REQUIRED_CORE_METHODS,
+} from "./hello";
 /**
  * The writes World makes, each built from a typed verb below: start a
  * program (`terminal.run`), end one (`terminal.kill`) and set labels (the
@@ -72,9 +73,6 @@ type CoreMethod =
   | ObservationMethod
   | CoreWriteMethod
   | (typeof FLOAT_SHELL_METHODS)[number];
-/** Required for observation; absence is an unsupported operation, not a pin. */
-export const REQUIRED_CORE_METHODS: readonly string[] = OBSERVATION_METHODS;
-export const REQUIRED_CORE_FEATURES = ["framed", "events"] as const;
 /** Watching a terminal: `terminal.attach` as an observer, nothing else. */
 const WATCH_METHOD = "terminal.attach";
 const WATCH_FEATURES = ["attach", "resize_notifications"] as const;
@@ -84,14 +82,6 @@ export const WATCH_HISTORY_LINES = 500;
 const HELLO_LINE_LIMIT = 1 << 20;
 /** Unclaimed stream bytes held while a subscribe reply is still in flight. */
 const MAX_UNCLAIMED_BYTES = 8 << 20;
-
-export type CoreHello = {
-  generation: number;
-  version: string;
-  core: { id: string; name: string };
-  methods: string[];
-  features: string[];
-};
 
 export type CoreServerStatus = {
   core: { id: string; name: string };
@@ -144,18 +134,39 @@ type ChannelSink = {
 /** Size of a viewer in cells; core takes it from the latest typing viewer. */
 export type CoreCellSize = { cols: number; rows: number };
 
-/** One interactive viewer of a terminal World started (a float shell). */
+/**
+ * One interactive viewer: a float shell World started, or World's keyboard
+ * on a terminal it watches. Every call is a no-op once the channel closed.
+ */
 export type CoreAttachment = {
   readonly channel: number;
   readonly terminal: CoreTerminalRecord;
-  /** Keys typed by a person, sent as they are. */
+  /** Core tells automatic replies from typing on this channel. */
+  readonly automatic: boolean;
+  readonly open: boolean;
+  /** Keys typed by a person, sent as they are: this viewer leads the size. */
   input(bytes: Uint8Array): void;
+  /** A terminal's own answer (a query reply); dropped unless `automatic`. */
+  automaticInput(bytes: Uint8Array): void;
   resize(size: CoreCellSize): void;
+  focus(focused: boolean): void;
   /** Return `bytes` of consumed stream window, once they were delivered on. */
   credit(bytes: number): void;
-  /** Leave: the terminal keeps running and returns to its headless size. */
+  /** Leave: core gives the size back to the next typing viewer, or headless. */
   detach(): void;
 };
+
+/** World typing into a terminal it watches (`keyboard`): input only. */
+export type CoreKeyboard = Omit<CoreAttachment, "credit">;
+
+/** A RESIZE payload: cols and rows as u16 LE. */
+function cellSizePayload(size: CoreCellSize): Uint8Array {
+  const payload = new Uint8Array(4);
+  const view = new DataView(payload.buffer);
+  view.setUint16(0, size.cols, true);
+  view.setUint16(2, size.rows, true);
+  return payload;
+}
 
 export type CoreAttachHandlers = {
   /** First paint, then live output, in order. */
@@ -253,49 +264,6 @@ export type CoreClientOptions = {
   onOutbound?(bytes: Uint8Array): void;
   maxEventLineBytes?: number;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseHello(value: unknown): CoreHello {
-  if (!isRecord(value))
-    throw new CoreIncompatibleError("hello reply is invalid");
-  const core = value.core;
-  if (
-    value.generation !== CORE_PROTOCOL_GENERATION ||
-    value.framed !== true ||
-    typeof value.version !== "string" ||
-    !isRecord(core) ||
-    typeof core.id !== "string" ||
-    !core.id ||
-    typeof core.name !== "string" ||
-    !Array.isArray(value.methods) ||
-    !Array.isArray(value.features)
-  )
-    throw new CoreIncompatibleError("hello reply is not framed generation 1");
-  const methods = value.methods.filter(
-    (m): m is string => typeof m === "string",
-  );
-  const features = value.features.filter(
-    (f): f is string => typeof f === "string",
-  );
-  const missing = [
-    ...REQUIRED_CORE_METHODS.filter((m) => !methods.includes(m)),
-    ...REQUIRED_CORE_FEATURES.filter((f) => !features.includes(f)),
-  ];
-  if (missing.length > 0)
-    throw new CoreIncompatibleError(
-      `core ${value.version} lacks ${missing.join(", ")}`,
-    );
-  return {
-    generation: value.generation,
-    version: value.version,
-    core: { id: core.id, name: core.name },
-    methods,
-    features,
-  };
-}
 
 /**
  * One framed connection to an already-running core. It never starts a core
@@ -495,14 +463,7 @@ export class CoreClient {
   sendText(
     address: string,
     text: string,
-    options:
-      | {
-          force: boolean;
-          onlyIfIdle?: boolean;
-          cancel?: AbortSignal;
-          timeoutMs?: number;
-        }
-      | number = 15_000,
+    options: Parameters<typeof coreSendRequest>[2] | number = 15_000,
   ) {
     if (typeof options === "number") {
       if (!text.trim() || text.length > 32_000 || text.includes("\0"))
@@ -702,16 +663,23 @@ export class CoreClient {
    * An interactive viewer. Core opens the stream paused and resumes it after
    * its reply, so the first paint always follows the reply; the stream's
    * window is returned only as the consumer reports bytes delivered.
+   * Automatic replies go only where hello and the attach reply allow them.
    */
   async attach(
     address: string,
     size: CoreCellSize,
     handlers: CoreAttachHandlers,
     timeoutMs = 10_000,
+    options: { history?: number } = {},
   ): Promise<CoreAttachment> {
     const reply = await this.call(
       "terminal.attach",
-      { terminal: localAddress(address), cols: size.cols, rows: size.rows },
+      {
+        terminal: localAddress(address),
+        cols: size.cols,
+        rows: size.rows,
+        ...(options.history === undefined ? {} : { history: options.history }),
+      },
       timeoutMs,
     );
     if (
@@ -721,10 +689,16 @@ export class CoreClient {
       reply.channel <= 0 ||
       !isRecord(reply.terminal) ||
       reply.terminal.address !== address
-    )
+    ) {
+      if (isRecord(reply) && typeof reply.channel === "number")
+        this.release(reply.channel);
       throw new CoreProtocolError("attach reply is invalid");
+    }
     if (this.closedError) throw this.closedError;
     const channel = reply.channel;
+    const automatic =
+      this.hello.features.includes("automatic_input") &&
+      reply.automatic_input === true;
     let open = true;
     const finish = (reason: string) => {
       if (!open) return;
@@ -738,24 +712,27 @@ export class CoreClient {
       close: finish,
       manualCredit: true,
     });
-    const cellSize = (next: CoreCellSize) => {
-      const payload = new Uint8Array(4);
-      const view = new DataView(payload.buffer);
-      view.setUint16(0, next.cols, true);
-      view.setUint16(2, next.rows, true);
-      return payload;
+    const frame = (kind: number, payload: Uint8Array) => {
+      if (open && this.sinks.has(channel))
+        this.send(encodeFrame(channel, kind, payload));
     };
     return {
       channel,
       terminal: reply.terminal as CoreTerminalRecord,
+      automatic,
+      get open() {
+        return open;
+      },
       input: (bytes) => {
-        if (!open || bytes.byteLength === 0) return;
-        this.send(encodeFrame(channel, FrameKind.DATA, bytes));
+        if (bytes.byteLength > 0) frame(FrameKind.DATA, bytes);
       },
-      resize: (next) => {
-        if (open)
-          this.send(encodeFrame(channel, FrameKind.RESIZE, cellSize(next)));
+      automaticInput: (bytes) => {
+        if (automatic && bytes.byteLength > 0)
+          frame(FrameKind.AUTOMATIC_INPUT, bytes);
       },
+      resize: (next) => frame(FrameKind.RESIZE, cellSizePayload(next)),
+      focus: (focused) =>
+        frame(FrameKind.FOCUS, new Uint8Array([focused ? 1 : 0])),
       credit: (bytes) => {
         if (open && bytes > 0) this.send(creditFrame(channel, bytes));
       },
@@ -763,16 +740,34 @@ export class CoreClient {
         if (!open) return;
         // Frames core wrote before it read our CLOSE are dropped, uncredited,
         // until its own CLOSE ends the channel; never held as unclaimed.
-        if (this.sinks.has(channel))
-          this.sinks.set(channel, {
-            data: () => {},
-            close: () => {},
-            manualCredit: true,
-          });
-        this.send(encodeFrame(channel, FrameKind.CLOSE));
+        this.release(channel);
         finish("detached");
       },
     };
+  }
+
+  /**
+   * World's keyboard on a terminal someone watches: an interactive viewer
+   * whose only job is input. It never displays (the watch does, from its
+   * observe stream), so its stream is dropped and never credited: core then
+   * bounds it at its own pending limit and repaints instead of replaying,
+   * and program output is never held back. Core makes it the size leader
+   * the moment it attaches (not `resumed`), so it is opened only for a key
+   * a person typed.
+   */
+  keyboard(
+    address: string,
+    size: CoreCellSize,
+    ended: (reason: string) => void,
+    timeoutMs = 10_000,
+  ): Promise<CoreKeyboard> {
+    return this.attach(
+      address,
+      size,
+      { data: () => {}, end: ended },
+      timeoutMs,
+      { history: 0 },
+    );
   }
 
   /** World ends a stream: CLOSE once, then drop its frames until core's CLOSE. */
@@ -784,6 +779,14 @@ export class CoreClient {
     if (this.closedError) return;
     this.retired.add(channel);
     this.send(encodeFrame(channel, FrameKind.CLOSE));
+  }
+
+  /** Whether this core takes typing from an interactive viewer. */
+  get offersKeyboard(): boolean {
+    return (
+      this.hello.methods.includes(WATCH_METHOD) &&
+      this.hello.features.includes("attach")
+    );
   }
 
   /** Whether this core offers World's float shells at all. */

@@ -1,8 +1,9 @@
 /**
  * Watching a herdr-core terminal. Core decides its grid (the desktop app's
- * pane, or headless when no app shows it) and announces it before every
- * paint. The page adopts that grid exactly and sends nothing back: no input,
- * no size, no focus. Fitting only scales the drawing.
+ * pane, World's view while you type there, or headless when nobody shows
+ * it) and announces it before every paint. The page adopts that grid
+ * exactly; watching alone sends core nothing back, and fitting only scales
+ * the drawing. Typing is coreTyping.ts.
  */
 
 export type CoreGrid = { cols: number; rows: number };
@@ -202,9 +203,13 @@ export function watchEndedText(reason: string): string {
 export function watchGridText(
   grid: CoreGrid | null,
   moved: CoreGridMove | null,
+  /** The grid World asked for while you type here; null when not typing. */
+  typed: CoreGrid | null = null,
 ): string {
   if (!grid) return "Waiting for its size…";
   const size = `${grid.cols}×${grid.rows}`;
+  if (typed && sameGrid(typed, grid))
+    return `${size}: World's size while you type here; it goes back when you leave`;
   const headless = sameGrid(grid, CORE_HEADLESS_GRID);
   if (moved && sameGrid(moved.to, grid))
     return `${size}: herdr-core moved it from ${moved.from.cols}×${moved.from.rows} to its headless size when World started watching, because no Herdr app has it open`;

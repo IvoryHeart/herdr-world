@@ -33,6 +33,8 @@ export type ImplementationFault =
   | "core-watch-interactive"
   | "core-watch-unconfirmed"
   | "core-watch-order"
+  | "core-typing-replay"
+  | "core-typing-leave"
   | "seen-forget-look"
   | "seen-hidden-look"
   | "seen-stale-look"
@@ -55,6 +57,8 @@ export async function mutateImplementation(
       "core-watch-interactive",
       "core-watch-unconfirmed",
       "core-watch-order",
+      "core-typing-replay",
+      "core-typing-leave",
       "core-missing-foreground",
     ],
     "herdr-core-seen": [
@@ -127,13 +131,17 @@ export async function mutateImplementation(
               ? "server/src/herdr-core/client.ts"
               : name === "herdr-core-runtime" && fault === "core-watch-order"
                 ? "web/src/coreWatch.ts"
-                : name === "herdr-core-seen" && fault === "seen-blind-write"
-                  ? "server/src/herdr-core/shared-state.ts"
-                  : name === "observation-base" && fault === "incarnation-reset"
-                    ? "web/src/world/observationBase.ts"
-                    : name === "creation-flow" && fault === "admission-fence"
-                      ? "web/src/world/createdTerminalAdmission.ts"
-                      : owners[name];
+                : name === "herdr-core-runtime" &&
+                    fault.startsWith("core-typing-")
+                  ? "server/src/herdr-core/typing.ts"
+                  : name === "herdr-core-seen" && fault === "seen-blind-write"
+                    ? "server/src/herdr-core/shared-state.ts"
+                    : name === "observation-base" &&
+                        fault === "incarnation-reset"
+                      ? "web/src/world/observationBase.ts"
+                      : name === "creation-flow" && fault === "admission-fence"
+                        ? "web/src/world/createdTerminalAdmission.ts"
+                        : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "herdr-core-runtime") {
@@ -181,6 +189,16 @@ export async function mutateImplementation(
       "core-watch-order": [
         "        this.surface.resize(cols, rows);",
         "        void cols;",
+      ],
+      // The key that opened the keyboard is sent again after the attach.
+      "core-typing-replay": [
+        "    this.drain(queue);",
+        "    this.drain([...queue.slice(0, 1), ...queue]);",
+      ],
+      // A leave during the attach does not wait for the keys before it.
+      "core-typing-leave": [
+        '    if (this.queue) this.queue.push({ kind: "leave" });\n    else this.drop();',
+        "    this.drop();",
       ],
     };
     const [guard, replacement] = guards[fault]!;
