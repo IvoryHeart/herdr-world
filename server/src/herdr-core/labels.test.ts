@@ -128,37 +128,41 @@ describe("the read model shows verified summaries and stamps", () => {
     await until(() => w.changedAt.some((at) => at >= expires), 1_000);
   });
 
-  test("a stamp and core's own parent both relate a child to its spawner", async () => {
-    const w = await world();
-    const lead = w.fake.create({ argv: ["/opt/example/bin/claude"] });
-    const stamped = w.fake.create({
-      argv: ["/opt/example/bin/codex"],
-      labels: { [CORE_SPAWNED_BY_LABEL]: lead },
-    });
-    const child = w.fake.create({
-      argv: ["/opt/example/bin/codex"],
-      parent: lead,
-      die_with_parent: true,
-    });
-    const forged = w.fake.create({
-      argv: ["/bin/sh"],
-      labels: { [CORE_SPAWNED_BY_LABEL]: "mac/t1" },
-    });
-    await w.settle();
-    const panes = (await w.rows()).panes;
-    const tokens = (address: string) =>
-      panes.find((p) => p.pane_id === address)?.tokens;
-    expect(tokens(stamped)).toEqual({
-      spawned_by: lead,
-      spawned_by_terminal: lead,
-    });
-    expect(tokens(child)).toEqual({
-      spawned_by: lead,
-      spawned_by_terminal: lead,
-    });
-    expect(tokens(forged)).toBeUndefined();
-    expect(tokens(lead)).toBeUndefined();
-  });
+  test.each([1, 20])(
+    "a stamp and core's own parent both relate a child to its spawner (ordinal %i)",
+    async (ordinal) => {
+      const w = await world();
+      for (let n = 1; n < ordinal; n++) w.fake.create();
+      const lead = w.fake.create({ argv: ["/opt/example/bin/claude"] });
+      const stamped = w.fake.create({
+        argv: ["/opt/example/bin/codex"],
+        labels: { [CORE_SPAWNED_BY_LABEL]: lead },
+      });
+      const child = w.fake.create({
+        argv: ["/opt/example/bin/codex"],
+        parent: lead,
+        die_with_parent: true,
+      });
+      const forged = w.fake.create({
+        argv: ["/bin/sh"],
+        labels: { [CORE_SPAWNED_BY_LABEL]: "mac/t1" },
+      });
+      await w.settle();
+      const panes = (await w.rows()).panes;
+      const tokens = (address: string) =>
+        panes.find((p) => p.pane_id === address)?.tokens;
+      expect(tokens(stamped)).toEqual({
+        spawned_by: lead,
+        spawned_by_terminal: lead,
+      });
+      expect(tokens(child)).toEqual({
+        spawned_by: lead,
+        spawned_by_terminal: lead,
+      });
+      expect(tokens(forged)).toBeUndefined();
+      expect(tokens(lead)).toBeUndefined();
+    },
+  );
 });
 
 describe("the CLI verifies the core terminal it runs in (§4.10)", () => {
@@ -175,39 +179,43 @@ describe("the CLI verifies the core terminal it runs in (§4.10)", () => {
     expect(await ancestorDistance(100, 55, parentOf)).toBeNull();
   });
 
-  test("a marker for a terminal this process is not inside is refused", async () => {
-    const w = await world();
-    const address = w.fake.create({ pid: 80 });
-    await w.settle();
-    const open = async (socket: string) =>
-      CoreClient.open(
-        await connectUnixStream(socket, new AbortController().signal),
-      );
-    const env = { HC_TERMINAL_ID: address, HC_TERMINAL_SOCKET: w.socket };
-    const claim = await verifyCoreCaller({ env, pid: 100, parentOf, open });
-    expect(claim).toMatchObject({
-      address,
-      distance: 2,
-      coreId: w.fake.coreId,
-    });
-    claim.client.close();
-    await expect(
-      verifyCoreCaller({
-        env,
-        pid: 100,
-        parentOf: async () => null,
-        open,
-      }),
-    ).rejects.toThrow("does not run inside");
-    await expect(
-      verifyCoreCaller({
-        env: { ...env, HC_TERMINAL_ID: "t99" },
-        pid: 100,
-        parentOf,
-        open,
-      }),
-    ).rejects.toThrow();
-  });
+  test.each([1, 20])(
+    "a marker for a terminal this process is not inside is refused (ordinal %i)",
+    async (ordinal) => {
+      const w = await world();
+      for (let n = 1; n < ordinal; n++) w.fake.create();
+      const address = w.fake.create({ pid: 80 });
+      await w.settle();
+      const open = async (socket: string) =>
+        CoreClient.open(
+          await connectUnixStream(socket, new AbortController().signal),
+        );
+      const env = { HC_TERMINAL_ID: address, HC_TERMINAL_SOCKET: w.socket };
+      const claim = await verifyCoreCaller({ env, pid: 100, parentOf, open });
+      expect(claim).toMatchObject({
+        address,
+        distance: 2,
+        coreId: w.fake.coreId,
+      });
+      claim.client.close();
+      await expect(
+        verifyCoreCaller({
+          env,
+          pid: 100,
+          parentOf: async () => null,
+          open,
+        }),
+      ).rejects.toThrow("does not run inside");
+      await expect(
+        verifyCoreCaller({
+          env: { ...env, HC_TERMINAL_ID: "t99" },
+          pid: 100,
+          parentOf,
+          open,
+        }),
+      ).rejects.toThrow();
+    },
+  );
 
   test("with both runtimes' markers, the nearer terminal wins", async () => {
     // 100 → 90 → 80 (the core terminal's program, distance 2) → 1.
@@ -323,33 +331,41 @@ describe("the standalone CLI writes to the verified core terminal", () => {
     expect(w.fake.calls.some((c) => c.method === "terminal.label")).toBe(false);
   });
 
-  test("stamp writes a display label, never a native parent", async () => {
-    const w = await world();
-    const { address, verifyCore, env } = await inside(w);
-    const child = w.fake.create({ argv: ["/opt/example/bin/codex"] });
-    await w.settle();
-    const out: string[] = [];
-    const code = await runSpawnStampCommand(["stamp", child, address], "test", {
-      env,
-      verifyCore,
-      log: (m) => out.push(m),
-      error: (m) => out.push(m),
-    });
-    expect(code).toBe(0);
-    expect(JSON.parse(out[0]!)).toMatchObject({
-      pane_id: child,
-      spawned_by: address,
-      runtime: "herdr-core",
-    });
-    expect(w.fake.terminal(child)!.parent ?? null).toBeNull();
-    expect(w.fake.terminal(child)!.labels).toEqual({
-      [CORE_SPAWNED_BY_LABEL]: address,
-    });
-    const missing = await runSpawnStampCommand(
-      ["stamp", "t99", address],
-      "test",
-      { env, verifyCore, log: () => {}, error: () => {} },
-    );
-    expect(missing).toBe(1);
-  });
+  test.each([1, 20])(
+    "stamp writes a display label, never a native parent (ordinal %i)",
+    async (ordinal) => {
+      const w = await world();
+      for (let n = 1; n < ordinal; n++) w.fake.create();
+      const { address, verifyCore, env } = await inside(w);
+      const child = w.fake.create({ argv: ["/opt/example/bin/codex"] });
+      await w.settle();
+      const out: string[] = [];
+      const code = await runSpawnStampCommand(
+        ["stamp", child, address],
+        "test",
+        {
+          env,
+          verifyCore,
+          log: (m) => out.push(m),
+          error: (m) => out.push(m),
+        },
+      );
+      expect(code).toBe(0);
+      expect(JSON.parse(out[0]!)).toMatchObject({
+        pane_id: child,
+        spawned_by: address,
+        runtime: "herdr-core",
+      });
+      expect(w.fake.terminal(child)!.parent ?? null).toBeNull();
+      expect(w.fake.terminal(child)!.labels).toEqual({
+        [CORE_SPAWNED_BY_LABEL]: address,
+      });
+      const missing = await runSpawnStampCommand(
+        ["stamp", "t99", address],
+        "test",
+        { env, verifyCore, log: () => {}, error: () => {} },
+      );
+      expect(missing).toBe(1);
+    },
+  );
 });

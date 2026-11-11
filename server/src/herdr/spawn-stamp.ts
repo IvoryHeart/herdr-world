@@ -1,3 +1,4 @@
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import { HerdrClient } from "../bridge/herdr-client";
 import { createSshTunnelManager } from "../bridge/ssh-tunnel";
 import { loadServerConfig, type ServerConfig } from "../config/server-config";
@@ -173,8 +174,6 @@ async function stampCoreSpawn(claim: CoreCallerClaim, command: Command) {
   });
 }
 
-const CORE_ADDRESS = /^t[1-9][0-9]{0,9}$/;
-
 export async function runSpawnStampCommand(
   args: string[],
   appVersion: string,
@@ -197,8 +196,8 @@ export async function runSpawnStampCommand(
   }
   if (
     !command.transportArgs.length &&
-    CORE_ADDRESS.test(command.child) &&
-    CORE_ADDRESS.test(command.parent) &&
+    isLocalCoreAddress(command.child) &&
+    isLocalCoreAddress(command.parent) &&
     coreClaimInEnvironment(dependencies.env ?? process.env)
   ) {
     let claim: CoreCallerClaim | null = null;

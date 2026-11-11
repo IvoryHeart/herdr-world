@@ -56,7 +56,7 @@ async function dispatchConnectionsRpc(
         const action = params?.action;
         result =
           action === "start"
-            ? await fixture.start()
+            ? await fixture.start(params?.scenario)
             : action === "replace"
               ? fixture.replaceReviewer()
               : action === "lose-reply"

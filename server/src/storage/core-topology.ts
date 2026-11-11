@@ -1,3 +1,4 @@
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import type { Database } from "bun:sqlite";
 import { StorageWriteRejected, type StorageRequest } from "./world-protocol";
 import {
@@ -29,7 +30,6 @@ export const coreTopologyMigration = `CREATE TABLE core_topology (
 );`;
 
 const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-const ADDRESS = /^t[1-9][0-9]{0,9}$/;
 const CORE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 /** An absolute path on the core's host, one line, bounded. */
 const HOST_PATH = /^\/[^\0\r\n]{0,4095}$/;
@@ -134,7 +134,7 @@ export function parseCoreTopology(value: unknown): CoreTopologyDocument {
         const terminals = (tab.terminals as unknown[]).map((address) => {
           if (
             typeof address !== "string" ||
-            !ADDRESS.test(address) ||
+            !isLocalCoreAddress(address) ||
             placed.has(address)
           )
             fail("terminal");
