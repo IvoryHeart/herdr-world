@@ -296,6 +296,9 @@ export const rpcVerbs = [
       seen: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
     }),
   ),
+  // Observe-only streams of herdr-core terminals; the handler fences each.
+  rpc("world.core.unwatch", "reconcilable", "world"),
+  rpc("world.core.watch", "reconcilable", "world"),
   // World's float shell on herdr-core (the TUI's Herdr Float popup there).
   // The handler qualifies the named core connection's lease itself.
   rpc(

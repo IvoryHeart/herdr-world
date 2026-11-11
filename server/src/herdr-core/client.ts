@@ -43,6 +43,11 @@ type CoreMethod =
 /** Required for observation; absence is an unsupported operation, not a pin. */
 export const REQUIRED_CORE_METHODS: readonly string[] = OBSERVATION_METHODS;
 export const REQUIRED_CORE_FEATURES = ["framed", "events"] as const;
+/** Watching a terminal: `terminal.attach` as an observer, nothing else. */
+const WATCH_METHOD = "terminal.attach";
+const WATCH_FEATURES = ["attach", "resize_notifications"] as const;
+/** Scrollback lines a watch asks for with its first paint (main screen only). */
+export const WATCH_HISTORY_LINES = 500;
 
 const HELLO_LINE_LIMIT = 1 << 20;
 /** Unclaimed stream bytes held while a subscribe reply is still in flight. */
@@ -125,6 +130,8 @@ type Pending = {
 type ChannelSink = {
   data(bytes: Uint8Array): void;
   close(reason: string): void;
+  /** Core-to-viewer RESIZE: the grid the DATA after it is painted for. */
+  resize?(cols: number, rows: number): void;
   /** The consumer returns credit itself (`CoreAttachment.credit`). */
   manualCredit?: boolean;
 };
@@ -158,6 +165,80 @@ export type CoreRunParams = {
   labels: Record<string, string>;
   size: CoreCellSize;
 };
+
+/** What a watched terminal's stream delivers, in core's order. */
+export type CoreWatchSink = {
+  /** Apply before consuming any DATA that follows. */
+  resize(cols: number, rows: number): void;
+  data(bytes: Uint8Array): void;
+  /** The stream is over: core's reason (`exited`, …) or World's. */
+  close(reason: string): void;
+};
+
+export type CoreWatch = {
+  readonly channel: number;
+  /** The terminal as core recorded it after this attach (its grid included). */
+  readonly terminal: CoreTerminalRecord;
+  /** Returns consumed DATA bytes to core's window for this stream only. */
+  credit(bytes: number): void;
+  /** Ends the stream (CLOSE); core answers with an empty CLOSE. */
+  detach(): void;
+};
+
+/** A watch core cannot serve as an observer that announces its grid. */
+export class CoreWatchRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CoreWatchRefusedError";
+  }
+}
+
+/**
+ * The only attach World sends: an observer that never types, resizes or
+ * takes focus, asking core to announce its grid before every paint. `cols`
+ * and `rows` are required by core and ignored for observers; World passes
+ * the grid it last saw so nothing it sends names a size of its own.
+ */
+export function watchAttachParams(
+  address: string,
+  grid: { cols: number; rows: number },
+) {
+  return {
+    terminal: localAddress(address),
+    observe: true,
+    resize_notifications: true,
+    cols: grid.cols,
+    rows: grid.rows,
+    history: WATCH_HISTORY_LINES,
+  };
+}
+
+/**
+ * Accepts an attach reply only when core confirmed resize notifications for
+ * the whole path: without them the first paint could arrive for a grid World
+ * does not know, so the watch is refused rather than guessed.
+ */
+export function acceptWatchReply(reply: unknown): {
+  channel: number;
+  terminal: CoreTerminalRecord;
+} {
+  if (
+    !isRecord(reply) ||
+    typeof reply.channel !== "number" ||
+    !Number.isSafeInteger(reply.channel) ||
+    reply.channel <= 0 ||
+    !isRecord(reply.terminal)
+  )
+    throw new CoreProtocolError("attach reply is invalid");
+  if (reply.resize_notifications !== true)
+    throw new CoreWatchRefusedError(
+      "this core cannot tell World the terminal's size, so World does not show it",
+    );
+  return {
+    channel: reply.channel,
+    terminal: reply.terminal as CoreTerminalRecord,
+  };
+}
 
 export type CoreClientOptions = {
   /** Called once when the stream ends or the protocol fails. */
@@ -220,6 +301,10 @@ export class CoreClient {
   private readonly decoder = new FrameDecoder();
   private readonly pending = new Map<number, Pending>();
   private readonly sinks = new Map<number, ChannelSink>();
+  /** Channels World closed: their in-flight frames are dropped until core's CLOSE. */
+  private readonly retired = new Set<number>();
+  /** Watch calls that timed out: a late reply's channel is closed at once. */
+  private readonly abandoned = new Set<number>();
   private readonly unclaimed = new Map<number, Frame[]>();
   private unclaimedBytes = 0;
   private nextId = 1;
@@ -433,6 +518,69 @@ export class CoreClient {
   }
 
   /**
+   * Watches one terminal: an observe attach with resize notifications. Its
+   * only outbound frames are CREDIT (paid by the caller as it passes bytes
+   * on) and CLOSE. Frames may precede the reply; they are held and delivered
+   * in order once the reply is accepted, or dropped if it is refused.
+   */
+  async watch(
+    address: string,
+    grid: { cols: number; rows: number },
+    sink: CoreWatchSink,
+    timeoutMs = 10_000,
+  ): Promise<CoreWatch> {
+    const missing = [
+      ...(this.hello.methods.includes(WATCH_METHOD) ? [] : [WATCH_METHOD]),
+      ...WATCH_FEATURES.filter((f) => !this.hello.features.includes(f)),
+    ];
+    if (missing.length > 0)
+      throw new CoreWatchRefusedError(
+        `core ${this.hello.version} lacks ${missing.join(", ")}`,
+      );
+    const reply = await this.call(
+      WATCH_METHOD,
+      watchAttachParams(address, grid),
+      timeoutMs,
+    );
+    let accepted: ReturnType<typeof acceptWatchReply>;
+    try {
+      accepted = acceptWatchReply(reply);
+    } catch (error) {
+      const channel =
+        isRecord(reply) && typeof reply.channel === "number"
+          ? reply.channel
+          : null;
+      if (channel !== null) this.release(channel);
+      throw error;
+    }
+    if (this.closedError) throw this.closedError;
+    const { channel } = accepted;
+    let open = true;
+    this.claim(channel, {
+      manualCredit: true,
+      resize: (cols, rows) => sink.resize(cols, rows),
+      data: (bytes) => sink.data(bytes),
+      close: (reason) => {
+        open = false;
+        sink.close(reason);
+      },
+    });
+    return {
+      channel,
+      terminal: accepted.terminal,
+      credit: (bytes) => {
+        if (open && bytes > 0 && this.sinks.has(channel))
+          this.send(creditFrame(channel, bytes));
+      },
+      detach: () => {
+        if (!open) return;
+        open = false;
+        this.release(channel);
+      },
+    };
+  }
+
+  /**
    * Starts that machine's own shell (no argv) in a new, unplaced terminal:
    * no parent, no notes, removed when it ends. A taken `name` is core's
    * refusal (`name_taken`), which is what keeps one shell per name.
@@ -530,6 +678,17 @@ export class CoreClient {
     };
   }
 
+  /** World ends a stream: CLOSE once, then drop its frames until core's CLOSE. */
+  private release(channel: number) {
+    this.sinks.delete(channel);
+    for (const frame of this.unclaimed.get(channel) ?? [])
+      this.unclaimedBytes -= frame.payload.byteLength;
+    this.unclaimed.delete(channel);
+    if (this.closedError) return;
+    this.retired.add(channel);
+    this.send(encodeFrame(channel, FrameKind.CLOSE));
+  }
+
   /** Hangup, then terminate, then kill; core reports what it observed. */
   kill(address: string, timeoutMs = 15_000) {
     return this.call(
@@ -548,7 +707,7 @@ export class CoreClient {
   }
 
   private call(
-    method: CoreMethod,
+    method: CoreMethod | typeof WATCH_METHOD,
     params: Record<string, unknown>,
     timeoutMs: number,
   ): Promise<unknown> {
@@ -557,6 +716,7 @@ export class CoreClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
+        if (method === WATCH_METHOD) this.abandoned.add(id);
         reject(new CoreUnavailableError(`timeout: ${method}`));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
@@ -604,6 +764,10 @@ export class CoreClient {
         if (frame.kind === FrameKind.DATA) this.reply(frame.payload);
         continue;
       }
+      if (this.retired.has(frame.channel)) {
+        if (frame.kind === FrameKind.CLOSE) this.retired.delete(frame.channel);
+        continue;
+      }
       if (!this.sinks.has(frame.channel)) {
         // A subscribe opens its stream before the reply is written.
         const held = this.unclaimed.get(frame.channel) ?? [];
@@ -632,6 +796,16 @@ export class CoreClient {
         // Credit what was consumed, so core keeps the stream flowing.
         if (frame.payload.byteLength > 0 && !sink.manualCredit)
           this.send(creditFrame(frame.channel, frame.payload.byteLength));
+      } else if (frame.kind === FrameKind.RESIZE) {
+        if (!sink.resize) return true;
+        if (frame.payload.byteLength !== 4)
+          throw new CoreProtocolError("RESIZE payload is not two u16 values");
+        const view = new DataView(
+          frame.payload.buffer,
+          frame.payload.byteOffset,
+          4,
+        );
+        sink.resize(view.getUint16(0, true), view.getUint16(2, true));
       } else if (frame.kind === FrameKind.CLOSE) {
         this.sinks.delete(frame.channel);
         sink.close(new TextDecoder().decode(frame.payload) || "closed");
@@ -653,7 +827,15 @@ export class CoreClient {
     }
     if (!isRecord(message) || typeof message.id !== "number") return;
     const pending = this.pending.get(message.id);
-    if (!pending) return;
+    if (!pending) {
+      // A watch nobody waits for any more must not hold a stream open.
+      if (this.abandoned.delete(message.id)) {
+        const result = message.result;
+        if (isRecord(result) && typeof result.channel === "number")
+          this.release(result.channel);
+      }
+      return;
+    }
     this.pending.delete(message.id);
     if (pending.timer) clearTimeout(pending.timer);
     if (isRecord(message.error)) {
@@ -680,6 +862,8 @@ export class CoreClient {
     this.pending.clear();
     const sinks = [...this.sinks.values()];
     this.sinks.clear();
+    this.retired.clear();
+    this.abandoned.clear();
     this.unclaimed.clear();
     this.stream.close();
     for (const sink of sinks) {

@@ -31,6 +31,12 @@ export type CoreFenceView = {
 };
 
 export type CoreFenceStage = "admission" | "dispatch" | "publication";
+/**
+ * What must still hold. A session-bound operation (a send, an answer) needs
+ * the same foreground program. Watching a terminal follows its program: the
+ * agent running a tool changes the foreground, never what the screen is.
+ */
+export type CoreFenceScope = "session" | "program";
 
 export class CoreFenceError extends Error {
   constructor(
@@ -138,7 +144,7 @@ export class CoreOperationFence<R extends CoreFencedRuntime> {
   }
 
   /** Throws unless the captured authority still holds exactly. */
-  check(stage: CoreFenceStage): void {
+  check(stage: CoreFenceStage, scope: CoreFenceScope = "session"): void {
     if (!this.lease.isCurrent()) throw new CoreFenceError(stage, "lease");
     const view = this.lease.runtime.core;
     const epoch = view.epoch;
@@ -161,6 +167,7 @@ export class CoreOperationFence<R extends CoreFencedRuntime> {
       view.occupancy(occupant.address) !== occupant.occupancy
     )
       throw new CoreFenceError(stage, "occupant-replaced");
+    if (scope === "program") return;
     const foreground = foregroundOf(record);
     if (
       occupant.foreground &&

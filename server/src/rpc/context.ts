@@ -52,12 +52,13 @@ export type RpcServices = {
   >;
   /**
    * herdr-core connections (seen and favourite shared with Herdr's apps),
-   * the in-process preview fixture (a testing switch) and World's float
-   * shells on core connections (world.float.*).
+   * the in-process preview fixture (a testing switch), the pages watching
+   * its terminals and World's float shells on core connections
+   * (world.float.*).
    */
   core?: Pick<
     import("../herdr-core/connections").CoreConnections,
-    "manager" | "fixture" | "floats"
+    "manager" | "fixture" | "floats" | "watches"
   >;
   focusedAcquisition: FocusedAcquisition<Socket>;
   agentActivity: AgentActivityCache;

@@ -24,14 +24,35 @@ type Profiles = {
 const FIXTURE_TERMINALS = 5;
 /** How long after a start the scout finishes its turn. */
 export const FIXTURE_FINISH_MS = 3_000;
+/** How often the working builder prints a line, so a watch is visibly live. */
+const FIXTURE_TICK_MS = 1_500;
+/**
+ * The reviewer's desktop pane, as `pane` steps it: Herdr's desktop app
+ * attaches every placed pane at its own size; `null` is the pane closed,
+ * so core runs the terminal headless.
+ */
+const FIXTURE_PANE_SIZES: ReadonlyArray<readonly [number, number] | null> = [
+  [96, 28],
+  [132, 40],
+  [72, 24],
+  null,
+];
+
+const CSI = "\x1b[";
+/** A synthetic first screen per agent, so a watch has something to show. */
+function screen(program: string, lines: string[]) {
+  return `${CSI}1m${program}${CSI}0m ${CSI}2m(fixture: no program runs)${CSI}0m\r\n${lines
+    .map((line) => `${line}\r\n`)
+    .join("")}`;
+}
 
 /**
  * Agents as Herdr's desktop app would leave them: two placed in its "web"
  * space (one waiting for an answer, one working), one in another tab that
  * finishes soon after World connects, one harness with no status
- * integration, and a plain shell. Returns the scout's address.
+ * integration, and a plain shell. Returns the agents the fixture drives.
  */
-function populate(fake: FakeCore): string {
+function populate(fake: FakeCore) {
   const space = (tab: string, where: string) => ({
     "herdr.space": "fx-web",
     "herdr.tab": tab,
@@ -55,6 +76,16 @@ function populate(fake: FakeCore): string {
     "claude",
     space("fx-review", "web / review"),
   );
+  fake.output(
+    reviewer,
+    screen("claude", [
+      "Reviewing the merge plan for web.",
+      "",
+      `${CSI}33m?${CSI}0m Which branch should I merge into?`,
+      "  1. main",
+      "  2. release",
+    ]),
+  );
   fake.report(reviewer, { state: "working", app: "claude-code" });
   fake.report(reviewer, {
     state: "blocked",
@@ -63,6 +94,7 @@ function populate(fake: FakeCore): string {
     msg: "Which branch should I merge into?",
   });
   const builder = agent("builder", "codex", space("fx-review", "web / review"));
+  fake.output(builder, screen("codex", ["Building the web bundle…"]));
   fake.report(builder, { state: "working", app: "codex" });
   const scout = agent(
     "scout",
@@ -70,15 +102,23 @@ function populate(fake: FakeCore): string {
     space("fx-research", "web / research"),
   );
   fake.report(scout, { state: "working", app: "gemini" });
-  agent("helper", "opencode");
+  fake.output(scout, screen("gemini", ["Researching cache headers…"]));
+  const helper = agent("helper", "opencode");
+  fake.output(helper, screen("opencode", ["Waiting for a task."]));
   fake.create({ name: "fixture-shell" });
-  return scout;
+  // The desktop app shows its placed agents; the unplaced helper has no
+  // pane, so core runs it at its headless size.
+  for (const placed of [reviewer, builder, scout])
+    fake.desktopAttach(placed, ...FIXTURE_PANE_SIZES[0]!);
+  return { scout, reviewer, builder };
 }
 
 export type CoreFixtureStatus = {
   running: boolean;
   connection_id: string;
   terminals: number;
+  /** The reviewer's desktop pane: its size, or null when it is closed. */
+  pane: { cols: number; rows: number } | null;
 };
 
 /**
@@ -114,12 +154,20 @@ export function createCoreFixture(
   const fixtureProfile = (service: Profiles) =>
     service.coreList().find((item) => item.id === CORE_FIXTURE_CONNECTION_ID);
   let scout: string | null = null;
+  let agents: ReturnType<typeof populate> | null = null;
   let finish: ReturnType<typeof setTimeout> | null = null;
-  const status = (): CoreFixtureStatus => ({
-    running: fake?.isRunning ?? false,
-    connection_id: CORE_FIXTURE_CONNECTION_ID,
-    terminals: fake ? FIXTURE_TERMINALS : 0,
-  });
+  let ticker: ReturnType<typeof setInterval> | null = null;
+  let ticks = 0;
+  let paneStep = 0;
+  const status = (): CoreFixtureStatus => {
+    const size = FIXTURE_PANE_SIZES[paneStep];
+    return {
+      running: fake?.isRunning ?? false,
+      connection_id: CORE_FIXTURE_CONNECTION_ID,
+      terminals: fake ? FIXTURE_TERMINALS : 0,
+      pane: fake && size ? { cols: size[0], rows: size[1] } : null,
+    };
+  };
   const runningScout = () => {
     if (!fake?.isRunning || !scout)
       throw new Error("start the fixture core first");
@@ -141,6 +189,8 @@ export function createCoreFixture(
   const stop = () => {
     if (finish) clearTimeout(finish);
     finish = null;
+    if (ticker) clearInterval(ticker);
+    ticker = null;
     if (fake?.isRunning) fake.kill(socket ?? undefined);
     socket = null;
   };
@@ -160,7 +210,9 @@ export function createCoreFixture(
         chmodSync(root, 0o700);
         fake = new FakeCore({ name: "fixture-host" });
         fake.revive();
-        scout = populate(fake);
+        paneStep = 0;
+        agents = populate(fake);
+        scout = agents.scout;
       } else if (!fake.isRunning) {
         // A new core process: same terminals at the same addresses.
         fake.revive();
@@ -178,6 +230,14 @@ export function createCoreFixture(
         });
       else if (["disconnected", "error"].includes(existing?.state ?? ""))
         await service.connect(CORE_FIXTURE_CONNECTION_ID);
+      // The builder keeps printing while it works, so a watch is live.
+      ticker ??= setInterval(() => {
+        if (fake?.isRunning && agents)
+          fake.output(
+            agents.builder,
+            `${CSI}32m✓${CSI}0m step ${++ticks} compiled ${CSI}2m(${new Date().toISOString().slice(11, 19)})${CSI}0m\r\n`,
+          );
+      }, FIXTURE_TICK_MS);
       // Scout finishes its turn while World watches: done until seen.
       finishScout();
       return status();
@@ -211,6 +271,20 @@ export function createCoreFixture(
       }
       return status();
     },
+    /**
+     * The reviewer's desktop pane changes, as a person resizing or closing
+     * it in Herdr's desktop app would: 96x28, 132x40, 72x24, closed
+     * (headless), and round again. Watches follow; World never sizes it.
+     */
+    pane(): CoreFixtureStatus {
+      if (!fake?.isRunning || !agents)
+        throw new Error("start the fixture core first");
+      paneStep = (paneStep + 1) % FIXTURE_PANE_SIZES.length;
+      const size = FIXTURE_PANE_SIZES[paneStep];
+      if (size) fake.desktopAttach(agents.reviewer, size[0], size[1]);
+      else fake.desktopDetach(agents.reviewer);
+      return status();
+    },
     /** Like `kill -9` of core: connections end, the socket goes, the lock stays. */
     kill(): CoreFixtureStatus {
       stop();
@@ -227,6 +301,7 @@ export function createCoreFixture(
       root = null;
       socket = null;
       scout = null;
+      agents = null;
       if (owner === "foreign")
         throw new Error(
           `the connection with ID ${CORE_FIXTURE_CONNECTION_ID} is not this fixture's; it was left in place`,

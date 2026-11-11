@@ -126,6 +126,11 @@ export type WorldLeafObject = WorldObjectBase & {
   watched?: boolean;
   lastActivityAt?: number;
   spaceLabel: string;
+  /**
+   * A live herdr-core terminal World can watch (never type into): its
+   * connection's current generation and core address.
+   */
+  watch?: { connectionId: string; generation: number; address: string };
 };
 
 export type WorldObjectNode =
@@ -793,6 +798,15 @@ function* constructHost(
         stale: connection.stale || !live,
         actionable: operational,
         ...(viewOnly ? { viewOnly } : {}),
+        ...(viewOnly && !connection.stale && /^t[1-9][0-9]*$/.test(pane.pane_id)
+          ? {
+              watch: {
+                connectionId: connection.connectionId,
+                generation: connection.generation,
+                address: pane.pane_id,
+              },
+            }
+          : {}),
         ...(connection.runtime === "herdr-core"
           ? { runtime: "herdr-core" as const }
           : {}),

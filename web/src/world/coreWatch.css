@@ -1,0 +1,137 @@
+/* A watched herdr-core terminal: full window on phones, a large sheet on
+   wide screens. The drawing keeps core's grid and is only scaled. */
+.core-watch {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+@media (min-width: 900px) {
+  .core-watch {
+    inset: 4vh 4vw;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+}
+
+.core-watch-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.core-watch-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.core-watch-back:hover {
+  background: var(--panel-2);
+}
+
+.core-watch-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.core-watch-title strong {
+  color: var(--text-strong);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-watch-title small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.core-watch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.core-watch-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--terminal-bg);
+  padding: 8px;
+}
+
+.core-watch-frame {
+  position: relative;
+  overflow: hidden;
+  /* Core's grid, edge to edge: the box is the terminal's real size. */
+  outline: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.core-watch-host {
+  transform-origin: 0 0;
+  width: max-content;
+}
+
+.core-watch-host .xterm-helper-textarea {
+  display: none;
+}
+
+.core-watch-ended {
+  position: absolute;
+  inset: auto 12px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.core-watch-ended p {
+  margin: 0;
+  min-width: 0;
+}
+
+.core-watch-ended button {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}

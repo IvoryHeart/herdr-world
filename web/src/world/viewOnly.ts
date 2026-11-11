@@ -1,5 +1,9 @@
 import type { WorldLeafObject } from "./worldObject";
 
+/** The title of a herdr-core agent's terminal control: World watches it. */
+export const CORE_WATCH_TITLE =
+  "Watch its terminal (World can't type into herdr-core agents yet)";
+
 const WAITING: Record<string, string> = {
   permission: "Waiting for permission",
   question: "Asking a question",

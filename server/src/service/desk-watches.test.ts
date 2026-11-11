@@ -53,7 +53,7 @@ test("Desk declarations dispatch without runtime selection and socket cleanup re
     logger: silentLogger,
     clock: { now: () => 0, monotonic: () => 0 },
     forEachRuntime() {},
-    closed: (socket) => watches.release(socket),
+    sockets: () => [watches],
   });
   services.clients = clients.clients;
   const target = {
@@ -138,7 +138,7 @@ test("cached send failures cannot leave holders or queued reads after socket chu
       logger: silentLogger,
       clock: { now: () => 0, monotonic: () => 0 },
       forEachRuntime() {},
-      closed: (socket) => watches.release(socket),
+      sockets: () => [watches],
     });
     const socket = (drops = false) =>
       ({
