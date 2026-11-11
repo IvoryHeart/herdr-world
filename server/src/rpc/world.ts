@@ -7,6 +7,7 @@ import {
 } from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
+import { handleCoreWatchRpc } from "./core-watch";
 import { handleBinRpc } from "./bin";
 import { handleCoreRpc } from "./core";
 import { handleFloatRpc } from "./float";
@@ -76,6 +77,8 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     return handleCoreSharedRpc(rpc);
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
+  if (method === "world.core.watch" || method === "world.core.unwatch")
+    return handleCoreWatchRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);

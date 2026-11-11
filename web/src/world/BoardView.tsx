@@ -2389,7 +2389,7 @@ export default function BoardView({
     const pane =
       tab.panes.find((candidate) => candidate.key === paneKey) ??
       primaryPane(tab);
-    if (pane && tab.actionable) void onOpen(pane.leaf.id);
+    if (pane && (tab.actionable || pane.leaf.watch)) void onOpen(pane.leaf.id);
     else if (pane && tab.viewOnly) setToast({ text: tab.viewOnly });
   };
   /** Center a workspace and zoom in until its tabs show; unfold it if folded. */

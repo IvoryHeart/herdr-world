@@ -1,4 +1,4 @@
-import { viewOnlyMessage } from "./viewOnly";
+import { CORE_WATCH_TITLE, viewOnlyMessage } from "./viewOnly";
 import { Screen } from "./DeskScreen";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { agentDirectory } from "./deskDirectory";
@@ -379,13 +379,14 @@ export function DeskBoard({
   const focused = order[focusIndex];
   const open = (leaf: WorldLeafObject) => {
     cancelPreview();
-    // World only watches it: say why rather than fail to open it.
-    if (leaf.viewOnly) {
+    // World can't control it: watch its terminal, or say why not.
+    if (leaf.viewOnly && !leaf.watch) {
       setError(leaf.viewOnly);
       return;
     }
     setError(null);
-    void recordOpen(leaf);
+    // Watching a core terminal is not opening it in World's own record.
+    if (!leaf.watch) void recordOpen(leaf);
     void onOpen(leaf.id).catch((reason: unknown) =>
       setError(
         reason instanceof Error ? reason.message : "Could not open this agent",
@@ -711,9 +712,17 @@ export function DeskBoard({
           <button
             type="button"
             className="is-primary"
-            // Answer only goes to Needs you; opening is not possible yet.
-            disabled={item.lane !== "needs" && Boolean(leaf.viewOnly)}
-            title={item.lane === "needs" ? undefined : leaf.viewOnly}
+            // Answer only goes to Needs you; a core agent opens as a watch.
+            disabled={
+              item.lane !== "needs" && Boolean(leaf.viewOnly) && !leaf.watch
+            }
+            title={
+              item.lane === "needs"
+                ? undefined
+                : leaf.watch
+                  ? CORE_WATCH_TITLE
+                  : leaf.viewOnly
+            }
             onClick={() =>
               item.lane === "needs"
                 ? openNeedsYou(needsYouLeafKey(leaf.id))

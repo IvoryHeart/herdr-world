@@ -196,11 +196,7 @@ async function compose(
     logger,
     clock,
     forEachRuntime: (visit) => connectionManager.forEachCurrentRuntime(visit),
-    closed: (socket) => {
-      focusedAcquisition.release(socket);
-      deskWatches.release(socket);
-      core.floats.releaseFor(socket);
-    },
+    sockets: () => [focusedAcquisition, deskWatches, core.pages],
     countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
@@ -305,6 +301,9 @@ async function compose(
     observed: publishWorldInvalidation,
     profiles: () => connectionProfiles,
     topology: storage.coreTopology,
+    // Its pages are always this service's sockets.
+    sendToPage: (ws, line) =>
+      safeSend(ws as ServerWebSocket<unknown>, line, "core-terminal"),
     push: (task, isCurrent) => webPush.notify(task, isCurrent),
   });
   /** The agent bin: reversible holding, a scheduled bus, then a durable fenced close. */

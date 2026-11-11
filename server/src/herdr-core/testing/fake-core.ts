@@ -23,6 +23,14 @@ type Subscriber = {
   channel: number;
 };
 
+type FakeStream = {
+  pending: Uint8Array[];
+  bytes: number;
+  credit: number;
+  /** A grid announcement that goes out before the pending paint. */
+  resize?: [number, number] | null;
+};
+
 type FakeConnection = {
   stream: CoreByteStream;
   framed: boolean;
@@ -30,19 +38,33 @@ type FakeConnection = {
   plain: string;
   nextChannel: number;
   /** Per stream channel: unsent bytes and remaining credit. */
-  streams: Map<
-    number,
-    { pending: Uint8Array[]; bytes: number; credit: number }
-  >;
+  streams: Map<number, FakeStream>;
   heartbeat: ReturnType<typeof setInterval> | null;
 };
 
-/** An attached viewer: input is echoed as a shell would, like `sh` on a pty. */
+/**
+ * A viewer of one terminal, as core's `viewers.rs` keeps it. A synthetic
+ * desktop pane has no connection. The most recently active non-observe
+ * viewer sets the size; with none, the terminal runs headless. Typed input
+ * is echoed as a shell would, like `sh` on a pty.
+ */
 type FakeViewer = {
-  connection: FakeConnection;
+  connection: FakeConnection | null;
   channel: number;
+  observe: boolean;
+  notify: boolean;
+  size: [number, number];
+  activeAt: number;
+};
+
+/** Core's default headless grid (`config.rs`). */
+export const FAKE_HEADLESS: readonly [number, number] = [200, 120];
+/** What a viewer sent on an attach channel, for assertions about World. */
+export type FakeViewerFrame = {
   address: string;
-  size: { cols: number; rows: number };
+  observe: boolean;
+  kind: number;
+  payload: Uint8Array;
 };
 
 export type FakeCoreOptions = {
@@ -54,6 +76,10 @@ export type FakeCoreOptions = {
   splitWritesAt?: number;
   /** A core that offers no writes (to test negotiation, not a version pin). */
   observeOnly?: boolean;
+  /** Writes an attach's stream frames before its reply (a relay may). */
+  attachFramesFirst?: boolean;
+  /** Answers observe attaches without confirming resize notifications. */
+  denyResizeNotifications?: boolean;
 };
 
 /** What an observe-only core leaves out of `hello`. */
@@ -75,7 +101,6 @@ export class FakeCore {
   private readonly terminals = new Map<string, FakeTerminal>();
   private readonly connections = new Set<FakeConnection>();
   private readonly subscribers: Subscriber[] = [];
-  private readonly viewers: FakeViewer[] = [];
   /** Keys each terminal received from viewers, for assertions. */
   readonly typed = new Map<string, string>();
   /** Runs as a request arrives, before core handles and answers it. */
@@ -88,6 +113,12 @@ export class FakeCore {
   private heldReads: Array<() => void> | null = null;
   /** Calls received on channel 0, for assertions about what World sends. */
   readonly calls: Array<{ method: string; params: unknown }> = [];
+  /** Every frame a viewer sent on an attach channel. */
+  readonly viewerFrames: FakeViewerFrame[] = [];
+  private readonly viewers = new Map<string, FakeViewer[]>();
+  /** Each terminal's synthetic screen: the latest output, repainted on attach. */
+  private readonly screens = new Map<string, string>();
+  private activity = 0;
 
   constructor(private readonly options: FakeCoreOptions = {}) {
     this.coreId = options.coreId ?? "c0ffee0000000001";
@@ -218,10 +249,15 @@ export class FakeCore {
   /** Like `kill -9` of core: every connection ends, the socket goes, the lock stays. */
   kill(socketPath?: string): void {
     this.running = false;
+    // Interactive viewers die with their connections; a desktop pane stays.
+    for (const [address, list] of this.viewers)
+      this.viewers.set(
+        address,
+        list.filter((v) => v.connection === null),
+      );
     for (const connection of [...this.connections]) connection.stream.close();
     this.connections.clear();
     this.subscribers.length = 0;
-    this.viewers.length = 0;
     this.listener?.stop(true);
     this.listener = null;
     if (socketPath) rmSync(socketPath, { force: true });
@@ -348,6 +384,8 @@ export class FakeCore {
     const lostPid = record.pid;
     record.pid = null;
     delete record.foreground;
+    // Loss ends every attach stream, even for a kept terminal.
+    this.endViewers(address, { reason: "signaled", exit_code: null });
     this.emit("lost", address, {
       reason: "signaled",
       exit_code: null,
@@ -378,6 +416,7 @@ export class FakeCore {
 
   remove(address: string): void {
     this.require(address);
+    this.endViewers(address, { reason: "killed", exit_code: null });
     this.emit("removed", address, {});
     this.terminals.delete(address);
   }
@@ -409,8 +448,7 @@ export class FakeCore {
     });
     delete record.foreground;
     this.emit("finished", address, facts);
-    for (const viewer of this.viewers.filter((v) => v.address === address))
-      this.closeViewer(viewer, JSON.stringify(facts));
+    this.endViewers(address, facts);
     if (record.rm === true) this.remove(address);
     for (const child of [...this.terminals.values()])
       if (
@@ -419,47 +457,6 @@ export class FakeCore {
         child.parent === address
       )
         this.finish(child.address, "killed");
-  }
-
-  /** Program output to every viewer of `address`. */
-  output(address: string, bytes: Uint8Array | string): void {
-    const data =
-      typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes;
-    for (const viewer of this.viewers.filter((v) => v.address === address))
-      this.enqueue(viewer, data);
-  }
-
-  viewersOf(address: string): Array<{ cols: number; rows: number }> {
-    return this.viewers
-      .filter((v) => v.address === address)
-      .map((v) => ({ ...v.size }));
-  }
-
-  private closeViewer(viewer: FakeViewer, payload = "") {
-    const at = this.viewers.indexOf(viewer);
-    if (at >= 0) this.viewers.splice(at, 1);
-    viewer.connection.streams.delete(viewer.channel);
-    this.write(
-      viewer.connection,
-      encodeFrame(
-        viewer.channel,
-        FrameKind.CLOSE,
-        new TextEncoder().encode(payload),
-      ),
-    );
-  }
-
-  /** Like core's `apply_size`: the latest typing viewer's size, else headless. */
-  private applySize(address: string) {
-    const record = this.terminals.get(address);
-    if (!record) return;
-    const viewing = this.viewers.filter((v) => v.address === address);
-    const leader = viewing[viewing.length - 1];
-    const size = leader?.size ?? { cols: 200, rows: 120 };
-    if (record.cols === size.cols && record.rows === size.rows) return;
-    record.cols = size.cols;
-    record.rows = size.rows;
-    this.emit("size", address, size);
   }
 
   /** Loses events silently, as core does when a `missed` exceeds 4 MiB. */
@@ -476,6 +473,240 @@ export class FakeCore {
   /** Writes raw bytes on every event channel (garbled tails, bad UTF-8). */
   injectEventBytes(bytes: Uint8Array): void {
     for (const sub of this.subscribers) this.enqueue(sub, bytes);
+  }
+
+  // --- Viewers (core's viewers.rs) -------------------------------------------
+
+  /** A desktop app pane attaches interactively at its own size. */
+  desktopAttach(address: string, cols: number, rows: number): void {
+    this.require(address);
+    const list = this.viewers.get(address) ?? [];
+    const pane = list.find((v) => v.connection === null);
+    if (pane) {
+      pane.size = [cols, rows];
+      pane.activeAt = ++this.activity;
+    } else
+      list.push({
+        connection: null,
+        channel: 0,
+        observe: false,
+        notify: false,
+        size: [cols, rows],
+        activeAt: ++this.activity,
+      });
+    this.viewers.set(address, list);
+    this.applySize(address);
+  }
+
+  /** The desktop pane resizes (or is clicked): it leads again at that size. */
+  desktopResize(address: string, cols: number, rows: number): void {
+    this.desktopAttach(address, cols, rows);
+  }
+
+  /** The desktop pane closes: without another typing viewer, headless. */
+  desktopDetach(address: string): void {
+    const list = this.viewers.get(address) ?? [];
+    this.viewers.set(
+      address,
+      list.filter((v) => v.connection !== null),
+    );
+    this.applySize(address);
+  }
+
+  /** Viewers on attach channels (World's observers among them). */
+  viewersOf(address: string): Array<{ observe: boolean; notify: boolean }> {
+    return (this.viewers.get(address) ?? [])
+      .filter((v) => v.connection !== null)
+      .map(({ observe, notify }) => ({ observe, notify }));
+  }
+
+  /** The program prints: every viewer receives the bytes in order. */
+  output(address: string, output: Uint8Array | string): void {
+    this.require(address);
+    const text =
+      typeof output === "string" ? output : new TextDecoder().decode(output);
+    const screen = `${this.screens.get(address) ?? ""}${text}`;
+    this.screens.set(address, screen.slice(-16_384));
+    const bytes =
+      typeof output === "string" ? new TextEncoder().encode(output) : output;
+    for (const v of this.viewers.get(address) ?? []) {
+      if (!v.connection) continue;
+      const stream = v.connection.streams.get(v.channel);
+      if (!stream) continue;
+      // Too far behind: a fresh repaint instead of the backlog (core's data()).
+      if (stream.bytes + bytes.byteLength > MAX_PENDING) {
+        stream.pending = [];
+        stream.bytes = 0;
+        this.queue(v.connection, v.channel, this.paint(address));
+      } else this.queue(v.connection, v.channel, bytes);
+    }
+  }
+
+  /** The first paint: cancel any unfinished sequence, then the screen. */
+  private paint(address: string): Uint8Array {
+    return new TextEncoder().encode(
+      `\x18\x1b[H\x1b[2J${this.screens.get(address) ?? ""}\x1b[?9001l`,
+    );
+  }
+
+  private applySize(address: string) {
+    const record = this.terminals.get(address);
+    if (!record || record.state !== "live") return;
+    let leader: FakeViewer | null = null;
+    for (const v of this.viewers.get(address) ?? [])
+      if (!v.observe && (!leader || v.activeAt > leader.activeAt)) leader = v;
+    const [cols, rows] = leader?.size ?? FAKE_HEADLESS;
+    if ((record.cols === cols && record.rows === rows) || !cols || !rows)
+      return;
+    record.cols = cols;
+    record.rows = rows;
+    // Pending output is superseded by RESIZE and an authoritative repaint.
+    for (const v of this.viewers.get(address) ?? []) {
+      if (!v.connection || !v.notify) continue;
+      const stream = v.connection.streams.get(v.channel);
+      if (!stream) continue;
+      stream.pending = [];
+      stream.bytes = 0;
+      stream.resize = [cols, rows];
+      this.queue(v.connection, v.channel, this.paint(address));
+    }
+    this.emit("size", address, { cols, rows });
+  }
+
+  private attach(
+    connection: FakeConnection,
+    params: Record<string, unknown>,
+    reply: (result: unknown) => void,
+    error: (code: number, message: string, kind: string) => void,
+  ) {
+    const address = String(params.terminal);
+    const record = this.terminals.get(address);
+    if (!record) return error(-32000, `no terminal ${address}`, "not_found");
+    if (record.state !== "live")
+      return error(-32000, `${address} has finished`, "finished");
+    const observe = params.observe === true;
+    const notify =
+      observe &&
+      params.resize_notifications === true &&
+      !this.options.denyResizeNotifications;
+    const channel = connection.nextChannel++;
+    const stream: FakeStream = {
+      pending: [],
+      bytes: 0,
+      credit: 0,
+      resize: null,
+    };
+    connection.streams.set(channel, stream);
+    const viewers = this.viewers.get(address) ?? [];
+    viewers.push({
+      connection,
+      channel,
+      observe,
+      notify,
+      size: [Number(params.cols), Number(params.rows)],
+      activeAt: params.resumed === true ? 0 : ++this.activity,
+    });
+    this.viewers.set(address, viewers);
+    // Every attach re-applies the size rule: an observer alone goes headless.
+    this.applySize(address);
+    stream.pending = [];
+    stream.bytes = 0;
+    stream.resize = notify
+      ? [record.cols as number, record.rows as number]
+      : null;
+    this.queue(connection, channel, this.paint(address));
+    const result = {
+      channel,
+      terminal: { ...record },
+      resize_notifications: notify,
+      automatic_input: true,
+    };
+    // The reply precedes stream frames unless a fault says otherwise.
+    if (!this.options.attachFramesFirst) reply(result);
+    stream.credit = STREAM_WINDOW;
+    this.flush(connection, channel);
+    if (this.options.attachFramesFirst) reply(result);
+  }
+
+  /** What a viewer sends on its attach channel (core's viewer_* handlers). */
+  private viewerFrame(
+    connection: FakeConnection,
+    channel: number,
+    kind: number,
+    payload: Uint8Array,
+  ) {
+    for (const [address, list] of this.viewers) {
+      const v = list.find(
+        (x) => x.connection === connection && x.channel === channel,
+      );
+      if (!v) continue;
+      this.viewerFrames.push({
+        address,
+        observe: v.observe,
+        kind,
+        payload: payload.slice(),
+      });
+      if (kind === FrameKind.CLOSE) {
+        this.viewers.set(
+          address,
+          list.filter((x) => x !== v),
+        );
+        connection.streams.delete(channel);
+        this.write(connection, encodeFrame(channel, FrameKind.CLOSE));
+        this.applySize(address);
+        return;
+      }
+      // Observers never type, resize or take focus: core ignores them.
+      if (v.observe) return;
+      if (kind === FrameKind.RESIZE && payload.byteLength === 4) {
+        const view = new DataView(payload.buffer, payload.byteOffset, 4);
+        v.size = [view.getUint16(0, true), view.getUint16(2, true)];
+      }
+      if (kind !== FrameKind.AUTOMATIC_INPUT) v.activeAt = ++this.activity;
+      this.applySize(address);
+      if (kind === FrameKind.DATA) this.typedInput(address, payload);
+      return;
+    }
+  }
+
+  /** A shell's line discipline echoes keys; Enter on `exit` ends it. */
+  private typedInput(address: string, payload: Uint8Array) {
+    const text = new TextDecoder().decode(payload);
+    const typed = (this.typed.get(address) ?? "") + text;
+    this.typed.set(address, typed);
+    this.output(address, text.replace(/\r/g, "\r\n"));
+    const line = typed.split("\r");
+    if (line.length > 1 && line[line.length - 2] === "exit")
+      this.finish(address);
+  }
+
+  /** Loss or removal: core closes every attach stream with its reason. */
+  private endViewers(address: string, reason: Record<string, unknown>) {
+    const payload = new TextEncoder().encode(JSON.stringify(reason));
+    for (const v of this.viewers.get(address) ?? []) {
+      if (!v.connection) continue;
+      v.connection.streams.delete(v.channel);
+      this.write(
+        v.connection,
+        encodeFrame(v.channel, FrameKind.CLOSE, payload),
+      );
+    }
+    this.viewers.set(
+      address,
+      (this.viewers.get(address) ?? []).filter((v) => v.connection === null),
+    );
+  }
+
+  private queue(
+    connection: FakeConnection,
+    channel: number,
+    bytes: Uint8Array,
+  ) {
+    const stream = connection.streams.get(channel);
+    if (!stream) return;
+    stream.pending.push(bytes);
+    stream.bytes += bytes.byteLength;
+    this.flush(connection, channel);
   }
 
   // --- Protocol ---------------------------------------------------------------
@@ -560,43 +791,6 @@ export class FakeCore {
           connection,
           JSON.parse(new TextDecoder().decode(frame.payload)),
         );
-      } else if (frame.channel !== 0 && frame.kind === FrameKind.DATA) {
-        const viewer = this.viewerOn(connection, frame.channel);
-        if (!viewer) continue;
-        this.raise(viewer);
-        const text = new TextDecoder().decode(frame.payload);
-        this.typed.set(
-          viewer.address,
-          (this.typed.get(viewer.address) ?? "") + text,
-        );
-        // A shell's line discipline echoes keys; Enter runs `exit`.
-        this.output(viewer.address, text.replace(/\r/g, "\r\n"));
-        const line = (this.typed.get(viewer.address) ?? "").split("\r");
-        if (line.length > 1 && line[line.length - 2] === "exit")
-          this.finish(viewer.address);
-      } else if (
-        frame.channel !== 0 &&
-        frame.kind === FrameKind.RESIZE &&
-        frame.payload.byteLength === 4
-      ) {
-        const viewer = this.viewerOn(connection, frame.channel);
-        if (!viewer) continue;
-        const view = new DataView(
-          frame.payload.buffer,
-          frame.payload.byteOffset,
-          4,
-        );
-        viewer.size = {
-          cols: view.getUint16(0, true),
-          rows: view.getUint16(2, true),
-        };
-        this.raise(viewer);
-        this.applySize(viewer.address);
-      } else if (frame.channel !== 0 && frame.kind === FrameKind.CLOSE) {
-        const viewer = this.viewerOn(connection, frame.channel);
-        if (!viewer) continue;
-        this.closeViewer(viewer);
-        this.applySize(viewer.address);
       } else if (
         frame.kind === FrameKind.CREDIT &&
         frame.payload.byteLength === 4
@@ -610,6 +804,8 @@ export class FakeCore {
           ).getUint32(0, true);
           this.flush(connection, frame.channel);
         }
+      } else if (frame.channel !== 0) {
+        this.viewerFrame(connection, frame.channel, frame.kind, frame.payload);
       }
     }
   }
@@ -728,6 +924,8 @@ export class FakeCore {
               "not_found",
             );
       }
+      case "terminal.attach":
+        return this.attach(connection, request.params ?? {}, reply, error);
       case "terminal.read": {
         const record = this.terminals.get(String(request.params?.terminal));
         if (!record) return error(-32000, "no terminal", "not_found");
@@ -789,45 +987,13 @@ export class FakeCore {
             cwd,
           },
         });
+        // The shell's prompt is its first screen.
+        this.screens.set(address, "$ ");
         if (this.dropNextWriteReply) {
           this.dropNextWriteReply = false;
           return;
         }
         return reply({ ...this.terminals.get(address)! });
-      }
-      case "terminal.attach": {
-        const address = String(request.params?.terminal);
-        const record = this.terminals.get(address);
-        if (!record)
-          return error(-32000, `no terminal "${address}"`, "not_found");
-        if (record.state !== "live")
-          return error(-32000, `${address} has finished`, "finished");
-        const channel = connection.nextChannel++;
-        connection.streams.set(channel, {
-          pending: [],
-          bytes: 0,
-          credit: STREAM_WINDOW,
-        });
-        const viewer: FakeViewer = {
-          connection,
-          channel,
-          address,
-          size: {
-            cols: Number(request.params?.cols),
-            rows: Number(request.params?.rows),
-          },
-        };
-        this.viewers.push(viewer);
-        this.applySize(address);
-        // Core opens the stream paused and resumes it after the reply.
-        reply({
-          channel,
-          terminal: { ...record },
-          resize_notifications: false,
-          automatic_input: true,
-        });
-        this.enqueue(viewer, new TextEncoder().encode("\x1b[H\x1b[2J$ "));
-        return;
       }
       case "terminal.kill": {
         if (this.options.observeOnly) break;
@@ -865,20 +1031,6 @@ export class FakeCore {
         return error(-32601, `method not found: ${request.method}`, "usage");
     }
     return error(-32601, `method not found: ${request.method}`, "usage");
-  }
-
-  private viewerOn(connection: FakeConnection, channel: number) {
-    return this.viewers.find(
-      (v) => v.connection === connection && v.channel === channel,
-    );
-  }
-
-  /** Typing or resizing makes a viewer the one whose size counts. */
-  private raise(viewer: FakeViewer) {
-    const at = this.viewers.indexOf(viewer);
-    if (at >= 0) this.viewers.splice(at, 1);
-    this.viewers.push(viewer);
-    this.applySize(viewer.address);
   }
 
   private queued(sub: Subscriber): number {
@@ -919,6 +1071,15 @@ export class FakeCore {
   private flush(connection: FakeConnection, channel: number) {
     const stream = connection.streams.get(channel);
     if (!stream) return;
+    // RESIZE waits for DATA credit with its paint, but consumes none.
+    if (stream.resize && stream.credit > 0) {
+      const size = new Uint8Array(4);
+      const view = new DataView(size.buffer);
+      view.setUint16(0, stream.resize[0], true);
+      view.setUint16(2, stream.resize[1], true);
+      stream.resize = null;
+      this.write(connection, encodeFrame(channel, FrameKind.RESIZE, size));
+    }
     while (stream.bytes > 0 && stream.credit > 0) {
       const first = stream.pending[0]!;
       const n = Math.min(first.byteLength, stream.credit, CHUNK);
@@ -934,14 +1095,15 @@ export class FakeCore {
   private drop(connection: FakeConnection) {
     if (connection.heartbeat) clearInterval(connection.heartbeat);
     this.connections.delete(connection);
-    for (const viewer of this.viewers.filter(
-      (v) => v.connection === connection,
-    )) {
-      this.viewers.splice(this.viewers.indexOf(viewer), 1);
-      this.applySize(viewer.address);
-    }
     for (let i = this.subscribers.length - 1; i >= 0; i--)
       if (this.subscribers[i]!.connection === connection)
         this.subscribers.splice(i, 1);
+    // A connection that goes away detaches its viewers (core's detach(None)).
+    for (const [address, list] of this.viewers) {
+      const kept = list.filter((v) => v.connection !== connection);
+      if (kept.length === list.length) continue;
+      this.viewers.set(address, kept);
+      if (this.running) this.applySize(address);
+    }
   }
 }

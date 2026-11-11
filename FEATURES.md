@@ -2083,8 +2083,8 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     has no notifications of its own, so its pushes always follow status.
     When World has more than one connection, Herdr or herdr-core, every push
     names the connection it came from.
-  - **Still view only.** Open terminal, Chat, answers and Mark reviewed stay
-    visible but disabled for core agents, with "World can't open herdr-core
+  - **Still view only.** Chat, answers and Mark reviewed stay visible but
+    disabled for core agents, with "World can't type into herdr-core
     terminals or chat with them yet". Tapping a core agent in Town shows its
     peek; Needs you, Desk and peeks show the program's own status message
     (or why it waits: permission, a question, sign-in) instead of a
@@ -2092,6 +2092,29 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     the two shared ones above (`herdr.seen`, `herdr.pinned`) and, once at
     launch, an agent's placement. Apart from the room shell below, World
     never types into core terminals, resizes them or writes status.
+  - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek),
+    Town's terminal button and opening a core agent in Desk or Board show its
+    live terminal at the size core holds: the size of the Herdr app pane (or
+    other typing viewer) that has it open, or core's headless size (200×120
+    by default) when none does. The line under the name says which. World
+    only watches: it sends core no keys, size or focus, so rotating a phone,
+    opening its keyboard or resizing the window only scales the drawing (down
+    to 45%, then the view scrolls) and never changes the agent's terminal.
+    When the app resizes or closes its pane, World follows before the next
+    paint. **Exception:** if no Herdr app or typing viewer has the terminal
+    open, core moves it to its headless size when World starts watching (its
+    rule for every observer); World says "herdr-core moved it from C×R to its
+    headless size" while that grid lasts; once an app's pane opens and sets
+    its own size, the line names that size and drops the move. Back or
+    Escape closes the view. The watch ends, with the
+    reason and **Watch again**, when the program exits, another program takes
+    the address, or the core connection is lost; when core is back the open
+    view watches again by itself. A hidden page holds no watch and resumes
+    when shown. Limits: four watched terminals per page and 32
+    per World service. A page that falls behind stops taking core's output
+    until it catches up; core then repaints the latest screen instead of
+    replaying the backlog. A core that cannot announce its grid
+    (`resize_notifications`) is refused rather than shown at a guessed size.
   - **Room shell.** **Shell** in a core agent's peek opens World's float
     shell, the equivalent of Herdr Float: that machine's own shell, started
     by core in the agent's current folder, one per room. It shows over any
@@ -2118,9 +2141,13 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   waiting for an answer and *builder* (Codex) is working, with its own
   sub-agent *tests* (ends with it) and *preview-server* (outlives it); *scout* (Gemini)
   finishes its turn about three seconds after the start (done); *helper*
-  (OpenCode, no status reporting) and a shell are unplaced. **Shell** in a
-  fixture agent's peek opens a stand-in float shell that echoes what you type
-  (`exit` ends it). **Kill fixture
+  (OpenCode, no status reporting) and a shell are unplaced. The placed agents
+  have a desktop-app pane at 96×28 and the builder keeps printing, so a watch
+  is live; *helper* has no pane and shows the headless size. **Resize
+  reviewer's app pane** steps the reviewer's pane through 132×40, 72×24,
+  closed (headless) and back to 96×28, as a person resizing or closing it in
+  the desktop app would. **Shell** in a fixture agent's peek opens a stand-in
+  float shell that echoes what you type (`exit` ends it). **Kill fixture
   core** stops it like `kill -9`, and **Remove fixture** deletes both. Three
   more buttons stand in for a person using Herdr's apps on *scout*: **Scout:
   finish another turn** (working, then done about three seconds later),

@@ -77,7 +77,7 @@ type WorldObjectBase = {
 
 /** The one reason every view-only control shows. */
 export const CORE_VIEW_ONLY_REASON =
-  "World can't open herdr-core terminals or chat with them yet";
+  "World can't type into herdr-core terminals or chat with them yet";
 
 /** Live in the view: current, whether or not World can control it. */
 export function isLiveNode(node: {
@@ -132,6 +132,11 @@ export type WorldLeafObject = WorldObjectBase & {
   watched?: boolean;
   lastActivityAt?: number;
   spaceLabel: string;
+  /**
+   * A live herdr-core terminal World can watch (never type into): its
+   * connection's current generation and core address.
+   */
+  watch?: { connectionId: string; generation: number; address: string };
 };
 
 export type WorldObjectNode =
@@ -800,6 +805,15 @@ function* constructHost(
         stale: connection.stale || !live,
         actionable: operational,
         ...(viewOnly ? { viewOnly, coreControl: true as const } : {}),
+        ...(viewOnly && !connection.stale && /^t[1-9][0-9]*$/.test(pane.pane_id)
+          ? {
+              watch: {
+                connectionId: connection.connectionId,
+                generation: connection.generation,
+                address: pane.pane_id,
+              },
+            }
+          : {}),
         ...(connection.runtime === "herdr-core"
           ? { runtime: "herdr-core" as const }
           : {}),

@@ -9,6 +9,7 @@ export type WorldBrowserEntry =
   | "NeedsYouCard"
   | "CoreViewOnly"
   | "CoreControl"
+  | "CoreTerminalWatch"
   | "CoreSharedState"
   | "QuestionCards";
 export type WorldBrowserBundle = {

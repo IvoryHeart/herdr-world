@@ -12,17 +12,23 @@ import {
 } from "../connections/profile-service";
 import { ConnectionProfileStore } from "../connections/profiles";
 import { silentLogger } from "../utils/logger";
-import { CoreClient } from "./client";
+import { CoreClient, type CoreWatchSink } from "./client";
 import {
   type FloatShellPush,
   FloatShellService,
   floatShellName,
 } from "./float-shell";
-import type { CoreConnectionRuntime } from "./runtime";
 import { createCoreConnections } from "./connections";
 import { resolveLocalCoreEndpoint } from "./endpoint";
 import { CoreMirror } from "./mirror";
-import type { CoreObservation } from "./observations";
+import { type CoreObservation, CoreObservationStore } from "./observations";
+import {
+  type CoreConnectionRuntime,
+  createCoreConnectionRuntime,
+} from "./runtime";
+import { desktopPane } from "./testing/desktop-pane";
+import { type CoreTerminalPush, CoreTerminalWatches } from "./watches";
+import { FrameDecoder, FrameKind } from "./wire";
 import { connectUnixStream } from "./stream";
 import { ScratchCore, scratchCoreBinary } from "./testing/scratch-core";
 import { localCoreTransport } from "./transport";
@@ -521,6 +527,227 @@ describe("herdr-core live (real release binary)", () => {
       client.close();
     },
     60_000,
+  );
+
+  live(
+    "watching follows the desktop pane's grid, never sizes it, and an observer alone goes headless",
+    async () => {
+      const core = new ScratchCore(bin!);
+      scratch.push(core);
+      await core.start();
+      // `cat` echoes anything typed, so input from World would show.
+      await core.hc(
+        "run",
+        "--bg",
+        "--name",
+        "agent",
+        "--",
+        "sh",
+        "-c",
+        "printf 'ready\\r\\n'; exec cat",
+      );
+      const grid = async (address: string) => {
+        const t = JSON.parse(await core.hc("get", address, "--json"));
+        return [t.cols, t.rows];
+      };
+      const pane = await desktopPane(core);
+      await pane.attach("t1", 100, 30);
+      expect(await grid("t1")).toEqual([100, 30]);
+
+      // World's own client, every outbound frame decoded.
+      const outbound: Array<{ channel: number; kind: number }> = [];
+      const decoder = new FrameDecoder();
+      let framed = false;
+      const client = await CoreClient.open(
+        await connectUnixStream(resolveLocalCoreEndpoint(core.stateDir)),
+        {
+          onOutbound: (bytes) => {
+            if (!framed) {
+              framed = true;
+              return;
+            }
+            for (const f of decoder.push(bytes))
+              outbound.push({ channel: f.channel, kind: f.kind });
+          },
+        },
+      );
+      const seen: Array<string> = [];
+      const text = new TextDecoder();
+      let screen = "";
+      const sink: CoreWatchSink = {
+        resize: (cols, rows) => seen.push(`${cols}x${rows}`),
+        data: (bytes) => {
+          seen.push("data");
+          screen += text.decode(bytes, { stream: true });
+        },
+        close: (reason) => seen.push(`closed ${reason}`),
+      };
+      const watch = await client.watch("t1", { cols: 100, rows: 30 }, sink);
+      await until(() => seen.includes("data") && screen.includes("ready"));
+      // The pane's grid arrives before the first paint, and core keeps it.
+      expect(seen[0]).toBe("100x30");
+      expect(watch.terminal).toMatchObject({ cols: 100, rows: 30 });
+      expect(await grid("t1")).toEqual([100, 30]);
+
+      // The pane resizes: World follows, measured from the pane's RESIZE.
+      const at = performance.now();
+      pane.resize(80, 24);
+      await until(() => seen.includes("80x24"));
+      const resizeMs = performance.now() - at;
+      await until(() => seen.lastIndexOf("data") > seen.indexOf("80x24"));
+      expect(await grid("t1")).toEqual([80, 24]);
+
+      // The same through World's relay and production runtime.
+      const root = mkdtempSync(join(tmpdir(), "hcw-watch-"));
+      roots.push(root);
+      const manager = new ConnectionManager<CoreConnectionRuntime>("");
+      manager.register({
+        identity: { id: "core", label: "core", source: "local-profile" },
+        createRuntime: (context) =>
+          createCoreConnectionRuntime({
+            identity: { id: "core", label: "core", source: "local-profile" },
+            context,
+            transport: localCoreTransport(core.stateDir),
+            observations: new CoreObservationStore(() => {}),
+            onFailure: () => {},
+          }),
+      });
+      await manager.start("core");
+      const pushes: CoreTerminalPush[] = [];
+      const page = {};
+      const watches = new CoreTerminalWatches<object>({
+        lease: (id) => (manager.has(id) ? manager.readyRuntimeLease(id) : null),
+        send: (_page, push) => {
+          pushes.push(push);
+          return true;
+        },
+        buffered: () => 0,
+      });
+      const lease = () => manager.readyRuntimeLease("core");
+      await until(() => lease()?.runtime.core.terminal("t1")?.cols === 80);
+      const target = (address: string, stream: string) => ({
+        connection_id: "core",
+        generation: manager.status("core").generation,
+        address,
+        stream,
+      });
+      const opened = await watches.open(page, target("t1", "a"));
+      expect(opened).toEqual({
+        stream: "a",
+        grid: { cols: 80, rows: 24 },
+        moved_from: null,
+      });
+      await until(() => pushes.some((p) => "bytes" in p));
+      expect(pushes[0]).toEqual({ stream: "a", grid: { cols: 80, rows: 24 } });
+      expect(await grid("t1")).toEqual([80, 24]);
+
+      // The pane closes: core goes headless, and both watches are told first.
+      pane.detach();
+      await until(
+        () =>
+          seen.includes("200x120") &&
+          pushes.some((p) => "grid" in p && p.grid.cols === 200),
+      );
+      expect(await grid("t1")).toEqual([200, 120]);
+
+      // Observer alone: an unviewed terminal made at 100x30 moves to headless
+      // when World attaches (core's documented exception), and World says so.
+      const plain = await connectUnixStream(
+        resolveLocalCoreEndpoint(core.stateDir),
+      );
+      let replies = "";
+      plain.onData((d) => {
+        replies += new TextDecoder().decode(d);
+      });
+      plain.write(
+        new TextEncoder().encode(
+          `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "terminal.run", params: { argv: ["sh", "-c", "exec sleep 600"], name: "fresh", size: { cols: 100, rows: 30 } } })}\n`,
+        ),
+      );
+      await until(() => replies.includes("\n"));
+      const fresh = JSON.parse(replies).result.address as string;
+      expect(await grid(fresh)).toEqual([100, 30]);
+      await until(() => lease()?.runtime.core.terminal(fresh)?.cols === 100);
+      const alone = await watches.open(page, target(fresh, "b"));
+      expect(alone.moved_from).toEqual({ cols: 100, rows: 30 });
+      expect(alone.grid).toEqual({ cols: 200, rows: 120 });
+      expect(pushes.find((p) => p.stream === "b")).toEqual({
+        stream: "b",
+        grid: { cols: 200, rows: 120 },
+      });
+
+      // Throughput through the relay: 200,000 lines printed while watched.
+      await core.hc(
+        "run",
+        "--bg",
+        "--name",
+        "flood",
+        "--",
+        "sh",
+        "-c",
+        "sleep 0.5; seq 1 200000; exec sleep 600",
+      );
+      const floodAddress = JSON.parse(await core.hc("get", "flood", "--json"))
+        .address as string;
+      await until(
+        () => lease()?.runtime.core.terminal(floodAddress)?.state === "live",
+      );
+      await watches.open(page, target(floodAddress, "c"));
+      // Timed from the first live output after the first paint.
+      let started: number | null = null;
+      let paints = 0;
+      let bytes = 0;
+      let consumed = 0;
+      let tail = "";
+      await until(() => {
+        for (; consumed < pushes.length; consumed++) {
+          const p = pushes[consumed]!;
+          if (p.stream !== "c" || !("bytes" in p)) continue;
+          const b = Buffer.from(p.bytes, "base64");
+          if (++paints === 2) started = performance.now();
+          if (paints >= 2) bytes += b.length;
+          tail = (tail + b.toString("latin1")).slice(-64);
+        }
+        return tail.includes("200000");
+      }, 30_000);
+      const floodMs = performance.now() - (started ?? performance.now());
+      console.log(
+        `herdr-core ${client.hello.version}: pane resize reached World in ${resizeMs.toFixed(1)} ms; 200,000 printed lines reached the page as ${(bytes / 1024).toFixed(0)} KiB in ${floodMs.toFixed(0)} ms (${(bytes / 1024 / 1024 / (floodMs / 1000)).toFixed(1)} MiB/s)`,
+      );
+      // Leaving changes nothing: t1 stays headless after its watches end.
+      watches.close(page, "a");
+      watch.detach();
+      await Bun.sleep(200);
+      expect(await grid("t1")).toEqual([200, 120]);
+      // Nothing World sent typed, resized or focused: RPC on channel 0,
+      // CREDIT for what it read, and CLOSE when it left.
+      const watchFrames = outbound.filter((f) => f.channel !== 0);
+      expect(watchFrames.length).toBeGreaterThan(0);
+      expect(
+        watchFrames.every(
+          (f) => f.kind === FrameKind.CREDIT || f.kind === FrameKind.CLOSE,
+        ),
+      ).toBe(true);
+      expect(
+        outbound
+          .filter((f) => f.channel === 0)
+          .every((f) => f.kind === FrameKind.DATA),
+      ).toBe(true);
+      // kill -9 of core mid-stream: every open watch is told, none lingers.
+      core.killCore();
+      await until(() =>
+        ["b", "c"].every((stream) =>
+          pushes.some((p) => p.stream === stream && "closed" in p),
+        ),
+      );
+      expect(watches.size).toBe(0);
+      watches.stop();
+      plain.close();
+      pane.close();
+      client.close();
+      await manager.stopAll();
+    },
+    90_000,
   );
 
   live(
