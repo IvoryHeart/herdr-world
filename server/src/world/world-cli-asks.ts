@@ -164,8 +164,12 @@ export async function handleWorldAsk(
       // Identity lookup may wait. Recheck keys/allowances inside the serialized
       // ledger mutation, so concurrent requests cannot bypass admission.
       const asker = await placeAsker(deps.hosts(), actor);
+      // Owner alerts go through Herdr's toasts; a herdr-core asker has none,
+      // so its alert goes through the default Herdr connection.
       const notificationConnection =
-        asker.connection_id ?? deps.defaultConnectionId();
+        asker.connection_id && !deps.core?.()?.has(asker.connection_id)
+          ? asker.connection_id
+          : deps.defaultConnectionId();
       if (key) {
         const known = deps.ledger
           .get()

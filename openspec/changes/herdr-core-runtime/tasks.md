@@ -40,6 +40,16 @@
     fence with two plan mutants and two production controls, and live checks
     against the 0.1.20 release.
 - [ ] P4: files/Git/worktrees, asks and Ranger.
+  - [x] Issue #871: a core connection's host runtime per generation (read
+    model rows, screen-only reads, World's guarded file/Git helpers, an
+    agent's worktree bound to the program occupying its address); Files,
+    Changes and file transfers routed by core connection and generation;
+    worktree create/open/remove as World's rooms with Paseo hooks, repository
+    settings and the kill confirmation; verified core callers for asks with
+    occupant-bound recipients and native saved-answer delivery; Ranger reads,
+    mentions, native prompt delivery and worktree creation
+    over core; the model's worktree-removal order with three mutants; live
+    checks against the 0.1.20 release.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.
   - [x] Popup equivalents (#873): the room shell on both runtimes; Herdr Float
     is the one TUI plugin popup World invokes, and generic plugin popups have

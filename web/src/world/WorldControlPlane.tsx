@@ -26,6 +26,7 @@ import { terminalColorKey } from "./terminalColor";
 import { setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
 import { CoreKillConfirmHost } from "./CoreKillConfirm";
+import { CoreWorktreesHost } from "./CoreWorktrees";
 import { BoardHub } from "./board/BoardHub";
 import { requestTownSummary } from "./town/townSummaryRequest";
 import { useTerminalColorChoices } from "./useTerminalColors";
@@ -361,7 +362,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   };
 
   // A herdr-core terminal opens as a watch: World adopts core's grid and
-  // sends nothing back, so it has no Inspector, Chat or input of its own.
+  // sends nothing back. Files and Changes use a separate resource Inspector.
   const coreWatch = useCoreTerminalWatch(
     (id) => aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id),
   );
@@ -429,6 +430,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         />
       ) : null}
       <CoreKillConfirmHost />
+      <CoreWorktreesHost />
       <WorldBin
         always={view === "town" || view === "board"}
         bus={view === "town"}
@@ -567,6 +569,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         conversationNodeIds={conversationNodeIds}
                         onSelect={stableSelectNode}
                         onOpen={stableOpenNodeById}
+                        onOpenFiles={(id) =>
+                          stableOpenInspectorView(id, "files")
+                        }
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>

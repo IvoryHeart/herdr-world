@@ -12,7 +12,10 @@ import { checkoutPath } from "../workspace/utils";
  * these and refuses to dispatch if any of them changed.
  */
 export async function readWorktreeHookState(
-  runtime: LegacyConnectionRuntime,
+  runtime: Pick<
+    LegacyConnectionRuntime,
+    "worktreeHooks" | "readSettings" | "sshHost"
+  >,
   read: <T>(operation: () => Promise<T>) => Promise<T>,
   connectionId: string,
   current: Record<string, unknown>,

@@ -2083,15 +2083,85 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     has no notifications of its own, so its pushes always follow status.
     When World has more than one connection, Herdr or herdr-core, every push
     names the connection it came from.
-  - **Still view only.** Chat, answers and Mark reviewed stay visible but
-    disabled for core agents, with "World can't type into herdr-core
+  - **Files and Changes.** A core agent's **Files** and **Changes** open in
+    its agent window, as for a Herdr agent: they follow the folder its
+    program runs in (core's live foreground cwd, matched to its Git
+    worktree), and a core room's follow its worktree or its terminals'
+    folder. Preview, search, download, upload, delete, Git actions and
+    commits use World's own tools on the core's host (this computer or the
+    core's SSH host), never core's file calls. The selection belongs to the
+    program at that address: if core replaces it, even with one that reuses
+    its pid, Files asks to refresh before reading again. Each request names
+    the core connection and the runtime generation it saw; after a
+    reconnect it is refused, never answered from another connection. Not on
+    a Windows core host.
+  - **Worktrees.** A core room's **Worktrees…** menu offers **Create**, **Open**
+    and, for a worktree room, **Remove this worktree…**. A new
+    worktree branches from origin's freshly fetched default branch (or the
+    checked-out commit without an origin) at the repository's **Worktree
+    location** (Herdr's `~/.herdr/worktrees/<repo>/<branch>` otherwise),
+    with the **New worktree command** when one is set and installed, and
+    becomes one of World's rooms of that core, named after its branch.
+    Agents and shells started there run in it. **Open worktree…** lists
+    what Git lists for the room's repository and opens one as a room (an
+    open one is shown, not opened twice). Paseo hooks run as for Herdr
+    worktrees: `setup` after creation, `opened` after opening, `teardown`
+    before removal (a failure ends and removes nothing) and `removed` after.
+    Removing first names every terminal that ends with the room, as
+    **Close room** does; then the hook runs, those terminals end, Git (or
+    the **Remove worktree command**) removes the checkout and the room
+    closes. If Git cannot remove it, the room stays so you can retry. The
+    repository's own checkout opened as a room is closed, not removed.
+  - **Questions from core agents.** `herdr-world ask` and the other agent
+    commands run inside a herdr-core terminal on this computer are verified
+    like a Herdr pane's: World checks that the command runs under that
+    terminal's program, so the question is that agent's own and waits on its
+    desk with **?**. CLI claims accept core's letter-bearing addresses such
+    as `t1b`; a claim without a matching local program stays unverified.
+    A program that replaced it at the same address, even
+    one reusing its pid, is a different asker. The agent reads your answer
+    with `ask get` or `--wait`. Without a CLI acknowledgement, World sends
+    the saved answer through core's own send after three seconds, under the
+    original program and foreground. A replaced program or foreground is
+    refused; a lost reply stays uncertain in Summary's Outbox and is never
+    replayed automatically. A restart event, even with identical PID and
+    command line, or a core reconnect retires that asking binding; `ask get`
+    still reads the answer. On a core reached over
+    SSH, or when a Herdr pane and a core terminal claim the command equally,
+    the caller stays unverified.
+  - **Ranger.** Ranger lists core rooms beside Herdr workspaces and reads
+    them like any workspace: status (marked `herdr-core`), Git changes and
+    diffs, and an agent's terminal. On core it reads only the visible
+    screen, never history, because a history read scrolls a full-screen
+    program; agent history is not available there yet. Mentions bind the
+    program running in the terminal, so an agent replaced at the same
+    address, even with the same pid, has to be selected again. Ranger can
+    create a worktree from a core room: the preview shows the branch, source
+    repository and setup hook, and confirming opens the checkout as a new
+    World room. It can send a previewed prompt through core's native send, checked against
+    the original program and foreground immediately before submission. An
+    uncertain send is never retried automatically. Starting or ending
+    agents, adding rooms and splitting terminals use World's dedicated
+    controls; Ranger explains these limits.
+    Scheduled tasks resume against the same core (by its ID) and refuse a
+    wiped or replaced one.
+  - **Disposable preview.** Open `?coreFixture`, then **Manage connections
+    → Fixture core → Start**. The fixture's agents work in a disposable Git
+    repository with a README and Paseo hooks. Open **builder → Files** or
+    the **web** room's **Worktrees…** menu. Worktrees stay inside that
+    fixture's directory and are removed with it. Ranger can read this room
+    when you allow it in Ranger settings. No real harness or checkout is
+    needed; the fixture runs no agents.
+  - **Chat remains unavailable.** Chat, answers and Mark reviewed stay
+    visible but disabled for core agents, with "World can't type into herdr-core
     terminals or chat with them yet". Tapping a core agent in Town shows its
     peek; Needs you, Desk and peeks show the program's own status message
     (or why it waits: permission, a question, sign-in) instead of a
     conversation. World reads core's event stream; the labels it writes are
     the two shared ones above (`herdr.seen`, `herdr.pinned`) and, once at
     launch, an agent's placement. Apart from the room shell below, World
-    never types into core terminals, resizes them or writes status.
+    types only confirmed Ranger prompts and saved ask answers through native
+    send, never resizes observed agents or writes their status.
   - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek),
     Town's terminal button and opening a core agent in Desk or Board show its
     live terminal at the size core holds: the size of the Herdr app pane (or

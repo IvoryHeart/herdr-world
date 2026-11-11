@@ -47,7 +47,7 @@ import type {
   CardColor,
 } from "./board-store";
 import type { CallerLocator } from "./caller-identity";
-import { identifyCaller, type CliHost } from "./world-cli-actor";
+import { CORE_TERMINAL, identifyCaller, type CliHost } from "./world-cli-actor";
 export {
   identifyCaller,
   paneActor,
@@ -97,6 +97,8 @@ export type WorldCliDeps = {
   ): Promise<unknown>;
   incarnation?: string;
   hosts(): CliHost[];
+  /** herdr-core connections, for callers inside core terminals (P4). */
+  core?(): import("./world-cli-actor").CoreCallerSource | null;
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
@@ -916,7 +918,17 @@ export function createWorldCli(deps: WorldCliDeps) {
         // The claim becomes a label in the ledger and in World: bound it.
         if (paneId !== undefined && !PANE_ID.test(paneId))
           usage("HERDR_PANE_ID is not a Herdr pane ID");
-        const identity = await identifyCaller(deps.hosts(), paneId, locate);
+        const claimedCore = request.caller?.core_terminal;
+        const coreTerminal =
+          typeof claimedCore === "string" && claimedCore.trim()
+            ? claimedCore.trim()
+            : undefined;
+        if (coreTerminal !== undefined && !CORE_TERMINAL.test(coreTerminal))
+          usage("HC_TERMINAL_ID is not a herdr-core terminal address");
+        const identity = await identifyCaller(deps.hosts(), paneId, locate, {
+          ...(coreTerminal ? { terminal: coreTerminal } : {}),
+          source: deps.core?.() ?? null,
+        });
         actor = identity.actor;
         admission.actor = actor.verified ? "cli_verified" : "cli_unverified";
         recheck();

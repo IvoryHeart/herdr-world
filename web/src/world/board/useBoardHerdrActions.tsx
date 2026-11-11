@@ -20,6 +20,7 @@ import {
   requestWorkspaceStep,
 } from "../herdrOrder";
 import { spaceRoomActionCapabilities } from "../officeRoomActions";
+import { openCoreWorktrees } from "../CoreWorktrees";
 import {
   closeCoreRoomConfirmed,
   closeRoom,
@@ -150,6 +151,7 @@ export function useBoardHerdrActions({
   boardRef,
   notify,
   onOpen,
+  onOpenFiles,
   deskStore = sharedDeskStore(),
 }: {
   model: BoardModel;
@@ -159,6 +161,7 @@ export function useBoardHerdrActions({
   notify: Notify;
   /** Open a pane as the user opens it: an agent's Chat, else its terminal. */
   onOpen(id: string): unknown;
+  onOpenFiles?: (id: string) => unknown;
   /** The one reviewed record; World's shared Desk store by default. */
   deskStore?: WorldDeskStore;
 }) {
@@ -360,9 +363,26 @@ export function useBoardHerdrActions({
     if (space) {
       const can = spaceRoomActionCapabilities(space.space);
       const host = model.hostByKey.get(space.hostKey);
-      if (!can.rename && !can.close) return null;
+      if (!can.rename && !can.close && !can.worktrees) return null;
       return (
         <>
+          {can.worktrees ? (
+            <button
+              type="button"
+              title="Worktrees: new, open or remove"
+              onClick={() =>
+                openCoreWorktrees({
+                  connectionId: space.connectionId,
+                  generation: space.generation,
+                  workspaceId: space.nativeId,
+                  label: space.label,
+                  linked: can.linkedWorktree === true,
+                })
+              }
+            >
+              Worktrees…
+            </button>
+          ) : null}
           {can.rename ? (
             <button type="button" onClick={() => openDialog("rename", space)}>
               Rename…
@@ -468,6 +488,14 @@ export function useBoardHerdrActions({
           setPeek(null);
           void onOpen(peeked.pane.leaf.id);
         }}
+        onFiles={
+          onOpenFiles
+            ? () => {
+                setPeek(null);
+                void onOpenFiles(peeked.pane.leaf.id);
+              }
+            : undefined
+        }
         onClose={() => setPeek(null)}
         onHold={(held) => {
           hover.current.held = held;

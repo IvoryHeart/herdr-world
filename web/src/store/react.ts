@@ -5,6 +5,7 @@ import {
   useRef,
   useMemo,
 } from "react";
+import type { ConnectionClient } from "../api";
 import { type State } from "./types";
 import { store } from "../store";
 import { connectionSnapshot } from "./sessions";
@@ -13,6 +14,8 @@ import { operationalStore } from "./operations";
 export interface OperationalContext {
   connectionId: string;
   runtimeGeneration: number;
+  /** Read-only resource rows from a non-TUI provider; commands stay separately qualified. */
+  resourceTopology?: Pick<State, "workspaces" | "tabs" | "panes">;
 }
 export const OperationalContext = createContext<OperationalContext | null>(
   null,
@@ -67,11 +70,29 @@ export function useStoreSelector<T>(
     value: T;
   } | null>(null);
 
+  const projected = useRef<{
+    source: State;
+    topology: OperationalContext["resourceTopology"];
+    snapshot: State;
+  } | null>(null);
   const getSnapshot = () => {
     const source = store.get();
-    const snapshot = context
+    const owned = context
       ? connectionSnapshot(source, context.connectionId)
       : source;
+    if (
+      context?.resourceTopology &&
+      (projected.current?.source !== owned ||
+        projected.current.topology !== context.resourceTopology)
+    )
+      projected.current = {
+        source: owned,
+        topology: context.resourceTopology,
+        snapshot: { ...owned, ...context.resourceTopology },
+      };
+    const snapshot = context?.resourceTopology
+      ? projected.current!.snapshot
+      : owned;
     const cache = cacheRef.current;
     if (cache && cache.state === snapshot && cache.selector === selector) {
       return cache.value;
@@ -88,7 +109,7 @@ export function useStoreSelector<T>(
   return useSyncExternalStore(store.subscribe, getSnapshot);
 }
 
-export function useOperationalStore() {
+export function useOperationalStore(resourceClient?: ConnectionClient) {
   const context = useContext(OperationalContext);
   const owner = useStoreSelector(
     (snapshot) => ({
@@ -107,9 +128,12 @@ export function useOperationalStore() {
   return useMemo(() => {
     void status;
     void attachEpoch;
-    return operationalStore({
-      connectionId,
-      runtimeGeneration: runtimeGeneration ?? -1,
-    });
-  }, [connectionId, runtimeGeneration, status, attachEpoch]);
+    return operationalStore(
+      {
+        connectionId,
+        runtimeGeneration: runtimeGeneration ?? -1,
+      },
+      resourceClient,
+    );
+  }, [connectionId, runtimeGeneration, status, attachEpoch, resourceClient]);
 }

@@ -1,10 +1,11 @@
 import { createAskRecipients, type AnswerLease } from "./ask-recipient";
+import type { CoreCallerSource } from "./world-cli-actor";
 import { createAnswerRecorder } from "./answer-record";
 import { createAnswerDispatcher } from "./answer-dispatch";
 import {
   ANSWER_DELIVERY_VERB,
   answeringAgent,
-  validRecipient,
+  herdrRecipient,
 } from "./ask-delivery-types";
 import { randomBytes } from "node:crypto";
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
@@ -47,6 +48,11 @@ export function createWorldCliService(deps: {
   snapshots(): {
     snapshot(params: Record<string, never>): Promise<WorldSnapshotResult>;
   } | null;
+  /**
+   * herdr-core connections (P4), read when a call arrives: callers inside
+   * core terminals are verified and bound to their program there.
+   */
+  core?(): CoreCallerSource | null;
   sources?(): Promise<WorldSourcesSnapshot>;
   townMoveQueues: TownMoveContext["queues"];
   publishBoard(revision: number): void;
@@ -70,6 +76,7 @@ export function createWorldCliService(deps: {
   let deliveryRevision = 0;
   const recipients = createAskRecipients({
     connections: deps.connections,
+    ...(deps.core ? { core: deps.core } : {}),
     clock: deps.clock ?? { now, monotonic: () => performance.now() },
     incarnation,
   });
@@ -114,7 +121,7 @@ export function createWorldCliService(deps: {
                 delivery: ask.delivery?.answer,
                 can_resend:
                   !ask.withdrawn &&
-                  validRecipient(ask.recipient) &&
+                  herdrRecipient(ask.recipient) &&
                   ["uncertain", "refused"].includes(entry.state),
               },
             ]
@@ -277,6 +284,7 @@ export function createWorldCliService(deps: {
             },
           ];
         }),
+    ...(deps.core ? { core: deps.core } : {}),
     defaultConnectionId: () => deps.connections().defaultId(),
     snapshot: async () => {
       const snapshots = deps.snapshots();

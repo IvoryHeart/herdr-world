@@ -19,10 +19,21 @@ export type CoreTopologyTab = {
   label: string;
   terminals: string[];
 };
+/**
+ * A linked Git worktree World created or opened as a room (P4): the
+ * checkout is the room's folder, so its Files, hooks and new terminals use
+ * it. `source` is the repository it was made from.
+ */
+export type CoreRoomCheckout = {
+  path: string;
+  source: string;
+  branch?: string;
+};
 export type CoreTopologyRoom = {
   id: string;
   label: string;
   app_space?: string;
+  checkout?: CoreRoomCheckout;
   tabs: CoreTopologyTab[];
 };
 export type CoreTopologyDocument = {

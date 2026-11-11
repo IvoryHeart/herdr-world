@@ -338,6 +338,51 @@ export const rpcVerbs = [
       confirmation: Type.Unknown(),
     }),
   ),
+  // Worktrees of a core room (P4): host Git and World's own rooms.
+  rpc(
+    "world.core.worktree.list",
+    "read",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+    }),
+  ),
+  rpc(
+    "world.core.worktree.create",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      branch: text,
+    }),
+  ),
+  rpc(
+    "world.core.worktree.open",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      path: text,
+    }),
+  ),
+  rpc(
+    "world.core.worktree.remove",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      force: Type.Optional(Type.Boolean()),
+      confirmation: Type.Optional(Type.Unknown()),
+    }),
+  ),
   rpc(
     "world.board.patch",
     "reconcilable",

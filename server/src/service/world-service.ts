@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import type { Server, ServerWebSocket } from "bun";
 import { createProfileServices } from "../agent/profile-service";
-import { createAssistantContext } from "../assistant/context";
+import { createRuntimeAssistantContext } from "./assistant-context";
 import { HerdrClient } from "../bridge/herdr-client";
 import { createServiceForwards } from "./forward-service";
 import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
@@ -27,11 +27,9 @@ import {
   type StartupLocalProfile,
 } from "../connections/profile-service";
 import { connectionFailureReporters } from "../connections/failure-reporters";
-import {
-  connectionRecoveryFingerprint,
-  type TuiConnectionProfile,
-} from "../connections/profiles";
+import { type TuiConnectionProfile } from "../connections/profiles";
 import { composeCore } from "../rpc/core";
+import { coreCallerSource } from "../herdr-core/ask-caller";
 import { ownedBy, worldRuntimeRegistry } from "../world/runtime-registry";
 import {
   createLegacyRoutingLogger,
@@ -61,7 +59,6 @@ import { SourcesService } from "../sources/service";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
-import { createWorkspaceWorktree } from "../worktree/create";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
 import { createBinService } from "./bin-service";
@@ -289,6 +286,8 @@ async function compose(
     now: () => clock.now(),
     incarnation: storage.incarnation,
     connections: () => connectionManager,
+    // herdr-core callers (P4); composed below, read only when a call arrives.
+    core: () => coreCallers,
     snapshots: () => worldSnapshots,
     sources: async () => worldSources.current(),
     townMoveQueues,
@@ -305,7 +304,9 @@ async function compose(
     sendToPage: (ws, line) =>
       safeSend(ws as ServerWebSocket<unknown>, line, "core-terminal"),
     push: (task, isCurrent) => webPush.notify(task, isCurrent),
+    readSettings: () => settings.read(),
   });
+  const coreCallers = coreCallerSource(() => coreRpc);
   /** The agent bin: reversible holding, a scheduled bus, then a durable fenced close. */
   const bin = createBinService({
     core: () => core.manager, // herdr-core closes are native kills
@@ -483,26 +484,13 @@ async function compose(
     serviceIncarnation,
   );
 
-  const assistantContext = createAssistantContext({
-    catalog: () => connectionProfiles.list(),
-    lease: (id) => connectionManager.readyRuntimeLease(id),
-    recoveryFingerprint: (id) => {
-      const profile = connectionProfiles
-        .list()
-        .find((profile) => profile.id === id);
-      if (!profile)
-        throw new Error("Ranger connection is no longer configured");
-      return connectionRecoveryFingerprint(profile);
-    },
-    createWorktree: (runtime, params, isCurrent, beforeDispatch) =>
-      createWorkspaceWorktree(
-        runtime,
-        params,
-        isCurrent,
-        undefined,
-        undefined,
-        beforeDispatch,
-      ),
+  const assistantContext = createRuntimeAssistantContext({
+    profiles: () => [
+      ...connectionProfiles.list(),
+      ...connectionProfiles.coreList(),
+    ],
+    tui: connectionManager,
+    core: coreRpc,
   });
   let assistantServiceTask: Promise<
     Awaited<
@@ -885,6 +873,7 @@ async function compose(
             auth,
             browsers,
             connectionManager,
+            core: coreRpc,
             legacyRoutingLogger,
             snapshotAdmission,
             handleRpc,

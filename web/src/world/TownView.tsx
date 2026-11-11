@@ -1,3 +1,4 @@
+import { lazyIndex } from "./town/lazyIndex";
 import { AnswerOutboxContext } from "./town/answerOutbox";
 import { TownStepStore } from "./town/townStepStore";
 import { useTownStepReads } from "./town/useTownStepReads";
@@ -112,19 +113,7 @@ import {
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
 
-/** Town's chrome insets: Needs you is a World tab now, not a Town rail. */
 const TOWN_CHROME = { left: 0, right: 0 };
-
-/** A keyed index of a list, built the first time it is read. */
-function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
-  let index: Map<string, T> | null = null;
-  const read = () =>
-    (index ??= new Map(items.map((item) => [keyOf(item), item])));
-  return {
-    get: (key: string) => read().get(key),
-    has: (key: string) => read().has(key),
-  };
-}
 
 export default function TownView({
   world,
@@ -869,6 +858,17 @@ export default function TownView({
               else void onOpenTerminal(peekAgent.nodeId).catch(() => undefined);
             }}
             leaf={peekLeaf}
+            onFiles={
+              peekAgent.viewOnly &&
+              onOpenInspectorView &&
+              world.nodeById.get(peekAgent.nodeId)?.capabilities.files
+                ? () => {
+                    holdPeek.current = false;
+                    setPeek(null);
+                    onOpenInspectorView(peekAgent.nodeId, "files", true);
+                  }
+                : null
+            }
             onNext={
               reception.step(peekAgent.key, peek!.anchor) ??
               (nextCall(peekAgent.key)

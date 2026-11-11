@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import {
   paneRoots,
-  runsInPane,
   type CallerLocator,
+  type CallerProcess,
   type PaneProcessInfo,
 } from "./caller-identity";
 import type { CliActor } from "./world-ledger";
@@ -30,6 +30,128 @@ export function askSessionFingerprint(value: unknown): string | undefined {
   return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
 }
 
+/** The program holding a herdr-core address now. */
+export type CoreCliOccupant = {
+  coreId: string;
+  pid: number;
+  foregroundPid: number | null;
+  foreground?: { pid: number; name: string };
+  /** `coreOccupantFingerprint`: core, address, pid, argv, template. */
+  fingerprint: string;
+};
+
+export type CorePreparedDelivery = {
+  connectionId: string;
+  generation: number;
+  isCurrent(): boolean;
+  send(
+    text: string,
+    beforeSubmit: () => Promise<boolean>,
+    authorized?: () => boolean,
+  ): Promise<unknown>;
+};
+
+/** A ready, current herdr-core connection the CLI checks callers against. */
+export type CoreCliHost = {
+  connection_id: string;
+  generation: number;
+  /** The core runs on this machine, so its processes can be checked. */
+  local: boolean;
+  isCurrent(): boolean;
+  coreId(): string | null;
+  delivery?(
+    address: string,
+    fingerprint: string,
+    foreground: { pid: number; name: string },
+  ): CorePreparedDelivery | null;
+  /** The live program at `address` (`tN`) on this core, or null. */
+  occupant(address: string): CoreCliOccupant | null;
+  /** World's read-model row for it: room, harness and name. */
+  describe(
+    address: string,
+  ): Promise<{ workspace_id?: string; agent?: string; name?: string } | null>;
+};
+
+export type CoreCallerSource = {
+  /** Whether a connection ID is a herdr-core connection, ready or not. */
+  has(connectionId: string): boolean;
+  hosts(): CoreCliHost[];
+};
+
+/** `HC_TERMINAL_ID`: core's 30-symbol alphabet, bounded for ledger labels. */
+export const CORE_TERMINAL = /^t[1-9][0-9bcdfghjkmnpqrstvwxyz]{0,9}$/;
+
+/**
+ * How far up the caller's process chain `pids` first appears (0: the caller
+ * itself), or null when none of them is the caller or an ancestor.
+ */
+function distanceTo(
+  chain: readonly CallerProcess[],
+  pids: ReadonlySet<number>,
+): number | null {
+  const index = chain.findIndex((entry) => pids.has(entry.pid));
+  return index < 0 ? null : index;
+}
+
+/** A verified core caller's fields, bound to the program it runs under. */
+export async function coreActor(
+  host: CoreCliHost,
+  address: string,
+  occupant: CoreCliOccupant,
+): Promise<CliActor> {
+  const row = await host.describe(address).catch(() => null);
+  return {
+    label: `${row?.agent ?? "terminal"} in ${address}`,
+    verified: true,
+    connection_id: host.connection_id,
+    connection_generation: host.generation,
+    pane_id: address,
+    terminal_id: address,
+    agent_session_fingerprint: occupant.fingerprint,
+    ...(row?.workspace_id ? { workspace_id: row.workspace_id } : {}),
+    ...(row?.agent ? { agent: row.agent } : {}),
+    ...(row?.name ? { name: row.name } : {}),
+  };
+}
+
+/**
+ * A caller inside a herdr-core terminal, verified (§4.10): on a local core
+ * whose terminal `address` is live, the calling process (found from its
+ * loopback connection) must run under that terminal's program. Addresses
+ * repeat across cores (every core has a `t1`): only a core whose program at
+ * that address is the caller's ancestor matches, and the nearest one wins.
+ */
+async function locateCoreCaller(
+  hosts: readonly CoreCliHost[],
+  address: string,
+  locate: CallerLocator,
+): Promise<
+  { host: CoreCliHost; occupant: CoreCliOccupant; distance: number }[]
+> {
+  const found: {
+    host: CoreCliHost;
+    occupant: CoreCliOccupant;
+    distance: number;
+  }[] = [];
+  for (const host of hosts) {
+    if (!host.local || !host.isCurrent()) continue;
+    const occupant = host.occupant(address);
+    if (!occupant) continue;
+    const roots = [occupant.pid, occupant.foregroundPid].filter(
+      (pid): pid is number => typeof pid === "number" && pid > 1,
+    );
+    const chain = roots.length ? locate(roots) : null;
+    // The terminal's own program must be the caller or its ancestor: a
+    // foreground process alone (a shared group) is not enough.
+    const distance = chain ? distanceTo(chain, new Set([occupant.pid])) : null;
+    if (distance === null) continue;
+    // Still the same program when the check finished.
+    if (host.occupant(address)?.fingerprint !== occupant.fingerprint) continue;
+    found.push({ host, occupant, distance });
+  }
+  return found;
+}
+
 /**
  * A caller that named no pane. Any process can leave HERDR_PANE_ID unset, so
  * this is not the owner, only a terminal that did not say where it runs.
@@ -37,18 +159,32 @@ export function askSessionFingerprint(value: unknown): string | undefined {
 export const NO_PANE = "terminal with no pane";
 
 /**
- * Who is calling. Without HERDR_PANE_ID the caller is unverified with no
- * pane. With one, the claim is verified only when the calling process runs
- * in that pane of a local Herdr (searched for among the pane's own
- * processes); otherwise it is labelled unverified and acts on the default host.
+ * Who is calling. Without HERDR_PANE_ID or HC_TERMINAL_ID the caller is
+ * unverified with no pane. With HERDR_PANE_ID, the claim is verified only
+ * when the calling process runs in that pane of a local Herdr (searched for
+ * among the pane's own processes). With HC_TERMINAL_ID, only when it runs
+ * under that terminal's program on a local herdr-core. When both verify
+ * (one runtime started inside the other), the runtime whose terminal is the
+ * caller's nearest ancestor wins; a tie stays unverified. Otherwise the
+ * claim is labelled unverified and acts on the default host.
  */
 export async function identifyCaller(
   hosts: readonly CliHost[],
   paneId: string | undefined,
   locate: CallerLocator | null,
+  core?: { terminal?: string; source: CoreCallerSource | null },
 ): Promise<{ actor: CliActor; host?: CliHost }> {
-  if (!paneId) return { actor: { label: NO_PANE, verified: false } };
-  if (locate)
+  const coreTerminal =
+    core?.terminal && CORE_TERMINAL.test(core.terminal)
+      ? core.terminal
+      : undefined;
+  if (!paneId && !coreTerminal)
+    return { actor: { label: NO_PANE, verified: false } };
+  const matches: {
+    distance: number;
+    resolve(): Promise<{ actor: CliActor; host?: CliHost }>;
+  }[] = [];
+  if (locate && paneId)
     for (const host of hosts) {
       if (!host.local) continue;
       const info = (
@@ -58,11 +194,43 @@ export async function identifyCaller(
       )?.process_info;
       const roots = paneRoots(info);
       const chain = roots.length ? locate(roots) : null;
-      if (!chain || !runsInPane(chain, info)) continue;
-      return { actor: (await paneActor(host, paneId)).actor, host };
+      const distance = chain ? distanceTo(chain, new Set(roots)) : null;
+      if (distance === null) continue;
+      matches.push({
+        distance,
+        resolve: async () => ({
+          actor: (await paneActor(host, paneId)).actor,
+          host,
+        }),
+      });
+      // A pane ID names one pane per Herdr; the first local match is it.
+      break;
     }
+  if (locate && coreTerminal && core?.source)
+    for (const found of await locateCoreCaller(
+      core.source.hosts(),
+      coreTerminal,
+      locate,
+    ))
+      matches.push({
+        distance: found.distance,
+        resolve: async () => ({
+          actor: await coreActor(found.host, coreTerminal, found.occupant),
+        }),
+      });
+  const nearest = Math.min(...matches.map((match) => match.distance));
+  const winners = matches.filter((match) => match.distance === nearest);
+  if (winners.length === 1) return winners[0]!.resolve();
+  if (paneId)
+    return {
+      actor: {
+        label: `unverified ${paneId}`,
+        verified: false,
+        pane_id: paneId,
+      },
+    };
   return {
-    actor: { label: `unverified ${paneId}`, verified: false, pane_id: paneId },
+    actor: { label: `unverified herdr-core ${coreTerminal}`, verified: false },
   };
 }
 
