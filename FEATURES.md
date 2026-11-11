@@ -1952,6 +1952,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   `hc server status`, which would start a core: a stopped core stays **Not
   running · retrying** and nothing starts. The core's socket directory must be
   yours and private (mode 0700), otherwise World refuses it.
+  Herdr (TUI) and core coexist with full read-write support. Use the latest
+  core; World neither pins versions nor withholds writes pending certification.
+  The manual and daily [release smoke](docs/development.md#herdr-core-release-smoke)
+  downloads the newest official release and flags failures for investigation;
+  it never changes the installed runtime or its permissions. World’s installers
+  still set up the TUI; install and start core separately before adding it here.
   **A Windows host over SSH** needs Windows PowerShell (`powershell.exe`,
   built into Windows) and SSH key login. World runs two fixed PowerShell
   scripts there and nothing else: one reads

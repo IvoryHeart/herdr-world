@@ -3,7 +3,8 @@
 World needs full support for herdr-core beside the existing Herdr TUI runtime:
 observe, start, talk to, answer, review and control agents across Town, Board,
 Desk, Spaces and Chat. The owner asked for support built "deeper, not bigger".
-This change fixes the contract before product code depends on it.
+This active change records the contract, implemented providers and remaining
+owner acceptance before the feature merges to main.
 
 ## Owner rulings (2026-11-11; verbatim)
 
@@ -31,17 +32,23 @@ and O8's per-harness delivery channels. World uses core send/keys for every
 harness and checks the occupant and foreground immediately before sending. The
 remaining queued-send replacement race belongs to core (Q3); this design does
 not claim that World's pre-send check closes it. Core is a Herdr runtime for
-World's runtime-selection rules. Installation alone selects the launch default;
+World's runtime-selection rules. A connected, available core selects the launch
+default;
 it does not authorize automatic startup during observation/reconnect.
 
 ## What Changes
 
-- Record one provider design and ownership decisions M1–M11 in [design](design.md).
-- Define observable runtime requirements in the [delta specification](specs/herdr-core-runtime/spec.md).
-- Carry the phases, acceptance and upstream questions in [delivery](delivery.md),
-  with implementation progress in [tasks](tasks.md).
-- Add one composed delta/authority/recovery Quint model, its replay adapter,
-  mutation controls and verification registration. See [model contract](model.md).
+- Add an existing-only local/Unix SSH/Windows SSH core provider alongside TUI,
+  with an ordered bounded mirror and per-connection runtime authority.
+- Show both providers in World, with core status, app placement, shared seen and
+  favourite, live observation, typing/mobile uploads and event-driven push.
+- Route launches, native send/keys, kills, files/Git/worktrees, asks, Ranger,
+  task summaries, spawn stamps and the room shell through their owning provider.
+- Check ordering and authority through the composed model and production replay,
+  recorded release traffic, fault injection, differential and browser tests.
+- Add a manual/daily newest-release smoke and current usage guides, with one
+  consolidated feature changelog. Record owner checks in [delivery](delivery.md)
+  and implementation progress in [tasks](tasks.md).
 
 ## Capabilities
 
@@ -52,18 +59,22 @@ it does not authorize automatic startup during observation/reconnect.
 
 ### Modified Capabilities
 
-None in this PR. Future implementation must preserve runtime-federation,
-world-protocol-identity, world-effects and world-surfaces contracts while adding
-the second provider. This change remains active until that implementation and
-its consumer acceptance are complete.
+Existing runtime-federation, world-protocol-identity, world-effects and
+world-surfaces behavior stays qualified by the original connection and runtime.
+The core provider adds a second runtime; it does not widen raw RPC or LAN shell
+access. This change remains active until independent mapping review, required
+CI and owner device acceptance are complete.
 
 ## Impact
 
-This PR delivers planning and bounded design evidence only. It changes no product
-code, setup, browser flow or runtime dependency. README, FEATURES and TUTORIAL
-remain accurate for shipping behavior; each implementation phase updates those
-guides when its behavior ships. There is no live-core or device-conformance claim.
+Product code and focused tests now implement P1–P5. README, FEATURES and TUTORIAL
+explain how users connect core, select a runtime, observe/type and share seen.
+The latest-release smoke is an optional external drift signal; required tests use
+fakes and recorded traffic and skip live-core checks without an explicit binary.
+No core version is pinned and no smoke outcome removes read-write support.
 
-The model composes the maintained runtime lease and opaque effect recovery
-predicates. Coverage remains pending for a production core provider; passing
-design replay cannot promote its future implementation mapping.
+Coverage Q52/Q53 connects the composed and shared-seen models to production
+consumers. Independent review and real official-app/device acceptance remain
+separate: a live-core or model pass does not certify desktop/phone visibility,
+Windows SSH ACLs or the residual core-owned Q3/Q7/Q11 races. Current specs are
+synchronized and this change archived only after acceptance.

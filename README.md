@@ -7,7 +7,8 @@
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
 hosts, see their agents together in Town, Board or Desk, and chat with them,
 start them from profiles, and use independently qualified terminals, files and
-changes on desktop or mobile. **Requires a running Herdr server.**
+changes on desktop or mobile. **Requires a running Herdr (TUI) or herdr-core
+runtime.** Both can run side by side.
 
 ## What's new in 0.3.0
 
@@ -92,7 +93,9 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
 
 ## Quick start
 
-1. Herdr World runs on [Herdr](https://herdr.dev). A fresh standalone install
+1. Herdr World supports [Herdr](https://herdr.dev) and
+   [herdr-core](https://github.com/herdrdev/herdr-core) (see [Runtimes](#runtimes)).
+   A fresh standalone install
    reuses existing Herdr and installs it only if missing; Homebrew does the same
    on first World launch. Set `HERDR_WORLD_SKIP_HERDR=1` to skip this setup.
    With npm or a Windows archive, run `herdr-world herdr upgrade --install`
@@ -145,6 +148,34 @@ login` is done for the user running World; add Jira in **Settings → Sources**.
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.
 
+## Runtimes
+
+**herdr-core** is the primary runtime for new agents when a core connection is
+ready. Start core separately with `hc server start`, then choose **Hosts → Manage
+connections → Add herdr-core**. Choose this computer, a Unix SSH host or a Windows SSH host; use
+the core session name (`default` unless you changed `HC_SESSION`). World connects
+to that existing core and never starts it during connection or retry. World’s
+installers still set up the Herdr TUI; they do not install core.
+
+Open **New agent** and choose an installed harness. The launcher says **Starts
+in herdr-core**; agents are kept and placed in Herdr’s apps. Plain shells start
+unplaced. To use the **Herdr TUI** for a launch, choose one of its rooms instead.
+Each runtime has its own connection; Town, Board, Desk and Needs you show both.
+World’s core rooms and Herdr’s app layout are arranged separately.
+
+Core agents support Chat, answers, Terminal, Files, Changes, worktrees and the
+room’s floating shell. World reads core’s status and uses its send/keys for every
+supported harness. Looking at an agent’s foreground Town or Board peek clears
+Done in Herdr’s apps too; favourites are shared. Watching a terminal follows the
+app’s grid without resizing it; typing takes the size, and leaving gives it back.
+
+Use the latest core: World applies no version pin or certification gate and
+retains full read-write support after updates. A daily and manually dispatched
+[release smoke](./docs/development.md#herdr-core-release-smoke) flags drift.
+If a send times out, its result is **uncertain**; check the agent before sending
+again. See [Features](./FEATURES.md#remote-multi-client-and-operations) for limits,
+replacement checks, SSH requirements and recovery.
+
 ## Install as a PWA
 
 **PWA installation is recommended for daily use:** a separate app window without
@@ -179,7 +210,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Development
 
-Use Bun 1.4.4 or newer and a running Herdr server:
+Use Bun 1.4.4 or newer and a running Herdr or herdr-core runtime:
 
 ```bash
 bun install --frozen-lockfile

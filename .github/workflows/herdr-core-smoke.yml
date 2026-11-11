@@ -1,0 +1,62 @@
+name: Herdr-core release smoke
+
+on:
+    workflow_dispatch:
+    schedule:
+        - cron: "37 6 * * *"
+
+# A drift signal, separate from required offline Delivery checks. Schedules run
+# the default branch after merge; dispatch can select a candidate branch.
+permissions:
+    contents: read
+
+concurrency:
+    group: herdr-core-smoke-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    smoke:
+        name: Newest herdr-core release
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.4"
+                  no-cache: true
+            - run: bun install --frozen-lockfile
+            - name: Enable PowerShell relay checks
+              run: |
+                  pwsh_path="$(command -v pwsh)"
+                  echo "HERDR_WORLD_PWSH=$pwsh_path" >> "$GITHUB_ENV"
+            - name: Download newest core and run all live suites
+              env:
+                  HERDR_CORE_SMOKE_REPORT: ${{ runner.temp }}/herdr-core-release.json
+              shell: bash
+              run: |
+                  set -o pipefail
+                  bun scripts/herdr-core-smoke.ts 2>&1 | tee "$RUNNER_TEMP/herdr-core-smoke.log"
+            - name: Summarize release evidence
+              if: always()
+              shell: bash
+              run: |
+                  echo '## Newest herdr-core release smoke' >> "$GITHUB_STEP_SUMMARY"
+                  echo 'Full read-write support is unchanged by this drift signal. See the artifact for release identity and live-test results; download failures are in the log.' >> "$GITHUB_STEP_SUMMARY"
+                  if test -f "$RUNNER_TEMP/herdr-core-release.json"; then
+                    echo '```json' >> "$GITHUB_STEP_SUMMARY"
+                    cat "$RUNNER_TEMP/herdr-core-release.json" >> "$GITHUB_STEP_SUMMARY"
+                    echo '```' >> "$GITHUB_STEP_SUMMARY"
+                  fi
+            - name: Retain smoke evidence
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: herdr-core-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+                  path: |
+                      ${{ runner.temp }}/herdr-core-release.json
+                      ${{ runner.temp }}/herdr-core-smoke.log
+                  if-no-files-found: warn
+                  retention-days: 14
