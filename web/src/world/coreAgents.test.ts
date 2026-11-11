@@ -7,7 +7,7 @@ import {
 } from "../../../server/src/herdr-core/topology";
 import { worldRuntimeRegistry } from "../../../server/src/world/runtime-registry";
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
-import { deskAgents } from "./handoffs";
+import { deskAgents, pollingTargets } from "./handoffs";
 import { needsYouItems } from "./needsYou";
 import {
   officeCreationActionState,
@@ -234,6 +234,28 @@ describe("core agents in World's views", () => {
         .filter((leaf) => leaf.connectionId === "box-core")
         .map((leaf) => leaf.agentName),
     ).toEqual(["reviewer", "builder", "scout"]);
+  });
+
+  test("view-only core agents take no receipt or screen read slot", async () => {
+    const world = await worldOf();
+    const blocked = world.leaves.find(
+      (leaf) => leaf.connectionId === "box-core" && leaf.status === "blocked",
+    )!;
+    const tui = (status: WorldLeafObject["status"]) =>
+      world.leaves.find(
+        (leaf) => leaf.connectionId === "tui" && leaf.status === status,
+      )!;
+    const crowd = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ...blocked,
+        id: `${blocked.id}-${index}`,
+      }));
+    // Receipts: 40 blocked core agents would fill every slot before a done TUI agent.
+    expect(pollingTargets([...crowd(40), tui("done")])).toEqual([tui("done")]);
+    // Screens: 16 blocked core agents would crowd out a working TUI agent.
+    expect(pollingTargets([...crowd(16), tui("working")], 16)).toEqual([
+      tui("working"),
+    ]);
   });
 
   test("room actions stay visible, disabled with the reason", async () => {

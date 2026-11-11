@@ -550,6 +550,30 @@ function NeedsYouViewOnly({
         ) : null,
       )}
       <p className="needs-you-empty">{viewOnlyMessage(leaf)}</p>
+      {kind === "needs" ? (
+        // Answering comes with core sends: the field stays, disabled with why.
+        <form
+          aria-label={`Question from ${name}`}
+          className="needs-you-field"
+          onSubmit={(event) => event.preventDefault()}
+        >
+          <input
+            aria-label={`Your answer to ${name}`}
+            placeholder={`Answer ${name}…`}
+            title={reason}
+            disabled
+          />
+          <button
+            type="submit"
+            className="needs-you-icon needs-you-send"
+            aria-label="Send answer"
+            title={reason}
+            disabled
+          >
+            <SendHorizontal size={16} aria-hidden="true" />
+          </button>
+        </form>
+      ) : null}
       <div className="needs-you-replies">
         <small className="needs-you-notice">{reason}</small>
         <button type="button" disabled title={reason}>

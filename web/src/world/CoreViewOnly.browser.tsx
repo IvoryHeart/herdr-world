@@ -178,6 +178,19 @@ async function run() {
     item?.textContent?.includes(CORE_VIEW_ONLY_REASON) === true,
     "Needs you says why it is view only",
   );
+  const answerField = item?.querySelector<HTMLInputElement>(
+    ".needs-you-field input",
+  );
+  const answerSend = item?.querySelector<HTMLButtonElement>(
+    ".needs-you-field .needs-you-send",
+  );
+  check(
+    answerField?.disabled === true &&
+      answerField.title === CORE_VIEW_ONLY_REASON &&
+      answerSend?.disabled === true &&
+      answerSend.title === CORE_VIEW_ONLY_REASON,
+    "Needs you keeps the answer field and Send, disabled with the reason",
+  );
   const disabled = [...document.querySelectorAll<HTMLButtonElement>("button")]
     .filter((button) => button.disabled)
     .map((button) => button.title);
