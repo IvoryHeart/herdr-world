@@ -1,4 +1,4 @@
-import { expect, mock, test } from "bun:test";
+import { afterAll, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { LaunchTarget } from "./agentProfiles";
 import type { WorldObject, WorldSpaceObject } from "./worldObject";
@@ -42,8 +42,18 @@ if (process.env.HERDR_LAUNCH_TARGET_DOM_TEST !== "1") {
       return { kinds: [], readiness: [], skills: [] };
     },
   }));
+  const coreControl = await import("./coreControl");
+  const coreLaunches: unknown[] = [];
+  mock.module("./coreControl", () => ({
+    ...coreControl,
+    launchInCore: async (target: unknown, choice: unknown) => {
+      coreLaunches.push({ target, choice });
+      return { status: "started", terminal_id: "t9", placed: false };
+    },
+  }));
   const { store } = await import("../store");
   const { AgentLauncherDialog } = await import("./AgentLauncherDialog");
+  afterAll(() => browser.happyDOM.close());
 
   test("explicit room and generation never fall back; a deliberate choice and generic launch may select a current room", async () => {
     const space = (
@@ -169,7 +179,100 @@ if (process.env.HERDR_LAUNCH_TARGET_DOM_TEST !== "1") {
       await act(async () => root.unmount());
       store.createQualifiedTab = original;
       host.remove();
-      await browser.happyDOM.close();
+    }
+  });
+
+  test("core first: with no room asked for, a new agent starts in herdr-core", async () => {
+    const tui = {
+      id: "tui:w1",
+      connectionId: "tui",
+      generation: 3,
+      nativeId: "w1",
+      label: "web",
+      hostLabel: "This computer",
+      actionable: true,
+      stale: false,
+    } as WorldSpaceObject;
+    const core = {
+      ...tui,
+      id: "box-core:hc:unplaced",
+      connectionId: "box-core",
+      generation: 5,
+      nativeId: "hc:unplaced",
+      label: "box",
+      actionable: false,
+      viewOnly: "World can't open herdr-core terminals or chat with them yet",
+      coreControl: true,
+    } as WorldSpaceObject;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    catalogs.length = 0;
+    let closed = 0;
+    try {
+      await act(async () =>
+        root.render(
+          h(AgentLauncherDialog, {
+            world: { spaces: [tui, core] } as WorldObject,
+            initial: {},
+            onOpen() {
+              throw new Error("a core terminal has no World window yet");
+            },
+            onEditProfiles() {},
+            onClose() {
+              closed += 1;
+            },
+          }),
+        ),
+      );
+      expect(host.querySelector("select")!.value).toBe(core.id);
+      expect(host.textContent).toContain(
+        "Starts in herdr-core. Herdr's apps show the agent and keep it running",
+      );
+      expect(host.textContent).toContain("not shown in Herdr's apps");
+      expect(catalogs).toEqual([
+        {
+          connectionId: "box-core",
+          generation: 5,
+          workspaceId: "hc:unplaced",
+          runtime: "herdr-core",
+        } as LaunchTarget,
+      ]);
+      const terminal = host.querySelector<HTMLButtonElement>(
+        ".agent-launcher-card",
+      )!;
+      await act(async () => terminal.click());
+      expect(coreLaunches).toEqual([
+        {
+          target: {
+            connectionId: "box-core",
+            generation: 5,
+            workspaceId: "hc:unplaced",
+            workspaceLabel: "box",
+            runtime: "herdr-core",
+          },
+          choice: { label: "Shell", text: "", shell: true },
+        },
+      ]);
+      expect(closed).toBe(1);
+      // The TUI stays a per-launch choice: an asked-for TUI room is kept.
+      await act(async () =>
+        root.render(
+          h(AgentLauncherDialog, {
+            key: "tui",
+            world: { spaces: [tui, core] } as WorldObject,
+            initial: { connectionId: "tui", generation: 3, workspaceId: "w1" },
+            onOpen() {},
+            onEditProfiles() {},
+            onClose() {},
+          }),
+        ),
+      );
+      expect(host.querySelector("select")!.value).toBe(tui.id);
+      expect(host.textContent).toContain("Starts in Herdr (TUI).");
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
     }
   });
 }

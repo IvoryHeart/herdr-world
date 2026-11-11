@@ -14,7 +14,8 @@ module herdr_core_runtime {
     connected: bool, ready: bool, running: bool, changes: int, replaced: bool,
     captured: bool, leaseGen: int, leaseOwner: int, leaseEpoch: int, session: int,
     pending: bool, queued: bool, uncertain: bool, attempts: int, delivered: int,
-    admitted: bool, dispatched: bool, published: bool, safe: bool }
+    admitted: bool, dispatched: bool, published: bool, safe: bool,
+    child: bool, planned: bool, confirmedChild: bool, confirmedOccupant: int, killed: bool }
   var family: str
   var c: State
   var op: str
@@ -30,7 +31,10 @@ module herdr_core_runtime {
       connected: false, ready: false, running: true, changes: 0, replaced: false,
       captured: false, leaseGen: -1, leaseOwner: -1, leaseEpoch: -1, session: -1,
       pending: false, queued: false, uncertain: false, attempts: 0, delivered: 0,
-      admitted: false, dispatched: false, published: false, safe: true },
+      admitted: false, dispatched: false, published: false, safe: true,
+      // Terminal 1, once born, is a child core ends with terminal 0 (M7).
+      child: choice >= 2, planned: false, confirmedChild: false,
+      confirmedOccupant: -1, killed: false },
     op' = "init", target' = 0,
     }
   }
@@ -158,15 +162,46 @@ module herdr_core_runtime {
       safe: c.safe and not(replay) }, "recover", 0),
   }
   action queuedReplacement = all { c.queued, replace }
+  // Sampling weight only: a child core starts after World planned a kill.
+  action childAfterPlan = all { c.planned, not(c.killed), emit(1, "create") }
+  // M7: World names everything a kill ends from its observation; the kill
+  // is sent only while that observation still matches what was confirmed:
+  // no unconfirmed child would die and the terminal runs the same program.
+  // A child core creates after World's last applied event is outside this
+  // fence (core has no conditional kill), like the Q3 queued-send window.
+  action plan = all {
+    family == "authority", c.ready, c.mirror[0].alive, not(c.planned),
+    change({ ...c, planned: true, confirmedChild: c.child and c.mirror[1].alive,
+      confirmedOccupant: c.mirror[0].occupant }, "plan", 0),
+  }
+  action kill = all {
+    c.planned, not(c.killed),
+    val unconfirmed = c.child and c.mirror[1].alive and not(c.confirmedChild)
+    val replaced = c.mirror[0].occupant != c.confirmedOccupant
+    val allowed = c.ready and c.mirror[0].alive and
+      (not(unconfirmed) or fault("unconfirmed-cascade")) and
+      (not(replaced) or fault("stale-confirmation"))
+    // Core ends the terminal and the child that dies with it: a silent
+    // source change, so World reacquires before showing the result.
+    val ended = c.source.replaceAt(0, { ...c.source[0], alive: false })
+    val cascaded = if (c.child) ended.replaceAt(1, { ...ended[1], alive: false }) else ended
+    change({ ...c, killed: allowed,
+      source: if (allowed) cascaded else c.source,
+      history: if (allowed) c.history.replaceAt(c.seq, cascaded) else c.history,
+      ready: c.ready and not(allowed),
+      safe: c.safe and (not(allowed) or not(unconfirmed or replaced)) }, "kill", 0),
+  }
   action choices = {
     nondet t = Set(0, 1).oneOf()
     nondet kind = Set("create", "remove", "x", "y").oneOf()
     any { connect, baseline, emit(t, kind), receive, missed, drop, heartbeat,
-      disconnect, restart, absent, switchProfile, replace, capture, dispatch, deliver, complete, recover }
+      disconnect, restart, absent, switchProfile, replace, capture, dispatch, deliver, complete, recover,
+      plan, kill }
   }
   // Simulation weights do not multiply the checker's successor computation.
   action step = if (CHECKING) choices else any { choices, capture, dispatch,
-    queuedReplacement, queuedReplacement, queuedReplacement, queuedReplacement }
+    queuedReplacement, queuedReplacement, queuedReplacement, queuedReplacement,
+    plan, plan, kill, kill, childAfterPlan, childAfterPlan, childAfterPlan }
   val projection = not(c.ready) or (c.connected and c.cursor >= 0 and
     c.cursor <= c.seq and c.mirror == c.history[c.cursor])
   val safety = c.safe and projection and c.attempts <= 1 and
@@ -180,4 +215,7 @@ module herdr_core_runtime {
   val replacementFenced = op == "dispatch" and c.replaced and c.attempts == 0
   val queueFenced = op == "deliver" and c.replaced and c.delivered == 0
   val existingOnly = op == "connect" and not(c.running) and not(c.connected)
+  val cascadeConfirmed = op == "kill" and c.killed and c.child and c.confirmedChild
+  val unconfirmedRefused = op == "kill" and not(c.killed) and c.child and
+    c.mirror[1].alive and not(c.confirmedChild)
 }

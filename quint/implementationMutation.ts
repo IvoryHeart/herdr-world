@@ -27,7 +27,9 @@ export type ImplementationFault =
   | "core-heartbeat"
   | "core-stale"
   | "core-missed-cut"
-  | "core-view-retired";
+  | "core-view-retired"
+  | "core-kill-pid-only"
+  | "core-kill-plan-once";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
@@ -40,6 +42,8 @@ export async function mutateImplementation(
       "core-stale",
       "core-missed-cut",
       "core-view-retired",
+      "core-kill-pid-only",
+      "core-kill-plan-once",
     ],
     "effect-recovery": [
       "primary",
@@ -94,11 +98,13 @@ export async function mutateImplementation(
       ? "server/src/storage/effect-transitions.ts"
       : name === "herdr-core-runtime" && fault === "core-view-retired"
         ? "server/src/herdr-core/topology.ts"
-        : name === "observation-base" && fault === "incarnation-reset"
-          ? "web/src/world/observationBase.ts"
-          : name === "creation-flow" && fault === "admission-fence"
-            ? "web/src/world/createdTerminalAdmission.ts"
-            : owners[name];
+        : name === "herdr-core-runtime" && fault.startsWith("core-kill-")
+          ? "server/src/herdr-core/kill-plan.ts"
+          : name === "observation-base" && fault === "incarnation-reset"
+            ? "web/src/world/observationBase.ts"
+            : name === "creation-flow" && fault === "admission-fence"
+              ? "web/src/world/createdTerminalAdmission.ts"
+              : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "herdr-core-runtime") {
@@ -118,6 +124,16 @@ export async function mutateImplementation(
       ],
       // The read model shows a retired mirror as current.
       "core-view-retired": ["if (!source.actionable)", "if (false)"],
+      // A kept replacement that reuses the pid passes as the confirmed program.
+      "core-kill-pid-only": [
+        "(was.pid !== ending.pid || (was.occupant ?? null) !== ending.occupant)",
+        "was.pid !== ending.pid",
+      ],
+      // A child started after the confirmation passes unnamed.
+      "core-kill-plan-once": [
+        "if (!was)\n      return `${ending.name ?? ending.address} would end too, and you did not confirm it.`;",
+        "if (!was) continue;",
+      ],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);

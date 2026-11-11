@@ -66,12 +66,18 @@ type WorldObjectBase = {
    * visible, disabled with this reason.
    */
   viewOnly?: string;
+  /**
+   * A live herdr-core node: World starts agents and shells there, manages
+   * its own rooms and ends terminals through world.core.* (coreControl.ts),
+   * never through the TUI paths `actionable` admits.
+   */
+  coreControl?: true;
   capabilities: WorldActionCapabilities;
 };
 
 /** The one reason every view-only control shows. */
 export const CORE_VIEW_ONLY_REASON =
-  "View only: World can't control herdr-core agents yet";
+  "World can't open herdr-core terminals or chat with them yet";
 
 /** Live in the view: current, whether or not World can control it. */
 export function isLiveNode(node: {
@@ -627,7 +633,8 @@ function* constructHost(
   const live =
     connectionHostState === "active" ||
     connectionHostState === "ready-inactive";
-  // Observed, never controlled: World has no control path to herdr-core yet.
+  // herdr-core: World starts, places and ends terminals there (coreControl),
+  // but has no terminal stream or chat for them yet.
   const viewOnly =
     live && connection.runtime === "herdr-core"
       ? CORE_VIEW_ONLY_REASON
@@ -790,7 +797,7 @@ function* constructHost(
         selectedHost,
         stale: connection.stale || !live,
         actionable: operational,
-        ...(viewOnly ? { viewOnly } : {}),
+        ...(viewOnly ? { viewOnly, coreControl: true as const } : {}),
         capabilities,
         pane,
         workspaceId: pane.workspace_id,
@@ -842,7 +849,7 @@ function* constructHost(
       selectedHost,
       stale: connection.stale || !live,
       actionable: operational,
-      ...(viewOnly ? { viewOnly } : {}),
+      ...(viewOnly ? { viewOnly, coreControl: true as const } : {}),
       capabilities: actionCapabilities("space", connectionHostState, viewOnly),
       workspace,
       tabs: tabsByWorkspace.get(workspace.workspace_id) ?? [],
@@ -882,7 +889,7 @@ function* constructHost(
     selectedHost,
     stale: connection.stale || !live,
     actionable: operational,
-    ...(viewOnly ? { viewOnly } : {}),
+    ...(viewOnly ? { viewOnly, coreControl: true as const } : {}),
     capabilities: hostCapabilities,
     connection,
     spaces,

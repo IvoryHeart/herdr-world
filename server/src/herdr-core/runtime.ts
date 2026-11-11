@@ -8,8 +8,11 @@ import {
   type CoreEventLine,
   CoreClient,
   CoreIncompatibleError,
+  type CoreRunRequest,
   type CoreServerStatus,
+  type CoreTerminalRecord,
   CoreUnavailableError,
+  type CoreWriteMethod,
 } from "./client";
 import {
   type CoreEpoch,
@@ -28,7 +31,13 @@ import {
   summarizeMirror,
 } from "./observations";
 import { connectUnixStream, type CoreStreamConnector } from "./stream";
-import { CoreFirstSight, coreRuntimeReader, coreTopology } from "./topology";
+import {
+  CoreFirstSight,
+  coreRuntimeReader,
+  coreTopology,
+  nextCoreSummaryExpiry,
+} from "./topology";
+import type { CoreTopologyDocument } from "./layout";
 import type { RuntimeReader } from "../adapters/runtime-ports";
 
 /** How World reaches a core: never by starting one. */
@@ -51,6 +60,8 @@ export type CoreRuntimeOptions = {
   firstSight?: CoreFirstSight;
   /** What World's views are built from changed (not every event does). */
   onReadModel?(): void;
+  /** World's own layout of a core (M1), by its durable ID. */
+  layout?(coreId: string): CoreTopologyDocument | null;
   livenessIntervalMs?: number;
   livenessTimeoutMs?: number;
   publishDelayMs?: number;
@@ -73,6 +84,27 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
   readScreen(
     fence: CoreOperationFence<CoreConnectionRuntime>,
   ): Promise<Record<string, unknown>>;
+  /** World's layout of this core changed: re-read the read model. */
+  layoutChanged(): void;
+  /**
+   * Writes, each under the authority its fence captured: the original lease,
+   * core process and (for kill and label) occupant are checked right before
+   * the request is sent and again when its reply is published. A refusal
+   * before sending sends nothing; a refusal after it means core acted but
+   * World no longer publishes or follows up (`CoreFenceError` at
+   * `publication`). A lost reply is `CoreWriteUncertainError`.
+   */
+  offers(method: CoreWriteMethod): boolean;
+  /** Not checked at publication: the caller checks before following up. */
+  run(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    request: CoreRunRequest,
+  ): Promise<CoreTerminalRecord>;
+  kill(fence: CoreOperationFence<CoreConnectionRuntime>): Promise<void>;
+  label(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    labels: Record<string, string>,
+  ): Promise<void>;
 };
 
 /** Admits a screen read of `address` under `lease` and runs it fenced. */
@@ -144,15 +176,32 @@ export function createCoreConnectionRuntime(
   // Labels, turns and folders shape Town and Needs you but not the
   // Connections page: World re-reads whenever its own rows would differ.
   let lastReadModel = "";
+  let expiryTimer: ReturnType<typeof setTimeout> | null = null;
+  const layout = () =>
+    epoch ? (options.layout?.(epoch.coreId) ?? null) : null;
   const readModelChanged = () => {
     if (!options.context.isCurrent() || !mirror.baselined) return;
+    const at = now();
+    const terminals = mirror.terminals();
     const key = JSON.stringify(
-      coreTopology(
-        mirror.terminals(),
-        coreSummary?.name ?? "herdr-core",
+      coreTopology(terminals, coreSummary?.name ?? "herdr-core", {
         firstSight,
-      ),
+        world: layout(),
+        coreId: epoch?.coreId,
+        now: at,
+      }),
     );
+    // A summary disappears when it expires, with no event to say so.
+    if (expiryTimer) clearTimeout(expiryTimer);
+    expiryTimer = null;
+    const expiry = epoch
+      ? nextCoreSummaryExpiry(epoch.coreId, terminals, at)
+      : null;
+    if (expiry !== null && !failed && !stopped)
+      expiryTimer = setTimeout(
+        readModelChanged,
+        Math.min(Math.max(expiry - at + 1, 1), 2 ** 31 - 1),
+      );
     if (key === lastReadModel) return;
     lastReadModel = key;
     options.onReadModel?.();
@@ -276,11 +325,28 @@ export function createCoreConnectionRuntime(
     return screen;
   }
 
+  async function write<T>(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    needsOccupant: boolean,
+    send: (client: CoreClient) => Promise<T>,
+    publish = true,
+  ): Promise<T> {
+    if (fence.lease.runtime !== self || (needsOccupant && !fence.occupant))
+      throw new CoreFenceError("dispatch", "lease");
+    const current = client;
+    if (!current) throw new CoreFenceError("dispatch", "not-actionable");
+    fence.check("dispatch");
+    const result = await send(current);
+    if (publish) fence.check("publication");
+    return result;
+  }
+
   function stop() {
     if (stopTask) return stopTask;
     stopped = true;
     abort.abort(new Error("connection runtime retired"));
     if (liveness) clearInterval(liveness);
+    if (expiryTimer) clearTimeout(expiryTimer);
     if (!failed) withdraw();
     client?.close("connection runtime retired");
     stopTask = options.transport.close().catch(() => undefined);
@@ -312,8 +378,25 @@ export function createCoreConnectionRuntime(
       },
       coreName: () => coreSummary?.name ?? "herdr-core",
       firstSight,
+      world: layout,
+      coreId: () => epoch?.coreId ?? null,
+      now,
     }),
     readScreen,
+    layoutChanged: () => readModelChanged(),
+    offers: (method) => client?.offers(method) ?? false,
+    // A started program exists whatever happens next: its record is returned
+    // and the caller decides what it may still publish.
+    run: (fence, request) =>
+      write(fence, false, (current) => current.run(request), false),
+    kill: (fence) =>
+      write(fence, true, async (current) => {
+        await current.kill(fence.occupant!.address);
+      }),
+    label: (fence, labels) =>
+      write(fence, true, async (current) => {
+        await current.label(fence.occupant!.address, labels);
+      }),
     startTransport,
     startBackground,
     stop,

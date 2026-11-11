@@ -1,0 +1,7 @@
+.core-kill-list ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  max-height: 40vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}

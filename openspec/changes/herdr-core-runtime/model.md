@@ -53,7 +53,7 @@ and cleanup failures abort; only the named `core.state` mismatch kills a control
 Required replay witnesses cover ordered deltas, missed cuts, gap retirement,
 reconnect, occupant refusal, late queued refusal and an absent endpoint per seed.
 
-The maintained command checks all eleven plan mutants individually and requires
+The maintained command checks all thirteen plan mutants individually and requires
 both an invariant violation and rejection of that counterexample by correct replay:
 
 | Mutant | Forbidden outcome |
@@ -69,6 +69,8 @@ both an invariant violation and rejection of that counterexample by correct repl
 | stale-session | Old session dispatch after replacement and fresh acquisition |
 | ungated-queue | Queued source input delivered to a replacement occupant |
 | heartbeat-ignored | Jump leaves the host actionable |
+| unconfirmed-cascade | Kill sent while an observed die-with-parent child is unconfirmed |
+| stale-confirmation | Kill sent after the confirmed program was replaced |
 
 A separate ungated-fake control must diverge on a valid model trace. It checks
 adapter sensitivity without claiming mutation of a production core provider.
@@ -113,6 +115,29 @@ which may lag a queued removal or replacement. Mapping the production
 occupant at dispatch from the actual one at core's input boundary (where the
 owner rulings place the queued-send window, upstream Q3). Until then, fence
 behaviour is checked by unit and integration tests, not by this replay.
+
+## Kill confirmation (issue #869, M7)
+
+The authority family chooses at init whether terminal 1, once created, is a
+child core ends with terminal 0 (`child`). `plan` records what World's
+production plan names from its mirror (`confirmedChild`, `confirmedOccupant`);
+`kill` plans again from the current mirror and is sent only while it is ready,
+the terminal is live, no observed child is unconfirmed and the occupant is the
+confirmed one. A sent kill ends terminal 0 and the child as a silent source
+change that withdraws readiness, as `replace` does. `safe` holds over World's
+observation: a child core creates after World's last applied event is outside
+this fence, since core has no conditional kill (upstream Q11), like the Q3
+queued-send window. A sampling-only weight (`childAfterPlan`) creates the child
+after planning; it adds no transition.
+
+The replay adapter decides `plan` and `kill` with the production
+`coreKillPlan` and `coreKillRefusal` (`server/src/herdr-core/kill-plan.ts`) over
+the production mirror, whose child record carries core's `parent` and
+`die_with_parent`. A kept replacement keeps pid 100 and changes only argv, so a
+pid-only confirmation diverges. Witnesses `cascadeConfirmed` and
+`unconfirmedRefused` are required per seed. Two production negative controls
+must be rejected through `core.state`: a refusal that compares pids only and one
+that lets an unconfirmed terminal pass.
 
 ## Bounds, evidence and acceptance
 

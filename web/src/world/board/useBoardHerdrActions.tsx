@@ -21,6 +21,7 @@ import {
 } from "../herdrOrder";
 import { spaceRoomActionCapabilities } from "../officeRoomActions";
 import {
+  closeCoreRoomConfirmed,
   closeRoom,
   renameRoom,
   RoomRenameCloseDialogs,
@@ -244,17 +245,22 @@ export function useBoardHerdrActions({
       ? space
       : null;
   };
-  const openDialog = (mode: RoomDialog["mode"], space: BoardWorkspace) =>
-    setDialog({
-      mode,
-      workspaceKey: space.key,
-      label: space.label,
-      target: {
-        connectionId: space.connectionId,
-        generation: space.generation,
-        workspaceId: space.nativeId,
-      },
-    });
+  const openDialog = (mode: RoomDialog["mode"], space: BoardWorkspace) => {
+    const target: RoomRenameCloseTarget = {
+      connectionId: space.connectionId,
+      generation: space.generation,
+      workspaceId: space.nativeId,
+      ...(spaceRoomActionCapabilities(space.space).core
+        ? { core: true as const }
+        : {}),
+    };
+    // A core room names every terminal that ends in its own confirmation.
+    if (mode === "close" && target.core) {
+      void closeCoreRoomConfirmed(target, space.label);
+      return;
+    }
+    setDialog({ mode, workspaceKey: space.key, label: space.label, target });
+  };
 
   /* ---------- Herdr's order ---------- */
   const run = async (label: string, move: () => Promise<string | null>) => {
@@ -371,7 +377,7 @@ export function useBoardHerdrActions({
               Close…
             </button>
           ) : null}
-          {can.rename && host
+          {can.rename && host && !can.core
             ? orderButtons(
                 host.workspaceKeys,
                 space.key,

@@ -8,6 +8,7 @@ export type WorldBrowserEntry =
   | "AnswerDeliveries"
   | "NeedsYouCard"
   | "CoreViewOnly"
+  | "CoreControl"
   | "QuestionCards";
 export type WorldBrowserBundle = {
   directory: string;

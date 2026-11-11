@@ -31,7 +31,7 @@ import {
   connectionRecoveryFingerprint,
   type TuiConnectionProfile,
 } from "../connections/profiles";
-import { createCoreConnections } from "../herdr-core/connections";
+import { composeCore } from "../rpc/core";
 import { ownedBy, worldRuntimeRegistry } from "../world/runtime-registry";
 import {
   createLegacyRoutingLogger,
@@ -297,8 +297,16 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
+  const { core, rpc: coreRpc } = composeCore({
+    logger: logger.child("connections"),
+    changed: publishConnectionsChanged,
+    observed: publishWorldInvalidation,
+    profiles: () => connectionProfiles,
+    topology: storage.coreTopology,
+  });
   /** The agent bin: reversible holding, a scheduled bus, then a durable fenced close. */
   const bin = createBinService({
+    core: () => core.manager, // herdr-core closes are native kills
     incarnation: serviceIncarnation,
     clock,
     scheduler,
@@ -344,14 +352,6 @@ async function compose(
     );
     broadcast(line, "world-invalidation");
   }
-
-  // herdr-core: never started by World; its agents join the read model only.
-  const core = createCoreConnections({
-    logger: logger.child("connections"),
-    changed: publishConnectionsChanged,
-    observed: publishWorldInvalidation,
-    profiles: () => connectionProfiles,
-  });
 
   const connectionFailureReporter = connectionFailureReporters(
     logger.child("connections"),
@@ -782,6 +782,7 @@ async function compose(
     connectionManager,
     connectionProfiles,
     coreFixture: core.fixture,
+    core: coreRpc,
     focusedAcquisition,
     agentActivity,
     deskWatches,

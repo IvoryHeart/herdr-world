@@ -1,4 +1,5 @@
 import {
+  type BinCoreConfirmation,
   BIN_BUS_INTERVAL_MS,
   BIN_BUS_TRIP_MS,
   type BinEntry,
@@ -316,6 +317,39 @@ export class WorldBinRegistry {
   }
 }
 
+function coreConfirmation(value: unknown): BinCoreConfirmation {
+  const input = (value ?? {}) as Record<string, unknown>;
+  if (
+    typeof input.core_id !== "string" ||
+    !input.core_id ||
+    input.core_id.length > MAX_ID_LENGTH ||
+    !Array.isArray(input.terminals) ||
+    input.terminals.length === 0 ||
+    input.terminals.length > 256
+  )
+    throw new Error("invalid bin target");
+  return {
+    core_id: input.core_id,
+    terminals: input.terminals.map((item) => {
+      const t = (item ?? {}) as Record<string, unknown>;
+      if (typeof t.address !== "string" || t.address.length > MAX_ID_LENGTH)
+        throw new Error("invalid bin target");
+      if (
+        t.occupant !== undefined &&
+        t.occupant !== null &&
+        (typeof t.occupant !== "string" || t.occupant.length > 128)
+      )
+        throw new Error("invalid bin target");
+      return {
+        address: t.address,
+        pid: typeof t.pid === "number" ? t.pid : null,
+        occupant: typeof t.occupant === "string" ? t.occupant : null,
+        ...(t.remote === true ? { remote: true } : {}),
+      };
+    }),
+  };
+}
+
 function normalize(input: BinAdd): Omit<BinEntry, "id" | "riding"> {
   for (const key of [
     "connection_id",
@@ -339,9 +373,12 @@ function normalize(input: BinAdd): Omit<BinEntry, "id" | "riding"> {
           .slice(0, MAX_LABEL_LENGTH)
           .join("")
       : "";
+  const core = input.runtime === "herdr-core";
+  const confirmation = core ? coreConfirmation(input.confirmation) : null;
   return {
     connection_id: input.connection_id,
     connection_generation: input.connection_generation,
+    ...(confirmation ? { runtime: "herdr-core" as const, confirmation } : {}),
     workspace_id: input.workspace_id,
     tab_id: input.tab_id,
     pane_id: input.pane_id,

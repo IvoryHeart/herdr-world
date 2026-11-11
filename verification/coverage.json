@@ -2943,7 +2943,7 @@
       "area": "Herdr-core composed ordering and runtime authority",
       "owner": "quint/herdr-core-runtime.qnt",
       "requirement": "openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md",
-      "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, pre-send occupant fencing, core-side source-queue fencing assumed under Q3 and existing-only connect",
+      "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, pre-send occupant fencing, core-side source-queue fencing assumed under Q3, existing-only connect and kill confirmation (M7: no observed unconfirmed descendant and no replaced program ends; a child created after World's last observation is core's under Q11)",
       "existingTests": [
         "quint/herdr-core-runtime.test.ts",
         "server/src/herdr-core/mirror.test.ts",
@@ -2952,11 +2952,15 @@
         "server/src/herdr-core/topology.test.ts",
         "server/src/herdr-core/world-read-model.test.ts",
         "web/src/world/coreAgents.test.ts",
-        "server/src/herdr-core/windows.test.ts"
+        "server/src/herdr-core/windows.test.ts",
+        "server/src/herdr-core/operations.test.ts",
+        "server/src/world/bin-close-core.test.ts",
+        "server/src/rpc/core.test.ts",
+        "web/src/world/coreControl.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "composed-design-model",
-      "assessment": "Bounded composed model. Replay drives the production CoreMirror for every mirror, cursor and readiness transition and the production read model for World's views, with five production negative controls (gap, heartbeat, stale, missed cut, view of a retired mirror); capture/dispatch/deliver still use the design seam because the model checks the source occupant at dispatch while World can check only its observation. Foundation delivery history is not acceptance of this contract.",
+      "assessment": "Bounded composed model. Replay drives the production CoreMirror for every mirror, cursor and readiness transition and the production read model for World's views, with five production negative controls (gap, heartbeat, stale, missed cut, view of a retired mirror); plan/kill replay the production coreKillPlan and coreKillRefusal with two production controls (pid-only confirmation, unconfirmed terminal passed); capture/dispatch/deliver still use the design seam because the model checks the source occupant at dispatch while World can check only its observation. Foundation delivery history is not acceptance of this contract.",
       "status": "pending",
       "remaining": "Independent design/model review; a model split of observed versus actual occupant before the production fence can replace the authority seam; harness, browser/app and owner real-Windows relay acceptance in P2–P6. The Windows relay realizes the same existing-only connect (a probe reads core.lock, then one relay per generation opens exactly that pipe); it adds no ordering rule, so the model is unchanged and its evidence is the fake-pipe and real-PowerShell tests.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
@@ -2975,7 +2979,11 @@
           "server/src/herdr-core/topology.test.ts",
           "server/src/herdr-core/world-read-model.test.ts",
           "web/src/world/coreAgents.test.ts",
-          "server/src/herdr-core/windows.test.ts"
+          "server/src/herdr-core/windows.test.ts",
+          "server/src/herdr-core/operations.test.ts",
+          "server/src/world/bin-close-core.test.ts",
+          "server/src/rpc/core.test.ts",
+          "web/src/world/coreControl.test.ts"
         ],
         "checks": [
           "bun quint/run.ts --case herdr-core-runtime",

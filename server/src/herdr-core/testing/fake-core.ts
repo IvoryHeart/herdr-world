@@ -44,6 +44,8 @@ export type FakeCoreOptions = {
   heartbeatMs?: number;
   /** Splits every outbound write into pieces of at most this many bytes. */
   splitWritesAt?: number;
+  /** A core that offers no writes (to test negotiation, not a version pin). */
+  observeOnly?: boolean;
 };
 
 export class FakeCore {
@@ -310,8 +312,10 @@ export class FakeCore {
   }
 
   /** A kept terminal whose program is lost gets a shell at the same address. */
-  replaceWithShell(address: string): void {
+  /** `reusePid`: the shell gets the lost program's pid, as an OS may give. */
+  replaceWithShell(address: string, { reusePid = false } = {}): void {
     const record = this.require(address);
+    const lostPid = record.pid;
     record.pid = null;
     delete record.foreground;
     this.emit("lost", address, {
@@ -320,7 +324,8 @@ export class FakeCore {
       signal: 9,
       finished_ms: null,
     });
-    const shellPid = 60_000 + this.seq;
+    const shellPid =
+      reusePid && typeof lostPid === "number" ? lostPid : 60_000 + this.seq;
     Object.assign(record, {
       pid: shellPid,
       argv: ["/bin/sh"],
@@ -337,6 +342,42 @@ export class FakeCore {
     });
     this.emit("restarted", address, { ...record });
   }
+
+  /**
+   * The program ends (it exits, or its pane is closed in an app), as core's
+   * `record_finish` does: `finished`, then every live child that dies with
+   * it, depth first (`notes.rs` Orphaned).
+   */
+  finish(address: string, reason = "exited"): void {
+    const record = this.require(address);
+    if (record.state !== "live") return;
+    Object.assign(record, {
+      state: "finished",
+      reason,
+      exit_code: reason === "exited" ? 0 : null,
+      signal: reason === "killed" ? 9 : null,
+      finished_ms: Date.now(),
+      status: null,
+      pid: null,
+    });
+    delete record.foreground;
+    this.emit("finished", address, {
+      reason,
+      exit_code: record.exit_code,
+      signal: record.signal,
+      finished_ms: record.finished_ms,
+    });
+    for (const child of [...this.terminals.values()])
+      if (
+        child.state === "live" &&
+        child.die_with_parent === true &&
+        child.parent === address
+      )
+        this.finish(child.address, "killed");
+  }
+
+  /** Holds the next `terminal.kill`/`terminal.run` reply (a lost reply). */
+  dropNextWriteReply = false;
 
   remove(address: string): void {
     this.require(address);
@@ -472,6 +513,9 @@ export class FakeCore {
         "terminal.get",
         "terminal.read",
         "events.subscribe",
+        ...(this.options.observeOnly
+          ? []
+          : ["terminal.run", "terminal.kill", "terminal.label"]),
       ],
       features: [
         "framed",
@@ -572,9 +616,83 @@ export class FakeCore {
         else send();
         return;
       }
-      default:
-        return error(-32601, `method not found: ${request.method}`, "usage");
+      case "terminal.run": {
+        if (this.options.observeOnly) break;
+        const p = request.params ?? {};
+        if (p.caller !== undefined || p.on !== undefined)
+          return error(-32602, "fixture refuses caller/on", "invalid_params");
+        const argv = Array.isArray(p.argv) ? (p.argv as string[]) : [];
+        const parent = typeof p.parent === "string" ? p.parent : null;
+        if (
+          typeof p.name === "string" &&
+          [...this.terminals.values()].some(
+            (t) => t.state === "live" && t.name === p.name,
+          )
+        )
+          return error(
+            -32000,
+            `a live terminal is already named "${p.name}"`,
+            "name_taken",
+          );
+        const pid = 70_000 + this.nextTerminal;
+        const program = argv[0] ?? "/bin/sh";
+        const address = this.create({
+          argv: argv.length ? argv : ["/bin/sh"],
+          cwd: typeof p.cwd === "string" ? p.cwd : "/tmp/example",
+          labels: Object.fromEntries(
+            Object.entries((p.labels as Record<string, string>) ?? {}).filter(
+              ([, v]) => v !== "",
+            ),
+          ),
+          keep: p.keep === true,
+          name: typeof p.name === "string" ? p.name : null,
+          parent,
+          die_with_parent: parent !== null && p.outlive_parent !== true,
+          notify: p.no_notify !== true,
+          pid,
+          foreground: {
+            pid,
+            name: program.split("/").pop() ?? "sh",
+            argv: argv.length ? argv : ["/bin/sh"],
+            cwd: typeof p.cwd === "string" ? p.cwd : "/tmp/example",
+          },
+        });
+        if (this.dropNextWriteReply) {
+          this.dropNextWriteReply = false;
+          return;
+        }
+        return reply({ ...this.terminals.get(address)! });
+      }
+      case "terminal.kill": {
+        if (this.options.observeOnly) break;
+        const address = String(request.params?.terminal);
+        if (!this.terminals.has(address))
+          return error(-32000, `no terminal ${address}`, "not_found");
+        this.finish(address, "killed");
+        if (this.dropNextWriteReply) {
+          this.dropNextWriteReply = false;
+          return;
+        }
+        return reply({ ...this.terminals.get(address)! });
+      }
+      case "terminal.label": {
+        if (this.options.observeOnly) break;
+        const address = String(request.params?.terminal);
+        const record = this.terminals.get(address);
+        if (!record)
+          return error(-32000, `no terminal ${address}`, "not_found");
+        const next = { ...record.labels };
+        for (const [k, v] of Object.entries(
+          (request.params?.labels as Record<string, string>) ?? {},
+        ))
+          if (v === "") delete next[k];
+          else next[k] = v;
+        record.labels = next;
+        this.emit("labels", address, { labels: next });
+        return reply({ ...record });
+      }
     }
+    return error(-32601, `method not found: ${request.method}`, "usage");
   }
 
   private queued(sub: Subscriber): number {

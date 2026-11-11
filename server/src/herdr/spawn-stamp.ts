@@ -3,6 +3,12 @@ import { createSshTunnelManager } from "../bridge/ssh-tunnel";
 import { loadServerConfig, type ServerConfig } from "../config/server-config";
 import { runProcess } from "../utils/process-utils";
 import {
+  type CoreCallerClaim,
+  coreClaimInEnvironment,
+  verifyCoreCaller,
+} from "../herdr-core/cli-claim";
+import { CORE_SPAWNED_BY_LABEL } from "../herdr-core/labels";
+import {
   SPAWNED_BY_TERMINAL_TOKEN,
   SPAWNED_BY_TOKEN,
 } from "../../../shared/relations";
@@ -33,6 +39,9 @@ export type SpawnStampCommandDeps = {
   } | null;
   log?: (message: string) => void;
   error?: (message: string) => void;
+  /** Test seam: the verified herdr-core terminal this command runs in. */
+  verifyCore?: () => Promise<CoreCallerClaim>;
+  env?: Record<string, string | undefined>;
 };
 
 function usage(message: string): never {
@@ -42,7 +51,10 @@ function help() {
   return `Usage: herdr-world stamp CHILD_PANE PARENT_PANE [--session NAME] [--ssh-host DESTINATION]
 
 Records on CHILD_PANE that PARENT_PANE spawned it, as Herdr pane metadata
-(spawned_by and spawned_by_terminal). World then groups the two.`;
+(spawned_by and spawned_by_terminal). World then groups the two.
+
+Inside a herdr-core terminal, CHILD and PARENT are that core's terminals
+(t7): the stamp is a display label on the child, never a native parent.`;
 }
 
 async function paneOf(call: Call, paneId: string) {
@@ -145,6 +157,24 @@ export async function stampLaunchParent(
   );
 }
 
+/**
+ * The herdr-core stamp (M7): a `herdr-world.spawned-by` label on the child.
+ * Both terminals must be live on the core this command verifiably runs in.
+ */
+async function stampCoreSpawn(claim: CoreCallerClaim, command: Command) {
+  if (command.child === command.parent) usage("a pane cannot spawn itself");
+  for (const address of [command.child, command.parent]) {
+    const record = await claim.client.getTerminal(address).catch(() => null);
+    if (record?.state !== "live")
+      usage(`herdr-core has no live terminal ${address}`);
+  }
+  await claim.client.label(command.child, {
+    [CORE_SPAWNED_BY_LABEL]: command.parent,
+  });
+}
+
+const CORE_ADDRESS = /^t[1-9][0-9]{0,9}$/;
+
 export async function runSpawnStampCommand(
   args: string[],
   appVersion: string,
@@ -163,6 +193,32 @@ export async function runSpawnStampCommand(
   }
   if (!command) {
     log(help());
+    return 0;
+  }
+  if (
+    !command.transportArgs.length &&
+    CORE_ADDRESS.test(command.child) &&
+    CORE_ADDRESS.test(command.parent) &&
+    coreClaimInEnvironment(dependencies.env ?? process.env)
+  ) {
+    let claim: CoreCallerClaim | null = null;
+    try {
+      claim = await (dependencies.verifyCore ?? (() => verifyCoreCaller()))();
+      await stampCoreSpawn(claim, command);
+    } catch (cause) {
+      error(`stamp: ${(cause as Error).message}`);
+      return 1;
+    } finally {
+      claim?.client.close();
+    }
+    log(
+      JSON.stringify({
+        pane_id: command.child,
+        spawned_by: command.parent,
+        runtime: "herdr-core",
+        status: "stamped",
+      }),
+    );
     return 0;
   }
   let tunnel:

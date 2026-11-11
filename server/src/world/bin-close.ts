@@ -10,6 +10,14 @@ import {
 } from "../storage/world-protocol";
 import { BinCloseNotRecorded, NOT_RECORDED } from "./bin";
 import type { LedgerStore } from "./world-ledger";
+import type { ReadyRuntimeLease } from "../connections/manager";
+import type { CoreConnectionRuntime } from "../herdr-core/runtime";
+import {
+  BIN_CORE_CLOSE_VERB,
+  binCoreCloseEffect,
+  CORE_GONE_REASONS,
+  coreBinCloseDriver,
+} from "./bin-close-core";
 
 export const BIN_CLOSE_VERB = "world.bin.close";
 
@@ -179,6 +187,9 @@ export function createBinCloser(deps: {
   retryDelay?(attempt: number): number;
   /** Any close's durable state moved (tests wait on it instead of sleeping). */
   changed?(): void;
+  /** herdr-core connections: their closes are native kills (M7). */
+  hasCoreConnection?(id: string): boolean;
+  coreLease?(id: string): ReadyRuntimeLease<CoreConnectionRuntime> | null;
 }) {
   const current = (connectionId: string, generation: number) => {
     const lease = deps.lease(connectionId);
@@ -198,6 +209,18 @@ export function createBinCloser(deps: {
       workspaceId,
     );
 
+  const coreDriver = coreBinCloseDriver({
+    incarnation: deps.incarnation,
+    hasConnection: (id) => deps.hasCoreConnection?.(id) ?? false,
+    lease: (id) => deps.coreLease?.(id) ?? null,
+    stopped: () => stopped,
+  });
+  const verbs = [BIN_CLOSE_VERB, BIN_CORE_CLOSE_VERB] as const;
+  type Verb = (typeof verbs)[number];
+  const hasLaneConnection = (verb: Verb, id: string) =>
+    verb === BIN_CORE_CLOSE_VERB
+      ? (deps.hasCoreConnection?.(id) ?? false)
+      : deps.hasConnection(id);
   const driver: EffectDriver = {
     authorize: (entry) => {
       const target = captured(entry);
@@ -428,6 +451,7 @@ export function createBinCloser(deps: {
     };
   }
 
+  /** One lane per verb and connection, keyed `${verb} ${connection}`. */
   const runners = new Map<string, ReturnType<typeof createEffectRunner>>();
   /** Bin entry ID to its outbox ID, while World waits for its outcome. */
   const watched = new Map<string, string>();
@@ -435,22 +459,28 @@ export function createBinCloser(deps: {
   const commits = new Set<Promise<void>>();
 
   /** One lane per connection; none is opened once World is stopping. */
-  const runner = (connectionId: string) => {
-    let lane = runners.get(connectionId);
+  const runner = (connectionId: string, verb: Verb = BIN_CLOSE_VERB) => {
+    const key = `${verb} ${connectionId}`;
+    let lane = runners.get(key);
     if (!lane && !stopped) {
       lane = createEffectRunner({
         store: deps.effects(),
         clock: deps.clock,
         scheduler: deps.scheduler,
         incarnation: deps.incarnation,
-        verb: BIN_CLOSE_VERB,
+        verb,
         // A host that blips and returns should not wait minutes for its close.
         retryDelay:
           deps.retryDelay ??
           ((attempt) =>
             Math.min(60_000, 2_000 * 2 ** Math.max(0, attempt - 1))),
         connection: connectionId,
-        driver: (verb) => (verb === BIN_CLOSE_VERB ? driver : undefined),
+        driver: (kind) =>
+          kind === BIN_CLOSE_VERB
+            ? driver
+            : kind === BIN_CORE_CLOSE_VERB
+              ? coreDriver
+              : undefined,
         changed: () =>
           queueMicrotask(() => {
             report();
@@ -458,13 +488,13 @@ export function createBinCloser(deps: {
           }),
         log: (error) => deps.log(`Bin close failed: ${String(error)}`),
       });
-      runners.set(connectionId, lane);
+      runners.set(key, lane);
     }
     return lane;
   };
 
   /** Connections no longer configured, whose closes can only end unsent. */
-  const orphans = new Set<string>();
+  const orphans = new Map<string, { verb: Verb; id: string }>();
   let sweeping = false;
   /**
    * Their closes are settled one connection at a time (each lane drains,
@@ -474,14 +504,14 @@ export function createBinCloser(deps: {
     if (sweeping) return;
     sweeping = true;
     try {
-      for (const id of orphans) {
-        orphans.delete(id);
+      for (const [key, { verb, id }] of orphans) {
+        orphans.delete(key);
         if (stopped) return;
-        const lane = runner(id);
+        const lane = runner(id, verb);
         if (!lane) return;
         await lane.wake();
-        if (!deps.hasConnection(id)) {
-          runners.delete(id);
+        if (!hasLaneConnection(verb, id)) {
+          runners.delete(key);
           await lane.stop();
         }
       }
@@ -495,15 +525,18 @@ export function createBinCloser(deps: {
    * end: configured hosts get a lane each; removed ones join the sweep.
    */
   const discover = async () => {
-    let after = "";
-    for (;;) {
-      if (stopped) return;
-      const page = (await deps.effects().lanes?.(BIN_CLOSE_VERB, after)) ?? [];
-      for (const id of page)
-        if (deps.hasConnection(id)) void runner(id)?.wake();
-        else if (!runners.has(id)) orphans.add(id);
-      if (page.length < EFFECT_LANE_PAGE) break;
-      after = page[page.length - 1]!;
+    for (const verb of verbs) {
+      let after = "";
+      for (;;) {
+        if (stopped) return;
+        const page = (await deps.effects().lanes?.(verb, after)) ?? [];
+        for (const id of page)
+          if (hasLaneConnection(verb, id)) void runner(id, verb)?.wake();
+          else if (!runners.has(`${verb} ${id}`))
+            orphans.set(`${verb} ${id}`, { verb, id });
+        if (page.length < EFFECT_LANE_PAGE) break;
+        after = page[page.length - 1]!;
+      }
     }
     void sweep();
   };
@@ -521,7 +554,8 @@ export function createBinCloser(deps: {
     for (const binId of [...unconfirmed]) {
       try {
         const effect = (await deps.outbox().forRecord(binId)).find(
-          (item) => item.kind === BIN_CLOSE_VERB,
+          (item) =>
+            item.kind === BIN_CLOSE_VERB || item.kind === BIN_CORE_CLOSE_VERB,
         );
         unconfirmed.delete(binId);
         if (effect) watched.set(binId, effect.id);
@@ -562,7 +596,8 @@ export function createBinCloser(deps: {
         binId,
         entry.state === "delivered"
           ? { result: "closed", closed_tab: receipt?.closed_tab === true }
-          : !entry.ever_dispatched && GONE_REASONS.has(reason)
+          : !entry.ever_dispatched &&
+              (GONE_REASONS.has(reason) || CORE_GONE_REASONS.has(reason))
             ? { result: "gone", closed_tab: false, detail: reason }
             : {
                 result: entry.ever_dispatched ? "uncertain" : "refused",
@@ -586,7 +621,11 @@ export function createBinCloser(deps: {
         try {
           await deps.ledger().update(
             () => {},
-            entries.map((entry) => binCloseEffect(entry, deps.incarnation)),
+            entries.map((entry) =>
+              entry.runtime === "herdr-core"
+                ? binCoreCloseEffect(entry, deps.incarnation)
+                : binCloseEffect(entry, deps.incarnation),
+            ),
           );
         } catch (error) {
           // Refused before it was sent: known not to be recorded.
@@ -602,8 +641,13 @@ export function createBinCloser(deps: {
         // Only these connections gained work; an unconfirmed write is found
         // by the same full discovery a start uses.
         if (acknowledged)
-          for (const id of new Set(entries.map((entry) => entry.connection_id)))
-            void runner(id)?.wake();
+          for (const entry of entries)
+            void runner(
+              entry.connection_id,
+              entry.runtime === "herdr-core"
+                ? BIN_CORE_CLOSE_VERB
+                : BIN_CLOSE_VERB,
+            )?.wake();
         else void discover();
         report();
       })();
@@ -621,8 +665,10 @@ export function createBinCloser(deps: {
      */
     async wake(connectionId?: string) {
       if (stopped) return;
-      const lane = connectionId ? runners.get(connectionId) : undefined;
-      if (lane) return void lane.wake();
+      const lanes = connectionId
+        ? verbs.flatMap((verb) => runners.get(`${verb} ${connectionId}`) ?? [])
+        : [];
+      if (lanes.length) return void lanes.forEach((lane) => lane.wake());
       // At start, or a host without a lane yet: look in storage.
       await discover();
     },

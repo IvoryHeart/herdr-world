@@ -7,6 +7,16 @@ import type {
 import { CoreUnavailableError } from "./client";
 import { harnessName, harnessOfArgv } from "./harness";
 import type { CoreMirror, CoreMirrorTerminal } from "./mirror";
+import { coreSpawnedBy, coreSummaryOf } from "./labels";
+import type {
+  CoreTopologyDocument,
+  CoreTopologyRoom,
+  CoreTopologyTab,
+} from "./layout";
+import {
+  SPAWNED_BY_TERMINAL_TOKEN,
+  SPAWNED_BY_TOKEN,
+} from "../../../shared/relations";
 
 /**
  * World's read model of one core: the same rows the TUI runtime lists, so
@@ -21,6 +31,10 @@ import type { CoreMirror, CoreMirrorTerminal } from "./mirror";
  *   Herdr's shared seen rule (`herdr.seen`) deciding done versus idle.
  */
 export const CORE_UNPLACED_WORKSPACE = "hc:unplaced";
+/** World's main room of a core: where unplaced terminals show. */
+export const CORE_MAIN_ROOM = "main";
+const WORLD_ROOM_PREFIX = "hc:room:";
+const WORLD_TAB_PREFIX = "world-";
 const SPACE_PREFIX = "hc:space:";
 const TAB_SUFFIX = ":tab:";
 const DEFAULT_TAB = "main";
@@ -32,8 +46,6 @@ export type CoreAgentStatus =
   | "blocked"
   | "done"
   | "unknown";
-
-type Placement = { space: string | null; tab: string | null; where: string };
 
 function text(value: unknown, max = MAX_LABEL): string | null {
   if (typeof value !== "string") return null;
@@ -143,15 +155,32 @@ export function coreHarness(record: CoreMirrorTerminal): string | null {
   return report ? (report.app?.toLowerCase() ?? "agent") : null;
 }
 
+type Placement =
+  | { kind: "world"; room: CoreTopologyRoom; tab: CoreTopologyTab }
+  | { kind: "app"; space: string; tab: string | null; where: string }
+  | { kind: "unplaced" };
+
+/**
+ * Where a terminal shows. World's own layout (M1) first; then the Herdr
+ * app's placement labels; a sub-agent joins its nearest placed ancestor;
+ * anything else is in the core's main room.
+ */
 function placementOf(
   record: CoreMirrorTerminal,
   byAddress: ReadonlyMap<string, CoreMirrorTerminal>,
+  worldTabs: ReadonlyMap<
+    string,
+    { room: CoreTopologyRoom; tab: CoreTopologyTab }
+  >,
 ): Placement {
   let current: CoreMirrorTerminal | undefined = record;
   for (let depth = 0; current && depth < 32; depth += 1) {
+    const world = worldTabs.get(current.address);
+    if (world) return { kind: "world", ...world };
     const space = label(current, "herdr.space");
     if (space)
       return {
+        kind: "app",
         space,
         tab: label(current, "herdr.tab"),
         where: label(current, "where") ?? "",
@@ -159,7 +188,7 @@ function placementOf(
     const parent: unknown = current.parent;
     current = typeof parent === "string" ? byAddress.get(parent) : undefined;
   }
-  return { space: null, tab: null, where: "" };
+  return { kind: "unplaced" };
 }
 
 /** `where` is the app's "<space> / <tab>" caption; it only names rooms. */
@@ -180,37 +209,126 @@ export type CoreTopology = {
   agents: RuntimeRow[];
 };
 
+/** The workspace ID World's read model gives a room of its own layout. */
+export function coreRoomWorkspaceId(room: {
+  id: string;
+  app_space?: string;
+}): string {
+  if (room.app_space) return SPACE_PREFIX + room.app_space;
+  return room.id === CORE_MAIN_ROOM
+    ? CORE_UNPLACED_WORKSPACE
+    : WORLD_ROOM_PREFIX + room.id;
+}
+
+/** The room of World's layout a read-model workspace ID names, if any. */
+export function coreRoomOfWorkspace(
+  world: CoreTopologyDocument,
+  workspaceId: string,
+):
+  | { kind: "world"; room: CoreTopologyRoom }
+  | { kind: "main" }
+  | { kind: "app"; space: string }
+  | null {
+  if (workspaceId === CORE_UNPLACED_WORKSPACE) return { kind: "main" };
+  if (workspaceId.startsWith(SPACE_PREFIX)) {
+    const space = workspaceId.slice(SPACE_PREFIX.length);
+    return space ? { kind: "app", space } : null;
+  }
+  if (!workspaceId.startsWith(WORLD_ROOM_PREFIX)) return null;
+  const id = workspaceId.slice(WORLD_ROOM_PREFIX.length);
+  const room = world.rooms.find((r) => r.id === id && !r.app_space);
+  return room ? { kind: "world", room } : null;
+}
+
+export type CoreTopologyOptions = {
+  firstSight?: Pick<CoreFirstSight, "turn">;
+  /** World's own layout of this core (M1). */
+  world?: CoreTopologyDocument | null;
+  coreId?: string;
+  now?: number;
+};
+
 export function coreTopology(
   terminals: readonly CoreMirrorTerminal[],
   coreName: string,
-  firstSight: Pick<CoreFirstSight, "turn"> = { turn: () => null },
+  options: CoreTopologyOptions | Pick<CoreFirstSight, "turn"> = {},
 ): CoreTopology {
+  const {
+    firstSight = { turn: () => null },
+    world = null,
+    coreId = world?.core_id ?? "",
+    now = Date.now(),
+  } = "turn" in options ? { firstSight: options } : options;
   const local = terminals
     .filter((record) => !record.remote && record.state === "live")
     .sort((a, b) => addressOrder(a.address, b.address));
   const byAddress = new Map(local.map((record) => [record.address, record]));
+  const worldTabs = new Map<
+    string,
+    { room: CoreTopologyRoom; tab: CoreTopologyTab }
+  >();
+  for (const room of world?.rooms ?? [])
+    for (const tab of room.tabs)
+      for (const address of tab.terminals)
+        if (byAddress.has(address) && !worldTabs.has(address))
+          worldTabs.set(address, { room, tab });
   const workspaces = new Map<string, WorkspaceRow>();
   const tabs = new Map<string, RuntimeRow>();
+  // World's rooms come first, in its order, even when empty. An app space
+  // World keeps terminals in is named by the app once a terminal says so.
+  const appNamed = new Set<string>();
+  for (const room of world?.rooms ?? []) {
+    const id = coreRoomWorkspaceId(room);
+    workspaces.set(id, {
+      workspace_id: id,
+      label: room.label || (room.id === CORE_MAIN_ROOM ? coreName : "Room"),
+      focused: false,
+    });
+  }
   const panes: TerminalRow[] = [];
   const agents: RuntimeRow[] = [];
   for (const record of local) {
-    const place = placementOf(record, byAddress);
-    const [spaceName, tabName] = whereParts(place.where);
-    const workspaceId = place.space
-      ? SPACE_PREFIX + place.space
-      : CORE_UNPLACED_WORKSPACE;
-    const tabId = `${workspaceId}${TAB_SUFFIX}${place.space ? (place.tab ?? DEFAULT_TAB) : DEFAULT_TAB}`;
-    if (!workspaces.has(workspaceId))
+    const place = placementOf(record, byAddress, worldTabs);
+    let workspaceId: string;
+    let tabId: string;
+    let workspaceLabel: string;
+    let tabLabel: string;
+    if (place.kind === "world") {
+      workspaceId = coreRoomWorkspaceId(place.room);
+      tabId = `${workspaceId}${TAB_SUFFIX}${WORLD_TAB_PREFIX}${place.tab.id}`;
+      workspaceLabel = place.room.label || coreName;
+      tabLabel = place.tab.label || workspaceLabel;
+    } else if (place.kind === "app") {
+      const [spaceName, tabName] = whereParts(place.where);
+      workspaceId = SPACE_PREFIX + place.space;
+      tabId = `${workspaceId}${TAB_SUFFIX}${place.tab ?? DEFAULT_TAB}`;
+      workspaceLabel = spaceName ?? "Herdr space";
+      tabLabel = tabName ?? spaceName ?? "Tab";
+    } else {
+      workspaceId = CORE_UNPLACED_WORKSPACE;
+      tabId = `${workspaceId}${TAB_SUFFIX}${DEFAULT_TAB}`;
+      workspaceLabel = coreName;
+      tabLabel = coreName;
+    }
+    const known = workspaces.get(workspaceId);
+    if (!known)
       workspaces.set(workspaceId, {
         workspace_id: workspaceId,
-        label: place.space ? (spaceName ?? "Herdr space") : coreName,
+        label: workspaceLabel,
         focused: false,
       });
+    else if (
+      place.kind === "app" &&
+      workspaceLabel !== "Herdr space" &&
+      !appNamed.has(workspaceId)
+    )
+      known.label = workspaceLabel;
+    if (place.kind === "app") appNamed.add(workspaceId);
     if (!tabs.has(tabId))
       tabs.set(tabId, {
         tab_id: tabId,
         workspace_id: workspaceId,
-        label: place.space ? (tabName ?? spaceName ?? "Tab") : coreName,
+        label: tabLabel,
         focused: false,
       });
     const report = coreStatusReport(record);
@@ -218,6 +336,13 @@ export function coreTopology(
     const foreground = object(record.foreground);
     const cwd = text(record.cwd, 4096);
     const foregroundCwd = text(foreground?.cwd, 4096);
+    // Spawn stamps (M7): core's own parent for a child it started, else
+    // World's display stamp. Both are display relations.
+    const parent =
+      typeof record.parent === "string" && byAddress.has(record.parent)
+        ? record.parent
+        : coreSpawnedBy(record);
+    const summary = coreId ? coreSummaryOf(coreId, record, now) : null;
     const pane: TerminalRow = {
       pane_id: record.address,
       terminal_id: record.address,
@@ -227,6 +352,14 @@ export function coreTopology(
       runtime: "herdr-core",
       ...(cwd ? { cwd } : {}),
       ...(foregroundCwd ? { foreground_cwd: foregroundCwd } : {}),
+      ...(parent && parent !== record.address
+        ? {
+            tokens: {
+              [SPAWNED_BY_TOKEN]: parent,
+              [SPAWNED_BY_TERMINAL_TOKEN]: parent,
+            },
+          }
+        : {}),
       agent_status: harness
         ? coreAgentStatus(record, firstSight.turn(record.address))
         : "unknown",
@@ -234,6 +367,7 @@ export function coreTopology(
     panes.push(pane);
     if (!harness) continue;
     pane.agent = harness;
+    if (summary) pane.task_summary = summary.text;
     // The program's own words for why it waits: Needs you shows them.
     if (report?.word === "blocked" && report.kind)
       pane.blocked_kind = report.kind;
@@ -257,11 +391,31 @@ export function coreTopology(
   };
 }
 
+/** When the next shown summary expires: the read model changes then. */
+export function nextCoreSummaryExpiry(
+  coreId: string,
+  terminals: readonly CoreMirrorTerminal[],
+  now: number,
+): number | null {
+  let next: number | null = null;
+  for (const record of terminals) {
+    if (record.remote || record.state !== "live") continue;
+    const summary = coreSummaryOf(coreId, record, now);
+    if (summary && (next === null || summary.expiresMs < next))
+      next = summary.expiresMs;
+  }
+  return next;
+}
+
 export type CoreReadModelSource = {
   readonly mirror: CoreMirror;
   readonly actionable: boolean;
   coreName(): string;
   firstSight?: Pick<CoreFirstSight, "turn">;
+  /** World's own layout of this core and the core's ID, when known. */
+  world?(): CoreTopologyDocument | null;
+  coreId?(): string | null;
+  now?(): number;
 };
 
 /**
@@ -272,11 +426,12 @@ export type CoreReadModelSource = {
 export function coreReadModel(source: CoreReadModelSource): CoreTopology {
   if (!source.actionable)
     throw new CoreUnavailableError("herdr-core observation is not current");
-  return coreTopology(
-    source.mirror.terminals(),
-    source.coreName(),
-    source.firstSight,
-  );
+  return coreTopology(source.mirror.terminals(), source.coreName(), {
+    firstSight: source.firstSight,
+    world: source.world?.() ?? null,
+    coreId: source.coreId?.() ?? undefined,
+    now: source.now?.(),
+  });
 }
 
 /** The TUI runtime's list operations, answered by `coreReadModel`. */

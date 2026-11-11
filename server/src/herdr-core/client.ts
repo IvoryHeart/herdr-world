@@ -20,6 +20,17 @@ const OBSERVATION_METHODS = [
   "events.subscribe",
 ] as const;
 type ObservationMethod = (typeof OBSERVATION_METHODS)[number];
+/**
+ * The writes World makes, each built from a typed verb below: start a
+ * program (`terminal.run`), end one (`terminal.kill`) and set labels.
+ * Never `terminal.send`/`keys` (the delivery item), `machine.*`, `file.*`,
+ * `server.stop`/`restart` or `terminal.put`.
+ */
+export type CoreWriteMethod =
+  | "terminal.run"
+  | "terminal.kill"
+  | "terminal.label";
+type CoreMethod = ObservationMethod | CoreWriteMethod;
 /** Required for observation; absence is an unsupported operation, not a pin. */
 export const REQUIRED_CORE_METHODS: readonly string[] = OBSERVATION_METHODS;
 export const REQUIRED_CORE_FEATURES = ["framed", "events"] as const;
@@ -88,12 +99,120 @@ export class CoreUnavailableError extends Error {
   }
 }
 
+/**
+ * A write whose reply never came (timeout or a closed connection after it
+ * was sent): core may or may not have done it. Shown as uncertain and never
+ * retried automatically.
+ */
+export class CoreWriteUncertainError extends Error {
+  readonly outcome = "uncertain";
+  constructor(method: string, options?: ErrorOptions) {
+    super(`herdr-core may have done ${method}; its reply never came`, options);
+    this.name = "CoreWriteUncertainError";
+  }
+}
+
+/** The connected core does not offer an operation World needs. */
+export class CoreUnsupportedError extends Error {
+  readonly retryable = false;
+  constructor(version: string, method: string) {
+    super(`herdr-core ${version} does not offer ${method}`);
+    this.name = "CoreUnsupportedError";
+  }
+}
+
 export class CoreIncompatibleError extends Error {
   readonly retryable = false;
   constructor(message: string) {
     super(message);
     this.name = "CoreIncompatibleError";
   }
+}
+
+/**
+ * What World asks core to start. Every native parameter is set explicitly,
+ * so a core whose defaults change (parent death, notes) behaves the same:
+ * no `caller` (it would make World's terminal the parent), no parent, no
+ * notes, and `keep` exactly as the launch chose it. `argv` is empty (the
+ * host's configured shell) or starts with an absolute executable: a bare
+ * program name would first load a core template of that name.
+ */
+export type CoreRunRequest = {
+  argv: string[];
+  /** Absent: the core's own folder. */
+  cwd?: string;
+  env?: Record<string, string>;
+  labels?: Record<string, string>;
+  keep: boolean;
+  /** Unique among live terminals; core refuses a taken one (`name_taken`). */
+  name?: string;
+  size?: { cols: number; rows: number };
+};
+
+/**
+ * Labels World may write: Herdr's shared ones, the app's `where` caption
+ * (written once at launch) and World's own namespace.
+ */
+const WRITABLE_LABEL =
+  /^(?:herdr\.(?:seen|pinned|space|tab)|where|herdr-world\.[a-z][a-z0-9-]{0,31})$/;
+const MAX_LABEL_VALUE = 1024;
+const MAX_ARG = 16 * 1024;
+
+function checkLabels(labels: Record<string, string>) {
+  const entries = Object.entries(labels);
+  if (entries.length > 16) throw new CoreProtocolError("too many labels");
+  for (const [key, value] of entries) {
+    if (!WRITABLE_LABEL.test(key))
+      throw new CoreProtocolError(`World does not write label ${key}`);
+    if (typeof value !== "string" || value.length > MAX_LABEL_VALUE)
+      throw new CoreProtocolError(`label ${key} is too long`);
+  }
+  return Object.fromEntries(entries);
+}
+
+/** Fresh native `terminal.run` parameters from a typed request. */
+export function coreRunParams(request: CoreRunRequest) {
+  const argv = request.argv.map(String);
+  if (argv.length > 0 && !/^\/[^\0]*$/.test(argv[0]!))
+    throw new CoreProtocolError("a program must be an absolute executable");
+  if (argv.some((arg) => arg.length > MAX_ARG || arg.includes("\0")))
+    throw new CoreProtocolError("a program argument is invalid");
+  if (request.cwd !== undefined && !/^\/[^\0]*$/.test(request.cwd))
+    throw new CoreProtocolError("the working folder must be absolute");
+  const env = Object.fromEntries(
+    Object.entries(request.env ?? {}).map(([key, value]) => {
+      if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || /^HC_/.test(key))
+        throw new CoreProtocolError(`World does not set ${key}`);
+      return [key, String(value)];
+    }),
+  );
+  if (request.name !== undefined && !/^[a-z0-9_.-]{1,32}$/.test(request.name))
+    throw new CoreProtocolError("a terminal name is invalid");
+  const size = request.size;
+  if (
+    size &&
+    !(
+      Number.isSafeInteger(size.cols) &&
+      Number.isSafeInteger(size.rows) &&
+      size.cols > 0 &&
+      size.rows > 0 &&
+      size.cols <= 1000 &&
+      size.rows <= 1000
+    )
+  )
+    throw new CoreProtocolError("a terminal size is invalid");
+  return {
+    argv,
+    ...(request.cwd !== undefined ? { cwd: request.cwd } : {}),
+    env,
+    labels: checkLabels(request.labels ?? {}),
+    keep: request.keep === true,
+    ...(request.name !== undefined ? { name: request.name } : {}),
+    no_parent: true,
+    no_notify: true,
+    outlive_parent: false,
+    ...(size ? { size: { cols: size.cols, rows: size.rows } } : {}),
+  };
 }
 
 type Pending = {
@@ -311,6 +430,58 @@ export class CoreClient {
     ) as Promise<Record<string, unknown>>;
   }
 
+  /** Whether the connected core offers `method` (negotiated, never pinned). */
+  offers(method: CoreWriteMethod): boolean {
+    return this.hello.methods.includes(method);
+  }
+
+  /** Starts a program; the reply is core's record of the new terminal. */
+  run(request: CoreRunRequest, timeoutMs = 15_000) {
+    return this.write(
+      "terminal.run",
+      coreRunParams(request),
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  /**
+   * Ends a program. Core also ends every live child started with this
+   * terminal as parent that does not outlive it (see kill-plan.ts).
+   */
+  kill(address: string, timeoutMs = 10_000) {
+    return this.write(
+      "terminal.kill",
+      { terminal: localAddress(address) },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  /** Sets labels (an empty value removes one); core sends the whole map. */
+  label(address: string, labels: Record<string, string>, timeoutMs = 5_000) {
+    return this.write(
+      "terminal.label",
+      { terminal: localAddress(address), labels: checkLabels(labels) },
+      timeoutMs,
+    ) as Promise<CoreTerminalRecord>;
+  }
+
+  private async write(
+    method: CoreWriteMethod,
+    params: Record<string, unknown>,
+    timeoutMs: number,
+  ): Promise<unknown> {
+    if (!this.offers(method))
+      throw new CoreUnsupportedError(this.hello.version, method);
+    if (this.closedError) throw this.closedError;
+    try {
+      return await this.call(method, params, timeoutMs);
+    } catch (error) {
+      // Sent: only core's own refusal proves nothing happened.
+      if (error instanceof CoreRpcError) throw error;
+      throw new CoreWriteUncertainError(method, { cause: error });
+    }
+  }
+
   /**
    * Unfiltered subscription. Core registers the snapshot atomically but may
    * write stream frames before the reply: those are held, then delivered in
@@ -366,7 +537,7 @@ export class CoreClient {
   }
 
   private call(
-    method: ObservationMethod,
+    method: CoreMethod,
     params: Record<string, unknown>,
     timeoutMs: number,
   ): Promise<unknown> {

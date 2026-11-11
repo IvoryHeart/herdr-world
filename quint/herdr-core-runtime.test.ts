@@ -1,5 +1,5 @@
 import { validateTrace } from "./traces";
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   CoreProtocolFake,
   coreFaults,
@@ -8,8 +8,9 @@ import {
 } from "./herdr-core-runtime";
 import { expectObservationMismatch } from "./observations";
 
-function trace(actions: (string | [string, number])[]) {
+function trace(actions: (string | [string, number])[], child = false) {
   const fake = new CoreProtocolFake();
+  fake.state.child = child;
   const states = [{ c: structuredClone(fake.state), op: "init", target: 0 }];
   for (const action of actions) {
     const [op, target] = typeof action === "string" ? [action, 0] : action;
@@ -103,8 +104,8 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
   );
 });
 
-test("all eleven required faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(11);
+test("all thirteen required faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(13);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;
@@ -123,4 +124,49 @@ test("removed terminal addresses cannot be created again", () => {
   fake.apply("create", 1);
   fake.apply("remove", 1);
   expect(() => fake.apply("create", 1)).toThrow();
+});
+
+describe("a kill ends only what was confirmed (M7)", () => {
+  // The authority family: one creation event is allowed.
+  const authority = (states: ReturnType<typeof trace>) =>
+    states.map((state) => ({ ...state, family: "authority" }));
+
+  test("a confirmed child dies with its parent", () => {
+    const states = authority(
+      trace(
+        ["connect", "baseline", ["create", 1], "receive", "plan", "kill"],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      confirmedChild: true,
+      killed: true,
+      ready: false,
+    });
+    expect(states.at(-1)!.c.source.map((t) => t.alive)).toEqual([false, false]);
+    expect(replayCore(states).has("cascadeConfirmed")).toBe(true);
+  });
+
+  test("a child seen after the plan refuses the kill; nothing ends", () => {
+    const states = authority(
+      trace(
+        ["connect", "baseline", "plan", ["create", 1], "receive", "kill"],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      confirmedChild: false,
+      killed: false,
+    });
+    expect(states.at(-1)!.c.source.map((t) => t.alive)).toEqual([true, true]);
+    expect(replayCore(states).has("unconfirmedRefused")).toBe(true);
+  });
+
+  test("a kept replacement with the same pid is not the confirmed program", () => {
+    const states = authority(
+      trace(["connect", "baseline", "plan", "replace", "baseline", "kill"]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({ killed: false, ready: true });
+    replayCore(states);
+  });
 });

@@ -249,6 +249,8 @@ export const rpcVerbs = [
       label: Type.Optional(Type.String({ maxLength: 200 })),
       view: Type.Optional(Type.String({ maxLength: 16 })),
       preserve_tab: Type.Optional(Type.Boolean()),
+      runtime: Type.Optional(Type.Literal("herdr-core")),
+      confirmation: Type.Optional(Type.Unknown()),
     }),
   ),
   rpc(
@@ -264,6 +266,78 @@ export const rpcVerbs = [
   rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
   rpc("world.bin.resume", "reconcilable", "world"),
   rpc("world.board.get", "read", "world"),
+  // herdr-core control: the handler takes the lease from the core manager
+  // only and checks the generation the browser saw (rpc/core.ts).
+  rpc(
+    "world.core.catalog",
+    "read",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+    }),
+  ),
+  rpc(
+    "world.core.launch",
+    "opaque",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+    }),
+  ),
+  rpc(
+    "world.core.kill_plan",
+    "read",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+    }),
+  ),
+  rpc(
+    "world.core.kill",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminals: Type.Array(text, { minItems: 1, maxItems: 64 }),
+      confirmation: Type.Unknown(),
+    }),
+  ),
+  rpc(
+    "world.core.room.create",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+    }),
+  ),
+  rpc(
+    "world.core.room.rename",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      label: text,
+    }),
+  ),
+  rpc(
+    "world.core.room.close",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      confirmation: Type.Unknown(),
+    }),
+  ),
   rpc(
     "world.board.patch",
     "reconcilable",

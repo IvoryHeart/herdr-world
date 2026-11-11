@@ -78,6 +78,10 @@ this worker to post upstream messages.
    Inbox include agents without herdr.space? Verify the promised app visibility.
 9. Q9, Environment: should core strip other runtimes' HERDR_* markers?
 10. Q10, TUI evolution: what is the TUI-on-core timeline or import path (app #63)?
+11. Q11, Conditional kill: can `terminal.kill` refuse when the set of terminals
+    its cascade ends differs from one the caller names? World confirms every
+    descendant it has observed; a child core creates after World's last applied
+    event can still die unconfirmed.
 
 No unresolved owner decision blocks this design. O1–O3 select core coexistence,
 default placement and shared seen; O4 is overridden by status read-only (M11);

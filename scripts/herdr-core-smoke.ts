@@ -61,6 +61,8 @@ try {
       process.execPath,
       "test",
       "server/src/herdr-core/core.live.test.ts",
+      // World's writes: launch parameters, placement and the kill cascade.
+      "server/src/herdr-core/operations.live.test.ts",
       // Windows relay checks; they run when HERDR_WORLD_PWSH names pwsh 7.
       "server/src/herdr-core/windows.live.test.ts",
     ],

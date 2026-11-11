@@ -4,6 +4,17 @@ import { HerdrClient } from "../bridge/herdr-client";
 import { createSshTunnelManager } from "../bridge/ssh-tunnel";
 import { loadServerConfig, type ServerConfig } from "../config/server-config";
 import { runProcess } from "../utils/process-utils";
+import {
+  type CoreCallerClaim,
+  coreClaimInEnvironment,
+  nearerRuntime,
+  verifyCoreCaller,
+} from "../herdr-core/cli-claim";
+import {
+  CORE_SUMMARY_LABEL,
+  coreOccupantFingerprint,
+  encodeCoreSummary,
+} from "../herdr-core/labels";
 
 export const TASK_SUMMARY_TOKEN = "task_summary";
 export const TASK_SUMMARY_SESSION_TOKEN = "task_summary_session";
@@ -13,7 +24,10 @@ export const MAX_TASK_SUMMARY_TTL_MS = 86_400_000;
 export const MAX_TASK_SUMMARY_CODE_POINTS = 80;
 
 type TaskSummaryCommand = {
-  paneId: string;
+  /** Null: the herdr-core terminal this command runs in (HC_TERMINAL_ID). */
+  paneId: string | null;
+  /** The pane was named with --pane (always Herdr's TUI). */
+  explicitPane: boolean;
   ttlMs: number;
   summary: string;
   transportArgs: string[];
@@ -37,6 +51,14 @@ export type TaskSummaryCommandDeps = {
   } | null;
   log?: (message: string) => void;
   error?: (message: string) => void;
+  /** Test seams for the herdr-core path. */
+  verifyCore?: () => Promise<CoreCallerClaim>;
+  nearer?: (
+    core: CoreCallerClaim,
+    paneId: string,
+  ) => Promise<"herdr-core" | "herdr" | null>;
+  now?: () => number;
+  env?: Record<string, string | undefined>;
 };
 
 function taskSummaryHelp() {
@@ -44,7 +66,11 @@ function taskSummaryHelp() {
 
 Reports a short, expiring summary for the exact pane's current Herdr agent session.
 Use --pane or HERDR_PANE_ID. The default lifetime is 900000 ms. Herdr expires
-the report; task-summary has no --clear command.`;
+the report; task-summary has no --clear command.
+
+Inside a herdr-core terminal (HC_TERMINAL_ID) it reports to that terminal on
+its own core, with no World service: a label bound to the program running
+there and to an absolute expiry.`;
 }
 
 function usage(message: string): never {
@@ -117,7 +143,10 @@ function parseAgentSession(value: unknown): AgentSession {
   return result;
 }
 
-function parseTaskSummaryCommand(args: string[]): TaskSummaryCommand | null {
+function parseTaskSummaryCommand(
+  args: string[],
+  env: Record<string, string | undefined> = process.env,
+): TaskSummaryCommand | null {
   if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
     return null;
   }
@@ -178,12 +207,14 @@ function parseTaskSummaryCommand(args: string[]): TaskSummaryCommand | null {
     summaryParts.push(arg);
   }
 
-  const resolvedPaneId = paneId ?? process.env.HERDR_PANE_ID;
-  if (!resolvedPaneId?.trim()) {
-    usage("task-summary requires --pane or HERDR_PANE_ID");
+  const resolvedPaneId = paneId ?? env.HERDR_PANE_ID;
+  const inCore = coreClaimInEnvironment(env) !== null;
+  if (!resolvedPaneId?.trim() && !inCore) {
+    usage("task-summary requires --pane, HERDR_PANE_ID or HC_TERMINAL_ID");
   }
   return {
-    paneId: nonEmpty(resolvedPaneId, "pane ID"),
+    paneId: resolvedPaneId?.trim() ? nonEmpty(resolvedPaneId, "pane ID") : null,
+    explicitPane: paneId !== undefined,
     ttlMs: ttlMs ?? DEFAULT_TASK_SUMMARY_TTL_MS,
     summary: normalizeTaskSummary(summaryParts.join(" ")),
     transportArgs,
@@ -196,9 +227,63 @@ function stripTaskSummaryArgv(transportArgs: readonly string[]) {
   }
 }
 
+/**
+ * The herdr-core path (M6): one label on the verified terminal, holding the
+ * normalized summary, the print of the program running there and an
+ * absolute expiry. Readers check both; reconnecting renews nothing.
+ */
+async function reportCoreTaskSummary(
+  claim: CoreCallerClaim,
+  command: TaskSummaryCommand,
+  now: number,
+) {
+  const fingerprint = coreOccupantFingerprint(claim.coreId, claim.record);
+  if (!fingerprint) usage("the terminal has no running program");
+  await claim.client.label(claim.address, {
+    [CORE_SUMMARY_LABEL]: encodeCoreSummary({
+      text: command.summary,
+      fingerprint,
+      expiresMs: now + command.ttlMs,
+    }),
+  });
+}
+
+/**
+ * Which runtime this report goes to: --pane or a TUI transport option means
+ * Herdr's TUI; otherwise a verified herdr-core terminal, and when both
+ * runtimes' markers are present, the nearer one. An unresolved ambiguity
+ * refuses rather than guessing.
+ */
+async function coreTarget(
+  command: TaskSummaryCommand,
+  dependencies: TaskSummaryCommandDeps,
+): Promise<CoreCallerClaim | null> {
+  const env = dependencies.env ?? process.env;
+  if (command.explicitPane || command.transportArgs.length) return null;
+  if (!coreClaimInEnvironment(env)) return null;
+  let claim: CoreCallerClaim;
+  try {
+    claim = await (dependencies.verifyCore ?? (() => verifyCoreCaller()))();
+  } catch (cause) {
+    if (command.paneId) return null;
+    throw cause;
+  }
+  if (!command.paneId) return claim;
+  const nearer = await (dependencies.nearer ?? nearerRuntime)(
+    claim,
+    command.paneId,
+  );
+  if (nearer === "herdr-core") return claim;
+  claim.client.close();
+  if (nearer === "herdr") return null;
+  usage(
+    "both Herdr and herdr-core terminal markers are set; pass --pane to report to Herdr",
+  );
+}
+
 async function reportTaskSummary(
   client: TaskSummaryClient,
-  command: TaskSummaryCommand,
+  command: TaskSummaryCommand & { paneId: string },
 ) {
   const { operations, sessions } = createHerdrControlPorts(client);
   const pane = await operations.getTerminal({ pane_id: command.paneId });
@@ -241,7 +326,10 @@ export async function runTaskSummaryCommand(
   const error = dependencies.error ?? console.error;
   let command: TaskSummaryCommand | null;
   try {
-    command = parseTaskSummaryCommand(args.slice(1));
+    command = parseTaskSummaryCommand(
+      args.slice(1),
+      dependencies.env ?? process.env,
+    );
   } catch (cause) {
     error(`task-summary: ${(cause as Error).message}`);
     error(taskSummaryHelp());
@@ -252,6 +340,41 @@ export async function runTaskSummaryCommand(
     return 0;
   }
 
+  let core: CoreCallerClaim | null;
+  try {
+    core = await coreTarget(command, dependencies);
+  } catch (cause) {
+    error(`task-summary: ${(cause as Error).message}`);
+    return 1;
+  }
+  if (core) {
+    try {
+      await reportCoreTaskSummary(
+        core,
+        command,
+        (dependencies.now ?? Date.now)(),
+      );
+    } catch {
+      error("task-summary: unable to report to the herdr-core terminal");
+      return 1;
+    } finally {
+      core.client.close();
+    }
+    log(
+      JSON.stringify({
+        terminal: core.address,
+        runtime: "herdr-core",
+        status: "reported",
+        ttl_ms: command.ttlMs,
+      }),
+    );
+    return 0;
+  }
+  const paneId = command.paneId;
+  if (!paneId) {
+    error("task-summary: not inside a verified herdr-core terminal");
+    return 1;
+  }
   let tunnel:
     | ReturnType<NonNullable<TaskSummaryCommandDeps["createTunnel"]>>
     | undefined;
@@ -274,7 +397,7 @@ export async function runTaskSummaryCommand(
       dependencies.createClient ??
       ((socketPath: string) => new HerdrClient(socketPath))
     )(config.socketPath);
-    await reportTaskSummary(client, command);
+    await reportTaskSummary(client, { ...command, paneId });
   } catch {
     reportFailed = true;
   }

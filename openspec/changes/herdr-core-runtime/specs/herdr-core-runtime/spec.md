@@ -117,6 +117,34 @@ installed. Native destructive actions SHALL confirm all dying descendants.
   a harness whose integration World installed
 - **THEN** World leaves status unknown and never injects or writes status to core
 
+### Requirement: World-started core terminals and confirmed kills
+
+World SHALL start agents in core with an absolute host executable, no caller,
+no parent, no notes and an explicit keep, placed in the apps by `herdr.space`,
+`herdr.tab`, a `where` caption and an unseen `herdr.seen`; plain shells SHALL
+start unplaced and not kept. World's rooms, their order and the tabs it started
+SHALL live in World's SQLite under the durable core ID. Before any native kill,
+room close or bin close, World SHALL name every terminal core will end with it,
+bind each to the program it saw (core, address, pid and argv) and send the kill
+only while its current observation ends no more than that confirmed set.
+
+#### Scenario: Agent launch
+
+- **WHEN** a profile starts on a host with a connected core
+- **THEN** core receives exactly those parameters, the desktop app shows the agent
+  in its space with World's names, and World shows it in World's room
+
+#### Scenario: A child appears after the confirmation
+
+- **WHEN** a die-with-parent child that World has observed was not in the
+  confirmation, or a confirmed program was replaced (even reusing its pid)
+- **THEN** World sends no kill, shows the new plan and asks again
+
+#### Scenario: A child core creates after World's last observation
+
+- **WHEN** core creates a child between World's last applied event and the kill
+- **THEN** core's cascade may end it; core has no conditional kill (Q11)
+
 ### Requirement: Observe and control with app coexistence
 
 Observe streams SHALL be independent per browser, negotiate resize notifications,

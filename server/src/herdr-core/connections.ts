@@ -7,6 +7,7 @@ import { CORE_PROTOCOL_GENERATION, CoreClient } from "./client";
 import { type CoreFixture, createCoreFixture } from "./fixture";
 import { CoreObservationStore } from "./observations";
 import { CoreFirstSight } from "./topology";
+import type { CoreTopologyPort } from "./layout";
 import {
   type CoreConnectionRuntime,
   type CoreTransport,
@@ -54,6 +55,8 @@ export function createCoreConnections(args: {
     onTunnelExit: (error: Error) => void,
   ) => CoreTransport;
   connect?: CoreStreamConnector;
+  /** World's own layout of each core (M1), from its SQLite. */
+  topology?: () => CoreTopologyPort | null;
 }): CoreConnections {
   const observed = (connectionId: string) => {
     if (manager.has(connectionId))
@@ -99,6 +102,7 @@ export function createCoreConnections(args: {
       return createCoreConnectionRuntime({
         firstSight,
         onReadModel: () => observed(profile.id),
+        layout: (coreId) => args.topology?.()?.get(coreId) ?? null,
         identity: connectionIdentityForProfile(profile),
         context,
         transport: transportFor(profile, report),
