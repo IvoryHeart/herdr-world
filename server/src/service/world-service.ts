@@ -278,8 +278,8 @@ async function compose(
     publishBoardChanged,
   );
 
-  /** The agent CLI (world-cli-service.ts). */
   const worldCli = createWorldCliService({
+    core: () => core.manager,
     board,
     ledger: () => storage.ledger(),
     attention: () => storage.attention(),

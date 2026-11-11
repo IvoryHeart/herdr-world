@@ -57,6 +57,18 @@ test("queued session delivery is refused after kept replacement", async () => {
   );
 });
 
+test("missing foreground refuses dispatch through the production recipient gate", () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    "capture",
+    "loseForeground",
+    "dispatch",
+  ]);
+  replayCore(states);
+  expect(states.at(-1)!.c.attempts).toBe(0);
+});
+
 test("original leases cannot be replaced by another profile on the same core", () => {
   for (const retire of [
     ["switchProfile"],
@@ -104,8 +116,8 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
   );
 });
 
-test("the eleven ordering/authority, two kill and five observe faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(18);
+test("the eleven ordering/authority, two kill, one missing-foreground and five observe faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(19);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;

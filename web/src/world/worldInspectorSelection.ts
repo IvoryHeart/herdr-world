@@ -465,3 +465,21 @@ export function reconcileObservedInspectors(
     return replacement ? [replacement] : [];
   });
 }
+
+/** Bind the selection owner once; abort cannot cancel a later intent. */
+export function bindWorldIntentAbort(
+  intentRequestRef: { current: number },
+  onAbort: (opening: boolean) => void,
+) {
+  return (signal: AbortSignal | undefined, requestId: number) => {
+    if (!signal) return () => {};
+    const abort = () => {
+      if (intentRequestRef.current !== requestId) return;
+      intentRequestRef.current += 1;
+      onAbort(false);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    return () => signal.removeEventListener("abort", abort);
+  };
+}

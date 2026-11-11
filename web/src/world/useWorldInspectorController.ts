@@ -29,6 +29,7 @@ import {
 import { createInspectorTerminalFocuser } from "./inspectorTerminalFocus";
 import { requestChatInputFocus } from "../chatFocus";
 import {
+  bindWorldIntentAbort,
   worldSelectionIsCurrent,
   worldNodeForWorkspaceSurfaceSelection,
   worldNodeForInspectorConversation,
@@ -202,20 +203,10 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     floatingInspectorPortalsRef,
   );
 
-  const bindSelectionIntentAbort = (
-    signal: AbortSignal | undefined,
-    requestId: number,
-  ) => {
-    if (!signal) return () => {};
-    const abort = () => {
-      if (intentRequestRef.current !== requestId) return;
-      intentRequestRef.current += 1;
-      setIntentOpening(false);
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    if (signal.aborted) abort();
-    return () => signal.removeEventListener("abort", abort);
-  };
+  const bindSelectionIntentAbort = bindWorldIntentAbort(
+    intentRequestRef,
+    setIntentOpening,
+  );
 
   const applySelection = async (
     id: string | null,
@@ -896,6 +887,10 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     if (signal?.aborted) throw new Error("Terminal activation was superseded");
     const node = candidateWorld.nodeById.get(id);
     if (!node) throw new Error("This terminal is no longer available");
+    if (node.kind === "agent" && node.pane.runtime === "herdr-core") {
+      await applySelection(id, "history", true, candidateWorld, signal);
+      return;
+    }
     const opened = requested ?? defaultOpenView(node) ?? "terminal";
     try {
       const existing = inspectorConversationsRef.current.find(

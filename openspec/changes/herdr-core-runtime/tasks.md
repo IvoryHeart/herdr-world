@@ -39,6 +39,11 @@
     its program print, core task summaries and spawn stamps, the model's kill
     fence with two plan mutants and two production controls, and live checks
     against the 0.1.20 release.
+  - [x] Issue #870: native core send/keys for every harness; fresh terminal and
+    original occupant/foreground fences; missing evidence and replacement refusal;
+    uncertain deadlines without replay; core Chat and Needs you answers; verified
+    local core asks through the existing durable dispatcher; recorded/live input
+    traffic, browser captures and production recipient model control. Q3 remains.
 - [ ] P4: files/Git/worktrees, asks and Ranger.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.
   - [x] Popup equivalents (#873): the room shell on both runtimes; Herdr Float

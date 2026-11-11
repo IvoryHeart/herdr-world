@@ -77,7 +77,7 @@ type WorldObjectBase = {
 
 /** The one reason every view-only control shows. */
 export const CORE_VIEW_ONLY_REASON =
-  "World can't type into herdr-core terminals or chat with them yet";
+  "World can't open files or mark core work reviewed yet";
 
 /** Live in the view: current, whether or not World can control it. */
 export function isLiveNode(node: {
@@ -641,7 +641,7 @@ function* constructHost(
     connectionHostState === "active" ||
     connectionHostState === "ready-inactive";
   // herdr-core: World starts, places and ends terminals there (coreControl),
-  // but has no terminal stream or chat for them yet.
+  // while Chat uses its own core send route, without TUI authority.
   const viewOnly =
     live && connection.runtime === "herdr-core"
       ? CORE_VIEW_ONLY_REASON

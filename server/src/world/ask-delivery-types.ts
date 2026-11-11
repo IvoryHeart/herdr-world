@@ -9,13 +9,16 @@ export const ANSWER_DELIVERY_VERB = {
 } as const;
 export const ANSWER_DELIVERY_DELAY_MS = 3000;
 export type AnswerRecipient = {
-  adapter: "herdr";
+  adapter: "herdr" | "herdr-core";
   connection_id: string;
   pane_id: string;
   terminal_id: string;
-  reported: { scheme: "herdr-reported-v1"; fingerprint: string };
+  reported: {
+    scheme: "herdr-reported-v1" | "core-occupant-v1";
+    fingerprint: string;
+  };
   conversation: {
-    scheme: "reported-v1" | "codex-title-v1";
+    scheme: "reported-v1" | "codex-title-v1" | "core-recipient-v1";
     fingerprint: string;
   };
   captured_at: number;
@@ -71,16 +74,26 @@ export function validRecipient(
 ): value is AnswerRecipient {
   return Boolean(
     value &&
-      value.adapter === "herdr" &&
+      ["herdr", "herdr-core"].includes(value.adapter) &&
       [value.connection_id, value.pane_id, value.terminal_id].every(
         (part) => typeof part === "string" && part.length > 0,
       ) &&
-      value.reported?.scheme === "herdr-reported-v1" &&
+      value.reported?.scheme ===
+        (value.adapter === "herdr-core"
+          ? "core-occupant-v1"
+          : "herdr-reported-v1") &&
       typeof value.reported.fingerprint === "string" &&
       /^[a-f0-9]{64}$/.test(value.reported.fingerprint) &&
-      ["reported-v1", "codex-title-v1"].includes(value.conversation?.scheme) &&
+      (value.adapter === "herdr-core"
+        ? value.conversation?.scheme === "core-recipient-v1"
+        : ["reported-v1", "codex-title-v1"].includes(
+            value.conversation?.scheme,
+          )) &&
       typeof value.conversation.fingerprint === "string" &&
-      /^[a-f0-9]{64}$/.test(value.conversation.fingerprint),
+      (value.adapter === "herdr-core"
+        ? /^[a-f0-9]{64}\.[a-f0-9]{32}$/
+        : /^[a-f0-9]{64}$/
+      ).test(value.conversation.fingerprint),
   );
 }
 export function sameRecipient(
@@ -90,6 +103,7 @@ export function sameRecipient(
   return Boolean(
     validRecipient(left) &&
       validRecipient(right) &&
+      left.adapter === right.adapter &&
       left.connection_id === right.connection_id &&
       left.pane_id === right.pane_id &&
       left.terminal_id === right.terminal_id &&

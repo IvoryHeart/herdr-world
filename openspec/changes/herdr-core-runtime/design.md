@@ -98,6 +98,23 @@ and its current foreground on the captured connection lease. Changed or missing
 evidence refuses dispatch until freshly verified. World builds no per-harness
 side channel and does not take over core's input scheduling.
 
+The browser keeps the recipient captured when Chat opened; durable asks capture
+it only after verifying local CLI process ancestry. A fresh `terminal.get` (no
+caller) precedes dispatch. The recipient includes core ID, tN, pid, argv,
+template, reporting state, mirror occupancy and foreground pid/name. Missing
+foreground refuses; a known harness must still own it. Loss of reporting retires
+the old binding even if it returns. Plain shells cannot acquire agent input
+through this API. Core does not expose a harness transcript/session ID in these
+records: this is native program/foreground evidence, not a transcript identity.
+Ask delivery also requires the captured runtime generation and World incarnation;
+it never rebinds across a reconnect or restart.
+
+World requests `$/cancelRequest` when it observes replacement while a native
+send is held, or when its deadline expires. Only core's `cancelled` response
+proves that held input was dropped; a missing reply stays uncertain. Keys have
+no cancellation support. Unknown native errors are uncertain because an error
+while saving after typing is not proof of no input.
+
 A native send queue can outlive its connection and execute in a kept replacement
 shell. World's pre-send check is required but cannot close that later window;
 core owns closing it (Q3). The model's execution-time source gate is that upstream

@@ -1,19 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import {
-  ConnectionManager,
-  type ConnectionRuntime,
-} from "../connections/manager";
-import {
-  ConnectionProfileService,
-  loadConnectionProfileBootstrap,
-} from "../connections/profile-service";
-import { ConnectionProfileStore } from "../connections/profiles";
-import { memoryCoreTopologyPort } from "../storage/core-topology";
-import { silentLogger } from "../utils/logger";
-import { createCoreConnections } from "./connections";
+import { rmSync } from "node:fs";
 import { type CoreKillConfirmation } from "./kill-plan";
 import {
   CoreOperationRefused,
@@ -23,8 +9,8 @@ import {
   planCoreKill,
   type CoreKillPlanView,
 } from "./operations";
+import { connectedLive, until } from "./testing/live-world";
 import { ScratchCore, scratchCoreBinary } from "./testing/scratch-core";
-import { localCoreTransport } from "./transport";
 
 /**
  * World's writes against a real herdr-core release (M2, M3, M7): what core
@@ -44,72 +30,11 @@ afterEach(async () => {
     rmSync(root, { recursive: true, force: true });
 });
 
-async function until(predicate: () => boolean, ms = 10_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(10);
-  }
-}
-
 async function connected(stateDir: string) {
-  const root = mkdtempSync(join(tmpdir(), "hcw-op-live-"));
-  roots.push(root);
-  const topology = memoryCoreTopologyPort();
-  const core = createCoreConnections({
-    logger: silentLogger,
-    changed: () => {},
-    profiles: () => service,
-    transportFor: () => localCoreTransport(stateDir),
-    topology: () => topology,
-  });
-  stops.push(() => core.stop());
-  const store = new ConnectionProfileStore({
-    path: join(root, "connections.json"),
-  });
-  const service: ConnectionProfileService<ConnectionRuntime, never> =
-    new ConnectionProfileService({
-      manager: new ConnectionManager<ConnectionRuntime>("startup-default"),
-      core: core.support as never,
-      store,
-      bootstrap: loadConnectionProfileBootstrap({
-        store,
-        startupProfile: {
-          id: "startup-default",
-          label: "Default",
-          type: "local",
-          control_socket_path: "/synthetic/herdr.sock",
-          client_socket_path: "/synthetic/herdr-client.sock",
-          auto_connect: false,
-        },
-        explicitStartupOverride: false,
-      }),
-      createRuntime: () => () => ({
-        identity: {
-          id: "startup-default",
-          label: "Default",
-          source: "startup-config",
-        },
-        startTransport: async () => {},
-        startBackground: () => {},
-        stop: async () => {},
-      }),
-      retry: { baseDelayMs: 20, maxDelayMs: 200, random: () => 0 },
-    });
-  await service.create({
-    id: "core",
-    label: "Scratch core",
-    type: "local",
-    runtime: "herdr-core",
-    core_session: "default",
-    core_state_dir: stateDir,
-    auto_connect: true,
-  });
-  await until(() => core.manager.status("core").state === "ready");
-  const lease = () => core.manager.readyRuntimeLease("core")!;
-  const record = (address: string) =>
-    lease().runtime.core.mirror.terminal(address);
-  return { core, topology, lease, record };
+  const w = await connectedLive(stateDir);
+  roots.push(w.root);
+  stops.push(w.stop);
+  return w;
 }
 
 const confirmAll = (plan: CoreKillPlanView): CoreKillConfirmation => ({

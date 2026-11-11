@@ -1,3 +1,13 @@
+import {
+  coreFaults,
+  coreWitnesses,
+  coreImplementationFaults,
+} from "./herdr-core-cases";
+export {
+  coreFaults,
+  coreWitnesses,
+  coreImplementationFaults,
+} from "./herdr-core-cases";
 import assert from "node:assert/strict";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -11,26 +21,6 @@ import type { CoreEventLine } from "../server/src/herdr-core/client";
 export type CoreSubjects = typeof productionSubjects;
 type ProductionMirror = InstanceType<CoreSubjects["CoreMirror"]>;
 
-export const coreFaults = [
-  "keep-cursor",
-  "stale-after-missed",
-  "replay-write",
-  "same-core-stale",
-  "profile-fallback",
-  "lost-delta",
-  "gap-admitted",
-  "not-ready",
-  "stale-session",
-  "ungated-queue",
-  "heartbeat-ignored",
-  "unconfirmed-cascade",
-  "stale-confirmation",
-  "interactive-attach",
-  "unconfirmed-accepted",
-  "paint-before-resize",
-  "stale-stream",
-  "observer-input",
-] as const;
 /** Faults of the observe family, searched in its own simulation. */
 const observeFaults: ReadonlySet<string> = new Set([
   "interactive-attach",
@@ -39,22 +29,7 @@ const observeFaults: ReadonlySet<string> = new Set([
   "stale-stream",
   "observer-input",
 ]);
-export const coreWitnesses: readonly string[] = [
-  "orderedDelta",
-  "missedCut",
-  "gapRetired",
-  "reconnected",
-  "replacementFenced",
-  "queueFenced",
-  "existingOnly",
-  "cascadeConfirmed",
-  "unconfirmedCascadeRefused",
-  "watchAdopted",
-  "observerAlone",
-  "headlessFollowed",
-  "stallReleased",
-  "unconfirmedRefused",
-];
+
 type Terminal = {
   alive: boolean;
   born: boolean;
@@ -89,6 +64,7 @@ export type CoreState = {
   leaseOwner: number;
   leaseEpoch: number;
   session: number;
+  foreground: boolean;
   pending: boolean;
   queued: boolean;
   uncertain: boolean;
@@ -159,6 +135,7 @@ export class CoreProtocolFake {
     leaseOwner: -1,
     leaseEpoch: -1,
     session: -1,
+    foreground: true,
     pending: false,
     queued: false,
     uncertain: false,
@@ -449,9 +426,28 @@ export class CoreProtocolFake {
         s.session = s.source[0]!.occupant;
         s.admitted = true;
         break;
+      case "loseForeground":
+        assert(s.foreground);
+        s.foreground = false;
+        break;
       case "dispatch": {
         assert(s.captured && s.attempts === 0);
-        const allowed = this.lease() && this.occupant();
+        // Drive the production recipient comparison as well as the original lease.
+        const original = {
+          ...this.record(0, { ...s.source[0]!, occupant: s.session }),
+          remote: false,
+          foreground: { pid: 101, name: "agent" },
+        };
+        const token = this.subjects.coreRecipientToken("core", original)!;
+        const current = {
+          ...this.record(0, s.source[0]!),
+          remote: false,
+          foreground: s.foreground ? { pid: 101, name: "agent" } : null,
+        };
+        const allowed =
+          this.lease() &&
+          this.occupant() &&
+          this.subjects.coreRecipientChange(token, "core", current) === null;
         s.attempts = allowed ? 1 : 0;
         s.pending = allowed;
         s.queued = allowed;
@@ -551,6 +547,7 @@ export function validateCoreTrace(
         "switchProfile",
         "replace",
         "capture",
+        "loseForeground",
         "dispatch",
         "deliver",
         "complete",
@@ -709,18 +706,6 @@ export function replayCore(
   return witnesses;
 }
 
-export const coreImplementationFaults = [
-  "core-gap",
-  "core-heartbeat",
-  "core-stale",
-  "core-missed-cut",
-  "core-view-retired",
-  "core-kill-pid-only",
-  "core-kill-plan-once",
-  "core-watch-interactive",
-  "core-watch-unconfirmed",
-  "core-watch-order",
-] as const;
 type Harness = {
   root: string;
   output: string;
@@ -842,6 +827,26 @@ export async function runCoreVerification(h: Harness) {
     await h.command(
       `core-${fault}-control`,
       [
+        "verify",
+        mutant,
+        "--main",
+        "herdr_core_runtime",
+        "--backend",
+        "tlc",
+        "--invariant",
+        "safety",
+        "--verbosity",
+        "1",
+        "--out-itf",
+        counterexample,
+      ],
+      true,
+    );
+    // TLC establishes the violation exhaustively; its backend emits no ITF.
+    // Collect a concrete replay witness separately through the simulator.
+    await h.command(
+      `core-${fault}-trace`,
+      [
         "run",
         mutant,
         "--main",
@@ -851,7 +856,7 @@ export async function runCoreVerification(h: Harness) {
         "--seed",
         "42",
         "--max-samples",
-        "10000",
+        "200000",
         "--max-steps",
         "25",
         "--invariant",

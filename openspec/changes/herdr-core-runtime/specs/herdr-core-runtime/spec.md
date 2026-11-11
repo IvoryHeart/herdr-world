@@ -98,6 +98,19 @@ the queued-send replacement window belongs to core (Q3), not World's pre-send ch
 - **THEN** World shows "uncertain", retains the original recipient and never
   automatically retries the possible write
 
+#### Scenario: Foreground evidence is unavailable
+
+- **WHEN** the foreground was missing at binding or is missing or different
+  before dispatch, including an agent that exited into its wrapping shell
+- **THEN** World refuses and types nothing until the owner opens a fresh binding
+
+#### Scenario: Saved core ask answer
+
+- **WHEN** a verified local core asker receives an owner answer
+- **THEN** the durable dispatcher uses the same native send and original binding;
+  a replaced occupant or retired runtime refuses while the stored answer remains
+  retrievable, and an unanswered possible write stays uncertain without replay
+
 ### Requirement: Shared app state with independent World ownership
 
 World SHALL own topology, asks/results, review receipts and card pins; it SHALL

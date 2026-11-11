@@ -84,6 +84,8 @@ export type FakeCoreOptions = {
 
 /** What an observe-only core leaves out of `hello`. */
 const WRITE_METHODS = new Set([
+  "terminal.send",
+  "terminal.keys",
   "terminal.run",
   "terminal.kill",
   "terminal.label",
@@ -119,6 +121,34 @@ export class FakeCore {
   /** Each terminal's synthetic screen: the latest output, repainted on attach. */
   private readonly screens = new Map<string, string>();
   private activity = 0;
+  /**
+   * What `terminal.send`/`terminal.keys` typed, and into which program: the
+   * pid and argv occupying the terminal when the input went in.
+   */
+  readonly deliveredInput: Array<{
+    address: string;
+    input: string | string[];
+    pid: unknown;
+    argv: unknown;
+    foreground: string | null;
+  }> = [];
+  /**
+   * While set, sends wait as core holds them for a person's draft or quiet
+   * (`input.rs` type_in). `releaseSends` then types each into whatever runs
+   * there by then, as core does: it checks no recipient (upstream Q3).
+   */
+  holdSends = false;
+  /** Runs after input goes in and before core's reply is written. */
+  onTyped: (() => void) | null = null;
+  private readonly heldSends: Array<{
+    connection: FakeConnection;
+    id: number;
+    address: string;
+    text: string;
+    force: boolean;
+    reply(result: unknown): void;
+    error(code: number, message: string, kind: string): void;
+  }> = [];
 
   constructor(private readonly options: FakeCoreOptions = {}) {
     this.coreId = options.coreId ?? "c0ffee0000000001";
@@ -328,6 +358,58 @@ export class FakeCore {
       status: record.status,
       records: {},
       reported: record.reported,
+    });
+  }
+
+  /** Types every held send now, into whatever occupies its terminal. */
+  releaseSends(): void {
+    this.holdSends = false;
+    for (const held of this.heldSends.splice(0)) {
+      if (!this.connections.has(held.connection)) continue;
+      this.typeText(held);
+    }
+  }
+
+  /** How many sends core is holding right now. */
+  get heldSendCount(): number {
+    return this.heldSends.length;
+  }
+
+  private typeText(held: {
+    address: string;
+    text: string;
+    force: boolean;
+    reply(result: unknown): void;
+    error(code: number, message: string, kind: string): void;
+  }) {
+    const record = this.terminals.get(held.address);
+    if (!record) return held.error(-32000, "no terminal", "not_found");
+    if (record.state !== "live")
+      return held.error(-32000, `${held.address} has finished`, "finished");
+    if (typeof record.pid !== "number")
+      return held.error(
+        -32000,
+        `${held.address} is lost, waiting for its new shell`,
+        "unavailable",
+      );
+    const word = (record.status as { state?: unknown } | null)?.state ?? null;
+    if (word === "blocked" && !held.force)
+      return held.error(-32000, `${held.address} is blocked`, "blocked");
+    this.deliveredInput.push({
+      address: held.address,
+      input: held.text,
+      pid: record.pid,
+      argv: record.argv,
+      foreground:
+        (record.foreground as { name?: string } | undefined)?.name ?? null,
+    });
+    const typed = this.onTyped;
+    this.onTyped = null;
+    typed?.();
+    held.reply({
+      turn: typeof record.turn === "number" ? record.turn : 0,
+      status: typeof word === "string" ? word : null,
+      started: record.reported === true ? false : null,
     });
   }
 
@@ -827,6 +909,8 @@ export class FakeCore {
         "terminal.attach",
         "terminal.label",
         "events.subscribe",
+        "terminal.send",
+        "terminal.keys",
       ].filter(
         (method) =>
           !this.withoutMethods.has(method) &&
@@ -876,6 +960,18 @@ export class FakeCore {
           ),
         ),
       );
+    if (request.method === "$/cancelRequest") {
+      // Core drops a send it still holds; one already typed stays typed.
+      const id = (request.params as { id?: unknown } | undefined)?.id;
+      const at = this.heldSends.findIndex(
+        (held) => held.connection === connection && held.id === id,
+      );
+      if (at >= 0) {
+        const [held] = this.heldSends.splice(at, 1);
+        held!.error(-32000, "send cancelled before typing", "cancelled");
+      }
+      return;
+    }
     switch (request.method) {
       case "server.status": {
         const live = [...this.terminals.values()].filter(
@@ -1012,6 +1108,70 @@ export class FakeCore {
           ? error(-32000, `${address} was removed`, "not_found")
           : reply({ ...record });
       }
+      case "terminal.send": {
+        if (this.options.observeOnly) break;
+        const p = request.params ?? {};
+        if (
+          p.caller !== undefined ||
+          p.wait !== undefined ||
+          p.if !== undefined ||
+          typeof p.text !== "string" ||
+          typeof p.force !== "boolean"
+        )
+          return error(
+            -32602,
+            "fixture refuses these params",
+            "invalid_params",
+          );
+        const held = {
+          connection,
+          id: request.id,
+          address: String(p.terminal),
+          text: p.text,
+          force: p.force,
+          reply: (result: unknown) => {
+            if (this.dropNextWriteReply) {
+              this.dropNextWriteReply = false;
+              return;
+            }
+            reply(result);
+          },
+          error,
+        };
+        if (this.holdSends) this.heldSends.push(held);
+        else this.typeText(held);
+        return;
+      }
+      case "terminal.keys": {
+        if (this.options.observeOnly) break;
+        const p = request.params ?? {};
+        const record = this.terminals.get(String(p.terminal));
+        if (p.caller !== undefined || !Array.isArray(p.keys))
+          return error(
+            -32602,
+            "fixture refuses these params",
+            "invalid_params",
+          );
+        if (!record) return error(-32000, "no terminal", "not_found");
+        if (record.state !== "live")
+          return error(-32000, "finished", "finished");
+        this.deliveredInput.push({
+          address: record.address,
+          input: p.keys as string[],
+          pid: record.pid,
+          argv: record.argv,
+          foreground:
+            (record.foreground as { name?: string } | undefined)?.name ?? null,
+        });
+        if (this.dropNextWriteReply) {
+          this.dropNextWriteReply = false;
+          return;
+        }
+        return reply({
+          turn: typeof record.turn === "number" ? record.turn : 0,
+          status: (record.status as { state?: string } | null)?.state ?? null,
+        });
+      }
       case "terminal.label": {
         if (this.options.observeOnly) break;
         const address = String(request.params?.terminal);
@@ -1094,6 +1254,10 @@ export class FakeCore {
 
   private drop(connection: FakeConnection) {
     if (connection.heartbeat) clearInterval(connection.heartbeat);
+    // Core cancels every send a closed connection left waiting.
+    for (let i = this.heldSends.length - 1; i >= 0; i--)
+      if (this.heldSends[i]!.connection === connection)
+        this.heldSends.splice(i, 1);
     this.connections.delete(connection);
     for (let i = this.subscribers.length - 1; i >= 0; i--)
       if (this.subscribers[i]!.connection === connection)

@@ -19,7 +19,12 @@ import {
   planCoreKill,
   renameCoreRoom,
 } from "../herdr-core/operations";
-import type { CoreConnectionRuntime } from "../herdr-core/runtime";
+import { deliverCore } from "../herdr-core/delivery";
+import { coreRecipientChange } from "../herdr-core/recipient";
+import {
+  type CoreConnectionRuntime,
+  readCoreScreen,
+} from "../herdr-core/runtime";
 import type { CoreTopologyPort } from "../storage/core-topology";
 import type { BridgeRpcContext } from "./context";
 
@@ -68,6 +73,12 @@ export function composeCore(
 }
 
 const ADDRESS = /^t[1-9][0-9]{0,9}$/;
+
+function address(value: unknown): string {
+  if (typeof value !== "string" || !ADDRESS.test(value))
+    throw new CoreOperationRefused("Name the terminal.");
+  return value;
+}
 
 function addresses(value: unknown): string[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 64)
@@ -199,6 +210,57 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         );
         reply({ ok: true });
         return invalidate();
+      // Session input (M4/§8): core's own send and keys, only to the
+      // program the browser's recipient token names. Never retried.
+      case "world.core.send": {
+        const text = typeof p.text === "string" ? p.text : "";
+        return reply(
+          await deliverCore(
+            lease,
+            address(p.terminal),
+            String(p.recipient ?? ""),
+            p.answer === true
+              ? { kind: "answer", text }
+              : { kind: "message", text },
+          ),
+        );
+      }
+      case "world.core.keys":
+        return reply(
+          await deliverCore(
+            lease,
+            address(p.terminal),
+            String(p.recipient ?? ""),
+            {
+              kind: "keys",
+              keys: Array.isArray(p.keys)
+                ? p.keys.filter((key): key is string => typeof key === "string")
+                : [],
+            },
+          ),
+        );
+      case "world.core.screen": {
+        const terminal = address(p.terminal);
+        const view = lease.runtime.core;
+        if (
+          !view.epoch ||
+          coreRecipientChange(
+            String(p.recipient ?? ""),
+            view.epoch.coreId,
+            view.terminal(terminal),
+            view.occupancy(terminal),
+          )
+        )
+          throw new CoreOperationRefused("The agent changed; reopen its Chat.");
+        const screen = await readCoreScreen(lease, address(p.terminal)).catch(
+          () => {
+            throw new CoreOperationRefused("World could not read its screen.");
+          },
+        );
+        return reply({
+          text: typeof screen.text === "string" ? screen.text : "",
+        });
+      }
       case "world.core.room.close": {
         const outcome = await closeCoreRoom(
           lease,

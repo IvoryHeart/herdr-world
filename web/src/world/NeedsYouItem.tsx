@@ -1,3 +1,4 @@
+import { CoreChat } from "./CoreChat";
 import { CORE_WATCH_TITLE, viewOnlyMessage } from "./viewOnly";
 import { MessageSquare, Paperclip, SendHorizontal, X } from "lucide-react";
 import {
@@ -79,6 +80,7 @@ export function NeedsYouMessage({
   onOpened?(): void;
 }) {
   const { leaf } = item;
+  const core = leaf?.pane.runtime === "herdr-core";
   const name = itemName(item);
   const unverified = item.kind === "asks" && !item.ask.actor.verified;
   const who = `${name}${unverified ? " (unverified)" : ""}`;
@@ -107,15 +109,17 @@ export function NeedsYouMessage({
           type="button"
           className="needs-you-name"
           aria-label={`Open ${name}'s window`}
-          title={leaf.viewOnly ?? `Open ${name}'s window`}
+          title={(!core && leaf.viewOnly) || `Open ${name}'s window`}
           aria-describedby={card ? cardId : undefined}
-          aria-disabled={leaf.viewOnly ? true : undefined}
+          aria-disabled={!core && leaf.viewOnly ? true : undefined}
           onPointerEnter={(event) =>
             event.pointerType === "mouse" && setCard(true)
           }
           onPointerLeave={() => setCard(false)}
           // A view-only agent has no window yet: the name shows its card.
-          onClick={() => (leaf.viewOnly ? setCard(true) : onChat(leaf.id))}
+          onClick={() =>
+            !core && leaf.viewOnly ? setCard(true) : onChat(leaf.id)
+          }
         >
           {name}
         </button>
@@ -135,8 +139,11 @@ export function NeedsYouMessage({
           aria-label={
             done ? `Follow up with ${name}` : `Chat with ${name} about this`
           }
-          title={leaf.viewOnly ?? (done ? "Follow up in Chat" : "Open in Chat")}
-          disabled={Boolean(leaf.viewOnly)}
+          title={
+            (!core && leaf.viewOnly) ||
+            (done ? "Follow up in Chat" : "Open in Chat")
+          }
+          disabled={!core && Boolean(leaf.viewOnly)}
           onClick={() => onChat(leaf.id)}
         >
           <MessageSquare size={16} aria-hidden="true" />
@@ -171,6 +178,26 @@ export function NeedsYouMessage({
           onAttach={onAttach}
           onDismiss={onDismiss}
         />
+      ) : core ? (
+        <>
+          {head(
+            <button
+              type="button"
+              className="needs-you-icon"
+              title={CORE_WATCH_TITLE}
+              aria-label={`Watch ${name}'s terminal`}
+              disabled={item.leaf.stale}
+              onClick={() => onOpenTerminal(item.leaf.id)}
+            >
+              Watch terminal
+            </button>,
+          )}
+          <CoreChat
+            key={`${item.leaf.id}:${item.leaf.generation}`}
+            leaf={item.leaf}
+            compact
+          />
+        </>
       ) : item.leaf.viewOnly ? (
         <NeedsYouViewOnly
           leaf={item.leaf}

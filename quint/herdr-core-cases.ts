@@ -1,0 +1,53 @@
+// Required core model faults, replay witnesses and production controls.
+export const coreFaults = [
+  "keep-cursor",
+  "stale-after-missed",
+  "replay-write",
+  "same-core-stale",
+  "profile-fallback",
+  "lost-delta",
+  "gap-admitted",
+  "not-ready",
+  "stale-session",
+  "missing-foreground",
+  "ungated-queue",
+  "heartbeat-ignored",
+  "unconfirmed-cascade",
+  "stale-confirmation",
+  "interactive-attach",
+  "unconfirmed-accepted",
+  "paint-before-resize",
+  "stale-stream",
+  "observer-input",
+] as const;
+
+export const coreWitnesses: readonly string[] = [
+  "orderedDelta",
+  "missedCut",
+  "gapRetired",
+  "reconnected",
+  "replacementFenced",
+  "queueFenced",
+  "existingOnly",
+  "cascadeConfirmed",
+  "unconfirmedCascadeRefused",
+  "watchAdopted",
+  "observerAlone",
+  "headlessFollowed",
+  "stallReleased",
+  "unconfirmedRefused",
+];
+
+export const coreImplementationFaults = [
+  "core-gap",
+  "core-heartbeat",
+  "core-stale",
+  "core-missed-cut",
+  "core-view-retired",
+  "core-kill-pid-only",
+  "core-kill-plan-once",
+  "core-watch-interactive",
+  "core-watch-unconfirmed",
+  "core-watch-order",
+  "core-missing-foreground",
+] as const;

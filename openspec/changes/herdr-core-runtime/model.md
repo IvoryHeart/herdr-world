@@ -34,6 +34,7 @@ replays remain required in the complete gate.
 | owner, generation, connected, running | Two profiles on the same durable core; two transport attempts; absent endpoint. Connection identity cannot be replaced by durable core identity. No start operation exists in automatic connection. |
 | leaseOwner/Gen/Epoch, captured, session | One original operation's immutable profile, runtime/epoch and occupant proof, retained after retirement. Capture, dispatch and publication are distinct transitions. |
 | occupant, replaced | One kept replacement of terminal 0 without changing its address. It abstracts pid/argv/template/reported/foreground/session evidence changes, including reused-pid and in-shell replacements. |
+| foreground | Whether current foreground evidence is present; loseForeground models a missing read, dispatch refuses it even with an otherwise current occupant. |
 | pending, queued, uncertain, attempts, delivered | Dispatch commits once; the source can execute later, even disconnected. The assumed core-side Q3 gate checks the captured occupant at execution; this is not a World harness channel. Completion only publishes under the original current authority. Recovery never blindly replays possible opaque writes. |
 
 `projection` checks the exact mirror at its accepted source cut, including both
@@ -53,8 +54,8 @@ and cleanup failures abort; only the named `core.state` mismatch kills a control
 Required replay witnesses cover ordered deltas, missed cuts, gap retirement,
 reconnect, occupant refusal, late queued refusal and an absent endpoint per seed.
 
-The maintained command checks all eighteen mutants (thirteen plan mutants and
-five observe mutants, below) individually and requires
+The maintained command explores all nineteen mutants (fourteen plan mutants and
+five observe mutants, below) individually with TLC and requires
 both an invariant violation and rejection of that counterexample by correct replay:
 
 | Mutant | Forbidden outcome |
@@ -68,6 +69,7 @@ both an invariant violation and rejection of that counterexample by correct repl
 | gap-admitted | Later event applied over an unexplained missing delta |
 | not-ready | Dispatch while the original connection is non-actionable |
 | stale-session | Old session dispatch after replacement and fresh acquisition |
+| missing-foreground | Dispatch with missing foreground evidence |
 | ungated-queue | Queued source input delivered to a replacement occupant |
 | heartbeat-ignored | Jump leaves the host actionable |
 | unconfirmed-cascade | Kill sent while an observed die-with-parent child is unconfirmed |
@@ -264,7 +266,8 @@ queued delivery) and the kill fence (plan, confirmation) read disjoint fields
 and each still meets every source, cursor, replacement and connection change,
 so this drops only their product (769,597 to 288,538 distinct states). Every
 model fault below still yields a TLC counterexample in this quotient.
-Fault searches use 10,000 samples with seed 42 and the same transition bound
+Each fault is checked exhaustively with TLC; a simulator search of up to
+200,000 samples with seed 42 extracts its ITF replay with the same transition bound
 (observe faults in the observe-only simulation);
 missing counterexamples fail. Increasing source changes to three adds 100 replayed sensitivity traces.
 
@@ -282,3 +285,18 @@ occupant-evidence detector, SQLite persistence, core send/keys integration or th
 upstream Q3 execution-time fence, OS/SSH/Windows named pipes, app placement (shared seen is the separate case above), browser grids, performance or
 temporal recovery. P1–P6 consumer/platform checks in [delivery](delivery.md) remain
 mandatory before their paths ship. Do not promote a fake into production evidence.
+
+## Session input mapping (issue #870)
+
+The dispatch replay additionally drives production `coreRecipientToken` and
+`coreRecipientChange`; `loseForeground` refuses a captured recipient whose
+current foreground is missing. Its production mutant permits absent foreground
+and must diverge through `core.state`. The original source/observation authority
+seam and Q3 limitation remain: this is not a proof of execution-time core fencing.
+`delivery.test.ts` drives the real provider through replacement, reporting loss,
+missing foreground, cancellation, timeout and a lost reply. `ask-delivery.test.ts`
+drives the SQLite dispatcher and compares its delivered state with the TUI
+consumer. Native send/keys bytes captured from scratch core 0.1.20 replay at
+one-byte boundaries in `delivery-replay.test.ts`. Core stream ordering and credit
+rules are unchanged; the existing EOF/UTF-8/oversized-missed/exhausted-credit
+cases remain required. No terminal/stream throughput improvement is claimed.

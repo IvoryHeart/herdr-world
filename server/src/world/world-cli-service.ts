@@ -1,3 +1,7 @@
+import {
+  identifyCoreAsker,
+  type CoreAnswerConnections,
+} from "../herdr-core/ask-recipient";
 import { createAskRecipients, type AnswerLease } from "./ask-recipient";
 import { createAnswerRecorder } from "./answer-record";
 import { createAnswerDispatcher } from "./answer-dispatch";
@@ -30,6 +34,7 @@ import type { TownMoveContext } from "./town-move";
 type Lease = AnswerLease;
 
 export function createWorldCliService(deps: {
+  core?(): CoreAnswerConnections;
   ledger(): LedgerStore;
   attention?(): WorldLedgerStorage["outbox"];
   effects?(): WorldLedgerStorage["effects"];
@@ -70,6 +75,7 @@ export function createWorldCliService(deps: {
   let deliveryRevision = 0;
   const recipients = createAskRecipients({
     connections: deps.connections,
+    core: deps.core,
     clock: deps.clock ?? { now, monotonic: () => performance.now() },
     incarnation,
   });
@@ -193,6 +199,8 @@ export function createWorldCliService(deps: {
       log: (message) => console.warn(message),
     });
   const cli = createWorldCli({
+    identifyCore: async (terminal, locate) =>
+      deps.core ? identifyCoreAsker(deps.core(), terminal, locate) : undefined,
     recordAnswer: recordAnswer
       ? async (id, text, actor, recheck) => {
           const revision = await recordAnswer(

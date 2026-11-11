@@ -233,6 +233,13 @@ export function createCoreFixture(
         paneStep = 0;
         agents = populate(fake);
         scout = agents.scout;
+        fake.onTyped = () => {
+          if (fake && agents)
+            fake.report(agents.reviewer, {
+              state: "working",
+              app: "claude-code",
+            });
+        };
       } else if (!fake.isRunning) {
         // A new core process: same terminals at the same addresses.
         fake.revive();
@@ -289,6 +296,16 @@ export function createCoreFixture(
         const pinned = Boolean(record.labels?.["herdr.pinned"]);
         fake!.label(running, { "herdr.pinned": pinned ? "" : "1" });
       }
+      return status();
+    },
+    replaceReviewer(): CoreFixtureStatus {
+      if (!fake?.isRunning) throw new Error("Start fixture core first.");
+      fake.replaceWithShell("t1");
+      return status();
+    },
+    loseReply(): CoreFixtureStatus {
+      if (!fake?.isRunning) throw new Error("Start fixture core first.");
+      fake.onTyped = () => stop();
       return status();
     },
     /**

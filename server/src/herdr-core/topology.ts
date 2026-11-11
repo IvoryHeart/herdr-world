@@ -8,6 +8,7 @@ import { CoreUnavailableError } from "./client";
 import { harnessName, harnessOfArgv } from "./harness";
 import type { CoreMirror, CoreMirrorTerminal } from "./mirror";
 import { coreSpawnedBy, coreSummaryOf } from "./labels";
+import { coreRecipientToken } from "./recipient";
 import type {
   CoreTopologyDocument,
   CoreTopologyRoom,
@@ -282,6 +283,7 @@ export function coreRoomOfWorkspace(
 }
 
 export type CoreTopologyOptions = {
+  occupancy?(address: string): number | null;
   firstSight?: Pick<CoreFirstSight, "turn">;
   /** World's own layout of this core (M1). */
   world?: CoreTopologyDocument | null;
@@ -405,6 +407,16 @@ export function coreTopology(
     panes.push(pane);
     if (!harness) continue;
     pane.agent = harness;
+    // The program a person addresses when they reply (delivery.ts): World
+    // sends only while this still names what runs there.
+    const recipient = coreId
+      ? coreRecipientToken(
+          coreId,
+          record,
+          "occupancy" in options ? options.occupancy?.(record.address) : null,
+        )
+      : null;
+    if (recipient) pane.core_recipient = recipient;
     if (summary) pane.task_summary = summary.text;
     // The program's own words for why it waits: Needs you shows them.
     if (report?.word === "blocked" && report.kind)
@@ -484,6 +496,7 @@ export function coreReadModel(source: CoreReadModelSource): CoreTopology {
     world: source.world?.() ?? null,
     coreId: source.coreId?.() ?? undefined,
     now: source.now?.(),
+    occupancy: (address) => source.mirror.occupancy(address),
   });
 }
 

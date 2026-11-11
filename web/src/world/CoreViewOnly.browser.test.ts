@@ -138,7 +138,7 @@ async function coreSnapshot() {
 }
 
 test.skipIf(!chrome)(
-  "core agents: Needs you and the peeks show them view-only, and World sends nothing",
+  "core agents: answers are available while terminal controls remain disabled",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "core-view-only-"));
     const { assets } = await buildWorldBrowserBundle("CoreViewOnly", dir);

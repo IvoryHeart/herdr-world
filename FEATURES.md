@@ -2083,15 +2083,26 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     has no notifications of its own, so its pushes always follow status.
     When World has more than one connection, Herdr or herdr-core, every push
     names the connection it came from.
-  - **Still view only.** Chat, answers and Mark reviewed stay visible but
-    disabled for core agents, with "World can't type into herdr-core
-    terminals or chat with them yet". Tapping a core agent in Town shows its
-    peek; Needs you, Desk and peeks show the program's own status message
-    (or why it waits: permission, a question, sign-in) instead of a
-    conversation. World reads core's event stream; the labels it writes are
-    the two shared ones above (`herdr.seen`, `herdr.pinned`) and, once at
-    launch, an agent's placement. Apart from the room shell below, World
-    never types into core terminals, resizes them or writes status.
+  - **Chat and answers.** Open a core agent from Town, Board or Desk, or
+    **Needs you → Chat**. Type a message and **Send**; a waiting agent has
+    **Answer**, its own status message, **Read question screen**, and answer
+    keys. Core's send/keys handle every supported harness identically. History
+    is unavailable here; the question screen is explicitly terminal text.
+    World checks the original core, terminal, program and foreground before
+    every send. Missing evidence or a replacement shell refuses it with a
+    reason. A timeout or lost reply says **Uncertain** and never retries.
+    Core may hold input for a person's draft or quiet period; World requests
+    cancellation if the occupant changes, but a replacement between the check
+    and core's actual typing remains core's window to close (Q3).
+  - **Saved ask answers.** A local Linux core agent using `herdr-world ask`
+    can receive the saved answer through the same core send. Its CLI claim
+    needs verified process ancestry, with the original foreground binding;
+    labels grant no authority. Replaced programs, reconnected runtime
+    generations and World restarts refuse old delivery. Uncertain delivery
+    never auto-replays; `herdr-world ask get ID` keeps the stored answer.
+    Unverified and remote claims remain retrieval-only, as with TUI asks.
+  - **Other controls.** Open terminal, files and Mark reviewed retain their
+    existing availability. World reads status from core and never writes it.
   - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek),
     Town's terminal button and opening a core agent in Desk or Board show its
     live terminal at the size core holds: the size of the Herdr app pane (or
@@ -2158,6 +2169,14 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   only touches its own connection: if a connection you made already uses the
   ID `core-fixture`, **Start fixture core** and **Remove fixture** refuse and
   leave it in place.
+
+  For input trials, open *reviewer*'s Chat before returning to **Fixture core
+  (testing) → Replace reviewer with shell**. Sending from that still-open Chat
+  must refuse without typing. **Lose next input reply** makes the next send
+  uncertain; no automatic retry occurs. **Remove fixture core** then **Start
+  fixture core** resets the synthetic agents. Answering the reviewer's question
+  moves it to working. These switches never touch a real core.
+
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
   **Open agent** follows **Agents open** (Chat by default when supported,

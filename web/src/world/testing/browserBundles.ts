@@ -11,6 +11,7 @@ export type WorldBrowserEntry =
   | "CoreControl"
   | "CoreTerminalWatch"
   | "CoreSharedState"
+  | "CoreChat"
   | "QuestionCards";
 export type WorldBrowserBundle = {
   directory: string;

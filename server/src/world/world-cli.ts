@@ -47,7 +47,7 @@ import type {
   CardColor,
 } from "./board-store";
 import type { CallerLocator } from "./caller-identity";
-import { identifyCaller, type CliHost } from "./world-cli-actor";
+import { identifyWorldCaller, type CliHost } from "./world-cli-actor";
 export {
   identifyCaller,
   paneActor,
@@ -95,6 +95,10 @@ export type WorldCliDeps = {
     actor: CliActor,
     recheck?: () => void,
   ): Promise<unknown>;
+  identifyCore?(
+    terminal: string,
+    locate: CallerLocator | null,
+  ): Promise<{ actor: CliActor; distance: number } | undefined>;
   incarnation?: string;
   hosts(): CliHost[];
   defaultConnectionId(): string | null;
@@ -136,9 +140,6 @@ export const WORLD_CLI_COMMANDS = [
 export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];
 
 /* ---------- Identity ---------- */
-
-/** Herdr pane IDs, such as "w1:p2"; anything else is refused before use. */
-const PANE_ID = /^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}$/;
 
 /* ---------- Targets ---------- */
 
@@ -908,15 +909,12 @@ export function createWorldCli(deps: WorldCliDeps) {
           }
         };
         const declaration = recheck();
-        const paneId =
-          typeof request.caller?.pane_id === "string" &&
-          request.caller.pane_id.trim()
-            ? request.caller.pane_id.trim()
-            : undefined;
-        // The claim becomes a label in the ledger and in World: bound it.
-        if (paneId !== undefined && !PANE_ID.test(paneId))
-          usage("HERDR_PANE_ID is not a Herdr pane ID");
-        const identity = await identifyCaller(deps.hosts(), paneId, locate);
+        const identity = await identifyWorldCaller(
+          deps.hosts(),
+          request.caller,
+          locate,
+          deps.identifyCore,
+        );
         actor = identity.actor;
         admission.actor = actor.verified ? "cli_verified" : "cli_unverified";
         recheck();

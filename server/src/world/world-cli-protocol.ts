@@ -6,7 +6,7 @@ export type WorldCliRequest = {
   command: string;
   params?: Record<string, unknown>;
   /** What the caller claims: its HERDR_PANE_ID. */
-  caller?: { pane_id?: unknown };
+  caller?: { pane_id?: unknown; core_terminal_id?: unknown };
 };
 
 export type WorldCliResponse = (
