@@ -48,6 +48,7 @@ import {
 } from "../http/herdr-setup";
 import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
+import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import {
   createSourcesHttpHandler,
@@ -351,6 +352,8 @@ async function compose(
     // Its pages are always this service's sockets.
     sendToPage: (ws, line) =>
       safeSend(ws as ServerWebSocket<unknown>, line, "core-terminal"),
+    // Core has no notification of its own: push follows its status events.
+    push: (task, isCurrent) => webPush.notify(task, isCurrent),
   });
 
   const connectionFailureReporter = connectionFailureReporters(
@@ -613,23 +616,20 @@ async function compose(
           clientLabel,
           markRpcError,
           taskNotificationSource: config.taskNotificationSource,
-          onTaskEvent: (event) => {
-            const connections = connectionProfiles.list();
+          onTaskEvent: (event) =>
             webPush.notify(
-              {
-                ...event,
-                connectionId: identity.id,
-                connectionLabel:
-                  connections.length > 1
-                    ? (connections.find(
-                        (connection) => connection.id === identity.id,
-                      )?.label ?? identity.label)
-                    : undefined,
-                runtimeGeneration: context.generation,
-              },
+              connectionTaskPush(
+                event,
+                identity.id,
+                context.generation,
+                [
+                  ...connectionProfiles.list(),
+                  ...connectionProfiles.coreList(),
+                ],
+                identity.label,
+              ),
               context.isCurrent,
-            );
-          },
+            ),
           onEvent: (event, eventIdentity, kind) => {
             if (!context.isCurrent()) return;
             publishWorldInvalidation(
@@ -782,6 +782,7 @@ async function compose(
     connectionManager,
     connectionProfiles,
     core,
+    coreConnections: core.manager,
     focusedAcquisition,
     agentActivity,
     deskWatches,

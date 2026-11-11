@@ -55,6 +55,8 @@ export type RpcServices = {
     import("../herdr-core/connections").CoreConnections,
     "fixture" | "watches"
   >;
+  /** herdr-core connections: seen and favourite shared with Herdr's apps. */
+  coreConnections?: import("./core-shared").CoreSharedConnections;
   focusedAcquisition: FocusedAcquisition<Socket>;
   agentActivity: AgentActivityCache;
   deskWatches: DeskWatches<Socket>;

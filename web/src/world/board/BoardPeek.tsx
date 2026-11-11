@@ -22,6 +22,9 @@ import {
   useTownScreen,
 } from "../town/townChat";
 import type { WorldLeafObject } from "../worldObject";
+import { useCoreSeen } from "../coreSeen";
+import { coreSharedOf } from "../coreShared";
+import { CoreFavouriteButton } from "../CoreFavourite";
 import "./boardPeek.css";
 
 /** The agent being peeked at and where its card sits on screen. */
@@ -55,6 +58,13 @@ export function BoardPeek({
   onHold(hold: boolean): void;
 }) {
   const { leaf, name, where, canReply, anchor } = target;
+  // A herdr-core agent drawn here is seen in Herdr's apps too.
+  const coreShared = coreSharedOf(
+    leaf.connectionId,
+    leaf.generation,
+    leaf.pane,
+  );
+  useCoreSeen(coreShared ? { ...coreShared, stale: leaf.stale } : null);
   const status = leaf.stale ? "unknown" : leaf.status;
   const blocked = status === "blocked";
   // Finished work waiting for review, as Town and Needs you count it: done,
@@ -144,6 +154,14 @@ export function BoardPeek({
             {where}
           </small>
         </div>
+        {coreShared ? (
+          <CoreFavouriteButton
+            className="board-peek-icon board-peek-favourite"
+            target={coreShared}
+            disabled={leaf.stale}
+            notify={(message) => notify("error", message)}
+          />
+        ) : null}
         <button
           type="button"
           className="board-peek-icon"

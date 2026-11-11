@@ -175,6 +175,8 @@
   "rpc:world.board.get": "allow deny deny deny deny deny",
   "rpc:world.board.patch": "allow deny deny deny deny deny",
   "rpc:world.chimes.save": "allow deny deny deny deny deny",
+  "rpc:world.core.favourite": "allow deny deny deny deny deny",
+  "rpc:world.core.seen": "allow deny deny deny deny deny",
   "rpc:world.core.unwatch": "allow deny deny deny deny deny",
   "rpc:world.core.watch": "allow deny deny deny deny deny",
   "rpc:world.desk.get": "allow deny deny deny deny deny",

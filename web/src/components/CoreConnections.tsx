@@ -377,7 +377,10 @@ export function CoreFixturePanel({
   run,
 }: {
   pending: string | null;
-  run: (action: "start" | "kill" | "remove" | "pane", success: string) => void;
+  run: (
+    action: "start" | "kill" | "remove" | "pane" | "turn" | "unread" | "pin",
+    success: string,
+  ) => void;
 }) {
   return (
     <section className="connection-manager-card" data-core-fixture>
@@ -420,6 +423,35 @@ export function CoreFixturePanel({
           onClick={() => run("remove", "Fixture core removed.")}
         >
           Remove fixture
+        </button>
+      </div>
+      <span>
+        Scout's seen and favourite are shared with Herdr's apps. These stand in
+        for a person using the phone or desktop app:
+      </span>
+      <div className="connection-profile-actions">
+        <button
+          type="button"
+          disabled={!!pending}
+          onClick={() =>
+            run("turn", "Scout is working; it finishes in about 3 seconds.")
+          }
+        >
+          Scout: finish another turn
+        </button>
+        <button
+          type="button"
+          disabled={!!pending}
+          onClick={() => run("unread", "Another app marked scout unread.")}
+        >
+          Another app: mark scout unread
+        </button>
+        <button
+          type="button"
+          disabled={!!pending}
+          onClick={() => run("pin", "Another app changed scout's favourite.")}
+        >
+          Another app: pin or unpin scout
         </button>
       </div>
     </section>

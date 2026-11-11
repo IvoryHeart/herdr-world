@@ -44,6 +44,8 @@ export type OfficeAgent = {
   /** Why World only watches this agent (herdr-core), and its own words. */
   /** `watch`: its terminal can be watched (never typed into). */
   viewOnly?: { reason: string; message: string; watch: boolean };
+  /** herdr-core: seen and favourite, shared with Herdr's apps. */
+  coreShared?: import("./coreShared").CoreShared;
   characterIndex: number;
 };
 

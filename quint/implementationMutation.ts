@@ -30,7 +30,11 @@ export type ImplementationFault =
   | "core-view-retired"
   | "core-watch-interactive"
   | "core-watch-unconfirmed"
-  | "core-watch-order";
+  | "core-watch-order"
+  | "seen-forget-look"
+  | "seen-hidden-look"
+  | "seen-stale-look"
+  | "seen-blind-write";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
@@ -46,6 +50,12 @@ export async function mutateImplementation(
       "core-watch-interactive",
       "core-watch-unconfirmed",
       "core-watch-order",
+    ],
+    "herdr-core-seen": [
+      "seen-forget-look",
+      "seen-hidden-look",
+      "seen-stale-look",
+      "seen-blind-write",
     ],
     "effect-recovery": [
       "primary",
@@ -80,6 +90,7 @@ export async function mutateImplementation(
   );
   const owners: Record<Model, string> = {
     "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
+    "herdr-core-seen": "web/src/world/coreShared.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
     "runtime-leases": "server/src/connections/manager.ts",
@@ -106,11 +117,13 @@ export async function mutateImplementation(
           ? "server/src/herdr-core/client.ts"
           : name === "herdr-core-runtime" && fault === "core-watch-order"
             ? "web/src/coreWatch.ts"
-            : name === "observation-base" && fault === "incarnation-reset"
-              ? "web/src/world/observationBase.ts"
-              : name === "creation-flow" && fault === "admission-fence"
-                ? "web/src/world/createdTerminalAdmission.ts"
-                : owners[name];
+            : name === "herdr-core-seen" && fault === "seen-blind-write"
+              ? "server/src/herdr-core/shared-state.ts"
+              : name === "observation-base" && fault === "incarnation-reset"
+                ? "web/src/world/observationBase.ts"
+                : name === "creation-flow" && fault === "admission-fence"
+                  ? "web/src/world/createdTerminalAdmission.ts"
+                  : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "herdr-core-runtime") {
@@ -145,6 +158,26 @@ export async function mutateImplementation(
         "        this.surface.resize(cols, rows);",
         "        void cols;",
       ],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "herdr-core-seen") {
+    const guards: Record<string, [string, string]> = {
+      // The browser shares a turn on every update, not once per look.
+      "seen-forget-look": [
+        "if (target.stale || this.looked.get(key) === target.turn) continue;",
+        "if (target.stale) continue;",
+      ],
+      // A hidden or unfocused page still decides.
+      "seen-hidden-look": ["    if (foreground)\n", "    if (true)\n"],
+      // A host that is not current still decides.
+      "seen-stale-look": [
+        "if (target.stale || this.looked.get(key) === target.turn) continue;",
+        "if (this.looked.get(key) === target.turn) continue;",
+      ],
+      // The service writes over a label another client changed meanwhile.
+      "seen-blind-write": ["  if (shared !== expected) return null;\n", ""],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);
@@ -398,9 +431,11 @@ export async function mutateImplementation(
             ? "quint/creation-subjects.ts"
             : name === "herdr-core-runtime"
               ? "quint/herdr-core-subjects.ts"
-              : name === "observation-base"
-                ? "quint/observation-subjects.ts"
-                : owner,
+              : name === "herdr-core-seen"
+                ? "quint/herdr-core-seen-subjects.ts"
+                : name === "observation-base"
+                  ? "quint/observation-subjects.ts"
+                  : owner,
       ),
     ],
     target: "bun",

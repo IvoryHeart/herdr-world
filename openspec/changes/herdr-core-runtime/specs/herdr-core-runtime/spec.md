@@ -111,6 +111,21 @@ installed. Native destructive actions SHALL confirm all dying descendants.
 - **THEN** shared seen clears done in the apps while blocked/error precedence,
   missing-seen semantics and explicit unread remain respected
 
+#### Scenario: Unread elsewhere while World looks
+
+- **WHEN** another Herdr client marks a turn unread while a World page still
+  shows the agent, or changes `herdr.seen` after World decided to write
+- **THEN** World keeps it unread until a new turn or a new look and writes no
+  label other than the one its look was decided on
+
+#### Scenario: Favourite and push
+
+- **WHEN** a person stars a core agent in World or pins it in a Herdr app
+- **THEN** `herdr.pinned` changes and every client shows it, while desk and
+  card pins and review receipts stay World-only; a core agent that finishes
+  after working or starts needing World's owner pushes from core status
+  events under Herdr's attention rule
+
 #### Scenario: Missing agent status
 
 - **WHEN** a harness has no reported status or its reporting times out, including

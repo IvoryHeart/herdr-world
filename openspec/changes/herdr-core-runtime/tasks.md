@@ -27,6 +27,10 @@
     fences, the observer-alone headless exception reported, a recorded 0.1.20
     watch replay, live release checks and the observe model family with three
     production negative controls.
+  - [x] Issue #868: shared `herdr.seen` from foreground World peeks (once per
+    turn per look, decided-label write, raise-only, best effort), favourite
+    as `herdr.pinned`, Web Push from core status events, the shared-seen
+    model with production replay, recorded 0.1.20 and live-release tests.
 - [ ] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
 - [ ] P4: files/Git/worktrees, asks and Ranger.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.

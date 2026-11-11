@@ -1,4 +1,5 @@
 import { viewOnlyMessage } from "./viewOnly";
+import { coreSharedOf } from "./coreShared";
 import type {
   OfficeAgent,
   OfficeAgentDestination,
@@ -56,8 +57,18 @@ export function projectAgent(
           },
         }
       : {}),
+    ...coreSharedField(leaf),
     characterIndex: stableNumber(leaf.id) % 12,
   };
+}
+
+function coreSharedField(leaf: WorldLeafObject) {
+  const coreShared = coreSharedOf(
+    leaf.connectionId,
+    leaf.generation,
+    leaf.pane,
+  );
+  return coreShared ? { coreShared } : {};
 }
 
 export function singleNamedAgentLabelInTab(
