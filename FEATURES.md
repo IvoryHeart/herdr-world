@@ -2013,9 +2013,13 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     labels plus a `where` caption (`Room / Tab`) the desktop app shows, and
     unseen. Claude Code and Codex get the task as a launch argument. Other
     harnesses get their profile role and brief through core's native send after
-    its foreground is verified (up to ten seconds). If that cannot be verified,
-    World says it started without the brief; open Chat to send it. A lost send
-    reply is uncertain and is never retried. The full [harness inventory](./docs/core-harnesses.md)
+    its foreground is verified (up to ten seconds), with core's `if: "idle"`
+    condition checked after its startup, draft and quiet waits. Unknown,
+    blocked or other non-idle status leaves the brief unsent, so an unreported
+    folder-trust dialog receives no automatic paste or Enter. World says it
+    started without the brief; open Chat to send it after reviewing the terminal.
+    A lost send reply says the agent started but brief delivery is uncertain,
+    retains its terminal identity and is never retried. The full [harness inventory](./docs/core-harnesses.md)
     includes the TUI detection list and desktop app programs; every listed kind
     can be used in a profile, with its actual executable resolved on the host.
     **Terminal** starts a plain shell in the room, not placed in the apps and
@@ -2031,7 +2035,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     native resume arguments or a Codex title, or uses the reader's existing
     directory discovery (marked as a possible guess). **Link a conversation
     for reading** accepts a session ID or an absolute transcript path on that
-    host and forgets the link when Chat closes. Links never authorize input.
+    host and forgets the link when Chat closes. The browser can select any
+    absolute path the service account can read through these transcript readers;
+    links never authorize input.
     **Refresh conversation** rereads the latest 200 entries; status and turn
     changes refresh too. Entries are limited to 16,000 characters each and
     256,000 characters in total, with shortening disclosed. A changed host,

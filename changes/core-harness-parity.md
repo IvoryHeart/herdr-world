@@ -8,4 +8,6 @@
 - Offer every Herdr integration, detection and desktop harness in the core
   launcher; resolve Cursor, Antigravity, Kiro and alternate executable names.
 - Send profile briefs for other core harnesses through native fenced delivery,
-  keeping unknown status when a harness reports none.
+  only when core confirms idle immediately before typing; leave unknown or
+  blocked startup dialogs untouched and retain the started agent's identity
+  when brief delivery is uncertain.

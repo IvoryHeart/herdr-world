@@ -6,7 +6,9 @@ import { CoreOperationFence } from "./fence";
 import { coreRecipientToken, foregroundOf } from "./recipient";
 
 /** Wait for core's foreground observation, never a guessed startup screen.
- * Core's send owns quiet/draft scheduling. A replacement during startup never
+ * Core's send owns quiet/draft scheduling and checks idle before typing, so
+ * foreground alone never authorizes an automatic answer to a trust dialog.
+ * A replacement during startup never
  * becomes the recipient of the original profile's brief. */
 export async function deliverLaunchBrief(
   lease: ReadyRuntimeLease<CoreConnectionRuntime>,
@@ -60,9 +62,21 @@ export async function deliverLaunchBrief(
       stop = lease.runtime.watch(check);
       check();
     });
-    return recipient
-      ? deliverCore(lease, record.address, recipient, { kind: "message", text })
-      : unavailable();
+    if (!recipient) return unavailable();
+    return deliverCore(
+      lease,
+      record.address,
+      recipient,
+      { kind: "message", text },
+      { onlyIfIdle: true },
+    ).then((delivery) =>
+      delivery.status === "refused"
+        ? {
+            ...delivery,
+            message: `Started, but the brief was not sent. ${delivery.message} Open Chat to send the brief.`,
+          }
+        : delivery,
+    );
   } catch {
     return unavailable();
   }

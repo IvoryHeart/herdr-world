@@ -11,6 +11,7 @@ export const coreFaults = [
   "stale-session",
   "missing-foreground",
   "publication-foreground",
+  "brief-without-idle",
   "ungated-queue",
   "heartbeat-ignored",
   "unconfirmed-cascade",

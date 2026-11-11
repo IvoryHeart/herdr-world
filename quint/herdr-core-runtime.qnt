@@ -182,6 +182,15 @@ module herdr_core_runtime {
     change({ ...c, queued: false, delivered: if (allowed) c.delivered + 1 else c.delivered,
       safe: c.safe and (not(allowed) or occupant) }, "deliver", 0),
   }
+  // Native terminal.send if=idle is checked at execution, after all queue,
+  // startup and draft waits. 0 abstracts every unknown/non-idle status.
+  action launchBrief(idle) = all {
+    c.queued,
+    val allowed = (occupant or fault("ungated-queue")) and
+      (idle == 1 or fault("brief-without-idle"))
+    change({ ...c, queued: false, delivered: if (allowed) c.delivered + 1 else c.delivered,
+      safe: c.safe and (not(allowed) or (occupant and idle == 1)) }, "launchBrief", idle),
+  }
   action complete = all {
     c.pending,
     // A transcript read also follows capture/dispatch/complete. Its contents
@@ -349,7 +358,7 @@ module herdr_core_runtime {
     nondet t = Set(0, 1).oneOf()
     nondet kind = Set("create", "remove", "x", "y").oneOf()
     any { connect, baseline, emit(t, kind), receive, missed, drop, heartbeat,
-      disconnect, restart, absent, switchProfile, replace, loseForeground, capture, dispatch, deliver, complete, recover,
+      disconnect, restart, absent, switchProfile, replace, loseForeground, capture, dispatch, deliver, launchBrief(t), complete, recover,
       plan, kill, teardown, removeCheckout }
   }
   // The observe family's own choices. The simulator's weighting depends on

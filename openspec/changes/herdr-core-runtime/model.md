@@ -14,6 +14,16 @@ a queued send to a replacement, so this model does not prove that race closed.
 The ungated-queue mutant exposes that gap; it is not permission to add a World
 harness side channel or gate read-write support on an upstream fix.
 
+Automatic profile briefs additionally require native `terminal.send if=idle`.
+`launchBrief(idle)` models the source execution after dispatch and every native
+queue/startup/draft wait. Its two status classes are idle and all unknown/non-idle
+states; only idle may type. `brief-without-idle` must violate safety. Replay
+drives the production `coreSendParams` condition and simulates core's source-side
+comparison, verified against v0.1.20 `input.rs`, `m4.rs` and the live delivery
+suite. It does not prove a vendor's status reports truthful or close Q3. Unit
+tests cover unknown/blocked/working/error and readiness lost while queued;
+live tests use a silent supported executable and native OSC status stand-ins.
+
 [The composed model](../../../quint/herdr-core-runtime.qnt) imports
 `capturedLeaseCurrent` from `runtime-leases` and `opaqueReplayBlocked` from
 `effect-recovery`. Those predicates also participate in the maintained foundation

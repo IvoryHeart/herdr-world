@@ -72,8 +72,8 @@ async function call(
   return { reply: replies[0], error: errors[0], invalidations };
 }
 
-async function world() {
-  const w = await coreWorld();
+async function world(options?: Parameters<typeof coreWorld>[0]) {
+  const w = await coreWorld(options);
   worlds.push(w);
   await w.connect();
   return w;
@@ -177,7 +177,7 @@ describe("world.core.* answers only the core connection it names", () => {
   });
 
   test("a saved generic core profile delivers its role and brief through native send", async () => {
-    const w = await world();
+    const w = await world({ runStatus: "idle" });
     const result = await call(
       w,
       "world.core.launch",

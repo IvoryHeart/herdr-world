@@ -495,7 +495,12 @@ export class CoreClient {
     address: string,
     text: string,
     options:
-      | { force: boolean; cancel?: AbortSignal; timeoutMs?: number }
+      | {
+          force: boolean;
+          onlyIfIdle?: boolean;
+          cancel?: AbortSignal;
+          timeoutMs?: number;
+        }
       | number = 15_000,
   ) {
     if (typeof options === "number") {

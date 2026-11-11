@@ -282,8 +282,24 @@ registry, detection manifest, desktop program list and World's profiles. World
 SHALL read status only from core records, showing unknown without a report,
 without running TUI screen inference or status-writing integrations for core.
 Generic profile briefs SHALL use the same native delivery path as Chat after
-core has observed the original program's foreground. Startup timeout SHALL leave
-the program running with an explicit unsent-brief notice.
+core has observed the original program's foreground, with native `if: "idle"`
+so core checks readiness after its queue/startup/draft waits, before typing.
+Unknown, blocked or other non-idle status SHALL NOT receive an automatic brief.
+Startup timeout or native refusal SHALL leave the program running with an
+explicit unsent-brief notice. Uncertain brief delivery SHALL retain the started
+terminal's identity and distinguish it from an uncertain launch.
+
+#### Scenario: Unreported startup trust prompt
+
+- **WHEN** a generic harness opens a folder-trust dialog without reporting status
+- **THEN** core refuses the automatic brief without pasting text or Enter;
+  World reports it started and offers Chat for explicit delivery
+
+#### Scenario: Readiness changes during a queued brief
+
+- **WHEN** core holds a brief for startup or a person's unfinished draft and
+  the status becomes unknown, blocked or working
+- **THEN** core's idle condition refuses it before any text or Enter is typed
 
 #### Scenario: Harness with a different executable name
 

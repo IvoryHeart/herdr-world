@@ -455,6 +455,20 @@ export class CoreProtocolFake {
         s.queued = false;
         if (this.skipGate || this.occupant()) s.delivered++;
         break;
+      case "launchBrief": {
+        assert(s.queued);
+        // Drive World's parameter builder; the source-side idle comparison
+        // is a core-owned seam, checked against input.rs and the live suite.
+        const params = this.subjects.coreSendParams("t1", "Brief", false, true);
+        const status = target === 1 ? "idle" : null;
+        s.queued = false;
+        if (
+          (this.skipGate || this.occupant()) &&
+          (!params.if || params.if === status)
+        )
+          s.delivered++;
+        break;
+      }
       case "complete": {
         assert(s.pending);
         s.pending = false;
@@ -584,6 +598,7 @@ export function validateCoreTrace(
         "loseForeground",
         "dispatch",
         "deliver",
+        "launchBrief",
         "complete",
         "recover",
         "plan",

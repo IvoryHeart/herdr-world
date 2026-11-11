@@ -81,9 +81,13 @@ during the read discards the result. Linking history never changes the recipient
 captured when Chat opened. Core's queued-send replacement window remains Q3.
 
 For generic harnesses, profile role/brief delivery waits up to ten seconds for
-core's foreground observation, then uses the ordinary fenced native send. If
-startup cannot be verified, the agent stays running and World explains that the
-brief was not sent. Lost delivery replies remain uncertain, never replayed.
+core's foreground observation, then uses the ordinary fenced native send with
+`if: "idle"`. Core checks that condition after startup/draft/quiet waits and
+before pasting: unknown, blocked and every other non-idle status type nothing.
+Foreground alone does not prove a folder-trust dialog is clear. If startup
+cannot be verified or core refuses readiness, the agent stays running and World
+says to open Chat to send the brief after reviewing the terminal. Lost delivery
+replies retain the started agent's identity and remain uncertain, never replayed.
 Claude/Codex retain their existing launch-argument first prompt.
 
 ## Browser captures
@@ -103,6 +107,11 @@ dimensions and sanity checks for all five standard viewports.
 
 ## Repeatable evidence and preview
 
+- `launch-brief.test.ts` covers unknown/blocked/working/error startup status and
+  loss of idle while queued. `delivery.live.test.ts` checks a silent supported
+  executable receives no bytes and checks native blocked/working/idle reports.
+  `testing/recorded/delivery-0.1.20.json` retains the real conditional-send
+  refusals; `delivery-replay.test.ts` replays them with one-byte reads too.
 - `server/src/herdr-core/history.test.ts` runs all eight shared native transcript
   fixtures and compares their entries with the TUI projection. It also covers
   remote lookup refusal, disconnect, missing foreground, title change and kept

@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { CoreClient } from "./client";
 import { deliverCore } from "./delivery";
+import { deliverLaunchBrief } from "./launch-brief";
 import { CoreOperationFence } from "./fence";
 import { coreRecipientToken } from "./recipient";
 import { connectUnixStream } from "./stream";
@@ -58,6 +65,7 @@ async function scratchWorld() {
       await core.hc(
         "run",
         "--json",
+        "--bg",
         "--keep",
         "--name",
         name,
@@ -118,6 +126,57 @@ async function scratchWorld() {
 }
 
 describe("World's session input to a real herdr-core", () => {
+  live(
+    "a silent harness trust dialog receives no automatic brief or Enter",
+    async () => {
+      const s = await scratchWorld();
+      // cat reports no OSC status and records/echoes every byte it receives.
+      // Its executable has a supported generic harness name, without credentials.
+      const executable = join(s.core.root, "copilot");
+      copyFileSync("/bin/cat", executable);
+      const run = JSON.parse(
+        await s.core.hc(
+          "run",
+          "--json",
+          "--bg",
+          "--keep",
+          "--name",
+          "silent",
+          "--",
+          executable,
+        ),
+      );
+      await until(() => Boolean(s.w.record(run.address)?.foreground));
+      const record = s.w.record(run.address)!;
+      expect(record.reported).toBe(false);
+      expect(
+        await deliverLaunchBrief(s.w.lease(), record, "AUTO-BRIEF"),
+      ).toMatchObject({
+        status: "refused",
+        message: expect.stringContaining("Open Chat to send the brief"),
+      });
+      expect(await s.screen("silent")).toBe("");
+    },
+    30_000,
+  );
+
+  for (const status of ["blocked", "working", "idle"])
+    live(
+      `automatic launch brief with native ${status} status`,
+      async () => {
+        const s = await scratchWorld();
+        const address = await s.start("probe", status);
+        const outcome = await deliverLaunchBrief(
+          s.w.lease(),
+          s.w.record(address)!,
+          "AUTO-BRIEF",
+        );
+        expect(outcome.status).toBe(status === "idle" ? "sent" : "refused");
+        expect(s.read()).toBe(status === "idle" ? "AUTO-BRIEF\n" : "");
+      },
+      30_000,
+    );
+
   live(
     "a message reaches the agent once, through core's send",
     async () => {
