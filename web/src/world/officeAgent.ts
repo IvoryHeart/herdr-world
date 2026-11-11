@@ -49,7 +49,11 @@ export function projectAgent(
     canOpenInSpaces: leaf.capabilities.openSpaces,
     ...(leaf.viewOnly
       ? {
-          viewOnly: { reason: leaf.viewOnly, message: viewOnlyMessage(leaf) },
+          viewOnly: {
+            reason: leaf.viewOnly,
+            message: viewOnlyMessage(leaf),
+            watch: Boolean(leaf.watch),
+          },
         }
       : {}),
     characterIndex: stableNumber(leaf.id) % 12,

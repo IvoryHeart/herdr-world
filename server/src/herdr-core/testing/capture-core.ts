@@ -7,6 +7,7 @@ import { writeFileSync } from "node:fs";
 import { CoreClient, type CoreTerminalRecord } from "../client";
 import { resolveLocalCoreEndpoint } from "../endpoint";
 import { connectUnixStream } from "../stream";
+import { desktopPane } from "./desktop-pane";
 import { ScratchCore, scratchCoreBinary } from "./scratch-core";
 
 export type RecordedConnection = {
@@ -146,16 +147,91 @@ export async function captureCore(bin: string): Promise<CoreRecording> {
   }
 }
 
+/** A program printing a 4-byte character in two writes, then more lines. */
+const WATCHED = [
+  "printf 'ready \\342\\234\\223\\r\\n'",
+  "sleep 0.6",
+  "printf 'split \\360\\237'",
+  "sleep 0.3",
+  "printf '\\230\\200 done\\r\\n'",
+  "sleep 0.6",
+  "printf 'after resize\\r\\n'",
+  "sleep 0.8",
+  "printf 'headless now\\r\\n'",
+  "exec sleep 600",
+].join("; ");
+
+/**
+ * World watches an agent while a desktop pane leads its size: the pane
+ * attaches at 120x40, resizes to 90x25, closes (headless), then core is
+ * killed mid-stream. Every byte World read is recorded.
+ */
+export async function captureWatch(bin: string): Promise<CoreRecording> {
+  const core = new ScratchCore(bin, { heartbeatMs: 300 });
+  try {
+    await core.start();
+    let version = "";
+    const pane = await desktopPane(core);
+    const sizes: Array<[number, number]> = [];
+    const watched = await recordConnection(
+      core,
+      "watch-then-crash",
+      async (client, calls) => {
+        version = client.hello.version;
+        await core.hc(
+          "run",
+          "--bg",
+          "--name",
+          "agent",
+          "--",
+          "sh",
+          "-c",
+          WATCHED,
+        );
+        await pane.attach("t1", 120, 40);
+        calls.push("terminal.attach t1 observe");
+        await client.watch(
+          "t1",
+          { cols: 120, rows: 40 },
+          {
+            resize: (cols, rows) => sizes.push([cols, rows]),
+            data: () => {},
+            close: () => {},
+          },
+        );
+        await Bun.sleep(1_200);
+        pane.resize(90, 25);
+        await Bun.sleep(700);
+        pane.detach();
+        await Bun.sleep(900);
+        core.killCore();
+      },
+    );
+    pane.close();
+    const after = JSON.parse(await core.hc("get", "agent", "--json"));
+    return {
+      core_version: version,
+      scenario: `watch t1 (observe, resize_notifications) while an interactive pane attaches at 120x40, resizes to 90x25 and detaches; a 4-byte character split across writes; kill -9 of core mid-stream. Grids World received: ${sizes.map((s) => s.join("x")).join(", ")}; after restart the terminal is ${after.cols}x${after.rows}`,
+      connections: [scrubHello(watched)],
+    };
+  } finally {
+    await core.dispose();
+  }
+}
+
 if (import.meta.main) {
   const bin = scratchCoreBinary();
   const out = process.argv[2];
   if (!bin || !out) {
     console.error(
-      "usage: HERDR_CORE_BIN=<herdr-core> bun capture-core.ts <out.json>",
+      "usage: HERDR_CORE_BIN=<herdr-core> bun capture-core.ts <out.json> [watch]",
     );
     process.exit(2);
   }
-  const recording = await captureCore(bin);
+  const recording =
+    process.argv[3] === "watch"
+      ? await captureWatch(bin)
+      : await captureCore(bin);
   writeFileSync(out, `${JSON.stringify(recording, null, 1)}\n`);
   console.log(`recorded ${recording.core_version}: ${out}`);
 }

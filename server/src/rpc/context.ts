@@ -50,8 +50,11 @@ export type RpcServices = {
     LegacyConnectionRuntime,
     CoreConnectionRuntime
   >;
-  /** Testing switch: the in-process herdr-core preview fixture. */
-  coreFixture?: import("../herdr-core/fixture").CoreFixture;
+  /** herdr-core: its preview fixture and the pages watching its terminals. */
+  core?: Pick<
+    import("../herdr-core/connections").CoreConnections,
+    "fixture" | "watches"
+  >;
   focusedAcquisition: FocusedAcquisition<Socket>;
   agentActivity: AgentActivityCache;
   deskWatches: DeskWatches<Socket>;

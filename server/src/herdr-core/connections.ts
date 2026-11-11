@@ -1,3 +1,4 @@
+import { type CorePage, CoreTerminalWatches } from "./watches";
 import { ConnectionManager } from "../connections/manager";
 import type { CoreConnectionSupport } from "../connections/core-support";
 import { connectionIdentityForProfile } from "../connections/profile-service";
@@ -17,6 +18,8 @@ import { coreTransportForProfile } from "./transport";
 
 export type CoreConnections = {
   manager: ConnectionManager<CoreConnectionRuntime>;
+  /** Pages watching this service's core terminals (observe streams). */
+  watches: CoreTerminalWatches<CorePage>;
   observations: CoreObservationStore;
   support: CoreConnectionSupport<CoreConnectionRuntime>;
   fixture: CoreFixture;
@@ -54,6 +57,8 @@ export function createCoreConnections(args: {
     onTunnelExit: (error: Error) => void,
   ) => CoreTransport;
   connect?: CoreStreamConnector;
+  /** Sends a watched terminal's push line to its page; false if it cannot. */
+  sendToPage?(page: CorePage, line: string): boolean;
 }): CoreConnections {
   const observed = (connectionId: string) => {
     if (manager.has(connectionId))
@@ -134,12 +139,21 @@ export function createCoreConnections(args: {
     observation: (connectionId) => observations.get(connectionId),
   };
   const fixture = createCoreFixture(args.profiles);
+  // Pages watch core terminals as observers: core's grid, never World's.
+  const watches = new CoreTerminalWatches<CorePage>({
+    lease: (id) => (manager.has(id) ? manager.readyRuntimeLease(id) : null),
+    send: (page, push) =>
+      args.sendToPage?.(page, JSON.stringify({ core_terminal: push })) ?? false,
+    buffered: (page) => page.getBufferedAmount(),
+  });
   return {
     manager,
+    watches,
     observations,
     support,
     fixture,
     stop: async () => {
+      watches.stop();
       await manager.stopAll();
       fixture.dispose();
     },

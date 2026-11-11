@@ -468,6 +468,7 @@ export function listen(deps: ListenerDeps) {
         );
       },
       drain(ws) {
+        browsers.drained(ws);
         // The viewer caught up: send the newest repaint we held back.
         flushCoalescedMessages(ws, {
           cleanup: () => {

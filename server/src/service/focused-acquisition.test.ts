@@ -201,7 +201,7 @@ test("socket cleanup releases acquisition once and publishes the changed browser
     logger: silentLogger,
     clock: { now: () => 0, monotonic: () => 0 },
     forEachRuntime() {},
-    closed: (socket) => released.push(socket),
+    sockets: () => [{ release: (socket) => void released.push(socket) }],
     countChanged: () => counts.push(browsers.clients.size),
   });
   const one = {} as ServerWebSocket<unknown>,

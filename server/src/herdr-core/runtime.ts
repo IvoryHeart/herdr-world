@@ -10,6 +10,8 @@ import {
   CoreIncompatibleError,
   type CoreServerStatus,
   CoreUnavailableError,
+  type CoreWatch,
+  type CoreWatchSink,
 } from "./client";
 import {
   type CoreEpoch,
@@ -73,6 +75,16 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
   readScreen(
     fence: CoreOperationFence<CoreConnectionRuntime>,
   ): Promise<Record<string, unknown>>;
+  /**
+   * Watches the fenced terminal as an observer on this connection, with its
+   * own credit. The fence's lease, core process and program must hold at
+   * dispatch and when the reply is published; the caller re-checks them for
+   * every frame it passes on.
+   */
+  watchTerminal(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    sink: CoreWatchSink,
+  ): Promise<CoreWatch>;
 };
 
 /** Admits a screen read of `address` under `lease` and runs it fenced. */
@@ -85,6 +97,15 @@ export function readCoreScreen(
   } catch (error) {
     return Promise.reject(error);
   }
+}
+
+function gridOf(value: unknown, fallback: number): number {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value > 0 &&
+    value <= 0xffff
+    ? value
+    : fallback;
 }
 
 export class CoreMirrorRetiredError extends CoreUnavailableError {
@@ -276,6 +297,31 @@ export function createCoreConnectionRuntime(
     return screen;
   }
 
+  async function watchTerminal(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    sink: CoreWatchSink,
+  ) {
+    if (fence.lease.runtime !== self || !fence.occupant)
+      throw new CoreFenceError("dispatch", "lease");
+    const current = client;
+    if (!current) throw new CoreFenceError("dispatch", "not-actionable");
+    fence.check("dispatch", "program");
+    const address = fence.occupant.address;
+    const record = mirror.terminal(address);
+    const watch = await current.watch(
+      address,
+      { cols: gridOf(record?.cols, 80), rows: gridOf(record?.rows, 24) },
+      sink,
+    );
+    try {
+      fence.check("publication", "program");
+    } catch (error) {
+      watch.detach();
+      throw error;
+    }
+    return watch;
+  }
+
   function stop() {
     if (stopTask) return stopTask;
     stopped = true;
@@ -314,6 +360,7 @@ export function createCoreConnectionRuntime(
       firstSight,
     }),
     readScreen,
+    watchTerminal,
     startTransport,
     startBackground,
     stop,

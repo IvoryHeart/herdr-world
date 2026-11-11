@@ -2,3 +2,8 @@
 // mutants substitute one of them inside an ignored bundle of this entry.
 export { CoreMirror } from "../server/src/herdr-core/mirror";
 export { coreReadModel } from "../server/src/herdr-core/topology";
+export {
+  acceptWatchReply,
+  watchAttachParams,
+} from "../server/src/herdr-core/client";
+export { CoreWatchScreen } from "../web/src/coreWatch";

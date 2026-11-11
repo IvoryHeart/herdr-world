@@ -1,0 +1,318 @@
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { ArrowLeft, Eye } from "lucide-react";
+import { Terminal } from "@xterm/xterm";
+import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
+import "@xterm/xterm/css/xterm.css";
+import { bridge, type ConnectionStatus } from "../api";
+import {
+  type CoreGrid,
+  CoreWatchScreen,
+  watchEndedText,
+  watchGridText,
+  watchScale,
+} from "../coreWatch";
+import type { ResolvedTheme } from "../appearance";
+import { terminalThemeFor } from "../terminalThemes";
+import "./coreWatch.css";
+
+/** Which herdr-core terminal to watch, as World's snapshot names it. */
+export type CoreWatchTarget = {
+  connectionId: string;
+  generation: number;
+  address: string;
+};
+
+const pageTheme = (): ResolvedTheme =>
+  document.documentElement.dataset.theme === "light" ? "light" : "dark";
+
+function streamKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return `w${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** The page is visible: a hidden page holds no stream (one per visible view). */
+function usePageVisible() {
+  const [visible, setVisible] = useState(
+    () => document.visibilityState !== "hidden",
+  );
+  useEffect(() => {
+    const update = () => setVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+  return visible;
+}
+
+/** Advances each time the World socket connects again (its watches ended). */
+function useBridgeEpoch() {
+  const [epoch, setEpoch] = useState(0);
+  useEffect(() => {
+    let last: ConnectionStatus | null = null;
+    return bridge.onStatus((status) => {
+      if (status === "connected" && last !== null && last !== "connected")
+        setEpoch((value) => value + 1);
+      last = status;
+    });
+  }, []);
+  return epoch;
+}
+
+/**
+ * A herdr-core terminal, watched. Core's grid is adopted exactly (the
+ * desktop pane's size, or headless); the drawing is only scaled to fit, so
+ * rotating a phone or opening its keyboard never changes the terminal. The
+ * page sends core nothing but its watch: no keys, size or focus.
+ */
+export function CoreTerminalWatch({
+  target,
+  title,
+  onClose,
+}: {
+  target: CoreWatchTarget;
+  title: string;
+  onClose(): void;
+}) {
+  const viewRef = useRef<HTMLDivElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const [grid, setGrid] = useState<CoreGrid | null>(null);
+  const [movedFrom, setMovedFrom] = useState<CoreGrid | null>(null);
+  const [ended, setEnded] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const [drawn, setDrawn] = useState({ width: 0, height: 0 });
+  const [attempt, setAttempt] = useState(0);
+  const visible = usePageVisible();
+  const epoch = useBridgeEpoch();
+
+  // One xterm for the view's lifetime: display only, never an input source.
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const term = new Terminal({
+      disableStdin: true,
+      cursorBlink: false,
+      allowProposedApi: true,
+      scrollback: 2000,
+      cols: 80,
+      rows: 24,
+      fontSize: 13,
+      theme: terminalThemeFor(pageTheme()),
+      scrollbar: { showScrollbar: false },
+    });
+    term.loadAddon(new UnicodeGraphemesAddon());
+    term.open(host);
+    if (term.textarea) {
+      term.textarea.readOnly = true;
+      term.textarea.tabIndex = -1;
+    }
+    termRef.current = term;
+    const themes = new MutationObserver(() => {
+      term.options.theme = terminalThemeFor(pageTheme());
+    });
+    themes.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => {
+      themes.disconnect();
+      termRef.current = null;
+      term.dispose();
+    };
+  }, []);
+
+  // The stream: opened while the page is visible, again after World's socket
+  // or the core connection comes back, closed when the view goes.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || !visible) return;
+    const stream = streamKey();
+    let live = true;
+    term.reset();
+    setGrid(null);
+    setEnded(null);
+    const screen = new CoreWatchScreen({
+      resize: (cols, rows) => {
+        // xterm's resize first parses every write before it (flushSync), so
+        // earlier bytes are drawn on their own grid and later ones on this.
+        term.resize(cols, rows);
+        // xterm's own grid, for anyone checking it is core's.
+        if (hostRef.current)
+          hostRef.current.dataset.termGrid = `${term.cols}x${term.rows}`;
+        setGrid({ cols, rows });
+      },
+      write: (bytes) => term.write(bytes),
+    });
+    const off = bridge.onCoreTerminal(stream, (push) => {
+      if (!live) return;
+      try {
+        screen.apply(push);
+      } catch (error) {
+        setEnded((error as Error).message);
+        return;
+      }
+      if ("closed" in push) setEnded(watchEndedText(push.closed));
+    });
+    bridge
+      .call("world.core.watch", {
+        connection_id: target.connectionId,
+        generation: target.generation,
+        address: target.address,
+        stream,
+      })
+      .then((opened: { moved_from?: CoreGrid | null } | null) => {
+        if (live) setMovedFrom(opened?.moved_from ?? null);
+      })
+      .catch((error: Error) => {
+        if (live) setEnded(error.message);
+      });
+    return () => {
+      live = false;
+      off();
+      void bridge.call("world.core.unwatch", { stream }).catch(() => undefined);
+    };
+  }, [
+    target.connectionId,
+    target.generation,
+    target.address,
+    visible,
+    epoch,
+    attempt,
+  ]);
+
+  // Measure the drawing at actual size once xterm has laid out the new grid.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !grid) return;
+    const frame = requestAnimationFrame(() => {
+      const screen = host.querySelector<HTMLElement>(".xterm-screen");
+      if (screen)
+        setDrawn({ width: screen.offsetWidth, height: screen.offsetHeight });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [grid]);
+
+  // Scale to the view: a rotation or a phone keyboard changes the view only.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const fit = () =>
+      setScale(
+        watchScale(drawn, {
+          width: view.clientWidth,
+          height: view.clientHeight,
+        }),
+      );
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(view);
+    return () => observer.disconnect();
+  }, [drawn]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <section
+      className="core-watch"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${title}'s terminal`}
+      data-core-watch={target.address}
+    >
+      <header className="core-watch-head">
+        <button
+          type="button"
+          className="core-watch-back"
+          onClick={onClose}
+          aria-label="Back"
+          title="Back"
+        >
+          <ArrowLeft size={18} aria-hidden="true" />
+        </button>
+        <div className="core-watch-title">
+          <strong>{title}</strong>
+          <small data-core-watch-grid>{watchGridText(grid, movedFrom)}</small>
+        </div>
+        <span
+          className="core-watch-badge"
+          title="World can't type into herdr-core agents yet"
+        >
+          <Eye size={14} aria-hidden="true" />
+          Watching
+        </span>
+      </header>
+      <div className="core-watch-view" ref={viewRef}>
+        <div
+          className="core-watch-frame"
+          style={{
+            width: drawn.width ? drawn.width * scale : undefined,
+            height: drawn.height ? drawn.height * scale : undefined,
+          }}
+        >
+          <div
+            className="core-watch-host"
+            ref={hostRef}
+            data-scale={scale.toFixed(3)}
+            style={{ transform: `scale(${scale})` }}
+          />
+        </div>
+        {ended ? (
+          <div className="core-watch-ended" role="status">
+            <p>{ended}</p>
+            <button type="button" onClick={() => setAttempt((n) => n + 1)}>
+              Watch again
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+/** What the watch needs of a World node: its label and, if live, its target. */
+type WatchableNode = { label: string; watch?: CoreWatchTarget };
+
+/**
+ * Which core terminal is open as a watch. While its connection is away the
+ * view keeps the last target, so it can say why the watch ended; when the
+ * connection returns with a new generation the view watches again.
+ */
+export function useCoreTerminalWatch(
+  find: (id: string) => WatchableNode | undefined,
+) {
+  const [open, setOpen] = useState<{ id: string; title: string } | null>(null);
+  const last = useRef<CoreWatchTarget | null>(null);
+  const close = useCallback(() => setOpen(null), []);
+  const node = open ? find(open.id) : undefined;
+  if (node?.watch) last.current = node.watch;
+  return {
+    /** Opens `id` as a watch when it is a live core terminal. */
+    watch(id: string): boolean {
+      const candidate = find(id);
+      if (!candidate?.watch) return false;
+      last.current = candidate.watch;
+      setOpen({ id, title: candidate.label });
+      return true;
+    },
+    view:
+      open && last.current ? (
+        <CoreTerminalWatch
+          key={open.id}
+          target={last.current}
+          title={node?.label ?? open.title}
+          onClose={close}
+        />
+      ) : null,
+  };
+}

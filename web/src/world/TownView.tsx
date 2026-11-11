@@ -865,7 +865,9 @@ export default function TownView({
             onChat={() => openChat(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);
-              openOfficeTerminal(peekAgent.key);
+              if (peekAgent.viewOnly?.watch)
+                void onOpenTerminal(peekAgent.nodeId).catch(() => undefined);
+              else openOfficeTerminal(peekAgent.key);
             }}
             onNext={
               reception.step(peekAgent.key, peek!.anchor) ??

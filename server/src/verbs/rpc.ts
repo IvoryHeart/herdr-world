@@ -271,6 +271,9 @@ export const rpcVerbs = [
     object({ ops: Type.Array(Type.Unknown()) }),
   ),
   rpc("world.chimes.save", "reconcilable", "world"),
+  // Observe-only streams of herdr-core terminals; the handler fences each.
+  rpc("world.core.unwatch", "reconcilable", "world"),
+  rpc("world.core.watch", "reconcilable", "world"),
   rpc("world.desk.get", "read", "world"),
   rpc("world.desk.observe", "reconcilable", "world"),
   rpc("world.desk.open", "reconcilable", "world"),

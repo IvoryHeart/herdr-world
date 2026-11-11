@@ -27,7 +27,10 @@ export type ImplementationFault =
   | "core-heartbeat"
   | "core-stale"
   | "core-missed-cut"
-  | "core-view-retired";
+  | "core-view-retired"
+  | "core-watch-interactive"
+  | "core-watch-unconfirmed"
+  | "core-watch-order";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
@@ -40,6 +43,9 @@ export async function mutateImplementation(
       "core-stale",
       "core-missed-cut",
       "core-view-retired",
+      "core-watch-interactive",
+      "core-watch-unconfirmed",
+      "core-watch-order",
     ],
     "effect-recovery": [
       "primary",
@@ -94,11 +100,17 @@ export async function mutateImplementation(
       ? "server/src/storage/effect-transitions.ts"
       : name === "herdr-core-runtime" && fault === "core-view-retired"
         ? "server/src/herdr-core/topology.ts"
-        : name === "observation-base" && fault === "incarnation-reset"
-          ? "web/src/world/observationBase.ts"
-          : name === "creation-flow" && fault === "admission-fence"
-            ? "web/src/world/createdTerminalAdmission.ts"
-            : owners[name];
+        : name === "herdr-core-runtime" &&
+            (fault === "core-watch-interactive" ||
+              fault === "core-watch-unconfirmed")
+          ? "server/src/herdr-core/client.ts"
+          : name === "herdr-core-runtime" && fault === "core-watch-order"
+            ? "web/src/coreWatch.ts"
+            : name === "observation-base" && fault === "incarnation-reset"
+              ? "web/src/world/observationBase.ts"
+              : name === "creation-flow" && fault === "admission-fence"
+                ? "web/src/world/createdTerminalAdmission.ts"
+                : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "herdr-core-runtime") {
@@ -118,6 +130,21 @@ export async function mutateImplementation(
       ],
       // The read model shows a retired mirror as current.
       "core-view-retired": ["if (!source.actionable)", "if (false)"],
+      // World attaches as a typing viewer: it would lead core's size.
+      "core-watch-interactive": [
+        "    observe: true,\n    resize_notifications: true,",
+        "    observe: false,\n    resize_notifications: true,",
+      ],
+      // An unconfirmed path is watched anyway: paints at an unknown grid.
+      "core-watch-unconfirmed": [
+        "if (reply.resize_notifications !== true)",
+        "if (false)",
+      ],
+      // The page draws without adopting core's grid first.
+      "core-watch-order": [
+        "        this.surface.resize(cols, rows);",
+        "        void cols;",
+      ],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);

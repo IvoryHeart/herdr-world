@@ -20,6 +20,13 @@
     from the desktop app's placement, view-only controls with a reason, and a
     production read-model replay with its own negative control.
 - [ ] P2: observer streams, shared seen/favourite and event push.
+  - [x] Issue #867: observe streams. One observe attach per visible browser
+    view with its own credit, `resize_notifications` required and confirmed,
+    core's grid applied before every paint (xterm adopts it; fitting only
+    scales), no RESIZE, FOCUS or input from World, per-frame lease/core/program
+    fences, the observer-alone headless exception reported, a recorded 0.1.20
+    watch replay, live release checks and the observe model family with three
+    production negative controls.
 - [ ] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
 - [ ] P4: files/Git/worktrees, asks and Ranger.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.

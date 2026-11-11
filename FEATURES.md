@@ -1993,14 +1993,34 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     World first saw the terminal count as seen, so done means a turn that
     ended while World watched. Marking a turn seen or unread in a Herdr app
     changes World within moments.
-  - **View only for now.** World cannot control core agents yet: Open
-    terminal, Chat, answers, Mark reviewed, New agent, Add room, rename and
-    close stay visible but disabled, with "View only: World can't control
-    herdr-core agents yet"; Board's bin and opening a core card say the same.
-    Tapping a core agent in Town shows its peek; Needs you, Desk and peeks show the program's own status message
-    (or why it waits: permission, a question, sign-in) instead of a
-    conversation. World reads only core's event stream: it never types,
-    resizes, labels or writes status.
+  - **View only for now.** World cannot control core agents yet: Chat,
+    answers, Mark reviewed, New agent, Add room, rename and close stay visible
+    but disabled, with "View only: World can't control herdr-core agents
+    yet"; Board's bin says the same. Tapping a core agent in Town shows its
+    peek; Needs you, Desk and peeks show the program's own status message (or
+    why it waits: permission, a question, sign-in) instead of a conversation.
+    World never types, labels or writes status.
+  - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek),
+    Town's terminal button and opening a core agent in Desk or Board show its
+    live terminal at the size core holds: the size of the Herdr app pane (or
+    other typing viewer) that has it open, or core's headless size (200×120
+    by default) when none does. The line under the name says which. World
+    only watches: it sends core no keys, size or focus, so rotating a phone,
+    opening its keyboard or resizing the window only scales the drawing (down
+    to 45%, then the view scrolls) and never changes the agent's terminal.
+    When the app resizes or closes its pane, World follows before the next
+    paint. **Exception:** if no Herdr app or typing viewer has the terminal
+    open, core moves it to its headless size when World starts watching (its
+    rule for every observer); World says "herdr-core moved it from C×R to its
+    headless size". Back or Escape closes the view. The watch ends, with the
+    reason and **Watch again**, when the program exits, another program takes
+    the address, or the core connection is lost; when core is back the open
+    view watches again by itself. A hidden page holds no watch and resumes
+    when shown. Limits: four watched terminals per page and 32
+    per World service. A page that falls behind stops taking core's output
+    until it catches up; core then repaints the latest screen instead of
+    replaying the backlog. A core that cannot announce its grid
+    (`resize_notifications`) is refused rather than shown at a guessed size.
   - **Stale.** When core stops, its agents stay where they were, marked
     offline with their last state, and return at the same addresses when it
     is back. Lost ordering shows them stale until World has a fresh snapshot.
@@ -2010,8 +2030,13 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   a shell: in the desktop app's "web" space, *reviewer* (Claude Code) is
   waiting for an answer and *builder* (Codex) is working; *scout* (Gemini)
   finishes its turn about three seconds after the start (done); *helper*
-  (OpenCode, no status reporting) and a shell are unplaced. **Kill fixture
-  core** stops it like `kill -9`, and **Remove fixture** deletes both. The
+  (OpenCode, no status reporting) and a shell are unplaced. The placed agents
+  have a desktop-app pane at 96×28 and the builder keeps printing, so a watch
+  is live; *helper* has no pane and shows the headless size. **Resize
+  reviewer's app pane** steps the reviewer's pane through 132×40, 72×24,
+  closed (headless) and back to 96×28, as a person resizing or closing it in
+  the desktop app would. **Kill fixture core** stops it like `kill -9`, and
+  **Remove fixture** deletes both. The
   stand-in runs inside the World service and starts no program. The fixture
   only touches its own connection: if a connection you made already uses the
   ID `core-fixture`, **Start fixture core** and **Remove fixture** refuse and

@@ -377,7 +377,7 @@ export function CoreFixturePanel({
   run,
 }: {
   pending: string | null;
-  run: (action: "start" | "kill" | "remove", success: string) => void;
+  run: (action: "start" | "kill" | "remove" | "pane", success: string) => void;
 }) {
   return (
     <section className="connection-manager-card" data-core-fixture>
@@ -386,7 +386,9 @@ export function CoreFixturePanel({
           <strong>Fixture core (testing)</strong>
           <span>
             A stand-in herdr-core inside this World service with four synthetic
-            agents and a shell. Nothing is installed and no program runs.
+            agents and a shell. Nothing is installed and no program runs. Its
+            placed agents have a desktop-app pane at 96×28; the reviewer's pane
+            can be resized or closed below.
           </span>
         </div>
       </div>
@@ -404,6 +406,13 @@ export function CoreFixturePanel({
           onClick={() => run("kill", "Fixture core was killed.")}
         >
           Kill fixture core
+        </button>
+        <button
+          type="button"
+          disabled={!!pending}
+          onClick={() => run("pane", "The reviewer's app pane changed size.")}
+        >
+          Resize reviewer's app pane
         </button>
         <button
           type="button"

@@ -195,10 +195,7 @@ async function compose(
     logger,
     clock,
     forEachRuntime: (visit) => connectionManager.forEachCurrentRuntime(visit),
-    closed: (socket) => {
-      focusedAcquisition.release(socket);
-      deskWatches.release(socket);
-    },
+    sockets: () => [focusedAcquisition, deskWatches, core.watches],
     countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
@@ -351,6 +348,9 @@ async function compose(
     changed: publishConnectionsChanged,
     observed: publishWorldInvalidation,
     profiles: () => connectionProfiles,
+    // Its pages are always this service's sockets.
+    sendToPage: (ws, line) =>
+      safeSend(ws as ServerWebSocket<unknown>, line, "core-terminal"),
   });
 
   const connectionFailureReporter = connectionFailureReporters(
@@ -781,7 +781,7 @@ async function compose(
     clients,
     connectionManager,
     connectionProfiles,
-    coreFixture: core.fixture,
+    core,
     focusedAcquisition,
     agentActivity,
     deskWatches,

@@ -3,6 +3,7 @@ import { SquareTerminal } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { agentStateWord } from "../agentMarks";
 import { AgentLatestMessage } from "../AgentHoverCard";
+import { CORE_WATCH_TITLE as WATCH_TITLE } from "../viewOnly";
 import type { TownChoice, TownConversation } from "./townChat";
 import { townPortrait } from "./townSprites";
 import { ContextFillBar } from "../../components/ContextFillBar";
@@ -171,8 +172,14 @@ export function TownPeek({
           type="button"
           className="town-peek-terminal"
           aria-label={`Open ${agent.displayLabel}'s terminal`}
-          title={agent.viewOnly?.reason ?? "Open terminal"}
-          disabled={Boolean(agent.viewOnly)}
+          title={
+            agent.viewOnly && !agent.viewOnly.watch
+              ? agent.viewOnly.reason
+              : agent.viewOnly
+                ? WATCH_TITLE
+                : "Open terminal"
+          }
+          disabled={Boolean(agent.viewOnly && !agent.viewOnly.watch)}
           onClick={onTerminal}
         >
           <SquareTerminal size={15} aria-hidden="true" />
