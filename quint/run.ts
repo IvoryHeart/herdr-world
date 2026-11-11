@@ -1,3 +1,4 @@
+import { coreWitnesses, runCoreVerification } from "./herdr-core-runtime";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
 import {
@@ -54,6 +55,11 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "herdr-core-runtime",
+    witnesses: coreWitnesses,
+    mismatches: ["core.state"],
+  },
   {
     name: "binding-resolution",
     witnesses: [
@@ -664,6 +670,18 @@ export async function runReviewedQuintModels(
     );
     const results = [];
     for (const item of runCases) {
+      if (item.name === "herdr-core-runtime") {
+        const result = await runCoreVerification({
+          root,
+          output,
+          artifacts,
+          command,
+        });
+        results.push(result);
+        console.log(JSON.stringify(result));
+        continue;
+      }
+      const witnesses: readonly string[] = item.witnesses;
       const traceCount = replayTracesPerSeed(item.name);
       const model = `quint/${item.name}.qnt`;
       await command(`${item.name}-types`, ["typecheck", model]);
@@ -690,7 +708,7 @@ export async function runReviewedQuintModels(
         ...item.witnesses,
       ]);
       const witnessCounts: Record<string, number> = {};
-      for (const witness of item.witnesses) {
+      for (const witness of witnesses) {
         const match = simulation.match(
           new RegExp(`${witness} was witnessed in (\\d+) trace`),
         );
@@ -742,7 +760,7 @@ export async function runReviewedQuintModels(
           ...item.witnesses,
         ]);
         witnessesBySeed[String(seed)] = {};
-        for (const witness of item.witnesses) {
+        for (const witness of witnesses) {
           const match = sampled.match(
             new RegExp(`${witness} was witnessed in (\\d+) trace`),
           );
@@ -774,12 +792,12 @@ export async function runReviewedQuintModels(
       const replayWitnesses = originalReplay.witnesses;
       const steps = originalReplay.steps;
       for (const seed of [42, 73, 103])
-        for (const witness of item.witnesses)
+        for (const witness of witnesses)
           assert(
             (originalReplay.witnessesBySeed[String(seed)]?.[witness] ?? 0) > 0,
             `missing seed-${seed} actual replay witness ${witness}`,
           );
-      for (const name of item.witnesses)
+      for (const name of witnesses)
         assert(
           replayWitnesses[name]! > 0,
           `missing actual replay witness ${name}`,
@@ -1212,7 +1230,7 @@ export async function runReviewedQuintModels(
     );
     cancellation.signal.throwIfAborted();
     console.log(
-      "All selected finite models verified; generated production replays and negative controls passed.",
+      "All selected finite models verified; scoped replays and negative controls passed.",
     );
     console.log(`Evidence: ${artifacts}`);
   } catch (error) {

@@ -2937,6 +2937,34 @@
         "decision": "pending",
         "scope": "Desk/watch, the draining legacy-review migration and approved lifetime changes only; Board layout remains with Q50. Independent review required."
       }
+    },
+    {
+      "id": "Q52",
+      "area": "Herdr-core composed ordering and runtime authority (design)",
+      "owner": "quint/herdr-core-runtime.qnt",
+      "requirement": "openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md",
+      "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, pre-send occupant fencing, core-side source-queue fencing assumed under Q3 and existing-only connect",
+      "existingTests": ["quint/herdr-core-runtime.test.ts"],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
+      "technique": "composed-design-model",
+      "assessment": "P0 bounded design model with in-process protocol fake; foundation delivery history is not acceptance of this new contract or future core provider",
+      "status": "pending",
+      "remaining": "Independent design/model review and actual provider, harness, browser/app and Windows consumer acceptance remain required in P1–P6.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [
+          "quint/herdr-core-runtime.qnt",
+          "quint/runtime-leases.qnt",
+          "quint/effect-recovery.qnt"
+        ],
+        "contracts": ["openspec/changes/herdr-core-runtime/model.md"],
+        "tests": ["quint/herdr-core-runtime.test.ts"],
+        "checks": [
+          "bun quint/run.ts --case herdr-core-runtime",
+          "bun run verification:gate"
+        ],
+        "review": "New design contract pending PR review. PR #188 is foundation history only, not acceptance of core implementation."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

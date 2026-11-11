@@ -1,3 +1,4 @@
+import { replayCore } from "../quint/herdr-core-runtime";
 import { replayEffectRecovery } from "../quint/effect-recovery";
 import { replayObservationBase } from "../quint/observation-base";
 import { replayBindingResolution } from "../quint/binding-resolution";
@@ -34,6 +35,7 @@ let activeTrace: string | undefined;
 async function replay(request: ReplayRequest, resultPath: string) {
   assert(
     [
+      "herdr-core-runtime",
       "runtime-leases",
       "ranger-recovery",
       "effect-recovery",
@@ -66,6 +68,7 @@ async function replay(request: ReplayRequest, resultPath: string) {
   );
   const exports = request.mutant ? await import(request.mutant) : null;
   const execute = (states: Awaited<ReturnType<typeof loadTrace>>) => {
+    if (request.model === "herdr-core-runtime") return replayCore(states);
     if (request.model === "binding-resolution")
       return replayBindingResolution(states, exports?.resolveBinding);
     if (request.model === "observation-base")

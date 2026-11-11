@@ -83,8 +83,10 @@ The maintained suite also includes [chunk credits](../verification/contracts/chu
 [creation](../verification/contracts/creation-flow.md),
 [Ranger authority](../verification/contracts/ranger-authority.md) and
 [durable recovery](../verification/contracts/ranger-recovery.md). Read each
-contract for real consumers, faults, finite domains and exclusions. All 14 models
-run in the unfiltered required CI workflow. The original eleven retain their accepted bounds;
+contract for real consumers, faults, finite domains and exclusions. All 14 production-connected models and the
+[herdr-core design case](../openspec/changes/herdr-core-runtime/model.md) run in the
+unfiltered required CI workflow. The design case uses a protocol fake and remains
+pending production-provider mapping acceptance. The original eleven retain their accepted bounds;
 [observation-base](../verification/contracts/observation-base.md) adds v1 admission and its
 independent candidate mapping and review.
 
