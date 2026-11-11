@@ -7,7 +7,7 @@ module herdr_core_runtime {
   pure val FAULT = "none"
   // Simulation samples the observe family on its own (the runner sets this),
   // so the ordering and authority families keep their sampling unchanged.
-  // The checker always explores all three families together.
+  // The checker always explores every family, each with its own actions.
   pure val OBSERVE = false
   pure def fault(name) = FAULT == name or (BROKEN and name == "lost-delta")
   pure val EVENT_BOUND = 2
@@ -63,6 +63,13 @@ module herdr_core_runtime {
   val lease = capturedLeaseCurrent(c.ready and c.connected, c.owner, c.generation, c.leaseOwner, c.leaseGen)
     and c.epoch == c.leaseEpoch
   val occupant = c.source[0].alive and c.source[0].occupant == c.session
+  // Checker quotient: the send fence (lease, occupant, queue) and the kill
+  // fence (plan, confirmation) read disjoint fields and each is checked
+  // against every source, cursor and connection change, so the checker runs
+  // sends in the authority family without a child and kills in the one with
+  // a child instead of their product. Simulation keeps both in both.
+  val sends = not(CHECKING) or not(c.child)
+  val kills = not(CHECKING) or c.child
   action connect = all {
     not(c.connected), c.generation < 2,
     // An absent endpoint is a failed direct connection, never a CLI autostart.
@@ -137,7 +144,7 @@ module herdr_core_runtime {
     change({ ...c, running: false }, "absent", 0),
   }
   action switchProfile = all {
-    family == "authority", c.owner == 0,
+    family == "authority", sends, c.owner == 0,
     // Both profiles point at the SAME durable core; ownership still differs.
     change({ ...c, owner: 1 }, "switchProfile", 0),
   }
@@ -149,7 +156,7 @@ module herdr_core_runtime {
       history: c.history.replaceAt(c.seq, updated), ready: false }, "replace", 0),
   }
   action capture = all {
-    family == "authority", c.ready, not(c.captured), c.source[0].alive,
+    family == "authority", sends, c.ready, not(c.captured), c.source[0].alive,
     change({ ...c, captured: true, leaseGen: c.generation, leaseOwner: c.owner,
       leaseEpoch: c.epoch, session: c.source[0].occupant,
       admitted: true, safe: c.safe and c.connected }, "capture", 0),
@@ -191,7 +198,7 @@ module herdr_core_runtime {
   // A child core creates after World's last applied event is outside this
   // fence (core has no conditional kill), like the Q3 queued-send window.
   action plan = all {
-    family == "authority", c.ready, c.mirror[0].alive, not(c.planned),
+    family == "authority", kills, c.ready, c.mirror[0].alive, not(c.planned),
     change({ ...c, planned: true, confirmedChild: c.child and c.mirror[1].alive,
       confirmedOccupant: c.mirror[0].occupant, planGen: c.generation, planOwner: c.owner, planEpoch: c.epoch }, "plan", 0),
   }
@@ -341,7 +348,11 @@ module herdr_core_runtime {
       pane(g), output, watch, unwatch, stall, drain, frame, viewport }
   }
   // Simulation weights do not multiply the checker's successor computation.
-  action step = if (CHECKING) any { choices, observeChoices }
+  // The checker gives each family the same actions simulation does: observe
+  // actions are family-guarded, so the ordering and authority families lose
+  // nothing, and the observe family is not multiplied by connection actions
+  // (absent, heartbeat) that its own scenarios never take.
+  action step = if (CHECKING) (if (family == "observe") observeChoices else choices)
     else if (family == "observe") any { observeChoices,
       watch, watch, frame, frame, frame, stall, stall, drain, drain, baseline, baseline }
     else any { choices, capture, dispatch,
