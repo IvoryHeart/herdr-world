@@ -1,3 +1,4 @@
+import type { RuntimeOperations } from "../adapters/runtime-ports";
 import type { HerdrClient } from "../bridge/herdr-client";
 import { herdrEventName } from "../utils/herdr-events";
 
@@ -65,6 +66,7 @@ export function samePaneIds(a: string[], b: string[]): boolean {
 
 export function createAgentStatusSubscriptionLoop(args: {
   herdr: HerdrClient;
+  operations: Pick<RuntimeOperations, "listTerminals">;
   connectionId: string;
   onSubscribeError?: (error: Error) => void;
   onListError?: (error: Error) => void;
@@ -163,7 +165,10 @@ export function createAgentStatusSubscriptionLoop(args: {
     }
     try {
       // Bounded so a hung downstream cannot hold runtime stop hostage.
-      const result = await args.herdr.call("pane.list", {}, 5000);
+      const result = await args.operations.listTerminals(
+        {},
+        { timeoutMs: 5000 },
+      );
       try {
         args.onPaneList?.(result, startedAtRevision);
       } catch {

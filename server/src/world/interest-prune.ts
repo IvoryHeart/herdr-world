@@ -11,7 +11,7 @@ export async function reconcileReadyInterest(
   lease: {
     connectionId: string;
     runtime: {
-      herdr: {
+      tui: {
         call(
           method: string,
           params: Record<string, unknown>,
@@ -25,7 +25,7 @@ export async function reconcileReadyInterest(
 ) {
   if (!lease) return;
   await pruneGoneInterest(board, lease.connectionId, {
-    call: (method, params) => lease.runtime.herdr.call(method, params, 10_000),
+    call: (method, params) => lease.runtime.tui.call(method, params, 10_000),
     isCurrent: lease.isCurrent,
     changed,
   });

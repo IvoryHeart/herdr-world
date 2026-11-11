@@ -50,7 +50,7 @@ async function dispatchGitRpc(
   } = rpc;
   const { logger, markRpcError } = rpc.services;
   const {
-    herdr,
+    tui,
     worktreeParents,
     worktreeRemovalCoordinator,
     worktreeRemovalRuntime,
@@ -189,7 +189,7 @@ async function dispatchGitRpc(
       const sourceWorkspace = await sourceWorkspaceForWorktreeCreate(
         params ?? {},
       );
-      const result = await herdr.call(method, params ?? {});
+      const result = await tui.call(method, params ?? {});
       await worktreeParents
         .rememberWorktreeParent(result, workspaceId, requestIsCurrent)
         .catch((error) => {
@@ -259,7 +259,7 @@ async function dispatchGitRpc(
             : undefined;
           const removal = await removeWorktreeWithRecovery({
             call: (name, callParams) =>
-              herdr.call(name, callParams, WORKTREE_REMOVE_TIMEOUT_MS),
+              tui.call(name, callParams, WORKTREE_REMOVE_TIMEOUT_MS),
             params: params ?? {},
             checkoutPath: removeHookContext?.checkoutPath,
             runtime: worktreeRemovalRuntime,
@@ -288,7 +288,7 @@ async function dispatchGitRpc(
                       return {
                         fallback: `${fallback} Herdr removed the worktree.`,
                       };
-                    await herdr.call("workspace.close", {
+                    await tui.call("workspace.close", {
                       workspace_id: workspaceId,
                     });
                     return {

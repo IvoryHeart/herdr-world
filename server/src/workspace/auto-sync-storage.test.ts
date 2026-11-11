@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -49,7 +50,7 @@ test("the real scheduler and RPC use durable status while toggles remain indepen
       connectionId: "studio",
       settings: store.settings,
       runtimeStatus: store.runtimeStatus,
-      herdr: {} as any,
+      ...herdrRuntimeFixture({} as any),
       sshHost: () => undefined,
       readWorktreeHooks: async () => null,
       resolveWorkspaceGitRoot: async () => ({
@@ -68,11 +69,11 @@ test("the real scheduler and RPC use durable status while toggles remain indepen
     clock: systemClock,
     scheduler: systemScheduler,
     connectionId: "studio",
-    herdr: {
+    ...herdrRuntimeFixture({
       call: async () => ({
         workspaces: [{ workspace_id: "workspace-a", cwd: "/synthetic/repo" }],
       }),
-    } as any,
+    } as any),
     sshHost: () => undefined,
     shQuote,
     runProcessWithCodeTimeout: async () => {

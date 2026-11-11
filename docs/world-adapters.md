@@ -1,4 +1,4 @@
-# Runtime observation adapters
+# Runtime adapters
 
 Herdr is the only production runtime. The static registry in
 `server/src/adapters/registry.ts` is imported by the service composition root;
@@ -22,8 +22,10 @@ classes use the protocol vocabulary: `read`, `keyed`, `reconcilable`, `reattacha
 The observation wrapper uses the same concurrent `workspace.list`, `tab.list`,
 `pane.list` and `agent.list` requests with 5-second timeouts. Required topology
 failures still fail the snapshot; an unavailable agent catalogue still becomes
-`null`. The production snapshot uses this raw wrapper, preserving all native
-fields, projection, caching, admission, subscription and actionability behavior.
+`null`. The production snapshot uses the provider-neutral `readRuntimeSnapshot` and the
+runtime's typed operations. The Herdr observation wrapper delegates to the same
+reader, preserving all native fields, projection, caching, admission, subscription
+and actionability behavior.
 
 The new schema-admitted observation port describes a small topology projection:
 workspace, tab, pane and agent IDs, labels, parent IDs and terminal/agent evidence.
@@ -39,6 +41,59 @@ mutation routing and actor policies remain in their current dispatch tables;
 their registry migration is task 7.1 of `world-protocol-identity`. GitHub and Jira
 retain their current built-in source integration. This change does not migrate
 their acquisition or add a second production runtime.
+
+## Typed runtime operations
+
+`AdapterDefinition.runtime` optionally opens a runtime control surface in addition
+to its bounded observation source. Observation-only adapters do not need control.
+The service creates the Herdr ports once per connection runtime; they close over
+that runtime's client and terminal bridge. There is no global runtime selection or
+replacement-client lookup. Callers retain their captured leases and recheck them at
+their existing read, write and publication boundaries.
+
+The small interfaces in `server/src/adapters/runtime-ports.ts` cover:
+
+- `RuntimeOperations`: workspace, tab, terminal and agent reads, including terminal
+  output and layout. Snapshot siblings settle together; only the agent catalogue
+  is optional. Native reply fields remain available to the existing projections.
+- `HostResources`: workspace and terminal resolution plus worktree listings before
+  using World's existing guarded local/SSH file and Git helpers.
+- `SessionProducers`: session identity and metadata reports, including task-summary
+  expiry, checkout reports and terminal settings. These are writes; session and
+  terminal authority still belong to the existing callers.
+- `TerminalStreams`: viewer-scoped terminal dispatch, viewer cleanup and runtime
+  disposal. Existing TUI attachment, input, focus, resize, scroll and link handling
+  stay in the terminal bridge, including its ownership and backpressure checks.
+
+`server/src/adapters/herdr-runtime.ts` translates these named operations into TUI
+RPC. It preserves parameters, optional deadlines, pre-send hooks, cancellation,
+reply envelopes and native errors. It adds no retries or recovery after uncertain
+writes. The descriptor's four schema-admitted read verbs are a separate observation
+contract; adding these service-side ports does not advertise new browser verbs.
+
+Migrated consumers include aggregate/focused topology, Desk screens and marks,
+usage revalidation, settings and worktree resource lookup, agent checkout/worktree
+reads, Ranger's direct reads, terminal settings, standalone summary/checkout
+reports and the common browser terminal route.
+
+### Remaining TUI-only areas
+
+`createTuiPassThrough` refuses other runtime kinds. Its explicitly named `tui.call`
+port contains the callback-based areas awaiting their own coherent migration:
+
+| Area | Remaining consumers |
+| --- | --- |
+| Launch and discovery | `rpc/launcher.ts`, `rpc/launcher-probe.ts` |
+| Hierarchy, Board sends, appearance and worktree mutations | `rpc/board-town.ts`, `rpc/appearance.ts`, `rpc/git.ts`, `rpc/world.ts`, `worktree/create.ts` |
+| CLI actor, ask and bin admission/dispatch | `world/world-cli-service.ts`, `world/ask-recipient.ts`, `world/interest-prune.ts`, `service/bin-service.ts`, `service/board-recipients.ts`, `service/world-service.ts` |
+| Ranger callback reads and actions | `assistant/context.ts`, `assistant/actions.ts` |
+| Browser legacy RPC | `service/rpc-dispatch.ts` |
+| TUI composition | `connections/runtime.ts`: Chat/session internals and empty-workspace creation; `agent/terminal-tokens.ts`: metadata repair around the legacy move callback |
+
+The TUI connection probe and popup surfaces remain native TUI transport concerns.
+This seam does not install or enable herdr-core; a second provider must implement
+these ports and migrate or explicitly refuse the remaining TUI-only routes.
+No browser controls, launch defaults or user-visible TUI behavior change here.
 
 ## Admission and ownership
 

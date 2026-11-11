@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import {
   runProcessWithInputTimeout,
   runBinaryProcessWithTimeout,
@@ -40,14 +41,14 @@ for (const remote of [false, true]) {
         runBinaryProcessWithTimeout,
         bindProcess: (argv) => argv,
         runProcessWithInputTimeout,
-        herdr: {
+        ...herdrRuntimeFixture({
           call: async () => ({
             workspace: {
               workspace_id: "w1",
               worktree: { checkout_path: root },
             },
           }),
-        } as any,
+        } as any),
         sshHost: () => (remote ? "example.invalid" : undefined),
         shQuote,
         runProcessWithCodeTimeout: async (argv, timeout) => {

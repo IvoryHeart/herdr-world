@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../../adapters/testing/runtime";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -74,7 +75,9 @@ export async function reviewStopFixture(seed?: {
           generation: captured,
           isCurrent: () => current && generation === captured,
           runtime: {
-            herdr: { call: async () => ({ panes: structuredClone(panes) }) },
+            ...herdrRuntimeFixture({
+              call: async () => ({ panes: structuredClone(panes) }),
+            }),
           },
         };
       },
