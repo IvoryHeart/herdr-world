@@ -31,9 +31,17 @@
 - Check the newest official core with a daily or manual release smoke that
   verifies its checksum and exercises live traffic without installing or pinning
   it. Every release retains full read-write support; failures flag work to fix.
+- Read core-agent conversations with the same eight transcript readers as TUI
+  Chat, with an explicit session link when needed and clear platform limits.
 
 ### Fixed
 
 - Accept native core addresses such as `t1b` across observation, terminals,
   files, placement, labels and verified CLI claims while preserving the original
   connection, generation and program checks.
+- Offer every Herdr integration, detection and desktop harness in the core
+  launcher; resolve Cursor, Antigravity, Kiro and alternate executable names.
+- Send profile briefs for other core harnesses through native fenced delivery,
+  only when core confirms idle immediately before typing; leave unknown or
+  blocked startup dialogs untouched and retain the started agent's identity
+  when brief delivery is uncertain.

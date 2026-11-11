@@ -67,6 +67,7 @@ linux.each([0, 7])(
         expect(suites.map((path) => basename(path))).toEqual([
           "core.live.test.ts",
           "delivery.live.test.ts",
+          "harnesses.live.test.ts",
           "operations.live.test.ts",
           "windows.live.test.ts",
           "worktrees.live.test.ts",

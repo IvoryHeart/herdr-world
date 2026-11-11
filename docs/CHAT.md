@@ -3,9 +3,23 @@
 For an agent on **herdr-core**, opening it in Town, Board, Desk or Needs you
 opens core Chat. **Send** uses core's native send, **Answer** forces a typed
 answer only while core reports it blocked, and the answer keys use core's own
-key encoding. Every harness uses this same path. The conversation transcript
-is currently unavailable; **Read question screen** is a separate, screen-only
-read with no history or injected input.
+key encoding. Every harness uses this same path, including harnesses without a
+transcript reader. The [core harness inventory](core-harnesses.md) lists launch,
+status, transcript and delivery support for every supported kind.
+
+Core Chat reuses the existing eight TUI transcript readers. Native resume
+arguments and Codex titles can identify a conversation; directory discovery is
+marked as a possible guess. If no readable conversation is identified, expand
+**Link a conversation for reading**, choose **Session ID** or **Transcript path**,
+enter the reference on the agent's host, and choose **Read linked conversation**.
+The link is a reading choice only, forgotten when Chat closes. **Refresh
+conversation** reads new messages; changes of status or turn refresh too. Chat
+shows the latest 200 entries, shortening entries over 16,000 characters or a
+256,000-character total with an explicit note. It discards a read if the
+connection, occupant, foreground or title changes while reading.
+**Read question screen** is a separate, screen-only read with no history or
+injected input. Windows transcript reading remains unavailable; native input
+works there.
 
 World keeps the recipient you opened, checks a fresh native terminal record and
 its observed foreground before dispatch, and refuses if the program changed or
@@ -17,7 +31,8 @@ send may wait for a person's draft or quiet. World requests cancellation on an
 observed replacement, but core can still type queued input into a replacement
 between World's check and execution (upstream Q3).
 
-The transcript and harness-specific features below describe the TUI provider.
+The conversation binding and input features below describe the TUI provider.
+Its transcript formats are shared with core Chat.
 
 The Inspector's **Chat** tab shows an agent's conversation as messages and lets
 you reply. Chat replaces the History tab. The **Terminal** tab remains a separate

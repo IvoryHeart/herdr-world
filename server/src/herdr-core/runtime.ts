@@ -174,7 +174,7 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
    */
   send(
     fence: CoreOperationFence<CoreConnectionRuntime>,
-    request: { text: string; force: boolean },
+    request: { text: string; force: boolean; onlyIfIdle?: boolean },
     options: { cancel: AbortSignal; timeoutMs?: number },
   ): Promise<CoreSendResult>;
   keys(
@@ -678,7 +678,7 @@ export function createCoreConnectionRuntime(
       }),
     send: async (
       fence,
-      request: string | { text: string; force: boolean },
+      request: string | { text: string; force: boolean; onlyIfIdle?: boolean },
       options:
         | (() => Promise<boolean>)
         | { cancel: AbortSignal; timeoutMs?: number },
@@ -693,6 +693,7 @@ export function createCoreConnectionRuntime(
             current.sendText(fence.occupant!.address, request.text, {
               ...(options as { cancel: AbortSignal; timeoutMs?: number }),
               force: request.force,
+              onlyIfIdle: request.onlyIfIdle,
             }),
           false,
         );

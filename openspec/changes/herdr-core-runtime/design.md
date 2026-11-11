@@ -87,7 +87,11 @@ helpers retain file/Git/upload authority and symlink policy.
 ### 7. Reads
 
 Background, peek, witness and Ranger reads use `terminal.read {lines:0}` without
-caller. History comes from attach history or browser scrollback. Stitched reads
+caller. Terminal history comes from attach history or browser scrollback. Chat transcripts
+reuse the TUI session resolver/projections, with native title/resume evidence or
+an explicit read-only session link; see [the harness inventory](../../../docs/core-harnesses.md).
+Links never grant input authority. Both sides of the host file read check the
+original lease, occupant and foreground; a title/session switch discards it. Stitched reads
 inject input and therefore require current control authority.
 
 ### 8. Session input

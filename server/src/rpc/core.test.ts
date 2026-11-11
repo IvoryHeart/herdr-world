@@ -1,6 +1,12 @@
+import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { afterEach, describe, expect, test } from "bun:test";
 import { coreWorld } from "../herdr-core/testing/core-world";
 import type { CoreHost } from "../herdr-core/host";
+import type { ServerWebSocket } from "bun";
+import { createRpcDispatcher } from "../service/rpc-dispatch";
+import { createLegacyRoutingLogger } from "../connections/protocol";
+import type { RpcServices } from "./context";
+import { localAgentSessionFiles } from "../agent/session-file-access";
 import { handleCoreRpc } from "./core";
 import type { BridgeRpcContext } from "./context";
 
@@ -66,14 +72,38 @@ async function call(
   return { reply: replies[0], error: errors[0], invalidations };
 }
 
-async function world() {
-  const w = await coreWorld();
+async function world(options?: Parameters<typeof coreWorld>[0]) {
+  const w = await coreWorld(options);
   worlds.push(w);
   await w.connect();
   return w;
 }
 
 describe("world.core.* answers only the core connection it names", () => {
+  test("catalog includes the TUI detection and desktop harnesses", async () => {
+    const w = await world();
+    const result = await call(w, "world.core.catalog", {
+      connection_id: "box",
+      connection_generation: w.lease().generation,
+    });
+    expect(result.reply?.result).toMatchObject({
+      kinds: expect.arrayContaining([
+        "cline",
+        "maki",
+        "kiro",
+        "amp",
+        "gemini",
+        "pig",
+        "dsh-tui",
+        "muse",
+        "crush",
+        "command-code",
+        "prime-agent",
+        "ollama",
+      ]),
+    });
+  });
+
   test("browser input binds the original recipient, rejects replacement, and checks generation", async () => {
     const w = await world();
     const t = w.fake.create({
@@ -144,6 +174,42 @@ describe("world.core.* answers only the core connection it names", () => {
       terminal_id: "t1",
     });
     expect(result.invalidations).toEqual([generation]);
+  });
+
+  test("a saved generic core profile delivers its role and brief through native send", async () => {
+    const w = await world({ runStatus: "idle" });
+    const result = await call(
+      w,
+      "world.core.launch",
+      {
+        connection_id: "box",
+        connection_generation: w.lease().generation,
+        workspace_id: "hc:unplaced",
+        profile_id: "scout",
+        label: "Scout",
+        text: "Check the tests",
+      },
+      {
+        profiles: {
+          profile: () => ({
+            ...STARTER_PROFILES[0],
+            id: "scout",
+            harness: "pi",
+            role: "Review carefully",
+          }),
+        },
+      },
+    );
+    expect(result.reply?.result).toMatchObject({
+      status: "sent",
+      placed: true,
+    });
+    expect(w.fake.deliveredInput).toEqual([
+      expect.objectContaining({
+        input:
+          "Review carefully\n\nUse these skills when they apply: code-review.\n\nCheck the tests",
+      }),
+    ]);
   });
 
   test("an agent on a Windows core host starts with its Windows executable", async () => {
@@ -241,4 +307,73 @@ describe("world.core.* answers only the core connection it names", () => {
       });
     },
   );
+});
+
+test("core history crosses browser admission and the real dispatcher as a read-only verb", async () => {
+  const w = await world();
+  const t = w.fake.create({
+    argv: ["claude"],
+    foreground: { pid: 77, name: "claude", argv: ["claude"] },
+  });
+  await w.settle();
+  const pane = (await w.rows()).panes.find((p) => p.pane_id === t)!;
+  const ws = {} as ServerWebSocket<unknown>;
+  const replies: Record<string, any>[] = [];
+  let reads = 0;
+  const services = {
+    clients: new Set([ws]),
+    snapshotAdmission: { acknowledge: () => false },
+    safeSend: (_ws: unknown, body: string) => {
+      replies.push(JSON.parse(body));
+      return true;
+    },
+    markRpcError: () => {},
+    connectionManager: w.core.manager,
+    coreControl: {
+      manager: w.core.manager,
+      topology: w.topology,
+      host: () => host(),
+      historyFiles: () => ({
+        ...localAgentSessionFiles,
+        statFile: async (path: string) => ({ path, mtimeMs: 1 }),
+        readText: async () => {
+          reads++;
+          return "";
+        },
+      }),
+    },
+  } as unknown as RpcServices;
+  const dispatch = createRpcDispatcher(
+    services,
+    createLegacyRoutingLogger({ log: () => {} }),
+  );
+  const params = {
+    connection_id: "box",
+    connection_generation: w.lease().generation,
+    terminal: t,
+    recipient: pane.core_recipient,
+    session: { kind: "path", value: "/work/example/chat.jsonl" },
+  };
+  await dispatch(
+    ws,
+    JSON.stringify({ id: "read", method: "world.core.history", params }),
+  );
+  expect(replies.at(-1)?.error).toBeUndefined();
+  expect(replies.at(-1)?.result).toMatchObject({
+    status: "ok",
+    source: "linked",
+    entries: [],
+  });
+  expect(reads).toBe(1);
+  await dispatch(
+    ws,
+    JSON.stringify({
+      id: "invalid",
+      method: "world.core.history",
+      params: { ...params, session: { kind: "path", value: 42 } },
+    }),
+  );
+  expect(replies.at(-1)?.error.message).toContain("invalid parameters");
+  expect(reads).toBe(1);
+  expect(w.fake.deliveredInput).toHaveLength(0);
 });

@@ -48,6 +48,10 @@ checks. Current spec synchronization and archive remain after acceptance.
     uncertain deadlines without replay; core Chat and Needs you answers; verified
     local core asks through the existing durable dispatcher; recorded/live input
     traffic, browser captures and production recipient model control. Q3 remains.
+  - [x] Issue #874: source inventory of all 30 TUI/app/World harnesses, core
+    launch catalog and executable aliases, generic profile briefs through native
+    delivery, shared TUI transcript readers with read-only links and publication
+    fences, differential fixtures and latest-release harness-name smoke.
 - [x] P4: files/Git/worktrees, asks and Ranger.
   - [x] Issue #871: a core connection's host runtime per generation (read
     model rows, screen-only reads, World's guarded file/Git helpers, an

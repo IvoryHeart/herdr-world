@@ -46,6 +46,76 @@ const confirmAll = (plan: CoreKillPlanView): CoreKillConfirmation => ({
 });
 
 describe("launching in herdr-core (M2, M3)", () => {
+  test("a non-Claude/Codex profile sends its role and brief through native delivery", async () => {
+    const w = await world({ runStatus: "idle" });
+    const room = await createCoreRoom(w.lease(), w.topology, "Review");
+    const outcome = await launchCore(
+      w.lease(),
+      {
+        workspaceId: room.workspace_id,
+        kind: "pi",
+        label: "Scout",
+        text: "Review the tests",
+      },
+      { topology: w.topology, resolveExecutable },
+    );
+    expect(outcome).toMatchObject({ status: "sent" });
+    expect(w.fake.deliveredInput).toEqual([
+      expect.objectContaining({ input: "Review the tests" }),
+    ]);
+  });
+
+  test("a silent generic harness starts without typing its saved brief", async () => {
+    const w = await world();
+    const outcome = await launchCore(
+      w.lease(),
+      {
+        workspaceId: CORE_UNPLACED_WORKSPACE,
+        kind: "copilot",
+        label: "Scout",
+        text: "Review carefully",
+      },
+      { topology: w.topology, resolveExecutable },
+    );
+    expect(outcome).toMatchObject({
+      status: "started",
+      terminal_id: "t1",
+      pane_id: "t1",
+      agent_name: "scout",
+      message: expect.stringContaining("Open Chat to send the brief"),
+    });
+    expect(w.fake.deliveredInput).toEqual([]);
+  });
+
+  test("uncertain brief delivery retains the definitely started agent identity", async () => {
+    const w = await world({ runStatus: "idle" });
+    w.fake.onTyped = () => w.fake.kill(w.socket);
+    const outcome = await launchCore(
+      w.lease(),
+      {
+        workspaceId: CORE_UNPLACED_WORKSPACE,
+        kind: "pi",
+        label: "Scout",
+        text: "Review carefully",
+      },
+      { topology: w.topology, resolveExecutable },
+    );
+    expect(outcome).toMatchObject({
+      status: "uncertain",
+      runtime: "herdr-core",
+      workspace_id: CORE_UNPLACED_WORKSPACE,
+      pane_id: "t1",
+      terminal_id: "t1",
+      tab_id: expect.any(String),
+      agent_name: "scout",
+      placed: true,
+      message: expect.stringContaining(
+        "Started, but delivery of the brief is uncertain",
+      ),
+    });
+    expect(w.fake.deliveredInput).toHaveLength(1);
+  });
+
   test("an agent starts with explicit native parameters, placed in the app", async () => {
     const w = await world();
     const room = await createCoreRoom(w.lease(), w.topology, "Review");
