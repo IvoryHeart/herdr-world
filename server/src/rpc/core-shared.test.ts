@@ -124,7 +124,7 @@ async function world() {
       sendError: (_context: string, error: unknown) => {
         out.error = error;
       },
-      services: { coreConnections: core.manager },
+      services: { core: { manager: core.manager } },
     });
     return out;
   };

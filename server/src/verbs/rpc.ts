@@ -370,6 +370,41 @@ export const rpcVerbs = [
       seen: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
     }),
   ),
+  // World's float shell on herdr-core (the TUI's Herdr Float popup there).
+  // The handler qualifies the named core connection's lease itself.
+  rpc(
+    "world.float.open",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminal_id: text,
+      // The agent's room (World workspace); the service refuses another.
+      room: Type.Optional(Type.String({ minLength: 1, maxLength: 600 })),
+      cols: Type.Integer({ minimum: 1, maximum: 65535 }),
+      rows: Type.Integer({ minimum: 1, maximum: 65535 }),
+    }),
+  ),
+  rpc(
+    "world.float.input",
+    "opaque",
+    "world",
+    // Base64 of at most 64 KiB of keys.
+    object({ stream: text, data: Type.String({ maxLength: 90_000 }) }),
+  ),
+  rpc(
+    "world.float.resize",
+    "reconcilable",
+    "world",
+    object({
+      stream: text,
+      cols: Type.Integer({ minimum: 1, maximum: 65535 }),
+      rows: Type.Integer({ minimum: 1, maximum: 65535 }),
+    }),
+  ),
+  rpc("world.float.hide", "reconcilable", "world", object({ stream: text })),
+  rpc("world.float.stop", "reconcilable", "world", object({ stream: text })),
   rpc("world.desk.get", "read", "world"),
   rpc("world.desk.observe", "reconcilable", "world"),
   rpc("world.desk.open", "reconcilable", "world"),

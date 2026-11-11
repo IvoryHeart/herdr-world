@@ -5,6 +5,7 @@ import type { CoreConnectionProfile } from "../connections/profiles";
 import type { Logger } from "../utils/logger";
 import { CORE_PROTOCOL_GENERATION, CoreClient } from "./client";
 import { type CoreFixture, createCoreFixture } from "./fixture";
+import { FloatShellService } from "./float-shell";
 import { CoreObservationStore } from "./observations";
 import { CoreFirstSight } from "./topology";
 import type { CoreTopologyPort } from "./layout";
@@ -25,6 +26,8 @@ export type CoreConnections = {
   observations: CoreObservationStore;
   support: CoreConnectionSupport<CoreConnectionRuntime>;
   fixture: CoreFixture;
+  /** World's float shells on these connections (`world.float.*`). */
+  floats: FloatShellService;
   stop(): Promise<void>;
 };
 
@@ -180,6 +183,9 @@ export function createCoreConnections(args: {
     observations,
     support,
     fixture,
+    floats: new FloatShellService({
+      lease: (connectionId) => manager.readyRuntimeLease(connectionId),
+    }),
     stop: async () => {
       await manager.stopAll();
       fixture.dispose();

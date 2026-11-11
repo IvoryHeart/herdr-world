@@ -18,7 +18,7 @@ export type CoreSharedRequest = {
   params?: Record<string, unknown>;
   sendReply: (message: Record<string, unknown>, context: string) => boolean;
   sendError: (context: string, error: unknown) => void;
-  services: { coreConnections?: CoreSharedConnections };
+  services: { core?: { manager: CoreSharedConnections } };
 };
 
 type Target = { connectionId: string; generation: number; address: string };
@@ -74,7 +74,7 @@ export async function handleCoreSharedRpc(
       if (typeof favourite !== "boolean") throw new Error("invalid favourite");
       decide = (record) => favouriteToShare(record, favourite);
     } else throw new Error(`unknown method: ${method}`);
-    const core = rpc.services.coreConnections;
+    const core = rpc.services.core?.manager;
     if (!core?.has(where.connectionId))
       throw new Error("not a herdr-core connection");
     const lease = core.readyRuntimeLease(where.connectionId);

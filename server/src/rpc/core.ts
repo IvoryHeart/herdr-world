@@ -90,7 +90,7 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
   const reply = (result: unknown): void => {
     sendReply({ id, result }, "world-core");
   };
-  const core = rpc.services.core;
+  const core = rpc.services.coreControl;
   try {
     if (!core) throw new CoreOperationRefused("herdr-core is not available.");
     const connectionId = String(p.connection_id ?? "");

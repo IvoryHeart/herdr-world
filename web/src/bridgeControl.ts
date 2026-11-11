@@ -16,7 +16,10 @@ export interface BridgeControlMsg {
     | "world_agent_activity"
     | "world_focused_changed"
     | "world_connections_changed"
-    | "world_desk_reads";
+    | "world_desk_reads"
+    // World's float shell on herdr-core (server/src/rpc/float.ts).
+    | "float_output"
+    | "float_closed";
   /** Answer delivery revisions belong to one service lifetime. */
   incarnation?: string;
   kind?: DeskReadKind;
@@ -34,4 +37,9 @@ export interface BridgeControlMsg {
   revision?: number;
   /** world_ledger_changed: a question was asked or answered. */
   asks?: boolean;
+  /** float_*: the float shell stream; its output is base64 `data`. */
+  stream?: string;
+  data?: string;
+  /** float_closed: whether the shell itself ended, not only this view. */
+  ended?: boolean;
 }

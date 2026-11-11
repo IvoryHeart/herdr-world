@@ -5,12 +5,16 @@ import type {
 } from "../connections/manager";
 import type { ConnectionIdentity } from "../connections/types";
 import {
+  type CoreAttachHandlers,
+  type CoreAttachment,
+  type CoreCellSize,
   type CoreEventLine,
+  type CoreRunParams,
+  type CoreTerminalRecord,
   CoreClient,
   CoreIncompatibleError,
   type CoreRunRequest,
   type CoreServerStatus,
-  type CoreTerminalRecord,
   CoreUnavailableError,
   type CoreWriteMethod,
 } from "./client";
@@ -98,6 +102,8 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
   readScreen(
     fence: CoreOperationFence<CoreConnectionRuntime>,
   ): Promise<Record<string, unknown>>;
+  /** World's layout of this core (M1), or null before a core is known. */
+  layout(): CoreTopologyDocument | null;
   /** World's layout of this core changed: re-read the read model. */
   layoutChanged(): void;
   /**
@@ -131,6 +137,32 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
       record: CoreMirrorTerminal | undefined,
     ) => SharedLabelChange | null,
   ): Promise<"written" | "unchanged">;
+  /** World's own float shells (`float-shell.ts`), each call fenced. */
+  readonly shells: CoreShellControl;
+};
+
+/**
+ * Start, view and end World's own shells. Every call holds its fence's lease
+ * and core process at dispatch and publication; a reply that outlives them
+ * is refused (an attach that outlived them is left again at once).
+ */
+export type CoreShellControl = {
+  /** Whether the connected core offers run, attach and kill. */
+  readonly offered: boolean;
+  run(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    params: CoreRunParams,
+  ): Promise<CoreTerminalRecord>;
+  attach(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+    address: string,
+    size: CoreCellSize,
+    handlers: CoreAttachHandlers,
+  ): Promise<CoreAttachment>;
+  /** Ends exactly the fenced occupant. */
+  kill(
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+  ): Promise<CoreTerminalRecord>;
 };
 
 /** Admits a screen read of `address` under `lease` and runs it fenced. */
@@ -406,6 +438,49 @@ export function createCoreConnectionRuntime(
     return "written";
   }
 
+  /** The current client, under a fence that belongs to this runtime. */
+  const dispatchThrough = (
+    fence: CoreOperationFence<CoreConnectionRuntime>,
+  ): CoreClient => {
+    if (fence.lease.runtime !== self)
+      throw new CoreFenceError("dispatch", "lease");
+    const current = client;
+    if (!current || !current.offersFloatShells)
+      throw new CoreFenceError("dispatch", "not-actionable");
+    fence.check("dispatch");
+    return current;
+  };
+  const shells: CoreShellControl = {
+    get offered() {
+      return client?.offersFloatShells === true;
+    },
+    async run(fence, params) {
+      const record = await dispatchThrough(fence).runShell(params);
+      fence.check("publication");
+      return record;
+    },
+    async attach(fence, address, size, handlers) {
+      const attachment = await dispatchThrough(fence).attach(
+        address,
+        size,
+        handlers,
+      );
+      try {
+        fence.check("publication");
+      } catch (error) {
+        attachment.detach();
+        throw error;
+      }
+      return attachment;
+    },
+    async kill(fence) {
+      if (!fence.occupant)
+        throw new CoreFenceError("dispatch", "occupant-gone");
+      const record = await dispatchThrough(fence).kill(fence.occupant.address);
+      return record;
+    },
+  };
+
   function stop() {
     if (stopTask) return stopTask;
     stopped = true;
@@ -448,6 +523,7 @@ export function createCoreConnectionRuntime(
       now,
     }),
     readScreen,
+    layout,
     layoutChanged: () => readModelChanged(),
     offers: (method) => client?.offers(method) ?? false,
     // A started program exists whatever happens next: its record is returned
@@ -463,6 +539,7 @@ export function createCoreConnectionRuntime(
         await current.label(fence.occupant!.address, labels);
       }),
     shareLabel,
+    shells,
     startTransport,
     startBackground,
     stop,

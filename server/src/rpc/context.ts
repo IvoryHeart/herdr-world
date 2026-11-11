@@ -50,12 +50,17 @@ export type RpcServices = {
     LegacyConnectionRuntime,
     CoreConnectionRuntime
   >;
+  /**
+   * herdr-core connections (seen and favourite shared with Herdr's apps),
+   * the in-process preview fixture (a testing switch) and World's float
+   * shells on core connections (world.float.*).
+   */
+  core?: Pick<
+    import("../herdr-core/connections").CoreConnections,
+    "manager" | "fixture" | "floats"
+  >;
   /** Control of herdr-core connections (world.core.*). */
-  core?: import("./core").CoreRpcServices;
-  /** herdr-core connections: seen and favourite shared with Herdr's apps. */
-  coreConnections?: import("./core-shared").CoreSharedConnections;
-  /** Testing switch: the in-process herdr-core preview fixture. */
-  coreFixture?: import("../herdr-core/fixture").CoreFixture;
+  coreControl?: import("./core").CoreRpcServices;
   focusedAcquisition: FocusedAcquisition<Socket>;
   agentActivity: AgentActivityCache;
   deskWatches: DeskWatches<Socket>;

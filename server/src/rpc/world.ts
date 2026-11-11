@@ -9,6 +9,7 @@ import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
 import { handleBinRpc } from "./bin";
 import { handleCoreRpc } from "./core";
+import { handleFloatRpc } from "./float";
 import { handleWorldIntegrationRpc } from "./integration";
 import { ownerPresence } from "./presence";
 import { handleCoreSharedRpc } from "./core-shared";
@@ -77,6 +78,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
+  if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.integration."))
     return handleWorldIntegrationRpc(rpc);
   if (method === "world.snapshot") {

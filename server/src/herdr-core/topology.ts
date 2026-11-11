@@ -36,6 +36,11 @@ export const CORE_UNPLACED_WORKSPACE = "hc:unplaced";
 export const CORE_MAIN_ROOM = "main";
 const WORLD_ROOM_PREFIX = "hc:room:";
 const WORLD_TAB_PREFIX = "world-";
+/**
+ * World's own float shells carry this label (its value is their room). They
+ * are a view's scratch shell, not a desk: they never join the read model.
+ */
+export const CORE_FLOAT_LABEL = "world.float";
 const SPACE_PREFIX = "hc:space:";
 const TAB_SUFFIX = ":tab:";
 const DEFAULT_TAB = "main";
@@ -195,6 +200,49 @@ function addressOrder(a: string, b: string) {
   return Number(a.slice(1)) - Number(b.slice(1));
 }
 
+/**
+ * The room (World workspace) a live local terminal sits in, as the read model
+ * places it, or null when it is not one of its rows.
+ */
+export function coreRoomOf(
+  terminals: readonly CoreMirrorTerminal[],
+  address: string,
+  world: CoreTopologyDocument | null = null,
+): string | null {
+  const local = terminals.filter(
+    (record) =>
+      !record.remote &&
+      record.state === "live" &&
+      record.labels?.[CORE_FLOAT_LABEL] === undefined,
+  );
+  const record = local.find((candidate) => candidate.address === address);
+  if (!record) return null;
+  const byAddress = new Map(local.map((each) => [each.address, each]));
+  const place = placementOf(record, byAddress, worldTabsOf(world, byAddress));
+  return place.kind === "world"
+    ? coreRoomWorkspaceId(place.room)
+    : place.kind === "app"
+      ? SPACE_PREFIX + place.space
+      : CORE_UNPLACED_WORKSPACE;
+}
+
+/** The World tab each live terminal sits in, by World's layout (M1). */
+function worldTabsOf(
+  world: CoreTopologyDocument | null,
+  byAddress: ReadonlyMap<string, CoreMirrorTerminal>,
+) {
+  const worldTabs = new Map<
+    string,
+    { room: CoreTopologyRoom; tab: CoreTopologyTab }
+  >();
+  for (const room of world?.rooms ?? [])
+    for (const tab of room.tabs)
+      for (const address of tab.terminals)
+        if (byAddress.has(address) && !worldTabs.has(address))
+          worldTabs.set(address, { room, tab });
+  return worldTabs;
+}
+
 export type CoreTopology = {
   workspaces: WorkspaceRow[];
   tabs: RuntimeRow[];
@@ -253,18 +301,15 @@ export function coreTopology(
     now = Date.now(),
   } = "turn" in options ? { firstSight: options } : options;
   const local = terminals
-    .filter((record) => !record.remote && record.state === "live")
+    .filter(
+      (record) =>
+        !record.remote &&
+        record.state === "live" &&
+        record.labels?.[CORE_FLOAT_LABEL] === undefined,
+    )
     .sort((a, b) => addressOrder(a.address, b.address));
   const byAddress = new Map(local.map((record) => [record.address, record]));
-  const worldTabs = new Map<
-    string,
-    { room: CoreTopologyRoom; tab: CoreTopologyTab }
-  >();
-  for (const room of world?.rooms ?? [])
-    for (const tab of room.tabs)
-      for (const address of tab.terminals)
-        if (byAddress.has(address) && !worldTabs.has(address))
-          worldTabs.set(address, { room, tab });
+  const worldTabs = worldTabsOf(world, byAddress);
   const workspaces = new Map<string, WorkspaceRow>();
   const tabs = new Map<string, RuntimeRow>();
   // World's rooms come first, in its order, even when empty. An app space

@@ -51,7 +51,7 @@ async function dispatchConnectionsRpc(
         result = await connectionProfiles.test(params?.profile ?? params);
       } else if (method === "connections.core_fixture") {
         // Testing switch: an in-process herdr-core double, never a real core.
-        const fixture = rpc.services.coreFixture;
+        const fixture = rpc.services.core?.fixture;
         if (!fixture) throw new Error("the core fixture is not available");
         const action = params?.action;
         result =

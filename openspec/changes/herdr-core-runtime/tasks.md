@@ -34,6 +34,10 @@
     against the 0.1.20 release.
 - [ ] P4: files/Git/worktrees, asks and Ranger.
 - [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.
+  - [x] Popup equivalents (#873): the room shell on both runtimes; Herdr Float
+    is the one TUI plugin popup World invokes, and generic plugin popups have
+    no core source. World's float shell is fenced like screen reads and tested
+    against the fake core, a browser and the 0.1.20 release.
 - [ ] P6: latest-release smoke, usage docs and final device/parity acceptance.
 - [ ] Obtain independent design/model review and separate implementation mapping
   acceptance; synchronize current specs and archive only after full delivery.

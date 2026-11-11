@@ -46,7 +46,7 @@ async function call(
       errors.push(error instanceof Error ? error.message : String(error));
     },
     services: {
-      core: {
+      coreControl: {
         manager: w.core.manager,
         topology: w.topology,
         host: () => options.host ?? host(),
