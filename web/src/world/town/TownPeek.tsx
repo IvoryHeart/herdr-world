@@ -171,7 +171,8 @@ export function TownPeek({
           type="button"
           className="town-peek-terminal"
           aria-label={`Open ${agent.displayLabel}'s terminal`}
-          title="Open terminal"
+          title={agent.viewOnly?.reason ?? "Open terminal"}
+          disabled={Boolean(agent.viewOnly)}
           onClick={onTerminal}
         >
           <SquareTerminal size={15} aria-hidden="true" />
@@ -201,6 +202,7 @@ export function TownPeek({
           conversation={conversation}
           taskSummary={agent.taskSummary}
           question={question}
+          {...(agent.viewOnly ? { viewOnly: agent.viewOnly } : {})}
         />
       </div>
       {choices.length && canReply ? (
@@ -222,25 +224,33 @@ export function TownPeek({
         {agent.semanticStatus === "done" ? (
           <button
             type="button"
-            disabled={!review.ready}
+            disabled={!review.ready || Boolean(agent.viewOnly)}
             title={
-              review.ready
-                ? undefined
-                : review.failed
-                  ? "The latest report could not be read"
-                  : "Reading the latest report…"
+              agent.viewOnly
+                ? agent.viewOnly.reason
+                : review.ready
+                  ? undefined
+                  : review.failed
+                    ? "The latest report could not be read"
+                    : "Reading the latest report…"
             }
             onClick={onReviewed}
           >
             <span>Mark reviewed</span>
           </button>
         ) : null}
-        {agent.semanticStatus === "done" && review.failed ? (
+        {agent.semanticStatus === "done" && review.failed && !agent.viewOnly ? (
           <button type="button" onClick={review.onRetry}>
             <span>Retry</span>
           </button>
         ) : null}
-        {canReply ? (
+        {agent.viewOnly ? (
+          <button type="button" disabled title={agent.viewOnly.reason}>
+            <span>
+              {agent.semanticStatus === "done" ? "Follow up" : "Open chat"}
+            </span>
+          </button>
+        ) : canReply ? (
           <button type="button" onClick={onChat}>
             <span>
               {agent.semanticStatus === "done" ? "Follow up" : "Open chat"}

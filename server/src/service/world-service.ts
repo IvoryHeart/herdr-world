@@ -32,6 +32,7 @@ import {
   type TuiConnectionProfile,
 } from "../connections/profiles";
 import { createCoreConnections } from "../herdr-core/connections";
+import { ownedBy, worldRuntimeRegistry } from "../world/runtime-registry";
 import {
   createLegacyRoutingLogger,
   serializeHerdrEventEnvelope,
@@ -47,7 +48,7 @@ import {
 } from "../http/herdr-setup";
 import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
-import type { RpcServices } from "../rpc/context";
+import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import {
   createSourcesHttpHandler,
   storedSourceSettings,
@@ -251,8 +252,7 @@ async function compose(
   }
 
   const readyConnectionGenerations = new Map<string, number>();
-  let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null =
-    null;
+  let worldSnapshots: ObservedSnapshots | null = null;
   let worldUsage: WorldUsageService | null = null;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
@@ -340,10 +340,18 @@ async function compose(
       connectionId,
       connectionGeneration,
       revision,
-      connectionManager,
+      observedConnections,
     );
     broadcast(line, "world-invalidation");
   }
+
+  // herdr-core: never started by World; its agents join the read model only.
+  const core = createCoreConnections({
+    logger: logger.child("connections"),
+    changed: publishConnectionsChanged,
+    observed: publishWorldInvalidation,
+    profiles: () => connectionProfiles,
+  });
 
   const connectionFailureReporter = connectionFailureReporters(
     logger.child("connections"),
@@ -398,6 +406,10 @@ async function compose(
       }
     },
     logger.child("connections"),
+  );
+  const observedConnections = worldRuntimeRegistry(
+    connectionManager,
+    core.manager,
   );
   const agentActivity = new AgentActivityCache({
     clock,
@@ -458,14 +470,14 @@ async function compose(
       safeSend(socket, JSON.stringify({ control }), "world-desk-reads"),
   });
   worldSnapshots = new WorldSnapshotService(
-    connectionManager,
+    observedConnections,
     () => clock.now(),
     (connectionId, generation) =>
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    observeHost,
-    observeTerminalSettings,
+    ownedBy(connectionManager, observeHost),
+    ownedBy(connectionManager, observeTerminalSettings),
     serviceIncarnation,
   );
 
@@ -680,12 +692,6 @@ async function compose(
     };
   }
 
-  // herdr-core connections: never started by World, observed read-only here.
-  const core = createCoreConnections({
-    logger: logger.child("connections"),
-    changed: publishConnectionsChanged,
-    profiles: () => connectionProfiles,
-  });
   const connectionProfiles = new ConnectionProfileService({
     manager: connectionManager,
     core: core.support,

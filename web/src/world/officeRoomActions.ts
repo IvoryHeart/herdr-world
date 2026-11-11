@@ -5,6 +5,8 @@ export type OfficeRoomActionCapabilities = {
   createSeat: boolean;
   rename: boolean;
   close: boolean;
+  /** A herdr-core room: its actions show, disabled with this reason. */
+  viewOnly?: string;
 };
 
 export type OfficeCreationActionState = {
@@ -31,7 +33,10 @@ export function createdPaneAdmissionRetryDelay(
 export function officeCreationActionState(
   admitted: boolean,
   endpointReason: string | null,
+  viewOnly?: string,
 ): OfficeCreationActionState {
+  // Not silently missing: World only watches herdr-core, and says so.
+  if (viewOnly) return { visible: true, enabled: false, reason: viewOnly };
   return {
     visible: admitted,
     enabled: admitted && endpointReason === null,
@@ -78,6 +83,9 @@ export function spaceRoomActionCapabilities(
     createSeat: operational && space?.capabilities.launcher === true,
     rename: operational && space?.capabilities.roomMutation === true,
     close: operational && space?.capabilities.roomMutation === true,
+    ...(space?.viewOnly && !space.stale && !stale
+      ? { viewOnly: space.viewOnly }
+      : {}),
   };
 }
 

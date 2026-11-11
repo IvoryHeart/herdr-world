@@ -233,7 +233,7 @@ export function TownRoomPlaque({
             className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"
             type="button"
             aria-label={`Rename room ${label}`}
-            title={`Rename ${label}`}
+            title={actions.roomViewOnly?.(room.key) ?? `Rename ${label}`}
             disabled={!actions.canRenameRoom(room.key)}
             onClick={() => actions.onRenameRoom(room.key)}
           >
@@ -243,7 +243,7 @@ export function TownRoomPlaque({
             className="world-room-overlay-action world-room-overlay-action-danger town-plaque-action"
             type="button"
             aria-label={`Close room ${label}`}
-            title={`Close ${label}`}
+            title={actions.roomViewOnly?.(room.key) ?? `Close ${label}`}
             disabled={!actions.canCloseRoom(room.key)}
             onClick={() => actions.onCloseRoom(room.key)}
           >

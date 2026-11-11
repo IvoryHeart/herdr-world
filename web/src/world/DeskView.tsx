@@ -1,3 +1,5 @@
+import { viewOnlyMessage } from "./viewOnly";
+import { Screen } from "./DeskScreen";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { agentDirectory } from "./deskDirectory";
 export { agentDirectory, type DirectoryGroup } from "./deskDirectory";
@@ -12,14 +14,7 @@ import {
 import { useWorldAsks, type WorldAsk } from "./worldAsks";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bridge } from "../api";
 import { worldSessionStorage } from "../browserStorage";
 import {
@@ -148,40 +143,6 @@ export function partitionDesk(
   );
   working.sort(oldestFirst);
   return { needs, review, working, quiet };
-}
-
-function Screen({
-  lines,
-  live,
-  fallback,
-}: {
-  lines: string[];
-  live?: boolean;
-  fallback: string;
-}) {
-  const ref = useRef<HTMLPreElement | null>(null);
-  // Follow the newest lines (the question and its choices) unless the reader
-  // has scrolled up to read earlier output.
-  const pinned = useRef(true);
-  const text = lines.join("\n");
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (element && pinned.current) element.scrollTop = element.scrollHeight;
-  }, [text]);
-  if (!lines.length) return <p className="desk-card-missing">{fallback}</p>;
-  return (
-    <pre
-      ref={ref}
-      className={`desk-screen${live ? " is-live" : ""}`}
-      onScroll={(event) => {
-        const element = event.currentTarget;
-        pinned.current =
-          element.scrollHeight - element.scrollTop - element.clientHeight < 24;
-      }}
-    >
-      {text}
-    </pre>
-  );
 }
 
 export { useMediaQuery } from "./deskMediaQuery";
@@ -418,6 +379,11 @@ export function DeskBoard({
   const focused = order[focusIndex];
   const open = (leaf: WorldLeafObject) => {
     cancelPreview();
+    // World only watches it: say why rather than fail to open it.
+    if (leaf.viewOnly) {
+      setError(leaf.viewOnly);
+      return;
+    }
     setError(null);
     void recordOpen(leaf);
     void onOpen(leaf.id).catch((reason: unknown) =>
@@ -654,7 +620,12 @@ export function DeskBoard({
             {ask}
           </p>
         ) : null}
-        {item.lane === "needs" ? (
+        {leaf.viewOnly ? (
+          // No transcript or screen for it: its own words, and why.
+          <p className="desk-card-report" title={leaf.viewOnly}>
+            {viewOnlyMessage(leaf)}
+          </p>
+        ) : item.lane === "needs" ? (
           <Screen
             lines={
               item.question
@@ -740,6 +711,9 @@ export function DeskBoard({
           <button
             type="button"
             className="is-primary"
+            // Answer only goes to Needs you; opening is not possible yet.
+            disabled={item.lane !== "needs" && Boolean(leaf.viewOnly)}
+            title={item.lane === "needs" ? undefined : leaf.viewOnly}
             onClick={() =>
               item.lane === "needs"
                 ? openNeedsYou(needsYouLeafKey(leaf.id))
@@ -756,9 +730,10 @@ export function DeskBoard({
           {item.lane === "review" ? (
             <button
               type="button"
-              disabled={item.pending}
+              disabled={item.pending || Boolean(leaf.viewOnly)}
               title={
-                item.pending ? "Waiting for this turn's receipt" : undefined
+                leaf.viewOnly ??
+                (item.pending ? "Waiting for this turn's receipt" : undefined)
               }
               onClick={() => toggleReviewed(item)}
             >

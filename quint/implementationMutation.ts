@@ -26,7 +26,8 @@ export type ImplementationFault =
   | "core-gap"
   | "core-heartbeat"
   | "core-stale"
-  | "core-missed-cut";
+  | "core-missed-cut"
+  | "core-view-retired";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
@@ -38,6 +39,7 @@ export async function mutateImplementation(
       "core-heartbeat",
       "core-stale",
       "core-missed-cut",
+      "core-view-retired",
     ],
     "effect-recovery": [
       "primary",
@@ -90,11 +92,13 @@ export async function mutateImplementation(
   const owner =
     name === "effect-recovery" && fault === "effect-not-sent"
       ? "server/src/storage/effect-transitions.ts"
-      : name === "observation-base" && fault === "incarnation-reset"
-        ? "web/src/world/observationBase.ts"
-        : name === "creation-flow" && fault === "admission-fence"
-          ? "web/src/world/createdTerminalAdmission.ts"
-          : owners[name];
+      : name === "herdr-core-runtime" && fault === "core-view-retired"
+        ? "server/src/herdr-core/topology.ts"
+        : name === "observation-base" && fault === "incarnation-reset"
+          ? "web/src/world/observationBase.ts"
+          : name === "creation-flow" && fault === "admission-fence"
+            ? "web/src/world/createdTerminalAdmission.ts"
+            : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "herdr-core-runtime") {
@@ -112,6 +116,8 @@ export async function mutateImplementation(
         'if (line.method === "missed") {\n      if (seq < this.cursorValue) {',
         "if (false) {\n      if (seq < this.cursorValue) {",
       ],
+      // The read model shows a retired mirror as current.
+      "core-view-retired": ["if (!source.actionable)", "if (false)"],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);

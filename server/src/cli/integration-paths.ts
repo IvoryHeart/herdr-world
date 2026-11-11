@@ -1,27 +1,8 @@
 import { join } from "node:path";
 import type { CliRuntime } from "./command";
+import { WORLD_HARNESSES } from "./harness-names";
 
-// Herdr's integration names, including its experimental Letta integration.
-export const WORLD_HARNESSES = [
-  "pi",
-  "omp",
-  "claude",
-  "codex",
-  "copilot",
-  "devin",
-  "droid",
-  "kimi",
-  "opencode",
-  "kilo",
-  "hermes",
-  "qodercli",
-  "qwen",
-  "letta",
-  "cursor",
-  "mastracode",
-  "antigravity-cli",
-  "grok",
-] as const;
+export { WORLD_HARNESSES };
 export type WorldHarness = (typeof WORLD_HARNESSES)[number];
 export const SHARED_HARNESSES: readonly WorldHarness[] = [
   "codex",

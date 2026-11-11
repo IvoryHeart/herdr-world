@@ -716,7 +716,8 @@ export default function BoardView({
         pane.leaf.actionable,
     );
     if (!agents.length) {
-      setToast({ text: "Only an agent can go in the bin" });
+      const viewOnly = panes.find((pane) => pane.leaf.viewOnly)?.leaf.viewOnly;
+      setToast({ text: viewOnly ?? "Only an agent can go in the bin" });
       return;
     }
     for (const pane of agents) void putAgentInBin(pane.leaf, "board", world);
@@ -2388,6 +2389,7 @@ export default function BoardView({
       tab.panes.find((candidate) => candidate.key === paneKey) ??
       primaryPane(tab);
     if (pane && tab.actionable) void onOpen(pane.leaf.id);
+    else if (pane && tab.viewOnly) setToast({ text: tab.viewOnly });
   };
   /** Center a workspace and zoom in until its tabs show; unfold it if folded. */
   function focusWorkspace(key: string) {
@@ -3593,12 +3595,13 @@ export default function BoardView({
                           <ChevronUp size={14} aria-hidden="true" />
                         )}
                       </button>
-                      {space.actionable ? (
+                      {space.actionable || space.viewOnly ? (
                         <button
                           type="button"
                           className="board-fold board-add"
                           aria-label={`New in ${space.label}`}
-                          title="New terminal or agent"
+                          title={space.viewOnly ?? "New terminal or agent"}
+                          disabled={Boolean(space.viewOnly)}
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={() => setAddTo(space.key)}
                         >

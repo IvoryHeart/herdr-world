@@ -1956,20 +1956,53 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   runtime cannot be changed (add another), and the default connection stays a
   Herdr one. Limits: 4,096 terminals, 64 KiB of labels and 256 KiB per
   terminal, 32 MiB per core; beyond them the card is stale, never partly
-  shown. Core agents do not appear in Town, Board or Desk yet; World only
-  observes core (it reads screens with `lines: 0`, so it never types, scrolls
-  or resizes). A screen read keeps the connection generation, core process
-  and occupant it started with; if the agent at that address is replaced
-  before the reply arrives, the read is refused rather than shown as the new
+  shown. A screen read keeps the connection generation, core process and
+  occupant it started with; if the agent at that address is replaced before
+  the reply arrives, the read is refused rather than shown as the new
   occupant's screen. Windows SSH hosts are not supported for core yet.
+- **Core agents in Town, Desk, Board and Needs you.** Agents running in a
+  connected herdr-core, including ones started in Herdr's desktop app, sit at
+  desks in Town, appear as Board cards, in Desk and, when waiting for you, in
+  Needs you, like Herdr agents. A host with both runtimes shows both side by
+  side, each under its own connection, never twice.
+  - **Rooms.** Terminals the desktop app placed share its spaces and tabs,
+    named from its `space / tab` caption; sub-agents join their parent's room;
+    every other core terminal is in one room named after the core.
+    Linked-machine terminals (`mac/t7`) and finished terminals are not shown.
+  - **Agents and status.** A terminal is an agent when it reports status
+    (OSC 7501) or runs a harness Herdr or its desktop app knows (Claude Code,
+    Codex, Gemini, OpenCode, Pi, Copilot, Cursor and the rest); the harness
+    comes from its report, else from what runs in it now, looking through the
+    app's shell wrapper. Status is core's, never guessed: blocked or error
+    needs you, working is working, and a harness that reports nothing is
+    unknown. Done versus idle follows Herdr's shared `herdr.seen` label (done
+    while the turn is above it); with no label yet, turns that ended before
+    World first saw the terminal count as seen, so done means a turn that
+    ended while World watched. Marking a turn seen or unread in a Herdr app
+    changes World within moments.
+  - **View only for now.** World cannot control core agents yet: Open
+    terminal, Chat, answers, Mark reviewed, New agent, Add room, rename and
+    close stay visible but disabled, with "View only: World can't control
+    herdr-core agents yet"; Board's bin and opening a core card say the same.
+    Tapping a core agent in Town shows its peek; Needs you, Desk and peeks show the program's own status message
+    (or why it waits: permission, a question, sign-in) instead of a
+    conversation. World reads only core's event stream: it never types,
+    resizes, labels or writes status.
+  - **Stale.** When core stops, its agents stay where they were, marked
+    offline with their last state, and return at the same addresses when it
+    is back. Lost ordering shows them stale until World has a fresh snapshot.
   Testing switch: open World with `?coreFixture`, then **Hosts → Manage
   connections** shows **Fixture core (testing)**: **Start fixture core** adds a
-  "Fixture core" connection to a stand-in core with two synthetic terminals,
-  **Kill fixture core** stops it like `kill -9`, and **Remove fixture** deletes
-  both. The stand-in runs inside the World service and starts no program. The
-  fixture only touches its own connection: if a connection you made already
-  uses the ID `core-fixture`, **Start fixture core** and **Remove fixture**
-  refuse and leave it in place.
+  "Fixture core" connection to a stand-in core with four synthetic agents and
+  a shell: in the desktop app's "web" space, *reviewer* (Claude Code) is
+  waiting for an answer and *builder* (Codex) is working; *scout* (Gemini)
+  finishes its turn about three seconds after the start (done); *helper*
+  (OpenCode, no status reporting) and a shell are unplaced. **Kill fixture
+  core** stops it like `kill -9`, and **Remove fixture** deletes both. The
+  stand-in runs inside the World service and starts no program. The fixture
+  only touches its own connection: if a connection you made already uses the
+  ID `core-fixture`, **Start fixture core** and **Remove fixture** refuse and
+  leave it in place.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
   **Open agent** follows **Agents open** (Chat by default when supported,

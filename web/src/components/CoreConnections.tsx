@@ -367,8 +367,8 @@ export function CoreFixturePanel({
         <div>
           <strong>Fixture core (testing)</strong>
           <span>
-            A stand-in herdr-core inside this World service with two synthetic
-            terminals. Nothing is installed and no program runs.
+            A stand-in herdr-core inside this World service with four synthetic
+            agents and a shell. Nothing is installed and no program runs.
           </span>
         </div>
       </div>

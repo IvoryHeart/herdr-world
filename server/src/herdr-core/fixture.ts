@@ -20,6 +20,61 @@ type Profiles = {
   remove(id: unknown): Promise<unknown>;
 };
 
+/** Synthetic terminals the fixture holds; see `populate`. */
+const FIXTURE_TERMINALS = 5;
+/** How long after a start the scout finishes its turn. */
+export const FIXTURE_FINISH_MS = 3_000;
+
+/**
+ * Agents as Herdr's desktop app would leave them: two placed in its "web"
+ * space (one waiting for an answer, one working), one in another tab that
+ * finishes soon after World connects, one harness with no status
+ * integration, and a plain shell. Returns the scout's address.
+ */
+function populate(fake: FakeCore): string {
+  const space = (tab: string, where: string) => ({
+    "herdr.space": "fx-web",
+    "herdr.tab": tab,
+    where,
+  });
+  const agent = (name: string, program: string, labels = {}) =>
+    fake.create({
+      name,
+      argv: [program],
+      keep: true,
+      labels,
+      foreground: {
+        pid: 1,
+        name: program,
+        argv: [program],
+        cwd: "/tmp/example",
+      },
+    });
+  const reviewer = agent(
+    "reviewer",
+    "claude",
+    space("fx-review", "web / review"),
+  );
+  fake.report(reviewer, { state: "working", app: "claude-code" });
+  fake.report(reviewer, {
+    state: "blocked",
+    kind: "question",
+    app: "claude-code",
+    msg: "Which branch should I merge into?",
+  });
+  const builder = agent("builder", "codex", space("fx-review", "web / review"));
+  fake.report(builder, { state: "working", app: "codex" });
+  const scout = agent(
+    "scout",
+    "gemini",
+    space("fx-research", "web / research"),
+  );
+  fake.report(scout, { state: "working", app: "gemini" });
+  agent("helper", "opencode");
+  fake.create({ name: "fixture-shell" });
+  return scout;
+}
+
 export type CoreFixtureStatus = {
   running: boolean;
   connection_id: string;
@@ -61,12 +116,16 @@ export function createCoreFixture(profiles: () => Profiles) {
   };
   const fixtureProfile = (service: Profiles) =>
     service.coreList().find((item) => item.id === CORE_FIXTURE_CONNECTION_ID);
+  let scout: string | null = null;
+  let finish: ReturnType<typeof setTimeout> | null = null;
   const status = (): CoreFixtureStatus => ({
     running: fake?.isRunning ?? false,
     connection_id: CORE_FIXTURE_CONNECTION_ID,
-    terminals: fake ? 2 : 0,
+    terminals: fake ? FIXTURE_TERMINALS : 0,
   });
   const stop = () => {
+    if (finish) clearTimeout(finish);
+    finish = null;
     if (fake?.isRunning) fake.kill(socket ?? undefined);
     socket = null;
   };
@@ -86,14 +145,7 @@ export function createCoreFixture(profiles: () => Profiles) {
         chmodSync(root, 0o700);
         fake = new FakeCore({ name: "fixture-host" });
         fake.revive();
-        fake.create({
-          name: "fixture-agent",
-          argv: ["claude"],
-          keep: true,
-          reported: true,
-          status: { state: "working" },
-        });
-        fake.create({ name: "fixture-shell" });
+        scout = populate(fake);
       } else if (!fake.isRunning) {
         // A new core process: same terminals at the same addresses.
         fake.revive();
@@ -114,6 +166,19 @@ export function createCoreFixture(profiles: () => Profiles) {
         });
       else if (["disconnected", "error"].includes(existing?.state ?? ""))
         await service.connect(CORE_FIXTURE_CONNECTION_ID);
+      // Scout finishes its turn while World watches: done until seen.
+      const finishing = scout;
+      const word = (
+        fake.terminal(finishing ?? "")?.status as { state?: unknown } | null
+      )?.state;
+      if (finishing && word === "working") {
+        if (finish) clearTimeout(finish);
+        finish = setTimeout(() => {
+          finish = null;
+          if (fake?.isRunning)
+            fake.report(finishing, { state: "idle", app: "gemini" });
+        }, FIXTURE_FINISH_MS);
+      }
       return status();
     },
     /** Like `kill -9` of core: connections end, the socket goes, the lock stays. */
@@ -132,6 +197,7 @@ export function createCoreFixture(profiles: () => Profiles) {
       fake = null;
       root = null;
       socket = null;
+      scout = null;
       if (owner === "foreign")
         throw new Error(
           `the connection with ID ${CORE_FIXTURE_CONNECTION_ID} is not the fixture's; it was left in place`,

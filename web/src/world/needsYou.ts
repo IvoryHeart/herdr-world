@@ -1,7 +1,11 @@
 import { worldLocalStorage } from "../browserStorage";
 import { askLeaves } from "./worldAskTargets";
 import { askerName, type WorldAsk } from "./worldAsks";
-import type { WorldLeafObject, WorldObject } from "./worldObject";
+import {
+  isLiveNode,
+  type WorldLeafObject,
+  type WorldObject,
+} from "./worldObject";
 
 /**
  * What waits on the owner, as one conversation: questions agents asked
@@ -38,7 +42,7 @@ export function needsYouItems(
     return node && node.kind !== "host" && node.kind !== "space" ? node : null;
   };
   const live = world.leaves.filter(
-    (leaf) => leaf.kind === "agent" && leaf.actionable && !leaf.stale,
+    (leaf) => leaf.kind === "agent" && isLiveNode(leaf),
   );
   const at = (leaf: WorldLeafObject) => leaf.lastActivityAt ?? 0;
   return [

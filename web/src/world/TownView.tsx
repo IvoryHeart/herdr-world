@@ -576,7 +576,12 @@ export default function TownView({
     trace,
   });
   const openReply = (key: string) => {
-    if (!townTargetActionable(office, key)) return;
+    if (!townTargetActionable(office, key)) {
+      const nodeId = deviceByKey.get(key)?.device.nodeId;
+      const viewOnly = nodeId ? world.nodeById.get(nodeId)?.viewOnly : null;
+      if (viewOnly) toast("error", viewOnly);
+      return;
+    }
     // A desk with more panes than seats lists them all rather than guessing.
     if (crowdedDesk(key)) {
       window.clearTimeout(peekTimer.current);
@@ -693,6 +698,13 @@ export default function TownView({
   const openAgent = (agentKey: string) => {
     const agent = agentByKey.get(agentKey)?.agent;
     if (!agent) return;
+    // World can only watch it: its peek shows its words and says why.
+    if (agent.viewOnly) {
+      window.clearTimeout(peekTimer.current);
+      holdPeek.current = true;
+      setPeek({ key: agentKey, anchor: lastPointer.current ?? { x: 0, y: 0 } });
+      return;
+    }
     const node = world.nodeById.get(agent.nodeId);
     const opens = node
       ? worldNodeOpenView(node, preferences.townOpens)

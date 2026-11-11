@@ -91,6 +91,16 @@
   color: var(--board-soft);
   font-size: 12px;
 }
+/* A view-only (herdr-core) agent: its own words, then why World only watches. */
+.board-peek-screen .town-peek-unavailable.is-view-only {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.board-peek-screen .town-peek-unavailable.is-view-only strong {
+  color: var(--board-ink);
+  font-weight: 600;
+}
 .board-peek-screen .town-question {
   margin: 6px 0 0;
   font: inherit;

@@ -1,3 +1,4 @@
+import { viewOnlyMessage } from "./viewOnly";
 import type {
   OfficeAgent,
   OfficeAgentDestination,
@@ -46,6 +47,11 @@ export function projectAgent(
           : "bar",
     stale: leaf.stale,
     canOpenInSpaces: leaf.capabilities.openSpaces,
+    ...(leaf.viewOnly
+      ? {
+          viewOnly: { reason: leaf.viewOnly, message: viewOnlyMessage(leaf) },
+        }
+      : {}),
     characterIndex: stableNumber(leaf.id) % 12,
   };
 }

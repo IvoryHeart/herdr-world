@@ -60,8 +60,27 @@ type WorldObjectBase = {
   selectedHost: boolean;
   stale: boolean;
   actionable: boolean;
+  /**
+   * Why a live node can be seen but not controlled (a herdr-core agent).
+   * Such a node is never stale and never actionable: its controls stay
+   * visible, disabled with this reason.
+   */
+  viewOnly?: string;
   capabilities: WorldActionCapabilities;
 };
+
+/** The one reason every view-only control shows. */
+export const CORE_VIEW_ONLY_REASON =
+  "View only: World can't control herdr-core agents yet";
+
+/** Live in the view: current, whether or not World can control it. */
+export function isLiveNode(node: {
+  stale: boolean;
+  actionable: boolean;
+  viewOnly?: string;
+}) {
+  return !node.stale && (node.actionable || node.viewOnly !== undefined);
+}
 
 export type WorldHostObject = WorldObjectBase & {
   kind: "host";
@@ -357,12 +376,14 @@ function hostState(
 function actionCapabilities(
   kind: WorldObjectKind,
   state: WorldHostState,
+  viewOnly: string | undefined,
 ): WorldActionCapabilities {
-  const operational = state === "active" || state === "ready-inactive";
+  const operational =
+    !viewOnly && (state === "active" || state === "ready-inactive");
   const leaf = kind === "agent" || kind === "terminal";
   const space = kind === "space";
   return {
-    activateHost: state === "ready-inactive",
+    activateHost: !viewOnly && state === "ready-inactive",
     openTerminal: operational && leaf,
     openSpaces: operational && (leaf || space),
     files: operational && (leaf || space),
@@ -603,10 +624,20 @@ function* constructHost(
 ): Generator<number, WorldHostObject> {
   const connectionHostState = hostState(connection, selectedConnectionId);
   const selectedHost = connection.connectionId === selectedConnectionId;
-  const hostCapabilities = actionCapabilities("host", connectionHostState);
-  const operational =
+  const live =
     connectionHostState === "active" ||
     connectionHostState === "ready-inactive";
+  // Observed, never controlled: World has no control path to herdr-core yet.
+  const viewOnly =
+    live && connection.runtime === "herdr-core"
+      ? CORE_VIEW_ONLY_REASON
+      : undefined;
+  const operational = live && !viewOnly;
+  const hostCapabilities = actionCapabilities(
+    "host",
+    connectionHostState,
+    viewOnly,
+  );
   const observedGeneration =
     connection.snapshotGeneration ?? connection.generation;
   const id = worldObjectId(
@@ -666,6 +697,7 @@ function* constructHost(
     }
     const roomCache = roomInputCache(workspace, [
       connection.connectionId,
+      connection.runtime ?? "herdr",
       observedGeneration,
       hostLabel,
       connectionHostState,
@@ -689,7 +721,11 @@ function* constructHost(
       const isAgent =
         typeof pane.agent === "string" && pane.agent.trim().length > 0;
       const kind = isAgent ? "agent" : "terminal";
-      const capabilities = actionCapabilities(kind, connectionHostState);
+      const capabilities = actionCapabilities(
+        kind,
+        connectionHostState,
+        viewOnly,
+      );
       const tab = tabsById.get(pane.tab_id);
       const tabLabel = boundedOptionalText(tab?.label, 100);
       const agentMetadata = isAgent ? (metadata.get(pane) ?? null) : null;
@@ -752,8 +788,9 @@ function* constructHost(
         hostLabel,
         hostState: connectionHostState,
         selectedHost,
-        stale: connection.stale || !operational,
+        stale: connection.stale || !live,
         actionable: operational,
+        ...(viewOnly ? { viewOnly } : {}),
         capabilities,
         pane,
         workspaceId: pane.workspace_id,
@@ -803,9 +840,10 @@ function* constructHost(
       hostLabel,
       hostState: connectionHostState,
       selectedHost,
-      stale: connection.stale || !operational,
+      stale: connection.stale || !live,
       actionable: operational,
-      capabilities: actionCapabilities("space", connectionHostState),
+      ...(viewOnly ? { viewOnly } : {}),
+      capabilities: actionCapabilities("space", connectionHostState, viewOnly),
       workspace,
       tabs: tabsByWorkspace.get(workspace.workspace_id) ?? [],
       children,
@@ -842,8 +880,9 @@ function* constructHost(
     hostLabel,
     hostState: connectionHostState,
     selectedHost,
-    stale: connection.stale || !operational,
+    stale: connection.stale || !live,
     actionable: operational,
+    ...(viewOnly ? { viewOnly } : {}),
     capabilities: hostCapabilities,
     connection,
     spaces,

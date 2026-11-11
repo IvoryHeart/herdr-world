@@ -2,12 +2,14 @@
   "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
   "units": "seconds; JUnit suite totals; Town groups sum their original testcase durations",
   "sourceNotes": {
+    "CoreViewOnly.browser": "2026-11-11 local focused run: 0.74 s testcase duration, one fixture with eight checks, bun run test web/src/world/CoreViewOnly.browser.test.ts.",
     "NeedsYouCard.browser": "2026-11-02 local focused run: 0.83273 s testcase duration, seven assertions, bun run test web/src/world/NeedsYouCard.browser.test.ts."
   },
   "seconds": {
     "AnswerDeliveries.browser": 10,
     "BoardView": 21.518,
     "ConcurrentContexts": 31.58,
+    "CoreViewOnly.browser": 0.74,
     "DeskView.browser": 14.112,
     "HostsFilter": 47.246,
     "HostsFilter.actions": 37.979,

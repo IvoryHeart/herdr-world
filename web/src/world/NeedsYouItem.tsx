@@ -1,3 +1,4 @@
+import { viewOnlyMessage } from "./viewOnly";
 import { MessageSquare, Paperclip, SendHorizontal, X } from "lucide-react";
 import {
   type ReactNode,
@@ -106,13 +107,15 @@ export function NeedsYouMessage({
           type="button"
           className="needs-you-name"
           aria-label={`Open ${name}'s window`}
-          title={`Open ${name}'s window`}
+          title={leaf.viewOnly ?? `Open ${name}'s window`}
           aria-describedby={card ? cardId : undefined}
+          aria-disabled={leaf.viewOnly ? true : undefined}
           onPointerEnter={(event) =>
             event.pointerType === "mouse" && setCard(true)
           }
           onPointerLeave={() => setCard(false)}
-          onClick={() => onChat(leaf.id)}
+          // A view-only agent has no window yet: the name shows its card.
+          onClick={() => (leaf.viewOnly ? setCard(true) : onChat(leaf.id))}
         >
           {name}
         </button>
@@ -132,7 +135,8 @@ export function NeedsYouMessage({
           aria-label={
             done ? `Follow up with ${name}` : `Chat with ${name} about this`
           }
-          title={done ? "Follow up in Chat" : "Open in Chat"}
+          title={leaf.viewOnly ?? (done ? "Follow up in Chat" : "Open in Chat")}
+          disabled={Boolean(leaf.viewOnly)}
           onClick={() => onChat(leaf.id)}
         >
           <MessageSquare size={16} aria-hidden="true" />
@@ -166,6 +170,14 @@ export function NeedsYouMessage({
           onAnswer={onAnswer}
           onAttach={onAttach}
           onDismiss={onDismiss}
+        />
+      ) : item.leaf.viewOnly ? (
+        <NeedsYouViewOnly
+          leaf={item.leaf}
+          name={name}
+          kind={item.kind}
+          reason={item.leaf.viewOnly}
+          head={head}
         />
       ) : (
         <NeedsYouAgent
@@ -503,6 +515,50 @@ type Answered = Pick<
   Extract<AnswerResult, { status: "sent" }>,
   "number" | "label" | "text" | "acknowledged" | "unconfirmed_reason"
 > & { question: string[]; fingerprint: string };
+
+/**
+ * A herdr-core agent World only watches: its status as core reports it, the
+ * program's own words, and its controls disabled with the reason. No
+ * transcript or screen is read, so nothing waits on a read that cannot come.
+ */
+function NeedsYouViewOnly({
+  leaf,
+  name,
+  kind,
+  reason,
+  head,
+}: {
+  leaf: WorldLeafObject;
+  name: string;
+  kind: "needs" | "done";
+  reason: string;
+  head: Head;
+}) {
+  return (
+    <>
+      {head(
+        kind === "done" ? (
+          <button
+            type="button"
+            className="needs-you-icon"
+            aria-label={`Mark ${name}'s work reviewed`}
+            title={reason}
+            disabled
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        ) : null,
+      )}
+      <p className="needs-you-empty">{viewOnlyMessage(leaf)}</p>
+      <div className="needs-you-replies">
+        <small className="needs-you-notice">{reason}</small>
+        <button type="button" disabled title={reason}>
+          Open Terminal
+        </button>
+      </div>
+    </>
+  );
+}
 
 /**
  * A blocked or finished agent's latest message, as Chat reads it. A blocked
