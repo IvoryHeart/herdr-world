@@ -1,3 +1,4 @@
+import type { HostResources } from "../adapters/runtime-ports";
 import { isAbsolute } from "node:path";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import {
@@ -13,9 +14,6 @@ type AgentSession = {
   agent: string;
   kind: string;
   value: string;
-};
-type Herdr = {
-  call(method: string, params?: Record<string, unknown>): Promise<unknown>;
 };
 
 export type AgentCheckoutContext =
@@ -178,7 +176,7 @@ export function parseAgentCheckoutStatus(output: string) {
 }
 
 export function createAgentCheckoutContext(args: {
-  herdr: Herdr;
+  resources: HostResources;
   sshHost: () => string | undefined;
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
   shQuote: (value: string) => string;
@@ -200,7 +198,7 @@ export function createAgentCheckoutContext(args: {
         "agent_checkout.get requires pane_id and agent_session_fingerprint",
       );
     const pane = paneRecord(
-      await args.herdr.call("pane.get", { pane_id: paneId }),
+      await args.resources.getTerminal({ pane_id: paneId }),
     );
     if (!pane || pane.pane_id !== paneId)
       return unavailable(
@@ -235,7 +233,7 @@ export function createAgentCheckoutContext(args: {
         "Agent checkout unavailable: reported path is not a Git checkout.",
       );
     const latestPane = paneRecord(
-      await args.herdr.call("pane.get", { pane_id: paneId }),
+      await args.resources.getTerminal({ pane_id: paneId }),
     );
     if (!latestPane || latestPane.pane_id !== paneId)
       return unavailable(

@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { describe, expect, test } from "bun:test";
 import { workspaceRepoSettingsKey } from "../config/gui-settings";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
@@ -277,7 +278,7 @@ function creationFixture(
         return { root: remainingRoots.shift() ?? "/source/root" };
       },
     },
-    herdr: {
+    ...herdrRuntimeFixture({
       call: async (method: string, params: Record<string, unknown>) => {
         methods.push(method);
         rpcParams.push(params);
@@ -286,7 +287,7 @@ function creationFixture(
           ? { workspace, already_open: false }
           : { workspace };
       },
-    },
+    }),
     worktreeParents: {
       rememberWorktreeParent: async (
         result: unknown,

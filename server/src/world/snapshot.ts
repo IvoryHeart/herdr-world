@@ -2,7 +2,10 @@ import { parseSnapshotParameters } from "./snapshot-parameters";
 import { WorldObservation, parseObservationBase } from "./observation-v1";
 import * as observation from "./snapshot-observers";
 import { nativeId, priorityKey } from "./snapshot-identity";
-import { readHerdrSnapshot } from "../adapters/herdr";
+import {
+  readRuntimeSnapshot,
+  type RuntimeReader,
+} from "../adapters/runtime-ports";
 import { createHash } from "node:crypto";
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
@@ -46,15 +49,7 @@ export type WorldSnapshotCoverage = {
   by_workspace: WorldWorkspaceCoverage[];
 };
 
-type RuntimeWithHerdr = {
-  herdr: {
-    call(
-      method: string,
-      params?: Record<string, unknown>,
-      timeoutMs?: number,
-    ): Promise<unknown>;
-  };
-};
+type RuntimeWithOperations = { operations: RuntimeReader };
 
 type RuntimeLease<Runtime> = {
   connectionId: ConnectionId;
@@ -318,7 +313,7 @@ function topologyCoverage(
   };
 }
 
-export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
+export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   readonly observation: WorldObservation;
   private revision = 0;
   private readonly cache = new Map<string, CachedSnapshot>();
@@ -622,8 +617,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     const observedAt = this.now();
     let outcome: HostOutcome;
     try {
-      const raw: RawHostSnapshot = await readHerdrSnapshot(
-        work.lease.runtime.herdr,
+      const raw: RawHostSnapshot = await readRuntimeSnapshot(
+        work.lease.runtime.operations,
       );
       // An expired catalogue can complete every downstream read immediately.
       // Break that microtask chain before host projection/digest work so native

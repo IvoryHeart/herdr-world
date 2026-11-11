@@ -23,10 +23,7 @@ import {
   readAssistantPaneOccupant,
   type AssistantWorktreeCreator,
 } from "./actions";
-import {
-  ASSISTANT_DEFAULT_TERMINAL_LINES,
-  ASSISTANT_MAX_TERMINAL_LINES,
-} from "./tools";
+import { terminalReadLines } from "./tools";
 
 const MAX_SCOPE_READS = 8;
 const MAX_ITEMS = 80;
@@ -208,10 +205,9 @@ export function createAssistantContext(args: {
     const result = await readLeased(
       lease,
       () =>
-        lease.runtime.herdr.call(
-          "workspace.get",
+        lease.runtime.operations.getWorkspace(
           { workspace_id: workspaceId },
-          5000,
+          { timeoutMs: 5000 },
         ),
       `workspace ${workspaceId}`,
       signal,
@@ -262,7 +258,7 @@ export function createAssistantContext(args: {
       (method, params) =>
         readLeased(
           lease,
-          () => lease.runtime.herdr.call(method, params, 5000),
+          () => lease.runtime.tui.call(method, params, 5000),
           `agent identity for pane ${paneId}`,
           signal,
         ),
@@ -336,10 +332,9 @@ export function createAssistantContext(args: {
           const result = await readLeased(
             lease,
             () =>
-              lease.runtime.herdr.call(
-                "pane.list",
+              lease.runtime.operations.listTerminals(
                 { workspace_id: target.workspace_id },
-                5000,
+                { timeoutMs: 5000 },
               ),
             `panes for workspace ${target.workspace_id}`,
             readSignal,
@@ -483,7 +478,8 @@ export function createAssistantContext(args: {
         const endpoint = fingerprint(connectionId);
         const payload = await readLeased(
           lease,
-          () => lease.runtime.herdr.call("workspace.list", {}, 5000),
+          () =>
+            lease.runtime.operations.listWorkspaces({}, { timeoutMs: 5000 }),
           `workspace list for connection ${connectionId}`,
         );
         if (!Array.isArray(payload?.workspaces))
@@ -824,6 +820,7 @@ export function createAssistantContext(args: {
     const output: Record<string, unknown>[] = [];
     for (const target of selected) {
       const lease = leases.get(target.connection_id)!;
+      const { operations } = lease.runtime;
       assertCurrent(lease, signal);
       if (kind === "history" || kind === "diff")
         assertUnixHost(lease.runtime, `Ranger ${kind} read`);
@@ -838,10 +835,9 @@ export function createAssistantContext(args: {
         const payload = await readLeased(
           lease,
           () =>
-            lease.runtime.herdr.call(
-              "pane.list",
+            operations.listTerminals(
               { workspace_id: target.workspace_id },
-              5000,
+              { timeoutMs: 5000 },
             ),
           `panes for workspace ${target.workspace_id}`,
           signal,
@@ -866,10 +862,15 @@ export function createAssistantContext(args: {
           truncated: panes.length > MAX_ITEMS,
         };
       } else if (kind === "history" || kind === "terminal") {
-        paneId = identifier(params.pane_id, "pane_id");
+        const targetPaneId = identifier(params.pane_id, "pane_id");
+        paneId = targetPaneId;
         const payload = await readLeased(
           lease,
-          () => lease.runtime.herdr.call("pane.get", { pane_id: paneId }, 5000),
+          () =>
+            operations.getTerminal(
+              { pane_id: targetPaneId },
+              { timeoutMs: 5000 },
+            ),
           `pane ${paneId}`,
           signal,
         );
@@ -930,30 +931,20 @@ export function createAssistantContext(args: {
               ),
           };
         } else {
-          if (
-            params.lines !== undefined &&
-            (!Number.isInteger(params.lines) ||
-              Number(params.lines) < 1 ||
-              Number(params.lines) > ASSISTANT_MAX_TERMINAL_LINES)
-          ) {
-            throw new Error(
-              `Terminal lines must be between 1 and ${ASSISTANT_MAX_TERMINAL_LINES}`,
-            );
-          }
+          const lines = terminalReadLines(params.lines);
           // Herdr can collect idle agents' application history and restore their viewport.
           const result = await readLeased(
             lease,
             () =>
-              lease.runtime.herdr.call(
-                "pane.read",
+              operations.readTerminal(
                 {
-                  pane_id: paneId,
+                  pane_id: targetPaneId,
                   source: "recent",
-                  lines: params.lines ?? ASSISTANT_DEFAULT_TERMINAL_LINES,
+                  lines,
                   format: "text",
                   strip_ansi: true,
                 },
-                25_000,
+                { timeoutMs: 25_000 },
               ),
             `terminal output for pane ${paneId}; this Herdr connection may not support pane.read`,
             signal,
@@ -971,7 +962,7 @@ export function createAssistantContext(args: {
           }
           data = {
             pane_id: paneId,
-            requested_lines: params.lines ?? ASSISTANT_DEFAULT_TERMINAL_LINES,
+            requested_lines: lines,
             terminal_window:
               "Most recent available terminal output; older output outside the requested line window is not included. Application history recovery depends on Herdr support and agent state",
             text: terminal.text.slice(-MAX_TEXT),

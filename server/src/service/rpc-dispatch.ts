@@ -1,3 +1,4 @@
+import { terminalStreamVerb } from "../adapters/runtime-ports";
 import type { ServerWebSocket } from "bun";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
@@ -322,7 +323,8 @@ async function handleRpc(
     );
     return;
   }
-  const { sshHost, herdr, handleSettingsRpc, terminalBridge } = connection;
+  const { sshHost, tui, operations, handleSettingsRpc, terminalBridge } =
+    connection;
 
   if (method.startsWith("forward.")) {
     try {
@@ -431,6 +433,16 @@ async function handleRpc(
   }
   if (method.startsWith("terminal.")) {
     recheck();
+    const streamVerb = terminalStreamVerb(method);
+    if (streamVerb)
+      return connection.terminals.dispatch(
+        ws,
+        id,
+        streamVerb,
+        params ?? {},
+        requestIsCurrent,
+      );
+    // Popups and other TUI-specific surfaces remain on its native bridge.
     return terminalBridge.handleTerminalRpc(
       ws,
       id,
@@ -462,10 +474,9 @@ async function handleRpc(
     let inputTerminalId: string | undefined;
     if (PANE_INPUT_METHODS.has(method) && typeof params?.pane_id === "string") {
       try {
-        const pane = await herdr.call(
-          "pane.get",
+        const pane = await operations.getTerminal(
           { pane_id: params.pane_id },
-          2000,
+          { timeoutMs: 2000 },
         );
         if (typeof pane?.pane?.terminal_id === "string")
           inputTerminalId = pane.pane.terminal_id;
@@ -473,7 +484,7 @@ async function handleRpc(
         // Input still goes; only its clipboard routing is unknown.
       }
     }
-    const rawResult = await herdr.call(method, params ?? {}, 8000, () => {
+    const rawResult = await tui.call(method, params ?? {}, 8000, () => {
       recheck();
       if (inputTerminalId)
         terminalBridge.noteTerminalInput(ws, inputTerminalId);
@@ -492,7 +503,7 @@ async function handleRpc(
       result = await enrichIntegrationVersions(result, {
         run: connection.runProcessWithCodeTimeout,
         sshHost: sshHost(),
-        ping: () => herdr.ping(),
+        ping: () => connection.herdr.ping(),
       });
     }
     sendReply({ id, result }, method);

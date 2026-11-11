@@ -1,12 +1,9 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { describe, expect, test } from "bun:test";
 import type { ConnectionStatus } from "../connections/types";
 import { WorldSnapshotService } from "./snapshot";
 
-type Runtime = {
-  herdr: {
-    call(method: string): Promise<unknown>;
-  };
-};
+type Runtime = ReturnType<typeof herdrRuntimeFixture>;
 
 function status(
   id: string,
@@ -26,7 +23,7 @@ function status(
 
 function runtime(label: string): Runtime {
   return {
-    herdr: {
+    ...herdrRuntimeFixture({
       async call(method) {
         if (method === "workspace.list") {
           return {
@@ -65,7 +62,7 @@ function runtime(label: string): Runtime {
         if (method === "agent.list") return { agents: [] };
         throw new Error(`unexpected method: ${method}`);
       },
-    },
+    }),
   };
 }
 
@@ -241,7 +238,7 @@ describe("WorldSnapshotService", () => {
         generation: 1,
         isCurrent: () => true,
         runtime: {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method) {
               if (method === "workspace.list") {
                 started.push(id);
@@ -269,7 +266,7 @@ describe("WorldSnapshotService", () => {
               }
               return result;
             },
-          },
+          }),
         },
       }),
     });
@@ -328,7 +325,7 @@ describe("WorldSnapshotService", () => {
         generation: 1,
         isCurrent: () => true,
         runtime: {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method) {
               if (method === "workspace.list") {
                 started.push(id);
@@ -338,7 +335,7 @@ describe("WorldSnapshotService", () => {
               else if (id.startsWith("stalled")) await stalled.promise;
               return runtime(id).herdr.call(method);
             },
-          },
+          }),
         },
       }),
     });
@@ -369,13 +366,13 @@ describe("WorldSnapshotService", () => {
       ids.map((id) => [
         id,
         {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method: string) {
               if (method === "workspace.list") started.push(id);
               await release.promise;
               return runtime(id).herdr.call(method);
             },
-          },
+          }),
         },
       ]),
     );
@@ -480,7 +477,7 @@ describe("WorldSnapshotService", () => {
       ids.map((id) => [
         id,
         {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method: string) {
               if (
                 method === "workspace.list" &&
@@ -490,7 +487,7 @@ describe("WorldSnapshotService", () => {
               if (id.startsWith("hold-")) await release.promise;
               return runtime(id).herdr.call(method);
             },
-          },
+          }),
         },
       ]),
     );
@@ -531,13 +528,13 @@ describe("WorldSnapshotService", () => {
       ids.map((id) => [
         id,
         {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method: string) {
               if (method === "workspace.list") started.push(id);
               await release.promise;
               return runtime(id).herdr.call(method);
             },
-          },
+          }),
         },
       ]),
     );
@@ -582,7 +579,7 @@ describe("WorldSnapshotService", () => {
       label: `Late ${index}`,
     }));
     const value: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           if (method === "workspace.list")
             return {
@@ -598,7 +595,7 @@ describe("WorldSnapshotService", () => {
           if (method === "pane.list") return { panes };
           return { agents: [] };
         },
-      },
+      }),
     };
     const service = new WorldSnapshotService(
       {
@@ -642,7 +639,7 @@ describe("WorldSnapshotService", () => {
 
   test("classifies one duplicate watched terminal as unresolved once", async () => {
     const value: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           if (method === "workspace.list")
             return { workspaces: [{ workspace_id: "space" }] };
@@ -667,7 +664,7 @@ describe("WorldSnapshotService", () => {
             };
           return { agents: [] };
         },
-      },
+      }),
     };
     const service = new WorldSnapshotService(
       {
@@ -735,13 +732,13 @@ describe("WorldSnapshotService", () => {
         return [
           id,
           {
-            herdr: {
+            ...herdrRuntimeFixture({
               async call(method: string) {
                 if (method === "workspace.list") started.push(id);
                 if (id !== "host-63") await release.promise;
                 return base.herdr.call(method);
               },
-            },
+            }),
           },
         ] as const;
       }),
@@ -797,12 +794,12 @@ describe("WorldSnapshotService", () => {
   test("keeps a slow selected host and unavailable peers non-actionable without inventing children", async () => {
     const release = deferred<void>();
     const selectedRuntime: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           await release.promise;
           return runtime("Selected").herdr.call(method);
         },
-      },
+      }),
     };
     const service = new WorldSnapshotService<Runtime>(
       {
@@ -897,13 +894,13 @@ describe("WorldSnapshotService", () => {
     const base = runtime("Current");
     let calls = 0;
     const value: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           calls += 1;
           await release.promise;
           return base.herdr.call(method);
         },
-      },
+      }),
     };
     const service = new WorldSnapshotService<Runtime>({
       list: () => [status("local")],
@@ -931,7 +928,7 @@ describe("WorldSnapshotService", () => {
       ids.map((id) => [
         id,
         {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method: string) {
               if (method === "workspace.list") started.push(id);
               if (id !== "host-0" && id !== "host-5") {
@@ -939,7 +936,7 @@ describe("WorldSnapshotService", () => {
               }
               return runtime(id).herdr.call(method);
             },
-          },
+          }),
         },
       ]),
     );
@@ -990,13 +987,13 @@ describe("WorldSnapshotService", () => {
           connectionId: id,
           generation: 1,
           runtime: {
-            herdr: {
+            ...herdrRuntimeFixture({
               async call(method) {
                 if (method === "workspace.list") started.push(id);
                 if (id !== "selected") await release.promise;
                 return runtime(id).herdr.call(method);
               },
-            },
+            }),
           },
           isCurrent: () => true,
         }),
@@ -1028,7 +1025,7 @@ describe("WorldSnapshotService", () => {
           connectionId: id,
           generation: 1,
           runtime: {
-            herdr: {
+            ...herdrRuntimeFixture({
               async call(method) {
                 if (id !== "selected" && method === "workspace.list") {
                   started.push(id);
@@ -1036,7 +1033,7 @@ describe("WorldSnapshotService", () => {
                 if (id !== "selected") await release.promise;
                 return runtime(id).herdr.call(method);
               },
-            },
+            }),
           },
           isCurrent: () => true,
         }),
@@ -1070,7 +1067,7 @@ describe("WorldSnapshotService", () => {
           connectionId: id,
           generation: 1,
           runtime: {
-            herdr: {
+            ...herdrRuntimeFixture({
               async call(method) {
                 if (method === "workspace.list") {
                   started.push(id);
@@ -1079,7 +1076,7 @@ describe("WorldSnapshotService", () => {
                 await release.promise;
                 return runtime(id).herdr.call(method);
               },
-            },
+            }),
           },
           isCurrent: () => true,
         }),
@@ -1103,13 +1100,13 @@ describe("WorldSnapshotService", () => {
     let calls = 0;
     const invalidated: string[] = [];
     const value: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           calls += 1;
           if (gate) await gate;
           return runtime(label).herdr.call(method);
         },
-      },
+      }),
     };
     const service = new WorldSnapshotService<Runtime>(
       {
@@ -1158,12 +1155,12 @@ describe("WorldSnapshotService", () => {
     let gate: Promise<void> | null = null;
     const invalidated: string[] = [];
     const value: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           if (gate) await gate;
           return runtime("Same").herdr.call(method);
         },
-      },
+      }),
     };
     const service = new WorldSnapshotService<Runtime>(
       {
@@ -1198,13 +1195,13 @@ describe("WorldSnapshotService", () => {
     const invalidated: string[] = [];
     let calls = 0;
     const value: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           calls += 1;
           await release.promise;
           return runtime("Same").herdr.call(method);
         },
-      },
+      }),
     };
     const service = new WorldSnapshotService<Runtime>(
       {
@@ -1250,13 +1247,13 @@ describe("WorldSnapshotService", () => {
     const invalidated: string[] = [];
     let calls = 0;
     const value: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           calls += 1;
           if (gate) await gate;
           return runtime("Same").herdr.call(method);
         },
-      },
+      }),
     };
     const service = new WorldSnapshotService<Runtime>(
       {
@@ -1327,13 +1324,13 @@ describe("WorldSnapshotService", () => {
         connectionId: "local",
         generation: 1,
         runtime: {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method) {
               calls += 1;
               if (calls <= 4) await release.promise;
               return runtime("Current").herdr.call(method);
             },
-          },
+          }),
         },
         isCurrent: () => true,
       }),
@@ -1356,12 +1353,12 @@ describe("WorldSnapshotService", () => {
     const release = deferred<void>();
     const oldBase = runtime("Old");
     const oldRuntime: Runtime = {
-      herdr: {
+      ...herdrRuntimeFixture({
         async call(method) {
           await release.promise;
           return oldBase.herdr.call(method);
         },
-      },
+      }),
     };
     const newRuntime = runtime("New");
     let generation = 1;
@@ -1456,7 +1453,7 @@ describe("WorldSnapshotService", () => {
         connectionId: "local",
         generation: 1,
         runtime: {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method) {
               if (method === "workspace.list") return { workspaces };
               if (method === "tab.list") return { tabs };
@@ -1464,7 +1461,7 @@ describe("WorldSnapshotService", () => {
               if (method === "agent.list") return { agents: [] };
               throw new Error(`unexpected method: ${method}`);
             },
-          },
+          }),
         },
         isCurrent: () => true,
       }),
@@ -1553,7 +1550,7 @@ describe("WorldSnapshotService", () => {
         connectionId: "local",
         generation: 1,
         runtime: {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method) {
               if (method === "workspace.list") return { workspaces };
               if (method === "tab.list") return { tabs };
@@ -1561,7 +1558,7 @@ describe("WorldSnapshotService", () => {
               if (method === "agent.list") return { agents };
               throw new Error(`unexpected method: ${method}`);
             },
-          },
+          }),
         },
         isCurrent: () => true,
       }),
@@ -1627,7 +1624,7 @@ describe("WorldSnapshotService", () => {
         connectionId: "local",
         generation: 1,
         runtime: {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method) {
               if (method === "workspace.list") return { workspaces };
               if (method === "tab.list") return { tabs };
@@ -1635,7 +1632,7 @@ describe("WorldSnapshotService", () => {
               if (method === "agent.list") return { agents: [] };
               throw new Error(`unexpected method: ${method}`);
             },
-          },
+          }),
         },
         isCurrent: () => true,
       }),
@@ -1685,7 +1682,7 @@ describe("WorldSnapshotService", () => {
         connectionId: "local",
         generation: 1,
         runtime: {
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(method) {
               if (method === "workspace.list") return { workspaces };
               if (method === "tab.list") return { tabs };
@@ -1693,7 +1690,7 @@ describe("WorldSnapshotService", () => {
               if (method === "agent.list") return { agents: [] };
               throw new Error(`unexpected method: ${method}`);
             },
-          },
+          }),
         },
         isCurrent: () => true,
       }),

@@ -644,7 +644,7 @@ async function compose(
               event,
               {
                 call: (rpc, rpcParams) =>
-                  runtime.herdr.call(rpc, rpcParams, 10_000),
+                  runtime.tui.call(rpc, rpcParams, 10_000),
                 isCurrent: context.isCurrent,
                 changed: publishBoardChanged,
               },

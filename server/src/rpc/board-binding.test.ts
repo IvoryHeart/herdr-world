@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -74,7 +75,7 @@ test("the actual Board RPC refuses duplicate bindings and notes edited during qu
         serviceIncarnation: "service-a",
       },
       connection: {
-        herdr: {
+        ...herdrRuntimeFixture({
           async call(method: string) {
             calls.push(method);
             if (method !== "pane.list")
@@ -100,7 +101,7 @@ test("the actual Board RPC refuses duplicate bindings and notes edited during qu
               ],
             };
           },
-        },
+        }),
       },
       sendReply: (reply: (typeof replies)[number]) => {
         replies.push(reply);

@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -188,13 +189,13 @@ async function fixture(
         runtime: {
           sshHost: () => null,
           agentSessions: { conversation: source },
-          herdr: {
+          ...herdrRuntimeFixture({
             async call(_method: string, params: Record<string, unknown>) {
               if (params.pane_id !== info(id).pane_id)
                 throw new Error("pane_not_found: fixture");
               return { pane: info(id) };
             },
-          },
+          }),
         },
       };
     },

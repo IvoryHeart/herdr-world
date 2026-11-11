@@ -237,7 +237,7 @@ export async function prepareAssistantAction(args: {
     method: string,
     query: Record<string, unknown>,
     timeout = 5000,
-  ) => read(() => runtime.herdr.call(method, query, timeout));
+  ) => read(() => runtime.tui.call(method, query, timeout));
   async function workspace(workspaceId = target.workspace_id) {
     const result = await call("workspace.get", { workspace_id: workspaceId });
     if (
@@ -370,7 +370,7 @@ export async function prepareAssistantAction(args: {
         let response: unknown;
         try {
           response = await dispatch((beforeSend) =>
-            runtime.herdr.call(
+            runtime.tui.call(
               "workspace.create",
               {
                 label,
@@ -532,7 +532,7 @@ export async function prepareAssistantAction(args: {
           : { pane_id: paneId! };
         try {
           await dispatch((beforeSend) =>
-            runtime.herdr.call(method, query, 30_000, beforeSend),
+            runtime.tui.call(method, query, 30_000, beforeSend),
           );
         } catch (error) {
           if (error instanceof DispatchNotSentError) throw error;
@@ -721,7 +721,7 @@ export async function prepareAssistantAction(args: {
         )
           throw new Error("Source directory changed");
         const response = await dispatch((beforeSend) =>
-          runtime.herdr.call(
+          runtime.tui.call(
             "tab.create",
             { workspace_id: target.workspace_id, cwd, focus: false },
             30_000,
@@ -773,7 +773,7 @@ export async function prepareAssistantAction(args: {
         if (JSON.stringify(await pane(paneId)) !== JSON.stringify(source))
           throw new Error("Source pane or directory changed");
         const response = await dispatch((beforeSend) =>
-          runtime.herdr.call(
+          runtime.tui.call(
             "pane.split",
             {
               target_pane_id: paneId,
@@ -857,7 +857,7 @@ export async function prepareAssistantAction(args: {
           let response: unknown;
           try {
             response = await dispatch((beforeSend) =>
-              runtime.herdr.call(
+              runtime.tui.call(
                 "agent.start",
                 {
                   pane_id: paneId,
@@ -976,7 +976,7 @@ export async function prepareAssistantAction(args: {
           let result: unknown;
           try {
             result = await dispatch((beforeSend) =>
-              runtime.herdr.call(
+              runtime.tui.call(
                 "agent.prompt",
                 { target: paneId, text: prompt },
                 5000,

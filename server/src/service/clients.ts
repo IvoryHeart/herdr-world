@@ -133,7 +133,7 @@ export function createBrowserClients(deps: {
     const viewedTerminals: string[] = [];
     deps.forEachRuntime((runtime) => {
       viewedTerminals.push(...runtime.terminalBridge.viewedTerminals(ws));
-      runtime.terminalBridge.cleanupWs(ws);
+      runtime.terminals.closeViewer(ws);
     });
     const snapshot = {
       client: clientLabel(ws),

@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../../adapters/testing/runtime";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHerdrConversationSource } from "../../agent/herdr-conversation";
@@ -107,7 +108,7 @@ export async function productionAnswerFixture(
     isCurrent: () => active,
     runtime: {
       sshHost: () => null,
-      herdr: { call },
+      ...herdrRuntimeFixture({ call }),
       agentSessions: { conversation },
     },
   };

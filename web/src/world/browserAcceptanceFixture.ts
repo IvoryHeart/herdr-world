@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../../../server/src/adapters/testing/runtime";
 import { parseObservationBase } from "../../../server/src/world/observation-v1";
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 
@@ -87,7 +88,7 @@ export function createDenseSnapshotFixture({
       generation: 7,
       isCurrent: () => true,
       runtime: {
-        herdr: {
+        ...herdrRuntimeFixture({
           async call(method: string) {
             await stalls.get(connectionId)?.promise;
             if (method === "workspace.list") return { workspaces };
@@ -104,7 +105,7 @@ export function createDenseSnapshotFixture({
               };
             return { agents: [] };
           },
-        },
+        }),
       },
     }),
   });

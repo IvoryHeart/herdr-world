@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -85,7 +86,10 @@ for (const mode of ["ready", "retired", "refused-settings"])
         isCurrent: () => current,
       },
       requestIsCurrent: () => current,
-      connection: { herdr: { call }, sshHost: () => undefined },
+      connection: {
+        ...herdrRuntimeFixture({ call }),
+        sshHost: () => undefined,
+      },
       sendReply: (reply: Record<string, unknown>) => {
         result = reply.result;
         return true;

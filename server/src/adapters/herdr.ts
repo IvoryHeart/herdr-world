@@ -1,4 +1,11 @@
 import { Type } from "typebox";
+import type { ServerWebSocket } from "bun";
+import {
+  createHerdrControlPorts,
+  createHerdrRuntimePorts,
+  type HerdrRuntimeContext,
+} from "./herdr-runtime";
+import { readRuntimeSnapshot } from "./runtime-ports";
 import type { AdapterDefinition, AdapterPage, AdapterRow } from "./types";
 
 export type HerdrObservationContext = {
@@ -64,22 +71,15 @@ const nativeKeys = ["workspaces", "tabs", "panes", "agents"] as const;
 export async function readHerdrSnapshot(
   client: Pick<HerdrObservationContext, "call">,
 ): Promise<readonly [unknown, unknown, unknown, unknown]> {
-  const results = await Promise.allSettled(
-    lists.map((kind) => client.call(kind + ".list", {}, 5_000)),
-  );
-  const [workspace, tabs, panes, agents] = results;
-  if (workspace.status === "rejected") throw workspace.reason;
-  if (tabs.status === "rejected") throw tabs.reason;
-  if (panes.status === "rejected") throw panes.reason;
-  return [
-    workspace.value,
-    tabs.value,
-    panes.value,
-    agents.status === "fulfilled" ? agents.value : null,
-  ];
+  return readRuntimeSnapshot(createHerdrControlPorts(client).operations);
 }
 
-export const herdrAdapter: AdapterDefinition<HerdrObservationContext> = {
+export const herdrAdapter: AdapterDefinition<
+  HerdrObservationContext,
+  HerdrRuntimeContext<ServerWebSocket<unknown>>,
+  ServerWebSocket<unknown>
+> = {
+  runtime: createHerdrRuntimePorts,
   descriptor: {
     kind: "herdr",
     version: 1,
