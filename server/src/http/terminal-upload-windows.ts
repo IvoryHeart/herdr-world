@@ -19,7 +19,7 @@ import { powershellCommand } from "../bridge/ssh-windows";
 
 /** cmd.exe, a common OpenSSH DefaultShell, refuses longer command lines. */
 const WINDOWS_COMMAND_LIMIT = 8191;
-/** A staged path as the upload script prints it: a local drive path. */
+/** A staged path as the upload script reports it: a local drive path. */
 export const WINDOWS_UPLOAD_PATH =
   /^[A-Za-z]:\\(?:[^\0-\x1f"*?<>|:/\\]+\\)+herdr-world-uploads-S-[0-9-]+\\upload-[a-z0-9]+\\[A-Za-z0-9._+-]+$/;
 
@@ -53,7 +53,9 @@ export function windowsRemoteCleanupCommand(retentionMinutes: number): string {
 
 /**
  * Stages stdin as `name` (already sanitized for Windows) in a new private
- * directory and prints the file's path; a failed copy removes the directory.
+ * directory and prints the file's path as base64 of its UTF-8 bytes; a failed
+ * copy removes the directory. `Console.Out` encodes in the host's locale code
+ * page, so a profile path outside ASCII would otherwise reach World altered.
  */
 export function windowsRemoteUploadCommand(
   name: string,
@@ -68,6 +70,28 @@ export function windowsRemoteUploadCommand(
     "$d=[IO.Path]::Combine($r,'upload-'+[IO.Path]::GetRandomFileName().Replace('.',''))",
     "if([IO.Directory]::Exists($d)){exit 1};[void][IO.Directory]::CreateDirectory($d);$p=[IO.Path]::Combine($d,$n)",
     "try{$f=[IO.File]::Open($p,'CreateNew','Write','None');try{[Console]::OpenStandardInput().CopyTo($f,65536)}finally{$f.Dispose()}}catch{Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue;throw}",
-    "[Console]::Out.Write($p)",
+    "[Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($p)))",
   ]);
+}
+
+/**
+ * The staged path from the upload script's output, or undefined unless the
+ * output is exactly base64 of valid UTF-8 naming a path under the private root.
+ */
+export function windowsUploadPath(output: string): string | undefined {
+  if (
+    !/^(?:[A-Za-z0-9+/]{4})+$|^(?:[A-Za-z0-9+/]{4})*[A-Za-z0-9+/]{2}(?:==|[A-Za-z0-9+/]=)$/.test(
+      output,
+    )
+  )
+    return undefined;
+  let path: string;
+  try {
+    path = new TextDecoder("utf-8", { fatal: true }).decode(
+      Buffer.from(output, "base64"),
+    );
+  } catch {
+    return undefined;
+  }
+  return WINDOWS_UPLOAD_PATH.test(path) ? path : undefined;
 }

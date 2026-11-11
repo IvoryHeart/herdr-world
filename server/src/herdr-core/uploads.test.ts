@@ -118,7 +118,7 @@ test("a Windows SSH core host stages uploads there through Windows PowerShell", 
   const originalSpawn = Bun.spawn;
   type SpawnOptions = NonNullable<Parameters<typeof Bun.spawn>[1]>;
   // ssh to the Windows host, faked: it keeps what it is sent and prints
-  // where the PowerShell script would have staged it.
+  // where the PowerShell script would have staged it (base64 of UTF-8).
   const spawn = spyOn(Bun, "spawn").mockImplementation(((
     command: string[],
     options: SpawnOptions,
@@ -130,7 +130,7 @@ test("a Windows SSH core host stages uploads there through Windows PowerShell", 
         process.execPath,
         "-e",
         upload
-          ? `await Bun.write(${JSON.stringify(sent)}, await new Response(Bun.stdin.stream()).arrayBuffer()); process.stdout.write(${JSON.stringify(staged)})`
+          ? `await Bun.write(${JSON.stringify(sent)}, await new Response(Bun.stdin.stream()).arrayBuffer()); process.stdout.write(${JSON.stringify(Buffer.from(staged).toString("base64"))})`
           : "",
       ],
       options,

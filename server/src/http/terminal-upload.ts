@@ -8,9 +8,9 @@ import { worldEnv } from "../config/environment";
 import { shQuote } from "../utils/process-utils";
 import { terminalPathText } from "./terminal-path-text";
 import {
-  WINDOWS_UPLOAD_PATH,
   windowsRemoteCleanupCommand,
   windowsRemoteUploadCommand,
+  windowsUploadPath,
 } from "./terminal-upload-windows";
 
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
@@ -257,7 +257,7 @@ export function createTerminalUploadHandler(args: {
           signal: req.signal,
         });
         let code: number;
-        let path: string;
+        let output: string;
         let stderr: string;
         try {
           session.signal?.throwIfAborted();
@@ -272,7 +272,7 @@ export function createTerminalUploadHandler(args: {
           });
           const stderrText = new Response(proc.stderr).text();
           trackSshProcess(argv, proc.exited, stderrText);
-          [code, path, stderr] = await Promise.all([
+          [code, output, stderr] = await Promise.all([
             proc.exited,
             new Response(proc.stdout).text(),
             stderrText,
@@ -280,10 +280,12 @@ export function createTerminalUploadHandler(args: {
         } finally {
           session.release();
         }
-        const staged = args.remoteWindows
-          ? WINDOWS_UPLOAD_PATH.test(path)
-          : path.startsWith("/");
-        if (code !== 0 || !staged) {
+        const path = args.remoteWindows
+          ? windowsUploadPath(output)
+          : output.startsWith("/")
+            ? output
+            : undefined;
+        if (code !== 0 || path === undefined) {
           return Response.json(
             { error: `ssh upload failed: ${stderr.trim() || `exit ${code}`}` },
             { status: 502 },
