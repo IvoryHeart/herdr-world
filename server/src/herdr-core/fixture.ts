@@ -28,7 +28,7 @@ type Profiles = {
 };
 
 /** Synthetic terminals the fixture holds; see `populate`. */
-const FIXTURE_TERMINALS = 5;
+const FIXTURE_TERMINALS = 7;
 /** How long after a start the scout finishes its turn. */
 export const FIXTURE_FINISH_MS = 3_000;
 /** How often the working builder prints a line, so a watch is visibly live. */
@@ -59,7 +59,15 @@ function screen(program: string, lines: string[]) {
  * finishes soon after World connects, one harness with no status
  * integration, and a plain shell. Returns the agents the fixture drives.
  */
-function populate(fake: FakeCore, cwd: string) {
+function populate(fake: FakeCore, cwd: string, alphabet: boolean) {
+  if (alphabet) {
+    // Allocate through the native boundary, keeping t19 beside reviewer at
+    // t1b. Removed earlier shells consumed IDs, exactly as they do in core.
+    for (let ordinal = 1; ordinal <= 19; ordinal++) {
+      const address = fake.create({ name: "alphabet-boundary", cwd });
+      if (ordinal < 19) fake.remove(address);
+    }
+  }
   const space = (tab: string, where: string) => ({
     "herdr.space": "fx-web",
     "herdr.tab": tab,
@@ -188,12 +196,15 @@ export function createCoreFixture(
   let ticker: ReturnType<typeof setInterval> | null = null;
   let ticks = 0;
   let paneStep = 0;
+  let scenario: "default" | "alphabet" = "default";
   const status = (): CoreFixtureStatus => {
     const size = FIXTURE_PANE_SIZES[paneStep];
     return {
       running: fake?.isRunning ?? false,
       connection_id: CORE_FIXTURE_CONNECTION_ID,
-      terminals: fake ? FIXTURE_TERMINALS : 0,
+      terminals: fake
+        ? FIXTURE_TERMINALS + (scenario === "alphabet" ? 1 : 0)
+        : 0,
       pane: fake && size ? { cols: size[0], rows: size[1] } : null,
     };
   };
@@ -246,7 +257,9 @@ export function createCoreFixture(
         },
       };
     },
-    async start(): Promise<CoreFixtureStatus> {
+    async start(value: unknown = "default"): Promise<CoreFixtureStatus> {
+      if (value !== "default" && value !== "alphabet")
+        throw new Error("unknown core fixture scenario");
       const service = profiles();
       const existing = fixtureProfile(service);
       const owner = ownership(existing);
@@ -254,6 +267,10 @@ export function createCoreFixture(
         throw new Error(
           `the connection with ID ${CORE_FIXTURE_CONNECTION_ID} is not this fixture's; remove it in Settings first`,
         );
+      if (fake && scenario !== value) {
+        await this.remove();
+        return this.start(value);
+      }
       if (!fake || !root) {
         // Short: Unix socket paths are limited to about 100 bytes.
         root = mkdtempSync(join(tmpdir(), ROOT_PREFIX));
@@ -305,7 +322,8 @@ export function createCoreFixture(
             );
         }
         paneStep = 0;
-        agents = populate(fake, repo);
+        scenario = value;
+        agents = populate(fake, repo, scenario === "alphabet");
         scout = agents.scout;
         fake.onTyped = () => {
           if (fake && agents)
@@ -374,7 +392,7 @@ export function createCoreFixture(
     },
     replaceReviewer(): CoreFixtureStatus {
       if (!fake?.isRunning) throw new Error("Start fixture core first.");
-      fake.replaceWithShell("t1");
+      fake.replaceWithShell(agents!.reviewer);
       return status();
     },
     loseReply(): CoreFixtureStatus {

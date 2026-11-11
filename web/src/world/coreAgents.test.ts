@@ -136,18 +136,18 @@ function manager<Runtime>(id: string, runtime: Runtime) {
   };
 }
 
-async function worldOf(coreStale = false) {
+async function worldOf(coreStale = false, records = coreTerminals) {
   const mirror = new CoreMirror();
   const sight = new CoreFirstSight();
-  mirror.baseline(1, coreTerminals);
-  sight.observe("c0ffee", coreTerminals);
+  mirror.baseline(1, records);
+  sight.observe("c0ffee", records);
   // Scout's turn ends while World watches: done until someone looks.
-  const scout = { ...coreTerminals[2]!, turn: 1, status: { state: "idle" } };
+  const scout = { ...records[2]!, turn: 1, status: { state: "idle" } };
   mirror.apply({
     method: "missed",
     params: {
       seq: 2,
-      terminals: [...coreTerminals.slice(0, 2), scout, coreTerminals[3]!],
+      terminals: [...records.slice(0, 2), scout, records[3]!],
     } as never,
   });
   const tui = {
@@ -196,6 +196,25 @@ const byName = (leaves: readonly WorldLeafObject[]) =>
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
 describe("core agents in World's views", () => {
+  test("native alphabet agents retain Terminal and Files on their exact connection", async () => {
+    const records = coreTerminals.map((t, i) => ({
+      ...t,
+      address: ["t19", "t1b", "t1c", "t1z"][i]!,
+    }));
+    const world = await worldOf(false, records);
+    const agent = world.leaves.find((l) => l.nativeId === "t1b")!;
+    expect(agent.watch).toEqual({
+      connectionId: "box-core",
+      generation: 3,
+      address: "t1b",
+    });
+    expect(agent.capabilities.files).toBe(true);
+    const stale = await worldOf(true, records);
+    expect(
+      stale.leaves.find((l) => l.nativeId === "t1b")?.watch,
+    ).toBeUndefined();
+  });
+
   test("the same agents as the TUI's, live and view-only, never stale", async () => {
     const world = await worldOf();
     const core = world.leaves.filter(

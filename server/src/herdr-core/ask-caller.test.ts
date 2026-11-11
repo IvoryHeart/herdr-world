@@ -307,60 +307,66 @@ describe("a core asker's recipient (M5)", () => {
     return { address, cores, actor, recipients: recipientsFor(cores) };
   }
 
-  test("is bound to the program and attaches to core delivery", async () => {
-    const w = await world();
-    const { address, actor, recipients } = await asker(w, 45_001);
-    const recipient = (await recipients.capture(actor)) as CoreAnswerRecipient;
-    expect(recipient).toMatchObject({
-      adapter: "herdr-core",
-      connection_id: "box",
-      pane_id: address,
-      terminal_id: address,
-      core_id: w.lease().runtime.core.epoch!.coreId,
-      pid: 45_001,
-      reported: { scheme: "herdr-core-occupant-v1" },
-      service_incarnation: "run-1",
-      connection_generation: w.lease().generation,
-    });
-    expect(validRecipient(recipient)).toBe(true);
-    expect(originalAsker(recipient, actor)).toBe(true);
-    expect(sameRecipient(recipient, { ...recipient })).toBe(true);
-    expect(await recipients.resolve(recipient)).toMatchObject({
-      state: "attached",
-      kind: "core",
-    });
-    expect(recipients.fence(recipient)).toEqual({
-      connection_id: "box",
-      generation: w.lease().generation,
-      service_incarnation: "run-1",
-    });
-    // Never handed to the Chat sender.
-    expect(
-      recipients.guard(recipient, w.lease() as never, {
+  test.each([1, 20])(
+    "is bound to the program and attaches to core delivery (ordinal %i)",
+    async (ordinal) => {
+      const w = await world();
+      for (let n = 1; n < ordinal; n++) w.fake.create();
+      const { address, actor, recipients } = await asker(w, 45_001);
+      const recipient = (await recipients.capture(
+        actor,
+      )) as CoreAnswerRecipient;
+      expect(recipient).toMatchObject({
+        adapter: "herdr-core",
+        connection_id: "box",
         pane_id: address,
         terminal_id: address,
-      }),
-    ).toBe(false);
-    // Durable intents admit exactly this shape.
-    const intent = {
-      verb: ANSWER_DELIVERY_VERB.name,
-      version: 1,
-      origin: "world.ask.answer",
-      params: { ask_id: "q1", answer_occurrence: "a1" },
-      actor: { kind: "owner" },
-      condition: { awaiting_delivery: true, recipient },
-    };
-    expect(isAnswerIntent(intent)).toBe(true);
-    expect(
-      isAnswerIntent({
-        ...intent,
-        condition: {
-          awaiting_delivery: true,
-          recipient: { ...recipient, conversation: { scheme: "x" } },
-        },
-      }),
-    ).toBe(false);
-  });
+        core_id: w.lease().runtime.core.epoch!.coreId,
+        pid: 45_001,
+        reported: { scheme: "herdr-core-occupant-v1" },
+        service_incarnation: "run-1",
+        connection_generation: w.lease().generation,
+      });
+      expect(validRecipient(recipient)).toBe(true);
+      expect(originalAsker(recipient, actor)).toBe(true);
+      expect(sameRecipient(recipient, { ...recipient })).toBe(true);
+      expect(await recipients.resolve(recipient)).toMatchObject({
+        state: "attached",
+        kind: "core",
+      });
+      expect(recipients.fence(recipient)).toEqual({
+        connection_id: "box",
+        generation: w.lease().generation,
+        service_incarnation: "run-1",
+      });
+      // Never handed to the Chat sender.
+      expect(
+        recipients.guard(recipient, w.lease() as never, {
+          pane_id: address,
+          terminal_id: address,
+        }),
+      ).toBe(false);
+      // Durable intents admit exactly this shape.
+      const intent = {
+        verb: ANSWER_DELIVERY_VERB.name,
+        version: 1,
+        origin: "world.ask.answer",
+        params: { ask_id: "q1", answer_occurrence: "a1" },
+        actor: { kind: "owner" },
+        condition: { awaiting_delivery: true, recipient },
+      };
+      expect(isAnswerIntent(intent)).toBe(true);
+      expect(
+        isAnswerIntent({
+          ...intent,
+          condition: {
+            awaiting_delivery: true,
+            recipient: { ...recipient, conversation: { scheme: "x" } },
+          },
+        }),
+      ).toBe(false);
+    },
+  );
 
   test("saved core answers dispatch durably, and an EOF after send stays uncertain", async () => {
     for (const lost of [false, true]) {

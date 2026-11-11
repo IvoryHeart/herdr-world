@@ -3,7 +3,7 @@ import {
   CoreFixturePanel,
   CoreProfileForm,
 } from "./CoreConnections";
-import { coreFixtureEnabled } from "../coreFixture";
+import { coreFixtureEnabled, coreFixtureScenario } from "../coreFixture";
 import { useCoreConnections } from "../coreConnections";
 import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import { ConnectionHerdrInfo } from "./ConnectionHerdrInfo";
@@ -680,7 +680,11 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
               run={(action, success) =>
                 void performAction(
                   `fixture-${action}`,
-                  () => bridge.call("connections.core_fixture", { action }),
+                  () =>
+                    bridge.call("connections.core_fixture", {
+                      action,
+                      scenario: coreFixtureScenario(),
+                    }),
                   success,
                 )
               }

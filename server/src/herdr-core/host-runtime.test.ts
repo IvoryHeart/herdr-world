@@ -66,30 +66,34 @@ describe("core host runtime (P4)", () => {
     ]);
   });
 
-  test("a read answered after its generation retired is refused, never returned", async () => {
-    const w = await world();
-    const address = w.fake.create({ name: "agent" });
-    await w.settle();
-    const runtime = host(w);
-    const release = w.fake.holdReads();
-    const pending = runtime.operations
-      .readTerminal({ pane_id: address })
-      .catch((error: Error) => error);
-    await until(() => w.fake.calls.some((c) => c.method === "terminal.read"));
-    const lease = w.lease();
-    w.fake.kill(w.socket);
-    await until(() => !lease.isCurrent());
-    release();
-    const outcome = await pending;
-    expect(outcome).toBeInstanceOf(Error);
-    // Later calls on the retired runtime are refused before anything runs.
-    await expect(runtime.operations.listWorkspaces()).rejects.toThrow(
-      "reconnected",
-    );
-    await expect(
-      runtime.files.listWorkspaceFiles({ workspace_id: "hc:unplaced" }),
-    ).rejects.toThrow("reconnected");
-  });
+  test.each([1, 20])(
+    "a read answered after its generation retired is refused, never returned (ordinal %i)",
+    async (ordinal) => {
+      const w = await world();
+      for (let n = 1; n < ordinal; n++) w.fake.create();
+      const address = w.fake.create({ name: "agent" });
+      await w.settle();
+      const runtime = host(w);
+      const release = w.fake.holdReads();
+      const pending = runtime.operations
+        .readTerminal({ pane_id: address })
+        .catch((error: Error) => error);
+      await until(() => w.fake.calls.some((c) => c.method === "terminal.read"));
+      const lease = w.lease();
+      w.fake.kill(w.socket);
+      await until(() => !lease.isCurrent());
+      release();
+      const outcome = await pending;
+      expect(outcome).toBeInstanceOf(Error);
+      // Later calls on the retired runtime are refused before anything runs.
+      await expect(runtime.operations.listWorkspaces()).rejects.toThrow(
+        "reconnected",
+      );
+      await expect(
+        runtime.files.listWorkspaceFiles({ workspace_id: "hc:unplaced" }),
+      ).rejects.toThrow("reconnected");
+    },
+  );
 
   test("each generation gets its own host runtime; a retired one is not reused", async () => {
     const w = await world();
@@ -116,65 +120,69 @@ describe("core host runtime (P4)", () => {
     expect(next.generation).toBe(w.lease().generation);
   });
 
-  test("an agent's Files follow its live folder; a replaced program's binding is refused", async () => {
-    const w = await world();
-    const repo = folder(w.root, "agent-folder");
-    const address = w.fake.create({
-      name: "agent",
-      argv: ["/opt/example/bin/claude"],
-      cwd: repo,
-      foreground: { pid: 4242, name: "claude", argv: [], cwd: repo },
-    });
-    await w.settle();
-    const runtime = host(w);
-    const subject = {
-      connectionId: "box",
-      generation: w.lease().generation,
-      paneId: address,
-      terminalId: address,
-      sessionFingerprint: null,
-    };
-    const read = await runtime.agentWorktree.get(subject, { refresh: true });
-    expect(read).toMatchObject({
-      state: "resolved",
-      candidates: [{ source: "foreground_cwd" }],
-    });
-    const target = {
-      subject,
-      revision: read.revision,
-      candidateId: read.selectedCandidateId,
-    };
-    const listed = (await runtime.files.listWorkspaceFiles({
-      workspace_id: "hc:unplaced",
-      agent_worktree: target,
-    })) as { entries?: Array<{ name: string }> };
-    expect(listed.entries?.map((e) => e.name)).toContain("agent-folder.txt");
-    await runtime.files.runWorkspaceGitFileAction({
-      workspace_id: "hc:unplaced",
-      agent_worktree: target,
-      action: "stage",
-      path: "agent-folder.txt",
-    });
-    expect(
-      Bun.spawnSync(["git", "-C", repo, "diff", "--cached", "--name-only"])
-        .stdout.toString()
-        .trim(),
-    ).toBe("agent-folder.txt");
-    // The program at that address is replaced by one reusing its pid, in
-    // the same folder: the binding World read no longer holds.
-    w.fake.replaceWithShell(address, { reusePid: true });
-    w.fake.foreground(address, {
-      pid: 4242,
-      name: "claude",
-      argv: [],
-      cwd: repo,
-    });
-    await w.settle();
-    await expect(
-      runtime.files.listWorkspaceFiles({
+  test.each([1, 20])(
+    "an agent's Files follow its live folder; a replaced program's binding is refused (ordinal %i)",
+    async (ordinal) => {
+      const w = await world();
+      for (let n = 1; n < ordinal; n++) w.fake.create();
+      const repo = folder(w.root, "agent-folder");
+      const address = w.fake.create({
+        name: "agent",
+        argv: ["/opt/example/bin/claude"],
+        cwd: repo,
+        foreground: { pid: 4242, name: "claude", argv: [], cwd: repo },
+      });
+      await w.settle();
+      const runtime = host(w);
+      const subject = {
+        connectionId: "box",
+        generation: w.lease().generation,
+        paneId: address,
+        terminalId: address,
+        sessionFingerprint: null,
+      };
+      const read = await runtime.agentWorktree.get(subject, { refresh: true });
+      expect(read).toMatchObject({
+        state: "resolved",
+        candidates: [{ source: "foreground_cwd" }],
+      });
+      const target = {
+        subject,
+        revision: read.revision,
+        candidateId: read.selectedCandidateId,
+      };
+      const listed = (await runtime.files.listWorkspaceFiles({
         workspace_id: "hc:unplaced",
         agent_worktree: target,
-      }),
-    ).rejects.toThrow("binding changed");
-  });
+      })) as { entries?: Array<{ name: string }> };
+      expect(listed.entries?.map((e) => e.name)).toContain("agent-folder.txt");
+      await runtime.files.runWorkspaceGitFileAction({
+        workspace_id: "hc:unplaced",
+        agent_worktree: target,
+        action: "stage",
+        path: "agent-folder.txt",
+      });
+      expect(
+        Bun.spawnSync(["git", "-C", repo, "diff", "--cached", "--name-only"])
+          .stdout.toString()
+          .trim(),
+      ).toBe("agent-folder.txt");
+      // The program at that address is replaced by one reusing its pid, in
+      // the same folder: the binding World read no longer holds.
+      w.fake.replaceWithShell(address, { reusePid: true });
+      w.fake.foreground(address, {
+        pid: 4242,
+        name: "claude",
+        argv: [],
+        cwd: repo,
+      });
+      await w.settle();
+      await expect(
+        runtime.files.listWorkspaceFiles({
+          workspace_id: "hc:unplaced",
+          agent_worktree: target,
+        }),
+      ).rejects.toThrow("binding changed");
+    },
+  );
 });

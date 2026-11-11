@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import { CoreClient, type CoreTerminalRecord } from "./client";
 import { connectUnixStream } from "./stream";
 
@@ -71,7 +72,7 @@ export function coreClaimInEnvironment(
   const socket = env.HC_TERMINAL_SOCKET;
   if (
     !address ||
-    !/^t[1-9][0-9]{0,9}$/.test(address) ||
+    !isLocalCoreAddress(address) ||
     !socket ||
     !isAbsolute(socket)
   )

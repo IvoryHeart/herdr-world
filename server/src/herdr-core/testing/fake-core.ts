@@ -2,6 +2,7 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CoreByteStream } from "../stream";
 import { encodeFrame, FrameDecoder, FrameKind, STREAM_WINDOW } from "../wire";
+import { fakeCoreAddress } from "./fake-address";
 
 /**
  * An in-process herdr-core that speaks the same wire protocol as the real
@@ -307,7 +308,7 @@ export class FakeCore {
   // --- Synthetic programs ---------------------------------------------------
 
   create(fields: Partial<FakeTerminal> = {}): string {
-    const address = `t${this.nextTerminal++}`;
+    const address = fakeCoreAddress(this.nextTerminal++);
     const record: FakeTerminal = {
       address,
       name: null,

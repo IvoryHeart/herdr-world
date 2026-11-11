@@ -1,6 +1,7 @@
 import { CircleAlert, X } from "lucide-react";
 import { useState } from "react";
 import { suggestConnectionId } from "../connectionProfiles";
+import { coreFixtureScenario } from "../coreFixture";
 import {
   type CoreConnectionSummary,
   type CoreProfileDraft,
@@ -397,6 +398,9 @@ export function CoreFixturePanel({
         <div>
           <strong>Fixture core (testing)</strong>
           <span>
+            {coreFixtureScenario() === "alphabet"
+              ? "Alphabet scenario: reviewer is t1b, after t19. "
+              : ""}
             A stand-in herdr-core inside this World service with four synthetic
             agents and a shell. Nothing is installed and no program runs. Its
             placed agents have a desktop-app pane at 96×28; the reviewer's pane
