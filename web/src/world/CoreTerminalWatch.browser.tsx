@@ -8,6 +8,12 @@ import {
   type CoreWatchTarget,
   useCoreTerminalWatch,
 } from "./CoreTerminalWatch";
+import {
+  activateTerminalComposerDraftScope,
+  readTerminalComposerDraft,
+  terminalComposerDraftKey,
+  writeTerminalComposerDraft,
+} from "../terminalComposer";
 import "../styles/tokens.css";
 import "../styles/base.css";
 
@@ -236,6 +242,7 @@ async function run() {
     `a paint is drawn on its own grid before the next one: ${marks.join()}`,
   );
   await typing(() => closed);
+  await keyboardLift();
   // core is killed: the stream ends and says so.
   deliver({ stream: "", closed: "core closed the connection" });
   await frames(2);
@@ -381,6 +388,51 @@ async function typing(closed: () => boolean) {
 }
 
 /**
+ * A phone keyboard that shrinks only the visual viewport (the layout stays
+ * 844 tall): App measures it into --keyboard-inset-content, and the view's
+ * composer and Send must end above the keyboard's top.
+ */
+async function keyboardLift() {
+  const root = document.documentElement;
+  const textarea = () =>
+    document
+      .querySelector(".core-watch-composer textarea")!
+      .getBoundingClientRect();
+  const send = () =>
+    document
+      .querySelector(
+        ".core-watch-composer .terminal-composer-submit.is-primary",
+      )!
+      .getBoundingClientRect();
+  root.dataset.layout = "mobile";
+  await frames(2);
+  const visibleBottom = 480;
+  check(
+    innerHeight === 844 && textarea().bottom > visibleBottom,
+    `the composer starts at the layout's bottom: ${innerHeight}, ${textarea().bottom}`,
+  );
+  root.classList.add("keyboard-open");
+  root.style.setProperty("--keyboard-inset-bottom", `${844 - visibleBottom}px`);
+  root.style.setProperty(
+    "--keyboard-inset-content",
+    `${844 - visibleBottom}px`,
+  );
+  root.style.setProperty("--keyboard-inset-composer-gap", "0px");
+  await frames(2);
+  check(
+    textarea().bottom <= visibleBottom &&
+      send().bottom <= visibleBottom &&
+      send().top >= 0,
+    `the composer and Send sit above the keyboard: textarea ${textarea().top}-${textarea().bottom}, Send ${send().top}-${send().bottom}`,
+  );
+  root.classList.remove("keyboard-open");
+  for (const name of ["bottom", "content", "composer-gap"])
+    root.style.removeProperty(`--keyboard-inset-${name}`);
+  delete root.dataset.layout;
+  await frames(2);
+}
+
+/**
  * World's open watch while its connection goes away and comes back: the
  * view stays and says why, then watches the new generation by itself.
  */
@@ -396,9 +448,14 @@ async function reconnects() {
   function Harness() {
     const [, setTick] = useState(0);
     rerender = () => setTick((n) => n + 1);
-    api = useCoreTerminalWatch((id) => nodes.get(id));
+    api = useCoreTerminalWatch([{ nodeById: nodes }]);
     return <div data-harness>{api.view}</div>;
   }
+  // App's catalogue lists only Herdr connections: core drafts live only
+  // while their generation is held.
+  activateTerminalComposerDraftScope("spaces-host", 3);
+  const draft = (generation: number) =>
+    terminalComposerDraftKey("core-fixture", generation, "t2");
   const root = document.createElement("div");
   document.body.append(root);
   flushSync(() => createRoot(root).render(<Harness />));
@@ -412,6 +469,28 @@ async function reconnects() {
     watches().length === before + 1 && latest() === 1,
     "the watch opens on the current generation",
   );
+  // An unsent message survives Back and reopening the same live terminal.
+  const composer = () =>
+    root.querySelector<HTMLTextAreaElement>(".core-watch-composer textarea");
+  writeTerminalComposerDraft(draft(1), "unsent message");
+  await frames(2);
+  check(
+    composer()?.value === "unsent message",
+    `the composer shows the draft: ${composer()?.value}`,
+  );
+  root.querySelector<HTMLButtonElement>(".core-watch-back")!.click();
+  await frames(2);
+  check(!root.querySelector(".core-watch"), "Back closes the harness view");
+  check(
+    readTerminalComposerDraft(draft(1)) === "unsent message",
+    "closing the view keeps the live terminal's draft",
+  );
+  flushSync(() => void api!.watch("n1"));
+  await frames(2);
+  check(
+    composer()?.value === "unsent message",
+    `reopening shows the draft again: ${composer()?.value}`,
+  );
   // kill -9: the connection goes stale (no target) and the stream ends.
   nodes = new Map([["n1", { label: "builder" } as never]]);
   flushSync(rerender);
@@ -424,16 +503,24 @@ async function reconnects() {
       ?.textContent?.includes("Lost the herdr-core connection") === true,
     `the view stays and says why: ${view()?.textContent?.slice(0, 120)}`,
   );
-  check(watches().length === before + 1, "a lost connection is not retried");
+  check(watches().length === before + 2, "a lost connection is not retried");
+  check(
+    readTerminalComposerDraft(draft(1)) === "unsent message",
+    "a lost stream keeps the draft while the view says why",
+  );
   // Core is back: a new generation is watched without a tap.
   nodes = new Map([["n1", { label: "builder", watch: target(2) }]]);
   flushSync(rerender);
   await frames(2);
   check(
-    watches().length === before + 2 && latest() === 2,
+    watches().length === before + 3 && latest() === 2,
     `the new generation is watched: ${JSON.stringify(watches().slice(before))}`,
   );
   check(!view()?.querySelector(".core-watch-ended"), "the ended notice clears");
+  check(
+    readTerminalComposerDraft(draft(1)) === "",
+    "a new generation (a change of owner) retires the old draft",
+  );
 }
 
 void run()

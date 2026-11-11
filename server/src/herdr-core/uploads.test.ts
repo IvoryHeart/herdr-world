@@ -1,14 +1,13 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { defaultGuiSettings } from "../config/gui-settings";
 import { parseConnectionHttpRoute } from "../connections/http-routing";
 import type { CoreRpcServices } from "../rpc/core";
 import { handleCoreFileHttpRequest } from "../service/core-files-http";
 import { type CoreHostRuntime, createCoreHostRuntime } from "./host-runtime";
 import { coreWorld, until } from "./testing/core-world";
-import { createCoreUploads } from "./uploads";
 
 const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
@@ -16,7 +15,9 @@ afterEach(async () => {
 });
 
 /** A connected local core whose uploads stage in a scratch directory. */
-async function uploadWorld(host: { windows: boolean } | null = null) {
+async function uploadWorld(
+  host: { destination?: string; windows: boolean } | null = null,
+) {
   const w = await coreWorld();
   const staged = mkdtempSync(join(tmpdir(), "hcw-up-"));
   cleanups.push(
@@ -108,20 +109,62 @@ test("a file upload names its file; a stale generation or lost core is refused",
   expect(lost.status).toBe(503);
 });
 
-test("a Windows core host takes no uploads", async () => {
-  expect(
-    createCoreUploads(
-      { destination: "agent@example.invalid", windows: true },
-      { signal: new AbortController().signal },
-    ),
-  ).toBeNull();
-  const { w, post } = await uploadWorld({ windows: true });
-  const refused = await post(
+test("a Windows SSH core host stages uploads there through Windows PowerShell", async () => {
+  const sent = join(mkdtempSync(join(tmpdir(), "hcw-win-")), "stdin");
+  cleanups.push(() => rmSync(dirname(sent), { recursive: true, force: true }));
+  const staged =
+    "C:\\Users\\agent\\AppData\\Local\\Temp\\herdr-world-uploads-S-1-5-21-1-2-3-1001\\upload-abc123def45\\img.png";
+  const argvs: string[][] = [];
+  const originalSpawn = Bun.spawn;
+  type SpawnOptions = NonNullable<Parameters<typeof Bun.spawn>[1]>;
+  // ssh to the Windows host, faked: it keeps what it is sent and prints
+  // where the PowerShell script would have staged it.
+  const spawn = spyOn(Bun, "spawn").mockImplementation(((
+    command: string[],
+    options: SpawnOptions,
+  ) => {
+    argvs.push(command);
+    const upload = options.stdin !== "ignore";
+    return originalSpawn(
+      [
+        process.execPath,
+        "-e",
+        upload
+          ? `await Bun.write(${JSON.stringify(sent)}, await new Response(Bun.stdin.stream()).arrayBuffer()); process.stdout.write(${JSON.stringify(staged)})`
+          : "",
+      ],
+      options,
+    );
+  }) as typeof Bun.spawn);
+  cleanups.push(() => spawn.mockRestore());
+  const { w, post } = await uploadWorld({
+    destination: "agent@example.invalid",
+    windows: true,
+  });
+  const response = await post(
     `/api/connections/box/upload-image?connection_generation=${w.lease().generation}`,
-    new Uint8Array([1]),
+    new Uint8Array([137, 80, 78, 71]),
   );
-  expect(refused.status).toBe(501);
-  expect(((await refused.json()) as { error: string }).error).toContain(
-    "Unix SSH host",
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    path: staged,
+    text: "C:/Users/agent/AppData/Local/Temp/herdr-world-uploads-S-1-5-21-1-2-3-1001/upload-abc123def45/img.png",
+    remote: true,
+  });
+  expect([...readFileSync(sent)]).toEqual([137, 80, 78, 71]);
+  await until(() => argvs.length === 2);
+  // The sweep and the upload are both one fixed PowerShell command over ssh;
+  // nothing runs through sh.
+  const remote = argvs.map((argv) => argv[argv.length - 1]!);
+  expect(argvs.every((argv) => argv[0] === "ssh")).toBe(true);
+  expect(argvs.some((argv) => argv.includes("agent@example.invalid"))).toBe(
+    true,
   );
+  for (const line of remote) {
+    expect(line).toMatch(
+      /^powershell\.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/,
+    );
+    expect(line).not.toContain("sh -c");
+  }
+  expect(w.fake.calls.filter((c) => c.method.startsWith("file."))).toEqual([]);
 });

@@ -2198,7 +2198,14 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     whose terminal cannot tell typing from replies stays watch-only and says
     so. On a phone the Terminal's composer, key rows, drafts and image or file
     uploads work as on a Herdr terminal: uploads go to the core connection's
-    host and come back as paths. A Windows SSH host cannot take uploads. **Exception:** if no Herdr app or typing viewer has the terminal
+    host and come back as paths. On a Windows SSH host they are staged in
+    the account's temp folder (a private `herdr-world-uploads-<SID>` folder
+    only that account, SYSTEM and Administrators may open) through Windows
+    PowerShell, and the path comes back with forward slashes. An unsent
+    composer message stays while the core connection does: Back, reopening
+    the terminal or a watch that ends keep it; a new core connection
+    generation (core restarted or reconnected) drops it. The view ends where
+    a phone's keyboard begins, so the composer stays above it. **Exception:** if no Herdr app or typing viewer has the terminal
     open, core moves it to its headless size when World starts watching (its
     rule for every observer); World says "herdr-core moved it from C×R to its
     headless size" while that grid lasts; once an app's pane opens and sets

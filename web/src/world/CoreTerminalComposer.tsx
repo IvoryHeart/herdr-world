@@ -5,7 +5,6 @@ import { chatKeyRows } from "../components/chat/chatKeys";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { mobileTerminalShortcutExecution } from "../mobileTerminalShortcutAction";
 import {
-  holdTerminalComposerDraftScope,
   sendTerminalComposerText,
   terminalComposerDraftKey,
 } from "../terminalComposer";
@@ -47,12 +46,12 @@ export function CoreTerminalComposer({
   const keyRows = useMemo(() => chatKeyRows(), []);
   const current = useRef(true);
   const { connectionId, generation, address } = target;
+  // The draft outlives this composer: the core connection's generation holds
+  // its scope (useCoreTerminalWatch), so Back, reopen or a lost stream keep it.
   useEffect(() => {
     current.current = true;
-    const release = holdTerminalComposerDraftScope(connectionId, generation);
     return () => {
       current.current = false;
-      release();
     };
   }, [connectionId, generation]);
   const upload: UploadTarget = useMemo(

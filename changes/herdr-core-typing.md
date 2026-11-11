@@ -5,4 +5,6 @@
   typing in the Herdr app's pane takes it back, and World gives it back 3
   seconds after you leave the view, after a minute without a key, or when you
   close it. On a phone the Terminal's composer, key rows and image or file
-  uploads work for core agents; uploads go to the core host.
+  uploads work for core agents, on local, Unix SSH and Windows SSH hosts;
+  uploads go to the core host. An unsent composer message survives Back and
+  reopening the terminal, and the composer stays above the phone keyboard.

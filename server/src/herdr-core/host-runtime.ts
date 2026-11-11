@@ -100,7 +100,7 @@ export function createCoreHostRuntime(args: {
     tempRoot: args.uploadTempRoot,
   });
   // Upload sweeps belong to this generation too.
-  transfers.addEventListener("abort", () => uploads?.stop(), { once: true });
+  transfers.addEventListener("abort", () => uploads.stop(), { once: true });
   const base = args.processes ?? {};
   const guarded = async <T>(operation: () => Promise<T>) => {
     current();
@@ -353,7 +353,7 @@ export function createCoreHostRuntime(args: {
     operations,
     resources,
     files,
-    /** Terminal uploads (the composer's image and file); null on Windows. */
+    /** Terminal uploads (the composer's image and file). */
     uploads,
     agentWorktree,
     worktreeHooks,

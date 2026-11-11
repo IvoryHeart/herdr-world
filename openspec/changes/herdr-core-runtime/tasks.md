@@ -59,7 +59,8 @@
   - [x] Typing and mobile (#872): the first genuine key opens World's interactive
     viewer and is sent once after the attach; leave on blur (3 s), idle (60 s)
     and close; replies never take the size; the phone composer and uploads to
-    the core host. The typing model family drives the production typing session
+    the core host (local, Unix and Windows SSH); composer drafts live while the
+    core generation does. The typing model family drives the production typing session
     with five plan mutants and two production controls.
   - [x] Popup equivalents (#873): the room shell on both runtimes; Herdr Float
     is the one TUI plugin popup World invokes, and generic plugin popups have

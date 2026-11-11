@@ -96,13 +96,6 @@ async function coreTerminalUpload(
 ): Promise<Response> {
   try {
     const { uploads } = core.hostRuntime(lease);
-    if (!uploads)
-      return Response.json(
-        {
-          error: "Uploads to a herdr-core agent need a local or Unix SSH host.",
-        },
-        { status: 501 },
-      );
     return endpoint === "upload-image"
       ? await uploads.image(req)
       : await uploads.file(req, url.searchParams.get("filename"), () =>

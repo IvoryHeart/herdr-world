@@ -7,6 +7,11 @@ import { bindSshCommand, holdSshSession } from "../bridge/ssh-sessions";
 import { worldEnv } from "../config/environment";
 import { shQuote } from "../utils/process-utils";
 import { terminalPathText } from "./terminal-path-text";
+import {
+  WINDOWS_UPLOAD_PATH,
+  windowsRemoteCleanupCommand,
+  windowsRemoteUploadCommand,
+} from "./terminal-upload-windows";
 
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
 const DEFAULT_RETENTION_HOURS = 24;
@@ -85,6 +90,8 @@ export function createTerminalUploadHandler(args: {
   runtimeSignal?: AbortSignal;
   tempRoot?: () => string;
   platform?: NodeJS.Platform;
+  /** The SSH host runs Windows: stage there through Windows PowerShell. */
+  remoteWindows?: boolean;
   maxBytes?: number;
   retentionHours?: number;
   rejectEmpty?: boolean;
@@ -141,7 +148,9 @@ export function createTerminalUploadHandler(args: {
       const argv = bindSshCommand(
         sshCommandArgv(
           host,
-          `sh -c ${shQuote(remoteTerminalCleanupScript(retentionHours * 60))}`,
+          args.remoteWindows
+            ? windowsRemoteCleanupCommand(retentionHours * 60)
+            : `sh -c ${shQuote(remoteTerminalCleanupScript(retentionHours * 60))}`,
           [],
           "upload.cleanup",
         ),
@@ -192,7 +201,10 @@ export function createTerminalUploadHandler(args: {
     if (!req.body) {
       return Response.json({ error: "empty body" }, { status: 400 });
     }
-    const name = sanitizeTerminalUploadName(filename, platform);
+    const name = sanitizeTerminalUploadName(
+      filename,
+      args.remoteWindows && args.sshHost() ? "win32" : platform,
+    );
     let directory: string | undefined;
     try {
       directory = await mkdtemp(join(await privateRoot(), "upload-"));
@@ -227,7 +239,9 @@ export function createTerminalUploadHandler(args: {
         const argv = bindSshCommand(
           sshCommandArgv(
             host,
-            `sh -c ${shQuote(remoteTerminalUploadScript(name, retentionHours * 60))}`,
+            args.remoteWindows
+              ? windowsRemoteUploadCommand(name, retentionHours * 60)
+              : `sh -c ${shQuote(remoteTerminalUploadScript(name, retentionHours * 60))}`,
             [],
             "upload",
           ),
@@ -266,7 +280,10 @@ export function createTerminalUploadHandler(args: {
         } finally {
           session.release();
         }
-        if (code !== 0 || !path.startsWith("/")) {
+        const staged = args.remoteWindows
+          ? WINDOWS_UPLOAD_PATH.test(path)
+          : path.startsWith("/");
+        if (code !== 0 || !staged) {
           return Response.json(
             { error: `ssh upload failed: ${stderr.trim() || `exit ${code}`}` },
             { status: 502 },
@@ -274,7 +291,7 @@ export function createTerminalUploadHandler(args: {
         }
         return Response.json({
           path,
-          text: terminalPathText(path, "linux"),
+          text: terminalPathText(path, args.remoteWindows ? "win32" : "linux"),
           remote: true,
         });
       }

@@ -17,8 +17,8 @@ export type CoreUploads = {
  * Files a person sends a core agent from World (the phone composer's image
  * and file buttons): staged on the machine the agent runs on, exactly as for
  * a Herdr (TUI) connection, and answered with the path to paste. A local
- * core stages on this computer; a Unix SSH core over that host's ssh. A
- * Windows SSH host takes none, as for Herdr connections there.
+ * core stages on this computer; an SSH core over that host's ssh, through
+ * `sh` on Unix and Windows PowerShell on Windows (terminal-upload-windows.ts).
  * `signal` ends transfers in flight when the generation retires.
  */
 export function createCoreUploads(
@@ -29,10 +29,10 @@ export function createCoreUploads(
     /** Where local uploads are staged (the system temp directory). */
     tempRoot?: () => string;
   },
-): CoreUploads | null {
-  if (host?.windows) return null;
+): CoreUploads {
   const handlers = {
     sshHost: () => host?.destination,
+    remoteWindows: Boolean(host?.destination && host.windows),
     runtimeSignal: options.signal,
     tempRoot: options.tempRoot,
   };

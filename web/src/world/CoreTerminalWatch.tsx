@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -27,6 +28,7 @@ import {
   isFocusReport,
   userInputSignal,
 } from "../coreTyping";
+import { holdTerminalComposerDraftScope } from "../terminalComposer";
 import { CoreTerminalComposer } from "./CoreTerminalComposer";
 import "./coreWatch.css";
 
@@ -407,20 +409,79 @@ export function CoreTerminalWatch({
 
 /** What the watch needs of a World node: its label and, if live, its target. */
 type WatchableNode = { label: string; watch?: CoreWatchTarget };
+type WatchableWorld = { nodeById: ReadonlyMap<string, WatchableNode> };
+type DraftScope = { connectionId: string; generation: number };
+
+/**
+ * Keeps unsent composer drafts for each core connection generation in
+ * `scopes`. App's catalogue does not list core connections, so their drafts
+ * are held here: a scope lets go (and its drafts go) only when its
+ * generation leaves, an actual change of owner, never when a view closes.
+ */
+export function useCoreDraftScopes(scopes: readonly DraftScope[]) {
+  const held = useRef(new Map<string, () => void>());
+  const key = JSON.stringify(
+    [
+      ...new Set(
+        scopes.map((s) => JSON.stringify([s.connectionId, s.generation])),
+      ),
+    ].sort(),
+  );
+  useEffect(() => {
+    const wanted = new Set<string>(JSON.parse(key));
+    for (const [scope, release] of held.current)
+      if (!wanted.has(scope)) {
+        held.current.delete(scope);
+        release();
+      }
+    for (const scope of wanted)
+      if (!held.current.has(scope)) {
+        const [connectionId, generation] = JSON.parse(scope);
+        held.current.set(
+          scope,
+          holdTerminalComposerDraftScope(connectionId, generation),
+        );
+      }
+  }, [key]);
+  useEffect(() => {
+    const scopes = held.current;
+    return () => {
+      for (const release of scopes.values()) release();
+      scopes.clear();
+    };
+  }, []);
+}
 
 /**
  * Which core terminal is open as a watch. While its connection is away the
  * view keeps the last target, so it can say why the watch ended; when the
- * connection returns with a new generation the view watches again.
+ * connection returns with a new generation the view watches again. Every
+ * live core generation in `worlds` keeps its composer drafts.
  */
-export function useCoreTerminalWatch(
-  find: (id: string) => WatchableNode | undefined,
-) {
+export function useCoreTerminalWatch(worlds: readonly WatchableWorld[]) {
   const [open, setOpen] = useState<{ id: string; title: string } | null>(null);
   const last = useRef<CoreWatchTarget | null>(null);
   const close = useCallback(() => setOpen(null), []);
+  const find = (id: string) => {
+    for (const world of worlds) {
+      const node = world.nodeById.get(id);
+      if (node) return node;
+    }
+    return undefined;
+  };
   const node = open ? find(open.id) : undefined;
   if (node?.watch) last.current = node.watch;
+  const live = useMemo(
+    () =>
+      worlds.flatMap((world) =>
+        [...world.nodeById.values()].flatMap((n) => (n.watch ? [n.watch] : [])),
+      ),
+    // The worlds' identities are what change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    worlds,
+  );
+  // The open view's generation stays held while it says why its stream ended.
+  useCoreDraftScopes(open && last.current ? [...live, last.current] : live);
   return {
     /** Opens `id` as a watch when it is a live core terminal. */
     watch(id: string): boolean {
