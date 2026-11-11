@@ -1,0 +1,211 @@
+{
+  "source": "https://github.com/herdrdev/herdr-core/blob/75874d6501302ffa5f357010309a60d85d38acdf/crates/herdr-core/src/terminals.rs",
+  "derivation": "Executed official SYMBOLS, address and parse_id; includes ids_count_with_a_digit_then_digits_and_consonants test vectors. Source revision records evidence, not a runtime version pin.",
+  "alphabet": "0123456789bcdfghjkmnpqrstvwxyz",
+  "vectors": [
+    {
+      "ordinal": 1,
+      "address": "t1"
+    },
+    {
+      "ordinal": 2,
+      "address": "t2"
+    },
+    {
+      "ordinal": 3,
+      "address": "t3"
+    },
+    {
+      "ordinal": 4,
+      "address": "t4"
+    },
+    {
+      "ordinal": 5,
+      "address": "t5"
+    },
+    {
+      "ordinal": 6,
+      "address": "t6"
+    },
+    {
+      "ordinal": 7,
+      "address": "t7"
+    },
+    {
+      "ordinal": 8,
+      "address": "t8"
+    },
+    {
+      "ordinal": 9,
+      "address": "t9"
+    },
+    {
+      "ordinal": 10,
+      "address": "t10"
+    },
+    {
+      "ordinal": 11,
+      "address": "t11"
+    },
+    {
+      "ordinal": 12,
+      "address": "t12"
+    },
+    {
+      "ordinal": 13,
+      "address": "t13"
+    },
+    {
+      "ordinal": 14,
+      "address": "t14"
+    },
+    {
+      "ordinal": 15,
+      "address": "t15"
+    },
+    {
+      "ordinal": 16,
+      "address": "t16"
+    },
+    {
+      "ordinal": 17,
+      "address": "t17"
+    },
+    {
+      "ordinal": 18,
+      "address": "t18"
+    },
+    {
+      "ordinal": 19,
+      "address": "t19"
+    },
+    {
+      "ordinal": 20,
+      "address": "t1b"
+    },
+    {
+      "ordinal": 21,
+      "address": "t1c"
+    },
+    {
+      "ordinal": 22,
+      "address": "t1d"
+    },
+    {
+      "ordinal": 23,
+      "address": "t1f"
+    },
+    {
+      "ordinal": 24,
+      "address": "t1g"
+    },
+    {
+      "ordinal": 25,
+      "address": "t1h"
+    },
+    {
+      "ordinal": 26,
+      "address": "t1j"
+    },
+    {
+      "ordinal": 27,
+      "address": "t1k"
+    },
+    {
+      "ordinal": 28,
+      "address": "t1m"
+    },
+    {
+      "ordinal": 29,
+      "address": "t1n"
+    },
+    {
+      "ordinal": 30,
+      "address": "t1p"
+    },
+    {
+      "ordinal": 31,
+      "address": "t1q"
+    },
+    {
+      "ordinal": 32,
+      "address": "t1r"
+    },
+    {
+      "ordinal": 33,
+      "address": "t1s"
+    },
+    {
+      "ordinal": 34,
+      "address": "t1t"
+    },
+    {
+      "ordinal": 35,
+      "address": "t1v"
+    },
+    {
+      "ordinal": 36,
+      "address": "t1w"
+    },
+    {
+      "ordinal": 37,
+      "address": "t1x"
+    },
+    {
+      "ordinal": 38,
+      "address": "t1y"
+    },
+    {
+      "ordinal": 39,
+      "address": "t1z"
+    },
+    {
+      "ordinal": 40,
+      "address": "t20"
+    },
+    {
+      "ordinal": 279,
+      "address": "t9z"
+    },
+    {
+      "ordinal": 280,
+      "address": "t100"
+    },
+    {
+      "ordinal": 8379,
+      "address": "t9zz"
+    },
+    {
+      "ordinal": 8380,
+      "address": "t1000"
+    },
+    {
+      "ordinal": 148377,
+      "address": "t65jk"
+    },
+    {
+      "ordinal": 4294967295,
+      "address": "t6kf3jk5"
+    }
+  ],
+  "invalid": [
+    "t",
+    "t0",
+    "t01",
+    "tb",
+    "t1l",
+    "t1a",
+    "T1",
+    "t1B",
+    "x1",
+    "tmp",
+    "t3po",
+    "t1e",
+    "t1i",
+    "t1o",
+    "t1u",
+    "t1/",
+    "t1\\n",
+    "t9zzzzzzzzzz"
+  ]
+}

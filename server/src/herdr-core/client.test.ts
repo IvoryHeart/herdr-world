@@ -229,6 +229,58 @@ describe("core client", () => {
       expect(() => localAddress(bad)).toThrow("not a local terminal address");
   });
 
+  test("allocating across t19 to t1b keeps observation, reads, labels and watches live", async () => {
+    const { fake, client, mirror } = await connected(7);
+    try {
+      const addresses = Array.from({ length: 40 }, () => fake.create());
+      expect(addresses.slice(18, 21)).toEqual(["t19", "t1b", "t1c"]);
+      expect(addresses.at(-1)).toBe("t20");
+      await client.status();
+      expect(mirror.actionable).toBe(true);
+      expect(mirror.cursor).toBe(fake.currentSeq);
+      expect(mirror.terminals().map((t) => t.address)).toEqual(addresses);
+      expect(await client.getTerminal("t1b")).toMatchObject({ address: "t1b" });
+      fake.output("t1b", "native alphabet terminal\r\n");
+      expect(await client.readScreen("t1b")).toMatchObject({
+        text: "$",
+        how: "screen",
+      });
+      await client.label("t1b", { "herdr.pinned": "1" });
+      expect(mirror.terminal("t1b")?.labels["herdr.pinned"]).toBe("1");
+      const paint: string[] = [];
+      const watch = await client.watch(
+        "t1b",
+        { cols: 200, rows: 120 },
+        {
+          resize() {},
+          data(bytes) {
+            paint.push(new TextDecoder().decode(bytes));
+          },
+          close() {},
+        },
+      );
+      expect(watch.terminal.address).toBe("t1b");
+      expect(paint.join("")).toContain("native alphabet terminal");
+      watch.detach();
+      const targets = fake.calls.filter((c) =>
+        [
+          "terminal.get",
+          "terminal.read",
+          "terminal.label",
+          "terminal.attach",
+        ].includes(c.method),
+      );
+      expect(targets).toHaveLength(4);
+      for (const call of targets) {
+        expect(call.params).toMatchObject({ terminal: "t1b" });
+        expect(call.params).not.toHaveProperty("caller");
+      }
+    } finally {
+      client.close();
+      fake.kill();
+    }
+  });
+
   test("background reads ask for the screen only (lines: 0) and never send caller", async () => {
     const { fake, client } = await connected();
     const t1 = fake.create();

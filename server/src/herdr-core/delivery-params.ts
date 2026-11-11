@@ -1,7 +1,8 @@
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import { CoreProtocolError, encodeFrame, FrameKind } from "./wire";
 
 function localAddress(address: string) {
-  if (!/^t[1-9][0-9]{0,9}$/.test(address))
+  if (!isLocalCoreAddress(address))
     throw new CoreProtocolError("World requires a local core terminal address");
   return address;
 }

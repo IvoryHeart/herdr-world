@@ -1,3 +1,4 @@
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import type { CliActor } from "./world-ledger";
 
 /** Only this record-delivery verb is queueable; generic Chat/terminal sends are not. */
@@ -92,7 +93,6 @@ export type AnswerIntent = {
   condition: { awaiting_delivery: true; recipient: AnswerRecipient | null };
 };
 const HEX64 = /^[a-f0-9]{64}$/;
-const CORE_ADDRESS = /^t[1-9][0-9]{0,9}$/;
 function validCoreRecipient(
   value: AnswerRecipient | null | undefined,
 ): value is CoreAnswerRecipient {
@@ -103,7 +103,7 @@ function validCoreRecipient(
       typeof value.connection_id === "string" &&
       value.connection_id.length > 0 &&
       typeof value.pane_id === "string" &&
-      CORE_ADDRESS.test(value.pane_id) &&
+      isLocalCoreAddress(value.pane_id) &&
       value.terminal_id === value.pane_id &&
       typeof value.core_id === "string" &&
       value.core_id.length > 0 &&

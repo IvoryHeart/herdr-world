@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 
 /**
  * World's own labels on core terminals (`herdr-world.` namespace). Labels
@@ -14,8 +15,6 @@ import { createHash } from "node:crypto";
  */
 export const CORE_SUMMARY_LABEL = "herdr-world.summary";
 export const CORE_SPAWNED_BY_LABEL = "herdr-world.spawned-by";
-
-const ADDRESS = /^t[1-9][0-9]{0,9}$/;
 
 type Occupied = { address: string; pid?: unknown; argv?: unknown };
 
@@ -86,5 +85,5 @@ export function coreSpawnedBy(record: {
   labels?: Record<string, string>;
 }): string | null {
   const value = record.labels?.[CORE_SPAWNED_BY_LABEL];
-  return typeof value === "string" && ADDRESS.test(value) ? value : null;
+  return typeof value === "string" && isLocalCoreAddress(value) ? value : null;
 }

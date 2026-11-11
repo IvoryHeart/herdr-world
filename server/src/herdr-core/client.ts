@@ -1,3 +1,4 @@
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import {
   CoreRpcError,
   CoreUnavailableError,
@@ -550,7 +551,7 @@ export class CoreClient {
    * which another terminal could take). Nothing else is ever labelled.
    */
   shareLabel(address: string, change: SharedLabelChange, timeoutMs = 5_000) {
-    if (!/^t\d{1,9}$/.test(address) || !isSharedLabelChange(change))
+    if (!isLocalCoreAddress(address) || !isSharedLabelChange(change))
       return Promise.reject(new Error("not a shared label change"));
     return this.call(
       "terminal.label",
@@ -988,7 +989,7 @@ export class CoreClient {
  * machine (`m/tN`), parent and child forms route elsewhere and are refused.
  */
 export function localAddress(address: string): string {
-  if (!/^t[1-9][0-9]{0,9}$/.test(address))
+  if (!isLocalCoreAddress(address))
     throw new CoreProtocolError(`not a local terminal address: ${address}`);
   return address;
 }

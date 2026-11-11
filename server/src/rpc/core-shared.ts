@@ -1,3 +1,4 @@
+import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import { CoreFenceError, CoreOperationFence } from "../herdr-core/fence";
 import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import { favouriteToShare, seenToShare } from "../herdr-core/shared-state";
@@ -36,7 +37,7 @@ function target(params: Record<string, unknown> | undefined): Target {
     generation < 0 ||
     typeof address !== "string" ||
     // A local address only: never a name, never a linked machine's terminal.
-    !/^t\d{1,9}$/.test(address)
+    !isLocalCoreAddress(address)
   )
     throw new Error("invalid herdr-core terminal");
   return { connectionId, generation, address };
