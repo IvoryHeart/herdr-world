@@ -2,12 +2,13 @@
 
 ### 1. Provider seam
 
-Extend `AdapterDefinition` with only the small interfaces both providers need:
-terminal streams, session producers and host-resource resolution. Retain typed
-dispatch, invalidate-only watch, epoch/lifetime/evidence and descriptor budgets.
-Move the existing direct TUI calls behind typed verbs; keep TUI behavior intact.
-The core mirror belongs inside its provider. Do not invent TUI RPC names, another
-framework, a split engine or a core document for World state.
+The TUI keeps its existing connection manager; core has a separate typed
+connection manager and per-generation host runtime. The aggregate
+`worldRuntimeRegistry` presents both to World without inventing TUI RPC methods.
+Core's client, ordered mirror, terminal watches, typing sessions and operations
+stay inside its provider; host files/Git/worktrees use World's guarded helpers.
+The browser uses typed `world.core.*`/watch RPC and qualified core object handles.
+World's core layout belongs in SQLite, never a core document or app layout.
 
 ### 2. Existing-only connections
 
@@ -188,3 +189,20 @@ drift and fix World as core and TUI evolve. World never runs `hc update`.
 | M9 | Share herdr.seen and herdr.pinned best-effort. Seen is raise-only once per visibly seen turn; missing is not zero; unread is turn−1; blocked/error outrank seen. Viewing done clears done across apps. Re-read before writes, preserve explicit unread and disclose last-writer races without CAS. Review receipts and desk/card pins remain World-only. |
 | M10 | World's own SSH connection per host owns authority. Linked machines are discovery only; hide their actionable entities/counts when a direct connection has the same core ID, while consuming all event positions. |
 | M11 | World reads agent status from core and never writes it, including for integrations World installed. Missing status remains unknown; a reporting timeout never authorizes injection. |
+
+## Release smoke and handover
+
+The manual/daily `herdr-core-smoke.yml` runs the latest-manifest downloader on
+Linux, verifies the official archive SHA-256, and discovers every live core suite.
+PowerShell relay checks run alongside the live core on the hosted runner. JSON
+release identity/result and the live log survive failure as Actions artifacts.
+The workflow is separate from required offline Delivery checks and never gates
+runtime writes or selects a fallback version. New workflows can be manually
+dispatched once present on GitHub's default branch; the same runner works locally
+before merge. See the [runbook](../../../docs/development.md#herdr-core-release-smoke).
+
+Release selection, checksum rejection, suite discovery and cleanup have direct
+offline regression tests using a synthetic release archive. They add no World
+ordering, fence or recovery transition to Q52/Q53, so their existing model actions
+and negative controls stay unchanged. The [handover](delivery.md) identifies
+production evidence and owner-only checks without treating one as the other.

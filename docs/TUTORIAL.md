@@ -35,13 +35,13 @@ Your browser or phone
       |
 Herdr World   (the app you see)
       |
-Herdr         (runs your terminals)
+Herdr or herdr-core (runs your terminals)
       |
 Your shells and agents
 ```
 
-- **Herdr** runs the terminals. They keep running when you close the browser,
-  but stop if the computer sleeps or shuts down.
+- **Herdr or herdr-core** runs the terminals. They keep running when you close
+  the browser, but stop if the computer sleeps or shuts down.
 - **World** shows them in your browser and lets you act on them.
 - **Agents** stay ordinary command-line tools. World does not provide models
   or sign you in to them.
@@ -73,6 +73,22 @@ Your shells and agents
 
 **You are done when:** the terminal shows your project's folder. Get this
 working before you set up remote access.
+
+### Use an existing herdr-core
+
+Already using herdr-core with Herdr’s apps? Use these steps instead of steps 4–6
+above; you can keep the TUI connected too.
+
+1. Start core separately. In World, open **Hosts → Manage connections → Add
+   herdr-core**, choose where it runs, and keep session **default** unless you
+   changed it. Save and connect; its card shows the version and live terminals.
+2. Return to **Town** and choose **New agent**. The launcher says **Starts in
+   herdr-core**. Choose your harness and project folder, then start it. The
+   agent also appears in Herdr’s apps. Choose a TUI room for a TUI launch.
+3. Open the agent’s **Terminal**. Watching follows the app’s size; type to
+   control it from World. Leave the terminal to give the size back.
+4. Finish a turn, then look at its Town peek. Done clears in Herdr’s apps too.
+   Try the star: its favourite is shared. Continue with either runtime below.
 
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 
@@ -191,7 +207,8 @@ is new for you, what finished and what merged.
 
 ### Rearrange Town
 
-These moves change the real Herdr tabs and panes, and agents keep running.
+These moves change the real Herdr TUI tabs and panes, and agents keep running.
+Core rooms keep their own World layout; Herdr’s app layout stays separate.
 
 - **Move a table to another room:** zoom in until you see tables, then drag
   one onto another room of the same building. On a phone, hold it first. From

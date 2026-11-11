@@ -5,9 +5,13 @@
 - [x] Verify the composed delta model, replay and all ordering/recovery mutants.
 - [x] Register bounded evidence and one knowledge-map row.
 
-## Following implementation (outside issue #863)
+## Implementation and handover
 
-- [ ] P1: inventory parity consumers, extract typed seam and implement core mirror.
+Checked items record implemented paths and their maintained tests, not device
+acceptance. [Delivery](delivery.md) separates traffic, authority/model and owner
+checks. Current spec synchronization and archive remain after acceptance.
+
+- [x] P1: coexisting providers, qualified connections and ordered core mirror.
   - [x] Issue #865: existing-only local and Unix SSH connections (core.lock on
     every attempt, private socket directory), framed client with credit and
     streaming UTF-8, ordered mirror with missed/heartbeat/gap rules, liveness,
@@ -19,7 +23,7 @@
     shared seen rule and World's first sight, every Herdr/app harness, rooms
     from the desktop app's placement, view-only controls with a reason, and a
     production read-model replay with its own negative control.
-- [ ] P2: observer streams, shared seen/favourite and event push.
+- [x] P2: observer streams, shared seen/favourite and event push.
   - [x] Issue #867: observe streams. One observe attach per visible browser
     view with its own credit, `resize_notifications` required and confirmed,
     core's grid applied before every paint (xterm adopts it; fitting only
@@ -31,7 +35,7 @@
     turn per look, decided-label write, raise-only, best effort), favourite
     as `herdr.pinned`, Web Push from core status events, the shared-seen
     model with production replay, recorded 0.1.20 and live-release tests.
-- [ ] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
+- [x] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
   - [x] Issue #869: core-first launches from World (absolute executable, no
     caller/parent/notes, explicit keep; agents placed with a `where` caption,
     shells unplaced), World's rooms in SQLite (create, rename, close), kill,
@@ -48,7 +52,7 @@
     launch catalog and executable aliases, generic profile briefs through native
     delivery, shared TUI transcript readers with read-only links and publication
     fences, differential fixtures and latest-release harness-name smoke.
-- [ ] P4: files/Git/worktrees, asks and Ranger.
+- [x] P4: files/Git/worktrees, asks and Ranger.
   - [x] Issue #871: a core connection's host runtime per generation (read
     model rows, screen-only reads, World's guarded file/Git helpers, an
     agent's worktree bound to the program occupying its address); Files,
@@ -59,7 +63,7 @@
     mentions, native prompt delivery and worktree creation
     over core; the model's worktree-removal order with three mutants; live
     checks against the 0.1.20 release.
-- [ ] P5: interactive/mobile, popup equivalents and both SSH platforms.
+- [x] P5: interactive/mobile, popup equivalents and both SSH platforms.
   - [x] Typing and mobile (#872): the first genuine key opens World's interactive
     viewer and is sent once after the attach; leave on blur (3 s), idle (60 s)
     and close; replies never take the size; the phone composer and uploads to
@@ -70,6 +74,22 @@
     is the one TUI plugin popup World invokes, and generic plugin popups have
     no core source. World's float shell is fenced like screen reads and tested
     against the fake core, a browser and the 0.1.20 release.
-- [ ] P6: latest-release smoke, usage docs and final device/parity acceptance.
+  - [x] Every supported harness (#874): Herdr integration names and app program
+    aliases, wrapper/interpreter detection, status from core only; topology,
+    differential, delivery and launch consumer tests.
+  - [x] Windows SSH (#875): fixed existing-only named-pipe probe/relay,
+    ownership/ACL refusal, EOF/reconnect/cleanup and native key transport;
+    fake Windows host and opt-in real PowerShell tests. Real host is below.
+  - [x] Native addresses (#893): source-derived alphabet/rollover vectors,
+    production-provider and action consumers, without changing authority.
+- [x] P6: latest-release smoke, usage docs and release handover (#876).
+  - [x] Manual/daily workflow always resolves latest, verifies SHA-256, discovers
+    all live suites (including native delivery), and retains failure evidence;
+    offline smoke-runner tests check errors, cleanup and suite admission.
+  - [x] README runtime section, FEATURES reference, learner core steps, smoke
+    runbook, one feature changelog and this implemented change record.
+- [ ] Final parity inventory and owner device acceptance A–D: official desktop
+  and phone apps, mobile interaction and a real Windows SSH account. A Linux
+  live test or fixture screenshot does not establish these outcomes.
 - [ ] Obtain independent design/model review and separate implementation mapping
   acceptance; synchronize current specs and archive only after full delivery.

@@ -51,6 +51,35 @@ Nothing is sent anywhere. Release and package builds never set the flag, and the
 web asset check fails a release build that carries any of it. See the
 [World component routes](../web/src/world/README.md#development-tools).
 
+## Herdr-core release smoke
+
+**Herdr-core release smoke** in GitHub Actions runs daily at 06:37 UTC and
+with **Run workflow**. Select the branch to test, run it, then open **Newest
+herdr-core release**. Its summary and 14-day artifact identify the resolved
+release, target, SHA-256, live suites and exit status; the log includes failures
+and measured latency/throughput. A red run flags drift or download failure; it
+never pins core, changes runtime permissions or certifies a release. This job is
+separate from required **Delivery checks**, which need no live core.
+
+GitHub enables manual dispatch and the schedule once the workflow exists on the
+default branch. Before then, or to reproduce locally on Linux x64/ARM64:
+
+```bash
+bun install --frozen-lockfile
+bun scripts/herdr-core-smoke.ts
+# Include the fixed Windows relay's PowerShell checks when pwsh 7 is available:
+HERDR_WORLD_PWSH="$(command -v pwsh)" bun scripts/herdr-core-smoke.ts
+```
+
+The runner always downloads `https://releases.herdr.dev/core/latest.json`, verifies
+the archive against its SHA-256, and runs every `server/src/herdr-core/*.live.test.ts`
+suite. It installs nothing. Live cores use isolated scratch HOME/XDG directories;
+the harness stops their processes and the runner removes the download. Without
+`HERDR_CORE_BIN`, ordinary test runs skip live-core cases. PowerShell-on-Linux
+checks exercise framing and pipe relay behavior; Windows ACLs, a real Windows
+SSH host, official-app visibility and phone behavior still require owner checks
+in [the handover](../openspec/changes/herdr-core-runtime/delivery.md#owner-device-acceptance).
+
 ## Verification
 
 ```bash

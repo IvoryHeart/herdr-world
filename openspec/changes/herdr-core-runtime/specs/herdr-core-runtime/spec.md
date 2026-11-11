@@ -19,6 +19,14 @@ certification gating. A newest-release smoke test SHALL flag protocol drift.
 - **THEN** World retains read-write support and smoke failures flag work to fix,
   without switching that release to read-only
 
+#### Scenario: Manual or scheduled release smoke
+
+- **WHEN** the manual or daily smoke runs
+- **THEN** it resolves the newest official release, verifies its archive checksum
+  and runs every live-core suite in scratch state, including native send/keys;
+  failure is visible with retained release identity and test logs when available,
+  without installing, pinning, falling back or changing runtime write authority
+
 ### Requirement: Existing-only qualified observation
 
 Automatic connection and reconnection SHALL never start core. World SHALL read

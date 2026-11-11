@@ -42,6 +42,28 @@ the third boundary by itself. The original feature-parity baseline is `15baa482`
 | P5 | Interactive streams, mobile, host uploads, World popup equivalents, Unix/Windows SSH and mixed hosts | Both-provider browser suites; first key once, win32-input-mode, owner Windows named-pipe relay checks. Owner C/D; TUI/core on one host without duplicate agents. |
 | P6 | Newest-release smoke, final parity review and FEATURES/TUTORIAL/README updates | Full gates, independent review and separate owner device evidence. Full read-write on each release without pins or certification gating. Ready PR; merge only on owner instruction. |
 
+## Implemented handover
+
+P1–P5 paths are implemented on the feature stack; P6 adds the release smoke and
+usage handover. These are implementation facts, not final feature acceptance.
+
+| Boundary | Maintained evidence | What it does not establish |
+| --- | --- | --- |
+| Core accepts World's traffic | `core.live.test.ts`, `delivery.live.test.ts`, `operations.live.test.ts`, `worktrees.live.test.ts`; recorded `core-0.1.20*.json` and `delivery-0.1.20.json` replays | Official apps or real device behavior |
+| Ordering, authority and faults | Q52/Q53, composed/shared-seen Quint models and production replay; client/mirror/fence, TUI/core differential, watch/typing and delivery tests | Closure of the upstream Q3/Q7/Q11 races |
+| Browser consumers | Core Chat, shared-state, watch/typing, files and float-shell browser suites; TUI suites remain in Delivery checks | A real phone, app window or Windows account |
+| Latest-release drift | [Smoke workflow](../../../.github/workflows/herdr-core-smoke.yml), [runner and offline regression](../../../scripts/herdr-core-smoke.test.ts), [runbook](../../../docs/development.md#herdr-core-release-smoke) | Certification, a version pin or removal of writes |
+| User guidance | README runtime choice, FEATURES controls/limits, TUTORIAL core steps; `changes/herdr-core.md` | Independent review or permission to merge |
+
+The smoke runs all live suites, including the Q3 negative control: core alone can
+deliver queued input to a replacement shell. A pass preserves that documented
+limitation. Linux PowerShell relay checks cannot establish Windows ACL behavior.
+The required CI gate, independent review, per-bullet parity inventory and owner
+checks below remain acceptance work. Keep the change active until they complete;
+then synchronize current specs and archive it. No new ordering rule is introduced
+by release download/verification/cleanup, so direct runner regressions cover P6
+without expanding Q52/Q53's bounded model claims.
+
 ### Required fixtures before the phase ships its path
 
 - P1: lossless captures, full projections and honest latency endpoints; absent
@@ -63,7 +85,7 @@ the third boundary by itself. The original feature-parity baseline is `15baa482`
   reconnect, process cleanup and win32-input-mode on a real host. Required CI uses
   fakes/recorded traffic; optional live tests skip cleanly without a supplied binary.
 
-### Owner device acceptance for later implementation
+## Owner device acceptance
 
 Use a disposable test account and candidate World, never the owner's runtime.
 
