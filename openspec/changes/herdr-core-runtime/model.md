@@ -128,7 +128,11 @@ change that withdraws readiness, as `replace` does. `safe` holds over World's
 observation: a child core creates after World's last applied event is outside
 this fence, since core has no conditional kill (upstream Q11), like the Q3
 queued-send window. A sampling-only weight (`childAfterPlan`) creates the child
-after planning; it adds no transition.
+after planning; it adds no transition. Naming what core's cascade ended beyond
+the confirmation (`coreKillUnconfirmed`) is a report after the kill, not a
+decision, so it adds no action either; `operations.test.ts` and
+`bin-close-core.test.ts` drive it with a child core creates while it handles
+the kill, and a child that had ended before it is never named.
 
 The replay adapter decides `plan` and `kill` with the production
 `coreKillPlan` and `coreKillRefusal` (`server/src/herdr-core/kill-plan.ts`) over

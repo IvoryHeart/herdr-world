@@ -178,3 +178,42 @@ export function coreKillRefusal(
   }
   return null;
 }
+
+/**
+ * What core's cascade from `roots` ended, or is ending, beyond what was
+ * confirmed. Core 0.1.20 has no conditional kill (upstream Q11): it ends a
+ * root's die-with-parent children as the root's program exits, up to about
+ * 3 s after the kill was sent, so a child started in that window (by the
+ * agent itself, or another client) ends unconfirmed. World cannot refuse
+ * that; it names each such terminal afterwards instead of staying silent.
+ * `endedBefore` holds the keys already ended when the kill began.
+ */
+export function coreKillUnconfirmed(
+  coreId: string,
+  terminals: readonly CoreMirrorTerminal[],
+  roots: readonly string[],
+  confirmed: CoreKillConfirmation,
+  endedBefore: ReadonlySet<string>,
+): CoreKillEntry[] {
+  // Killed since the kill began counts as part of the chain again.
+  const chain = terminals.flatMap((record) =>
+    record.state === "live"
+      ? [record]
+      : record.reason === "killed" && !endedBefore.has(keyOf(record))
+        ? [{ ...record, state: "live" }]
+        : [],
+  );
+  const seen = new Set(confirmed.terminals.map(confirmedKey));
+  return coreKillPlan(coreId, chain, roots).descendants.filter(
+    (entry) => !seen.has(confirmedKey(entry)),
+  );
+}
+
+/** The keys of every terminal not live now (see `coreKillUnconfirmed`). */
+export function coreEndedKeys(
+  terminals: readonly CoreMirrorTerminal[],
+): Set<string> {
+  return new Set(
+    terminals.filter((r) => r.state !== "live").map((r) => keyOf(r)),
+  );
+}

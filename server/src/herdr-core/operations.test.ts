@@ -314,13 +314,54 @@ describe("kills name every native descendant (M7)", () => {
     const { w, dies, outlives, grandchild } = await family();
     const plan = await planCoreKill(w.lease(), ["t1"]);
     const outcome = await killCore(w.lease(), ["t1"], confirmAll(plan));
-    expect(outcome).toEqual({ killed: ["t1"], uncertain: [] });
+    expect(outcome).toEqual({ killed: ["t1"], uncertain: [], alsoEnded: [] });
     const kills = w.fake.calls.filter((c) => c.method === "terminal.kill");
     expect(kills.map((c) => c.params)).toEqual([{ terminal: "t1" }]);
     for (const address of ["t1", dies, grandchild])
       expect(w.fake.terminal(address)!.state).toBe("finished");
     expect(w.fake.terminal(outlives)!.state).toBe("live");
     expect(w.fake.terminal("t5")!.state).toBe("live");
+  });
+
+  test("a child core starts while it handles the kill is named, not hidden (Q11)", async () => {
+    // The review's repro: core has no conditional kill, so a die-with-parent
+    // child started after World's last check ends with its parent.
+    const { w, dies, grandchild } = await family();
+    const plan = await planCoreKill(w.lease(), ["t1"]);
+    let late = "";
+    w.fake.onCall = (method) => {
+      if (method !== "terminal.kill" || late) return;
+      late = w.fake.create({
+        parent: "t1",
+        die_with_parent: true,
+        name: "late",
+      });
+    };
+    const outcome = await killCore(w.lease(), ["t1"], confirmAll(plan));
+    w.fake.onCall = null;
+    expect(outcome.killed).toEqual(["t1"]);
+    expect(w.fake.terminal(late)!.state).toBe("finished");
+    // Only the unconfirmed one is named; the confirmed cascade is not.
+    expect(outcome.alsoEnded).toEqual([
+      { address: late, name: "late", remote: false },
+    ]);
+    expect(outcome.alsoEnded.map((t) => t.address)).not.toContain(dies);
+    expect(outcome.alsoEnded.map((t) => t.address)).not.toContain(grandchild);
+  });
+
+  test("a terminal that ended before the kill is never named as also ended", async () => {
+    const { w, dies } = await family();
+    const earlier = w.fake.create({
+      parent: "t1",
+      die_with_parent: true,
+      name: "earlier",
+    });
+    w.fake.finish(earlier, "killed");
+    await w.settle();
+    const plan = await planCoreKill(w.lease(), ["t1"]);
+    const outcome = await killCore(w.lease(), ["t1"], confirmAll(plan));
+    expect(outcome.alsoEnded).toEqual([]);
+    expect(w.fake.terminal(dies)!.state).toBe("finished");
   });
 
   test("a child started after the confirmation refuses the kill, with the new plan", async () => {

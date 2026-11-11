@@ -305,7 +305,6 @@ async function compose(
     observed: publishWorldInvalidation,
     profiles: () => connectionProfiles,
     topology: storage.coreTopology,
-    // Core has no notification of its own: push follows its status events.
     push: (task, isCurrent) => webPush.notify(task, isCurrent),
   });
   /** The agent bin: reversible holding, a scheduled bus, then a durable fenced close. */

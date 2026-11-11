@@ -81,7 +81,9 @@ this worker to post upstream messages.
 11. Q11, Conditional kill: can `terminal.kill` refuse when the set of terminals
     its cascade ends differs from one the caller names? World confirms every
     descendant it has observed; a child core creates after World's last applied
-    event can still die unconfirmed.
+    event, or while the killed program exits (core cascades at its finish, up
+    to about 3 s after the request), can still die unconfirmed. World names
+    each such terminal in the kill's outcome; only core can refuse it.
 
 No unresolved owner decision blocks this design. O1–O3 select core coexistence,
 default placement and shared seen; O4 is overridden by status read-only (M11);

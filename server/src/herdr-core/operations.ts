@@ -18,8 +18,10 @@ import {
   type CoreKillConfirmation,
   type CoreKillEntry,
   type CoreKillPlan,
+  coreEndedKeys,
   coreKillPlan,
   coreKillRefusal,
+  coreKillUnconfirmed,
 } from "./kill-plan";
 import { CORE_SPAWNED_BY_LABEL } from "./labels";
 import type { CoreMirrorTerminal } from "./mirror";
@@ -506,6 +508,11 @@ export type CoreKillOutcome = {
   killed: string[];
   /** Asked, but the reply never came: they may still be running. */
   uncertain: string[];
+  /**
+   * Ended by core's cascade without confirmation: started under a dying
+   * terminal after World's last check (core has no conditional kill, Q11).
+   */
+  alsoEnded: Array<{ address: string; name: string | null; remote: boolean }>;
 };
 
 /**
@@ -520,7 +527,8 @@ export async function killCore(
   addresses: readonly string[],
   confirmation: CoreKillConfirmation,
 ): Promise<CoreKillOutcome> {
-  const outcome: CoreKillOutcome = { killed: [], uncertain: [] };
+  const outcome: CoreKillOutcome = { killed: [], uncertain: [], alsoEnded: [] };
+  const endedBefore = coreEndedKeys(lease.runtime.core.mirror.terminals());
   const refuseIfChanged = async () => {
     const coreId = coreIdOf(lease);
     const terminals = lease.runtime.core.mirror.terminals();
@@ -567,6 +575,16 @@ export async function killCore(
       throw error;
     }
   }
+  // Core's cascade is its own (Q11): name anything it ended beyond the
+  // confirmation rather than report a clean kill.
+  if (outcome.killed.length)
+    outcome.alsoEnded = coreKillUnconfirmed(
+      coreIdOf(lease),
+      lease.runtime.core.mirror.terminals(),
+      outcome.killed,
+      confirmation,
+      endedBefore,
+    ).map(({ address, name, remote }) => ({ address, name, remote }));
   return outcome;
 }
 
@@ -655,7 +673,7 @@ export async function closeCoreRoom(
   const addresses = await coreRoomTerminals(lease, workspaceId);
   const outcome = addresses.length
     ? await killCore(lease, addresses, confirmation)
-    : { killed: [], uncertain: [] };
+    : { killed: [], uncertain: [], alsoEnded: [] };
   if (outcome.uncertain.length) return outcome;
   const live = liveLocal(lease);
   for (const address of outcome.killed) live.delete(address);

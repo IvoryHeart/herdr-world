@@ -133,6 +133,32 @@ describe("the bin closes core agents by a confirmed native kill", () => {
     expect(w.fake.terminal(server)!.state).toBe("live");
   });
 
+  test("a child core starts while it handles the kill is named in the outcome (Q11)", async () => {
+    const { w, closer, outcomes, entry, lead } = await setup();
+    let late = "";
+    w.fake.onCall = (method) => {
+      if (method !== "terminal.kill" || late) return;
+      late = w.fake.create({
+        parent: lead,
+        die_with_parent: true,
+        name: "late",
+      });
+    };
+    const one = entry();
+    await closer.commit([one]);
+    await until(() => outcomes.length === 1);
+    w.fake.onCall = null;
+    expect(w.fake.terminal(late)!.state).toBe("finished");
+    expect(outcomes).toEqual([
+      {
+        id: one.id,
+        result: "closed",
+        closed_tab: true,
+        detail: "herdr-core also ended late, started after you confirmed.",
+      },
+    ]);
+  });
+
   test("a child started while it rode the bus refuses the close", async () => {
     const { w, closer, outcomes, entry, lead, storage } = await setup();
     const one = entry();

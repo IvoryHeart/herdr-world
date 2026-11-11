@@ -2036,8 +2036,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     nothing beyond what you confirmed: if a child started since, or a
     confirmed program was replaced (even by a shell that reused its pid, on
     a linked machine too), nothing ends and World shows the new list. A
-    child core starts in the instant between World's last update and the
-    kill can still end with it, since core has no conditional kill.
+    child started under a dying agent while core carries out the kill (by
+    the agent itself or another app, up to a few seconds while the program
+    exits) can still end with it, since core has no conditional kill; World
+    then names it: **Close room** shows "More ended than you confirmed" and
+    the bin's Recent line reads "Closed: herdr-core also ended …, started
+    after you confirmed."
     Closing an agent's pane in the desktop app ends it, and World shows it
     gone.
   - **Summaries and stamps.** `herdr-world task-summary` inside a core

@@ -14,6 +14,7 @@ import {
   renameCoreRoom,
 } from "./coreControl";
 import { confirmCoreKill } from "./CoreKillConfirm";
+import { coreAlsoEndedText } from "../../../shared/coreKill";
 
 /** The Town scale scene's own host, which the service does not know. */
 const sceneClient = (connectionId: string) =>
@@ -119,6 +120,13 @@ export async function closeCoreRoomConfirmed(
       room.workspaceId,
       coreKillConfirmation(plan),
     );
+    const alsoEnded = coreAlsoEndedText(outcome.alsoEnded);
+    if (alsoEnded)
+      store.notify({
+        kind: "error",
+        message: "More ended than you confirmed",
+        detail: alsoEnded,
+      });
     if (outcome.uncertain.length)
       store.notify({
         kind: "error",

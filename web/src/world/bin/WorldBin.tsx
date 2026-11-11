@@ -309,9 +309,7 @@ export function WorldBin({
                 .map((outcome) => (
                   <li key={outcome.id} data-result={outcome.result}>
                     <b>{outcome.label}</b> {OUTCOME[outcome.result]}
-                    {outcome.result !== "closed" && outcome.detail
-                      ? `: ${outcome.detail}`
-                      : ""}
+                    {outcome.detail ? `: ${outcome.detail}` : ""}
                   </li>
                 ))}
             </ol>

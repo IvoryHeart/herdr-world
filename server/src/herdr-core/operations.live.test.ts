@@ -268,7 +268,7 @@ describe("World's writes to a real herdr-core", () => {
       // Confirmed again with the late child: core ends exactly those three.
       const again = (refused as CoreOperationRefused).plan!;
       const outcome = await killCore(w.lease(), ["t1"], confirmAll(again));
-      expect(outcome).toEqual({ killed: ["t1"], uncertain: [] });
+      expect(outcome).toEqual({ killed: ["t1"], uncertain: [], alsoEnded: [] });
       await until(() =>
         ["t1", "t2", "t4"].every((a) => w.record(a)?.state !== "live"),
       );

@@ -1,4 +1,5 @@
 import { bridge } from "../api";
+import type { CoreAlsoEnded } from "../../../shared/coreKill";
 
 /**
  * World's control of a herdr-core connection (world.core.*): starting
@@ -115,7 +116,12 @@ export async function coreKillPlan(
   );
 }
 
-export type CoreKillOutcome = { killed: string[]; uncertain: string[] };
+export type CoreKillOutcome = {
+  killed: string[];
+  uncertain: string[];
+  /** Ended by core's cascade without confirmation (started too late). */
+  alsoEnded?: CoreAlsoEnded[];
+};
 
 export async function closeCoreRoom(
   target: CoreTarget,

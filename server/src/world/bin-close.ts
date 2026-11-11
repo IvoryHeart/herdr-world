@@ -591,11 +591,21 @@ export function createBinCloser(deps: {
         continue;
       watched.delete(binId);
       const reason = entry.evidence?.reason ?? "";
-      const receipt = entry.receipt as { closed_tab?: unknown } | null;
+      const receipt = entry.receipt as {
+        closed_tab?: unknown;
+        also_ended?: unknown;
+      } | null;
       deps.settle(
         binId,
         entry.state === "delivered"
-          ? { result: "closed", closed_tab: receipt?.closed_tab === true }
+          ? {
+              result: "closed",
+              closed_tab: receipt?.closed_tab === true,
+              // A core kill whose cascade ended more than was confirmed.
+              ...(typeof receipt?.also_ended === "string"
+                ? { detail: receipt.also_ended }
+                : {}),
+            }
           : !entry.ever_dispatched &&
               (GONE_REASONS.has(reason) || CORE_GONE_REASONS.has(reason))
             ? { result: "gone", closed_tab: false, detail: reason }

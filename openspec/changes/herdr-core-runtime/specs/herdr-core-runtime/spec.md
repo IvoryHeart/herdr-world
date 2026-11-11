@@ -159,6 +159,8 @@ only while its current observation ends no more than that confirmed set.
 
 - **WHEN** core creates a child between World's last applied event and the kill
 - **THEN** core's cascade may end it; core has no conditional kill (Q11)
+- **AND** World's kill outcome names every unconfirmed terminal that ended or
+  is ending in that cascade, never one that had ended before the kill
 
 ### Requirement: Observe and control with app coexistence
 

@@ -9,8 +9,10 @@
   database; the desktop app's own spaces stay the app's.
 - Put core agents in the bin. Before the bin, a room close or any other kill
   ends a core terminal, World names every sub-agent that core will end with
-  it and ends nothing more. A sub-agent started since, or a program replaced
-  meanwhile, stops the kill and shows the new list.
+  it and ends nothing more it has seen. A sub-agent started since, or a
+  program replaced meanwhile, stops the kill and shows the new list. One
+  started while core carries out the kill can still end with it, since core
+  has no conditional kill; World then names it.
 - `herdr-world task-summary` and `herdr-world stamp` work inside core
   terminals, with no World service needed.
 

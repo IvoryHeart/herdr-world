@@ -5,6 +5,7 @@ import type { ReadyRuntimeLease } from "../connections/manager";
 import { coreKillPlan, coreKillRefusal } from "../herdr-core/kill-plan";
 import { coreOccupantFingerprint } from "../herdr-core/labels";
 import { killCore, CoreOperationRefused } from "../herdr-core/operations";
+import { coreAlsoEndedText } from "../../../shared/coreKill";
 import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import type { OutboxEffect } from "../storage/world-protocol";
 
@@ -250,11 +251,17 @@ export function coreBinCloseDriver(deps: {
           [target.address],
           target.confirmation,
         );
-        if (outcome.killed.includes(target.address))
+        if (outcome.killed.includes(target.address)) {
+          const alsoEnded = coreAlsoEndedText(outcome.alsoEnded);
           return {
             state: "delivered",
-            receipt: { method: "terminal.kill", closed_tab: true },
+            receipt: {
+              method: "terminal.kill",
+              closed_tab: true,
+              ...(alsoEnded ? { also_ended: alsoEnded } : {}),
+            },
           };
+        }
         if (outcome.uncertain.length)
           return {
             state: "uncertain",
