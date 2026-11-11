@@ -1935,8 +1935,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - **herdr-core connections.** **Hosts → Manage connections → Add herdr-core**
-  watches a herdr-core that is already running, on this computer or on a Unix
-  host over SSH (an OpenSSH alias or `user@host`). Set the core session
+  watches a herdr-core that is already running, on this computer, on a Unix
+  host over SSH or on a Windows host over SSH (an OpenSSH alias or
+  `user@host`). Set the core session
   (`default` unless core was started with `HC_SESSION`) and, only if core uses
   a non-default `XDG_STATE_HOME`, its state directory. On every connect World
   reads `<state>/core.lock` and opens exactly that socket (over SSH: a plain
@@ -1944,6 +1945,18 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   `hc server status`, which would start a core: a stopped core stays **Not
   running · retrying** and nothing starts. The core's socket directory must be
   yours and private (mode 0700), otherwise World refuses it.
+  **A Windows host over SSH** needs Windows PowerShell (`powershell.exe`,
+  built into Windows) and SSH key login. World runs two fixed PowerShell
+  scripts there and nothing else: one reads
+  `%LOCALAPPDATA%\herdr-core\<session>\core.lock` (or `XDG_STATE_HOME`, or
+  the state directory you set as `C:\...`) and checks the named pipe it
+  names; the other opens exactly that existing pipe and copies bytes between
+  it and SSH, unchanged (including win32-input-mode keys). Neither runs `hc`
+  or any program, so a stopped core stays **Not running · retrying**. World
+  refuses a pipe owned by, or open to, another account (only you, SYSTEM and
+  Administrators may own or open it), and a core this SSH login cannot open,
+  as when core was started elevated; stop it with `hc server stop` in an
+  elevated terminal there, then start Herdr normally.
   A connected core shows its version, live-terminal count and up to eight
   terminals by address (`t1 agent · working`). If core stops or is killed, the
   card turns **Stale**: the last facts stay, marked stale, and World keeps
@@ -1959,7 +1972,7 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   shown. A screen read keeps the connection generation, core process and
   occupant it started with; if the agent at that address is replaced before
   the reply arrives, the read is refused rather than shown as the new
-  occupant's screen. Windows SSH hosts are not supported for core yet.
+  occupant's screen.
 - **Core agents in Town, Desk, Board and Needs you.** Agents running in a
   connected herdr-core, including ones started in Herdr's desktop app, sit at
   desks in Town, appear as Board cards, in Desk and, when waiting for you, in

@@ -119,7 +119,8 @@ const ATTENTION_ORDER: Record<string, number> = {
 
 /**
  * The agents whose transcripts and screens are read, most urgent first, so a
- * bounded read never hides an agent that is waiting on the operator.
+ * bounded read never hides an agent that is waiting on the operator. View-only
+ * (core) agents have no transcript or screen read, so they take no slot.
  */
 export function pollingTargets(
   leaves: readonly WorldLeafObject[],
@@ -128,6 +129,7 @@ export function pollingTargets(
   if (limit <= 0) return [];
   const tiers = new Map<number, WorldLeafObject[]>();
   for (const leaf of leaves) {
+    if (leaf.viewOnly !== undefined) continue;
     const priority = ATTENTION_ORDER[leaf.status] ?? 4;
     const tier = tiers.get(priority) ?? [];
     tier.push(leaf);

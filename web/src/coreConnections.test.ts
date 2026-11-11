@@ -60,6 +60,16 @@ describe("herdr-core connections in the browser", () => {
       "t1 agent · working",
       "t2 sh · ended",
     ]);
+    const [windows, local] = parseCoreConnections([
+      item({
+        type: "ssh",
+        ssh_destination: "dev@windows.example",
+        remote_platform: "windows",
+      }),
+      item({ remote_platform: "windows" }),
+    ]);
+    expect(windows!.remote_platform).toBe("windows");
+    expect(local!.remote_platform).toBeUndefined();
     expect(parseCoreConnections(undefined)).toEqual([]);
   });
 
@@ -119,6 +129,35 @@ describe("herdr-core connections in the browser", () => {
       ssh_destination: "dev@host.example",
     });
     expect(() => coreProfilePayload({ ...base, where: "ssh" })).toThrow(
+      "SSH destination",
+    );
+    expect(
+      coreProfilePayload({
+        ...base,
+        where: "windows",
+        sshDestination: "dev@windows.example",
+        stateDir: String.raw`C:\Users\dev\state`,
+      }),
+    ).toEqual({
+      id: "wc",
+      label: "Workstation core",
+      type: "ssh",
+      runtime: "herdr-core",
+      ssh_destination: "dev@windows.example",
+      remote_platform: "windows",
+      core_session: "default",
+      core_state_dir: String.raw`C:\Users\dev\state`,
+      auto_connect: true,
+    });
+    expect(() =>
+      coreProfilePayload({
+        ...base,
+        where: "windows",
+        sshDestination: "dev@windows.example",
+        stateDir: "/home/dev/state",
+      }),
+    ).toThrow("Windows path");
+    expect(() => coreProfilePayload({ ...base, where: "windows" })).toThrow(
       "SSH destination",
     );
     expect(() => coreProfilePayload({ ...base, session: "a;b" })).toThrow(
