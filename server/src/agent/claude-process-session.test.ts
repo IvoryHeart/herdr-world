@@ -134,9 +134,13 @@ describe.skipIf(process.platform !== "linux")(
       scratch.push(dir);
       mkdirSync(join(dir, "sessions"));
       // A process name with spaces and ")" must not shift the start-time field.
+      // The kernel names the process after the executed file, so link a
+      // program that ignores its own name: multicall coreutils such as
+      // uutils refuse to run `sleep` under another name. The shell blocks on
+      // its open stdin until the test kills it.
       const odd = join(dir, "a) b c");
-      symlinkSync(Bun.which("sleep")!, odd);
-      const child = Bun.spawn([odd, "30"]);
+      symlinkSync(Bun.which("sh")!, odd);
+      const child = Bun.spawn([odd, "-c", "read line"], { stdin: "pipe" });
       children.push(child);
       const stat = readFileSync(`/proc/${child.pid}/stat`, "utf8");
       const start = stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19]!;
