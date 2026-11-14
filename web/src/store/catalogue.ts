@@ -110,7 +110,10 @@ export function changedCoreHosts(
   previous: State["coreConnections"],
   catalogue: unknown,
 ): State["coreConnections"] {
-  const value = (catalogue as { core_connections?: unknown }).core_connections;
+  const value = (catalogue as { core_connections?: unknown } | null)
+    ?.core_connections;
+  // A reply without the field (an older service) says nothing about core hosts.
+  if (value === undefined) return undefined;
   const next = parseCoreConnections(value).map((connection) => {
     const profile: Partial<typeof connection> = { ...connection };
     delete profile.observation;

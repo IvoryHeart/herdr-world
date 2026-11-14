@@ -62,6 +62,8 @@ async function dispatchBridgeRpc(rpc: BridgeRpcContext): Promise<false | void> {
               ?.terminalBridge.statusTerminals() ?? [],
           default_connection_id: connectionManager.defaultId(),
           connections: connectionProfiles.list(),
+          // The page's catalogue poll: herdr-core hosts ride along, as in connections.list.
+          core_connections: connectionProfiles.coreList(),
         },
       },
       "bridge-status",

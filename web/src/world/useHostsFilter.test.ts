@@ -220,8 +220,19 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       expect(await store.refreshConnections()).toBe(true);
     });
     expect(worldHosts(store.get())).toBe(before);
-    // A removed core profile prunes like a removed Herdr profile.
+    // The page's bridge.status poll from a service that sends no core field says
+    // nothing about core hosts: the host stays listed and selected.
     bridge.call = (async () => ({ connections })) as typeof bridge.call;
+    await act(async () => {
+      expect(await store.refreshConnections()).toBe(true);
+    });
+    expect(filter.ids).toEqual(["core-synthetic", "alpha"]);
+    expect(worldHosts(store.get())).toBe(before);
+    // A removed core profile prunes like a removed Herdr profile.
+    bridge.call = (async () => ({
+      connections,
+      core_connections: [],
+    })) as typeof bridge.call;
     await act(async () => {
       expect(await store.refreshConnections()).toBe(true);
     });
