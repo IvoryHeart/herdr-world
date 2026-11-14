@@ -319,9 +319,11 @@ export type CoreTopologyOptions = {
 
 export function coreTopology(
   terminals: readonly CoreMirrorTerminal[],
-  coreName: string,
+  name: string,
   options: CoreTopologyOptions | Pick<CoreFirstSight, "turn"> = {},
 ): CoreTopology {
+  // The main room is named after its core: never an empty name.
+  const coreName = name.trim() || "herdr-core";
   const {
     firstSight = { turn: () => null },
     world = null,
@@ -342,13 +344,20 @@ export function coreTopology(
   const workspaces = new Map<string, WorkspaceRow>();
   const tabs = new Map<string, RuntimeRow>();
   // World's rooms come first, in its order, even when empty. An app space
-  // World keeps terminals in is named by the app once a terminal says so.
+  // World keeps terminals in, and has not named itself, is named by the
+  // app's caption once a terminal gives one.
   const appNamed = new Set<string>();
   for (const room of world?.rooms ?? []) {
     const id = coreRoomWorkspaceId(room);
     workspaces.set(id, {
       workspace_id: id,
-      label: room.label || (room.id === CORE_MAIN_ROOM ? coreName : "Room"),
+      label:
+        room.label ||
+        (room.app_space
+          ? "Herdr space"
+          : room.id === CORE_MAIN_ROOM
+            ? coreName
+            : "Room"),
       focused: false,
       ...coreCheckoutFields(room.checkout),
     });
@@ -378,6 +387,12 @@ export function coreTopology(
       workspaceLabel = coreName;
       tabLabel = coreName;
     }
+    const caption =
+      place.kind === "app"
+        ? place.where
+        : place.kind === "world" && place.room.app_space && !place.room.label
+          ? (label(record, "where") ?? "")
+          : null;
     const known = workspaces.get(workspaceId);
     if (!known)
       workspaces.set(workspaceId, {
@@ -385,13 +400,11 @@ export function coreTopology(
         label: workspaceLabel,
         focused: false,
       });
-    else if (
-      place.kind === "app" &&
-      workspaceLabel !== "Herdr space" &&
-      !appNamed.has(workspaceId)
-    )
-      known.label = workspaceLabel;
-    if (place.kind === "app") appNamed.add(workspaceId);
+    else if (caption !== null && !appNamed.has(workspaceId)) {
+      const [spaceName] = whereParts(caption);
+      if (spaceName) known.label = spaceName;
+    }
+    if (caption !== null) appNamed.add(workspaceId);
     if (!tabs.has(tabId))
       tabs.set(tabId, {
         tab_id: tabId,

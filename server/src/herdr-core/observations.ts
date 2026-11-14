@@ -27,7 +27,42 @@ export type CoreObservation = {
   counts: { live: number; finished: number; remote: number };
   /** Event types this World does not model yet (protocol drift). */
   unknown_events: string[];
+  /**
+   * Present when core says the host ends its programs once the last login
+   * closes (`keeps_running_after_logout: false`, core 0.1.21+): systemd
+   * lingering is off. `linger_user` is the account for
+   * `loginctl enable-linger`, when core names a usable one. Null means kept,
+   * unknown, not applicable, or an older core: nothing to say.
+   */
+  stops_at_logout: { linger_user: string | null } | null;
 };
+
+/** Longest account name World passes on; longer is treated as unnamed. */
+const LINGER_USER_LIMIT = 256;
+
+/**
+ * Reads core's logout facts from `server.status` (or `hello`). Only an
+ * explicit `false` warns; a name with control or format characters (which
+ * could hide what a pasted command does) is dropped rather than shown.
+ */
+export function logoutStop(
+  status: unknown,
+): CoreObservation["stops_at_logout"] {
+  if (
+    !status ||
+    typeof status !== "object" ||
+    (status as { keeps_running_after_logout?: unknown })
+      .keeps_running_after_logout !== false
+  )
+    return null;
+  const user = (status as { logout_linger_user?: unknown }).logout_linger_user;
+  const usable =
+    typeof user === "string" &&
+    user.length > 0 &&
+    user.length <= LINGER_USER_LIMIT &&
+    !/[\p{Cc}\p{Cf}]/u.test(user);
+  return { linger_user: usable ? user : null };
+}
 
 function word(value: unknown): string | null {
   return value &&
@@ -41,6 +76,7 @@ export function summarizeMirror(
   mirror: CoreMirror,
   core: CoreObservation["core"],
   observedMs: number,
+  stopsAtLogout: CoreObservation["stops_at_logout"] = null,
 ): CoreObservation {
   const terminals = mirror
     .terminals()
@@ -77,6 +113,7 @@ export function summarizeMirror(
     }),
     counts,
     unknown_events: [...mirror.unknownEvents.keys()].sort(),
+    stops_at_logout: stopsAtLogout,
   };
 }
 

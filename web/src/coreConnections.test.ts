@@ -3,6 +3,7 @@ import {
   coreConnectionStatus,
   coreProfilePayload,
   coreTerminalLabel,
+  lingerCommand,
   parseCoreConnections,
 } from "./coreConnections";
 
@@ -97,6 +98,46 @@ describe("herdr-core connections in the browser", () => {
     expect(coreConnectionStatus(absent!)).toBe("Not running · retrying");
     const [off] = parseCoreConnections([item({ state: "disconnected" })]);
     expect(coreConnectionStatus(off!)).toBe("Disconnected");
+  });
+
+  test("a host that stops programs at logout says so, with the one fix", () => {
+    const stops = (value: unknown) =>
+      parseCoreConnections([
+        item({
+          observation: { ...item().observation, stops_at_logout: value },
+        }),
+      ])[0]!;
+    const warned = stops({ linger_user: "example" });
+    expect(warned.observation?.stops_at_logout).toEqual({
+      linger_user: "example",
+    });
+    expect(coreConnectionStatus(warned)).toBe(
+      "Connected · herdr-core 0.1.20 · 1 live terminal · stops at logout",
+    );
+    expect(stops({ linger_user: "" }).observation?.stops_at_logout).toEqual({
+      linger_user: null,
+    });
+    // Kept running, unknown or an older World: nothing to show.
+    for (const value of [null, undefined, true, "yes"]) {
+      const quiet = stops(value);
+      expect(quiet.observation?.stops_at_logout).toBeNull();
+      expect(coreConnectionStatus(quiet)).toBe(
+        "Connected · herdr-core 0.1.20 · 1 live terminal",
+      );
+    }
+  });
+
+  test("the fix command quotes the account the way core does", () => {
+    expect(lingerCommand("example.user-1_x")).toBe(
+      "sudo loginctl enable-linger -- example.user-1_x",
+    );
+    expect(lingerCommand(null)).toBe("sudo loginctl enable-linger -- <user>");
+    expect(lingerCommand("o'brien; rm -rf ~")).toBe(
+      "sudo loginctl enable-linger -- 'o'\\''brien; rm -rf ~'",
+    );
+    expect(lingerCommand("DOMAIN\\user")).toBe(
+      "sudo loginctl enable-linger -- 'DOMAIN\\user'",
+    );
   });
 
   test("the add form builds a herdr-core profile and refuses bad input", () => {

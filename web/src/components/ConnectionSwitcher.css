@@ -379,6 +379,26 @@
   line-height: 1.4;
 }
 
+.connection-core-logout {
+  display: grid;
+  gap: 4px;
+  color: var(--warning-text);
+  font-size: 12px;
+}
+
+.connection-core-logout svg {
+  vertical-align: -2px;
+}
+
+.connection-core-logout code {
+  justify-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--text-code);
+  font-size: 11px;
+  user-select: all;
+}
+
 .connection-profile-error svg {
   flex: 0 0 auto;
   margin-top: 2px;

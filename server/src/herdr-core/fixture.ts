@@ -197,6 +197,8 @@ export type CoreFixtureStatus = {
   terminals: number;
   /** The reviewer's desktop pane: its size, or null when it is closed. */
   pane: { cols: number; rows: number } | null;
+  /** Whether the fixture core reports that its programs stop at logout. */
+  stops_at_logout: boolean;
 };
 
 /**
@@ -247,6 +249,7 @@ export function createCoreFixture(
         ? FIXTURE_TERMINALS + (scenario === "alphabet" ? 1 : 0)
         : 0,
       pane: fake && size ? { cols: size[0], rows: size[1] } : null,
+      stops_at_logout: fake?.logout?.keeps_running_after_logout === false,
     };
   };
   const runningScout = () => {
@@ -434,6 +437,20 @@ export function createCoreFixture(
     replaceReviewer(): CoreFixtureStatus {
       if (!fake?.isRunning) throw new Error("Start fixture core first.");
       fake.replaceWithShell(agents!.reviewer);
+      return status();
+    },
+    /**
+     * What core 0.1.21 reports from a Linux host whose systemd lingering is
+     * off (programs stop when the account's last login ends), and back to
+     * kept running. World reads it on its next liveness check (within 10 s).
+     */
+    logout(): CoreFixtureStatus {
+      if (!fake?.isRunning) throw new Error("Start fixture core first.");
+      fake.logout = {
+        keeps_running_after_logout:
+          fake.logout?.keeps_running_after_logout === false,
+        logout_linger_user: "example-user",
+      };
       return status();
     },
     loseReply(): CoreFixtureStatus {

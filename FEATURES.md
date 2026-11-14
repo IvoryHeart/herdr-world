@@ -256,7 +256,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
-    **New room** (disabled with the reason when no room can be created). Arrow
+    **New room** (disabled with the reason when no room can be created). With
+    no room open, New room asks for the **Destination host**, herdr-core hosts
+    included (`· herdr-core`); a core room takes a name only, since its agents
+    start in core's own folder, and an empty name becomes "Room". Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -947,7 +950,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
   **Hosts** defaults to All hosts and persists an explicit host set independently
-  of **Manage connections**. Filtering preserves open resources and terminals;
+  of **Manage connections**. It lists every connection of either runtime,
+  Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
+  and is counted, selected and remembered like a Herdr host (profiles of one
+  runtime endpoint count once). Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
 - **Needs you** in the top bar (in the view picker in Zen, including on a phone;
@@ -1976,6 +1982,17 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   Terminal, Files, placement, shared labels and verified caller claims.
   Linked-machine addresses remain observations; direct actions require a local
   ID on the exact connection and generation, with the same occupant checks.
+  **Stops at logout.** When core (0.1.21 or later, Linux with systemd) reports
+  that its programs end when your last login on that host closes (lingering
+  is off), the status line adds **stops at logout** and the card says so,
+  with the one fix to run there once:
+  `sudo loginctl enable-linger -- <user>`, naming the account core reports
+  (shell-quoted as core quotes it; `<user>` when core names none or a name
+  that could hide what the command does). This applies to this computer and
+  to Unix hosts over SSH. World reads it on connect and on each 10-second
+  liveness check, so the warning clears by itself once lingering is on. Core
+  checks in the background: until it knows, and on hosts that keep programs
+  running, nothing is shown.
   If core stops or is killed, the
   card turns **Stale**: the last facts stay, marked stale, and World keeps
   retrying. When core is back (holders keep programs through a core crash),
@@ -2003,6 +2020,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   - **Rooms.** Terminals the desktop app placed share its spaces and tabs,
     named from its `space / tab` caption; sub-agents join their parent's room;
     every other core terminal is in one room named after the core.
+    No room is unnamed: an app space World starts agents in keeps the app's
+    name (else "Herdr space"), a core with no name reads `herdr-core`, and any
+    other unlabelled room reads "Room".
     Linked-machine terminals (`mac/t7`) and finished terminals are not shown.
   - **Agents and status.** A terminal is an agent when it reports status
     (OSC 7501) or runs a harness Herdr or its desktop app knows (Claude Code,
@@ -2255,13 +2275,15 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     composer message stays while the core connection does: Back, reopening
     the terminal or a watch that ends keep it; a new core connection
     generation (core restarted or reconnected) drops it. The view ends where
-    a phone's keyboard begins, so the composer stays above it. **Exception:** if no Herdr app or typing viewer has the terminal
-    open, core moves it to its headless size when World starts watching (its
-    rule for every observer); World says "herdr-core moved it from C×R to its
-    headless size" while that grid lasts; once an app's pane opens and sets
-    its own size, the line names that size and drops the move. The window's
-    close or a phone's Back closes it; Escape is the program's key. The
-    watch ends, with the
+    a phone's keyboard begins, so the composer stays above it. Watching never
+    sizes a terminal: on core 0.1.21 and later a terminal no Herdr app or
+    typing viewer has open keeps its size while World watches it, attaching
+    and leaving. **Exception on older cores:** there core moves such a
+    terminal to its headless size when World starts watching; World says
+    "herdr-core moved it from C×R to its headless size" while that grid lasts;
+    once an app's pane opens and sets its own size, the line names that size
+    and drops the move. The window's close or a phone's Back closes it;
+    Escape is the program's key. The watch ends, with the
     reason and **Watch again**, when the program exits, another program takes
     the address, or the core connection is lost; when core is back the open
     view watches again by itself. A hidden page holds no watch and resumes
@@ -2307,7 +2329,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   more buttons stand in for a person using Herdr's apps on *scout*: **Scout:
   finish another turn** (working, then done about three seconds later),
   **Another app: mark scout unread** (`herdr.seen` = turn − 1; refused until
-  scout has finished a turn) and **Another app: pin or unpin scout**. The
+  scout has finished a turn) and **Another app: pin or unpin scout**.
+  **Toggle stops at logout** makes the stand-in core report that its programs
+  stop at logout (and, pressed again, that they keep running); the card shows
+  or clears the warning and its `loginctl` command within 10 seconds. The
   stand-in runs inside the World service and starts no program: agents you
   start there appear as terminals but run nothing. The fixture
   only touches its own connection: if a connection you made already uses the

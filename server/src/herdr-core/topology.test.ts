@@ -386,6 +386,54 @@ describe("a core always has a room to start in", () => {
   });
 });
 
+describe("no core room is ever unnamed", () => {
+  test("an app space World recorded keeps the app's name, not a generic one", () => {
+    const world = {
+      core_id: "core-1",
+      revision: 1,
+      rooms: [
+        {
+          id: "r1",
+          label: "",
+          app_space: "s1",
+          tabs: [{ id: "b1", label: "Builder", terminals: ["t1"] }],
+        },
+        { id: "r2", label: "", app_space: "s2", tabs: [] },
+      ],
+    };
+    const rows = coreTopology(
+      [
+        record({
+          address: "t1",
+          labels: {
+            "herdr.space": "world-r1",
+            "herdr.tab": "world-b1",
+            where: "web / Builder",
+          },
+        }),
+      ],
+      "example-host",
+      { world },
+    );
+    expect(rows.workspaces.map((w) => [w.workspace_id, w.label])).toEqual([
+      ["hc:space:s1", "web"],
+      // Nothing in it says the app's name yet: still a named room.
+      ["hc:space:s2", "Herdr space"],
+    ]);
+  });
+
+  test("a core without a name still names its main room", () => {
+    for (const name of ["", "  "])
+      expect(coreTopology([], name).workspaces).toEqual([
+        {
+          workspace_id: CORE_UNPLACED_WORKSPACE,
+          label: "herdr-core",
+          focused: false,
+        },
+      ]);
+  });
+});
+
 describe("the read model refuses a mirror that is not current", () => {
   test("a retired mirror lists nothing as current; one cut serves all four lists", async () => {
     const mirror = new CoreMirror();

@@ -312,6 +312,31 @@ describe("launching in herdr-core (M2, M3)", () => {
     expect(rows.tabs.map((t) => t.label)).toEqual(["example-host", "Builder"]);
   });
 
+  test("a launch into an app space keeps the app's name for the room World records", async () => {
+    const w = await world();
+    const app = w.fake.create({
+      argv: ["/bin/sh"],
+      labels: { "herdr.space": "s1", "herdr.tab": "c1", where: "web / one" },
+    });
+    await w.settle();
+    const outcome = await launchCore(
+      w.lease(),
+      { workspaceId: "hc:space:s1", kind: "codex", label: "Builder", text: "" },
+      { topology: w.topology, resolveExecutable },
+    );
+    expect(outcome).toMatchObject({ status: "started", placed: true });
+    expect(runs(w)[0]!.params).toMatchObject({
+      labels: { where: "web / Builder" },
+    });
+    // The app's own terminal ends: World's room still reads as the app's.
+    w.fake.remove(app);
+    await w.settle();
+    const rows = await w.rows();
+    expect(rows.workspaces).toEqual([
+      { workspace_id: "hc:space:s1", label: "web", focused: false },
+    ]);
+  });
+
   test("a core that offers no writes refuses without sending anything", async () => {
     const w = await world({ observeOnly: true });
     const outcome = await launchCore(
