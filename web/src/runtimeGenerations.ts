@@ -21,6 +21,10 @@ export class RuntimeGenerationCatalogue {
     );
     this.apply();
   }
+  /** A herdr-core connection: it answers only core's methods. */
+  isCore(id: string): boolean {
+    return this.coreGenerations.has(id) && !this.hostGenerations.has(id);
+  }
   private apply() {
     const next = new Map([...this.coreGenerations, ...this.hostGenerations]);
     for (const [id, generation] of next)

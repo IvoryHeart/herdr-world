@@ -1,4 +1,11 @@
 import type { CoreHostRuntime } from "../herdr-core/host-runtime";
+import {
+  answersOnCore,
+  coreHostRefusal,
+  type CoreHostMethod,
+} from "../../../shared/coreHostMethods";
+
+export { answersOnCore };
 
 /**
  * The connection methods a herdr-core connection answers (P4): workspace
@@ -35,17 +42,11 @@ const CORE_HOST_CALLS = {
         refresh: params.refresh === true,
       }),
 } satisfies Record<
-  string,
+  Exclude<CoreHostMethod, "file.reveal">,
   (
     host: CoreHostRuntime,
   ) => (params: Record<string, unknown>) => Promise<unknown>
 >;
-
-export type CoreHostMethod = keyof typeof CORE_HOST_CALLS;
-
-export function isCoreHostMethod(method: string): method is CoreHostMethod {
-  return Object.hasOwn(CORE_HOST_CALLS, method);
-}
 
 /**
  * Answers one connection method on a core host runtime. `file.reveal` needs
@@ -60,14 +61,8 @@ export async function callCoreHost(
 ): Promise<unknown> {
   if (method === "file.reveal")
     return host.files.revealWorkspaceFile(params, remoteAddress ?? "");
-  if (!isCoreHostMethod(method))
-    throw new Error(
-      `${method} is not available on a herdr-core connection; World offers its files, Git and worktrees.`,
-    );
-  return CORE_HOST_CALLS[method](host)(params);
-}
-
-/** Methods `callCoreHost` answers, `file.reveal` included. */
-export function answersOnCore(method: string): boolean {
-  return method === "file.reveal" || isCoreHostMethod(method);
+  if (!answersOnCore(method)) throw new Error(coreHostRefusal(method));
+  return CORE_HOST_CALLS[method as Exclude<CoreHostMethod, "file.reveal">](
+    host,
+  )(params);
 }

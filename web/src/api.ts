@@ -1,4 +1,5 @@
 import { RuntimeGenerationCatalogue } from "./runtimeGenerations";
+import { answersOnCore, coreHostRefusal } from "../../shared/coreHostMethods";
 import { createConnectionBackgroundLanes, type RpcLane } from "./rpcLanes";
 import { isBridgeHello } from "./bridgeHello";
 import type { BridgeControlMsg } from "./bridgeControl";
@@ -357,6 +358,10 @@ export class Bridge {
       if (!this.helloAcceptedForSocket) {
         return Promise.reject(new Error("bridge hello is unavailable"));
       }
+      // A herdr-core connection answers only Files, Git and worktrees; a
+      // Herdr-only call never leaves the page for it.
+      if (this.runtimeCatalogue.isCore(connectionId) && !answersOnCore(method))
+        return Promise.reject(new Error(coreHostRefusal(method)));
       if (
         transportEpoch !== this.transportEpoch ||
         (legacyActiveLease &&

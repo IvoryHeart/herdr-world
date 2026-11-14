@@ -1990,7 +1990,11 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   shown. A screen read keeps the connection generation, core process and
   occupant it started with; if the agent at that address is replaced before
   the reply arrives, the read is refused rather than shown as the new
-  occupant's screen.
+  occupant's screen. A core connection answers only World's own files,
+  Git and worktree requests; the page and the service both refuse a
+  Herdr-only request (quests, Herdr transcripts, pane reads, terminal input)
+  for it with "… is not available on a herdr-core connection", so Town's
+  step lines and quest badges simply skip core agents.
 - **Core agents in Town, Desk, Board and Needs you.** Agents running in a
   connected herdr-core, including ones started in Herdr's desktop app, sit at
   desks in Town, appear as Board cards, in Desk and, when waiting for you, in
@@ -2118,8 +2122,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     has no notifications of its own, so its pushes always follow status.
     When World has more than one connection, Herdr or herdr-core, every push
     names the connection it came from.
-  - **Chat and answers.** Open a core agent from Town, Board or Desk, or
-    **Needs you → Chat**. Type a message and **Send**; a waiting agent has
+  - **Chat and answers.** Open a core agent from Town, Board or Desk, its
+    peek or menu, a phone's ⋯ switch list, or **Needs you → Chat**: it opens
+    in its Inspector window on **Chat**, with **Files** and **Changes** beside
+    it (no Terminal tab: **Watch terminal** in Chat opens the terminal in its
+    own window). The window moves, resizes, docks, minimizes and switches
+    like a Herdr agent's. Type a message and **Send**; a waiting agent has
     **Answer**, its own status message, **Read question screen**, and answer
     keys. Core's send/keys handle every supported harness identically. History
     is unavailable here; the question screen is explicitly terminal text.
@@ -2205,23 +2213,30 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     fixture's directory and are removed with it. Ranger can read this room
     when you allow it in Ranger settings. No real harness or checkout is
     needed; the fixture runs no agents.
-  - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek),
-    Town's terminal button and opening a core agent in Desk or Board show its
-    live terminal at the size core holds: the size of the Herdr app pane (or
+  - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek, the
+    agent's Chat), Town's terminal button and opening a plain core terminal
+    show its live terminal in its own World window at the size core holds: the size of the Herdr app pane (or
     other typing viewer) that has it open, or core's headless size (200×120
     by default) when none does. The line under the name says which. Until you
     type, World only watches: it sends core no keys, size or focus, so
     rotating a phone, opening its keyboard or resizing the window only scales
     the drawing (down to 45%, then the view scrolls) and never changes the
     agent's terminal. When the app resizes or closes its pane, World follows
-    before the next paint.
+    before the next paint. The window moves, resizes, snaps, maximizes,
+    minimizes, restores and switches (phone ⋯) like a Herdr terminal's.
+    Several core terminals may be open, each in its own window; opening one
+    that is open raises it. Minimizing a core terminal ends its watch (and
+    gives back the size if you typed); restoring it watches again.
   - **Type into its terminal.** The first key you type in the view (or send
     from the phone's composer) opens World's keyboard for it: core gives the
     terminal World's fitted size, the line says World has the size, and that
     key and every key typed while the keyboard opens arrive once, in order.
     Terminal replies (cursor reports) never open it, and xterm's own focus
     reports are not sent. Typing in the Herdr app's pane, or clicking it,
-    takes the size back there; the next key in World takes it again. World
+    takes the size back there; the next key in World takes it again. Each
+    key carries the size that fits the window now, so after you resize the
+    window while typing, your next key resizes the terminal; resizing alone
+    sends nothing. World
     leaves, and core returns the size to the app's pane or its headless size,
     3 seconds after focus moves out of the view, after a minute with no key,
     and on Back or closing the view; anything typed before is sent first.
@@ -2244,8 +2259,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     open, core moves it to its headless size when World starts watching (its
     rule for every observer); World says "herdr-core moved it from C×R to its
     headless size" while that grid lasts; once an app's pane opens and sets
-    its own size, the line names that size and drops the move. Back or
-    Escape closes the view. The watch ends, with the
+    its own size, the line names that size and drops the move. The window's
+    close or a phone's Back closes it; Escape is the program's key. The
+    watch ends, with the
     reason and **Watch again**, when the program exits, another program takes
     the address, or the core connection is lost; when core is back the open
     view watches again by itself. A hidden page holds no watch and resumes

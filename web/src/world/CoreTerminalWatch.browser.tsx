@@ -2,12 +2,18 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
 import type { CoreTerminalPush } from "../coreWatch";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
   CoreTerminalWatch,
   type CoreWatchTarget,
   useCoreTerminalWatch,
 } from "./CoreTerminalWatch";
+import {
+  useWorldPanelRegistry,
+  WorldPanel,
+  WorldPanelsContext,
+  WorldPanelWindow,
+} from "./windows/WorldPanel";
 import {
   activateTerminalComposerDraftScope,
   readTerminalComposerDraft,
@@ -16,6 +22,51 @@ import {
 } from "../terminalComposer";
 import "../styles/tokens.css";
 import "../styles/base.css";
+import "./windows/windows.css";
+import "./windows/WorldLayout.css";
+
+/**
+ * World's panel windows as a phone shows them: each open panel fills the
+ * World shell (which the keyboard lifts) under its one bar with Back.
+ */
+function PanelHost({ children }: { children: ReactNode }) {
+  const registry = useWorldPanelRegistry();
+  return (
+    <WorldPanelsContext.Provider value={registry}>
+      {children}
+      <style>{`.core-watch-fixture-shell{position:fixed;inset:0;display:flex;flex-direction:column}.core-watch-fixture-window{flex:1;min-height:0}`}</style>
+      {registry.panels.length ? (
+        <div className="world-foundation-shell core-watch-fixture-shell">
+          {registry.panels.map((panel) => (
+            <div
+              key={panel.id}
+              className="core-watch-fixture-window"
+              data-window={panel.id}
+            >
+              <WorldPanelWindow
+                label={panel.label}
+                controls={{
+                  maximized: false,
+                  compact: true,
+                  onMinimize() {},
+                  onMaximize() {},
+                  onClose: panel.onClose,
+                  onSnap() {},
+                  onFit() {},
+                  onFloat() {},
+                  back: { label: "Back to Town" },
+                }}
+                onBody={registry.panelBodyRef(panel.id)}
+              />
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </WorldPanelsContext.Provider>
+  );
+}
+const backButton = (root: ParentNode = document) =>
+  root.querySelector<HTMLButtonElement>(".world-panel-bar .world-window-back");
 
 // The production watch view fed, push by push, with what World's server
 // relays from a recorded real-core watch: a desktop pane at 120x40, then
@@ -119,17 +170,34 @@ async function run() {
   const root = document.createElement("div");
   document.body.append(root);
   let closed = false;
-  flushSync(() =>
-    createRoot(root).render(
-      <CoreTerminalWatch
-        target={{ connectionId: "core-fixture", generation: 1, address: "t1" }}
-        title="reviewer"
-        onClose={() => {
-          closed = true;
-        }}
-      />,
-    ),
-  );
+  function Window() {
+    const [open, setOpen] = useState(true);
+    return (
+      <PanelHost>
+        {open ? (
+          <WorldPanel
+            name="core-terminal-fixture"
+            label="reviewer · Terminal"
+            onClose={() => {
+              closed = true;
+              setOpen(false);
+            }}
+          >
+            <CoreTerminalWatch
+              target={{
+                connectionId: "core-fixture",
+                generation: 1,
+                address: "t1",
+              }}
+              title="reviewer"
+            />
+          </WorldPanel>
+        ) : null}
+      </PanelHost>
+    );
+  }
+  flushSync(() => createRoot(root).render(<Window />));
+  await until(() => stream !== null);
   await frames(2);
   check(stream !== null, "the view asks to watch t1");
   check(
@@ -252,9 +320,19 @@ async function run() {
       ?.textContent?.includes("Lost the herdr-core connection") === true,
     "a lost core says so",
   );
-  // Back closes the view and ends the watch.
-  document.querySelector<HTMLButtonElement>(".core-watch-back")!.click();
+  // The window's Back closes it and ends the watch.
+  const firstStream = stream;
+  backButton()!.click();
+  await frames(2);
   check(closed, "Back closes the watch");
+  check(!document.querySelector(".core-watch"), "Back removes the view");
+  check(
+    calls.some(
+      (c) =>
+        c.method === "world.core.unwatch" && c.params.stream === firstStream,
+    ),
+    "closing the window ends the watch",
+  );
   await reconnects();
 }
 
@@ -311,6 +389,34 @@ async function typing(closed: () => boolean) {
   await until(() => inputs().length === 3);
   check(typedText() === "a\x1b", `Escape is typed: ${typedText()}`);
   check(!closed(), "Escape in the terminal does not close the view");
+  // The window is resized while World types: nothing is sent until the next
+  // key, which carries the grid that now fits; core answers with it.
+  const beforeResize = inputs().length;
+  await viewport(844, 390);
+  check(
+    inputs().length === beforeResize &&
+      calls.every((c) => c.method !== "world.core.leave"),
+    `resizing the window sends nothing by itself: ${JSON.stringify(inputs().slice(beforeResize))}`,
+  );
+  await press("b");
+  await until(() => inputs().length > beforeResize);
+  const resized = inputs()[beforeResize]?.params ?? {};
+  const wideRoom = view.clientWidth - 16;
+  const wideCell =
+    document.querySelector<HTMLElement>(".core-watch-host .xterm-screen")!
+      .offsetWidth / Number(first.cols);
+  check(
+    atob(String(resized.data)) === "b" &&
+      Number(resized.cols) > Number(first.cols) &&
+      Number(resized.cols) * wideCell <= wideRoom + 0.5 &&
+      (Number(resized.cols) + 1) * wideCell > wideRoom,
+    `the next key carries the resized window's grid: ${first.cols}x${first.rows} -> ${resized.cols}x${resized.rows} in ${wideRoom}px`,
+  );
+  deliver({
+    stream: "",
+    grid: { cols: Number(resized.cols), rows: Number(resized.rows) },
+  });
+  await viewport(390, 844);
   // Focus leaves the view: a few seconds later the size goes back.
   xtermInput().blur();
   const left = await until(
@@ -319,8 +425,8 @@ async function typing(closed: () => boolean) {
   );
   check(left, "leaving the view gives the size back");
   check(
-    inputs().length === 3,
-    `focus reports never go: ${JSON.stringify(inputs().slice(3))}`,
+    inputs().length === 4,
+    `focus reports never go: ${JSON.stringify(inputs().slice(4))}`,
   );
   check(badge() === "watching", `the badge says watching again: ${badge()}`);
   // The phone's composer: text, then an image uploaded to the host.
@@ -449,7 +555,7 @@ async function reconnects() {
     const [, setTick] = useState(0);
     rerender = () => setTick((n) => n + 1);
     api = useCoreTerminalWatch([{ nodeById: nodes }]);
-    return <div data-harness>{api.view}</div>;
+    return <PanelHost>{api.view}</PanelHost>;
   }
   // App's catalogue lists only Herdr connections: core drafts live only
   // while their generation is held.
@@ -469,18 +575,28 @@ async function reconnects() {
     watches().length === before + 1 && latest() === 1,
     "the watch opens on the current generation",
   );
+  // Opening it again raises the one window: one watch, one view.
+  flushSync(() => void api!.watch("n1"));
+  await frames(2);
+  check(
+    watches().length === before + 1 &&
+      document.querySelectorAll(".core-watch").length === 1,
+    "a second open raises the same window",
+  );
   // An unsent message survives Back and reopening the same live terminal.
   const composer = () =>
-    root.querySelector<HTMLTextAreaElement>(".core-watch-composer textarea");
+    document.querySelector<HTMLTextAreaElement>(
+      ".core-watch-composer textarea",
+    );
   writeTerminalComposerDraft(draft(1), "unsent message");
   await frames(2);
   check(
     composer()?.value === "unsent message",
     `the composer shows the draft: ${composer()?.value}`,
   );
-  root.querySelector<HTMLButtonElement>(".core-watch-back")!.click();
+  backButton()!.click();
   await frames(2);
-  check(!root.querySelector(".core-watch"), "Back closes the harness view");
+  check(!document.querySelector(".core-watch"), "Back closes the window");
   check(
     readTerminalComposerDraft(draft(1)) === "unsent message",
     "closing the view keeps the live terminal's draft",
@@ -496,7 +612,7 @@ async function reconnects() {
   flushSync(rerender);
   deliver({ stream: "", closed: "core closed the connection" });
   await frames(2);
-  const view = () => root.querySelector(".core-watch");
+  const view = () => document.querySelector(".core-watch");
   check(
     view()
       ?.querySelector(".core-watch-ended")

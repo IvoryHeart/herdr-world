@@ -1,70 +1,27 @@
-/* A watched herdr-core terminal: full window on phones, a large sheet on
-   wide screens. The drawing keeps core's grid and is only scaled. */
+/* A watched herdr-core terminal fills its World window's body. The drawing
+   keeps core's grid and is only scaled. */
 .core-watch {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
   background: var(--bg);
   color: var(--text);
-}
-
-@media (min-width: 900px) {
-  .core-watch {
-    inset: 4vh 4vw;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
-    overflow: hidden;
-  }
 }
 
 .core-watch-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  padding-top: max(8px, env(safe-area-inset-top));
+  padding: 6px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   min-width: 0;
 }
 
-.core-watch-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  flex: none;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.core-watch-back:hover {
-  background: var(--panel-2);
-}
-
-.core-watch-title {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.core-watch-grid {
   flex: 1;
-}
-
-.core-watch-title strong {
-  color: var(--text-strong);
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.core-watch-title small {
+  min-width: 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
@@ -125,19 +82,8 @@
   border-top: 1px solid var(--border);
 }
 
-/* A phone keyboard can shrink only the visual viewport; the fixed view then
-   ends where the keyboard begins, as the World shell's content does, so the
-   composer and Send stay above it. */
-:where(html[data-layout="mobile"]) .core-watch {
-  bottom: var(--keyboard-inset-content, 0px);
-}
-
-@media (min-width: 900px) {
-  :where(html[data-layout="mobile"]) .core-watch {
-    bottom: calc(4vh + var(--keyboard-inset-content, 0px));
-  }
-}
-
+/* A phone keyboard can shrink only the visual viewport: the World shell then
+   ends where the keyboard begins, so the window and its composer do too. */
 :where(html[data-layout="mobile"]) .core-watch-composer {
   margin-bottom: var(--keyboard-inset-composer-gap, 0px);
 }

@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowLeft, Eye, Keyboard } from "lucide-react";
+import { Eye, Keyboard } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
 import "@xterm/xterm/css/xterm.css";
@@ -30,6 +30,7 @@ import {
 } from "../coreTyping";
 import { holdTerminalComposerDraftScope } from "../terminalComposer";
 import { CoreTerminalComposer } from "./CoreTerminalComposer";
+import { WorldPanel, worldPanelWindowId } from "./windows/WorldPanel";
 import "./coreWatch.css";
 
 /** Which herdr-core terminal to watch, as World's snapshot names it. */
@@ -80,17 +81,16 @@ function useBridgeEpoch() {
  * the drawing is only scaled to fit, so rotating a phone or opening its
  * keyboard never changes the terminal by itself. The first real key opens
  * core's keyboard at the size that fits this view; leaving (focus away for
- * a few seconds, a minute without keys, Back) gives the size back. xterm's
- * own replies to the program go only while World holds the keyboard.
+ * a few seconds, a minute without keys, closing or minimizing its window)
+ * gives the size back. xterm's own replies to the program go only while
+ * World holds the keyboard. It lives in a World window, whose bar has Back.
  */
 export function CoreTerminalWatch({
   target,
   title,
-  onClose,
 }: {
   target: CoreWatchTarget;
   title: string;
-  onClose(): void;
 }) {
   const viewRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -298,22 +298,9 @@ export function CoreTerminalWatch({
     return () => observer.disconnect();
   }, [drawn]);
 
-  useEffect(() => {
-    // Escape is a key for the program while you type in it or its composer.
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as Element | null;
-      if (event.key === "Escape" && !target?.closest?.("textarea, input"))
-        onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   return (
     <section
       className="core-watch"
-      role="dialog"
-      aria-modal="true"
       aria-label={`${title}'s terminal`}
       data-core-watch={target.address}
       data-typing={typed ? "" : undefined}
@@ -324,21 +311,9 @@ export function CoreTerminalWatch({
       }}
     >
       <header className="core-watch-head">
-        <button
-          type="button"
-          className="core-watch-back"
-          onClick={onClose}
-          aria-label="Back"
-          title="Back"
-        >
-          <ArrowLeft size={18} aria-hidden="true" />
-        </button>
-        <div className="core-watch-title">
-          <strong>{title}</strong>
-          <small data-core-watch-grid>
-            {watchGridText(grid, moved, typed)}
-          </small>
-        </div>
+        <small className="core-watch-grid" data-core-watch-grid>
+          {watchGridText(grid, moved, typed)}
+        </small>
         {typed ? (
           <span
             className="core-watch-badge"
@@ -453,15 +428,21 @@ export function useCoreDraftScopes(scopes: readonly DraftScope[]) {
 }
 
 /**
- * Which core terminal is open as a watch. While its connection is away the
- * view keeps the last target, so it can say why the watch ended; when the
- * connection returns with a new generation the view watches again. Every
- * live core generation in `worlds` keeps its composer drafts.
+ * The core terminals open as watches, each in its own World window. While a
+ * terminal's connection is away its window keeps the last target, so it can
+ * say why the watch ended; when the connection returns with a new
+ * generation the window watches again. Every live core generation in
+ * `worlds` keeps its composer drafts.
  */
 export function useCoreTerminalWatch(worlds: readonly WatchableWorld[]) {
-  const [open, setOpen] = useState<{ id: string; title: string } | null>(null);
-  const last = useRef<CoreWatchTarget | null>(null);
-  const close = useCallback(() => setOpen(null), []);
+  const [open, setOpen] = useState<
+    readonly { id: string; title: string; raise: number }[]
+  >([]);
+  const last = useRef(new Map<string, CoreWatchTarget>());
+  const close = useCallback((id: string) => {
+    last.current.delete(id);
+    setOpen((current) => current.filter((entry) => entry.id !== id));
+  }, []);
   const find = (id: string) => {
     for (const world of worlds) {
       const node = world.nodeById.get(id);
@@ -469,8 +450,14 @@ export function useCoreTerminalWatch(worlds: readonly WatchableWorld[]) {
     }
     return undefined;
   };
-  const node = open ? find(open.id) : undefined;
-  if (node?.watch) last.current = node.watch;
+  const shown = open.flatMap((entry) => {
+    const node = find(entry.id);
+    if (node?.watch) last.current.set(entry.id, node.watch);
+    const target = last.current.get(entry.id);
+    return target
+      ? [{ ...entry, title: node?.label ?? entry.title, target }]
+      : [];
+  });
   const live = useMemo(
     () =>
       worlds.flatMap((world) =>
@@ -480,25 +467,47 @@ export function useCoreTerminalWatch(worlds: readonly WatchableWorld[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     worlds,
   );
-  // The open view's generation stays held while it says why its stream ended.
-  useCoreDraftScopes(open && last.current ? [...live, last.current] : live);
+  // An open window's generation stays held while it says why its stream ended.
+  useCoreDraftScopes([...live, ...shown.map((entry) => entry.target)]);
   return {
-    /** Opens `id` as a watch when it is a live core terminal. */
+    /** Opens (or raises) `id`'s window when it is a live core terminal. */
     watch(id: string): boolean {
       const candidate = find(id);
       if (!candidate?.watch) return false;
-      last.current = candidate.watch;
-      setOpen({ id, title: candidate.label });
+      last.current.set(id, candidate.watch);
+      setOpen((current) => {
+        const known = current.find((entry) => entry.id === id);
+        return known
+          ? current.map((entry) =>
+              entry === known ? { ...entry, raise: entry.raise + 1 } : entry,
+            )
+          : [...current, { id, title: candidate.label, raise: 0 }];
+      });
       return true;
     },
-    view:
-      open && last.current ? (
-        <CoreTerminalWatch
-          key={open.id}
-          target={last.current}
-          title={node?.label ?? open.title}
-          onClose={close}
-        />
-      ) : null,
+    view: shown.map((entry) => (
+      <WorldPanel
+        key={entry.id}
+        name={coreTerminalPanelName(entry.id)}
+        label={`${entry.title} · Terminal`}
+        focusKey={entry.raise}
+        onClose={() => close(entry.id)}
+      >
+        <CoreTerminalWatch target={entry.target} title={entry.title} />
+      </WorldPanel>
+    )),
   };
+}
+
+/** A core terminal's window name (its window ID is `panel:` and this). */
+export function coreTerminalPanelName(nodeId: string) {
+  return `core-terminal-${nodeId}`;
+}
+
+/** The node a core terminal window shows, from its managed window id. */
+export function coreTerminalNodeId(windowId: string): string | null {
+  const prefix = worldPanelWindowId(coreTerminalPanelName(""));
+  return windowId.startsWith(prefix) && windowId.length > prefix.length
+    ? windowId.slice(prefix.length)
+    : null;
 }

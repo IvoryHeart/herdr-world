@@ -587,6 +587,42 @@ describe("simultaneous qualified runtime admission", () => {
     expect(await betaOutcome).toBe("beta");
   });
 
+  test("a herdr-core connection gets only the methods core answers; Herdr-only calls never leave the page", async () => {
+    // Recorded on a core preview: the page sent these to `local-core` and
+    // the service refused each one (agent_quest.list every few seconds).
+    const { bridge, socket } = setup();
+    bridge.setCoreRuntimeGenerations([{ id: "core", generation: 2 }]);
+    const core = bridge.connection("core", 2);
+    for (const method of [
+      "agent_quest.list",
+      "agent_conversation.latest",
+      "agent_conversation.watch",
+      "agent_conversation.unwatch",
+      "agent_conversation.answer",
+      "pane.read",
+      "terminal.input",
+    ]) {
+      const refused = await core.call(method, {}).catch((error) => error);
+      expect(refused).toBeInstanceOf(Error);
+      expect(refused.message).toBe(
+        `${method} is not available on a herdr-core connection; World offers its files, Git and worktrees.`,
+      );
+    }
+    expect(socket.sent).toHaveLength(0);
+    // Files, Git and worktrees still go to core, and Herdr hosts are unchanged.
+    void core.call("file.list", { path: "." }).catch(() => undefined);
+    void core.call("file.reveal", { path: "." }).catch(() => undefined);
+    void bridge
+      .connection("alpha", 7)
+      .call("agent_quest.list", { pane_ids: [] })
+      .catch(() => undefined);
+    expect(socket.sent.map((request) => request.method)).toEqual([
+      "file.list",
+      "file.reveal",
+      "agent_quest.list",
+    ]);
+  });
+
   test("lost input acknowledgement reports uncertainty and never sends another request", async () => {
     const { bridge, socket } = setup();
     const outcome = bridge

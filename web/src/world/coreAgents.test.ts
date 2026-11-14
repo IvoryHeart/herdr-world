@@ -20,6 +20,7 @@ import {
   type WorldLeafObject,
 } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
+import { worldIntentViews, worldNodeOpenView } from "./worldInspectorSelection";
 import { CORE_APP_SPACE_REASON } from "./coreRooms";
 
 /**
@@ -346,6 +347,29 @@ describe("core agents in World's views", () => {
     });
     expect(leaf.capabilities.openTerminal).toBe(false);
     expect(leaf.capabilities.agentHistory).toBe(false);
+  });
+
+  test("a core agent's window opens on core's Chat beside Files and Changes", async () => {
+    const world = await worldOf();
+    const agent = world.leaves.find(
+      (l) => l.connectionId === "box-core" && l.kind === "agent",
+    )!;
+    const plain = world.leaves.find(
+      (l) => l.connectionId === "box-core" && l.kind === "terminal",
+    )!;
+    expect(worldIntentViews(agent)).toEqual(["history", "files", "changes"]);
+    // Either Agents-open setting: an agent opens on Chat, never a Herdr
+    // terminal it does not have.
+    expect(worldNodeOpenView(agent, "chat")).toBe("history");
+    expect(worldNodeOpenView(agent, "terminal")).toBe("history");
+    // A plain core terminal has no Chat.
+    expect(worldIntentViews(plain)).toEqual(["files", "changes"]);
+    // A stale core connection's agent opens nothing.
+    const stale = await worldOf(true);
+    const gone = stale.leaves.find(
+      (l) => l.connectionId === "box-core" && l.kind === "agent",
+    )!;
+    expect(worldIntentViews(gone)).not.toContain("history");
   });
 
   test("the view-only message prefers the program's words, then why it waits", async () => {

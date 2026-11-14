@@ -76,3 +76,11 @@
 .core-history details > p {
   margin: 8px 0;
 }
+
+/* In the Inspector's Chat slot (a flex row), fill it as Herdr's Chat does. */
+.inspector-history-resource > .core-chat {
+  flex: 1 1 auto;
+}
+.core-chat button {
+  align-self: flex-start;
+}
