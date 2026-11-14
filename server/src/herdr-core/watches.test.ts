@@ -197,7 +197,19 @@ describe("World's watches of core terminals", () => {
     expect(fresh.pushes[0]).toMatchObject({ grid: { cols: 100, rows: 30 } });
   });
 
-  test("the observer-alone exception is reported, not hidden", async () => {
+  test("on core 0.1.21 an observer alone moves nothing, so nothing is reported", async () => {
+    const w = await served({ version: "0.1.21", observerKeepsSize: true });
+    const t = w.fake.create({ name: "quiet", cols: 100, rows: 30 });
+    await w.seen(t);
+    await until(() => w.manager.readyRuntimeLease("core") !== null);
+    const opened = await w.watches.open(w.page(), w.target(t));
+    expect(opened).toMatchObject({
+      grid: { cols: 100, rows: 30 },
+      moved_from: null,
+    });
+  });
+
+  test("an older core's observer-alone exception is reported, not hidden", async () => {
     const w = await served();
     const t = w.fake.create({ name: "quiet", cols: 100, rows: 30 });
     await w.seen(t);

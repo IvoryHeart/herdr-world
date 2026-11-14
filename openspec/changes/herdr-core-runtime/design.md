@@ -137,8 +137,10 @@ Request `resize_notifications:true`, require confirmation, and apply each
 core-to-viewer RESIZE before following DATA and the first paint. Browser fitting
 cannot replace the authoritative PTY grid. A transport lacking confirmation needs
 a tested size-event fallback or refuses attachment. Observers send no human DATA,
-RESIZE or FOCUS. An observer attaching alone may trigger core's headless grid
-(default 200×120); document this exception.
+RESIZE or FOCUS. Core 0.1.21 and later never size a terminal for an observer
+(upstream #199, which answers Q4), so an observer alone leaves it at its size.
+On older cores an observer attaching alone may trigger core's headless grid
+(default 200×120); World still reports that exception.
 
 Open an interactive stream on the first genuine key in a focused terminal; queue
 that key and send it exactly once after confirmed attach. FOCUS accompanies real
@@ -149,7 +151,7 @@ an interactive viewer no RESIZE) and the interactive output is drained uncredite
 Keep interactive while visible and focused; leave 3 s after focus leaves the view,
 after 60 s with no key, and on Back, close or hide. A leave waits behind the keys
 typed before it. Core may return to headless size when no other interactive
-viewer remains. A key typed in or a click on the app's pane retakes its size by
+viewer remains; from 0.1.21 an observer leaving never re-applies a size. A key typed in or a click on the app's pane retakes its size by
 core's own rule. Every batch is re-fenced (lease, generation, occupant) before it
 is written; a key not sent is reported and drops the keys queued behind it, never
 replayed. Windows encoding obeys win32-input-mode.

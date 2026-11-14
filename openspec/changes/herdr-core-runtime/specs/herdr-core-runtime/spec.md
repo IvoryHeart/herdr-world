@@ -40,6 +40,15 @@ and service/runtime/occupant fences at admission, dispatch and publication.
 - **THEN** observation is unavailable and nothing starts until a separate
   confirmed start action
 
+#### Scenario: Host stops programs at logout
+
+- **WHEN** core reports `keeps_running_after_logout: false` for a local or Unix
+  SSH host, at connect or on a later liveness check
+- **THEN** Manage connections and the connection's status say that programs
+  there stop when the last login ends and give the one fix,
+  `sudo loginctl enable-linger -- <logout_linger_user>`; true, null or absent
+  shows nothing, and an unsafe account name is replaced by `<user>`
+
 #### Scenario: Same core through another profile
 
 - **WHEN** profile A's delayed operation outlives its lease and profile B reaches
@@ -234,8 +243,9 @@ popups and verify Windows named-pipe/key behavior on a real owner test host.
 #### Scenario: Observer alone
 
 - **WHEN** a phone observes a terminal with no interactive viewer
-- **THEN** it renders the core's headless grid, including the documented attach
-  resize exception
+- **THEN** it renders the grid core reports: core 0.1.21 and later keep the
+  terminal's size (an observer never sizes it, upstream #199); an older core may
+  move it to headless on attach, and World reports that move, never hides it
 
 #### Scenario: First key and desktop reclaim
 

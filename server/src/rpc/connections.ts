@@ -61,17 +61,19 @@ async function dispatchConnectionsRpc(
               ? fixture.replaceReviewer()
               : action === "lose-reply"
                 ? fixture.loseReply()
-                : action === "kill"
-                  ? fixture.kill()
-                  : action === "remove"
-                    ? await fixture.remove()
-                    : action === "pane"
-                      ? fixture.pane()
-                      : action === "turn"
-                        ? fixture.turn()
-                        : action === "unread" || action === "pin"
-                          ? fixture.otherApp(action)
-                          : fixture.status();
+                : action === "logout"
+                  ? fixture.logout()
+                  : action === "kill"
+                    ? fixture.kill()
+                    : action === "remove"
+                      ? await fixture.remove()
+                      : action === "pane"
+                        ? fixture.pane()
+                        : action === "turn"
+                          ? fixture.turn()
+                          : action === "unread" || action === "pin"
+                            ? fixture.otherApp(action)
+                            : fixture.status();
       } else {
         throw new Error(`unknown bridge-global method: ${method}`);
       }

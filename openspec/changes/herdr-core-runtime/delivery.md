@@ -71,7 +71,8 @@ without expanding Q52/Q53's bounded model claims.
   jump; frame/header/UTF-8 fragmentation; profile A/B on the same core. Port useful
   spike experiments into maintained Bun fixtures; neither spike model is evidence.
 - P2: confirmed observer resize order on desktop/mobile grids, during credit
-  stalls and reconnect; assert observer-alone headless resizing; replay captures
+  stalls and reconnect; assert observer-alone sizing by release (0.1.21 and later
+  keep the size, older cores' headless move is reported); replay captures
   through actual World/browser consumers; shared seen/unread/favourite races.
 - P3: kept replacement and exit to shell connected/disconnected, reused pid,
   never-reported shell-wrapped agent; queued input after connection close and
@@ -91,7 +92,8 @@ Use a disposable test account and candidate World, never the owner's runtime.
 
 - A, Observe: focus a desktop app pane and record its grid; open the agent in
   World on a phone, rotate and toggle the keyboard. The phone uses the desktop
-  grid without changing it. With no interactive desktop viewer, expect headless.
+  grid without changing it. With no interactive desktop viewer, expect the
+  terminal to keep its size (core 0.1.21 and later).
 - B, Seen: finish a turn while hidden and see Done in the app. View it in a
   foreground World tab and see Idle in the app within two seconds. Mark unread
   in the app and ensure World preserves it; check favourite both ways.
@@ -117,7 +119,11 @@ this worker to post upstream messages.
    foreground/replacement event reaches World, or revoke already typed input.
    World uses core send/keys for every harness with an immediate
    occupant/foreground check and uncertain timeouts; no harness side channel.
-4. Q4, Observer resize: is observer-alone attachment resetting to headless intended?
+4. Q4, Observer resize: answered upstream in core 0.1.21 (#199): an observer
+   never sizes a terminal, attaching or leaving; only typing viewers do. World
+   needs no new ordering rule; the live tests expect the size kept on 0.1.21 and
+   later, and still report an older core's headless move. The recorded 0.1.20
+   replays stay as they are.
 5. Q5, Oversized recovery: can suppressed missed snapshots be explicit, labels
    capped or snapshots paginated?
 6. Q6, Status coverage: how will core expose status for every supported harness,

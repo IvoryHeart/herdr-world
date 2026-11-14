@@ -188,7 +188,15 @@ Watching a terminal adds a third schedule family. The source is core's size
 rule (`viewers.rs`): the most recently active typing viewer sets the grid, an
 observer never does, and with no typing viewer the terminal is headless. Every
 attach re-applies the rule, so an observer attaching alone moves an unviewed
-terminal to headless; that is allowed and reported, never hidden. A confirmed
+terminal to headless; that is allowed and reported, never hidden. Core 0.1.21
+(upstream #199, Q4) removed that move: an observer never sizes a terminal,
+attaching or leaving. The model keeps the older rule and so keeps allowing the
+old behaviour: it is the harder case, an extra grid change World must adopt
+before painting. Under 0.1.21 an observer alone sees the grid core already has,
+like the explored attach to a terminal that is already headless or at the
+pane's size; World adopts whatever grid core reports and predicts none. No new
+ordering rule is needed. The fake core's `observerKeepsSize` option and the
+live tests cover the newer rule; the recorded 0.1.20 replays stay unchanged. A confirmed
 observer receives RESIZE and then a repaint for every grid change; while it has
 no credit core keeps only the newest grid and repaints instead of replaying
 the backlog.

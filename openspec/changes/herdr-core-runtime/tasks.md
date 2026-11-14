@@ -31,6 +31,12 @@ checks. Current spec synchronization and archive remain after acceptance.
     fences, the observer-alone headless exception reported, a recorded 0.1.20
     watch replay, live release checks and the observe model family with three
     production negative controls.
+  - [x] Issue #907: core 0.1.21. Q4 answered upstream (#199): live tests
+    expect an observer alone to keep the size on 0.1.21 and later and still
+    report an older core's move; the fake core models both rules. The logout
+    warning (`keeps_running_after_logout: false`) shows in Manage connections
+    with the `loginctl enable-linger` command, read at connect and on each
+    liveness check, with a fixture switch.
   - [x] Issue #868: shared `herdr.seen` from foreground World peeks (once per
     turn per look, decided-label write, raise-only, best effort), favourite
     as `herdr.pinned`, Web Push from core status events, the shared-seen

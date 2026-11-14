@@ -40,6 +40,7 @@ import {
 import {
   type CoreObservation,
   type CoreObservationStore,
+  logoutStop,
   summarizeMirror,
 } from "./observations";
 import { connectUnixStream, type CoreStreamConnector } from "./stream";
@@ -304,6 +305,9 @@ export function createCoreConnectionRuntime(
   let epoch: CoreEpoch | null = null;
   let version: string | null = null;
   let coreSummary: CoreObservation["core"] = null;
+  // Core checks lingering in the background (null until its first check,
+  // then about every minute), so World re-reads it with every liveness poll.
+  let stopsAtLogout: CoreObservation["stops_at_logout"] = null;
   let ready = false;
   let failed = false;
   let stopped = false;
@@ -324,7 +328,12 @@ export function createCoreConnectionRuntime(
 
   const publish = (force = false) => {
     if (!options.context.isCurrent() && !force) return;
-    const observation = summarizeMirror(mirror, coreSummary, now());
+    const observation = summarizeMirror(
+      mirror,
+      coreSummary,
+      now(),
+      stopsAtLogout,
+    );
     // Time and cursor move on every event; publish only what a person sees.
     const key = JSON.stringify({ ...observation, observed_ms: 0, cursor: 0 });
     if (!force && key === lastPublished) return;
@@ -397,6 +406,10 @@ export function createCoreConnectionRuntime(
   const checkStatus = (status: CoreServerStatus) => {
     if (!epoch || status?.core?.id !== epoch.coreId || status.pid !== epoch.pid)
       throw new CoreUnavailableError("herdr-core was replaced");
+    const logout = logoutStop(status);
+    if (JSON.stringify(logout) === JSON.stringify(stopsAtLogout)) return;
+    stopsAtLogout = logout;
+    if (ready && !failed && !stopped) publish();
   };
 
   async function startTransport() {
@@ -425,6 +438,7 @@ export function createCoreConnectionRuntime(
       startedMs: now() - status.uptime_ms,
     };
     version = opened.hello.version;
+    stopsAtLogout = logoutStop(status);
     coreSummary = {
       id: opened.hello.core.id,
       name: opened.hello.core.name,
