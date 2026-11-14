@@ -256,7 +256,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
-    **New room** (disabled with the reason when no room can be created). Arrow
+    **New room** (disabled with the reason when no room can be created). With
+    no room open, New room asks for the **Destination host**, herdr-core hosts
+    included (`· herdr-core`); a core room takes a name only, since its agents
+    start in core's own folder, and an empty name becomes "Room". Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -947,7 +950,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
   **Hosts** defaults to All hosts and persists an explicit host set independently
-  of **Manage connections**. Filtering preserves open resources and terminals;
+  of **Manage connections**. It lists every connection of either runtime,
+  Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
+  and is counted, selected and remembered like a Herdr host (profiles of one
+  runtime endpoint count once). Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
 - **Needs you** in the top bar (in the view picker in Zen, including on a phone;
@@ -2010,6 +2016,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   - **Rooms.** Terminals the desktop app placed share its spaces and tabs,
     named from its `space / tab` caption; sub-agents join their parent's room;
     every other core terminal is in one room named after the core.
+    No room is unnamed: an app space World starts agents in keeps the app's
+    name (else "Herdr space"), a core with no name reads `herdr-core`, and any
+    other unlabelled room reads "Room".
     Linked-machine terminals (`mac/t7`) and finished terminals are not shown.
   - **Agents and status.** A terminal is an agent when it reports status
     (OSC 7501) or runs a harness Herdr or its desktop app knows (Claude Code,

@@ -126,6 +126,10 @@ export function useTownRoomActions({
     seatCreationState(roomKey).reason;
   const roomCreationState = (roomKey: string | null) => {
     const room = roomForKey(roomKey);
+    // With no room selected the dialog asks for the host, and any live
+    // herdr-core host can take a room there.
+    if (!room && world.hosts.some((host) => host.coreControl && !host.stale))
+      return officeCreationActionState(true, null);
     const destination = room
       ? world.hosts.find(
           (host) =>

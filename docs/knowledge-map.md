@@ -232,6 +232,8 @@ through the public `web/src/store.ts` entry, with
 [qualified commands](../web/src/store/operations.ts),
 [session transitions](../web/src/store/sessions.ts) and
 [React bindings](../web/src/store/react.ts) in its internal slices.
+Every host list and choice (Hosts menu, its filter, New room's destination)
+reads [one catalogue of both runtimes](../web/src/worldHosts.ts).
 The persisted `hostsFilter.ts` affects visibility only;
 `spaceAdmission.ts` shares the navigator's capacity fairly and `WorldSearchResults.tsx`
 pages full-observation matches beyond renderer bounds.

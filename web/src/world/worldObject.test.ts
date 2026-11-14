@@ -207,6 +207,36 @@ test("a host filter queries the World's index and is shared by its presenters", 
   expect(worldObjectForHosts(world, null)).toBe(world);
 });
 
+test("a room without a label is named: Herdr's number, else Room", () => {
+  const base = connection("alpha");
+  const workspace = base.snapshot!.workspaces[0]!;
+  const world = buildWorldObject(
+    [
+      connection("alpha", {
+        snapshot: {
+          ...base.snapshot!,
+          workspaces: [
+            { ...workspace, label: "" },
+            // herdr-core rows carry no number.
+            {
+              ...workspace,
+              workspace_id: "core-room",
+              number: undefined as unknown as number,
+              label: " ",
+            },
+          ],
+        },
+      }),
+    ],
+    "alpha",
+  );
+  expect(
+    world.nodes
+      .filter((node) => node.kind === "space")
+      .map((node) => node.label),
+  ).toEqual(["Space 1", "Room"]);
+});
+
 function connection(
   connectionId: string,
   options: Partial<WorldRuntimeConnection> = {},

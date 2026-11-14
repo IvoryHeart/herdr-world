@@ -76,6 +76,13 @@ type WorldObjectBase = {
   capabilities: WorldActionCapabilities;
 };
 
+/** An unlabelled room's name: Herdr's number, else (herdr-core) "Room". */
+function unnamedSpace(workspace: { number?: number | null }) {
+  return typeof workspace.number === "number"
+    ? `Space ${workspace.number}`
+    : "Room";
+}
+
 /** The one reason every view-only control shows. */
 export const CORE_VIEW_ONLY_REASON = "World can't mark core work reviewed yet";
 
@@ -724,10 +731,7 @@ function* constructHost(
       "space",
       workspace.workspace_id,
     );
-    const spaceLabel = boundedLabel(
-      workspace.label,
-      `Space ${workspace.number ?? ""}`,
-    );
+    const spaceLabel = boundedLabel(workspace.label, unnamedSpace(workspace));
     const roomPanes = panesByWorkspace.get(workspace.workspace_id) ?? [];
     const metadata = new Map<Pane, Record<string, unknown> | null>();
     const paneInputs: string[] = [];
@@ -893,7 +897,7 @@ function* constructHost(
       parentId: id,
       connectionId: connection.connectionId,
       generation: observedGeneration,
-      label: boundedLabel(workspace.label, `Space ${workspace.number ?? ""}`),
+      label: boundedLabel(workspace.label, unnamedSpace(workspace)),
       hostLabel,
       hostState: connectionHostState,
       selectedHost,

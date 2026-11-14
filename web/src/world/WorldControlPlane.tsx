@@ -410,8 +410,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   // The Town Master never greets over the welcome that asks for a first
   // connection, nor over an open window or sheet (TownMasterGreetingHost).
   const greetingHeld =
-    connectionSelection.connections.length === 0 &&
-    inspectorConversations.length === 0;
+    controller.hosts.length === 0 && inspectorConversations.length === 0;
   const greetingWindowsOpen =
     needsYouOpen ||
     visibleFloatingInspectors.length > 0 ||
@@ -499,8 +498,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       {/* The browser tab and app icon count what Needs you lists, in every
           view (Spaces too) and in preview scenes. */}
       <NeedsYouTabBadge world={world} />
-      {connectionSelection.connections.length === 0 &&
-      inspectorConversations.length === 0 ? (
+      {controller.hosts.length === 0 && inspectorConversations.length === 0 ? (
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
         <div
