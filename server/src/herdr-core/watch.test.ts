@@ -104,7 +104,43 @@ describe("watching a core terminal", () => {
     );
   });
 
-  test("an observer alone moves an unviewed terminal to core's headless grid (documented exception)", async () => {
+  test("on core 0.1.21 an observer alone leaves an unviewed terminal at its size, attaching and leaving", async () => {
+    const { fake, client, outbound } = await watching({
+      version: "0.1.21",
+      observerKeepsSize: true,
+    });
+    const t = fake.create({ name: "quiet", cols: 100, rows: 30 });
+    const { seen, sink } = recorder();
+    const watch = await client.watch(t, { cols: 100, rows: 30 }, sink);
+    await settle();
+    expect(watch.terminal).toMatchObject({ cols: 100, rows: 30 });
+    expect(seen[0]).toEqual({ grid: [100, 30] });
+    // A desktop pane still takes the size, and closing it goes headless.
+    fake.desktopAttach(t, 80, 24);
+    await settle();
+    expect(seen.at(-2)).toEqual({ grid: [80, 24] });
+    fake.desktopDetach(t);
+    await settle();
+    expect(seen.at(-2)).toEqual({ grid: [200, 120] });
+    // Leaving changes nothing either.
+    const quiet = fake.create({ name: "quieter", cols: 90, rows: 20 });
+    const second = await client.watch(quiet, { cols: 90, rows: 20 }, sink);
+    second.detach();
+    await settle();
+    expect(fake.terminal(quiet)).toMatchObject({ cols: 90, rows: 20 });
+    watch.detach();
+    // World sent core no size, focus or input on either watch.
+    expect(
+      outbound.every(
+        (f) =>
+          f.channel === 0 ||
+          f.kind === FrameKind.CREDIT ||
+          f.kind === FrameKind.CLOSE,
+      ),
+    ).toBe(true);
+  });
+
+  test("before core 0.1.21 an observer alone moves an unviewed terminal to core's headless grid (documented exception)", async () => {
     const { fake, client } = await watching();
     const t = fake.create({ name: "quiet", cols: 100, rows: 30 });
     const { seen, sink } = recorder();

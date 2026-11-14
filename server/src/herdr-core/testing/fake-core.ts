@@ -85,6 +85,13 @@ export type FakeCoreOptions = {
   denyResizeNotifications?: boolean;
   /** A core (or relay) that cannot tell automatic replies from typing. */
   noAutomaticInput?: boolean;
+  /**
+   * Core 0.1.21's observer rule (upstream #199): attaching or leaving as an
+   * observer never re-applies the size, so an observer alone leaves a
+   * terminal at the size it had. Without it, older cores' rule: every
+   * attach and leave re-applies it, moving an unviewed terminal to headless.
+   */
+  observerKeepsSize?: boolean;
 };
 
 /** What an observe-only core leaves out of `hello`. */
@@ -116,6 +123,15 @@ export class FakeCore {
   /** Runs as a request arrives, before core handles and answers it. */
   onCall: ((method: string, params: Record<string, unknown>) => void) | null =
     null;
+  /**
+   * What core 0.1.21+ reports about the host's logout (`hello` and
+   * `server.status`); null leaves both fields out, as an older core does.
+   * Change it to stand in for an administrator enabling lingering.
+   */
+  logout: {
+    keeps_running_after_logout: boolean | null;
+    logout_linger_user: string | null;
+  } | null = null;
   /** Methods to leave out of `hello`, as an older or trimmed core would. */
   withoutMethods = new Set<string>();
   private listener: { stop(closeActive?: boolean): void } | null = null;
@@ -710,8 +726,9 @@ export class FakeCore {
       activeAt: params.resumed === true ? 0 : ++this.activity,
     });
     this.viewers.set(address, viewers);
-    // Every attach re-applies the size rule: an observer alone goes headless.
-    this.applySize(address);
+    // Before 0.1.21 every attach re-applied the size rule, so an observer
+    // alone moved the terminal to headless; since then only typing viewers do.
+    if (!observe || !this.options.observerKeepsSize) this.applySize(address);
     stream.pending = [];
     stream.bytes = 0;
     stream.resize = notify
@@ -756,7 +773,8 @@ export class FakeCore {
         );
         connection.streams.delete(channel);
         this.write(connection, encodeFrame(channel, FrameKind.CLOSE));
-        this.applySize(address);
+        if (!v.observe || !this.options.observerKeepsSize)
+          this.applySize(address);
         return;
       }
       // Observers never type, resize or take focus: core ignores them.
@@ -959,6 +977,7 @@ export class FakeCore {
         "resize_notifications",
         ...(this.options.noAutomaticInput ? [] : ["automatic_input"]),
       ],
+      ...this.logout,
     };
   }
 
@@ -1021,6 +1040,7 @@ export class FakeCore {
           live,
           finished: this.terminals.size - live,
           installed_by: null,
+          ...this.logout,
         });
       }
       case "events.subscribe": {

@@ -8,6 +8,7 @@ import {
   coreConnectionStatus,
   coreProfilePayload,
   coreTerminalLabel,
+  lingerCommand,
 } from "../coreConnections";
 
 type Feedback = { kind: "success" | "error"; message: string } | null;
@@ -302,6 +303,21 @@ export function CoreConnectionCards({
                 <CircleAlert size={13} /> {connection.error.message}
               </div>
             ) : null}
+            {observed?.stops_at_logout ? (
+              <div className="connection-core-logout" role="note">
+                <span>
+                  <CircleAlert size={13} /> Programs on{" "}
+                  {connection.type === "ssh"
+                    ? connection.ssh_destination
+                    : "this computer"}{" "}
+                  stop when your last login there ends. To keep them running,
+                  run this there once:
+                </span>
+                <code>
+                  {lingerCommand(observed.stops_at_logout.linger_user)}
+                </code>
+              </div>
+            ) : null}
             {observed && observed.unknown_events.length > 0 ? (
               <div className="connection-profile-policy">
                 Newer core events not shown yet:{" "}
@@ -388,7 +404,8 @@ export function CoreFixturePanel({
       | "unread"
       | "pin"
       | "replace"
-      | "lose-reply",
+      | "lose-reply"
+      | "logout",
     success: string,
   ) => void;
 }) {
@@ -439,6 +456,18 @@ export function CoreFixturePanel({
           }
         >
           Lose next input reply
+        </button>
+        <button
+          type="button"
+          disabled={!!pending}
+          onClick={() =>
+            run(
+              "logout",
+              "Fixture core's logout report changed. Its card updates within 10 seconds.",
+            )
+          }
+        >
+          Toggle stops at logout
         </button>
         <button
           type="button"

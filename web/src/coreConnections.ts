@@ -19,6 +19,12 @@ export type CoreObservation = {
   terminals: CoreObservedTerminal[];
   counts: { live: number; finished: number; remote: number };
   unknown_events: string[];
+  /**
+   * Core reports that its programs end when the account's last login
+   * closes (systemd lingering is off), with the account to fix; null when
+   * kept running or unknown.
+   */
+  stops_at_logout: { linger_user: string | null } | null;
 };
 
 /** A herdr-core connection: kept apart from Herdr (TUI) connections. */
@@ -100,6 +106,15 @@ function parseObservation(value: unknown): CoreObservation | null {
     unknown_events: Array.isArray(value.unknown_events)
       ? value.unknown_events.filter((e): e is string => typeof e === "string")
       : [],
+    stops_at_logout: record(value.stops_at_logout)
+      ? {
+          linger_user:
+            typeof value.stops_at_logout.linger_user === "string" &&
+            value.stops_at_logout.linger_user.length > 0
+              ? value.stops_at_logout.linger_user
+              : null,
+        }
+      : null,
   };
 }
 
@@ -156,7 +171,8 @@ export function coreConnectionStatus(
     const version = observed.core?.version
       ? `herdr-core ${observed.core.version}`
       : "herdr-core";
-    return `Connected · ${version} · ${count(observed.counts.live)}`;
+    const logout = observed.stops_at_logout ? " · stops at logout" : "";
+    return `Connected · ${version} · ${count(observed.counts.live)}${logout}`;
   }
   if (observed?.state === "stale" && connection.state !== "disconnected")
     return `Stale · last saw ${count(observed.counts.live)} · retrying`;
@@ -164,6 +180,20 @@ export function coreConnectionStatus(
     return "Not running · retrying";
   if (connection.state === "error") return "Error";
   return "Disconnected";
+}
+
+/**
+ * The one command that keeps a host's programs running after logout, quoted
+ * the way herdr-core's own warning quotes it.
+ */
+export function lingerCommand(user: string | null): string {
+  const name =
+    user === null
+      ? "<user>"
+      : /^[A-Za-z0-9_.-]+$/.test(user)
+        ? user
+        : `'${user.replace(/'/g, "'\\''")}'`;
+  return `sudo loginctl enable-linger -- ${name}`;
 }
 
 export function coreTerminalLabel(terminal: CoreObservedTerminal): string {

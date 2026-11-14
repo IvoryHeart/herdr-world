@@ -1976,6 +1976,17 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   Terminal, Files, placement, shared labels and verified caller claims.
   Linked-machine addresses remain observations; direct actions require a local
   ID on the exact connection and generation, with the same occupant checks.
+  **Stops at logout.** When core (0.1.21 or later, Linux with systemd) reports
+  that its programs end when your last login on that host closes (lingering
+  is off), the status line adds **stops at logout** and the card says so,
+  with the one fix to run there once:
+  `sudo loginctl enable-linger -- <user>`, naming the account core reports
+  (shell-quoted as core quotes it; `<user>` when core names none or a name
+  that could hide what the command does). This applies to this computer and
+  to Unix hosts over SSH. World reads it on connect and on each 10-second
+  liveness check, so the warning clears by itself once lingering is on. Core
+  checks in the background: until it knows, and on hosts that keep programs
+  running, nothing is shown.
   If core stops or is killed, the
   card turns **Stale**: the last facts stay, marked stale, and World keeps
   retrying. When core is back (holders keep programs through a core crash),
@@ -2240,11 +2251,14 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     composer message stays while the core connection does: Back, reopening
     the terminal or a watch that ends keep it; a new core connection
     generation (core restarted or reconnected) drops it. The view ends where
-    a phone's keyboard begins, so the composer stays above it. **Exception:** if no Herdr app or typing viewer has the terminal
-    open, core moves it to its headless size when World starts watching (its
-    rule for every observer); World says "herdr-core moved it from C×R to its
-    headless size" while that grid lasts; once an app's pane opens and sets
-    its own size, the line names that size and drops the move. Back or
+    a phone's keyboard begins, so the composer stays above it. Watching never
+    sizes a terminal: on core 0.1.21 and later a terminal no Herdr app or
+    typing viewer has open keeps its size while World watches it, attaching
+    and leaving. **Exception on older cores:** there core moves such a
+    terminal to its headless size when World starts watching; World says
+    "herdr-core moved it from C×R to its headless size" while that grid lasts;
+    once an app's pane opens and sets its own size, the line names that size
+    and drops the move. Back or
     Escape closes the view. The watch ends, with the
     reason and **Watch again**, when the program exits, another program takes
     the address, or the core connection is lost; when core is back the open
@@ -2291,7 +2305,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   more buttons stand in for a person using Herdr's apps on *scout*: **Scout:
   finish another turn** (working, then done about three seconds later),
   **Another app: mark scout unread** (`herdr.seen` = turn − 1; refused until
-  scout has finished a turn) and **Another app: pin or unpin scout**. The
+  scout has finished a turn) and **Another app: pin or unpin scout**.
+  **Toggle stops at logout** makes the stand-in core report that its programs
+  stop at logout (and, pressed again, that they keep running); the card shows
+  or clears the warning and its `loginctl` command within 10 seconds. The
   stand-in runs inside the World service and starts no program: agents you
   start there appear as terminals but run nothing. The fixture
   only touches its own connection: if a connection you made already uses the

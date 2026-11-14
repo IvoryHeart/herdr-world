@@ -58,6 +58,19 @@ async function until(predicate: () => boolean, ms = 10_000) {
   }
 }
 
+/**
+ * Core 0.1.21 (upstream #199) stopped an observer from sizing a terminal: an
+ * observer alone leaves it at the size it had. Not a pin: every release runs
+ * the same test; this names the rule each one is held to.
+ */
+function keepsObservedSize(version: string): boolean {
+  const [major = 0, minor = 0, patch = 0] = version
+    .split(/[-+]/)[0]!
+    .split(".")
+    .map(Number);
+  return major > 0 || minor > 1 || (minor === 1 && patch >= 21);
+}
+
 function worldFor(stateDir: string, pushed: TaskEvent[] = []) {
   const root = mkdtempSync(join(tmpdir(), "hcw-world-"));
   roots.push(root);
@@ -530,7 +543,7 @@ describe("herdr-core live (real release binary)", () => {
   );
 
   live(
-    "watching follows the desktop pane's grid, never sizes it, and an observer alone goes headless",
+    "watching follows the desktop pane's grid, never sizes it, and reports what an observer alone did",
     async () => {
       const core = new ScratchCore(bin!);
       scratch.push(core);
@@ -650,8 +663,9 @@ describe("herdr-core live (real release binary)", () => {
       );
       expect(await grid("t1")).toEqual([200, 120]);
 
-      // Observer alone: an unviewed terminal made at 100x30 moves to headless
-      // when World attaches (core's documented exception), and World says so.
+      // Observer alone: an unviewed terminal made at 100x30. Core 0.1.21
+      // (upstream #199) leaves it at that size; older cores move it to
+      // headless when an observer attaches. World reports whichever core did.
       const plain = await connectUnixStream(
         resolveLocalCoreEndpoint(core.stateDir),
       );
@@ -669,12 +683,20 @@ describe("herdr-core live (real release binary)", () => {
       expect(await grid(fresh)).toEqual([100, 30]);
       await until(() => lease()?.runtime.core.terminal(fresh)?.cols === 100);
       const alone = await watches.open(page, target(fresh, "b"));
-      expect(alone.moved_from).toEqual({ cols: 100, rows: 30 });
-      expect(alone.grid).toEqual({ cols: 200, rows: 120 });
+      const [cols, rows] = await grid(fresh);
+      expect(alone.grid).toEqual({ cols, rows });
       expect(pushes.find((p) => p.stream === "b")).toEqual({
         stream: "b",
-        grid: { cols: 200, rows: 120 },
+        grid: { cols, rows },
       });
+      if (keepsObservedSize(client.hello.version)) {
+        expect({ cols, rows }).toEqual({ cols: 100, rows: 30 });
+        expect(alone.moved_from).toBeNull();
+      } else {
+        // The exception older cores still have: reported, never hidden.
+        expect({ cols, rows }).toEqual({ cols: 200, rows: 120 });
+        expect(alone.moved_from).toEqual({ cols: 100, rows: 30 });
+      }
 
       // Throughput through the relay: 200,000 lines printed while watched.
       await core.hc(

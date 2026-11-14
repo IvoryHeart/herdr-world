@@ -369,6 +369,25 @@ describe("herdr-core connections", () => {
     expect(w.service.coreList()).toEqual([]);
   });
 
+  test("the preview fixture can report that its programs stop at logout", async () => {
+    const w = world();
+    const fixture = createCoreFixture(() => w.service);
+    expect(await fixture.start()).toMatchObject({ stops_at_logout: false });
+    await until(() => observed(w, "core-fixture")?.state === "live");
+    expect(observed(w, "core-fixture")!.stops_at_logout).toBeNull();
+    expect(fixture.logout()).toMatchObject({ stops_at_logout: true });
+    // The liveness check (10 s) picks it up; a reconnect reads it at once.
+    await w.service.disconnect("core-fixture");
+    await w.service.connect("core-fixture");
+    await until(() => observed(w, "core-fixture")?.stops_at_logout != null);
+    expect(observed(w, "core-fixture")!.stops_at_logout).toEqual({
+      linger_user: "example-user",
+    });
+    expect(fixture.logout()).toMatchObject({ stops_at_logout: false });
+    await fixture.remove();
+    expect(() => fixture.logout()).toThrow("Start fixture core first.");
+  });
+
   test("the preview fixture walks the shared seen and favourite try-out", async () => {
     const w = world();
     const fixture = createCoreFixture(() => w.service, { finishMs: 20 });
