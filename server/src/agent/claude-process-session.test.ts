@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   CLAUDE_PROCESS_RECORD_LIMIT,
+  claudeConfigDirectory,
   claudeProcessRecordCommand,
   claudeProcessSession,
 } from "./claude-process-session";
@@ -190,4 +191,21 @@ test("an SSH host runs the same command through its login shell", async () => {
   await expect(files.findClaudeSessionForProcess!(4242)).rejects.toThrow(
     "permission denied",
   );
+});
+
+test("the transcript directory is the one the host command reads records from", async () => {
+  const cases = [
+    { HOME: "/home/example" },
+    { HOME: "/home/example", CLAUDE_CONFIG_DIR: "" },
+    { HOME: "/home/example", CLAUDE_CONFIG_DIR: "/srv/example/claude" },
+  ];
+  for (const env of cases) {
+    const child = Bun.spawn(
+      ["sh", "-c", 'printf %s "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"'],
+      { env: { PATH: process.env.PATH ?? "/usr/bin:/bin", ...env } },
+    );
+    expect(claudeConfigDirectory(env)).toBe(
+      await new Response(child.stdout).text(),
+    );
+  }
 });

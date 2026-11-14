@@ -1,8 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { localAgentSessionFiles } from "../agent/session-file-access";
+import {
+  createAgentSessionFileAccess,
+  localAgentSessionFiles,
+} from "../agent/session-file-access";
+import { runBinaryProcessWithTimeout } from "../workspace/process";
 import {
   fixtures,
   QUESTION,
@@ -323,3 +327,51 @@ test("pi's launch session ID identifies its conversation", async () => {
   ).toMatchObject({ status: "ok", source: "native" });
   expect(asked).toEqual([LAUNCHED]);
 });
+
+test.skipIf(process.platform !== "linux")(
+  "a local Claude with its own CLAUDE_CONFIG_DIR is read from that directory",
+  async () => {
+    const config = await mkdtemp(join(tmpdir(), "hcw-claude-config-"));
+    cleanups.push(() => rm(config, { recursive: true, force: true }));
+    const saved = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = config;
+    cleanups.push(async () => {
+      if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = saved;
+    });
+    // The live process the record and the core foreground name.
+    const agent = Bun.spawn(["sleep", "30"]);
+    cleanups.push(async () => {
+      agent.kill();
+      await agent.exited;
+    });
+    const stat = await Bun.file(`/proc/${agent.pid}/stat`).text();
+    const procStart = stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19]!;
+    await mkdir(join(config, "sessions"));
+    await writeFile(
+      join(config, "sessions", `${agent.pid}.json`),
+      JSON.stringify({ pid: agent.pid, sessionId: SESSION, procStart }),
+    );
+    // Claude's own layout: <config>/projects/<project>/<session>.jsonl.
+    const project = join(config, "projects", "-srv-example-project");
+    await mkdir(project, { recursive: true });
+    await rename(
+      await fixtures.find((f) => f.agent === "claude")!.write(project),
+      join(project, `${SESSION}.jsonl`),
+    );
+    const { w, t } = await setup("claude");
+    w.fake.foreground(t, { pid: agent.pid, name: "claude", argv: ["claude"] });
+    await w.settle();
+    const files = createAgentSessionFileAccess({
+      shQuote: (text) => `'${text.replaceAll("'", "'\\''")}'`,
+      runBinaryProcessWithTimeout,
+    });
+    const result = await readCoreHistory(w.lease(), t, tokenOf(w, t), {
+      files,
+    });
+    expect(result).toMatchObject({ status: "ok", source: "native" });
+    expect(result.entries.map((e) => e.text)).toEqual(
+      expect.arrayContaining([QUESTION, ANSWER]),
+    );
+  },
+);

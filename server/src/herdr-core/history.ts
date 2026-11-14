@@ -4,6 +4,7 @@ import type {
   CoreHistorySession,
 } from "../../../shared/coreHistory";
 import { normalizeAgentName, SESSION_AGENTS } from "../agent/chat-harnesses";
+import { claudeConfigDirectory } from "../agent/claude-process-session";
 import type { AgentSessionFileAccess } from "../agent/session-file-access";
 import { readSessionProjection } from "../agent/session-projection-cache";
 import {
@@ -195,7 +196,13 @@ export async function readCoreHistory(
         : {}),
     },
     options.files,
-    createAgentSessionResolverContext(),
+    // Local transcripts live under the directory the process record came
+    // from; an SSH host resolves its own.
+    createAgentSessionResolverContext(undefined, {
+      claudeConfigDir: options.files.remote
+        ? undefined
+        : claudeConfigDirectory(),
+    }),
   );
   let result: CoreHistory;
   if (

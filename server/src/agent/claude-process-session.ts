@@ -1,3 +1,6 @@
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+
 /**
  * Claude Code's own record of the session one process runs, for Chat on a
  * runtime that reports no session (herdr-core).
@@ -11,6 +14,20 @@
  * the live process's: a record left by a killed agent whose pid was reused
  * never names the new process's conversation.
  */
+
+/**
+ * This machine's Claude configuration directory as the host command below
+ * resolves it in a child of this service: `$CLAUDE_CONFIG_DIR` when set and
+ * non-empty, else `$HOME/.claude`. A transcript found by the record's ID is
+ * looked up under the same directory.
+ */
+export function claudeConfigDirectory(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return resolve(
+    env.CLAUDE_CONFIG_DIR || join(env.HOME || homedir(), ".claude"),
+  );
+}
 
 /** Claude Code reads no more of a record than this. */
 export const CLAUDE_PROCESS_RECORD_LIMIT = 262_144;

@@ -2052,8 +2052,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     message; before the agent saves one, Chat says it has no saved messages
     yet. Claude's record counts only for the terminal's foreground Claude
     process with the start time the record names, read on the agent's host
-    (local or Unix SSH); a missing, stale or unreadable record falls back to
-    the link. A Pi that started a new session with `/new` still shows its
+    (local or Unix SSH), and its transcript is found under the same Claude
+    directory as the record (`CLAUDE_CONFIG_DIR` in the service's or the SSH
+    login's environment, else `~/.claude`); a missing, stale or unreadable
+    record falls back to the link. A Pi that started a new session with `/new` still shows its
     launch conversation until linked. Codex, Kimi, OMP, Muse, Grok and
     Antigravity keep no per-process record; they use the other paths.
     **Link a conversation
