@@ -60,7 +60,7 @@ import {
   defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
-import type { WorldObject } from "./worldObject";
+import { inspectorAdmits, type WorldObject } from "./worldObject";
 import { worldSwitchTargets } from "./worldSwitchTargets";
 import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
@@ -390,7 +390,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     compactArrangement
       ? worldSwitchTargets(presentedWorld.nodes, currentId, (node) => {
           leave?.();
-          if (node.kind !== "agent" && coreWatch.watch(node.id)) return;
+          if (
+            (node.kind !== "agent" || !inspectorAdmits(node)) &&
+            coreWatch.watch(node.id)
+          )
+            return;
           void applySelection(
             node.id,
             node.kind === "agent" ? "history" : "terminal",
