@@ -60,22 +60,13 @@ import {
   defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
-import type {
-  WorldAgentStatus,
-  WorldLeafObject,
-  WorldObject,
-  WorldObjectNode,
-} from "./worldObject";
+import type { WorldObject } from "./worldObject";
+import { worldSwitchTargets } from "./worldSwitchTargets";
 import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import { coreTerminalNodeId, useCoreTerminalWatch } from "./CoreTerminalWatch";
-
-/** Switch to lists the agents waiting on you, then finished ones, then the rest. */
-function switchToRank(status: WorldAgentStatus) {
-  return status === "blocked" ? 0 : status === "done" ? 1 : 2;
-}
 
 // Memoized: an agent window opening, moving or updating changes none of a
 // view's data, so the view must not re-render with the control plane.
@@ -393,33 +384,18 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
   // A phone switches between agents and terminals from ⋯, as its terminal
-  // does: agents open on Chat, terminals on Terminal (a herdr-core terminal in
-  // its own window). The list is the hosts the filter shows, live ones only,
-  // those that need you first; the menu scrolls rather than cutting.
+  // does: agents open on Chat, terminals on Terminal (a herdr-core terminal
+  // in its own window).
   const switchTargets = (currentId: string, leave?: () => void) =>
     compactArrangement
-      ? presentedWorld.nodes
-          .filter(
-            (node: WorldObjectNode): node is WorldLeafObject =>
-              (node.kind === "agent" || node.kind === "terminal") &&
-              node.actionable &&
-              !node.stale &&
-              node.id !== currentId,
-          )
-          .sort((a, b) => switchToRank(a.status) - switchToRank(b.status))
-          .map((node) => ({
-            id: node.id,
-            label: node.label,
-            detail: `${node.stateLabels[node.status] ?? node.status} · ${node.spaceLabel}`,
-            onSelect: () => {
-              leave?.();
-              if (node.kind !== "agent" && coreWatch.watch(node.id)) return;
-              void applySelection(
-                node.id,
-                node.kind === "agent" ? "history" : "terminal",
-              );
-            },
-          }))
+      ? worldSwitchTargets(presentedWorld.nodes, currentId, (node) => {
+          leave?.();
+          if (node.kind !== "agent" && coreWatch.watch(node.id)) return;
+          void applySelection(
+            node.id,
+            node.kind === "agent" ? "history" : "terminal",
+          );
+        })
       : undefined;
   const stableOpenNodeById = useStableCallback(openNodeById);
   const stableRevealDeskAgent = useStableCallback(revealDeskAgent);
