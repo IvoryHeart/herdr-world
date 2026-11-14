@@ -2042,9 +2042,21 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     `%APPDATA%\npm`) and starts its `.exe`, or its npm `.cmd` through
     `cmd.exe`; core refuses a multi-line first message to a `.cmd`.
   - **Core Chat transcripts.** Chat reuses the TUI readers for Claude, Codex,
-    Kimi, Pi, OMP, Muse, Grok and Antigravity. It reads the session named by
-    native resume arguments or a Codex title, or uses the reader's existing
-    directory discovery (marked as a possible guess). **Link a conversation
+    Kimi, Pi, OMP, Muse, Grok and Antigravity. Without a link it reads, in
+    order: Claude's own record of the session its process runs now (following
+    `/clear` and `/resume`, for Claude started from World, `hc run`, the apps
+    or a shell); the session named by launch or resume arguments or a Codex
+    title; or the reader's existing directory discovery (marked as a possible
+    guess). World starts Claude and Pi with a new `--session-id`, unless the
+    profile's arguments choose a session, so their Chat reads from the first
+    message; before the agent saves one, Chat says it has no saved messages
+    yet. Claude's record counts only for the terminal's foreground Claude
+    process with the start time the record names, read on the agent's host
+    (local or Unix SSH); a missing, stale or unreadable record falls back to
+    the link. A Pi that started a new session with `/new` still shows its
+    launch conversation until linked. Codex, Kimi, OMP, Muse, Grok and
+    Antigravity keep no per-process record; they use the other paths.
+    **Link a conversation
     for reading** accepts a session ID or an absolute transcript path on that
     host and forgets the link when Chat closes. The browser can select any
     absolute path the service account can read through these transcript readers;

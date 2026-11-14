@@ -31,7 +31,7 @@ program may return to a kept shell; its old Chat cannot send to that replacement
 | --- | --- | --- | --- |
 | amp | amp | Yes / native / native | No TUI reader; native input remains available |
 | antigravity-cli | agy | Yes / native / native | Local ID/path/directory |
-| claude | claude | Yes / native / native | ID/path; resume arguments |
+| claude | claude | Yes / native / native | ID/path; own process record; World launch ID or resume arguments |
 | cline | cline | Yes / native / native | No TUI reader; native input remains available |
 | codex | codex | Yes / native / native | ID/path; title or resume arguments |
 | command-code | command-code | Yes / native / native | No TUI reader; native input remains available |
@@ -54,7 +54,7 @@ program may return to a kept shell; its old Chat cannot send to that replacement
 | ollama | ollama | Yes / native / native | No TUI reader; native input remains available |
 | omp | omp | Yes / native / native | ID/path |
 | opencode | opencode | Yes / native / native | No TUI reader; native input remains available |
-| pi | pi | Yes / native / native | ID/path; directory discovery |
+| pi | pi | Yes / native / native | ID/path; World launch ID or session arguments; directory discovery |
 | pig | pig | Yes / native / native | No TUI reader; native input remains available |
 | prime-agent | prime-agent | Yes / native / native | No TUI reader; native input remains available |
 | qodercli | qodercli (Windows aliases also accepted) | Yes / native / native | No TUI reader; native input remains available |
@@ -63,6 +63,13 @@ program may return to a kept shell; its old Chat cannot send to that replacement
 Transcript reading uses the same resolver and format projections as TUI Chat;
 it never derives status or permission to send. A native resume/session argument
 can identify a transcript. Codex can use a title containing its Thread ID.
+World starts Claude and Pi with a new `--session-id` unless the profile's
+arguments already choose a session. Claude, however it was started, records the
+conversation it currently runs per process; World reads that record on the
+agent's host only for the foreground process with the same start time, so a
+reused process ID never names another agent's conversation. Codex, Kimi, OMP,
+Muse, Grok and Antigravity keep no such record and World cannot choose their
+session ID, so they keep the paths below.
 Pi, Muse, Grok and Antigravity retain their directory discovery, visibly described
 as a possible guess. Otherwise use **Link a conversation for reading** and enter
 a session ID or an absolute transcript path on that host. Links last only while
