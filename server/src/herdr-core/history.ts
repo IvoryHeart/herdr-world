@@ -4,6 +4,7 @@ import type {
   CoreHistorySession,
 } from "../../../shared/coreHistory";
 import { normalizeAgentName, SESSION_AGENTS } from "../agent/chat-harnesses";
+import { claudeConfigDirectory } from "../agent/claude-process-session";
 import type { AgentSessionFileAccess } from "../agent/session-file-access";
 import { readSessionProjection } from "../agent/session-projection-cache";
 import {
@@ -14,9 +15,11 @@ import type { ReadyRuntimeLease } from "../connections/manager";
 import { CoreOperationFence } from "./fence";
 import { CORE_RECIPIENT, coreRecipientChange } from "./recipient";
 import type { CoreConnectionRuntime } from "./runtime";
+import { harnessName, harnessOfArgv } from "./harness";
 import { coreHarness } from "./topology";
 
-/** Resume flags verified in Herdr's agent_resume.rs, not guessed filenames. */
+/** Resume flags verified in Herdr's agent_resume.rs, not guessed filenames,
+ * and the caller-chosen IDs World launches with (operations.ts). */
 function argvSession(
   agent: string,
   argv: unknown,
@@ -25,11 +28,13 @@ function argvSession(
   const flags =
     agent === "claude"
       ? ["--resume", "--session-id"]
-      : agent === "pi" || agent === "kimi"
-        ? ["--session"]
-        : agent === "omp"
-          ? ["--resume"]
-          : [];
+      : agent === "pi"
+        ? ["--session", "--session-id"]
+        : agent === "kimi"
+          ? ["--session"]
+          : agent === "omp"
+            ? ["--resume"]
+            : [];
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
     if (typeof arg !== "string") continue;
@@ -44,6 +49,32 @@ function argvSession(
     if (typeof value === "string" && value && !value.startsWith("-"))
       return { kind: isAbsolute(value) ? "path" : "id", value };
   }
+}
+
+/**
+ * The session Claude Code's own record names for the process in the
+ * terminal's foreground, read on the agent's host. Only a foreground that
+ * is Claude itself counts: core's foreground pid is its process group's
+ * leader, so a wrapper leading the group is no evidence. A failed read is
+ * no evidence either.
+ */
+async function processSession(
+  agent: string,
+  foreground: { pid?: unknown; name?: unknown; argv?: unknown } | undefined,
+  files: AgentSessionFileAccess,
+): Promise<CoreHistorySession | undefined> {
+  if (
+    agent !== "claude" ||
+    !files.findClaudeSessionForProcess ||
+    typeof foreground?.pid !== "number" ||
+    (harnessOfArgv(foreground.argv) ?? harnessName(foreground.name)) !==
+      "claude"
+  )
+    return;
+  const id = await files
+    .findClaudeSessionForProcess(foreground.pid)
+    .catch(() => null);
+  return id ? { kind: "id", value: id } : undefined;
 }
 
 export function parseCoreHistorySession(
@@ -66,8 +97,9 @@ export function parseCoreHistorySession(
 }
 
 /** Reuses the TUI transcript readers only. Core owns status and all input.
- * Core has no session-report API: titles/resume argv and the existing
- * read-only discovery can identify history, or the person can link it.
+ * Core has no session-report API: the agent's own per-process record,
+ * titles/launch argv and the existing read-only discovery can identify
+ * history, or the person can link it.
  * Such a link is a reading choice, never input authority. Both native get
  * replies and the original lease/occupant fence surround the host file read. */
 export async function readCoreHistory(
@@ -118,11 +150,17 @@ export async function readCoreHistory(
       `World has no transcript reader for ${agent || "this program"}. Messages and answer keys still use core.`,
     );
   const foreground = record.foreground as
-    | { argv?: unknown; cwd?: unknown }
+    | { pid?: unknown; name?: unknown; argv?: unknown; cwd?: unknown }
     | undefined;
   const linked = parseCoreHistorySession(options.session);
+  // The process's own record follows /clear and /resume; launch arguments
+  // name only the session it started with.
+  const recorded = linked
+    ? undefined
+    : await processSession(agent, foreground, options.files);
   const session =
     linked ??
+    recorded ??
     argvSession(agent, foreground?.argv) ??
     argvSession(agent, record.argv);
   if (
@@ -147,17 +185,38 @@ export async function readCoreHistory(
         ? {
             agent_session: {
               ...session,
-              source: linked ? "world-link" : "core-argv",
+              source: linked
+                ? "world-link"
+                : recorded
+                  ? "core-process"
+                  : "core-argv",
               agent,
             },
           }
         : {}),
     },
     options.files,
-    createAgentSessionResolverContext(),
+    // Local transcripts live under the directory the process record came
+    // from; an SSH host resolves its own.
+    createAgentSessionResolverContext(undefined, {
+      claudeConfigDir: options.files.remote
+        ? undefined
+        : claudeConfigDirectory(),
+    }),
   );
   let result: CoreHistory;
-  if (!resolved.file)
+  if (
+    !resolved.file &&
+    session &&
+    !linked &&
+    resolved.reason === "file_missing"
+  )
+    // Claude and pi write a transcript only once the conversation starts.
+    result = unavailable(
+      "no_messages_yet",
+      "This agent's conversation has no saved messages yet. Refresh after it replies, or link its transcript if it keeps them elsewhere.",
+    );
+  else if (!resolved.file)
     result = unavailable(
       resolved.reason ?? "no_session",
       "No readable conversation was identified. Link its session ID or transcript path on this host, or use Terminal.",

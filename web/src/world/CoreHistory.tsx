@@ -81,7 +81,7 @@ export function CoreHistory({
                 ? "Linked for reading only."
                 : history.source === "discovered"
                   ? "Found by directory; this may be another conversation."
-                  : "Identified by the agent’s title or launch arguments."}
+                  : "Identified by the agent’s own session record, title or launch arguments."}
             </p>
           ) : null}
           {history.entries.length ? (

@@ -1,8 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { localAgentSessionFiles } from "../agent/session-file-access";
+import {
+  createAgentSessionFileAccess,
+  localAgentSessionFiles,
+} from "../agent/session-file-access";
+import { runBinaryProcessWithTimeout } from "../workspace/process";
 import {
   fixtures,
   QUESTION,
@@ -178,3 +182,196 @@ test("core catalog equals the raw TUI, desktop and World inventory union", () =>
     [...new Set(names.filter((name): name is string => name !== null))].sort(),
   );
 });
+
+const SESSION = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+const LAUNCHED = "11111111-2222-4333-8444-555555555555";
+
+/** A host whose Claude records name `records[pid]`, and whose transcripts
+ * exist for the IDs in `transcripts` (the Claude fixture's text). */
+async function claudeHost(
+  records: Record<number, string | Error>,
+  transcripts: string[] = [SESSION],
+) {
+  const root = await mkdtemp(join(tmpdir(), "hcw-history-"));
+  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  const path = await fixtures
+    .find((fixture) => fixture.agent === "claude")!
+    .write(root);
+  const lookups: number[] = [];
+  const files = {
+    ...localAgentSessionFiles,
+    remote: true,
+    findClaudeSessionById: async (id: string) =>
+      transcripts.includes(id) ? localAgentSessionFiles.statFile(path) : null,
+    findClaudeSuccessor: async () => null,
+    findClaudeSessionForProcess: async (pid: number) => {
+      lookups.push(pid);
+      const found = records[pid];
+      if (found instanceof Error) throw found;
+      return found ?? null;
+    },
+  };
+  return { files, lookups };
+}
+const tokenOf = (w: Awaited<ReturnType<typeof setup>>["w"], t: string) =>
+  coreRecipientToken(
+    w.lease().runtime.core.epoch!.coreId,
+    w.lease().runtime.core.terminal(t),
+    w.lease().runtime.core.occupancy(t),
+  )!;
+
+test("Claude's own process record identifies the conversation without a link", async () => {
+  const { w, t, token } = await setup("claude");
+  const { files, lookups } = await claudeHost({ 77: SESSION });
+  const result = await readCoreHistory(w.lease(), t, token, { files });
+  expect(result).toMatchObject({ status: "ok", source: "native" });
+  expect(result.entries.map((e) => e.text)).toEqual(
+    expect.arrayContaining([QUESTION, ANSWER]),
+  );
+  expect(lookups).toEqual([77]);
+});
+
+test("the process record outranks the launch ID after /clear, and a link outranks both", async () => {
+  const { w, t } = await setup("claude");
+  w.fake.foreground(t, {
+    pid: 77,
+    name: "claude",
+    argv: ["claude", "--session-id", LAUNCHED],
+  });
+  await w.settle();
+  const { files, lookups } = await claudeHost({ 77: SESSION });
+  expect(
+    await readCoreHistory(w.lease(), t, tokenOf(w, t), { files }),
+  ).toMatchObject({ status: "ok", source: "native" });
+  // A conversation that has not started yet has no transcript.
+  const fresh = await claudeHost({ 77: LAUNCHED });
+  expect(
+    await readCoreHistory(w.lease(), t, tokenOf(w, t), { files: fresh.files }),
+  ).toMatchObject({
+    status: "unavailable",
+    reason: "no_messages_yet",
+    entries: [],
+  });
+  // Without a record, the launch ID still names the conversation.
+  const unrecorded = await claudeHost({}, [LAUNCHED]);
+  expect(
+    await readCoreHistory(w.lease(), t, tokenOf(w, t), {
+      files: unrecorded.files,
+    }),
+  ).toMatchObject({ status: "ok", source: "native" });
+  // A link is the person's choice and skips the record.
+  lookups.length = 0;
+  expect(
+    await readCoreHistory(w.lease(), t, tokenOf(w, t), {
+      files,
+      session: { kind: "id", value: SESSION },
+    }),
+  ).toMatchObject({ status: "ok", source: "linked" });
+  expect(lookups).toEqual([]);
+});
+
+test("without a matching record Chat asks for a link instead of guessing", async () => {
+  const { w, t, token } = await setup("claude");
+  for (const record of [undefined, new Error("permission denied")]) {
+    const { files } = await claudeHost(record ? { 77: record } : {});
+    expect(await readCoreHistory(w.lease(), t, token, { files })).toMatchObject(
+      { status: "unavailable", reason: "no_session", entries: [] },
+    );
+  }
+});
+
+test("an agent killed and replaced at the same address never shows the old conversation", async () => {
+  const { w, t, token } = await setup("claude");
+  // The host keeps the old record; the new process (same pid) does not match
+  // it, so the lookup finds nothing for it (claude-process-session.test.ts).
+  const { files } = await claudeHost({ 77: SESSION });
+  expect(await readCoreHistory(w.lease(), t, token, { files })).toMatchObject({
+    status: "ok",
+  });
+  w.fake.replaceWithShell(t);
+  w.fake.foreground(t, { pid: 77, name: "claude", argv: ["claude"] });
+  await w.settle();
+  // The Chat opened for the old agent is refused outright.
+  await expect(
+    readCoreHistory(w.lease(), t, token, { files }),
+  ).rejects.toThrow();
+  const replaced = await claudeHost({});
+  const result = await readCoreHistory(w.lease(), t, tokenOf(w, t), {
+    files: replaced.files,
+  });
+  expect(result).toMatchObject({ status: "unavailable", entries: [] });
+});
+
+test("pi's launch session ID identifies its conversation", async () => {
+  const { w, t } = await setup("pi");
+  w.fake.foreground(t, {
+    pid: 77,
+    name: "pi",
+    argv: ["pi", "--session-id", LAUNCHED],
+  });
+  await w.settle();
+  const root = await mkdtemp(join(tmpdir(), "hcw-history-"));
+  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  const path = await fixtures.find((f) => f.agent === "pi")!.write(root);
+  const asked: string[] = [];
+  const files = {
+    ...localAgentSessionFiles,
+    remote: true,
+    findPiSessionById: async (id: string) => {
+      asked.push(id);
+      return localAgentSessionFiles.statFile(path);
+    },
+  };
+  expect(
+    await readCoreHistory(w.lease(), t, tokenOf(w, t), { files }),
+  ).toMatchObject({ status: "ok", source: "native" });
+  expect(asked).toEqual([LAUNCHED]);
+});
+
+test.skipIf(process.platform !== "linux")(
+  "a local Claude with its own CLAUDE_CONFIG_DIR is read from that directory",
+  async () => {
+    const config = await mkdtemp(join(tmpdir(), "hcw-claude-config-"));
+    cleanups.push(() => rm(config, { recursive: true, force: true }));
+    const saved = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = config;
+    cleanups.push(async () => {
+      if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = saved;
+    });
+    // The live process the record and the core foreground name.
+    const agent = Bun.spawn(["sleep", "30"]);
+    cleanups.push(async () => {
+      agent.kill();
+      await agent.exited;
+    });
+    const stat = await Bun.file(`/proc/${agent.pid}/stat`).text();
+    const procStart = stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19]!;
+    await mkdir(join(config, "sessions"));
+    await writeFile(
+      join(config, "sessions", `${agent.pid}.json`),
+      JSON.stringify({ pid: agent.pid, sessionId: SESSION, procStart }),
+    );
+    // Claude's own layout: <config>/projects/<project>/<session>.jsonl.
+    const project = join(config, "projects", "-srv-example-project");
+    await mkdir(project, { recursive: true });
+    await rename(
+      await fixtures.find((f) => f.agent === "claude")!.write(project),
+      join(project, `${SESSION}.jsonl`),
+    );
+    const { w, t } = await setup("claude");
+    w.fake.foreground(t, { pid: agent.pid, name: "claude", argv: ["claude"] });
+    await w.settle();
+    const files = createAgentSessionFileAccess({
+      shQuote: (text) => `'${text.replaceAll("'", "'\\''")}'`,
+      runBinaryProcessWithTimeout,
+    });
+    const result = await readCoreHistory(w.lease(), t, tokenOf(w, t), {
+      files,
+    });
+    expect(result).toMatchObject({ status: "ok", source: "native" });
+    expect(result.entries.map((e) => e.text)).toEqual(
+      expect.arrayContaining([QUESTION, ANSWER]),
+    );
+  },
+);

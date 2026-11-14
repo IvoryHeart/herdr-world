@@ -52,14 +52,22 @@ export type AgentSessionResolverContext = {
   codexDiscovery: ReturnType<typeof createCodexDiscoveryCache>;
   /** When a Claude transcript was last checked for a successor. */
   successorChecked: Map<string, number>;
+  /**
+   * Where this machine's Claude transcripts live. Herdr-core history passes
+   * the configured directory its process lookup read the record from; the
+   * TUI keeps `~/.claude`.
+   */
+  claudeConfigDir?: string;
 };
 
 const DEFAULT_RESOLVER_CONTEXT = createAgentSessionResolverContext();
 
 export function createAgentSessionResolverContext(
   scope?: CodexDiscoveryScope,
+  options: { claudeConfigDir?: string } = {},
 ): AgentSessionResolverContext {
   return {
+    ...options,
     pathCache: new Map(),
     museMetadata: new Map(),
     codexTitles: new Map(),
@@ -350,14 +358,19 @@ async function findClaudeSession(
   id: string,
   context: AgentSessionResolverContext,
 ) {
-  return resolveCachedSessionPath(context, `claude:${id}`, async () => {
-    const root = join(homedir(), ".claude", "projects");
-    const files = await walkFiles(
-      root,
-      (path) => basename(path) === `${id}.jsonl`,
-    );
-    return newestFile(files);
-  });
+  const config = context.claudeConfigDir ?? join(homedir(), ".claude");
+  return resolveCachedSessionPath(
+    context,
+    `claude:${config}:${id}`,
+    async () => {
+      const root = join(config, "projects");
+      const files = await walkFiles(
+        root,
+        (path) => basename(path) === `${id}.jsonl`,
+      );
+      return newestFile(files);
+    },
+  );
 }
 
 async function findKimiSession(

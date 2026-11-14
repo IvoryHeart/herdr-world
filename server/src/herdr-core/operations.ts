@@ -1,5 +1,5 @@
 import { deliverLaunchBrief } from "./launch-brief";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { agentNameFor, AGENT_KIND } from "../../../shared/agentProfile";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import {
@@ -126,6 +126,21 @@ const PROMPT_ARGUMENT: Record<string, (text: string) => string[]> = {
   claude: (text) => [text.startsWith("-") ? ` ${text}` : text],
   codex: (text) => [text.startsWith("-") ? ` ${text}` : text],
 };
+
+/**
+ * Harnesses that start a new conversation under an ID the caller chooses
+ * (Claude Code and pi: `--session-id`, a UUID), so Chat reads it from the
+ * first message without a session report from core. Never added when the
+ * arguments already choose a session: both refuse the combination. Core
+ * never re-runs a kept program (`--keep` replaces it with a shell), so the
+ * ID is never reused.
+ */
+const SESSION_ARGUMENT: Record<string, (id: string) => string[]> = {
+  claude: (id) => ["--session-id", id],
+  pi: (id) => ["--session-id", id],
+};
+const CHOOSES_SESSION =
+  /^(?:-[cr]|--(?:continue|resume|session|session-id|fork|fork-session|no-session|from-pr))(?:=|$)/;
 
 export type CoreLaunchRequest = {
   /** The read-model room (`workspace_id`) to start it in. */
@@ -261,6 +276,8 @@ export async function launchCore(
   };
   const text = request.text.trim();
   const promptArgument = kind ? PROMPT_ARGUMENT[kind] : undefined;
+  const sessionArgument = kind ? SESSION_ARGUMENT[kind] : undefined;
+  const sessionId = randomUUID();
   let executable: string | null = null;
   if (kind) {
     try {
@@ -294,6 +311,10 @@ export async function launchCore(
           ? [
               executable,
               ...args,
+              ...(sessionArgument &&
+              !args.some((arg) => CHOOSES_SESSION.test(arg))
+                ? sessionArgument(sessionId)
+                : []),
               ...(text && promptArgument ? promptArgument(text) : []),
             ]
           : [],

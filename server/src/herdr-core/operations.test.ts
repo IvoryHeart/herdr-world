@@ -33,6 +33,7 @@ async function world(options?: Parameters<typeof coreWorld>[0]) {
 }
 
 const resolveExecutable = async (kind: string) => `/opt/example/bin/${kind}`;
+const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const runs = (w: World) =>
   w.fake.calls.filter((c) => c.method === "terminal.run");
 const confirmAll = (plan: CoreKillPlanView): CoreKillConfirmation => ({
@@ -158,6 +159,8 @@ describe("launching in herdr-core (M2, M3)", () => {
         "/opt/example/bin/claude",
         "--agent",
         "reviewer",
+        "--session-id",
+        expect.stringMatching(UUID),
         "Check the tests",
       ],
       keep: true,
@@ -194,6 +197,56 @@ describe("launching in herdr-core (M2, M3)", () => {
         agent: "claude",
         runtime: "herdr-core",
       }),
+    ]);
+  });
+
+  test("World names the session of a harness that accepts one, unless the arguments pick one", async () => {
+    const w = await world();
+    const room = await createCoreRoom(w.lease(), w.topology, "Work");
+    const launch = (kind: string, args: string[] = []) =>
+      launchCore(
+        w.lease(),
+        {
+          workspaceId: room.workspace_id,
+          kind,
+          label: kind,
+          args: () => args,
+          text: "",
+        },
+        { topology: w.topology, resolveExecutable },
+      );
+    await launch("claude");
+    await launch("pi");
+    await launch("codex");
+    await launch("claude", [
+      "--resume",
+      "11111111-2222-4333-8444-555555555555",
+    ]);
+    await launch("claude", ["-c"]);
+    await launch("pi", ["--session=/srv/example/s.jsonl"]);
+    const argv = runs(w).map((run) => (run.params as { argv: string[] }).argv);
+    expect(argv[0]).toEqual([
+      "/opt/example/bin/claude",
+      "--session-id",
+      expect.stringMatching(UUID),
+    ]);
+    expect(argv[1]).toEqual([
+      "/opt/example/bin/pi",
+      "--session-id",
+      expect.stringMatching(UUID),
+    ]);
+    // A fresh ID per launch: two agents never share a conversation.
+    expect(argv[0]![2]).not.toBe(argv[1]![2]);
+    expect(argv[2]).toEqual(["/opt/example/bin/codex"]);
+    expect(argv[3]).toEqual([
+      "/opt/example/bin/claude",
+      "--resume",
+      "11111111-2222-4333-8444-555555555555",
+    ]);
+    expect(argv[4]).toEqual(["/opt/example/bin/claude", "-c"]);
+    expect(argv[5]).toEqual([
+      "/opt/example/bin/pi",
+      "--session=/srv/example/s.jsonl",
     ]);
   });
 
