@@ -1,4 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { answersOnCore } from "../../../shared/coreHostMethods";
+import { coreAgentChat } from "./CoreChat";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -21,7 +23,10 @@ import {
   type WorldLeafObject,
   type WorldSpaceObject,
 } from "./worldObject";
-import { worldInspectorForNode } from "./worldTerminalPresentation";
+import {
+  type WorldInspectorConversation,
+  worldInspectorForNode,
+} from "./worldTerminalPresentation";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
@@ -105,6 +110,37 @@ async function world() {
   return buildWorldObject(worldRuntimeStore.get().connections);
 }
 
+/** The window as WorldControlPlane wires it: its view changes stick, and a
+ * core agent's Chat is core's own (coreAgentChat). */
+function CoreAgentWindow({
+  agent,
+  initial,
+  target,
+  onOpenTerminal,
+}: {
+  agent: WorldLeafObject;
+  initial: WorldInspectorConversation;
+  target: HTMLElement;
+  onOpenTerminal(id: string): void;
+}) {
+  const [conversation, setConversation] = useState(initial);
+  return (
+    <WorldInspectorConversationView
+      conversation={conversation}
+      target={target}
+      floating={false}
+      terminalActive={false}
+      chat={coreAgentChat(agent, onOpenTerminal)}
+      onChange={(change) =>
+        setConversation((current) => ({ ...current, ...change }))
+      }
+      onClose={() => {}}
+      onResourceFocus={() => {}}
+      onTerminalPortalChange={() => {}}
+    />
+  );
+}
+
 function CaptureSurface({ element }: { element: HTMLElement }) {
   const root = useRef(element);
   useDrawReadiness("desk", root);
@@ -162,7 +198,8 @@ async function run() {
     (leaf) => leaf.kind === "agent" && leaf.agentName === "builder",
   ) as WorldLeafObject | undefined;
   if (!agent) throw new Error("the read model lists the core agent");
-  // The capability rule: Files and Changes, never terminal, chat or history.
+  // The capability rule: Files and Changes, never a Herdr terminal or Herdr
+  // history; Chat is core's own (coreAgentChat).
   check(
     agent.capabilities.files &&
       agent.capabilities.changes &&
@@ -176,8 +213,8 @@ async function run() {
     "a core agent stays view-only yet its window opens",
   );
   check(
-    JSON.stringify(worldIntentViews(agent)) === '["files","changes"]',
-    `its window has Files and Changes: ${JSON.stringify(worldIntentViews(agent))}`,
+    JSON.stringify(worldIntentViews(agent)) === '["history","files","changes"]',
+    `its window has Chat, Files and Changes: ${JSON.stringify(worldIntentViews(agent))}`,
   );
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;inset:0;display:flex";
@@ -195,19 +232,16 @@ async function run() {
   if (!conversation) throw new Error("the core agent's window opens on Files");
   const root = document.createElement("div");
   document.body.append(root);
+  const watched: string[] = [];
   flushSync(() =>
     createRoot(root).render(
       <>
         <CaptureSurface element={host} />
-        <WorldInspectorConversationView
-          conversation={conversation}
+        <CoreAgentWindow
+          agent={agent}
+          initial={conversation}
           target={target}
-          floating={false}
-          terminalActive={false}
-          onChange={() => {}}
-          onClose={() => {}}
-          onResourceFocus={() => {}}
-          onTerminalPortalChange={() => {}}
+          onOpenTerminal={(id) => watched.push(id)}
         />
         <CoreWorktreesHost />
         <CoreKillConfirmHost />
@@ -254,7 +288,44 @@ async function run() {
     () => document.body.textContent?.includes("hello from core") === true,
     "the file preview shows the file",
   );
+  // Its tabs: Chat first, then Files and Changes; no Herdr Terminal tab.
+  const tabs = () =>
+    [
+      ...target.querySelectorAll<HTMLElement>(
+        ".workspace-inspector-tabs [role=tab]",
+      ),
+    ].map((tab) => tab.getAttribute("aria-label") ?? "");
+  check(
+    tabs().join() === "Chat,Files,Changes",
+    `the core agent's window has Chat, Files and Changes: ${tabs().join()}`,
+  );
   if (stage === "files") return;
+  // Chat is core's own input and history, with the terminal a tap away.
+  target.querySelector<HTMLElement>("[role=tab][aria-label=Chat]")!.click();
+  await until(
+    () =>
+      target.querySelector("[aria-label='Chat with builder']") !== null &&
+      target.textContent?.includes("No conversation linked yet") === true,
+    "Chat shows core's input and history",
+  );
+  check(
+    Boolean(target.querySelector("[aria-label='Message to builder']")),
+    "Chat has the message box",
+  );
+  buttonNamed("Watch terminal", target)!.click();
+  check(
+    watched.join() === agent.id,
+    `Watch terminal opens the agent's terminal window: ${watched.join()}`,
+  );
+  if (stage === "chat") return;
+  // Nothing the window did asked core for a Herdr-only method.
+  const herdrOnly = calls.filter(
+    (call) => call.connection_id !== null && !answersOnCore(call.method),
+  );
+  check(
+    herdrOnly.length === 0,
+    `no Herdr-only call reaches the core connection: ${JSON.stringify(herdrOnly.map((call) => call.method))}`,
+  );
   target.style.display = "none";
 
   // Worktrees of the agent's room: list, create, open, remove.

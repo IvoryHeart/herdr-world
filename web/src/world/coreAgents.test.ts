@@ -20,7 +20,9 @@ import {
   type WorldLeafObject,
 } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
+import { worldIntentViews, worldNodeOpenView } from "./worldInspectorSelection";
 import { CORE_APP_SPACE_REASON } from "./coreRooms";
+import { worldSwitchTargets } from "./worldSwitchTargets";
 
 /**
  * Core agents through World's real read path into the objects Town, Desk,
@@ -346,6 +348,67 @@ describe("core agents in World's views", () => {
     });
     expect(leaf.capabilities.openTerminal).toBe(false);
     expect(leaf.capabilities.agentHistory).toBe(false);
+  });
+
+  test("a core agent's window opens on core's Chat beside Files and Changes", async () => {
+    const world = await worldOf();
+    const agent = world.leaves.find(
+      (l) => l.connectionId === "box-core" && l.kind === "agent",
+    )!;
+    const plain = world.leaves.find(
+      (l) => l.connectionId === "box-core" && l.kind === "terminal",
+    )!;
+    expect(worldIntentViews(agent)).toEqual(["history", "files", "changes"]);
+    // Either Agents-open setting: an agent opens on Chat, never a Herdr
+    // terminal it does not have.
+    expect(worldNodeOpenView(agent, "chat")).toBe("history");
+    expect(worldNodeOpenView(agent, "terminal")).toBe("history");
+    // A plain core terminal has no Chat.
+    expect(worldIntentViews(plain)).toEqual(["files", "changes"]);
+    // A stale core connection's agent opens nothing.
+    const stale = await worldOf(true);
+    const gone = stale.leaves.find(
+      (l) => l.connectionId === "box-core" && l.kind === "agent",
+    )!;
+    expect(worldIntentViews(gone)).not.toContain("history");
+  });
+
+  test("a phone's switch list reaches live core agents and terminals", async () => {
+    const world = await worldOf();
+    const core = world.leaves.filter((l) => l.connectionId === "box-core");
+    // Live core leaves are never actionable: their own admission applies.
+    expect(core.every((l) => !l.actionable && !l.stale)).toBe(true);
+    const chosen: string[] = [];
+    // From a Herdr window (the TUI's agent) and from a core agent's own.
+    const tuiAgent = world.leaves.find((l) => l.connectionId === "tui")!;
+    const fromTui = worldSwitchTargets(world.nodes, tuiAgent.id, (node) =>
+      chosen.push(node.agentName ?? node.label),
+    );
+    expect(fromTui.map((t) => t.id).sort()).toEqual(
+      core.map((l) => l.id).sort(),
+    );
+    // Waiting first: the reviewer asks, then finished scout.
+    expect(fromTui[0]!.label).toBe("reviewer · claude");
+    expect(fromTui[0]!.detail).toContain("web");
+    fromTui[0]!.onSelect();
+    expect(chosen).toEqual(["reviewer"]);
+    const reviewer = core.find((l) => l.agentName === "reviewer")!;
+    const fromCore = worldSwitchTargets(world.nodes, reviewer.id, () => {});
+    expect(fromCore.map((t) => t.id)).not.toContain(reviewer.id);
+    expect(fromCore).toHaveLength(core.length - 1);
+    // A stale core connection offers nothing to switch to.
+    const stale = await worldOf(true);
+    const staleCore = new Set(
+      stale.leaves
+        .filter((l) => l.connectionId === "box-core")
+        .map((l) => l.id),
+    );
+    expect(staleCore.size).toBe(core.length);
+    expect(
+      worldSwitchTargets(stale.nodes, "none", () => {}).filter((t) =>
+        staleCore.has(t.id),
+      ),
+    ).toEqual([]);
   });
 
   test("the view-only message prefers the program's words, then why it waits", async () => {

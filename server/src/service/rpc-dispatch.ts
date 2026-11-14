@@ -30,6 +30,7 @@ import type {
   RpcServices,
 } from "../rpc/context";
 import { answersOnCore, callCoreHost } from "../rpc/core-host";
+import { coreHostRefusal } from "../../../shared/coreHostMethods";
 import { handleFilesRpc } from "../rpc/files";
 import { handleGitRpc } from "../rpc/git";
 import { handleLauncherRpc } from "../rpc/launcher";
@@ -570,10 +571,7 @@ async function dispatchCoreHostRpc(
     return refuse("The host's herdr-core is not connected.");
   if (req.connection_generation !== lease.generation)
     return refuse("The host's herdr-core reconnected; look again and retry.");
-  if (!answersOnCore(method))
-    return refuse(
-      `${method} is not available on a herdr-core connection; World offers its files, Git and worktrees.`,
-    );
+  if (!answersOnCore(method)) return refuse(coreHostRefusal(method));
   admission.preconditions = () => services.clients.has(ws) && lease.isCurrent();
   admission.capabilities = () => routeCapabilities("connection");
   const verb = registeredVerb("rpc", method);

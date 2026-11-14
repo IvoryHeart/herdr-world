@@ -86,6 +86,7 @@ test.skipIf(!chrome)(
     /** CDP key presses: real, trusted events into the focused element. */
     const KEYS: Record<string, { code: string; vk: number; text?: string }> = {
       a: { code: "KeyA", vk: 65, text: "a" },
+      b: { code: "KeyB", vk: 66, text: "b" },
       Escape: { code: "Escape", vk: 27 },
     };
     const server = Bun.serve({
@@ -209,6 +210,11 @@ test.skipIf(!chrome)(
             });
             result = Promise.withResolvers<string[]>();
             requested = Promise.withResolvers<void>();
+            // Headless Chrome fetches, but never commits, a navigation away
+            // from a page whose xterm input still has focus under emulation.
+            await connection.command("Runtime.evaluate", {
+              expression: "document.activeElement?.blur()",
+            });
             await connection.command("Page.navigate", {
               url: `${server.url.href}?capture=${scene}`,
             });

@@ -91,6 +91,8 @@ export class TownStepReads {
         if (step) this.steps.set(key, step);
         continue;
       }
+      // A herdr-core agent has no Herdr conversation to read a step from.
+      if (leaf.pane.runtime === "herdr-core") continue;
       const client = (this.options.clientFor ?? leafClient)(leaf);
       if (!client) continue;
       const watch = this.options.watch ?? watchConversation;

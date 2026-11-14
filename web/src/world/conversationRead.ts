@@ -69,7 +69,9 @@ export function useConversationRead(
     setConversation(next);
   };
   useEffect(() => {
-    const client = leaf && leafOwner(leaf);
+    // A herdr-core agent's conversation is core's Chat, not Herdr's reader.
+    const client =
+      leaf && leaf.pane.runtime !== "herdr-core" ? leafOwner(leaf) : null;
     if (!leaf || !client || !active || !identity) return;
     let cancelled = false;
     // Only the newest read may answer; an older one can finish later.

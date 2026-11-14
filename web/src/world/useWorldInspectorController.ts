@@ -89,7 +89,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   } = useWorldObservation({ onPresentedWorldChange });
 
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
-  const [coreChatSelected, setCoreChatSelected] = useState(false);
   const [pendingSurfacePriority, setPendingSurfacePriority] =
     useState<WorldRuntimePriority | null>(null);
   const intentRequestRef = creationIntentRevision;
@@ -238,16 +237,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       : undefined;
     setIntentError(null);
     setVisualConversationAnchors(null);
-    const coreChat =
-      next?.kind === "agent" &&
-      next.pane.runtime === "herdr-core" &&
-      (requestedView === "history" || requestedView === null);
-    setCoreChatSelected(coreChat);
-    if (coreChat) {
-      setSelection(next);
-      setIntentOpening(false);
-      return true;
-    }
     if (!next || next.kind === "host" || !inspectorAdmits(next)) {
       setSelection(next);
       setIntentOpening(false);
@@ -845,10 +834,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     if (signal?.aborted) throw new Error("Terminal activation was superseded");
     const node = candidateWorld.nodeById.get(id);
     if (!node) throw new Error("This terminal is no longer available");
-    if (node.kind === "agent" && node.pane.runtime === "herdr-core") {
-      await applySelection(id, "history", true, candidateWorld, signal);
-      return;
-    }
     const opened = requested ?? defaultOpenView(node) ?? "terminal";
     try {
       const existing = inspectorConversationsRef.current.find(
@@ -1015,7 +1000,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   );
 
   return {
-    coreChatSelected,
     ...props,
     openInBackground,
     focusInspectorPane,

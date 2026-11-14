@@ -17,6 +17,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -154,7 +155,10 @@ function InspectorResources({
   onTerminalPortalChange,
   onBind,
   onSelectPane,
+  chat,
 }: {
+  /** Chat for a runtime World does not read through Herdr (herdr-core). */
+  chat?: ReactNode;
   /**
    * The window is shown but its host's session has not loaded this
    * workspace yet (a window restored on page load, on a host not yet opened):
@@ -759,6 +763,7 @@ function InspectorResources({
                 visible={Boolean(target)}
                 workspace={workspace}
                 historyPane={historyPane}
+                chat={chat}
                 historySessionFingerprint={conversation.agentSessionFingerprint}
                 notice={
                   awaitingChat && awaitSince ? (

@@ -1,4 +1,4 @@
-import { CoreChatWindow } from "./CoreChat";
+import { coreAgentChat } from "./CoreChat";
 import { memo, Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
@@ -60,22 +60,13 @@ import {
   defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
-import type {
-  WorldAgentStatus,
-  WorldLeafObject,
-  WorldObject,
-  WorldObjectNode,
-} from "./worldObject";
+import { inspectorAdmits, type WorldObject } from "./worldObject";
+import { worldSwitchTargets } from "./worldSwitchTargets";
 import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
-import { useCoreTerminalWatch } from "./CoreTerminalWatch";
-
-/** Switch to lists the agents waiting on you, then finished ones, then the rest. */
-function switchToRank(status: WorldAgentStatus) {
-  return status === "blocked" ? 0 : status === "done" ? 1 : 2;
-}
+import { coreTerminalNodeId, useCoreTerminalWatch } from "./CoreTerminalWatch";
 
 // Memoized: an agent window opening, moving or updating changes none of a
 // view's data, so the view must not re-render with the control plane.
@@ -243,7 +234,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     inspectorConversationsRef,
     currentSelectionGeneration,
     selected,
-    coreChatSelected,
     selectedId,
     setWindowLayer,
     windowStage,
@@ -264,7 +254,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     previewTerminalById,
     closeDeskReading,
     openTerminalById: openInspectorTerminalById,
-    openNodeById: openInspectorNodeById,
     closeInspector,
     focusFloatingInspector,
     retireInspectors,
@@ -363,9 +352,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     };
   };
 
-  // A herdr-core terminal opens as a watch you can type into: World adopts
-  // core's grid and takes it only while you type. Chat has its own route.
+  // A herdr-core terminal opens in its own window as a watch you can type
+  // into: World adopts core's grid and takes it only while you type. A core
+  // agent's Chat, Files and Changes open in its Inspector.
   const coreWatch = useCoreTerminalWatch([aggregateWorld, world]);
+  const coreNode = (id: string) =>
+    aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id);
   const openTerminalById = (
     id: string,
     ...rest: Parameters<typeof openInspectorTerminalById> extends [
@@ -374,21 +366,41 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     ]
       ? Rest
       : never
-  ) =>
-    rest[2] !== "history" && coreWatch.watch(id)
+  ) => {
+    const node = coreNode(id);
+    const requested = rest[2] === undefined ? "terminal" : rest[2];
+    // A plain terminal opens on Terminal; an agent on its default view.
+    const opened =
+      requested ??
+      (node?.kind === "agent" ? defaultOpenView(node) : null) ??
+      "terminal";
+    return opened === "terminal" && coreWatch.watch(id)
       ? Promise.resolve()
       : openInspectorTerminalById(id, ...rest);
-  const openNodeById = (id: string, signal?: AbortSignal) => {
-    const node = aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id);
-    return node?.kind === "agent" && node.pane.runtime === "herdr-core"
-      ? openInspectorNodeById(id, signal)
-      : coreWatch.watch(id)
-        ? Promise.resolve()
-        : openInspectorNodeById(id, signal);
   };
+  const openNodeById = (id: string, signal?: AbortSignal) =>
+    openTerminalById(id, signal, world, null);
 
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
+  // A phone switches between agents and terminals from ⋯, as its terminal
+  // does: agents open on Chat, terminals on Terminal (a herdr-core terminal
+  // in its own window).
+  const switchTargets = (currentId: string, leave?: () => void) =>
+    compactArrangement
+      ? worldSwitchTargets(presentedWorld.nodes, currentId, (node) => {
+          leave?.();
+          if (
+            (node.kind !== "agent" || !inspectorAdmits(node)) &&
+            coreWatch.watch(node.id)
+          )
+            return;
+          void applySelection(
+            node.id,
+            node.kind === "agent" ? "history" : "terminal",
+          );
+        })
+      : undefined;
   const stableOpenNodeById = useStableCallback(openNodeById);
   const stableRevealDeskAgent = useStableCallback(revealDeskAgent);
   const stablePreviewTerminalById = useStableCallback(previewTerminalById);
@@ -402,7 +414,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       focus = true,
     ) => {
       // An unfocused open (the docked Town master) stays in the background:
-      // no selection, not raised.
+      // no selection, not raised. A herdr-core terminal opens its own window.
+      if (focus && view === "terminal" && coreWatch.watch(id)) return;
       if (focus) void applySelection(id, view);
       else openInBackground(id, view);
     },
@@ -435,11 +448,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         />
       ) : null}
       <CoreKillConfirmHost />
-      {coreChatSelected &&
-      selected?.kind === "agent" &&
-      selected.pane.runtime === "herdr-core" ? (
-        <CoreChatWindow leaf={selected} onClose={closeIntent} />
-      ) : null}
       <CoreWorktreesHost />
       <WorldBin
         always={view === "town" || view === "board"}
@@ -709,6 +717,13 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         back: {
                           label: `Back to ${view[0]!.toUpperCase()}${view.slice(1)}`,
                         },
+                        // A herdr-core terminal switches as a Herdr one does.
+                        switchTo: coreTerminalNodeId(entry.id)
+                          ? switchTargets(
+                              coreTerminalNodeId(entry.id)!,
+                              panel.onClose,
+                            )
+                          : undefined,
                       }}
                     />
                   </WindowFrame>
@@ -941,35 +956,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               bin: inspectorBin(conversation),
               // The colour is chosen from the swatch beside the name.
               back: view === "town" ? { label: "Back to Town" } : undefined,
-              // A phone switches between agents and terminals from ⋯, as
-              // its terminal does: agents open on Chat, terminals on Terminal.
-              // The list is the hosts the filter shows, live ones only, those
-              // that need you first; the menu scrolls rather than cutting.
-              switchTo: compactArrangement
-                ? presentedWorld.nodes
-                    .filter(
-                      (node: WorldObjectNode): node is WorldLeafObject =>
-                        (node.kind === "agent" || node.kind === "terminal") &&
-                        node.actionable &&
-                        !node.stale &&
-                        node.id !== conversation.nodeId,
-                    )
-                    .sort(
-                      (a, b) => switchToRank(a.status) - switchToRank(b.status),
-                    )
-                    .map((node) => ({
-                      id: node.id,
-                      label: node.label,
-                      detail: `${node.stateLabels[node.status] ?? node.status} · ${node.spaceLabel}`,
-                      onSelect: () =>
-                        void applySelection(
-                          node.id,
-                          node.kind === "agent" ? "history" : "terminal",
-                        ),
-                    }))
-                : undefined,
+              switchTo: switchTargets(conversation.nodeId),
             }}
             terminalColor={inspectorColor(conversation)}
+            chat={coreAgentChat(coreNode(conversation.nodeId), (id) =>
+              coreWatch.watch(id),
+            )}
             townSkin={view === "town"}
             onBind={() =>
               void store

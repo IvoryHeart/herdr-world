@@ -203,6 +203,12 @@ async function coreSide(root: string) {
               ? null
               : parseCoreKillConfirmation(p.confirmation),
         });
+      case "world.core.history":
+        return {
+          status: "unavailable",
+          detail: "No conversation linked yet.",
+          entries: [],
+        };
       case "world.core.kill_plan":
         return planCoreKill(lease, await coreRoomTerminals(lease, workspaceId));
       default:
@@ -295,6 +301,7 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
       // The page read the agent's checkout and drove every worktree step.
       for (const method of [
         "agent_worktree.get",
+        "world.core.history",
         "file.list",
         "file.read",
         "world.core.worktree.create",
@@ -323,7 +330,7 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
         await waitForChromePort(child, profile, log),
       );
       let run = 0;
-      for (const stage of ["files", "dialog", "remove"] as const)
+      for (const stage of ["files", "chat", "dialog", "remove"] as const)
         for (const theme of ["light", "dark"] as const)
           for (const viewport of VIEWPORTS) {
             run += 1;
@@ -358,9 +365,11 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
                 selector:
                   stage === "files"
                     ? ".workspace-inspector-file-detail"
-                    : stage === "dialog"
-                      ? ".core-worktrees"
-                      : '.modal[aria-label="Remove worktree"]',
+                    : stage === "chat"
+                      ? ".core-chat > *"
+                      : stage === "dialog"
+                        ? ".core-worktrees"
+                        : '.modal[aria-label="Remove worktree"]',
               },
             });
             const stem = `${stage}-${viewport.name}-${theme}`;

@@ -97,7 +97,14 @@ export function worldNodeForInspectorPaneFocus(
 
 export function worldIntentViews(node: WorldObjectNode): InspectorView[] {
   if (node.kind === "host") return [];
+  // A live herdr-core agent's window opens on its Chat (core's own input and
+  // history), with Files and Changes beside it.
+  const coreChat =
+    node.kind === "agent" &&
+    node.pane.runtime === "herdr-core" &&
+    isCoreResourceNode(node);
   return [
+    ...(coreChat ? (["history"] as const) : []),
     ...(node.capabilities.openTerminal ? (["terminal"] as const) : []),
     ...(node.capabilities.files ? (["files"] as const) : []),
     ...(node.capabilities.changes ? (["changes"] as const) : []),
@@ -166,12 +173,7 @@ export function worldNodeOpenView(
  * takes a view, or null for this default (Chat, else terminal).
  */
 export const defaultOpenView = (node: WorldObjectNode) =>
-  node.kind === "agent" && node.pane.runtime === "herdr-core"
-    ? "history"
-    : worldNodeOpenView(
-        node,
-        readOfficePreferences(worldLocalStorage).townOpens,
-      );
+  worldNodeOpenView(node, readOfficePreferences(worldLocalStorage).townOpens);
 
 /** Whether the selected node's host is still ready at its generation. */
 export function ownerReady(

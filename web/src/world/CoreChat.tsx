@@ -1,7 +1,6 @@
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { CoreHistory } from "./CoreHistory";
-import { WorldPanel } from "./windows/WorldPanel";
-import type { WorldLeafObject } from "./worldObject";
+import type { WorldLeafObject, WorldObjectNode } from "./worldObject";
 import {
   coreDeliveryText,
   pressForCoreAgent,
@@ -14,9 +13,12 @@ import "./CoreChat.css";
 export function CoreChat({
   leaf,
   compact = false,
+  onOpenTerminal,
 }: {
   leaf: WorldLeafObject;
   compact?: boolean;
+  /** Opens the agent's terminal in its own window, watched until you type. */
+  onOpenTerminal?(): void;
 }) {
   const [recipient] = useState(leaf);
   const name = recipient.agentName || recipient.label;
@@ -110,25 +112,34 @@ export function CoreChat({
         ) : null}
       </form>
       {notice ? <p role="status">{notice}</p> : null}
+      {onOpenTerminal ? (
+        <button
+          type="button"
+          className="core-chat-terminal"
+          onClick={onOpenTerminal}
+        >
+          Watch terminal
+        </button>
+      ) : null}
     </section>
   );
 }
 
-export function CoreChatWindow({
-  leaf,
-  onClose,
-}: {
-  leaf: WorldLeafObject;
-  onClose(): void;
-}) {
+/**
+ * A herdr-core agent's Chat for its Inspector: core's own input and history,
+ * beside Files and Changes, with its terminal a tap away in its own window.
+ * Other nodes read Chat through Herdr, so they have none here.
+ */
+export function coreAgentChat(
+  node: WorldObjectNode | undefined,
+  onOpenTerminal: (id: string) => void,
+): ReactNode | undefined {
+  if (node?.kind !== "agent" || node.pane.runtime !== "herdr-core") return;
   return (
-    <WorldPanel
-      name={`core-chat-${leaf.id}`}
-      label={`${leaf.agentName || leaf.label} · Chat`}
-      onClose={onClose}
-      focusKey={1}
-    >
-      <CoreChat key={`${leaf.id}:${leaf.generation}`} leaf={leaf} />
-    </WorldPanel>
+    <CoreChat
+      key={`${node.id}:${node.generation}`}
+      leaf={node}
+      onOpenTerminal={() => onOpenTerminal(node.id)}
+    />
   );
 }
