@@ -35,6 +35,36 @@ export function withCoreRecipient<T>(
   );
 }
 
+/**
+ * Said when no conversation is found for a core agent in place of advice
+ * about Herdr (install its integration, the command to copy, what Herdr did
+ * not report), which does not apply to core.
+ */
+export const CORE_NO_SESSION =
+  "World has not found where this agent saves its conversation yet. It looks in the agent's own session record and its launch command. You can still send it a message, and the Terminal tab shows it live.";
+
+/** A Herdr-integration "no session" answer, in core's words. */
+function inCoreWords<T extends { status: string; unavailable: unknown }>(
+  value: T,
+): T {
+  const unavailable = value.unavailable as {
+    reason?: string;
+    detail?: string;
+    command?: string;
+  } | null;
+  if (
+    value.status !== "unavailable" ||
+    !(unavailable?.command || unavailable?.detail?.includes("Herdr")) ||
+    (unavailable.reason !== "no_session" &&
+      unavailable.reason !== "codex_unlinked")
+  )
+    return value;
+  return {
+    ...value,
+    unavailable: { reason: "no_session", detail: CORE_NO_SESSION },
+  };
+}
+
 /** Herdr's key names where core's differ. */
 const CORE_KEY: Readonly<Record<string, string>> = { escape: "esc" };
 
@@ -297,6 +327,10 @@ export function createCoreAgentSessions(args: {
   };
   const conversation: ConversationSource = {
     ...source,
+    read: async (target) => inCoreWords(await source.read(target)),
+    latest: async (target) => inCoreWords(await source.latest(target)),
+    latestAll: async (paneIds) =>
+      (await source.latestAll(paneIds)).map(inCoreWords),
     // Core has no trust question Chat can answer: the Terminal tab can.
     trust: undefined,
     send: async (target) => {

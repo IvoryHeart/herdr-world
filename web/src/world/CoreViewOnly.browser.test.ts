@@ -50,6 +50,8 @@ async function coreSnapshot() {
       name: "reviewer",
       labels: placed("fx-review", "web / review"),
       argv: ["claude"],
+      // A live local program: the read model names it as the recipient.
+      pid: 4101,
       state: "live",
       turn: 1,
       status: {
@@ -100,6 +102,7 @@ async function coreSnapshot() {
       mirror,
       actionable: true,
       coreName: () => "fixture-host",
+      coreId: () => "c0ffee",
       firstSight: sight,
     }),
   };

@@ -98,7 +98,8 @@ export function worldNodeForInspectorPaneFocus(
 export function worldIntentViews(node: WorldObjectNode): InspectorView[] {
   if (node.kind === "host") return [];
   // A live herdr-core node opens in the same Inspector: an agent's Chat
-  // (core's own input and history), the watched terminal, Files and Changes.
+  // (the shared Chat, read through core), the watched terminal, Files and
+  // Changes.
   const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
   const core = leaf !== null && isCoreResourceNode(leaf);
   const coreChat =

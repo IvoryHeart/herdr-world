@@ -13,6 +13,7 @@ import { ChatComposer, chatComposerDraftKey } from "./chat/ChatComposer";
 import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
 import { useConnectionClient } from "../useConnectionClient";
+import { CORE_STOP_REASON, chatClient } from "../coreRecipient";
 import { useStoreSelector } from "../store/react";
 import { relayNames } from "./chat/chatSenders";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
@@ -90,7 +91,14 @@ export function AgentChat({
   const localFocusIntent = useChatFocusIntent(
     active && focusIntent === undefined,
   );
-  const connectionClient = useConnectionClient();
+  const sharedClient = useConnectionClient();
+  // A herdr-core agent's input names the program the person saw.
+  const connectionClient = useMemo(
+    () => chatClient(sharedClient, pane),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sharedClient, pane.runtime, pane.core_recipient],
+  );
+  const coreAgent = pane.runtime === "herdr-core";
   // The other live agents in this Herdr session whose names are valid and
   // unique there: a message typed here as "name: …" reads as relayed from it.
   const relayFrom = useStoreSelector((state) =>
@@ -435,7 +443,10 @@ export function AgentChat({
   // Stop presses Esc in the agent's pane, only when the user asks: the Stop
   // button, or Esc twice while Chat has focus.
   const agentName = conversation?.agent ?? pane.agent ?? "";
-  const canStop = liveStatus === "working" && STOPS_WITH_ESCAPE.has(agentName);
+  const stopOffered =
+    liveStatus === "working" && STOPS_WITH_ESCAPE.has(agentName);
+  // herdr-core takes keys only while the agent asks: Stop stays, off, with why.
+  const canStop = stopOffered && !coreAgent;
   const [stopNote, setStopNote] = useState("");
   const stop = useCallback(async () => {
     try {
@@ -550,8 +561,12 @@ export function AgentChat({
         (delivery.state === "unverified" &&
           delivery.fingerprint !== conversation?.session_fingerprint)),
   );
+  // A herdr-core agent takes messages through core's own send for every
+  // harness, even one whose conversation Chat cannot read: core checks the
+  // occupant against the recipient the person saw.
   const canSend =
-    conversation?.status === "ok" && !!conversation.session_fingerprint;
+    (conversation?.status === "ok" && !!conversation.session_fingerprint) ||
+    (coreAgent && !!pane.core_recipient && conversation !== null);
   return (
     <div className="agent-chat">
       <div className="agent-chat-toolbar agent-chat-now">
@@ -579,15 +594,18 @@ export function AgentChat({
             {elapsed(clock - statusSince)}
           </span>
         ) : null}
-        {canStop ? (
+        {stopOffered ? (
           <button
             type="button"
             className="agent-chat-stop"
+            disabled={!canStop}
             title={
-              // A touch screen has no Esc key to point to.
-              window.matchMedia?.("(pointer: coarse)").matches
-                ? "Interrupt this turn in the agent's terminal"
-                : "Press Esc in the agent's terminal to interrupt this turn (or press Esc twice)"
+              coreAgent
+                ? CORE_STOP_REASON
+                : // A touch screen has no Esc key to point to.
+                  window.matchMedia?.("(pointer: coarse)").matches
+                  ? "Interrupt this turn in the agent's terminal"
+                  : "Press Esc in the agent's terminal to interrupt this turn (or press Esc twice)"
             }
             onClick={() => void stop()}
           >
@@ -714,7 +732,8 @@ export function AgentChat({
               </button>
             </span>
           ) : null}
-          {unavailable.reason === "codex_unlinked" ? (
+          {/* Core keeps no session links: its Terminal tab resumes one. */}
+          {unavailable.reason === "codex_unlinked" && !coreAgent ? (
             <div className="agent-chat-link">
               <CodexSessionLink
                 paneId={pane.pane_id}

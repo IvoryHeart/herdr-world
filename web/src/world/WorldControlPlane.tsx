@@ -1,4 +1,3 @@
-import { coreAgentChat } from "./CoreChat";
 import { memo, Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
@@ -928,9 +927,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               switchTo: switchTargets(conversation.nodeId),
             }}
             terminalColor={inspectorColor(conversation)}
-            chat={coreAgentChat(coreNode(conversation.nodeId), () =>
-              stableOpenInspectorView(conversation.nodeId, "terminal"),
-            )}
             terminal={coreInspectorTerminal(coreNode(conversation.nodeId), {
               selected: conversation.view === "terminal",
               shown: visibleFloatingInspectorIds.has(

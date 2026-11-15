@@ -106,7 +106,6 @@ export function WorkspaceInspectorHost({
   visible,
   workspace,
   historyPane,
-  chat,
   terminal,
   fileSelection,
   onSelectFileTab,
@@ -159,11 +158,6 @@ export function WorkspaceInspectorHost({
   visible: boolean;
   workspace?: Workspace;
   historyPane?: Pane;
-  /**
-   * The Chat body when the runtime is not Herdr (a herdr-core agent's own
-   * input and history): it replaces the Herdr transcript reader.
-   */
-  chat?: ReactNode;
   /** Terminal for a runtime not shown through Herdr (InspectorTerminalBody). */
   terminal?: ReactNode;
   fileSelection: ActiveFilePreviewSelection;
@@ -381,8 +375,7 @@ export function WorkspaceInspectorHost({
   const filesAvailable = availableViews.includes("files");
   const changesAvailable = availableViews.includes("changes");
   const historyAvailable =
-    availableViews.includes("history") &&
-    (chat !== undefined || paneHasAgentHistory(historyPane));
+    availableViews.includes("history") && paneHasAgentHistory(historyPane);
   const terminalAvailable = availableViews.includes("terminal");
   const agentContext = context ?? inspectorAgentContext(historyPane, workspace);
   const detailAvailable =
@@ -1281,9 +1274,7 @@ export function WorkspaceInspectorHost({
               state.view === "history" ? "" : "is-hidden"
             }`}
           >
-            {historyAvailable && chat !== undefined ? (
-              chat
-            ) : historyAvailable && historyPane ? (
+            {historyAvailable && historyPane ? (
               <InspectorChat
                 sourceFiles={{
                   client: connectionClient,

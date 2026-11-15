@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { answersOnCore } from "../../../shared/coreHostMethods";
-import { coreAgentChat } from "./CoreChat";
 import { coreInspectorTerminal } from "./CoreTerminalWatch";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { createRoot } from "react-dom/client";
@@ -112,7 +111,7 @@ async function world() {
 }
 
 /** The window as WorldControlPlane wires it: its view changes stick, a core
- * agent's Chat is core's own (coreAgentChat), its Terminal is core's watch
+ * agent's Chat is the shared Chat, its Terminal is core's watch
  * (coreInspectorTerminal), and Chat's terminal button opens that tab. */
 function CoreAgentWindow({
   agent,
@@ -130,9 +129,6 @@ function CoreAgentWindow({
       target={target}
       floating={false}
       terminalActive={false}
-      chat={coreAgentChat(agent, () =>
-        setConversation((current) => ({ ...current, view: "terminal" })),
-      )}
       terminal={coreInspectorTerminal(agent, {
         selected: conversation.view === "terminal",
         shown: true,
@@ -205,7 +201,7 @@ async function run() {
   ) as WorldLeafObject | undefined;
   if (!agent) throw new Error("the read model lists the core agent");
   // The capability rule: Files and Changes, never a Herdr terminal or Herdr
-  // history; Chat is core's own (coreAgentChat).
+  // history; Chat is the shared Chat, answered through core.
   check(
     agent.capabilities.files &&
       agent.capabilities.changes &&
@@ -298,21 +294,29 @@ async function run() {
     ].map((tab) => tab.getAttribute("aria-label") ?? "");
   check(
     tabs().join() === "Chat,Terminal,Files,Changes",
-    `the core agent's window has Chat, Terminal, Files and Changes: ${tabs().join()}`,
+    `the core agent's window has a Herdr agent's tabs, in order: ${tabs().join()}`,
   );
   if (stage === "files") return;
-  // Chat is core's own input and history, with the terminal a tap away.
+  // Chat is the shared Chat, read through core, with the terminal a tap away.
   target.querySelector<HTMLElement>("[role=tab][aria-label=Chat]")!.click();
   await until(
     () =>
-      target.querySelector("[aria-label='Chat with builder']") !== null &&
-      target.textContent?.includes("No conversation linked yet") === true,
-    "Chat shows core's input and history",
+      target.querySelector(".agent-chat") !== null &&
+      target.textContent?.includes(
+        "World has not found where this agent saves its conversation",
+      ) === true,
+    "Chat reads the core agent's conversation through the shared handlers",
   );
   check(
-    Boolean(target.querySelector("[aria-label='Message to builder']")),
-    "Chat has the message box",
+    !target.textContent?.includes("integration install"),
+    "a core agent is not told to install Herdr's integration",
   );
+  // Core takes a message for every harness, even one Chat cannot read.
+  await until(
+    () => target.querySelector("[aria-label='Chat input']") !== null,
+    "Chat has the shared composer",
+  );
+  check(!target.querySelector(".core-chat"), "no separate core Chat is drawn");
   if (stage === "chat") return;
   // Chat's terminal button opens the Terminal tab in this same window: core's
   // watch, never a Herdr terminal or a second window.
@@ -320,10 +324,10 @@ async function run() {
     !target.querySelector(".core-watch"),
     "the terminal is not watched before its tab is shown",
   );
-  buttonNamed("Watch terminal", target)!.click();
+  buttonNamed("Open Terminal", target)!.click();
   await until(
     () => target.querySelector(".core-watch") !== null,
-    "Watch terminal opens the Terminal tab with core's watch",
+    "Open Terminal opens the Terminal tab with core's watch",
   );
   check(
     target
@@ -388,7 +392,8 @@ async function run() {
   // Back to Chat and to Terminal again: the one watch stays.
   target.querySelector<HTMLElement>("[role=tab][aria-label=Chat]")!.click();
   await until(
-    () => target.querySelector("[aria-label='Chat with builder']") !== null,
+    () =>
+      target.querySelector(".agent-chat [aria-label='Chat input']") !== null,
     "Chat shows again",
   );
   target.querySelector<HTMLElement>("[role=tab][aria-label=Terminal]")!.click();

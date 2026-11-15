@@ -11,6 +11,7 @@ import {
 } from "../agent/testing/conversation-fixtures";
 import { defaultGuiSettings } from "../config/gui-settings";
 import { callCoreHost } from "../rpc/core-host";
+import { CORE_NO_SESSION } from "./agent-sessions";
 import { createCoreHostRuntime } from "./host-runtime";
 import { coreWorld, until } from "./testing/core-world";
 
@@ -32,7 +33,7 @@ const files = {
   findClaudeSessionForProcess: async () => null,
 };
 
-async function setup(kind = "claude", status = "idle") {
+async function setup(kind = "claude", status = "idle", resume = true) {
   const root = await mkdtemp(join(tmpdir(), "hcw-chat-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const fixture = fixtures.find((item) => item.agent === "claude")!;
@@ -42,7 +43,7 @@ async function setup(kind = "claude", status = "idle") {
   await w.connect();
   const program = `/opt/example/bin/${kind}`;
   const argv =
-    kind === "claude" ? [program, "--resume", transcript] : [program];
+    kind === "claude" && resume ? [program, "--resume", transcript] : [program];
   const pid = 70_000 + w.fake.currentSeq;
   const t = w.fake.create({
     argv,
@@ -188,6 +189,20 @@ describe("one Chat for both runtimes", () => {
         params: expect.objectContaining({ terminal: t, text: "Status?" }),
       }),
     ]);
+  });
+
+  test("a conversation core cannot find gets core's advice, not Herdr's", async () => {
+    const { call } = await setup("claude", "working", false);
+    const shown = (await call("agent_conversation.get")) as {
+      status: string;
+      unavailable: { reason: string; detail: string; command?: string };
+    };
+    expect(shown.status).toBe("unavailable");
+    expect(shown.unavailable).toEqual({
+      reason: "no_session",
+      detail: CORE_NO_SESSION,
+    });
+    expect(JSON.stringify(shown)).not.toContain("integration install");
   });
 
   test("a watched conversation is told when core reports a change", async () => {

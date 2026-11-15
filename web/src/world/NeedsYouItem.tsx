@@ -1,4 +1,3 @@
-import { CoreChat } from "./CoreChat";
 import { CORE_WATCH_TITLE, viewOnlyMessage } from "./viewOnly";
 import { MessageSquare, Paperclip, SendHorizontal, X } from "lucide-react";
 import {
@@ -17,6 +16,7 @@ import type { AnswerResult, TrustChoice } from "../components/chat/types";
 import { MarkdownPreview } from "../components/markdown";
 import { AgentHoverCard } from "./AgentHoverCard";
 import { leafOwner, useConversationRead } from "./conversationRead";
+import { chatClient } from "../coreRecipient";
 import { townAgo } from "./town/TownRail";
 import { askDeliveryMessage, type WorldAsk } from "./worldAsks";
 import type { WorldLeafObject } from "./worldObject";
@@ -178,27 +178,7 @@ export function NeedsYouMessage({
           onAttach={onAttach}
           onDismiss={onDismiss}
         />
-      ) : core ? (
-        <>
-          {head(
-            <button
-              type="button"
-              className="needs-you-icon"
-              title={CORE_WATCH_TITLE}
-              aria-label={`Watch ${name}'s terminal`}
-              disabled={item.leaf.stale}
-              onClick={() => onOpenTerminal(item.leaf.id)}
-            >
-              Watch terminal
-            </button>,
-          )}
-          <CoreChat
-            key={`${item.leaf.id}:${item.leaf.generation}`}
-            leaf={item.leaf}
-            compact
-          />
-        </>
-      ) : item.leaf.viewOnly ? (
+      ) : item.leaf.viewOnly && !core ? (
         <NeedsYouViewOnly
           leaf={item.leaf}
           name={name}
@@ -545,7 +525,7 @@ type Answered = Pick<
 > & { question: string[]; fingerprint: string };
 
 /**
- * A herdr-core agent World only watches: its status as core reports it, the
+ * An agent World only watches: its status as its runtime reports it, the
  * program's own words, and its controls disabled with the reason. No
  * transcript or screen is read, so nothing waits on a read that cannot come.
  */
@@ -666,8 +646,13 @@ function NeedsYouAgent({
   }, [prompt?.fingerprint]);
   const [marking, setMarking] = useState(false);
   const [markError, setMarkError] = useState(false);
-  const answer = async (key: string, text?: string) => {
+  // A herdr-core agent's answer names the program the person saw.
+  const owner = () => {
     const client = leafOwner(leaf);
+    return client ? chatClient(client, leaf.pane) : null;
+  };
+  const answer = async (key: string, text?: string) => {
+    const client = owner();
     if (!prompt || !client || answering) return;
     setAnswering(true);
     setNotice("");
@@ -697,7 +682,7 @@ function NeedsYouAgent({
   };
   // Claude's folder-trust question, as in Chat.
   const trust = async (choice: TrustChoice) => {
-    const client = leafOwner(leaf);
+    const client = owner();
     if (!prompt?.trust || !client || answering) return;
     setAnswering(true);
     setNotice("");

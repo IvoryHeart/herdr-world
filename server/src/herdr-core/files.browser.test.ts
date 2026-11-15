@@ -21,6 +21,7 @@ import {
   openCoreWorktree,
   removeCoreWorktree,
 } from "../herdr-core/worktrees";
+import { localAgentSessionFiles } from "../agent/session-file-access";
 import { callCoreHost } from "../rpc/core-host";
 import { runProcessWithCodeTimeout } from "../utils/process-utils";
 import { worldRuntimeRegistry } from "../world/runtime-registry";
@@ -135,6 +136,11 @@ async function coreSide(root: string) {
     lease,
     host: null,
     readSettings: async () => settings,
+    // Chat never reads the developer's own process records.
+    agentSessionFiles: {
+      ...localAgentSessionFiles,
+      findClaudeSessionForProcess: async () => null,
+    },
     // Belt and braces: nothing reaches the real home directory.
     processes: {
       runProcessWithCodeTimeout: (argv, timeoutMs, options = {}) =>
@@ -311,7 +317,7 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
       // The page read the agent's checkout and drove every worktree step.
       for (const method of [
         "agent_worktree.get",
-        "world.core.history",
+        "agent_conversation.latest",
         "file.list",
         "file.read",
         "world.core.worktree.create",
@@ -382,7 +388,7 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
                   stage === "files"
                     ? ".workspace-inspector-file-detail"
                     : stage === "chat"
-                      ? ".core-chat > *"
+                      ? ".agent-chat > *"
                       : stage === "terminal"
                         ? ".core-watch"
                         : stage === "dialog"

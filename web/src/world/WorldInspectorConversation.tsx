@@ -155,11 +155,8 @@ function InspectorResources({
   onTerminalPortalChange,
   onBind,
   onSelectPane,
-  chat,
   terminal,
 }: {
-  /** Chat for a runtime World does not read through Herdr (herdr-core). */
-  chat?: ReactNode;
   /** Terminal for a runtime World does not show through Herdr (herdr-core). */
   terminal?: ReactNode;
   /**
@@ -766,7 +763,6 @@ function InspectorResources({
                 visible={Boolean(target)}
                 workspace={workspace}
                 historyPane={historyPane}
-                chat={chat}
                 terminal={terminal}
                 historySessionFingerprint={conversation.agentSessionFingerprint}
                 notice={
