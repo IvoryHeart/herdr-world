@@ -2267,16 +2267,16 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     whose size it is. The tab mounts when first shown and keeps its watch
     while you switch to another tab. Several core terminals may be open, each
     in its own window. Minimizing the window ends its watch and gives back
-    the size; restoring it watches again.
+    the size; restored, it watches again when its Terminal tab is shown.
   - **Type into its terminal.** Click the terminal, or just press a key
     while its tab is shown (outside any text field): the terminal takes
     focus, shows its cursor, and that first key arrives once. With two core
     terminals open, page keys go to the one shown or clicked last. A key
     typed in World makes World's size lead even over an app pane, by core's
     own rule; typing in the Herdr app's pane, or clicking it, takes the size
-    back there. Keys typed while World's viewer is still opening arrive
-    once, in order. Terminal replies (cursor reports) go only after you have
-    typed in World, and xterm's own focus reports are not sent.
+    back there. Keys typed while World's watch or viewer is still opening
+    arrive once, in order. Terminal replies (cursor reports) go only after
+    you have typed in World, and xterm's own focus reports are not sent.
     A key World could not send says "Not sent" and drops the keys queued
     behind it, so nothing lands out of order; typed bytes are never replayed.
     A replaced program, a lost core connection or a watch that ends refuses

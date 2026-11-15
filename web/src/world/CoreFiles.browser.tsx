@@ -133,7 +133,10 @@ function CoreAgentWindow({
       chat={coreAgentChat(agent, () =>
         setConversation((current) => ({ ...current, view: "terminal" })),
       )}
-      terminal={coreInspectorTerminal(agent, conversation.view === "terminal")}
+      terminal={coreInspectorTerminal(agent, {
+        selected: conversation.view === "terminal",
+        shown: true,
+      })}
       onChange={(change) =>
         setConversation((current) => ({ ...current, ...change }))
       }

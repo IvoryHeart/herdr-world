@@ -240,8 +240,8 @@ grid 3 or 4). Core 0.1.21 ranks a resumed viewer lowest until it is touched
 Herdr app pane has it, and over a pane only after a person typed in World.
 A new fitted size swaps the seat: attach the new one, then leave the old, so
 core never passes through its headless size. World never sends RESIZE. The
-pane retakes the size by typing or a click (`paneTouch`); closing the tab
-ends the seat with the watch, and core's rule gives the size to the pane or
+pane retakes the size by typing or a click (`paneTouch`); closing or
+minimizing the window ends the seat with the watch, and core's rule gives the size to the pane or
 headless.
 
 | State | Meaning and boundary |

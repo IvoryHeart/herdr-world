@@ -14,7 +14,7 @@ const text = (batch: CoreInputBatch) =>
   );
 
 /** A port whose requests answer only when the test says so. */
-function harness(size = { cols: 90, rows: 30 }) {
+function harness(size = { cols: 90, rows: 30 }, opening = false) {
   const log: string[] = [];
   const pending: Array<{ resolve(): void; reject(error: Error): void }> = [];
   const timers = new Map<number, () => void>();
@@ -46,6 +46,7 @@ function harness(size = { cols: 90, rows: 30 }) {
         },
         clear: (handle) => timers.delete(handle as number),
       },
+      opening,
     },
   );
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -182,6 +183,38 @@ describe("typing into a core terminal from the page", () => {
     expect(joined.replace(/�/g, "").length).toBeGreaterThan(
       CORE_INPUT_CHUNK - 2,
     );
+  });
+
+  test("keys typed before the watch answers wait for it, then go once, in order", async () => {
+    // Live core 0.1.21: the server knows the stream only once its observe
+    // attach answered, so a key sent earlier was refused ("not being watched").
+    const h = harness({ cols: 90, rows: 30 }, true);
+    const first = h.typing.type("a");
+    const second = h.typing.type("b");
+    await h.settle();
+    expect(h.log).toEqual([]);
+    h.typing.open();
+    h.typing.open();
+    await h.settle();
+    expect(h.log).toEqual(['key "ab" 90x30']);
+    await h.answer();
+    await Promise.all([first, second]);
+    void h.typing.type("c");
+    await h.settle();
+    expect(h.log).toEqual(['key "ab" 90x30', 'key "c" 90x30']);
+    expect(h.refused).toEqual([]);
+  });
+
+  test("a watch that never opens drops the keys that waited, unsent", async () => {
+    const h = harness({ cols: 90, rows: 30 }, true);
+    const waiting = h.typing.type("a").catch((error: Error) => error.message);
+    await h.settle();
+    h.typing.stop();
+    expect(await waiting).toContain("closed");
+    h.typing.open();
+    await h.settle();
+    expect(h.log).toEqual([]);
+    expect(h.refused).toEqual([]);
   });
 
   test("closing stops everything queued without sending it", async () => {

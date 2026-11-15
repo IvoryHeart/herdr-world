@@ -75,6 +75,8 @@ export class CoreTyping {
   /** The grid the view fits now, waiting out the settle time. */
   private pending: CoreGrid | null = null;
   private settle: unknown = null;
+  /** The watch answered: until then keys wait here (`open`). */
+  private ready: boolean;
 
   constructor(
     private readonly port: CoreTypingPort,
@@ -87,8 +89,23 @@ export class CoreTyping {
       changed?(held: CoreGrid | null): void;
       timers?: CoreTypingTimers;
       settleMs?: number;
+      /**
+       * The watch is still opening: keys typed meanwhile wait, in order,
+       * and go once `open()` is called (the server knows the stream only
+       * after its watch answered). Without it they go at once.
+       */
+      opening?: boolean;
     },
-  ) {}
+  ) {
+    this.ready = !options.opening;
+  }
+
+  /** The watch opened: the keys that waited for it go now, once, in order. */
+  open(): void {
+    if (this.ready) return;
+    this.ready = true;
+    void this.pump();
+  }
 
   private get timers(): CoreTypingTimers {
     return (
@@ -183,7 +200,7 @@ export class CoreTyping {
   }
 
   private async pump(): Promise<void> {
-    if (this.busy) return;
+    if (this.busy || !this.ready) return;
     this.busy = true;
     try {
       while (!this.stopped && this.queue.length > 0) {

@@ -151,13 +151,15 @@ no Herdr app pane holds it (instead of core's headless 200×120) and never
 takes a pane's size by attaching. World keeps the seat while the tab is open:
 no give-back on blur or idle. A new fitted size swaps the seat (attach the new
 one, then detach the old), so core never passes through headless; World never
-sends RESIZE. Closing the tab ends the seat with the watch, and core gives the
-size to the app's pane or headless. While a pane holds a large grid, World
+sends RESIZE. Closing or minimizing the window ends the seat with the watch
+(a look at another tab keeps both), and core gives the size to the app's pane
+or headless. While a pane holds a large grid, World
 draws it no smaller than 0.85 of its cell size and scrolls the rest.
 
 The first genuine key goes on the seat with FOCUS(true), so World leads by
 core's own rule until a key typed in or a click on the app's pane retakes it;
-a key typed before the seat is answered waits and is sent exactly once. Send
+a key typed before the observe watch or the seat is answered waits and is
+sent exactly once. Send
 terminal replies as AUTOMATIC_INPUT at their source only when hello and attach
 both confirm support, and only on a seat a person typed into: core forwards
 automatic input without dedup, so an untouched seat stays silent. The observe

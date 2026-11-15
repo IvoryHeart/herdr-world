@@ -248,6 +248,8 @@ export function CoreTerminalWatch({
         size: () => fits() ?? { cols: term.cols, rows: term.rows },
         refused: (message) => live && setNotice(message),
         changed: (size) => live && setHeld(size),
+        // Keys typed before the watch answers wait for it, then go once.
+        opening: true,
       },
     );
     typingRef.current = typing;
@@ -294,6 +296,7 @@ export function CoreTerminalWatch({
         screen.opened(reply);
         setMoved(screen.moved);
         opened = true;
+        typing.open();
         holdRef.current?.();
       })
       .catch((error: Error) => {
@@ -528,12 +531,19 @@ export function useCoreDraftScopes(scopes: readonly DraftScope[]) {
 /**
  * The Terminal tab's body for a live herdr-core leaf, or undefined for any
  * other node. The watch starts the first time the tab is shown and then
- * stays (hidden while another tab is), so a look at Chat neither ends the
- * stream nor gives the size back; closing the Inspector does both.
+ * stays while the window is shown (hidden while another tab is), so a look
+ * at Chat neither ends the stream nor gives the size back. Minimizing or
+ * closing the window ends both: the page's watch and World's seat go, and
+ * the watch starts again when the Terminal tab is shown next.
  */
 export function coreInspectorTerminal(
   node: WorldObjectNode | undefined,
-  active: boolean,
+  view: {
+    /** The Terminal tab is the one selected in the Inspector. */
+    selected: boolean;
+    /** The Inspector window is on screen (not minimized or hidden). */
+    shown: boolean;
+  },
 ): ReactNode | undefined {
   if (node?.kind !== "agent" && node?.kind !== "terminal") return;
   if (!node.coreControl) return;
@@ -548,7 +558,8 @@ export function coreInspectorTerminal(
       key={`${node.id}:${node.watch.generation}`}
       target={node.watch}
       title={node.label}
-      active={active}
+      selected={view.selected}
+      shown={view.shown}
     />
   );
 }
@@ -556,16 +567,23 @@ export function coreInspectorTerminal(
 function CoreInspectorTerminal({
   target,
   title,
-  active,
+  selected,
+  shown,
 }: {
   target: CoreWatchTarget;
   title: string;
-  active: boolean;
+  selected: boolean;
+  shown: boolean;
 }) {
-  const [shown, setShown] = useState(active);
-  if (active && !shown) setShown(true);
-  return shown ? (
-    <CoreTerminalWatch target={target} title={title} active={active} />
+  const [watching, setWatching] = useState(selected && shown);
+  if (watching && !shown) setWatching(false);
+  else if (!watching && shown && selected) setWatching(true);
+  return watching ? (
+    <CoreTerminalWatch
+      target={target}
+      title={title}
+      active={selected && shown}
+    />
   ) : null;
 }
 

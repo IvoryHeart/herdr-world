@@ -261,7 +261,8 @@ popups and verify Windows named-pipe/key behavior on a real owner test host.
   its size
 - **THEN** core sizes it to the tab's fitted grid and keeps it there through
   blur and idle; resizing the window resizes the terminal without a headless
-  step, and closing the tab gives the size back to core's rule
+  step; another tab of the same window keeps the size, and closing or
+  minimizing the window ends the watch and gives the size back to core's rule
 
 #### Scenario: An app pane keeps its size
 
@@ -274,7 +275,8 @@ popups and verify Windows named-pipe/key behavior on a real owner test host.
 
 - **WHEN** the user clicks the Terminal tab or presses a key while it is shown
 - **THEN** the terminal takes focus and shows its cursor, and the key is sent
-  exactly once; a terminal reply goes only on a seat a person typed into
+  exactly once, after World's watch has opened if it is still opening; a
+  terminal reply goes only on a seat a person typed into
 
 #### Scenario: Room shell on either runtime
 

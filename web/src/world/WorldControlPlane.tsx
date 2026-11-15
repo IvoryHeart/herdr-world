@@ -931,13 +931,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
             chat={coreAgentChat(coreNode(conversation.nodeId), () =>
               stableOpenInspectorView(conversation.nodeId, "terminal"),
             )}
-            terminal={coreInspectorTerminal(
-              coreNode(conversation.nodeId),
-              conversation.view === "terminal" &&
-                visibleFloatingInspectorIds.has(
-                  worldInspectorWindowId(conversation),
-                ),
-            )}
+            terminal={coreInspectorTerminal(coreNode(conversation.nodeId), {
+              selected: conversation.view === "terminal",
+              shown: visibleFloatingInspectorIds.has(
+                worldInspectorWindowId(conversation),
+              ),
+            })}
             townSkin={view === "town"}
             onBind={() =>
               void store

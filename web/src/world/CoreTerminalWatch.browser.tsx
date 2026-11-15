@@ -45,10 +45,13 @@ const until = async (condition: () => boolean, ms = 2000) => {
 
 const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
 let stream: string | null = null;
+/** While set, the watch answers only when it settles (a slow SSH host). */
+let watchGate: Promise<void> | null = null;
 Object.assign(bridge, {
   call: async (method: string, params: Record<string, unknown> = {}) => {
     calls.push({ method, params });
     if (method === "world.core.watch") {
+      if (watchGate) await watchGate;
       stream = String(params.stream);
       return { stream, grid: { cols: 120, rows: 40 }, moved_from: null };
     }
@@ -339,6 +342,148 @@ async function run() {
   );
   await twoInspectors();
   await reconnects();
+  await earlyKeys();
+  await minimized();
+}
+
+/**
+ * A key typed before the watch answers (over a slow SSH host, say) waits
+ * for it and then goes once: World's server knows the stream only after
+ * core's observe attach answered (live core 0.1.21 refused the key with
+ * "that terminal is not being watched").
+ */
+async function earlyKeys() {
+  let release = () => {};
+  watchGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const root = document.createElement("div");
+  document.body.append(root);
+  const app = createRoot(root);
+  const from = calls.length;
+  flushSync(() =>
+    app.render(
+      <div style={{ position: "fixed", inset: 0 }}>
+        <CoreTerminalWatch
+          target={{
+            connectionId: "core-fixture",
+            generation: 1,
+            address: "t6",
+          }}
+          title="slow"
+        />
+      </div>,
+    ),
+  );
+  const watch = () =>
+    calls
+      .slice(from)
+      .find(
+        (c) => c.method === "world.core.watch" && c.params.address === "t6",
+      );
+  await until(() => watch() !== undefined);
+  const key = String(watch()?.params.stream);
+  const sentOn = () =>
+    calls
+      .slice(from)
+      .filter(
+        (c) => c.method === "world.core.input" && c.params.stream === key,
+      );
+  root.querySelector<HTMLTextAreaElement>(".core-watch-host textarea")!.focus();
+  await press("a");
+  await pause(200);
+  check(
+    sentOn().length === 0,
+    `a key waits while the watch opens: ${JSON.stringify(sentOn())}`,
+  );
+  watchGate = null;
+  release();
+  await until(() => sentOn().length > 0);
+  await pause(200);
+  const typed = sentOn()
+    .filter((c) => !c.params.automatic)
+    .map((c) => atob(String(c.params.data)))
+    .join("");
+  check(typed === "a", `the waiting key goes once, after the watch: ${typed}`);
+  check(
+    !root.querySelector(".core-watch-notice"),
+    "the waiting key is not refused",
+  );
+  flushSync(() => app.unmount());
+  root.remove();
+}
+
+/**
+ * Minimizing the Inspector ends its watch and World's seat (the page's
+ * watch slots and the size go back); a look at Chat keeps both. Restored,
+ * the Terminal tab watches again once it is the tab shown.
+ */
+async function minimized() {
+  const node = {
+    kind: "agent",
+    id: "n7",
+    label: "minimized",
+    coreControl: true,
+    stale: false,
+    watch: { connectionId: "core-fixture", generation: 1, address: "t7" },
+  } as unknown as WorldObjectNode;
+  let view = { selected: true, shown: true };
+  let rerender = () => {};
+  function Harness() {
+    const [, setTick] = useState(0);
+    rerender = () => setTick((n) => n + 1);
+    return (
+      <div style={{ position: "fixed", inset: 0 }}>
+        {coreInspectorTerminal(node, view)}
+      </div>
+    );
+  }
+  const root = document.createElement("div");
+  document.body.append(root);
+  const app = createRoot(root);
+  const from = calls.length;
+  const of = (method: string) =>
+    calls
+      .slice(from)
+      .filter(
+        (c) =>
+          c.method === method &&
+          (method !== "world.core.watch" || c.params.address === "t7"),
+      );
+  const set = async (next: typeof view) => {
+    view = next;
+    flushSync(rerender);
+    await frames(2);
+  };
+  flushSync(() => app.render(<Harness />));
+  await until(() => of("world.core.watch").length === 1);
+  const first = String(of("world.core.watch")[0]?.params.stream);
+  await set({ selected: false, shown: true });
+  check(
+    of("world.core.unwatch").length === 0 &&
+      Boolean(root.querySelector(".core-watch")),
+    "a look at Chat keeps the watch and World's seat",
+  );
+  await set({ selected: false, shown: false });
+  check(
+    of("world.core.unwatch").some((c) => c.params.stream === first),
+    `minimizing ends the watch: ${JSON.stringify(of("world.core.unwatch"))}`,
+  );
+  check(!root.querySelector(".core-watch"), "a minimized window holds no view");
+  await set({ selected: true, shown: false });
+  await set({ selected: false, shown: true });
+  check(
+    of("world.core.watch").length === 1,
+    "restored on Chat, nothing is watched until the Terminal tab is shown",
+  );
+  await set({ selected: true, shown: true });
+  await until(() => of("world.core.watch").length === 2);
+  check(
+    of("world.core.watch").length === 2,
+    "the Terminal tab watches again once shown",
+  );
+  flushSync(() => app.unmount());
+  root.remove();
 }
 
 /**
@@ -622,7 +767,9 @@ async function reconnects() {
     useCoreTerminalDrafts([{ nodeById: new Map([["n1", node]]) as never }]);
     return (
       <div style={{ position: "fixed", inset: 0 }}>
-        {open ? coreInspectorTerminal(node, true) : null}
+        {open
+          ? coreInspectorTerminal(node, { selected: true, shown: true })
+          : null}
       </div>
     );
   }
