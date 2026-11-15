@@ -89,7 +89,8 @@ above; you can keep the TUI connected too.
    and **Changes**, like a Herdr agent’s. On **Terminal**, type to control it;
    the text fits the window. Close the window to give the size back.
 4. Finish a turn, then look at its Town peek. Done clears in Herdr’s apps too.
-   Try the star: its favourite is shared. Continue with either runtime below.
+   Pin it from its peek: it is pinned in Herdr’s apps too. Continue with either
+   runtime below.
 
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 

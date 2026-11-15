@@ -24,7 +24,7 @@ import {
 import type { WorldLeafObject } from "../worldObject";
 import { useCoreSeen } from "../coreSeen";
 import { coreSharedOf } from "../coreShared";
-import { CoreFavouriteButton } from "../CoreFavourite";
+import { CorePinButton } from "../CorePin";
 import "./boardPeek.css";
 import { Terminal as ShellIcon } from "lucide-react";
 import { store } from "../../store";
@@ -162,8 +162,8 @@ export function BoardPeek({
           </small>
         </div>
         {coreShared ? (
-          <CoreFavouriteButton
-            className="board-peek-icon board-peek-favourite"
+          <CorePinButton
+            className="board-peek-icon board-peek-pin"
             target={coreShared}
             disabled={leaf.stale}
             notify={(message) => notify("error", message)}

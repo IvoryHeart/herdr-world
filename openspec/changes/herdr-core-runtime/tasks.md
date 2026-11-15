@@ -41,6 +41,12 @@ checks. Current spec synchronization and archive remain after acceptance.
     turn per look, decided-label write, raise-only, best effort), favourite
     as `herdr.pinned`, Web Push from core status events, the shared-seen
     model with production replay, recorded 0.1.20 and live-release tests.
+  - [x] Issue #921: core agents open on Chat when their conversation reads
+    (Terminal only until then; a plain shell on Terminal), and one pin shared
+    with the apps: a core desk or card is pinned exactly while its tab
+    carries `herdr.pinned`, World's pin writes it (agents first, then
+    terminals; unpin clears all), the favourite star is gone, pinned agents
+    lead the phone switch list.
 - [x] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
   - [x] Issue #869: core-first launches from World (absolute executable, no
     caller/parent/notes, explicit keep; agents placed with a `where` caption,

@@ -14,7 +14,7 @@ import { store } from "../../store";
 import { canOpenRoomShell, openRoomShell } from "../floatShell";
 import type { WorldLeafObject } from "../worldObject";
 import { useCoreSeen } from "../coreSeen";
-import { CoreFavouriteButton } from "../CoreFavourite";
+import { CorePinButton } from "../CorePin";
 import { ContextFillBar } from "../../components/ContextFillBar";
 import { useAgentContextFill } from "../agentContextFill";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
@@ -194,8 +194,8 @@ export function TownPeek({
           />
         ) : null}
         {agent.coreShared ? (
-          <CoreFavouriteButton
-            className="town-peek-favourite"
+          <CorePinButton
+            className="town-peek-pin"
             target={agent.coreShared}
             disabled={agent.stale}
           />

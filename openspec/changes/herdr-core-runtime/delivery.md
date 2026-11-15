@@ -96,13 +96,24 @@ Use a disposable test account and candidate World, never the owner's runtime.
   terminal to keep its size (core 0.1.21 and later).
 - B, Seen: finish a turn while hidden and see Done in the app. View it in a
   foreground World tab and see Idle in the app within two seconds. Mark unread
-  in the app and ensure World preserves it; check favourite both ways.
+  in the app and ensure World preserves it; check the pin both ways: a pin
+  in the app shows on the agent's Town desk and Board card within seconds,
+  and World's pin or unpin shows in the app.
 - C, Control: type in World and see the desktop pane adopt World's grid; click
   the desktop pane and see it reclaim its grid. Leave World and retain desktop
   control. Repeat on Windows SSH with native key encoding.
 - D, Placement: launch an agent with default placement, see it in the app with
   keep enabled, then close the app pane and see it ended in World. Launch an
   unplaced shell; record desktop/phone behavior separately.
+
+Owner results, 2026-11-15 (A–D are not complete):
+
+- Opening and closing an agent from World and from the app works.
+- A plain shell launched from World without a room shows under the app's
+  spaces, not its Inbox.
+- Pinning in the app reached World as `herdr.pinned` but had no visible cue
+  there. The owner ruled that app and World pins are one pin (issue #921):
+  World's desk and card pin for a core agent is now that label.
 
 ## Upstream questions (for the owner to post)
 

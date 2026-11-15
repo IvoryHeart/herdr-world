@@ -2,11 +2,21 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
 import { BoardPeek } from "./board/BoardPeek";
+import type {
+  BoardDocumentStore,
+  BoardOp,
+  DeskPin,
+} from "./board/boardDocument";
 import { CORE_LOOK_DWELL_MS } from "./coreSeen";
 import { WorldDeskStore } from "./deskStateStore";
 import { projectAgent } from "./officeAgent";
-import { WorldRuntimeStore } from "./runtimeStore";
+import { worldRuntimeStore } from "./runtimeStore";
 import { TownPeek } from "./town/TownPeek";
+import {
+  placeDeskPin,
+  useCoreDeskPinPositions,
+  useDeskPins,
+} from "./useDeskPins";
 import { buildWorldObject, type WorldLeafObject } from "./worldObject";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -14,7 +24,7 @@ import "./world.css";
 import "./town/town.css";
 import "./board/boardAppearance.css";
 
-// Seen and favourite shared with Herdr's apps, end to end: the page's World
+// Seen and the one pin shared with Herdr's apps, end to end: the page's World
 // calls go to the test's World service handler, the production core
 // provider and an in-process core; the snapshot is the production read
 // model. "The app" is a second client the test drives on request.
@@ -47,6 +57,8 @@ const post = async (path: string, body: unknown) =>
   (await fetch(path, { method: "POST", body: JSON.stringify(body) })).json();
 Object.assign(bridge, {
   call: async (method: string, params: Record<string, unknown>) => {
+    // World's runtime store (the peeks' pins read it) observes the fixture.
+    if (method === "world.snapshot") return (await fetch("/snapshot")).json();
     if (!method.startsWith("world.core.")) return null;
     sent.push({ method, params });
     const reply = await post("/rpc", { method, params });
@@ -71,18 +83,8 @@ const deskStore = new WorldDeskStore({
 });
 
 async function world() {
-  const snapshot = await (await fetch("/snapshot")).json();
-  const store = new WorldRuntimeStore(
-    {
-      call: async () => snapshot,
-      connection: () => ({ isCurrent: () => false }),
-      onControl: () => () => {},
-      onStatus: () => () => {},
-    },
-    async () => {},
-  );
-  await store.refresh();
-  return buildWorldObject(store.get().connections);
+  await worldRuntimeStore.refresh();
+  return buildWorldObject(worldRuntimeStore.get().connections);
 }
 
 async function scout(
@@ -100,6 +102,45 @@ async function scout(
   throw new Error(`scout never became ${what}`);
 }
 
+/**
+ * World's saved desk pins (the service's board document), applying the desk
+ * operations as the service does, and the desk pins Town is given.
+ */
+const saved: { desk_pins: Record<string, DeskPin> } = { desk_pins: {} };
+const boardListeners = new Set<() => void>();
+const boardStore = {
+  start: () => {},
+  stop: () => {},
+  subscribe: (listener: () => void) => {
+    boardListeners.add(listener);
+    return () => boardListeners.delete(listener);
+  },
+  get: () => ({ document: { layout: saved }, error: null }),
+  patch: async (ops: BoardOp[]) => {
+    const pins = { ...saved.desk_pins };
+    for (const op of ops)
+      if (op.op === "desk.pin") pins[op.key] = { cell: op.cell };
+      else if (op.op === "desk.unpin") delete pins[op.key];
+      else if (op.op === "desk.place" && pins[op.key]?.cell === null)
+        pins[op.key] = { cell: op.cell };
+    saved.desk_pins = pins;
+    for (const listener of boardListeners) listener();
+    return null;
+  },
+} as unknown as BoardDocumentStore;
+let townPins: Readonly<Record<string, DeskPin>> = {};
+/** Town reads its desk pins alone; World's root keeps core cells current. */
+function TownDeskPins() {
+  townPins = useDeskPins(boardStore);
+  return null;
+}
+function WorldRoot() {
+  useCoreDeskPinPositions(boardStore);
+  return null;
+}
+const coreDesk = () =>
+  Object.keys(townPins).filter((key) => key.startsWith("core-fixture:"));
+
 const seenCalls = () =>
   sent.filter((call) => call.method === "world.core.seen");
 
@@ -116,6 +157,8 @@ async function run() {
   const root = createRoot(
     document.body.appendChild(document.createElement("div")),
   );
+  for (const probe of [<WorldRoot key="root" />, <TownDeskPins key="town" />])
+    flushSync(() => createRoot(document.createElement("div")).render(probe));
   const show = (leaf: (WorldLeafObject & { kind: "agent" }) | null) => {
     const space = leaf ? (leaf.parentId as string) : "";
     flushSync(() =>
@@ -214,28 +257,76 @@ async function run() {
     "still done after a screen left on",
   );
 
-  // 5. Favourite from Town's peek: the label is set, both peeks show it.
-  const star = document.querySelector<HTMLButtonElement>(
-    ".town-peek .town-peek-favourite",
+  // 5. Pin from Town's peek: the label is set, both peeks show it, quietly.
+  const pinButton = (where: string) =>
+    document.querySelector<HTMLButtonElement>(
+      `.${where}-peek .${where}-peek-pin`,
+    );
+  check(
+    pinButton("town")?.getAttribute("aria-pressed") === "false",
+    "not pinned yet",
   );
-  check(star?.getAttribute("aria-pressed") === "false", "not a favourite yet");
-  star?.click();
-  leaf = await scout((l) => l.pane.favourite === true, "a favourite");
+  check(
+    !document.querySelector('[aria-label*="avourite"]'),
+    "no separate favourite",
+  );
+  pinButton("town")?.click();
+  leaf = await scout((l) => l.pane.favourite === true, "pinned");
   show(leaf);
   await sleep(50);
   check(
-    [...document.querySelectorAll('[aria-label="Remove from favourites"]')]
-      .length === 2,
-    "both peeks show the favourite",
+    [...document.querySelectorAll('[aria-label="Unpin"]')].length === 2,
+    "both peeks show the pin",
+  );
+  const pinWrites = () =>
+    sent.filter((c) => c.method === "world.core.favourite");
+  check(
+    pinWrites().length === 1 &&
+      pinWrites()[0]!.params.favourite === true &&
+      pinWrites()[0]!.params.terminal === leaf.pane.pane_id,
+    `one pin write: ${JSON.stringify(pinWrites())}`,
   );
 
-  // 6. Pinning a desk or card is World's own: no favourite write from here on.
-  const favourites = sent.filter((c) => c.method === "world.core.favourite");
+  // Town's desk wears the pin, and keeps the cell Town gives it.
+  check(coreDesk().length === 1, `Town's desk is pinned: ${coreDesk()}`);
+  const desk = coreDesk()[0]!;
+  await placeDeskPin(desk, { col: 2, row: 1 }, boardStore);
   check(
-    favourites.length === 1 &&
-      favourites[0]!.params.favourite === true &&
-      favourites[0]!.params.terminal === leaf.pane.pane_id,
-    `one favourite write: ${JSON.stringify(favourites)}`,
+    townPins[desk]?.cell?.col === 2 && saved.desk_pins[desk]?.cell?.col === 2,
+    `the pinned desk keeps its cell: ${JSON.stringify(saved)}`,
+  );
+
+  // 6. Unpin from Board's peek clears it for every client; a pin made in the
+  // app shows in World with no write from World.
+  pinButton("board")?.click();
+  leaf = await scout((l) => l.pane.favourite !== true, "unpinned");
+  show(leaf);
+  await sleep(50);
+  check(
+    pinWrites().length === 2 && pinWrites()[1]!.params.favourite === false,
+    `one unpin write: ${JSON.stringify(pinWrites())}`,
+  );
+  check(
+    [...document.querySelectorAll('[aria-label="Pin"]')].length === 2,
+    "both peeks show it unpinned",
+  );
+  await sleep(50);
+  check(
+    coreDesk().length === 0 && !saved.desk_pins[desk],
+    `Town's desk is unpinned and its cell forgotten: ${JSON.stringify(saved)}`,
+  );
+  await post("/app", { action: "pin" });
+  leaf = await scout((l) => l.pane.favourite === true, "pinned in the app");
+  show(leaf);
+  await sleep(50);
+  check(
+    [...document.querySelectorAll('[aria-label="Unpin"]')].length === 2 &&
+      pinWrites().length === 2,
+    "the app's pin shows in both peeks",
+  );
+  check(
+    coreDesk().length === 1 && townPins[desk]?.cell === null,
+    "the app's pin pins Town's desk where it stands",
   );
 
   // 7. Looking again later raises seen again.

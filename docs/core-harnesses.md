@@ -24,7 +24,7 @@ Sources inspected on 2026-11-11:
 Every row has a **launch profile**, **native status** and **native send/answers/keys**.
 Native status means exactly core's records: without OSC 7501 it is **unknown**.
 World does not copy the TUI's screen-status inference or install status-writing
-hooks for core. Seen and favourite use the existing shared labels. A stopped
+hooks for core. Seen and the pin use the existing shared labels. A stopped
 program may return to a kept shell; its old Chat cannot send to that replacement.
 
 | Harness kind | Executable | Core profile / status / delivery | Chat transcript |

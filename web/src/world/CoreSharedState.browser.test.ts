@@ -127,6 +127,8 @@ async function coreWorld(root: string) {
       const turn = Number(fake.terminal(scout)?.turn ?? 0);
       fake.label(scout, { "herdr.seen": String(Math.max(0, turn - 1)) });
     },
+    /** Herdr's app pins the agent (`terminal.pin`). */
+    pin: () => fake.label(scout, { "herdr.pinned": "1" }),
     stop: async () => {
       await manager.stopAll();
       fake.kill(socket);
@@ -135,7 +137,7 @@ async function coreWorld(root: string) {
 }
 
 test.skipIf(!chrome)(
-  "core agents: seen and favourite round-trip with Herdr's apps from Town's and Board's peeks",
+  "core agents: seen and the one pin round-trip with Herdr's apps from Town's and Board's peeks",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "core-shared-"));
     const { assets } = await buildWorldBrowserBundle("CoreSharedState", dir);
@@ -158,7 +160,9 @@ test.skipIf(!chrome)(
           return Response.json(await backend.rpc(method, params));
         }
         if (path === "/app") {
-          backend.unread();
+          const { action } = await request.json();
+          if (action === "pin") backend.pin();
+          else backend.unread();
           return Response.json({ ok: true });
         }
         if (path === "/") requested.resolve();
@@ -210,6 +214,7 @@ test.skipIf(!chrome)(
       ).toEqual([
         { terminal: backend.scout, labels: { "herdr.seen": "1" } },
         { terminal: backend.scout, labels: { "herdr.pinned": "1" } },
+        { terminal: backend.scout, labels: { "herdr.pinned": "" } },
         { terminal: backend.scout, labels: { "herdr.seen": "1" } },
       ]);
       // Evidence captures for the PR, only when asked for.

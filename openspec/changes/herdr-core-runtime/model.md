@@ -312,10 +312,16 @@ rejected by a valid trace. Turns 0–3 add 100 sensitivity traces.
 The model's label is World's ordered observation. Core has no compare-and-set
 (upstream Q7): another client's change that World has not yet received, or an
 unread that returns the label to the decided value between decision and
-dispatch, can still be overwritten. Favourite (`herdr.pinned`) is a one-key
-last-writer-wins change with no ordering rule, and push follows Herdr's
-attention rule from the ordered mirror; both are checked by unit, RPC,
-recorded 0.1.20 and live-release tests, not by this model.
+dispatch, can still be overwritten. The pin (`herdr.pinned`) is a one-key
+last-writer-wins change with no ordering rule of its own, and push follows
+Herdr's attention rule from the ordered mirror; neither is in this model. A
+core tab's desk and card pin is a pure function of one runtime observation and
+World's saved positions: pinned while any terminal is, a saved position
+forgotten only on a live unpinned observation, no write while the host is
+stale, every write fenced by the observed generation. Its unit test checks
+every combination of liveness, the tab's two labels and the saved cell
+(`web/src/world/corePins.test.ts`), with production mutants that must fail;
+unit, RPC, recorded 0.1.20, browser and live-release tests cover the label.
 
 Run `bun quint/run.ts --case herdr-core-seen` during development.
 The production gap control searches for a receive gap on an already observed

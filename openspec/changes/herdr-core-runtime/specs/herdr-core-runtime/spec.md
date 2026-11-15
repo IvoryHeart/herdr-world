@@ -130,8 +130,10 @@ the queued-send replacement window belongs to core (Q3), not World's pre-send ch
 
 ### Requirement: Shared app state with independent World ownership
 
-World SHALL own topology, asks/results, review receipts and card pins; it SHALL
-share app placement at launch, seen and favourite under M1–M11. World SHALL read
+World SHALL own topology, asks/results, review receipts and where a pinned desk
+or card stands; it SHALL share app placement at launch, seen and the pin under
+M1–M11. A core tab's desk and card SHALL be pinned exactly while one of its
+terminals carries `herdr.pinned`; Herdr (TUI) tabs keep World's own pin. World SHALL read
 agent status from core and SHALL NOT write it, including for integrations World
 installed. Native destructive actions SHALL confirm all dying descendants.
 
@@ -148,13 +150,18 @@ installed. Native destructive actions SHALL confirm all dying descendants.
 - **THEN** World keeps it unread until a new turn or a new look and writes no
   label other than the one its look was decided on
 
-#### Scenario: Favourite and push
+#### Scenario: One pin and push
 
-- **WHEN** a person stars a core agent in World or pins it in a Herdr app
-- **THEN** `herdr.pinned` changes and every client shows it, while desk and
-  card pins and review receipts stay World-only; a core agent that finishes
-  after working or starts needing World's owner pushes from core status
-  events under Herdr's attention rule
+- **WHEN** a person pins or unpins a core agent's desk, card or peek in World,
+  or pins or unpins it in a Herdr app
+- **THEN** `herdr.pinned` changes and every client shows it: World's pin pins
+  the tab's agents (its terminals when it has none) and its unpin clears every
+  terminal in the tab; the desk and card wear World's pin while any terminal
+  is pinned, World keeps only where they stand and forgets it on an unpin it
+  observes live; a stale host shows its last pins and refuses changes; review
+  receipts stay World-only; a core agent that finishes after working or
+  starts needing World's owner pushes from core status events under Herdr's
+  attention rule
 
 #### Scenario: Missing agent status
 

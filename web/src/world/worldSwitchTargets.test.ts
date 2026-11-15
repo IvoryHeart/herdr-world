@@ -43,3 +43,24 @@ test("a window's switch list holds live agents and terminals, those that need yo
   targets[1]!.onSelect();
   expect(chosen).toEqual(["shell"]);
 });
+
+test("pinned agents come first within each need, never ahead of one that needs you", () => {
+  const pinned = new Set(["pinned-busy", "pinned-asks"]);
+  const targets = worldSwitchTargets(
+    [
+      leaf("busy", "agent", "working"),
+      leaf("asks", "agent", "blocked"),
+      leaf("pinned-busy", "agent", "working"),
+      leaf("pinned-asks", "agent", "blocked"),
+    ],
+    "none",
+    () => {},
+    (node) => pinned.has(node.id),
+  );
+  expect(targets.map((t) => t.id)).toEqual([
+    "pinned-asks",
+    "asks",
+    "pinned-busy",
+    "busy",
+  ]);
+});
