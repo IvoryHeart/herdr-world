@@ -773,8 +773,7 @@ export function createCoreConnectionRuntime(
       write(
         fence,
         true,
-        (current) =>
-          current.keys(fence.occupant!.address, keys, undefined, control),
+        (current) => current.keys(fence.occupant!.address, keys, control),
         false,
       ),
     watch: (listener) => {
