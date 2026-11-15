@@ -4,6 +4,195 @@ This document describes Herdr World's current system contracts. See
 [FEATURES.md](../FEATURES.md) for behavior and shortcuts and
 [DEPLOYMENT.md](./DEPLOYMENT.md) for supported configurations.
 
+## Runtimes: Herdr TUI and herdr-core
+
+World observes and drives agents through two runtimes side by side: the Herdr
+TUI and herdr-core. Each runtime has its own provider in the service. Both
+providers feed one aggregate read model, and the browser only ever talks to the
+World origin. The dotted "runtime seam" line shows where a third runtime would
+plug in. Nothing behind it is built yet.
+
+```mermaid
+flowchart TB
+  browser["Browser: React Web/PWA<br/>one World origin, web/src/"]
+
+  subgraph world["Bun service: aggregate, server/src/"]
+    rpc["RPC and terminal WebSockets<br/>rpc/, service/"]
+    snapshot["Aggregate snapshot<br/>world/snapshot.ts"]
+    registry["worldRuntimeRegistry: reads only<br/>world/runtime-registry.ts"]
+  end
+
+  subgraph tuiSide["Herdr TUI provider, server/src/"]
+    tuiManager["Connection manager<br/>connections/manager.ts"]
+    tuiConn["Herdr connections, local and OpenSSH<br/>connections/runtime.ts, bridge/ssh-*.ts<br/>terminal bridge: bridge/terminal-bridge.ts"]
+  end
+
+  subgraph coreSide["herdr-core provider, server/src/herdr-core/"]
+    coreManager["Core connection manager<br/>connections.ts"]
+    coreHost["Host runtime per generation<br/>runtime.ts, host-runtime.ts"]
+    coreOps["Operations: launch, rooms, kill, send, keys, Chat<br/>operations.ts, delivery.ts, history.ts"]
+    coreWatch["Watches and typing<br/>watches.ts, typing.ts"]
+    coreMirror["Client and ordered mirror<br/>client.ts, mirror.ts, topology.ts"]
+    coreTransport["Existing-only transports<br/>local socket via core.lock: endpoint.ts<br/>Unix SSH stream-local forward: transport.ts<br/>Windows PowerShell named-pipe relay: windows.ts"]
+  end
+
+  nextProvider["Next runtime provider<br/>not built, e.g. Rex"]
+  sqlite[("world.sqlite<br/>core rooms and layout: storage/core-topology.ts<br/>Desk marks, watchlist, completion seen: storage/terminal-marks.ts")]
+  hostFiles["Host files, Git, worktrees<br/>World's guarded helpers"]
+  tui["Herdr TUI<br/>control and client sockets"]
+  core["herdr-core<br/>writes core.lock"]
+  apps["Official Herdr apps and hc"]
+  rex["Next runtime, e.g. Rex"]
+
+  browser <-->|"world.* RPC, snapshot, terminal streams"| rpc
+  rpc -->|reads| snapshot
+  snapshot --> registry
+  registry -->|reads| tuiManager
+  registry -->|reads| coreManager
+  registry -.->|"runtime seam"| nextProvider
+  rpc -->|"TUI controls and streams"| tuiManager
+  rpc -->|"world.core.* controls, watch, input"| coreManager
+
+  tuiManager --> tuiConn
+  tuiConn <-->|"status, output, input, size"| tui
+  tuiConn -->|files| hostFiles
+
+  coreManager --> coreHost
+  coreHost --> coreOps
+  coreHost --> coreWatch
+  coreHost -->|files| hostFiles
+  coreOps -->|"rooms and layout"| sqlite
+  coreOps -->|"fenced: connection, generation, occupant"| coreMirror
+  coreWatch --> coreMirror
+  coreMirror <--> coreTransport
+  core -->|"status events, output, size"| coreTransport
+  coreTransport -->|"run, kill, labels, send, keys, attach"| core
+  apps <-->|"same core: status, input, size"| core
+  nextProvider -.-> rex
+
+  classDef next stroke-dasharray: 6 4
+  class nextProvider,rex next
+```
+
+Status, output and terminal size flow up from each runtime to the browser.
+Input, launches and kills flow down, and each control resolves its runtime from
+its own manager. The registry is for reads only. Files and Git go from the
+provider to the host through World's guarded helpers, never through the runtime.
+
+Ownership:
+
+- **Core owns status, input and size.** World mirrors core's status as
+  reported. Agent input uses core's own `terminal.send` and `terminal.keys`.
+  Core decides the terminal size. A World observer never sizes a terminal. A
+  key typed in World takes the size by core's own rule, as the official apps do.
+- **World owns rooms and layout in SQLite** (`core_topology`), never in a core
+  document or an app's layout. Seen and favourite are shared with the official
+  apps as core labels (`herdr.seen`, `herdr.pinned`; `herdr-core/shared-state.ts`).
+  Desk marks, watchlist and completion seen stay in `terminal_marks`.
+- **Every operation is fenced** by immutable connection ID, runtime generation
+  and occupant (`herdr-core/fence.ts`, `herdr-core/occupant.ts`), and the fence
+  is rechecked before each dispatch. Nothing falls back to another connection
+  or runtime.
+- **World never starts core.** Connects and reconnects read `core.lock` and
+  open only an endpoint that already exists (`herdr-core/stream.ts`). A core
+  that is not running stays unavailable until the user starts it.
+
+The [herdr-core design](../openspec/changes/herdr-core-runtime/design.md) and
+[requirements](../openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md)
+hold the details: mirror recovery, admission limits, native parameters,
+session input and terminal streams. [Connection isolation](#connection-isolation),
+[Terminal endpoints](#terminal-endpoints) and [SSH transport](#ssh-transport)
+cover the TUI side.
+
+The main core path: launch an agent, watch it, type into it, then Chat.
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant S as World service
+  participant D as world.sqlite
+  participant C as herdr-core
+  B->>S: world.core.launch, rpc/core.ts
+  S->>C: terminal.run, fenced by lease and generation, operations.ts
+  C-->>S: terminal created, ordered mirror event, mirror.ts
+  S->>D: place the agent in its room, core_topology
+  S-->>B: snapshot shows the agent
+  B->>S: world.core.watch, rpc/core-watch.ts
+  S->>C: terminal.attach as observer with resize notifications, watches.ts
+  C-->>B: RESIZE, then history and output via the service
+  B->>S: first key, world.core.input
+  S->>C: interactive attach, the key takes the size by core's rule, typing.ts
+  S->>C: queued keys sent once, each batch re-fenced
+  B->>S: world.core.leave when focus leaves or on Back
+  B->>S: open Chat, world.core.history
+  S-->>B: transcript from the session resolver, history.ts
+  B->>S: Chat message, world.core.send
+  Note over S: recipient checked against the current occupant and foreground, delivery.ts
+  S->>C: terminal.send
+```
+
+### Adding a runtime
+
+New terminal runtimes keep appearing. Rex from
+[Superlogical](https://www.superlogical.com/) is one. A third runtime joins as
+another provider beside the two above. It must not be a mode of either.
+
+**What a new provider implements and owns:**
+
+- **Connection kind and transport.** A typed connection profile, its own
+  connection manager, and a transport that connects only to a runtime that is
+  already running.
+- **Identity and generation fences.** A durable identity for the runtime
+  instance and its terminals, plus a runtime generation. Every operation
+  captures connection, generation and occupant, and rechecks them.
+- **The read model.** Workspaces, terminals and agents fed to the aggregate
+  snapshot through `RuntimeReader` (`adapters/runtime-ports.ts`), as
+  `herdr-core/topology.ts` does for core.
+- **Status as the runtime reports it.** World does not infer status the runtime
+  doesn't report.
+- **Input and size.** Who sends input, and whose rule sets terminal size.
+- **Launches and placement.** Starting agents and shells, and where they appear.
+- **Host files.** Which host a connection's files and Git commands run on.
+  World's guarded helpers do the work.
+- **Chat history.** How a terminal's harness session is found, so the shared
+  session resolver can read its transcript.
+
+**What World supplies unchanged:** the views (Town, Desk and Board),
+rooms and layout in SQLite, the guarded file, upload and Git
+helpers, and Needs you.
+
+**Debt a third runtime would have to generalise.** These places are Herdr- or
+core-specific today. They are recorded here and not refactored yet:
+
+- The runtime kind is a two-value union: `ConnectionRuntimeKind`
+  (`connections/profiles.ts`) and `WorldRuntimeKind`
+  (`world/runtime-registry.ts`), both `"herdr" | "herdr-core"`. The snapshot
+  marks only core (`runtime?: "herdr-core"` in `world/snapshot.ts`).
+- `worldRuntimeRegistry(tui, core)` takes exactly two managers.
+- Code branches on `runtime === "herdr-core"` in more than 20 service and browser
+  modules. Among them are snapshot, bin close, ask delivery, Ranger context,
+  launcher, inspector selection, Town reads, Chat and the connection switcher.
+  Search for `"herdr-core"` under `server/src` and `web/src`.
+- The connection catalogue has a separate `core_connections` field
+  (`rpc/connections.ts`, `rpc/bridge.ts`, `web/src/store/catalogue.ts`), and
+  core has its own Connections page cards (`components/CoreConnections.tsx`).
+- Core controls have their own RPC namespace (`world.core.*` in `rpc/core.ts`,
+  `rpc/core-watch.ts`, `rpc/core-host.ts`) and their own files endpoint
+  (`service/core-files-http.ts`).
+- The windows are runtime-specific: the TUI terminal (`TerminalView.tsx`) beside
+  core's `CoreTerminalWatch`, `CoreChat`, `CoreFiles`, `CoreHistory`,
+  `CoreWorktrees` and `CoreKillConfirm` under `web/src/world/`.
+
+**Where Rex would map.** Superlogical's public pages, read 2026-11-15, describe
+Rex as a terminal multiplexer in public beta. They mention long-lived sessions
+that survive disconnects, terminal blocks in split panes, and a Rex server
+self-hosted by the macOS app, with servers for Linux and Windows. Clients
+include web, macOS and iOS. Those facts map to the connection kind and
+transport, to identity (a server and its sessions), and to the read model
+(sessions and panes). The pages say nothing about a client protocol, socket or
+SSH access, agent status, input, size, files or session identity. Every other
+seam item stays open until Rex documents it.
+
 ## System overview
 
 `WorldStorage.terminalMarks` stores Desk marks/recent opens, watchlist and completion
