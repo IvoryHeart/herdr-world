@@ -44,6 +44,7 @@ import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
 import { DeskOtherHosts } from "./DeskOtherHosts";
+import { leafPinnedBy, useDeskPins } from "./useDeskPins";
 import { useGreetingAnchor } from "./townMasterGreeting";
 import {
   keyTakenByViewSearch,
@@ -79,6 +80,7 @@ export function partitionDesk(
   stops: Map<string, number> = new Map(),
   stopIds: ReadonlyMap<string, string> = new Map(),
   asks: ReadonlyMap<string, WorldAsk> = new Map(),
+  pinned: (leaf: WorldLeafObject) => boolean = () => false,
 ) {
   const needs: Item[] = [];
   const review: Item[] = [];
@@ -142,6 +144,11 @@ export function partitionDesk(
       Number(left.handled) - Number(right.handled) || oldestFirst(left, right),
   );
   working.sort(oldestFirst);
+  // Quiet agents have no order of their own: pinned ones come first.
+  const pins = new Map(quiet.map((leaf) => [leaf.id, pinned(leaf)]));
+  quiet.sort(
+    (left, right) => Number(pins.get(right.id)) - Number(pins.get(left.id)),
+  );
   return { needs, review, working, quiet };
 }
 
@@ -205,7 +212,12 @@ export function DeskView(props: {
       bridge.connection(leaf.connectionId, leaf.generation),
     [],
   );
-  return <DeskBoard {...props} client={client} />;
+  const deskPins = useDeskPins();
+  const pinned = useMemo(
+    () => leafPinnedBy(deskPins, props.world.spaces),
+    [deskPins, props.world.spaces],
+  );
+  return <DeskBoard {...props} client={client} pinned={pinned} />;
 }
 
 /** Desk triage follows the host filter; reads retain each leaf's owner. */
@@ -219,8 +231,11 @@ export function DeskBoard({
   onPreview = null,
   onCloseReading,
   deskStore,
+  pinned,
 }: {
   deskStore?: WorldDeskStore;
+  /** Whether an agent is pinned; quiet agents list pinned ones first. */
+  pinned?: (leaf: WorldLeafObject) => boolean;
   world: WorldObject;
   aggregate?: WorldObject;
   client: DeskClients;
@@ -293,6 +308,7 @@ export function DeskBoard({
     stops,
     stopIds,
     asking,
+    pinned,
   );
   const pendingReview = review.filter((item) => !item.handled);
   const matches = (item: Item) =>

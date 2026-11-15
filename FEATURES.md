@@ -2153,8 +2153,11 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     then. A desk holds a tab, so it is pinned while any of its terminals is
     pinned: World's pin pins the tab's agents (its terminals, when it has no
     agent), and its unpin clears every terminal's pin in the tab. Pinned
-    agents come first in a phone's ⋯ switch list within the same need
-    (Needs you first, then finished ones, then the rest). The pin is quiet
+    agents come first where World lists agents in no order of its own: a
+    phone's ⋯ switch list within the same need (Needs you first, then
+    finished ones, then the rest) and Desk's quiet agents. Lists with their
+    own order (Desk's lanes by time, its Agents directory by recent activity)
+    keep it. The pin is quiet
     (no colour), so it never competes with Needs you. A host that is offline
     or reconnecting shows its last pins and refuses changes ("This agent's
     host is reconnecting: its pin can change once World sees it again"); a

@@ -4,7 +4,7 @@
   desk, Board card or peek in World pins it in the apps, and a pin made or
   removed in an app shows on its desk and card within seconds. World still
   decides where a pinned desk or card stands. Pinned agents come first in a
-  phone's switch list. Herdr (TUI) agents keep World's own pin.
+  phone's switch list and Desk's quiet agents. Herdr (TUI) agents keep World's own pin.
 
 ### Removed
 

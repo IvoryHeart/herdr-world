@@ -46,7 +46,7 @@ checks. Current spec synchronization and archive remain after acceptance.
     with the apps: a core desk or card is pinned exactly while its tab
     carries `herdr.pinned`, World's pin writes it (agents first, then
     terminals; unpin clears all), the favourite star is gone, pinned agents
-    lead the phone switch list.
+    lead the phone switch list and Desk's quiet agents.
 - [x] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
   - [x] Issue #869: core-first launches from World (absolute executable, no
     caller/parent/notes, explicit keep; agents placed with a `where` caption,

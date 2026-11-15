@@ -158,7 +158,9 @@ installed. Native destructive actions SHALL confirm all dying descendants.
   the tab's agents (its terminals when it has none) and its unpin clears every
   terminal in the tab; the desk and card wear World's pin while any terminal
   is pinned, World keeps only where they stand and forgets it on an unpin it
-  observes live; a stale host shows its last pins and refuses changes; review
+  observes live; pinned agents come first in lists with no order of their
+  own (a phone's switch list, Desk's quiet agents); a stale host shows its
+  last pins and refuses changes; review
   receipts stay World-only; a core agent that finishes after working or
   starts needing World's owner pushes from core status events under Herdr's
   attention rule

@@ -24,6 +24,7 @@ import {
 } from "./floatingTerminalPreferences";
 import { terminalColorKey } from "./terminalColor";
 import {
+  leafPinnedBy,
   setDeskPinned,
   useCoreDeskPinPositions,
   useDeskPins,
@@ -63,7 +64,7 @@ import {
   defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
-import type { WorldLeafObject, WorldObject } from "./worldObject";
+import type { WorldObject } from "./worldObject";
 import { worldSwitchTargets } from "./worldSwitchTargets";
 import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
@@ -375,23 +376,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   // does: agents open on Chat, terminals on Terminal.
   // Pinned ones come first: a herdr-core agent by its own label (Herdr's
   // apps list it first too), a Herdr agent or terminal by its desk.
-  const leafPinned = (node: WorldLeafObject) =>
-    node.runtime === "herdr-core"
-      ? node.pane.favourite === true
-      : Boolean(
-          deskPins[
-            terminalColorKey({
-              connectionId: node.connectionId,
-              workspaceId: node.workspaceId,
-              tabId: node.tabId,
-              workspaceIds: new Set(
-                world.spaces
-                  .filter((space) => space.connectionId === node.connectionId)
-                  .map((space) => space.nativeId),
-              ),
-            })
-          ],
-        );
+  const leafPinned = leafPinnedBy(deskPins, world.spaces);
   const switchTargets = (currentId: string, leave?: () => void) =>
     compactArrangement
       ? worldSwitchTargets(

@@ -23,6 +23,7 @@ import {
   type CorePins,
 } from "./corePins";
 import { worldRuntimeStore } from "./runtimeStore";
+import type { WorldLeafObject, WorldSpaceObject } from "./worldObject";
 
 /**
  * Town desk pins, a view setting World's service keeps beside the terminal
@@ -82,6 +83,34 @@ export function useDeskPins(
     return last.current;
   };
   return useSyncExternalStore(subscribe, snapshot, snapshot);
+}
+
+/**
+ * Whether a leaf is pinned, for lists World shows in no order of its own,
+ * which put pinned ones first as Herdr's apps do: a herdr-core leaf by its own
+ * label, a Herdr leaf by its tab's desk.
+ */
+export function leafPinnedBy(
+  deskPins: DeskPins,
+  spaces: readonly WorldSpaceObject[],
+) {
+  return (node: WorldLeafObject) =>
+    node.runtime === "herdr-core"
+      ? node.pane.favourite === true
+      : Boolean(
+          deskPins[
+            terminalColorKey({
+              connectionId: node.connectionId,
+              workspaceId: node.workspaceId,
+              tabId: node.tabId,
+              workspaceIds: new Set(
+                spaces
+                  .filter((space) => space.connectionId === node.connectionId)
+                  .map((space) => space.nativeId),
+              ),
+            })
+          ],
+        );
 }
 
 /**
