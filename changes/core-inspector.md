@@ -10,9 +10,12 @@
   keeps its own size.
 - A herdr-core agent's Chat is the same Chat as a Herdr agent's: transcript,
   Details, question cards, composer, attachments and keys. Messages and
-  answers still go through core, checked against the agent you saw. Stop is
-  shown but off, with the reason, because core takes keys only at a question.
+  answers still go through core, checked against the agent you saw. Stop and
+  the composer's keys work while the agent works, and a core Codex agent can
+  link its session for reading.
 - Board's peek offers Open for a core agent, as for a Herdr agent.
+- An open core agent window counts as looking at it: Herdr's apps show its
+  finished turn as seen, as they do after a Town or Board peek.
 
 ### Fixed
 
@@ -21,3 +24,6 @@
   sends the key once.
 - A core agent whose conversation World has not found is no longer told to
   install Herdr's integration.
+- An answer to a core agent's question no longer answers the same question
+  asked again on a later turn.
+- Chat's composer sends to a core agent whose conversation World cannot read.

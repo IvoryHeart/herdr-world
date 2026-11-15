@@ -169,8 +169,11 @@ another provider beside the two above. It must not be a mode of either.
   session resolver can read its transcript, and how a message reaches the
   program. Core does both in `herdr-core/agent-sessions.ts`: it answers the
   shared agent-session handlers' few Herdr calls through core, so Chat,
-  History and Needs you answers are the same code for both runtimes. In the
-  browser, `web/src/coreRecipient.ts` adds the occupant a send is for.
+  History and Needs you answers are the same code for both runtimes. Chat's
+  Stop and keys use core's keys at any status (`delivery.ts` input kind
+  `control`); a Codex session link is kept per occupant in that adapter. In
+  the browser, `web/src/coreRecipient.ts` adds the occupant a send or link is
+  for.
 
 **What World supplies unchanged:** the views (Town, Desk and Board), their
 view layout and marks in SQLite, the guarded file, upload and Git helpers, and

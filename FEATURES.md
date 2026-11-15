@@ -2129,14 +2129,15 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   - **Seen, shared with Herdr's apps.** Looking at a core agent in World
     clears its Done in Herdr's phone and desktop apps too: open its peek in
     Town (tap or hover the agent) or Board (rest the mouse on its row, or
-    **Preview** on a phone) on a page that is in front of you (visible and
+    **Preview** on a phone), or its window (Chat, Terminal, Files or Changes,
+    however you opened it), on a page that is in front of you (visible and
     focused) for about half a second. World shares each
     finished turn once per look: if someone marks it unread in an app while
-    the peek stays open, it stays unread until the agent finishes another
-    turn or you look again (close and reopen the peek, or come back to the
+    the peek or window stays open, it stays unread until the agent finishes
+    another turn or you look again (close and reopen it, or come back to the
     page). Needs you, Desk and hover cards are lists and glances, not looks,
-    and a page in the background or a host that is offline or reconnecting
-    shares nothing. Sharing is best effort: World writes only Herdr's shared
+    until they open the agent's window; a minimized window, a page in the
+    background or a host that is offline or reconnecting shares nothing. Sharing is best effort: World writes only Herdr's shared
     `herdr.seen` label, only to raise it, and only while it still holds what
     World saw when you looked, so an app's newer look or unread wins; a write
     that fails is not retried and the next look shares it.
@@ -2171,11 +2172,16 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     command, so agents started before World was connected read too. When it
     finds none, Chat says so ("World has not found where this agent saves
     its conversation yet…") and still takes messages; it never offers
-    Herdr's integration install for a core agent. Differences core forces:
-    **Stop** is shown but off ("herdr-core takes keys only while the agent
-    asks you something. Interrupt this turn from the Terminal tab."), and
-    the trust question is answered in the Terminal tab. Messages, answers
-    and keys go through core's own send and keys for every harness. World
+    Herdr's integration install for a core agent. **Stop** sends Esc and
+    the composer's ⋮ keys work while the agent works, as for a Herdr agent;
+    both are off, with the reason, until World knows which program the
+    window is for. An answer is tied to the question's turn: the same
+    question asked again on a later turn needs a new answer. A core Codex
+    agent World cannot match to a session offers **Link session**, as a
+    Herdr one does; the link reads that program's conversation only and is
+    dropped when another program takes the terminal. The trust question is
+    answered in the Terminal tab. Messages, answers and keys go through
+    core's own send and keys for every harness. World
     checks the original core, terminal, program and foreground before every
     send. Missing evidence or a replacement shell refuses it with a reason
     ("Reopen this agent's Chat; nothing was sent."). A timeout or lost reply

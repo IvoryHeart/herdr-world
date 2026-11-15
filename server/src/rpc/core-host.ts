@@ -48,6 +48,15 @@ const CORE_HOST_CALLS = {
   "agent_history.get": (host) => host.agentSessions().readHistoryRequest,
   "agent_history.entry": (host) => host.agentSessions().readEntry,
   "agent_session.get": (host) => host.agentSessions().readSummary,
+  // A Codex session linked for reading, for the program the person saw.
+  "agent_session.link_preview": (host) => (params) =>
+    withCoreRecipient(params.recipient, () =>
+      host.agentSessions().previewLink(params),
+    ),
+  "agent_session.link": (host) => (params) =>
+    withCoreRecipient(params.recipient, () =>
+      host.agentSessions().link(params),
+    ),
   "agent_turn.get": (host) => host.agentSessions().readTurn,
 } satisfies Record<
   Exclude<CoreHostMethod, "file.reveal" | ConversationMethod>,

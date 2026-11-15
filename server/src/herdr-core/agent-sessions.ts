@@ -5,6 +5,7 @@ import { CHAT_KEY } from "../../../shared/chatKeys";
 import { createAgentSessionHandlers } from "../agent/agent-sessions";
 import { normalizeAgentName } from "../agent/chat-harnesses";
 import { claudeConfigDirectory } from "../agent/claude-process-session";
+import { createCodexSessionLinker } from "../agent/codex-session-link";
 import type {
   ConversationKeyResult,
   ConversationSendResult,
@@ -15,6 +16,7 @@ import type { HerdrCall } from "../agent/session-types";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import { deliverCore, type CoreDeliveryInput } from "./delivery";
 import { argvSession, processSession } from "./history";
+import { coreRecipientChange, foregroundOf } from "./recipient";
 import type { CoreConnectionRuntime } from "./runtime";
 
 type Lease = ReadyRuntimeLease<CoreConnectionRuntime>;
@@ -53,6 +55,9 @@ export function withCoreRecipient<T>(
 export const CORE_NO_SESSION =
   "World has not found where this agent saves its conversation yet. It looks in the agent's own session record and its launch command. You can still send it a message, and the Terminal tab shows it live.";
 
+/** CORE_NO_SESSION for Codex, whose session ID Chat can link for reading. */
+export const CORE_CODEX_UNLINKED = `${CORE_NO_SESSION} If you know its Codex session ID, link it to read the conversation here.`;
+
 /** A Herdr-integration "no session" answer, in core's words. */
 function inCoreWords<T extends { status: string; unavailable: unknown }>(
   value: T,
@@ -62,16 +67,21 @@ function inCoreWords<T extends { status: string; unavailable: unknown }>(
     detail?: string;
     command?: string;
   } | null;
+  if (value.status !== "unavailable") return value;
+  // An unlinked Codex conversation always gets core's linking advice, not
+  // Herdr's (its integration, its startup report, its daemon issue).
   if (
-    value.status !== "unavailable" ||
-    !(unavailable?.command || unavailable?.detail?.includes("Herdr")) ||
-    (unavailable.reason !== "no_session" &&
-      unavailable.reason !== "codex_unlinked")
+    unavailable?.reason !== "codex_unlinked" &&
+    (unavailable?.reason !== "no_session" ||
+      !(unavailable.command || unavailable.detail?.includes("Herdr")))
   )
     return value;
   return {
     ...value,
-    unavailable: { reason: "no_session", detail: CORE_NO_SESSION },
+    unavailable:
+      unavailable.reason === "codex_unlinked"
+        ? { reason: "codex_unlinked", detail: CORE_CODEX_UNLINKED }
+        : { reason: "no_session", detail: CORE_NO_SESSION },
   };
 }
 
@@ -151,6 +161,30 @@ export function createCoreAgentSessions(args: {
     return launched ? { ...launched, source: "core-argv", agent } : undefined;
   };
 
+  /**
+   * Codex sessions the person linked for reading, by terminal: each holds
+   * only while the program it was linked for (its recipient) runs there.
+   * A link is a reading choice, never input authority: core's occupant
+   * check still decides where input goes.
+   */
+  const links = new Map<string, { recipient: string; session: Row }>();
+  const linked = (address: string): Row | undefined => {
+    const link = links.get(address);
+    if (!link) return;
+    const epoch = view.epoch;
+    if (
+      epoch &&
+      !coreRecipientChange(
+        link.recipient,
+        epoch.coreId,
+        view.terminal(address),
+        view.occupancy(address),
+      )
+    )
+      return link.session;
+    links.delete(address);
+  };
+
   /** Herdr's `agent.get` record for the agent at `address`, from core. */
   const agentRecord = async (address: string): Promise<Row> => {
     const agents = ((await operations.listAgents()).agents ?? []) as Row[];
@@ -161,7 +195,7 @@ export function createCoreAgentSessions(args: {
     const record = view.terminal(address) as Row | undefined;
     const foreground = record?.foreground as { cwd?: unknown } | undefined;
     const agent = normalizeAgentName(String(row.agent ?? ""));
-    const session = await sessionOf(agent, record);
+    const session = linked(address) ?? (await sessionOf(agent, record));
     const turn = pane.turn;
     return {
       ...row,
@@ -271,6 +305,56 @@ export function createCoreAgentSessions(args: {
         throw new Error(`${method} is not available for herdr-core agents`);
     }
   };
+
+  /**
+   * The shared Codex linker (codex-session-link.ts) over core: the
+   * foreground core reports stands in for Herdr's process list, and the
+   * link is kept here for the program the person saw, not reported to core
+   * (core has no session report).
+   */
+  const linker = createCodexSessionLinker(async (method, params = {}) => {
+    const pane = String(params.pane_id ?? params.target ?? "");
+    if (method === "pane.process_info") {
+      const record = view.terminal(pane);
+      const foreground = record ? foregroundOf(record) : null;
+      return {
+        process_info: {
+          foreground_process_group_id: foreground?.[0] ?? null,
+          foreground_processes: foreground
+            ? [{ pid: foreground[0], name: foreground[1] }]
+            : [],
+        },
+      };
+    }
+    if (method === "pane.report_agent_session") {
+      const recipient = requestInput.getStore()?.recipient ?? "";
+      const epoch = view.epoch;
+      if (
+        !recipient ||
+        !epoch ||
+        coreRecipientChange(
+          recipient,
+          epoch.coreId,
+          view.terminal(pane),
+          view.occupancy(pane),
+        )
+      )
+        throw new Error(
+          "This agent changed since you opened its Chat. Reopen it and link again.",
+        );
+      links.set(pane, {
+        recipient,
+        session: {
+          kind: "id",
+          value: String(params.agent_session_id ?? ""),
+          source: "world-link",
+          agent: "codex",
+        },
+      });
+      return {};
+    }
+    return call(method, params);
+  }, files);
 
   const handlers = createAgentSessionHandlers({
     herdrCall: call,
@@ -432,6 +516,8 @@ export function createCoreAgentSessions(args: {
 
   return {
     ...handlers,
+    previewLink: linker.preview,
+    link: linker.link,
     conversation,
     /** Tells `owner` (a browser) about changes to `paneId` through `send`. */
     watch(owner: object, paneId: string, send: (paneId: string) => void) {

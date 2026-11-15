@@ -154,6 +154,7 @@ async function run() {
   viewport.name = "viewport";
   viewport.content = "width=device-width, initial-scale=1";
   document.head.append(viewport);
+  window.focus();
   initializeLayoutPreferences();
   initializeShortcutPreferences();
   Object.assign(bridge, {
@@ -252,6 +253,24 @@ async function run() {
         (name) => name.textContent === "README.md",
       ),
     "Files lists the agent's checkout",
+  );
+  // The drawn window is a look: the agent's finished turn is shared as seen
+  // with Herdr's apps, qualified by its generation and turn (coreSeen.ts).
+  await until(
+    () => calls.some((call) => call.method === "world.core.seen"),
+    "the open window shares the agent's turn as seen",
+  );
+  const seen = calls.find((call) => call.method === "world.core.seen")!;
+  check(
+    JSON.stringify(seen.params) ===
+      JSON.stringify({
+        connection_id: "box",
+        connection_generation: agent.generation,
+        terminal: agent.nativeId,
+        turn: agent.kind === "agent" ? agent.pane.turn : null,
+        seen: null,
+      }),
+    `one seen write for the open window's turn: ${JSON.stringify(seen.params)}`,
   );
   const worktreeRead = calls.find(
     (call) => call.method === "agent_worktree.get",

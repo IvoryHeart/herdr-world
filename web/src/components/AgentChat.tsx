@@ -755,8 +755,7 @@ export function AgentChat({
               </button>
             </span>
           ) : null}
-          {/* Core keeps no session links: its Terminal tab resumes one. */}
-          {unavailable.reason === "codex_unlinked" && !coreAgent ? (
+          {unavailable.reason === "codex_unlinked" ? (
             <div className="agent-chat-link">
               <CodexSessionLink
                 paneId={pane.pane_id}

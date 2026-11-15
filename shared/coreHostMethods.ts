@@ -39,6 +39,8 @@ export const CORE_HOST_METHODS = [
   "agent_history.get",
   "agent_history.entry",
   "agent_session.get",
+  "agent_session.link_preview",
+  "agent_session.link",
   "agent_turn.get",
 ] as const;
 

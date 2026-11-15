@@ -1,12 +1,14 @@
 import type { ConnectionClient } from "./connectionClient";
 import type { Pane } from "./types";
 
-/** Chat's calls that type into the agent. */
+/** Chat's calls that type into the agent, or link its session for reading. */
 const INPUT = new Set([
   "agent_conversation.send",
   "agent_conversation.answer",
   "agent_conversation.press",
   "agent_conversation.trust",
+  "agent_session.link_preview",
+  "agent_session.link",
 ]);
 
 /**

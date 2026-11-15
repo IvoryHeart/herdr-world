@@ -1,9 +1,20 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rename, rm } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAgentSessionHandlers } from "../agent/agent-sessions";
-import { localAgentSessionFiles } from "../agent/session-file-access";
+import {
+  type AgentSessionFileAccess,
+  localAgentSessionFiles,
+} from "../agent/session-file-access";
 import {
   ANSWER,
   QUESTION,
@@ -11,7 +22,7 @@ import {
 } from "../agent/testing/conversation-fixtures";
 import { defaultGuiSettings } from "../config/gui-settings";
 import { callCoreHost } from "../rpc/core-host";
-import { CORE_NO_SESSION } from "./agent-sessions";
+import { CORE_CODEX_UNLINKED, CORE_NO_SESSION } from "./agent-sessions";
 import { createCoreHostRuntime } from "./host-runtime";
 import { coreWorld, until } from "./testing/core-world";
 
@@ -27,10 +38,15 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
-// The real per-process records live in the developer's home: never read.
-const files = {
+// The real per-process records and Codex sessions live in the developer's
+// home: never read.
+const files: AgentSessionFileAccess = {
   ...localAgentSessionFiles,
   findClaudeSessionForProcess: async () => null,
+  findCodexSessionById: async () => null,
+  findCodexSessionByPrefix: async () => null,
+  listCodexThreads: async () => [],
+  listCodexThreadBatch: async (cwds) => new Map(cwds.map((cwd) => [cwd, []])),
 };
 
 async function setup(
@@ -365,6 +381,68 @@ describe("one Chat for both runtimes", () => {
     expect(shown.messages.map((m) => m.text)).toEqual(
       expect.arrayContaining([QUESTION, ANSWER]),
     );
+  });
+
+  test("a Codex session the person links is read for that program only", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hcw-codex-"));
+    cleanups.push(() => rm(dir, { recursive: true, force: true }));
+    const id = "019a0000-0000-7000-8000-0000000000a1";
+    const written = await fixtures
+      .find((item) => item.agent === "codex")!
+      .write(dir);
+    const path = join(dir, `rollout-2026-10-22T09-00-00-${id}.jsonl`);
+    await writeFile(
+      path,
+      `${JSON.stringify({
+        type: "session_meta",
+        payload: { id, cwd: "/work/demo" },
+      })}\n${await readFile(written, "utf8")}`,
+    );
+    const { w, t, call, recipient } = await setup("codex", "idle", false, {
+      ...files,
+      findCodexSessionById: async (asked) =>
+        asked === id
+          ? { path, mtimeMs: (await stat(path)).mtimeMs, identity: "fixture" }
+          : null,
+    });
+    const before = (await call("agent_conversation.get")) as {
+      status: string;
+      unavailable: { reason: string; detail: string };
+    };
+    expect(before.unavailable).toMatchObject({
+      reason: "codex_unlinked",
+      detail: CORE_CODEX_UNLINKED,
+    });
+    // Without the recipient the person saw, nothing is linked.
+    const preview = (await call("agent_session.link_preview", {
+      session_id: id,
+      recipient,
+    })) as { token: string; path: string };
+    expect(preview.path).toBe(path);
+    await expect(
+      call("agent_session.link", { token: preview.token }),
+    ).rejects.toThrow();
+    const again = (await call("agent_session.link_preview", {
+      session_id: id,
+      recipient,
+    })) as { token: string };
+    await expect(
+      call("agent_session.link", { token: again.token, recipient }),
+    ).resolves.toEqual({ session_id: id });
+    const shown = (await call("agent_conversation.get")) as {
+      status: string;
+      messages: Array<{ text: string }>;
+    };
+    expect(shown.status).toBe("ok");
+    expect(shown.messages.length).toBeGreaterThan(0);
+    // Linking reads; it types nothing.
+    expect(sends(w)).toEqual([]);
+    // Another program in the terminal does not inherit the link.
+    w.fake.replaceWithShell(t);
+    await w.settle();
+    await expect(call("agent_conversation.get")).resolves.not.toMatchObject({
+      status: "ok",
+    });
   });
 
   test("Chat's trust answer is not offered for core", async () => {

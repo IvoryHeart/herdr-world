@@ -2,6 +2,8 @@ import { watchConversation } from "../conversationWatch";
 import { harnessLabel } from "./agentProfiles";
 import { WorldLoader } from "./WorldLoader";
 import { useCoreRuntimeConnection } from "./runtimeStore";
+import { useCoreSeen } from "./coreSeen";
+import { coreSharedOf } from "./coreShared";
 import { useEffectCallback } from "../useEffectCallback";
 import type { Conversation } from "../components/chat/types";
 import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
@@ -259,6 +261,13 @@ function InspectorResources({
           candidate.tab_id === conversation.tabId,
       )
     : undefined;
+  // An open, drawn agent window is a look like a peek: Herdr's apps see the
+  // core agent's turn as seen (generation- and turn-qualified, coreSeen.ts).
+  const coreShared =
+    core && target && historyPane && conversation.context.kind === "agent"
+      ? coreSharedOf(conversation.connectionId, core.generation, historyPane)
+      : null;
+  useCoreSeen(coreShared ? { ...coreShared, stale: !coreLive } : null);
   const worktree = useAgentWorktree(baseConnectionClient, {
     enabled: conversation.context.kind === "agent",
     active: ["files", "changes", "commits"].includes(conversation.view),
