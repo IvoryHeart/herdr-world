@@ -445,6 +445,9 @@ export class FakeCore {
     });
   }
 
+  /** What `terminal.read` answers for a terminal; `$` when unset. */
+  readonly readScreens = new Map<string, string>();
+
   /** Holds `terminal.read` replies until the returned release sends them. */
   holdReads(): () => void {
     const held: Array<() => void> = [];
@@ -672,8 +675,10 @@ export class FakeCore {
     const record = this.terminals.get(address);
     if (!record || record.state !== "live") return;
     let leader: FakeViewer | null = null;
+    // Ties (resumed viewers that never typed) go to the last attached,
+    // as Rust's `max_by_key` does in core's `apply_size`.
     for (const v of this.viewers.get(address) ?? [])
-      if (!v.observe && (!leader || v.activeAt > leader.activeAt)) leader = v;
+      if (!v.observe && (!leader || v.activeAt >= leader.activeAt)) leader = v;
     const [cols, rows] = leader?.size ?? FAKE_HEADLESS;
     if ((record.cols === cols && record.rows === rows) || !cols || !rows)
       return;
@@ -1079,7 +1084,9 @@ export class FakeCore {
       case "terminal.read": {
         const record = this.terminals.get(String(request.params?.terminal));
         if (!record) return error(-32000, "no terminal", "not_found");
-        const send = () => reply({ complete: true, how: "screen", text: "$" });
+        const text = this.readScreens.get(String(request.params?.terminal));
+        const send = () =>
+          reply({ complete: true, how: "screen", text: text ?? "$" });
         if (this.heldReads) this.heldReads.push(send);
         else send();
         return;

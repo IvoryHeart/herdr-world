@@ -586,7 +586,34 @@ async function dispatchCoreHostRpc(
   try {
     admitVerb(verb, params, admission);
     const host = core.hostRuntime(lease);
-    const result = await callCoreHost(host, method, params, ws.remoteAddress);
+    const result = await callCoreHost(host, method, params, {
+      remoteAddress: ws.remoteAddress,
+      owner: ws,
+      // The same notice a Herdr connection's watch sends (rpc/agent.ts).
+      conversationChanged: (paneId) =>
+        services.safeSend(
+          ws,
+          JSON.stringify({
+            control: {
+              type: "agent_conversation_changed",
+              connection_id: connectionId,
+              connection_generation: lease.generation,
+              pane_id: paneId,
+            },
+          }),
+          "agent-conversation",
+        ),
+    });
+    if (method === "agent_conversation.watch") {
+      // A closed browser stops watching (listener.ts).
+      const sessions = host.agentSessions();
+      let watchers = services.conversationWatchers.get(ws);
+      if (!watchers) {
+        watchers = new Set();
+        services.conversationWatchers.set(ws, watchers);
+      }
+      watchers.add(sessions);
+    }
     checkVerbResult(verb, result);
     publisher.send(
       { id, result, command_evidence: evidence.get() },

@@ -47,7 +47,8 @@ export function CoreTerminalComposer({
   const current = useRef(true);
   const { connectionId, generation, address } = target;
   // The draft outlives this composer: the core connection's generation holds
-  // its scope (useCoreTerminalWatch), so Back, reopen or a lost stream keep it.
+  // its scope (useCoreTerminalDrafts), so closing, reopening or a lost stream
+  // keep it.
   useEffect(() => {
     current.current = true;
     return () => {

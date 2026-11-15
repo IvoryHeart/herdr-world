@@ -87,20 +87,24 @@ function unnamedSpace(workspace: { number?: number | null }) {
 export const CORE_VIEW_ONLY_REASON = "World can't mark core work reviewed yet";
 
 /**
- * A live herdr-core node World can show Files and Changes for: its window
- * opens with only those views (no terminal, chat or history).
+ * A live herdr-core node World's Inspector opens: one whose terminal World
+ * watches (its Terminal tab) or whose Files and Changes it can show. A core
+ * agent adds its Chat.
  */
 export function isCoreResourceNode(node: {
   stale: boolean;
   viewOnly?: string;
   coreControl?: true;
+  watch?: unknown;
   capabilities: Pick<WorldActionCapabilities, "files" | "changes">;
 }): boolean {
   return (
     !node.stale &&
     node.coreControl === true &&
     node.viewOnly !== undefined &&
-    (node.capabilities.files || node.capabilities.changes)
+    (node.watch !== undefined ||
+      node.capabilities.files ||
+      node.capabilities.changes)
   );
 }
 
@@ -110,6 +114,7 @@ export function inspectorAdmits(node: {
   actionable: boolean;
   viewOnly?: string;
   coreControl?: true;
+  watch?: unknown;
   capabilities: Pick<WorldActionCapabilities, "files" | "changes">;
 }): boolean {
   return node.actionable || isCoreResourceNode(node);
@@ -169,8 +174,9 @@ export type WorldLeafObject = WorldObjectBase & {
   lastActivityAt?: number;
   spaceLabel: string;
   /**
-   * A live herdr-core terminal World can watch (never type into): its
-   * connection's current generation and core address.
+   * A live herdr-core terminal World watches in its Inspector's Terminal tab
+   * (typing goes through core's input): its connection's current generation
+   * and core address.
    */
   watch?: { connectionId: string; generation: number; address: string };
 };

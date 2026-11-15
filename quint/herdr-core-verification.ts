@@ -23,8 +23,9 @@ const observeFaults: ReadonlySet<string> = new Set([
   "key-twice",
   "key-before-attach",
   "typed-replacement",
-  "leave-overtakes",
-  "automatic-opens",
+  "hold-resizes",
+  "swap-gap",
+  "automatic-untyped",
 ]);
 type Harness = {
   root: string;

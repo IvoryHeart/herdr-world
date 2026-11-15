@@ -1,4 +1,3 @@
-import { coreAgentChat } from "./CoreChat";
 import { memo, Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
@@ -60,13 +59,16 @@ import {
   defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
-import { inspectorAdmits, type WorldObject } from "./worldObject";
+import type { WorldObject } from "./worldObject";
 import { worldSwitchTargets } from "./worldSwitchTargets";
 import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
-import { coreTerminalNodeId, useCoreTerminalWatch } from "./CoreTerminalWatch";
+import {
+  coreInspectorTerminal,
+  useCoreTerminalDrafts,
+} from "./CoreTerminalWatch";
 
 // Memoized: an agent window opening, moving or updating changes none of a
 // view's data, so the view must not re-render with the control plane.
@@ -352,49 +354,24 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     };
   };
 
-  // A herdr-core terminal opens in its own window as a watch you can type
-  // into: World adopts core's grid and takes it only while you type. A core
-  // agent's Chat, Files and Changes open in its Inspector.
-  const coreWatch = useCoreTerminalWatch([aggregateWorld, world]);
+  // A herdr-core agent or terminal opens in the same Inspector as a Herdr
+  // one: its Chat, its watched Terminal (World holds the size that fits it
+  // while no Herdr app leads), Files and Changes.
+  useCoreTerminalDrafts([aggregateWorld, world]);
   const coreNode = (id: string) =>
     aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id);
-  const openTerminalById = (
-    id: string,
-    ...rest: Parameters<typeof openInspectorTerminalById> extends [
-      string,
-      ...infer Rest,
-    ]
-      ? Rest
-      : never
-  ) => {
-    const node = coreNode(id);
-    const requested = rest[2] === undefined ? "terminal" : rest[2];
-    // A plain terminal opens on Terminal; an agent on its default view.
-    const opened =
-      requested ??
-      (node?.kind === "agent" ? defaultOpenView(node) : null) ??
-      "terminal";
-    return opened === "terminal" && coreWatch.watch(id)
-      ? Promise.resolve()
-      : openInspectorTerminalById(id, ...rest);
-  };
+  const openTerminalById = openInspectorTerminalById;
   const openNodeById = (id: string, signal?: AbortSignal) =>
     openTerminalById(id, signal, world, null);
 
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
   // A phone switches between agents and terminals from ⋯, as its terminal
-  // does: agents open on Chat, terminals on Terminal (a herdr-core terminal
-  // in its own window).
+  // does: agents open on Chat, terminals on Terminal.
   const switchTargets = (currentId: string, leave?: () => void) =>
     compactArrangement
       ? worldSwitchTargets(presentedWorld.nodes, currentId, (node) => {
           leave?.();
-          if (
-            (node.kind !== "agent" || !inspectorAdmits(node)) &&
-            coreWatch.watch(node.id)
-          )
-            return;
           void applySelection(
             node.id,
             node.kind === "agent" ? "history" : "terminal",
@@ -414,8 +391,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       focus = true,
     ) => {
       // An unfocused open (the docked Town master) stays in the background:
-      // no selection, not raised. A herdr-core terminal opens its own window.
-      if (focus && view === "terminal" && coreWatch.watch(id)) return;
+      // no selection, not raised.
       if (focus) void applySelection(id, view);
       else openInBackground(id, view);
     },
@@ -473,7 +449,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         world={aggregateWorld}
         onOpenTerminal={(id) => void openTerminalById(id)}
       />
-      {coreWatch.view}
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}
         initialDestination={workspaceCreationDestination}
@@ -717,13 +692,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         back: {
                           label: `Back to ${view[0]!.toUpperCase()}${view.slice(1)}`,
                         },
-                        // A herdr-core terminal switches as a Herdr one does.
-                        switchTo: coreTerminalNodeId(entry.id)
-                          ? switchTargets(
-                              coreTerminalNodeId(entry.id)!,
-                              panel.onClose,
-                            )
-                          : undefined,
                       }}
                     />
                   </WindowFrame>
@@ -959,9 +927,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               switchTo: switchTargets(conversation.nodeId),
             }}
             terminalColor={inspectorColor(conversation)}
-            chat={coreAgentChat(coreNode(conversation.nodeId), (id) =>
-              coreWatch.watch(id),
-            )}
+            terminal={coreInspectorTerminal(coreNode(conversation.nodeId), {
+              selected: conversation.view === "terminal",
+              shown: visibleFloatingInspectorIds.has(
+                worldInspectorWindowId(conversation),
+              ),
+            })}
             townSkin={view === "town"}
             onBind={() =>
               void store

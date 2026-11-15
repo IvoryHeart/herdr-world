@@ -39,7 +39,13 @@ export type CoreDeliveryInput =
   /** A typed answer to the question the program is blocked on. */
   | { kind: "answer"; text: string }
   /** Answer keys (a menu option, y/n, enter) for a blocked program. */
-  | { kind: "keys"; keys: string[] };
+  | { kind: "keys"; keys: string[] }
+  /**
+   * A key the person pressed from Chat (Stop's Esc, a composer key control,
+   * a command menu's key), at any status: core 0.1.21 takes keys while the
+   * program works. Still only to the program the person saw.
+   */
+  | { kind: "control"; keys: string[] };
 
 export type CoreDeliveryRefusal =
   | "changed"
@@ -123,12 +129,12 @@ export async function deliverCore(
   input: CoreDeliveryInput,
   options: CoreDeliveryOptions = {},
 ): Promise<CoreDeliveryOutcome> {
-  const method: CoreWriteMethod =
-    input.kind === "keys" ? "terminal.keys" : "terminal.send";
+  const pressing = input.kind === "keys" || input.kind === "control";
+  const method: CoreWriteMethod = pressing ? "terminal.keys" : "terminal.send";
   if (!CORE_RECIPIENT.test(recipient))
     return refused("invalid", "World does not know which agent this is for.");
   try {
-    if (input.kind === "keys") coreKeysParams(address, input.keys);
+    if (pressing) coreKeysParams(address, input.keys, input.kind === "control");
     else coreSendParams(address, input.text, false);
   } catch (error) {
     const why = (error as Error).message;
@@ -188,7 +194,7 @@ export async function deliverCore(
       "unsupported",
       "This terminal is a shell, not an agent. Nothing was sent.",
     );
-  const answering = input.kind !== "message";
+  const answering = input.kind === "answer" || input.kind === "keys";
   if (answering && statusWord(record) !== "blocked")
     return refused(
       "not-waiting",
@@ -221,18 +227,17 @@ export async function deliverCore(
     if (cancelledFor) cancel.abort();
   });
   try {
-    const reply =
-      input.kind === "keys"
-        ? await lease.runtime.keys(fence, input.keys)
-        : await lease.runtime.send(
-            fence,
-            {
-              text: input.text,
-              force: input.kind === "answer",
-              onlyIfIdle: options.onlyIfIdle,
-            },
-            { cancel: cancel.signal, timeoutMs: options.timeoutMs },
-          );
+    const reply = pressing
+      ? await lease.runtime.keys(fence, input.keys, input.kind === "control")
+      : await lease.runtime.send(
+          fence,
+          {
+            text: input.text,
+            force: input.kind === "answer",
+            onlyIfIdle: options.onlyIfIdle,
+          },
+          { cancel: cancel.signal, timeoutMs: options.timeoutMs },
+        );
     // Core typed it. Say "sent" only while the same program is there.
     const now = lease.runtime.core.terminal(address);
     let after: string | null = null;

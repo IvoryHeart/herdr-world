@@ -14,7 +14,7 @@ const text = (batch: CoreInputBatch) =>
   );
 
 /** A port whose requests answer only when the test says so. */
-function harness(size = { cols: 90, rows: 30 }) {
+function harness(size = { cols: 90, rows: 30 }, opening = false) {
   const log: string[] = [];
   const pending: Array<{ resolve(): void; reject(error: Error): void }> = [];
   const timers = new Map<number, () => void>();
@@ -30,8 +30,8 @@ function harness(size = { cols: 90, rows: 30 }) {
           );
           pending.push({ resolve, reject });
         }),
-      leave: () => {
-        log.push("leave");
+      hold: (grid) => {
+        log.push(`hold ${grid.cols}x${grid.rows}`);
         return Promise.resolve();
       },
     },
@@ -46,6 +46,7 @@ function harness(size = { cols: 90, rows: 30 }) {
         },
         clear: (handle) => timers.delete(handle as number),
       },
+      opening,
     },
   );
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -81,13 +82,10 @@ describe("typing into a core terminal from the page", () => {
     expect(h.log).toEqual(['key "a" 90x30']);
     await h.answer();
     expect(h.log).toEqual(['key "a" 90x30', 'key "bc" 90x30']);
-    expect(h.typing.typing).toBe(true);
   });
 
-  test("a reply never opens the keyboard and keeps its place between keys", async () => {
+  test("replies keep their place between keys (the server sends them only after a key)", async () => {
     const h = harness();
-    await h.typing.type("\x1b[1;1R", true);
-    expect(h.log).toEqual([]);
     void h.typing.type("x");
     void h.typing.type("\x1b[2;2R", true);
     void h.typing.type("y");
@@ -102,20 +100,38 @@ describe("typing into a core terminal from the page", () => {
     ]);
   });
 
-  test("leaving waits for the keys before it and is sent once", async () => {
+  test("the open view holds its size at once; later sizes settle first and go once", async () => {
+    const h = harness();
+    h.typing.hold({ cols: 90, rows: 30 });
+    await h.settle();
+    expect(h.log).toEqual(["hold 90x30"]);
+    // A drag: only the size it ends at is asked for.
+    h.typing.hold({ cols: 80, rows: 30 });
+    h.typing.hold({ cols: 70, rows: 28 });
+    expect(h.timers.size).toBe(1);
+    h.fire([...h.timers.keys()][0]!);
+    await h.settle();
+    expect(h.log).toEqual(["hold 90x30", "hold 70x28"]);
+    // The same size again sends nothing; there is no give-back on blur or idle.
+    h.typing.hold({ cols: 70, rows: 28 });
+    h.fire([...h.timers.keys()][0]!);
+    await h.settle();
+    expect(h.log).toHaveLength(2);
+    expect(h.changes).toEqual(["90x30", "70x28"]);
+    h.typing.stop();
+    expect(h.changes[h.changes.length - 1]).toBeNull();
+    expect(h.timers.size).toBe(0);
+  });
+
+  test("a size waits for the keys before it; a hidden view (zero size) holds nothing", async () => {
     const h = harness();
     void h.typing.type("a");
-    h.typing.leave();
-    h.typing.leave();
+    h.typing.hold({ cols: 90, rows: 30 });
+    h.typing.hold({ cols: 0, rows: 0 });
     await h.settle();
     expect(h.log).toEqual(['key "a" 90x30']);
     await h.answer();
-    expect(h.log).toEqual(['key "a" 90x30', "leave"]);
-    expect(h.changes).toEqual(["90x30", null]);
-    // Nothing typed since: no second leave.
-    h.typing.leave();
-    await h.settle();
-    expect(h.log).toHaveLength(2);
+    expect(h.log).toEqual(['key "a" 90x30', "hold 90x30"]);
   });
 
   test("a refused key drops the keys queued behind it", async () => {
@@ -148,7 +164,6 @@ describe("typing into a core terminal from the page", () => {
     void h.typing.type("b");
     await h.answer();
     expect(h.log[1]).toBe('key "b" 40x12');
-    expect(h.changes).toEqual(["90x30", "40x12"]);
   });
 
   test("a paste larger than one request goes in order, in pieces", async () => {
@@ -170,25 +185,36 @@ describe("typing into a core terminal from the page", () => {
     );
   });
 
-  test("focus away for a while, or no key for a minute, gives the size back", async () => {
-    const h = harness();
-    void h.typing.type("a");
-    await h.answer();
-    const [idle] = [...h.timers.keys()];
-    h.typing.focus(false);
-    h.typing.focus(true);
-    expect(h.timers.size).toBe(1);
-    h.typing.focus(false);
-    const blur = [...h.timers.keys()].find((key) => key !== idle)!;
-    h.fire(blur);
+  test("keys typed before the watch answers wait for it, then go once, in order", async () => {
+    // Live core 0.1.21: the server knows the stream only once its observe
+    // attach answered, so a key sent earlier was refused ("not being watched").
+    const h = harness({ cols: 90, rows: 30 }, true);
+    const first = h.typing.type("a");
+    const second = h.typing.type("b");
     await h.settle();
-    expect(h.log).toEqual(['key "a" 90x30', "leave"]);
-    void h.typing.type("b");
-    await h.answer();
-    const later = [...h.timers.keys()].pop()!;
-    h.fire(later);
+    expect(h.log).toEqual([]);
+    h.typing.open();
+    h.typing.open();
     await h.settle();
-    expect(h.log).toEqual(['key "a" 90x30', "leave", 'key "b" 90x30', "leave"]);
+    expect(h.log).toEqual(['key "ab" 90x30']);
+    await h.answer();
+    await Promise.all([first, second]);
+    void h.typing.type("c");
+    await h.settle();
+    expect(h.log).toEqual(['key "ab" 90x30', 'key "c" 90x30']);
+    expect(h.refused).toEqual([]);
+  });
+
+  test("a watch that never opens drops the keys that waited, unsent", async () => {
+    const h = harness({ cols: 90, rows: 30 }, true);
+    const waiting = h.typing.type("a").catch((error: Error) => error.message);
+    await h.settle();
+    h.typing.stop();
+    expect(await waiting).toContain("closed");
+    h.typing.open();
+    await h.settle();
+    expect(h.log).toEqual([]);
+    expect(h.refused).toEqual([]);
   });
 
   test("closing stops everything queued without sending it", async () => {

@@ -2,6 +2,8 @@ import { watchConversation } from "../conversationWatch";
 import { harnessLabel } from "./agentProfiles";
 import { WorldLoader } from "./WorldLoader";
 import { useCoreRuntimeConnection } from "./runtimeStore";
+import { useCoreSeen } from "./coreSeen";
+import { coreSharedOf } from "./coreShared";
 import { useEffectCallback } from "../useEffectCallback";
 import type { Conversation } from "../components/chat/types";
 import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
@@ -155,10 +157,10 @@ function InspectorResources({
   onTerminalPortalChange,
   onBind,
   onSelectPane,
-  chat,
+  terminal,
 }: {
-  /** Chat for a runtime World does not read through Herdr (herdr-core). */
-  chat?: ReactNode;
+  /** Terminal for a runtime World does not show through Herdr (herdr-core). */
+  terminal?: ReactNode;
   /**
    * The window is shown but its host's session has not loaded this
    * workspace yet (a window restored on page load, on a host not yet opened):
@@ -259,6 +261,13 @@ function InspectorResources({
           candidate.tab_id === conversation.tabId,
       )
     : undefined;
+  // An open, drawn agent window is a look like a peek: Herdr's apps see the
+  // core agent's turn as seen (generation- and turn-qualified, coreSeen.ts).
+  const coreShared =
+    core && target && historyPane && conversation.context.kind === "agent"
+      ? coreSharedOf(conversation.connectionId, core.generation, historyPane)
+      : null;
+  useCoreSeen(coreShared ? { ...coreShared, stale: !coreLive } : null);
   const worktree = useAgentWorktree(baseConnectionClient, {
     enabled: conversation.context.kind === "agent",
     active: ["files", "changes", "commits"].includes(conversation.view),
@@ -763,7 +772,7 @@ function InspectorResources({
                 visible={Boolean(target)}
                 workspace={workspace}
                 historyPane={historyPane}
-                chat={chat}
+                terminal={terminal}
                 historySessionFingerprint={conversation.agentSessionFingerprint}
                 notice={
                   awaitingChat && awaitSince ? (

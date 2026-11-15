@@ -85,8 +85,9 @@ above; you can keep the TUI connected too.
 2. Return to **Town** and choose **New agent**. The launcher says **Starts in
    herdr-core**. Choose your harness and project folder, then start it. The
    agent also appears in Herdr’s apps. Choose a TUI room for a TUI launch.
-3. Open the agent’s **Terminal**. Watching follows the app’s size; type to
-   control it from World. Leave the terminal to give the size back.
+3. Tap the agent’s desk. Its window opens with **Chat**, **Terminal**, **Files**
+   and **Changes**, like a Herdr agent’s. On **Terminal**, type to control it;
+   the text fits the window. Close the window to give the size back.
 4. Finish a turn, then look at its Town peek. Done clears in Herdr’s apps too.
    Try the star: its favourite is shared. Continue with either runtime below.
 

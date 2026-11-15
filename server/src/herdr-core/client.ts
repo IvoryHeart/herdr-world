@@ -135,7 +135,7 @@ type ChannelSink = {
 export type CoreCellSize = { cols: number; rows: number };
 
 /**
- * One interactive viewer: a float shell World started, or World's keyboard
+ * One interactive viewer: a float shell World started, or World's seat
  * on a terminal it watches. Every call is a no-op once the channel closed.
  */
 export type CoreAttachment = {
@@ -156,7 +156,7 @@ export type CoreAttachment = {
   detach(): void;
 };
 
-/** World typing into a terminal it watches (`keyboard`): input only. */
+/** World's seat on a terminal it watches (`keyboard`): input only. */
 export type CoreKeyboard = Omit<CoreAttachment, "credit">;
 
 /** A RESIZE payload: cols and rows as u16 LE. */
@@ -210,8 +210,8 @@ export class CoreWatchRefusedError extends Error {
 }
 
 /**
- * The only attach World sends: an observer that never types, resizes or
- * takes focus, asking core to announce its grid before every paint. `cols`
+ * The watch's attach: an observer that never types, resizes or takes
+ * focus, asking core to announce its grid before every paint. `cols`
  * and `rows` are required by core and ignored for observers; World passes
  * the grid it last saw so nothing it sends names a size of its own.
  */
@@ -481,11 +481,11 @@ export class CoreClient {
 
   /**
    * Presses named keys after ~3 s of a person's quiet. Core cannot cancel
-   * keys once asked (only sends), so World checks before asking.
+   * keys once asked, so World checks first. `control`: Chat's keys, Stop.
    */
-  keys(address: string, keys: readonly string[], timeoutMs = 15_000) {
+  keys(address: string, keys: readonly string[], control = false) {
     return this.write(
-      ...coreKeysRequest(address, keys, timeoutMs),
+      ...coreKeysRequest(address, keys, 15_000, control),
     ) as Promise<CoreKeysResult>;
   }
 
@@ -670,7 +670,7 @@ export class CoreClient {
     size: CoreCellSize,
     handlers: CoreAttachHandlers,
     timeoutMs = 10_000,
-    options: { history?: number } = {},
+    options: { history?: number; resumed?: boolean } = {},
   ): Promise<CoreAttachment> {
     const reply = await this.call(
       "terminal.attach",
@@ -679,6 +679,7 @@ export class CoreClient {
         cols: size.cols,
         rows: size.rows,
         ...(options.history === undefined ? {} : { history: options.history }),
+        ...(options.resumed ? { resumed: true } : {}),
       },
       timeoutMs,
     );
@@ -747,13 +748,14 @@ export class CoreClient {
   }
 
   /**
-   * World's keyboard on a terminal someone watches: an interactive viewer
-   * whose only job is input. It never displays (the watch does, from its
-   * observe stream), so its stream is dropped and never credited: core then
-   * bounds it at its own pending limit and repaints instead of replaying,
-   * and program output is never held back. Core makes it the size leader
-   * the moment it attaches (not `resumed`), so it is opened only for a key
-   * a person typed.
+   * World's seat on a terminal it watches: an interactive viewer whose job
+   * is input and size. It never displays (the watch does, from its observe
+   * stream), so its stream is dropped and never credited: core then bounds
+   * it at its own pending limit and repaints instead of replaying, and
+   * program output is never held back. It attaches `resumed`, the lowest
+   * rank in core's size rule: it sets the size only while no other
+   * interactive viewer (a Herdr app's pane) has the terminal, until a person
+   * types in it.
    */
   keyboard(
     address: string,
@@ -766,7 +768,7 @@ export class CoreClient {
       size,
       { data: () => {}, end: ended },
       timeoutMs,
-      { history: 0 },
+      { history: 0, resumed: true },
     );
   }
 

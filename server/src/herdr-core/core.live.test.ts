@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -770,6 +776,140 @@ describe("herdr-core live (real release binary)", () => {
       await manager.stopAll();
     },
     90_000,
+  );
+
+  live(
+    "an open Terminal tab holds its fitted size while no app pane leads, swaps without headless, and gives it back on close",
+    async () => {
+      const core = new ScratchCore(bin!);
+      scratch.push(core);
+      await core.start();
+      // `cat` keeps what is typed, once per key, in a scratch file (the
+      // screen repaints on every grid change, so it can't count keys).
+      const root = mkdtempSync(join(tmpdir(), "hcw-seat-"));
+      roots.push(root);
+      const typedFile = join(root, "typed");
+      await core.hc(
+        "run",
+        "--bg",
+        "--name",
+        "agent",
+        "--",
+        "sh",
+        "-c",
+        `printf 'ready\\r\\n'; exec cat > '${typedFile}'`,
+      );
+      const grid = async () => {
+        const t = JSON.parse(await core.hc("get", "t1", "--json"));
+        return `${t.cols}x${t.rows}`;
+      };
+      const settles = async (want: string) => {
+        const deadline = Date.now() + 10_000;
+        while ((await grid()) !== want) {
+          if (Date.now() > deadline)
+            throw new Error(`grid ${await grid()}, not ${want}`);
+          await Bun.sleep(20);
+        }
+      };
+      const manager = new ConnectionManager<CoreConnectionRuntime>("");
+      manager.register({
+        identity: { id: "core", label: "core", source: "local-profile" },
+        createRuntime: (context) =>
+          createCoreConnectionRuntime({
+            identity: { id: "core", label: "core", source: "local-profile" },
+            context,
+            transport: localCoreTransport(core.stateDir),
+            observations: new CoreObservationStore(() => {}),
+            onFailure: () => {},
+          }),
+      });
+      await manager.start("core");
+      const pushes: CoreTerminalPush[] = [];
+      const page = {};
+      const watches = new CoreTerminalWatches<object>({
+        lease: (id) => (manager.has(id) ? manager.readyRuntimeLease(id) : null),
+        send: (_page, push) => {
+          pushes.push(push);
+          return true;
+        },
+        buffered: () => 0,
+      });
+      await until(
+        () =>
+          manager.readyRuntimeLease("core")?.runtime.core.terminal("t1")
+            ?.state === "live",
+      );
+      await watches.open(page, {
+        connection_id: "core",
+        generation: manager.status("core").generation,
+        address: "t1",
+        stream: "a",
+      });
+      const announced = () =>
+        pushes.flatMap((p) =>
+          "grid" in p && !("bytes" in p)
+            ? [`${p.grid.cols}x${p.grid.rows}`]
+            : [],
+        );
+
+      // No app pane: the open tab's seat sizes the terminal (not headless).
+      expect(watches.hold(page, { stream: "a", cols: 90, rows: 28 })).toBe(
+        true,
+      );
+      await settles("90x28");
+      await until(() => watches.typing(page, "a") === "yes");
+      // Resizing the window swaps the seat; core never passes through
+      // headless between the two sizes.
+      const before = announced().length;
+      watches.hold(page, { stream: "a", cols: 100, rows: 32 });
+      await settles("100x32");
+      await Bun.sleep(300);
+      expect(announced().slice(before)).toEqual(["100x32"]);
+
+      // An app pane takes the size; a new fitted size in World never
+      // takes it back.
+      const pane = await desktopPane(core);
+      await pane.attach("t1", 120, 40);
+      await settles("120x40");
+      watches.hold(page, { stream: "a", cols: 80, rows: 24 });
+      await until(() => watches.typing(page, "a") === "yes");
+      await Bun.sleep(300);
+      expect(await grid()).toBe("120x40");
+
+      // A key typed in World leads by core's rule, arrives once, and the
+      // pane retakes the size by resizing.
+      const typed = await watches.input(page, {
+        stream: "a",
+        data: Buffer.from("x").toString("base64"),
+        cols: 80,
+        rows: 24,
+      });
+      expect(typed).toEqual({ sent: true });
+      await settles("80x24");
+      await watches.input(page, {
+        stream: "a",
+        data: Buffer.from("\r").toString("base64"),
+        cols: 80,
+        rows: 24,
+      });
+      await until(
+        () => existsSync(typedFile) && readFileSync(typedFile, "utf8") !== "",
+      );
+      expect(readFileSync(typedFile, "utf8")).toBe("x\n");
+      pane.resize(110, 36);
+      await settles("110x36");
+      // The pane closes: World's open seat holds the size again.
+      pane.detach();
+      await settles("80x24");
+
+      // Closing the tab gives the size back: core goes headless.
+      watches.close(page, "a");
+      await settles("200x120");
+      watches.stop();
+      pane.close();
+      await manager.stopAll();
+    },
+    60_000,
   );
 
   live(

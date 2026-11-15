@@ -36,6 +36,32 @@ test("cached agents, panes and desks cannot dispatch a live terminal action", as
   }
 });
 
+test("a live herdr-core agent opens in the Inspector but never takes a Herdr reply", async () => {
+  for (const stale of [false, true]) {
+    const projection = office(false);
+    const entry = projection.roster[0]!;
+    // As officeAgent projects one: World only watches it, coreChat while live.
+    projection.roster[0] = {
+      ...entry,
+      agent: {
+        ...entry.agent,
+        canOpenInSpaces: false,
+        stale,
+        coreChat: stale ? undefined : true,
+      },
+    };
+    const key = entry.agent.key;
+    // Town's reply path is Herdr-only; the Inspector path admits the agent.
+    expect(townTargetActionable(projection, key)).toBe(false);
+    expect(townTargetActionable(projection, key, true)).toBe(!stale);
+    const calls: string[] = [];
+    await inspectTownTerminal(projection, key, (id) => {
+      calls.push(id);
+    });
+    expect(calls).toEqual(stale ? [] : [entry.agent.nodeId]);
+  }
+});
+
 test("Town keeps cached agents without presenting current work or urgent reception", () => {
   const projection = office(true);
   const model = townModelFromProjection(projection);

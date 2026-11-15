@@ -358,8 +358,8 @@ export class Bridge {
       if (!this.helloAcceptedForSocket) {
         return Promise.reject(new Error("bridge hello is unavailable"));
       }
-      // A herdr-core connection answers only Files, Git and worktrees; a
-      // Herdr-only call never leaves the page for it.
+      // A herdr-core connection answers only Files, Git, worktrees and Chat;
+      // a Herdr-only call never leaves the page for it.
       if (this.runtimeCatalogue.isCore(connectionId) && !answersOnCore(method))
         return Promise.reject(new Error(coreHostRefusal(method)));
       if (

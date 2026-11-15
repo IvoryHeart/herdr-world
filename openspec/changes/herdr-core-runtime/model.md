@@ -92,11 +92,12 @@ both an invariant violation and rejection of that counterexample by correct repl
 | paint-before-resize | A paint is drawn before the grid core announced for it |
 | stale-stream | Frames of an ended watch reach the new one |
 | observer-input | A rotation or keyboard sends core input, size or focus |
-| key-twice | The first key is sent twice once the keyboard opens |
-| key-before-attach | A key is written before core answered the attach |
+| key-twice | The first key is sent twice once the seat opens |
+| key-before-attach | A key is written before core answered the seat's attach |
 | typed-replacement | A key reaches the program that replaced the watched one |
-| leave-overtakes | A leave sent during the attach loses the keys before it |
-| automatic-opens | A terminal reply opens the keyboard and takes the size |
+| hold-resizes | A new fitted size goes to the seat as RESIZE and takes the pane's size |
+| swap-gap | The old seat leaves before the new one is answered (a headless flash) |
+| automatic-untyped | A terminal reply goes on a seat nobody typed into |
 
 A separate ungated-fake control must diverge on a valid model trace. It checks
 adapter sensitivity without claiming mutation of a production core provider.
@@ -229,39 +230,59 @@ with a 4-byte character split across frames (`watch-replay.test.ts`), the
 browser suite (`CoreTerminalWatch.browser.test.ts`, including a paint that a
 following grid must not overtake) and the live release check.
 
-## Typing family (issue #872)
+## Typing family (issues #872, #915)
 
 Typing adds a fourth family on the observe state. World watches the terminal
-and a person types into it: the first key opens World's interactive viewer,
-which core's rule makes the most recent typing viewer, so core takes World's
-fitted grid (grid id 3). The pane retakes it by typing or a click
-(`paneTouch`), and World leaving or losing the keyboard re-applies the rule:
-the pane's size, or headless.
+in its Inspector's Terminal tab and, while that tab is open, holds a *seat*:
+an interactive viewer attached `resumed` at the tab's fitted grid (`held`,
+grid 3 or 4). Core 0.1.21 ranks a resumed viewer lowest until it is touched
+(input, RESIZE or FOCUS(true)), so the seat sizes the terminal only while no
+Herdr app pane has it, and over a pane only after a person typed in World.
+A new fitted size swaps the seat: attach the new one, then leave the old, so
+core never passes through its headless size. World never sends RESIZE. The
+pane retakes the size by typing or a click (`paneTouch`); closing or
+minimizing the window ends the seat with the watch, and core's rule gives the size to the pane or
+headless.
 
 | State | Meaning and boundary |
 | --- | --- |
-| keys, waiting, left, asked | World's keyboard (closed, opening, open), keys typed while it opens, a leave queued behind them, and whether World asked core to open it. |
-| pressed, sent, refused, replies | Keys a person pressed (two), keys core received, keys reported not sent, terminal replies (one). |
-| worldLeads, stray | Whether World was the last typing viewer, and whether any key reached core without an open keyboard or after the program was replaced. |
+| seat, opening, held, holds | World's open seat and the attach in flight (their grid ids), the size the view holds now, and how many sizes it held (two). |
+| touched, seated, lost | Whether a person typed on the open seat, whether a seat was ever answered, and the run's one refusal or lost seat. |
+| pressed, waiting, sent, refused | Keys a person pressed (two), keys waiting for a seat, keys core received, keys reported not sent. |
+| replies, echo | Terminal replies (one), and whether one went on a seat nobody typed into. |
+| worldLeads, stray | Whether World's seat was the last touched viewer, and whether any key reached core without a seat or after the program was replaced. |
 
-Transitions: `key`, `attached`, `attachRefused`, `leave`, `reply`,
-`keyboardLost` (EOF or a killed connection), `reoccupy` (another program takes
-the address) and `paneTouch`, plus the observe family's watch transitions.
-`keyed` joins `safety`: no stray key, every pressed key is sent, waiting or
-refused exactly once, an open keyboard was asked for by a key, and only an
-opening keyboard has keys or a leave waiting. `watched` now expects grid 3 while
-World leads. Witnesses: `typingLed`, `sizeReturned`, `leftAfterKeys` and
-`replacementRefused`.
+Transitions: `hold`, `attached`, `attachRefused`, `key`, `reply`,
+`seatLost` (core closed the seat's channel), `reoccupy` (another program takes
+the address) and `paneTouch`, plus the observe family's `connect`, `baseline`,
+`disconnect`, `pane`, `watch`, `unwatch` and `frame`. The typing family
+watches once, on the confirmed path; the observe family covers the rest.
+Core's lead (`coreGrid`) is the seat when it was touched last or no pane is open,
+else the pane, else headless. `seated` joins `safety`: the seat leads over a
+pane only after a key, no reply goes on an untouched seat, a held size always
+has a seat or an attach in flight (unless the run's loss happened), and an
+answered seat never leaves the terminal headless while a pane is closed.
+`keyed`: no stray key, every pressed key is sent, waiting or refused exactly
+once, and keys wait only while a seat is opening. `watched` still requires
+every paint on core's announced grid. Witnesses: `typingLed`, `seatHeld`,
+`paneRetook`, `swapped` and `replacementRefused`.
 
-Production mapping: every key, reply and leave in a trace goes through
+Model faults that must violate safety: `key-twice`, `key-before-attach`,
+`typed-replacement`, `hold-resizes` (a new size sent as RESIZE takes the
+pane's size), `swap-gap` (the old seat leaves first) and `automatic-untyped`
+(a terminal reply on an untouched seat).
+
+Production mapping: every hold, key, reply and loss in a trace goes through
 World's production `CoreTypingSession` (`server/src/herdr-core/typing.ts`),
-the queue and fence the service's watch relay uses, over a fake interactive
-viewer that records what it was sent. Two production negative controls must
+the queue and fence the service's watch relay uses, over a fake core viewer
+set that applies core's rank rule. Three production negative controls must
 each be rejected through `core.state`: a session that replays the first
-queued key, and one whose leave during the attach drops the keys before it.
-The page's single in-flight queue, leave timers and reply detection
-(`web/src/coreTyping.ts`), framing and the 64 KiB request limit are covered by
-unit, relay and browser tests, not by this model.
+queued key (`core-typing-replay`), one that sends a new size to the open seat
+as RESIZE (`core-seat-resize`), and one that leaves the old seat before the
+new one is answered (`core-seat-gap`). The page's hold settling and
+coalescing, first-key focus, the absence of any blur or idle give-back
+(`web/src/coreTyping.ts`), framing and the 64 KiB request limit are covered
+by unit, relay and browser tests, not by this model.
 
 ## Shared seen (issue #868)
 

@@ -76,6 +76,13 @@ checks. Current spec synchronization and archive remain after acceptance.
     the core host (local, Unix and Windows SSH); composer drafts live while the
     core generation does. The typing model family drives the production typing session
     with five plan mutants and two production controls.
+  - [x] One Inspector and a readable size (#915): a core agent or terminal opens
+    in the shared Inspector (Chat, Terminal, Files, Changes) from every entry;
+    the Terminal tab holds a resumed seat at its fitted grid while open (no blur
+    or idle give-back), swaps seats on resize without a headless step, never
+    sends RESIZE, draws an app pane's grid at 0.85 scale or more, and takes the
+    first key with focus. The typing family now models the seat, with six plan
+    mutants and three production controls; the separate core window is gone.
   - [x] Popup equivalents (#873): the room shell on both runtimes; Herdr Float
     is the one TUI plugin popup World invokes, and generic plugin popups have
     no core source. World's float shell is fenced like screen reads and tested

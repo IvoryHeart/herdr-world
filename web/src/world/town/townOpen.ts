@@ -3,16 +3,23 @@ import type {
   OfficeAgent,
 } from "../herdrOfficeProjection";
 
-/** Cached entities may be inspected as history, never opened as live endpoints. */
+/**
+ * Cached entities may be inspected as history, never opened as live
+ * endpoints. With `inspector`, a live herdr-core agent counts too: it opens
+ * in World's Inspector, though Town's Herdr-only replies still refuse it.
+ */
 export function townTargetActionable(
   office: HerdrOfficeProjection,
   key: string,
+  inspector = false,
 ) {
   const target =
     office.paneRoster.find((x) => x.device.key === key)?.device ??
     office.roster.find((x) => x.agent.key === key)?.agent ??
     office.deskRoster.find((x) => x.desk.key === key)?.desk;
-  return Boolean(target && !target.stale && target.canOpenInSpaces);
+  if (!target || target.stale) return false;
+  const core = inspector && "coreChat" in target && Boolean(target.coreChat);
+  return target.canOpenInSpaces || core;
 }
 
 export async function inspectTownTerminal(
@@ -21,7 +28,7 @@ export async function inspectTownTerminal(
   open: (nodeId: string) => unknown,
   reviewed?: (agent: OfficeAgent) => void,
 ) {
-  if (!townTargetActionable(office, key)) return;
+  if (!townTargetActionable(office, key, true)) return;
   const device = office.paneRoster.find((x) => x.device.key === key)?.device;
   if (device) {
     await open(device.nodeId);

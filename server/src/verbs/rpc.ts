@@ -493,7 +493,18 @@ export const rpcVerbs = [
       automatic: Type.Optional(Type.Boolean()),
     }),
   ),
-  rpc("world.core.leave", "reconcilable", "world", object({ stream: text })),
+  // World's seat at the page's fitted grid while its view is open (size only
+  // while no Herdr app pane has the terminal); a repeat is a no-op.
+  rpc(
+    "world.core.hold",
+    "reconcilable",
+    "world",
+    object({
+      stream: text,
+      cols: Type.Integer({ minimum: 1, maximum: 65535 }),
+      rows: Type.Integer({ minimum: 1, maximum: 65535 }),
+    }),
+  ),
   // World's float shell on herdr-core (the TUI's Herdr Float popup there).
   // The handler qualifies the named core connection's lease itself.
   rpc(

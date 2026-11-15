@@ -265,11 +265,12 @@ const b64 = (data: string | Uint8Array) =>
 /** A watch of a fresh terminal shown in a 132×40 desktop pane. */
 async function watching(
   options: ConstructorParameters<typeof FakeCore>[0] = {},
+  { pane = true }: { pane?: boolean } = {},
 ) {
   const w = await served(options);
   const t = w.fake.create({ name: "agent" });
   await w.seen(t);
-  w.fake.desktopAttach(t, 132, 40);
+  if (pane) w.fake.desktopAttach(t, 132, 40);
   const page = w.page();
   await w.watches.open(page, w.target(t));
   const type = (
@@ -284,63 +285,128 @@ async function watching(
       rows: size.rows,
       automatic,
     });
-  /** Frames World's keyboard (not its watch) sent core, by kind. */
+  /** The page's view is open at this fitted grid. */
+  const hold = (cols: number, rows: number) =>
+    w.watches.hold(page, { stream: "s1", cols, rows });
+  /** Frames World's seat (not its watch) sent core, by kind. */
   const keyboard = () =>
     w.fake.viewerFrames.filter((f) => !f.observe).map((f) => f.kind);
-  return { ...w, t, page, type, keyboard };
+  /** World's interactive attaches (seats), with their params. */
+  const seats = () =>
+    w.fake.calls.filter(
+      (c) =>
+        c.method === "terminal.attach" &&
+        (c.params as { observe?: boolean }).observe !== true,
+    );
+  const size = () => {
+    const terminal = w.fake.terminal(t);
+    return `${terminal?.cols}x${terminal?.rows}`;
+  };
+  /** Every grid core announced on World's watch, in order. */
+  const grids = () =>
+    page.pushes.flatMap((p) =>
+      "grid" in p ? [`${p.grid.cols}x${p.grid.rows}`] : [],
+    );
+  return { ...w, t, page, type, hold, keyboard, seats, size, grids };
 }
 
-describe("typing into a watched core terminal", () => {
-  test("the first key takes World's size and is sent once; leaving gives the size back", async () => {
+describe("World's seat on a watched core terminal", () => {
+  test("alone, the seat holds World's size for as long as the view is open; closing gives it back", async () => {
+    const w = await watching({}, { pane: false });
+    expect(w.size()).toBe("200x120");
+    expect(w.hold(90, 30)).toBe(true);
+    await until(() => w.size() === "90x30");
+    // One resumed attach at World's size; no RESIZE, input or focus.
+    expect(w.seats()).toHaveLength(1);
+    expect(w.seats()[0]!.params).toMatchObject({
+      cols: 90,
+      rows: 30,
+      resumed: true,
+    });
+    expect(w.keyboard()).toEqual([]);
+    await until(() => w.grids().includes("90x30"));
+    // Nothing gives it back while the view stays open (no blur or idle rule).
+    await Bun.sleep(30);
+    expect(w.size()).toBe("90x30");
+    w.watches.close(w.page, "s1");
+    await until(() => w.size() === "200x120");
+    expect(w.fake.viewersOf(w.t)).toHaveLength(0);
+  });
+
+  test("a new size swaps the seat with no headless step in between", async () => {
+    const w = await watching({}, { pane: false });
+    w.hold(90, 30);
+    await until(() => w.size() === "90x30");
+    w.hold(120, 36);
+    await until(() => w.size() === "120x36");
+    await until(() => w.fake.viewersOf(w.t).length === 2);
+    expect(w.seats()).toHaveLength(2);
+    expect(w.keyboard()).toEqual([FrameKind.CLOSE]);
+    await until(() => w.grids().at(-1) === "120x36");
+    // From World's first size on, core never went back to headless.
+    expect(w.grids().slice(w.grids().indexOf("90x30"))).not.toContain(
+      "200x120",
+    );
+  });
+
+  test("while a Herdr app pane has the terminal, holding and resizing never take it", async () => {
     const w = await watching();
-    // Watching alone never leads the size.
-    expect(w.fake.terminal(w.t)).toMatchObject({ cols: 132, rows: 40 });
-    // Keys typed while the attach is in flight wait, in order.
+    expect(w.size()).toBe("132x40");
+    w.hold(90, 30);
+    await until(() => w.watches.typing(w.page, "s1") === "yes");
+    w.hold(100, 33);
+    await until(() => w.seats().length === 2);
+    await until(() => w.fake.viewersOf(w.t).length === 2);
+    await Bun.sleep(20);
+    expect(w.size()).toBe("132x40");
+    expect(w.keyboard()).not.toContain(FrameKind.RESIZE);
+    expect(w.keyboard()).not.toContain(FrameKind.FOCUS);
+    // The pane closes: World's seat is the only typing viewer left.
+    w.fake.desktopDetach(w.t);
+    await until(() => w.size() === "100x33");
+    // It comes back and leads again.
+    w.fake.desktopAttach(w.t, 132, 40);
+    expect(w.size()).toBe("132x40");
+  });
+
+  test("typing takes the size by core's rule, once per key; the pane retakes it when used", async () => {
+    const w = await watching();
+    w.hold(90, 30);
+    // Keys typed while the seat opens wait, in order.
     const sent = await Promise.all([w.type("l"), w.type("s"), w.type("\r")]);
     expect(sent).toEqual([{ sent: true }, { sent: true }, { sent: true }]);
     await until(() => (w.fake.typed.get(w.t) ?? "").length >= 3);
     await Bun.sleep(20);
     expect(w.fake.typed.get(w.t)).toBe("ls\r");
-    expect(w.fake.terminal(w.t)).toMatchObject({ cols: 90, rows: 30 });
-    // The watch shows the grid World now leads, before its paint.
-    await until(() =>
-      w.page.pushes.some((p) => "grid" in p && p.grid.cols === 90),
-    );
-    // One attach carried the size; focus, then the keys, no RESIZE.
-    expect(
-      w.fake.calls.filter(
-        (c) =>
-          c.method === "terminal.attach" &&
-          (c.params as { observe?: boolean }).observe !== true,
-      ),
-    ).toHaveLength(1);
+    expect(w.size()).toBe("90x30");
+    await until(() => w.grids().includes("90x30"));
+    expect(w.seats()).toHaveLength(1);
     expect(w.keyboard()).toEqual([
       FrameKind.FOCUS,
       FrameKind.DATA,
       FrameKind.DATA,
       FrameKind.DATA,
     ]);
-    expect(w.watches.leave(w.page, "s1")).toBe(true);
-    await until(() => w.fake.terminal(w.t)?.cols === 132);
-    expect(w.fake.terminal(w.t)).toMatchObject({ cols: 132, rows: 40 });
-    expect(w.keyboard().slice(-2)).toEqual([FrameKind.FOCUS, FrameKind.CLOSE]);
-    // The watch goes on; the next key opens a new keyboard.
-    expect(w.watches.size).toBe(1);
-    await w.type("x");
-    await until(() => w.fake.terminal(w.t)?.cols === 90);
-    // The desktop pane clicked: it leads again while World's keyboard stays.
+    // The desktop pane clicked: it leads again while World's seat stays.
     w.fake.desktopResize(w.t, 132, 40);
-    expect(w.fake.terminal(w.t)).toMatchObject({ cols: 132, rows: 40 });
+    expect(w.size()).toBe("132x40");
+    await w.type("x");
+    await until(() => w.size() === "90x30");
+    w.watches.close(w.page, "s1");
+    await until(() => w.size() === "132x40");
+    expect(w.keyboard().slice(-2)).toEqual([FrameKind.FOCUS, FrameKind.CLOSE]);
   });
 
-  test("automatic replies never open the keyboard and go only where core tells them apart", async () => {
+  test("automatic replies go only on a seat a person typed into, and only where core tells them apart", async () => {
     const w = await watching();
+    w.hold(90, 30);
+    await until(() => w.watches.typing(w.page, "s1") === "yes");
     expect(await w.type("\x1b[1;1R", undefined, true)).toEqual({
       sent: false,
     });
     await Bun.sleep(20);
-    expect(w.fake.viewersOf(w.t).filter((v) => !v.observe)).toHaveLength(0);
-    expect(w.fake.terminal(w.t)).toMatchObject({ cols: 132, rows: 40 });
+    expect(w.keyboard()).toEqual([]);
+    expect(w.size()).toBe("132x40");
     await w.type("a");
     expect(await w.type("\x1b[?1;2c", undefined, true)).toEqual({
       sent: true,
@@ -358,21 +424,6 @@ describe("typing into a watched core terminal", () => {
     expect(old.fake.answered.get(old.t)).toBeUndefined();
   });
 
-  test("the size goes with typed keys only, and only when it changed", async () => {
-    const w = await watching();
-    await w.type("a");
-    await w.type("b");
-    await w.type("c", { cols: 60, rows: 20 });
-    await until(() => w.fake.terminal(w.t)?.cols === 60);
-    expect(w.keyboard()).toEqual([
-      FrameKind.FOCUS,
-      FrameKind.DATA,
-      FrameKind.DATA,
-      FrameKind.RESIZE,
-      FrameKind.DATA,
-    ]);
-  });
-
   test("a character split across messages reaches core byte for byte", async () => {
     const w = await watching();
     const check = new TextEncoder().encode("✓");
@@ -381,25 +432,7 @@ describe("typing into a watched core terminal", () => {
     await until(() => w.fake.typed.get(w.t) === "✓");
   });
 
-  test("leaving while the attach is in flight sends what was typed, then leaves", async () => {
-    const w = await watching();
-    const typed = w.type("hi");
-    w.watches.leave(w.page, "s1");
-    const again = w.type("!");
-    expect(await typed).toEqual({ sent: true });
-    expect(await again).toEqual({ sent: true });
-    await until(() => w.fake.typed.get(w.t) === "hi!");
-    expect(w.watches.typing(w.page, "s1")).toBe("yes");
-    expect(
-      w.fake.calls.filter(
-        (c) =>
-          c.method === "terminal.attach" &&
-          (c.params as { observe?: boolean }).observe !== true,
-      ),
-    ).toHaveLength(2);
-  });
-
-  test("kill -9 while the keyboard opens: queued keys are not sent, never replayed", async () => {
+  test("kill -9 while the seat opens: queued keys are not sent, never replayed", async () => {
     const w = await watching();
     w.fake.onCall = (method, params) => {
       if (method === "terminal.attach" && params.observe !== true)
@@ -424,11 +457,12 @@ describe("typing into a watched core terminal", () => {
     w.fake.replaceWithShell(w.t);
     await until(() => w.page.pushes.some((p) => "closed" in p));
     await expect(w.type("b")).rejects.toThrow(/not being watched/);
+    expect(w.hold(80, 24)).toBe(false);
     await Bun.sleep(20);
     expect(w.fake.typed.get(w.t)).toBe("a");
   });
 
-  test("a program replaced while the keyboard opens: the keys are not sent", async () => {
+  test("a program replaced while the seat opens: the keys are not sent", async () => {
     const w = await watching();
     w.fake.onCall = (method, params) => {
       if (method === "terminal.attach" && params.observe !== true)
@@ -437,14 +471,14 @@ describe("typing into a watched core terminal", () => {
     await expect(w.type("y")).rejects.toThrow();
     await Bun.sleep(20);
     expect(w.fake.typed.get(w.t)).toBeUndefined();
-    // The keyboard core opened was left at once: the pane leads.
+    // The seat core opened was left at once: the pane leads.
     await until(
       () => w.fake.viewersOf(w.t).filter((v) => !v.observe).length === 0,
     );
-    expect(w.fake.terminal(w.t)).toMatchObject({ cols: 132, rows: 40 });
+    expect(w.size()).toBe("132x40");
   });
 
-  test("closing the watch leaves the keyboard too; oversized or malformed input is refused", async () => {
+  test("closing the watch leaves the seat too; oversized or malformed requests are refused", async () => {
     const w = await watching();
     await w.type("a");
     await expect(
@@ -466,9 +500,18 @@ describe("typing into a watched core terminal", () => {
     await expect(
       w.watches.input(w.page, { stream: "s1", data: "!!", cols: 9, rows: 3 }),
     ).rejects.toThrow(/base64/);
+    expect(() =>
+      w.watches.hold(w.page, { stream: "s1", cols: 0x10000, rows: 3 }),
+    ).toThrow(/size in cells/);
+    expect(() => w.watches.hold(w.page, { cols: 9, rows: 3 })).toThrow(
+      /stream key/,
+    );
+    expect(w.watches.hold(w.page, { stream: "s9", cols: 9, rows: 3 })).toBe(
+      false,
+    );
     w.watches.close(w.page, "s1");
     await until(() => w.fake.viewersOf(w.t).length === 0);
-    expect(w.fake.terminal(w.t)).toMatchObject({ cols: 132, rows: 40 });
+    expect(w.size()).toBe("132x40");
     await expect(w.type("b")).rejects.toThrow(/not being watched/);
   });
 });

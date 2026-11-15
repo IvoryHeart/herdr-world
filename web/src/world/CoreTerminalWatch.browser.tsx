@@ -1,19 +1,15 @@
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
-import type { CoreTerminalPush } from "../coreWatch";
-import { type ReactNode, useState } from "react";
+import { type CoreTerminalPush, MIN_WATCH_SCALE } from "../coreWatch";
+import { useState } from "react";
 import {
   CoreTerminalWatch,
   type CoreWatchTarget,
-  useCoreTerminalWatch,
+  coreInspectorTerminal,
+  useCoreTerminalDrafts,
 } from "./CoreTerminalWatch";
-import {
-  useWorldPanelRegistry,
-  WorldPanel,
-  WorldPanelsContext,
-  WorldPanelWindow,
-} from "./windows/WorldPanel";
+import type { WorldObjectNode } from "./worldObject";
 import {
   activateTerminalComposerDraftScope,
   readTerminalComposerDraft,
@@ -22,57 +18,13 @@ import {
 } from "../terminalComposer";
 import "../styles/tokens.css";
 import "../styles/base.css";
-import "./windows/windows.css";
 import "./windows/WorldLayout.css";
 
-/**
- * World's panel windows as a phone shows them: each open panel fills the
- * World shell (which the keyboard lifts) under its one bar with Back.
- */
-function PanelHost({ children }: { children: ReactNode }) {
-  const registry = useWorldPanelRegistry();
-  return (
-    <WorldPanelsContext.Provider value={registry}>
-      {children}
-      <style>{`.core-watch-fixture-shell{position:fixed;inset:0;display:flex;flex-direction:column}.core-watch-fixture-window{flex:1;min-height:0}`}</style>
-      {registry.panels.length ? (
-        <div className="world-foundation-shell core-watch-fixture-shell">
-          {registry.panels.map((panel) => (
-            <div
-              key={panel.id}
-              className="core-watch-fixture-window"
-              data-window={panel.id}
-            >
-              <WorldPanelWindow
-                label={panel.label}
-                controls={{
-                  maximized: false,
-                  compact: true,
-                  onMinimize() {},
-                  onMaximize() {},
-                  onClose: panel.onClose,
-                  onSnap() {},
-                  onFit() {},
-                  onFloat() {},
-                  back: { label: "Back to Town" },
-                }}
-                onBody={registry.panelBodyRef(panel.id)}
-              />
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </WorldPanelsContext.Provider>
-  );
-}
-const backButton = (root: ParentNode = document) =>
-  root.querySelector<HTMLButtonElement>(".world-panel-bar .world-window-back");
-
-// The production watch view fed, push by push, with what World's server
-// relays from a recorded real-core watch: a desktop pane at 120x40, then
-// 90x25, then closed (headless 200x120). The page records every call it
-// makes; the test rotates the phone and opens its keyboard between pushes,
-// then types real keys (CDP) into the view and its phone composer.
+// The production Terminal tab body of a herdr-core agent's Inspector, fed
+// push by push with what World's server relays from a recorded real-core
+// watch: a desktop pane at 120x40, then 90x25, then closed (headless
+// 200x120). The page records every call it makes; the test rotates the
+// phone and opens its keyboard between pushes, then types real keys (CDP).
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -82,6 +34,7 @@ const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 const frames = async (n: number) => {
   for (let i = 0; i < n; i++) await frame();
 };
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 window.addEventListener("error", (event) => failures.push(String(event.error)));
 const capture = new URL(location.href).searchParams.get("capture");
 const until = async (condition: () => boolean, ms = 2000) => {
@@ -92,15 +45,18 @@ const until = async (condition: () => boolean, ms = 2000) => {
 
 const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
 let stream: string | null = null;
+/** While set, the watch answers only when it settles (a slow SSH host). */
+let watchGate: Promise<void> | null = null;
 Object.assign(bridge, {
   call: async (method: string, params: Record<string, unknown> = {}) => {
     calls.push({ method, params });
     if (method === "world.core.watch") {
+      if (watchGate) await watchGate;
       stream = String(params.stream);
       return { stream, grid: { cols: 120, rows: 40 }, moved_from: null };
     }
     if (method === "world.core.input") return { sent: true };
-    if (method === "world.core.leave") return { left: true };
+    if (method === "world.core.hold") return { held: true };
     return { closed: true };
   },
   onStatus: () => () => {},
@@ -109,9 +65,9 @@ Object.assign(bridge, {
 (
   bridge as unknown as { helloAcceptedForSocket: boolean }
 ).helloAcceptedForSocket = true;
-const deliver = (push: CoreTerminalPush) =>
+const deliver = (push: CoreTerminalPush, to = stream) =>
   (bridge as unknown as { onMessage(raw: string): void }).onMessage(
-    JSON.stringify({ core_terminal: { ...push, stream } }),
+    JSON.stringify({ core_terminal: { ...push, stream: to } }),
   );
 
 const host = () => document.querySelector<HTMLElement>(".core-watch-host");
@@ -131,34 +87,53 @@ const press = (key: string) => fetch(`/key?key=${encodeURIComponent(key)}`);
 const insert = (text: string) =>
   fetch(`/insert?text=${encodeURIComponent(text)}`);
 const inputs = () => calls.filter((c) => c.method === "world.core.input");
+const holds = () => calls.filter((c) => c.method === "world.core.hold");
+const lastHold = () => holds()[holds().length - 1]?.params ?? {};
 const typedText = (from = 0) =>
   inputs()
     .slice(from)
     .filter((c) => !c.params.automatic)
     .map((c) => atob(String(c.params.data)))
     .join("");
-const badge = () =>
-  document.querySelector<HTMLElement>("[data-core-watch-badge]")?.dataset
-    .coreWatchBadge;
 const gridLine = () =>
   document.querySelector("[data-core-watch-grid]")?.textContent ?? "";
 const xtermInput = () =>
   document.querySelector<HTMLTextAreaElement>(".core-watch-host textarea")!;
+const section = () => document.querySelector<HTMLElement>(".core-watch")!;
 
-/** The first key takes World's fitted size; core answers with that grid. */
-async function typeFirstKey() {
-  xtermInput().focus();
-  await frames(1);
-  const before = inputs().length;
-  await press("a");
-  await until(() => inputs().length > before);
-  const first = inputs()[before]?.params ?? {};
+/** The grid World asks for fits the view at actual size, edge to edge. */
+function fitsView(size: Record<string, unknown>, label: string) {
+  const view = document.querySelector<HTMLElement>(".core-watch-view")!;
+  const drawing = document.querySelector<HTMLElement>(
+    ".core-watch-host .xterm-screen",
+  )!;
+  // xterm opens at 80x24 and keeps it until core's first grid.
+  const [cols, rows] = (termGrid() ?? "80x24").split("x").map(Number);
+  const cellWidth = drawing.offsetWidth / cols!;
+  const cellHeight = drawing.offsetHeight / rows!;
+  const width = view.clientWidth - 16;
+  const height = view.clientHeight - 16;
+  const c = Number(size.cols);
+  const r = Number(size.rows);
+  check(
+    c * cellWidth <= width + 0.5 &&
+      (c + 1) * cellWidth > width &&
+      r * cellHeight <= height + 0.5 &&
+      (r + 1) * cellHeight > height,
+    `${label}: ${c}x${r} fits ${width}x${height}px (cell ${cellWidth.toFixed(2)}x${cellHeight.toFixed(2)})`,
+  );
+}
+
+/** World's view holds its size; core answers with that grid. */
+async function adoptHold() {
+  await until(() => holds().length > 0);
+  const size = lastHold();
   deliver({
     stream: "",
-    grid: { cols: Number(first.cols), rows: Number(first.rows) },
+    grid: { cols: Number(size.cols), rows: Number(size.rows) },
   });
   await frames(3);
-  return first;
+  return size;
 }
 
 async function run() {
@@ -169,32 +144,37 @@ async function run() {
   const pushes: CoreTerminalPush[] = await (await fetch("/pushes")).json();
   const root = document.createElement("div");
   document.body.append(root);
-  let closed = false;
+  let setOpen: (open: boolean) => void = () => {};
+  // The Inspector's frame in World's shell (which a phone keyboard lifts):
+  // its tab body fills it.
   function Window() {
-    const [open, setOpen] = useState(true);
-    return (
-      <PanelHost>
-        {open ? (
-          <WorldPanel
-            name="core-terminal-fixture"
-            label="reviewer · Terminal"
-            onClose={() => {
-              closed = true;
-              setOpen(false);
+    const [open, set] = useState(true);
+    setOpen = set;
+    return open ? (
+      <div
+        className="world-foundation-shell workspace-inspector"
+        style={{
+          position: "fixed",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <button type="button" className="fixture-title">
+          reviewer
+        </button>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <CoreTerminalWatch
+            target={{
+              connectionId: "core-fixture",
+              generation: 1,
+              address: "t1",
             }}
-          >
-            <CoreTerminalWatch
-              target={{
-                connectionId: "core-fixture",
-                generation: 1,
-                address: "t1",
-              }}
-              title="reviewer"
-            />
-          </WorldPanel>
-        ) : null}
-      </PanelHost>
-    );
+            title="reviewer"
+          />
+        </div>
+      </div>
+    ) : null;
   }
   flushSync(() => createRoot(root).render(<Window />));
   await until(() => stream !== null);
@@ -210,14 +190,22 @@ async function run() {
       }),
     `the watch names only the terminal: ${JSON.stringify(calls[0])}`,
   );
+  // The open view holds the grid that fits it at once, with no key typed.
+  await until(() => holds().length > 0);
+  check(
+    holds().length === 1 && lastHold().stream === stream,
+    `the open view holds its size: ${JSON.stringify(holds())}`,
+  );
+  // Once its header settles, the size held is the one that fits.
+  await pause(300);
+  fitsView(lastHold(), "the held grid fits the view");
   const grids = pushes.flatMap((p, i) => ("grid" in p ? [i] : []));
   check(grids.length === 3, `three grids recorded: ${grids.length}`);
-  // Desktop pane at 120x40, then its resize to 90x25 with its repaint.
+  // Desktop pane at 120x40, then its resize to 90x25 with its repaint: a
+  // Herdr app holds the size, and World draws its grid.
   const desktopEnd = grids[2]!;
-  // Every grid xterm takes, in order.
   const adopted: string[] = [];
   new MutationObserver((records) => {
-    // Records arrive batched: each one's successor holds its new value.
     records.forEach((_, i) => {
       const grid = records[i + 1]?.oldValue ?? termGrid();
       if (grid && adopted[adopted.length - 1] !== grid) adopted.push(grid);
@@ -240,16 +228,15 @@ async function run() {
     `the repaint and live output are shown: ${screenText().slice(0, 200)}`,
   );
   check(
-    document
-      .querySelector("[data-core-watch-grid]")
-      ?.textContent?.startsWith("90×25: the size of the Herdr app") === true,
-    "the grid line says who set the size",
+    gridLine().startsWith("90×25: the size of the Herdr app"),
+    `the grid line says who set the size: ${gridLine()}`,
   );
-  if (capture === "typing") await typeFirstKey();
-  if (capture) return;
-  // Rotate the phone, open its keyboard, close it, rotate back: the view
-  // rescales, core's grid never changes and nothing is sent.
-  const sent = calls.length;
+  if (capture === "app") return;
+  // Rotate the phone, open its keyboard, close it, rotate back: the drawing
+  // rescales (never below a readable size), core's grid never changes under
+  // World, nothing is typed, and World's held size follows the view once
+  // it settles.
+  const sent = inputs().length;
   const scales: string[] = [];
   for (const [width, height] of [
     [390, 844],
@@ -263,11 +250,16 @@ async function run() {
       termGrid() === "90x25",
       `${width}x${height} keeps 90x25: ${termGrid()}`,
     );
+    const scale = Number(host()?.dataset.scale);
     const view = document.querySelector<HTMLElement>(".core-watch-view")!;
     const drawn = document.querySelector<HTMLElement>(".core-watch-frame")!;
     check(
+      scale >= MIN_WATCH_SCALE - 0.001,
+      `${width}x${height}: the drawing stays readable: ${scale}`,
+    );
+    check(
       drawn.offsetWidth <= view.clientWidth ||
-        Number(host()?.dataset.scale) <= 0.45,
+        Math.abs(scale - MIN_WATCH_SCALE) < 0.001,
       `${width}x${height}: the drawing fits or scrolls at the minimum scale`,
     );
   }
@@ -276,20 +268,30 @@ async function run() {
     `only the drawing scales: ${scales.join(", ")}`,
   );
   check(
-    calls.length === sent,
-    `rotation and keyboard send nothing: ${JSON.stringify(calls.slice(sent))}`,
+    inputs().length === sent,
+    `rotation and keyboard type nothing: ${JSON.stringify(inputs().slice(sent))}`,
   );
-  // The pane closes: core's headless grid, said plainly.
-  for (const push of pushes.slice(desktopEnd)) deliver(push);
-  await frames(3);
-  check(termGrid() === "200x120", `headless is adopted: ${termGrid()}`);
+  await pause(300);
+  fitsView(lastHold(), "after the rotations World holds the grid that fits");
   check(
-    document
-      .querySelector("[data-core-watch-grid]")
-      ?.textContent?.includes("headless size") === true,
-    "the headless grid is named honestly",
+    holds().length <= 5,
+    `each settled view size is held once, not every frame: ${holds().length}`,
   );
-  check(screenText().includes("headless now"), "output continues headless");
+  // The pane closes: core gives World its held size (no headless step).
+  const held = await adoptHold();
+  check(
+    termGrid() === `${held.cols}x${held.rows}`,
+    `World's held size is adopted: ${termGrid()}`,
+  );
+  check(
+    gridLine().includes("fits this window; it goes back when you close it"),
+    `the grid line says World holds the size: ${gridLine()}`,
+  );
+  check(
+    section().dataset.held === `${held.cols}x${held.rows}`,
+    `the view says what it holds: ${section().dataset.held}`,
+  );
+  if (capture === "held") return;
   // xterm parses writes later but resizes at once: a grid arriving right
   // behind a paint must not overtake it. An X sent to column 100 of a
   // 60-column grid stops at column 60; drawn after the next grid, it would
@@ -309,7 +311,14 @@ async function run() {
     marks.join() === "60",
     `a paint is drawn on its own grid before the next one: ${marks.join()}`,
   );
-  await typing(() => closed);
+  // The headless grid, said plainly.
+  for (const push of pushes.slice(desktopEnd)) deliver(push);
+  await frames(3);
+  check(
+    gridLine().includes("headless size"),
+    `the headless grid is named honestly: ${gridLine()}`,
+  );
+  await typing();
   await keyboardLift();
   // core is killed: the stream ends and says so.
   deliver({ stream: "", closed: "core closed the connection" });
@@ -320,12 +329,10 @@ async function run() {
       ?.textContent?.includes("Lost the herdr-core connection") === true,
     "a lost core says so",
   );
-  // The window's Back closes it and ends the watch.
+  // Closing the Inspector ends the watch (and with it World's seat).
   const firstStream = stream;
-  backButton()!.click();
+  flushSync(() => setOpen(false));
   await frames(2);
-  check(closed, "Back closes the watch");
-  check(!document.querySelector(".core-watch"), "Back removes the view");
   check(
     calls.some(
       (c) =>
@@ -333,103 +340,215 @@ async function run() {
     ),
     "closing the window ends the watch",
   );
+  await twoInspectors();
   await reconnects();
+  await earlyKeys();
+  await minimized();
 }
 
 /**
- * Typing into the view. xterm's own answers to the program never open the
- * keyboard; the first real key does, at the size that fits the view; while
- * World holds it, xterm's answers go as replies; focus reports never go;
- * Escape is a key; leaving gives the size back. Then the phone composer
- * sends text and an uploaded image's path through the same keyboard.
+ * A key typed before the watch answers (over a slow SSH host, say) waits
+ * for it and then goes once: World's server knows the stream only after
+ * core's observe attach answered (live core 0.1.21 refused the key with
+ * "that terminal is not being watched").
  */
-async function typing(closed: () => boolean) {
-  check(badge() === "watching", `the view starts watching: ${badge()}`);
+async function earlyKeys() {
+  let release = () => {};
+  watchGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const root = document.createElement("div");
+  document.body.append(root);
+  const app = createRoot(root);
+  const from = calls.length;
+  flushSync(() =>
+    app.render(
+      <div style={{ position: "fixed", inset: 0 }}>
+        <CoreTerminalWatch
+          target={{
+            connectionId: "core-fixture",
+            generation: 1,
+            address: "t6",
+          }}
+          title="slow"
+        />
+      </div>,
+    ),
+  );
+  const watch = () =>
+    calls
+      .slice(from)
+      .find(
+        (c) => c.method === "world.core.watch" && c.params.address === "t6",
+      );
+  await until(() => watch() !== undefined);
+  const key = String(watch()?.params.stream);
+  const sentOn = () =>
+    calls
+      .slice(from)
+      .filter(
+        (c) => c.method === "world.core.input" && c.params.stream === key,
+      );
+  root.querySelector<HTMLTextAreaElement>(".core-watch-host textarea")!.focus();
+  await press("a");
+  await pause(200);
+  check(
+    sentOn().length === 0,
+    `a key waits while the watch opens: ${JSON.stringify(sentOn())}`,
+  );
+  watchGate = null;
+  release();
+  await until(() => sentOn().length > 0);
+  await pause(200);
+  const typed = sentOn()
+    .filter((c) => !c.params.automatic)
+    .map((c) => atob(String(c.params.data)))
+    .join("");
+  check(typed === "a", `the waiting key goes once, after the watch: ${typed}`);
+  check(
+    !root.querySelector(".core-watch-notice"),
+    "the waiting key is not refused",
+  );
+  flushSync(() => app.unmount());
+  root.remove();
+}
+
+/**
+ * Minimizing the Inspector ends its watch and World's seat (the page's
+ * watch slots and the size go back); a look at Chat keeps both. Restored,
+ * the Terminal tab watches again once it is the tab shown.
+ */
+async function minimized() {
+  const node = {
+    kind: "agent",
+    id: "n7",
+    label: "minimized",
+    coreControl: true,
+    stale: false,
+    watch: { connectionId: "core-fixture", generation: 1, address: "t7" },
+  } as unknown as WorldObjectNode;
+  let view = { selected: true, shown: true };
+  let rerender = () => {};
+  function Harness() {
+    const [, setTick] = useState(0);
+    rerender = () => setTick((n) => n + 1);
+    return (
+      <div style={{ position: "fixed", inset: 0 }}>
+        {coreInspectorTerminal(node, view)}
+      </div>
+    );
+  }
+  const root = document.createElement("div");
+  document.body.append(root);
+  const app = createRoot(root);
+  const from = calls.length;
+  const of = (method: string) =>
+    calls
+      .slice(from)
+      .filter(
+        (c) =>
+          c.method === method &&
+          (method !== "world.core.watch" || c.params.address === "t7"),
+      );
+  const set = async (next: typeof view) => {
+    view = next;
+    flushSync(rerender);
+    await frames(2);
+  };
+  flushSync(() => app.render(<Harness />));
+  await until(() => of("world.core.watch").length === 1);
+  const first = String(of("world.core.watch")[0]?.params.stream);
+  await set({ selected: false, shown: true });
+  check(
+    of("world.core.unwatch").length === 0 &&
+      Boolean(root.querySelector(".core-watch")),
+    "a look at Chat keeps the watch and World's seat",
+  );
+  await set({ selected: false, shown: false });
+  check(
+    of("world.core.unwatch").some((c) => c.params.stream === first),
+    `minimizing ends the watch: ${JSON.stringify(of("world.core.unwatch"))}`,
+  );
+  check(!root.querySelector(".core-watch"), "a minimized window holds no view");
+  await set({ selected: true, shown: false });
+  await set({ selected: false, shown: true });
+  check(
+    of("world.core.watch").length === 1,
+    "restored on Chat, nothing is watched until the Terminal tab is shown",
+  );
+  await set({ selected: true, shown: true });
+  await until(() => of("world.core.watch").length === 2);
+  check(
+    of("world.core.watch").length === 2,
+    "the Terminal tab watches again once shown",
+  );
+  flushSync(() => app.unmount());
+  root.remove();
+}
+
+/**
+ * Typing into the view. A key typed while focus is on the page or the
+ * Inspector's frame focuses the terminal and is sent once; xterm's own
+ * answers go as automatic replies (World's server sends them only on a seat
+ * a person typed into); Escape is a key; focus leaving gives nothing back.
+ * Then the phone composer sends text and an uploaded image's path.
+ */
+async function typing() {
   // The program asks where the cursor is and turns on focus reports.
   deliver({ stream: "", bytes: btoa("\x1b[6n\x1b[?1004h") });
-  await frames(3);
+  await until(() => inputs().length > 0);
   check(
-    inputs().length === 0,
-    `xterm's answer alone sends nothing: ${JSON.stringify(inputs())}`,
+    inputs().every((c) => c.params.automatic === true),
+    `xterm's answer goes only as a reply: ${JSON.stringify(inputs())}`,
   );
-  const first = await typeFirstKey();
-  const view = document.querySelector<HTMLElement>(".core-watch-view")!;
-  const drawing = document.querySelector<HTMLElement>(
-    ".core-watch-host .xterm-screen",
-  )!;
-  const cell = drawing.offsetWidth / Number(first.cols);
-  const room = view.clientWidth - 16;
+  const before = inputs().length;
+  // Focus on the Inspector's title: the first key still reaches the terminal.
+  document.querySelector<HTMLElement>(".fixture-title")!.focus();
+  await press("a");
+  await until(() => typedText(before).length > 0);
   check(
-    first.stream === stream &&
-      atob(String(first.data)) === "a" &&
-      first.automatic === undefined,
-    `the first key goes once, as a key, with no focus report before it: ${JSON.stringify(inputs())}`,
+    typedText(before) === "a",
+    `the first key goes once, as typed: ${JSON.stringify(inputs().slice(before))}`,
   );
   check(
-    Number(first.cols) * cell <= room + 0.5 &&
-      (Number(first.cols) + 1) * cell > room,
-    `the first key asks for the grid that fits the view: ${first.cols}x${first.rows} in ${room}px`,
+    document.activeElement === xtermInput(),
+    "the first key focuses the terminal",
   );
-  check(badge() === "typing", `the badge says World is typing: ${badge()}`);
   check(
-    gridLine().includes("World's size while you type"),
-    `the grid line says World holds the size: ${gridLine()}`,
+    Boolean(document.querySelector(".core-watch-host .xterm.focus")),
+    "the terminal's cursor is active",
   );
-  // While World holds the keyboard, xterm's answer goes as a reply.
-  deliver({ stream: "", bytes: btoa("\x1b[6n") });
-  await until(() => inputs().length === 2);
-  const reply = inputs()[1]?.params ?? {};
-  check(
-    reply.automatic === true &&
-      /^\x1b\[\d+;\d+R$/.test(atob(String(reply.data ?? ""))),
-    `xterm's cursor report goes as a reply: ${JSON.stringify(reply)}`,
-  );
-  // Escape is the program's key here, not Back.
-  await press("Escape");
-  await until(() => inputs().length === 3);
-  check(typedText() === "a\x1b", `Escape is typed: ${typedText()}`);
-  check(!closed(), "Escape in the terminal does not close the view");
-  // The window is resized while World types: nothing is sent until the next
-  // key, which carries the grid that now fits; core answers with it.
-  const beforeResize = inputs().length;
-  await viewport(844, 390);
-  check(
-    inputs().length === beforeResize &&
-      calls.every((c) => c.method !== "world.core.leave"),
-    `resizing the window sends nothing by itself: ${JSON.stringify(inputs().slice(beforeResize))}`,
-  );
-  await press("b");
-  await until(() => inputs().length > beforeResize);
-  const resized = inputs()[beforeResize]?.params ?? {};
-  const wideRoom = view.clientWidth - 16;
-  const wideCell =
-    document.querySelector<HTMLElement>(".core-watch-host .xterm-screen")!
-      .offsetWidth / Number(first.cols);
-  check(
-    atob(String(resized.data)) === "b" &&
-      Number(resized.cols) > Number(first.cols) &&
-      Number(resized.cols) * wideCell <= wideRoom + 0.5 &&
-      (Number(resized.cols) + 1) * wideCell > wideRoom,
-    `the next key carries the resized window's grid: ${first.cols}x${first.rows} -> ${resized.cols}x${resized.rows} in ${wideRoom}px`,
-  );
-  deliver({
-    stream: "",
-    grid: { cols: Number(resized.cols), rows: Number(resized.rows) },
-  });
-  await viewport(390, 844);
-  // Focus leaves the view: a few seconds later the size goes back.
+  // A click on the view focuses the terminal too.
   xtermInput().blur();
-  const left = await until(
-    () => calls.some((c) => c.method === "world.core.leave"),
-    6000,
-  );
-  check(left, "leaving the view gives the size back");
+  document
+    .querySelector<HTMLElement>(".core-watch-view")!
+    .dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, button: 0 }),
+    );
+  await frames(2);
   check(
-    inputs().length === 4,
-    `focus reports never go: ${JSON.stringify(inputs().slice(4))}`,
+    document.activeElement === xtermInput(),
+    "a click on the view focuses the terminal",
   );
-  check(badge() === "watching", `the badge says watching again: ${badge()}`);
+  // Escape is the program's key here.
+  const beforeEscape = inputs().length;
+  await press("Escape");
+  await until(() => inputs().length > beforeEscape);
+  check(typedText(before) === "a\x1b", `Escape is typed: ${typedText(before)}`);
+  // Focus leaves and the page idles: World keeps its size (no give-back).
+  await pause(300);
+  const holding = holds().length;
+  xtermInput().blur();
+  await pause(1500);
+  check(
+    holds().length === holding &&
+      calls.every((c) => c.method !== "world.core.leave"),
+    `blur and idle give nothing back: ${JSON.stringify(calls.slice(-3))}`,
+  );
+  check(Boolean(section().dataset.held), "World still holds its size");
   // The phone's composer: text, then an image uploaded to the host.
+  document.documentElement.dataset.layout = "mobile";
+  await frames(2);
   const composer = document.querySelector<HTMLTextAreaElement>(
     ".core-watch-composer textarea",
   );
@@ -441,11 +560,14 @@ async function typing(closed: () => boolean) {
         ".core-watch-composer .terminal-composer-submit.is-primary",
       )
       ?.click();
-  const sentBefore = inputs().length;
   composer.focus();
   await press("Escape");
   await frames(1);
-  check(!closed(), "Escape in the composer does not close the view");
+  check(
+    !typedText(before).endsWith("\x1b\x1b"),
+    "a key in the composer is the composer's",
+  );
+  const sentBefore = inputs().length;
   await insert("ship it");
   await frames(2);
   send();
@@ -491,6 +613,8 @@ async function typing(closed: () => boolean) {
       /^ *\r$/.test(typedText(imageFrom).slice(firstImageBatch.length)),
     `the path is typed alone, then Enter: ${JSON.stringify(typedText(imageFrom))}`,
   );
+  delete document.documentElement.dataset.layout;
+  await frames(2);
 }
 
 /**
@@ -511,7 +635,7 @@ async function keyboardLift() {
       )!
       .getBoundingClientRect();
   root.dataset.layout = "mobile";
-  await frames(2);
+  await viewport(390, 844);
   const visibleBottom = 480;
   check(
     innerHeight === 844 && textarea().bottom > visibleBottom,
@@ -539,8 +663,85 @@ async function keyboardLift() {
 }
 
 /**
- * World's open watch while its connection goes away and comes back: the
- * view stays and says why, then watches the new generation by itself.
+ * Two Inspectors with core terminals: a key typed on the bare page goes to
+ * the one shown or clicked last, never to both.
+ */
+async function twoInspectors() {
+  const root = document.createElement("div");
+  document.body.append(root);
+  const streams: Record<string, string> = {};
+  const box = (address: string, left: string) => (
+    <div
+      className="workspace-inspector"
+      data-fixture={address}
+      style={{ position: "fixed", top: 0, bottom: 0, left, width: "50%" }}
+    >
+      <CoreTerminalWatch
+        target={{ connectionId: "core-fixture", generation: 1, address }}
+        title={address}
+      />
+    </div>
+  );
+  const watchesBefore = calls.length;
+  const app = createRoot(root);
+  flushSync(() =>
+    app.render(
+      <>
+        {box("t3", "0")}
+        {box("t4", "50%")}
+      </>,
+    ),
+  );
+  await until(
+    () =>
+      calls.slice(watchesBefore).filter((c) => c.method === "world.core.watch")
+        .length === 2,
+  );
+  for (const c of calls.slice(watchesBefore))
+    if (c.method === "world.core.watch")
+      streams[String(c.params.address)] = String(c.params.stream);
+  await frames(3);
+  const typedOn = (address: string, from: number) =>
+    inputs()
+      .slice(from)
+      .filter(
+        (c) => c.params.stream === streams[address] && !c.params.automatic,
+      )
+      .map((c) => atob(String(c.params.data)))
+      .join("");
+  (document.activeElement as HTMLElement | null)?.blur();
+  let from = inputs().length;
+  await press("b");
+  await until(() => inputs().length > from);
+  await frames(2);
+  check(
+    typedOn("t4", from) === "b" && typedOn("t3", from) === "",
+    `a page key goes to the last shown terminal only: t3 ${JSON.stringify(typedOn("t3", from))}, t4 ${JSON.stringify(typedOn("t4", from))}`,
+  );
+  // A click on the first makes it the one.
+  document
+    .querySelector<HTMLElement>("[data-fixture=t3] .core-watch-view")!
+    .dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, button: 0 }),
+    );
+  await frames(2);
+  (document.activeElement as HTMLElement | null)?.blur();
+  from = inputs().length;
+  await press("a");
+  await until(() => inputs().length > from);
+  await frames(2);
+  check(
+    typedOn("t3", from) === "a" && typedOn("t4", from) === "",
+    `after a click, page keys go to that terminal: t3 ${JSON.stringify(typedOn("t3", from))}, t4 ${JSON.stringify(typedOn("t4", from))}`,
+  );
+  flushSync(() => app.unmount());
+  root.remove();
+}
+
+/**
+ * The Inspector's Terminal tab while its core connection goes away and
+ * comes back: closing keeps the live terminal's draft; a stale node says
+ * so; a new generation is watched afresh and retires the old draft.
  */
 async function reconnects() {
   const target = (generation: number): CoreWatchTarget => ({
@@ -548,42 +749,46 @@ async function reconnects() {
     generation,
     address: "t2",
   });
-  let nodes = new Map([["n1", { label: "builder", watch: target(1) }]]);
+  const leaf = (watch?: CoreWatchTarget) =>
+    ({
+      kind: "agent",
+      id: "n1",
+      label: "builder",
+      coreControl: true,
+      stale: watch === undefined,
+      ...(watch ? { watch } : {}),
+    }) as unknown as WorldObjectNode;
+  let node = leaf(target(1));
+  let open = true;
   let rerender = () => {};
-  let api: ReturnType<typeof useCoreTerminalWatch> | null = null;
   function Harness() {
     const [, setTick] = useState(0);
     rerender = () => setTick((n) => n + 1);
-    api = useCoreTerminalWatch([{ nodeById: nodes }]);
-    return <PanelHost>{api.view}</PanelHost>;
+    useCoreTerminalDrafts([{ nodeById: new Map([["n1", node]]) as never }]);
+    return (
+      <div style={{ position: "fixed", inset: 0 }}>
+        {open
+          ? coreInspectorTerminal(node, { selected: true, shown: true })
+          : null}
+      </div>
+    );
   }
-  // App's catalogue lists only Herdr connections: core drafts live only
-  // while their generation is held.
   activateTerminalComposerDraftScope("spaces-host", 3);
   const draft = (generation: number) =>
     terminalComposerDraftKey("core-fixture", generation, "t2");
   const root = document.createElement("div");
   document.body.append(root);
-  flushSync(() => createRoot(root).render(<Harness />));
   const watches = () => calls.filter((c) => c.method === "world.core.watch");
   const latest = () => watches()[watches().length - 1]?.params.generation;
   const before = watches().length;
-  check(api!.watch("missing") === false, "only a live core terminal opens");
-  flushSync(() => void api!.watch("n1"));
+  flushSync(() => createRoot(root).render(<Harness />));
   await frames(2);
   check(
     watches().length === before + 1 && latest() === 1,
-    "the watch opens on the current generation",
+    "the tab watches the current generation",
   );
-  // Opening it again raises the one window: one watch, one view.
-  flushSync(() => void api!.watch("n1"));
+  document.documentElement.dataset.layout = "mobile";
   await frames(2);
-  check(
-    watches().length === before + 1 &&
-      document.querySelectorAll(".core-watch").length === 1,
-    "a second open raises the same window",
-  );
-  // An unsent message survives Back and reopening the same live terminal.
   const composer = () =>
     document.querySelector<HTMLTextAreaElement>(
       ".core-watch-composer textarea",
@@ -594,49 +799,45 @@ async function reconnects() {
     composer()?.value === "unsent message",
     `the composer shows the draft: ${composer()?.value}`,
   );
-  backButton()!.click();
+  open = false;
+  flushSync(rerender);
   await frames(2);
-  check(!document.querySelector(".core-watch"), "Back closes the window");
+  check(!document.querySelector(".core-watch"), "closing removes the view");
   check(
     readTerminalComposerDraft(draft(1)) === "unsent message",
-    "closing the view keeps the live terminal's draft",
+    "closing the Inspector keeps the live terminal's draft",
   );
-  flushSync(() => void api!.watch("n1"));
+  open = true;
+  flushSync(rerender);
   await frames(2);
   check(
     composer()?.value === "unsent message",
     `reopening shows the draft again: ${composer()?.value}`,
   );
-  // kill -9: the connection goes stale (no target) and the stream ends.
-  nodes = new Map([["n1", { label: "builder" } as never]]);
+  // kill -9: the connection goes stale; the tab says so instead of a
+  // Herdr terminal.
+  node = leaf();
   flushSync(rerender);
-  deliver({ stream: "", closed: "core closed the connection" });
   await frames(2);
-  const view = () => document.querySelector(".core-watch");
   check(
-    view()
-      ?.querySelector(".core-watch-ended")
-      ?.textContent?.includes("Lost the herdr-core connection") === true,
-    `the view stays and says why: ${view()?.textContent?.slice(0, 120)}`,
-  );
-  check(watches().length === before + 2, "a lost connection is not retried");
-  check(
-    readTerminalComposerDraft(draft(1)) === "unsent message",
-    "a lost stream keeps the draft while the view says why",
+    document.body.textContent?.includes(
+      "This herdr-core terminal is not live now.",
+    ) === true,
+    "a stale core terminal says so",
   );
   // Core is back: a new generation is watched without a tap.
-  nodes = new Map([["n1", { label: "builder", watch: target(2) }]]);
+  node = leaf(target(2));
   flushSync(rerender);
   await frames(2);
   check(
     watches().length === before + 3 && latest() === 2,
     `the new generation is watched: ${JSON.stringify(watches().slice(before))}`,
   );
-  check(!view()?.querySelector(".core-watch-ended"), "the ended notice clears");
   check(
     readTerminalComposerDraft(draft(1)) === "",
     "a new generation (a change of owner) retires the old draft",
   );
+  delete document.documentElement.dataset.layout;
 }
 
 void run()

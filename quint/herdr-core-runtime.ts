@@ -82,11 +82,22 @@ export type CoreState = {
   misdrawn: boolean;
   typed: boolean;
   outputs: number;
-  /** World's keyboard (typing family): 0 none, 1 attach in flight, 2 open. */
-  keys: number;
+  /** World's seat (typing family): its grid id, or -1 for none. */
+  seat: number;
+  /** The grid id of the seat's attach in flight, or -1. */
+  opening: number;
+  /** The grid id the page's view holds, or -1 before it held one. */
+  held: number;
+  holds: number;
+  /** A person typed on the current seat. */
+  touched: boolean;
+  /** A seat opened during this watch. */
+  seated: boolean;
+  /** Core ended or refused World's seat during this watch. */
+  lost: boolean;
+  /** A terminal reply went on a seat nobody typed into. */
+  echo: boolean;
   waiting: number;
-  left: boolean;
-  asked: boolean;
   pressed: number;
   sent: number;
   refused: number;
@@ -168,10 +179,15 @@ export class CoreProtocolFake {
     misdrawn: false,
     typed: false,
     outputs: 0,
-    keys: 0,
+    seat: -1,
+    opening: -1,
+    held: -1,
+    holds: 0,
+    touched: false,
+    seated: false,
+    lost: false,
+    echo: false,
     waiting: 0,
-    left: false,
-    asked: false,
     pressed: 0,
     sent: 0,
     refused: 0,
@@ -428,12 +444,12 @@ export class CoreProtocolFake {
       case "frame":
       case "viewport":
       case "paneTouch":
+      case "hold":
       case "key":
       case "attached":
       case "attachRefused":
-      case "leave":
       case "reply":
-      case "keyboardLost":
+      case "seatLost":
       case "reoccupy":
         this.watcher.apply(op, target);
         break;
@@ -643,12 +659,12 @@ export function validateCoreTrace(
         "frame",
         "viewport",
         "paneTouch",
+        "hold",
         "key",
         "attached",
         "attachRefused",
-        "leave",
         "reply",
-        "keyboardLost",
+        "seatLost",
         "reoccupy",
       ].includes(item.op),
       "unknown core trace action",
@@ -663,14 +679,15 @@ export function validateCoreTrace(
     assert(
       item.target === 0 ||
         item.target === 1 ||
-        (item.op === "pane" && item.target === 2),
+        (item.op === "pane" && item.target === 2) ||
+        (item.op === "hold" && (item.target === 3 || item.target === 4)),
     );
     assert(item.c && typeof item.c === "object");
     assert.deepEqual(Object.keys(item.c).sort(), Object.keys(shape).sort());
     for (const [key, initial] of Object.entries(shape)) {
       const field = item.c[key];
       if (typeof initial === "number")
-        assert(Number.isSafeInteger(field) && field >= -1 && field <= 3);
+        assert(Number.isSafeInteger(field) && field >= -1 && field <= 4);
       else if (typeof initial === "boolean") assert(typeof field === "boolean");
       else assert(Array.isArray(field));
     }
@@ -705,7 +722,7 @@ export function validateCoreTrace(
       assert.deepEqual(Object.keys(frame).sort(), ["grid", "kind", "stream"]);
       assert(["resize", "data"].includes(frame.kind));
       assert(
-        Number.isSafeInteger(frame.grid) && frame.grid >= 0 && frame.grid <= 3,
+        Number.isSafeInteger(frame.grid) && frame.grid >= 0 && frame.grid <= 4,
       );
       assert(
         Number.isSafeInteger(frame.stream) &&
@@ -798,19 +815,13 @@ export function replayCore(
       witnesses.add("stallReleased");
     if (state.op === "watch" && !c.watching)
       witnesses.add("unconfirmedRefused");
-    if (state.op === "frame" && c.watching && c.keys === 2 && c.shown === 3)
-      witnesses.add("typingLed");
-    if (
-      state.op === "frame" &&
-      c.watching &&
-      c.keys === 0 &&
-      c.sent > 0 &&
-      c.shown >= 0 &&
-      c.shown === c.grid
-    )
-      witnesses.add("sizeReturned");
-    if (state.op === "attached" && c.keys === 0 && c.sent > 0)
-      witnesses.add("leftAfterKeys");
+    const framed = state.op === "frame" && c.watching && c.seat >= 0;
+    if (framed && c.lead >= 0 && c.shown === c.seat) witnesses.add("typingLed");
+    if (framed && c.lead < 0 && c.shown === c.seat) witnesses.add("seatHeld");
+    if (framed && c.sent > 0 && c.lead >= 0 && c.shown === c.lead)
+      witnesses.add("paneRetook");
+    if (state.op === "attached" && c.holds === 2 && c.seat === c.held)
+      witnesses.add("swapped");
     if (state.op === "key" && c.replaced && !c.watching)
       witnesses.add("replacementRefused");
     if (state.op === "removeCheckout" && c.removed)

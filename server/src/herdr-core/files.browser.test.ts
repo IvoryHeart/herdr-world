@@ -21,7 +21,9 @@ import {
   openCoreWorktree,
   removeCoreWorktree,
 } from "../herdr-core/worktrees";
+import { localAgentSessionFiles } from "../agent/session-file-access";
 import { callCoreHost } from "../rpc/core-host";
+import { handleCoreSharedRpc } from "../rpc/core-shared";
 import { runProcessWithCodeTimeout } from "../utils/process-utils";
 import { worldRuntimeRegistry } from "../world/runtime-registry";
 import { WorldSnapshotService } from "../world/snapshot";
@@ -123,6 +125,10 @@ async function coreSide(root: string) {
     foreground: { pid: 1, name: "claude", argv: ["claude"], cwd: main },
   });
   world.fake.report(agent, { state: "working", app: "claude-code" });
+  // Its first turn ended while nobody looked (opening its window is a look);
+  // it is working on the next.
+  world.fake.report(agent, { state: "done", app: "claude-code" });
+  world.fake.report(agent, { state: "working", app: "claude-code" });
   await world.settle();
   const lease = world.lease("box");
   const settings = defaultGuiSettings();
@@ -135,6 +141,11 @@ async function coreSide(root: string) {
     lease,
     host: null,
     readSettings: async () => settings,
+    // Chat never reads the developer's own process records.
+    agentSessionFiles: {
+      ...localAgentSessionFiles,
+      findClaudeSessionForProcess: async () => null,
+    },
     // Belt and braces: nothing reaches the real home directory.
     processes: {
       runProcessWithCodeTimeout: (argv, timeoutMs, options = {}) =>
@@ -167,6 +178,35 @@ async function coreSide(root: string) {
     params: Record<string, unknown>;
   }) => {
     const p = call.params;
+    // The Terminal tab's watch, as World's relay answers it; the page draws
+    // its own pushes (CoreTerminalWatch's own test drives the stream).
+    if (call.method === "world.core.watch")
+      return {
+        stream: p.stream,
+        grid: { cols: 80, rows: 24 },
+        moved_from: null,
+      };
+    if (call.method === "world.core.hold") return { held: true };
+    if (call.method === "world.core.unwatch") return { closed: true };
+    // Seen shared with Herdr's apps, as rpc-dispatch routes it.
+    if (call.method === "world.core.seen") {
+      const out: { result?: unknown; error?: unknown } = {};
+      await handleCoreSharedRpc({
+        id: "seen",
+        method: call.method,
+        params: p,
+        sendReply: (message: Record<string, unknown>) => {
+          out.result = message.result;
+          return true;
+        },
+        sendError: (_context: string, error: unknown) => {
+          out.error = error;
+        },
+        services: { core: { manager: world.core.manager } },
+      } as never);
+      if (out.error) throw out.error;
+      return out.result;
+    }
     if (call.connection_id !== null) {
       if (
         call.connection_id !== "box" ||
@@ -217,6 +257,7 @@ async function coreSide(root: string) {
   };
   return {
     world,
+    agent,
     main,
     worktrees,
     readMarks: () =>
@@ -301,15 +342,20 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
       // The page read the agent's checkout and drove every worktree step.
       for (const method of [
         "agent_worktree.get",
-        "world.core.history",
+        "agent_conversation.latest",
         "file.list",
         "file.read",
         "world.core.worktree.create",
         "world.core.worktree.open",
         "world.core.kill_plan",
         "world.core.worktree.remove",
+        "world.core.seen",
       ])
         expect(outcome.calls).toContain(method);
+      // The open window shared the finished turn with Herdr's apps.
+      const record = side.world.fake.terminal(side.agent);
+      expect(record?.labels["herdr.seen"]).toBe(String(record?.turn));
+      expect(Number(record?.turn)).toBeGreaterThan(0);
       // On disk: the new worktree was made and removed, the opened one
       // stays, and every hook ran where it should.
       const created = join(side.worktrees, "feature-x");
@@ -330,9 +376,21 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
         await waitForChromePort(child, profile, log),
       );
       let run = 0;
-      for (const stage of ["files", "chat", "dialog", "remove"] as const)
+      for (const stage of [
+        "files",
+        "chat",
+        "terminal",
+        "dialog",
+        "remove",
+      ] as const)
         for (const theme of ["light", "dark"] as const)
           for (const viewport of VIEWPORTS) {
+            // An empty Chat is mostly background on a large screen.
+            if (
+              stage === "chat" &&
+              !["phone", "laptop"].includes(viewport.name)
+            )
+              continue;
             run += 1;
             await resizeCapture(
               connection.command,
@@ -366,10 +424,12 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
                   stage === "files"
                     ? ".workspace-inspector-file-detail"
                     : stage === "chat"
-                      ? ".core-chat > *"
-                      : stage === "dialog"
-                        ? ".core-worktrees"
-                        : '.modal[aria-label="Remove worktree"]',
+                      ? ".agent-chat > *"
+                      : stage === "terminal"
+                        ? ".core-watch"
+                        : stage === "dialog"
+                          ? ".core-worktrees"
+                          : '.modal[aria-label="Remove worktree"]',
               },
             });
             const stem = `${stage}-${viewport.name}-${theme}`;

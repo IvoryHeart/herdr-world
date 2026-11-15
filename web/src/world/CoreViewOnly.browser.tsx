@@ -23,8 +23,9 @@ import "./board/boardAppearance.css";
 
 // Core agents as the server's read model lists them (served by the test from
 // the production provider): Needs you, Town's peek and Board's peek. The page
-// never reaches a runtime; every call is recorded so the test can prove World
-// sends nothing for a view-only agent.
+// never reaches a runtime; every call is recorded. Needs you reads a core
+// agent's conversation through the shared Chat calls, as for a Herdr agent,
+// and its answer names the program the person saw.
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -37,12 +38,60 @@ console.error = (...args: unknown[]) => {
   failures.push(args.map(String).join(" ").slice(0, 400));
   consoleError(...args);
 };
-/** Calls a view-only agent's controls or reads would make. */
+/** Calls the agents' controls and reads made. */
 const calls: string[] = [];
-const record = async (method: string) => {
-  calls.push(method);
-  return null;
-};
+/** Input sent through the shared Chat calls, with its parameters. */
+const inputs: { method: string; params: Record<string, unknown> }[] = [];
+const QUESTION = "Which branch should I merge into?";
+/**
+ * The shared conversation read as the service answers it for a core agent
+ * (`createCoreAgentSessions`): a waiting agent's question from its screen,
+ * a finished one's report.
+ */
+async function conversationCall(
+  connectionId: string,
+  method: string,
+  params: Record<string, unknown> = {},
+) {
+  calls.push(`${connectionId}:${method}`);
+  if (method === "agent_conversation.answer") {
+    inputs.push({ method, params });
+    return {
+      status: "sent",
+      number: "1",
+      label: "main",
+      acknowledged: true,
+    };
+  }
+  if (method !== "agent_conversation.latest") return null;
+  const waiting = conversationPanes.waiting === params.pane_id;
+  return {
+    status: "ok",
+    agent: "claude",
+    session_fingerprint: "fx-session",
+    latest: waiting
+      ? null
+      : {
+          id: "m1",
+          role: "assistant",
+          kind: "message",
+          text: "Reviewed the fixture branch.",
+          sent_at: "2026-11-01T00:00:00.000Z",
+        },
+    pending_prompt: waiting
+      ? {
+          question: [QUESTION],
+          request: [],
+          options: [
+            { number: "1", label: "main", key: "1" },
+            { number: "2", label: "release", key: "2" },
+          ],
+          fingerprint: "fx-question",
+        }
+      : null,
+  };
+}
+const conversationPanes = { waiting: "" };
 /**
  * World's float shell as the service answers it (`server/src/rpc/float.ts`):
  * the reply, then the stream's pushes as control messages. The shell echoes
@@ -131,10 +180,14 @@ Object.assign(bridge, {
     float.handlers.add(handler);
     return () => float.handlers.delete(handler);
   },
-  connection: (connectionId: string) => ({
+  connection: (connectionId: string, generation: number) => ({
     connectionId,
-    isCurrent: () => false,
-    call: (method: string) => record(`${connectionId}:${method}`),
+    generation,
+    serverRuntimeGeneration: null,
+    isCurrent: () => true,
+    acceptsServerGeneration: () => true,
+    call: (method: string, params?: Record<string, unknown>) =>
+      conversationCall(connectionId, method, params),
   }),
   onStatus: (handler: (status: string) => void) => {
     float.statusHandlers.add(handler);
@@ -182,6 +235,7 @@ async function run() {
   const reviewer = named("reviewer");
   const scout = named("scout");
   check(Boolean(reviewer && scout), "the read model lists the core agents");
+  conversationPanes.waiting = reviewer.pane.pane_id;
   const space = world.spaces[0]!;
   const agent = projectAgent(reviewer, space.id, space.parentId, new Map());
   const root = document.createElement("div");
@@ -264,29 +318,61 @@ async function run() {
     `[data-needs-you-item=${JSON.stringify(needsYouLeafKey(reviewer.id))}]`,
   );
   check(Boolean(item), "Needs you lists the waiting core agent");
-  check(
-    item?.textContent?.includes("Which branch should I merge into?") === true,
-    `Needs you shows the program's own words: ${item?.textContent}`,
-  );
-  const answerField = item?.querySelector<HTMLTextAreaElement>(
-    ".core-chat textarea",
-  );
-  const answerSend = item?.querySelector<HTMLButtonElement>(
-    ".core-chat button[type=submit]",
+  // The shared card: the question read through the shared Chat calls, its
+  // options as quick replies, as for a Herdr agent.
+  await until(
+    () => item?.textContent?.includes(QUESTION) === true,
+    () => `Needs you shows the program's own question: ${item?.textContent}`,
   );
   check(
-    answerField?.disabled === false && answerSend?.disabled === true,
-    "Core answers have an editable field; an empty answer cannot send",
+    !document.querySelector(".core-chat"),
+    "no separate core card is drawn",
   );
-  // Its terminal can be watched (never typed into) from every surface.
+  const reply = [
+    ...(item?.querySelectorAll<HTMLButtonElement>(
+      ".agent-chat-ask-options button",
+    ) ?? []),
+  ].find((button) => button.textContent?.includes("main"));
+  check(reply?.disabled === false, "the question's options are quick replies");
+  reply?.click();
+  await until(
+    () => inputs.length === 1,
+    () => `the reply is sent once: ${JSON.stringify(inputs)}`,
+  );
+  check(
+    inputs[0]?.params.recipient === reviewer.pane.core_recipient &&
+      typeof reviewer.pane.core_recipient === "string" &&
+      inputs[0]?.params.prompt_fingerprint === "fx-question" &&
+      inputs[0]?.params.pane_id === reviewer.pane.pane_id,
+    `the answer names the program the person saw: ${JSON.stringify(inputs[0])}`,
+  );
+  // Finished work is marked reviewed with the same ✕ as a Herdr agent's.
+  const done = document.querySelector<HTMLElement>(
+    `[data-needs-you-item=${JSON.stringify(needsYouLeafKey(scout.id))}]`,
+  );
+  await until(
+    () => done?.textContent?.includes("Reviewed the fixture branch.") === true,
+    () => `the finished agent's report shows: ${done?.textContent}`,
+  );
+  check(
+    Boolean(done?.querySelector('[aria-label="Mark scout\'s work reviewed"]')),
+    "finished core work has the review ✕",
+  );
+  // Town's terminal button and Board's Open, the one a Herdr agent has,
+  // open the agent's window.
+  const boardOpen = [
+    ...document.querySelectorAll<HTMLButtonElement>(".board-peek button"),
+  ].find((button) => ["Open", "Follow up"].includes(button.textContent ?? ""));
   const watchButtons = [
     ...document.querySelectorAll<HTMLButtonElement>("button"),
   ].filter((button) => button.title === CORE_WATCH_TITLE);
   check(
-    // Needs you lists two core agents (one waiting, one finished).
-    watchButtons.length === 4 && watchButtons.every((b) => !b.disabled),
-    `Needs you, Town and Board offer the watch: ${watchButtons.length}`,
+    watchButtons.length === 1 &&
+      boardOpen?.disabled === false &&
+      !boardOpen.title,
+    `Town offers the watch, Board the Herdr agent's Open: ${watchButtons.length}`,
   );
+  watchButtons.push(boardOpen!);
   const terminal = document.querySelector<HTMLButtonElement>(
     ".town-peek-terminal",
   );
@@ -299,29 +385,32 @@ async function run() {
       document.querySelector(".board-peek .is-view-only") !== null,
     "both peeks show the view-only note",
   );
-  // Disabled controls never fire, and no read names the core connection.
+  // Disabled controls never fire: no further input reaches the agents.
   for (const button of document.querySelectorAll<HTMLButtonElement>(
     "button:disabled",
   ))
     button.click();
   await frame();
   check(
-    calls.length === 0,
-    `World sent nothing for view-only agents: ${calls.join(", ")}`,
+    inputs.length === 1,
+    `disabled controls send nothing: ${JSON.stringify(inputs)}`,
   );
+  calls.length = 0;
   for (const button of watchButtons) button.click();
   await frame();
+  const opened = calls.filter((c) => !c.includes(":agent_conversation."));
   check(
-    calls.length === 4 &&
-      ["board-open", "town-terminal", `terminal:${reviewer.id}`].every((c) =>
-        calls.includes(c),
-      ) &&
-      calls.every((c) => /^(board-open|town-terminal|terminal:)/.test(c)),
-    `watching opens the terminal and reads nothing: ${calls.join(", ")}`,
+    opened.length === 2 &&
+      ["board-open", "town-terminal"].every((c) => opened.includes(c)),
+    `watching opens the terminal: ${calls.join(", ")}`,
+  );
+  check(
+    inputs.length === 1,
+    `watching types nothing: ${JSON.stringify(inputs)}`,
   );
   check(
     !document.body.textContent?.includes("Loading conversation"),
-    "nothing waits on a conversation World cannot read",
+    "every core conversation has been read",
   );
   await floatShell(scout);
 }

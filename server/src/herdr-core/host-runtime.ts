@@ -27,6 +27,11 @@ import {
 } from "../workspace/process";
 import { createFileHandlers } from "../workspace/files";
 import { createWorktreeHookRunner } from "../worktree/worktree-hooks";
+import {
+  createAgentSessionFileAccess,
+  type AgentSessionFileAccess,
+} from "../agent/session-file-access";
+import { createCoreAgentSessions } from "./agent-sessions";
 import { CoreUnavailableError } from "./client";
 import type { CoreHost } from "./host";
 import { readCoreScreen, type CoreConnectionRuntime } from "./runtime";
@@ -82,6 +87,8 @@ export function createCoreHostRuntime(args: {
   onUploadCleanupError?(error: unknown): void;
   /** Test seam: where local uploads are staged (the system temp directory). */
   uploadTempRoot?: () => string;
+  /** Test seam: agents' transcripts (production: read on the core's host). */
+  agentSessionFiles?: AgentSessionFileAccess;
 }) {
   const { lease } = args;
   const identity: ConnectionIdentity = { ...lease.runtime.identity };
@@ -340,6 +347,27 @@ export function createCoreHostRuntime(args: {
         repoWorktreeHooksEnabled(readSettings, repoKey),
     }),
   );
+  // Chat, History and Details: the same handlers a Herdr connection uses.
+  let agentSessions: ReturnType<typeof createCoreAgentSessions> | null = null;
+  const sessions = () => {
+    current();
+    agentSessions ??= createCoreAgentSessions({
+      lease,
+      operations,
+      remotePlatform,
+      files:
+        args.agentSessionFiles ??
+        createAgentSessionFileAccess({
+          sshHost: destination,
+          runBinaryProcessWithTimeout,
+          shQuote,
+        }),
+    });
+    return agentSessions;
+  };
+  transfers.addEventListener("abort", () => agentSessions?.stop(), {
+    once: true,
+  });
   return {
     runtime: "herdr-core" as const,
     identity,
@@ -356,6 +384,8 @@ export function createCoreHostRuntime(args: {
     /** Terminal uploads (the composer's image and file). */
     uploads,
     agentWorktree,
+    /** Agents' conversations, built on first use for this generation. */
+    agentSessions: sessions,
     worktreeHooks,
     worktreeGit,
     /** No Git status badges are kept for core rooms: nothing to refresh. */
@@ -381,6 +411,7 @@ export function coreHostRuntimes(args: {
   readSettings(connectionId: string): Promise<GuiSettings>;
   processes?: Partial<CoreHostProcesses>;
   onUploadCleanupError?(error: unknown): void;
+  agentSessionFiles?(connectionId: string): AgentSessionFileAccess | undefined;
 }) {
   const runtimes = new WeakMap<CoreConnectionRuntime, CoreHostRuntime>();
   return (lease: Lease): CoreHostRuntime => {
@@ -397,6 +428,7 @@ export function coreHostRuntimes(args: {
       readSettings: () => args.readSettings(lease.connectionId),
       ...(args.processes ? { processes: args.processes } : {}),
       onUploadCleanupError: args.onUploadCleanupError,
+      agentSessionFiles: args.agentSessionFiles?.(lease.connectionId),
     });
     runtimes.set(lease.runtime, made);
     return made;

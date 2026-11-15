@@ -142,19 +142,32 @@ RESIZE or FOCUS. Core 0.1.21 and later never size a terminal for an observer
 On older cores an observer attaching alone may trigger core's headless grid
 (default 200×120); World still reports that exception.
 
-Open an interactive stream on the first genuine key in a focused terminal; queue
-that key and send it exactly once after confirmed attach. FOCUS accompanies real
-input only. Send terminal replies as AUTOMATIC_INPUT at their source only when
-hello and attach both confirm support, and only while World's viewer is open or
-opening; a reply never opens it. The observe watch stays the display (core sends
-an interactive viewer no RESIZE) and the interactive output is drained uncredited.
-Keep interactive while visible and focused; leave 3 s after focus leaves the view,
-after 60 s with no key, and on Back, close or hide. A leave waits behind the keys
-typed before it. Core may return to headless size when no other interactive
-viewer remains; from 0.1.21 an observer leaving never re-applies a size. A key typed in or a click on the app's pane retakes its size by
-core's own rule. Every batch is re-fenced (lease, generation, occupant) before it
-is written; a key not sent is reported and drops the keys queued behind it, never
-replayed. Windows encoding obeys win32-input-mode.
+A core terminal opens in the same Inspector as a Herdr one (issue #915): its
+Terminal tab is the watch. While that tab is open World holds a *seat*: an
+interactive viewer attached `resumed` at the tab's fitted grid. Core 0.1.21
+ranks the viewer that last sent input, RESIZE or FOCUS(true) first and a
+resumed attach lowest until touched, so the seat sizes the terminal whenever
+no Herdr app pane holds it (instead of core's headless 200×120) and never
+takes a pane's size by attaching. World keeps the seat while the tab is open:
+no give-back on blur or idle. A new fitted size swaps the seat (attach the new
+one, then detach the old), so core never passes through headless; World never
+sends RESIZE. Closing or minimizing the window ends the seat with the watch
+(a look at another tab keeps both), and core gives the size to the app's pane
+or headless. While a pane holds a large grid, World
+draws it no smaller than 0.85 of its cell size and scrolls the rest.
+
+The first genuine key goes on the seat with FOCUS(true), so World leads by
+core's own rule until a key typed in or a click on the app's pane retakes it;
+a key typed before the observe watch or the seat is answered waits and is
+sent exactly once. Send
+terminal replies as AUTOMATIC_INPUT at their source only when hello and attach
+both confirm support, and only on a seat a person typed into: core forwards
+automatic input without dedup, so an untouched seat stays silent. The observe
+watch stays the display (core sends an interactive viewer no RESIZE) and the
+seat's output is drained uncredited. Every batch is re-fenced (lease,
+generation, occupant) before it is written; a key not sent is reported and
+drops the keys queued behind it, never replayed. Windows encoding obeys
+win32-input-mode.
 
 ### 10. Runtime and session selection
 

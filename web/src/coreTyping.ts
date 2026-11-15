@@ -1,9 +1,10 @@
 /**
- * Typing into a watched herdr-core terminal. The watch stays the display;
- * typing goes to World's server as `world.core.input`, which opens core's
- * keyboard on the first real key and gives the size back on
- * `world.core.leave`. This page sends one request at a time, in the order
- * typed, so no key overtakes another and leaving never overtakes a key.
+ * Typing into a watched herdr-core terminal and holding its size. While the
+ * view is open it asks World's server to hold the grid that fits it
+ * (`world.core.hold`): core gives World that size when no Herdr app leads,
+ * and never takes it from one. Typing goes as `world.core.input`. This page
+ * sends one request at a time, in order, so no key overtakes another or a
+ * size. Nothing is given back on blur or idle; closing the view does that.
  */
 
 import type { CoreGrid } from "./coreWatch";
@@ -19,7 +20,7 @@ export type CoreInputBatch = {
 
 export type CoreTypingPort = {
   input(batch: CoreInputBatch): Promise<unknown>;
-  leave(): Promise<unknown>;
+  hold(size: CoreGrid): Promise<unknown>;
 };
 
 export type CoreTypingTimers = {
@@ -29,10 +30,8 @@ export type CoreTypingTimers = {
 
 /** Below the server's 64 KiB per request. */
 export const CORE_INPUT_CHUNK = 32 * 1024;
-/** Focus left the view this long: the size goes back. */
-export const CORE_LEAVE_AFTER_BLUR_MS = 3_000;
-/** No key for this long: the size goes back, even with the view focused. */
-export const CORE_LEAVE_AFTER_IDLE_MS = 60_000;
+/** A resize settles this long before World asks core for the new size. */
+export const CORE_HOLD_SETTLE_MS = 150;
 
 type Waiter = { resolve(): void; reject(error: Error): void };
 type Item =
@@ -43,7 +42,7 @@ type Item =
       size: CoreGrid;
       waiters: Waiter[];
     }
-  | { kind: "leave" };
+  | { kind: "hold"; size: CoreGrid };
 
 const encoder = new TextEncoder();
 
@@ -64,14 +63,20 @@ function joined(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
+const sameGrid = (a: CoreGrid | null, b: CoreGrid | null) =>
+  a?.cols === b?.cols && a?.rows === b?.rows;
+
 export class CoreTyping {
   private queue: Item[] = [];
   private busy = false;
   private stopped = false;
-  /** The grid typed keys last asked for; null until typing, again after leaving. */
-  private held: CoreGrid | null = null;
-  private idleTimer: unknown = null;
-  private blurTimer: unknown = null;
+  /** The grid last sent to hold; null before the first. */
+  private sentHold: CoreGrid | null = null;
+  /** The grid the view fits now, waiting out the settle time. */
+  private pending: CoreGrid | null = null;
+  private settle: unknown = null;
+  /** The watch answered: until then keys wait here (`open`). */
+  private ready: boolean;
 
   constructor(
     private readonly port: CoreTypingPort,
@@ -80,13 +85,27 @@ export class CoreTyping {
       size(): CoreGrid;
       /** A key was not sent; the keys queued behind it are dropped too. */
       refused(message: string): void;
-      /** The grid World asked core for while it holds the keyboard; null once left. */
+      /** The grid World asked core to hold for this view. */
       changed?(held: CoreGrid | null): void;
       timers?: CoreTypingTimers;
-      idleMs?: number;
-      blurMs?: number;
+      settleMs?: number;
+      /**
+       * The watch is still opening: keys typed meanwhile wait, in order,
+       * and go once `open()` is called (the server knows the stream only
+       * after its watch answered). Without it they go at once.
+       */
+      opening?: boolean;
     },
-  ) {}
+  ) {
+    this.ready = !options.opening;
+  }
+
+  /** The watch opened: the keys that waited for it go now, once, in order. */
+  open(): void {
+    if (this.ready) return;
+    this.ready = true;
+    void this.pump();
+  }
 
   private get timers(): CoreTypingTimers {
     return (
@@ -97,13 +116,29 @@ export class CoreTyping {
     );
   }
 
-  get typing(): boolean {
-    return this.held !== null;
+  /**
+   * The view fits `size` now. The first size goes at once; later ones once
+   * the view stops changing, so a drag asks core for one size, not dozens.
+   */
+  hold(size: CoreGrid): void {
+    if (this.stopped || size.cols <= 0 || size.rows <= 0) return;
+    this.pending = { ...size };
+    if (this.settle !== null) this.timers.clear(this.settle);
+    this.settle = null;
+    if (this.sentHold === null) {
+      this.flushHold();
+      return;
+    }
+    this.settle = this.timers.set(() => {
+      this.settle = null;
+      this.flushHold();
+    }, this.options.settleMs ?? CORE_HOLD_SETTLE_MS);
   }
 
   /**
-   * Queues bytes for core. Genuine keys open the keyboard and take the
-   * size; automatic replies go only while it is open. Resolves once sent.
+   * Queues bytes for core. Genuine keys open World's seat if it has none
+   * (and take the size); automatic replies go only on a seat a person typed
+   * into. Resolves once sent.
    */
   type(data: string | Uint8Array, automatic = false): Promise<void> {
     const bytes = typeof data === "string" ? encoder.encode(data) : data;
@@ -135,55 +170,27 @@ export class CoreTyping {
         }),
       );
     }
-    if (!automatic) this.armIdle();
     void this.pump();
     return Promise.all(sent).then(() => undefined);
   }
 
-  /** Focus moved into or out of the view. */
-  focus(inside: boolean): void {
-    if (this.blurTimer !== null) this.timers.clear(this.blurTimer);
-    this.blurTimer = null;
-    if (inside || this.stopped) return;
-    this.blurTimer = this.timers.set(() => {
-      this.blurTimer = null;
-      this.leave();
-    }, this.options.blurMs ?? CORE_LEAVE_AFTER_BLUR_MS);
-  }
-
-  /** Gives core's size back after everything typed so far. */
-  leave(): void {
-    if (this.stopped) return;
-    if (this.idleTimer !== null) this.timers.clear(this.idleTimer);
-    this.idleTimer = null;
-    if (this.queue[this.queue.length - 1]?.kind !== "leave")
-      this.queue.push({ kind: "leave" });
-    void this.pump();
-  }
-
-  /** The watch is closing: the server drops the keyboard with it. */
+  /** The watch is closing: the server lets the seat go with it. */
   stop(): void {
     this.stopped = true;
-    for (const handle of [this.idleTimer, this.blurTimer])
-      if (handle !== null) this.timers.clear(handle);
-    this.idleTimer = this.blurTimer = null;
+    if (this.settle !== null) this.timers.clear(this.settle);
+    this.settle = null;
     this.fail(new Error("The terminal closed"));
-    this.set(null);
+    this.options.changed?.(null);
   }
 
-  private armIdle() {
-    if (this.idleTimer !== null) this.timers.clear(this.idleTimer);
-    this.idleTimer = this.timers.set(() => {
-      this.idleTimer = null;
-      this.leave();
-    }, this.options.idleMs ?? CORE_LEAVE_AFTER_IDLE_MS);
-  }
-
-  private set(held: CoreGrid | null) {
-    if (this.held?.cols === held?.cols && this.held?.rows === held?.rows)
-      return;
-    this.held = held && { ...held };
-    this.options.changed?.(this.held);
+  private flushHold() {
+    const size = this.pending;
+    this.pending = null;
+    if (!size || this.stopped) return;
+    const last = this.queue[this.queue.length - 1];
+    if (last?.kind === "hold") last.size = size;
+    else this.queue.push({ kind: "hold", size });
+    void this.pump();
   }
 
   private fail(error: Error) {
@@ -193,23 +200,19 @@ export class CoreTyping {
   }
 
   private async pump(): Promise<void> {
-    if (this.busy) return;
+    if (this.busy || !this.ready) return;
     this.busy = true;
     try {
       while (!this.stopped && this.queue.length > 0) {
         const item = this.queue.shift()!;
-        if (item.kind === "leave") {
-          if (!this.held) continue;
-          this.set(null);
-          await this.port.leave().catch(() => undefined);
+        if (item.kind === "hold") {
+          if (sameGrid(item.size, this.sentHold)) continue;
+          this.sentHold = { ...item.size };
+          this.options.changed?.(this.sentHold);
+          // A watch that ended answers `held: false`; the stream says why.
+          await this.port.hold(item.size).catch(() => undefined);
           continue;
         }
-        // A reply with no keyboard open has nowhere to go: core answers it.
-        if (item.automatic && !this.held) {
-          for (const waiter of item.waiters) waiter.resolve();
-          continue;
-        }
-        if (!item.automatic) this.set(item.size);
         try {
           await this.port.input({
             data: base64(item.bytes),

@@ -2,7 +2,7 @@ import type { WorldLeafObject } from "./worldObject";
 
 /** The title of a herdr-core agent's terminal control. */
 export const CORE_WATCH_TITLE =
-  "Open its terminal (World takes its size only while you type)";
+  "Open its terminal (World fits it while its window is open)";
 
 const WAITING: Record<string, string> = {
   permission: "Waiting for permission",

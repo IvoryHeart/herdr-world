@@ -39,10 +39,17 @@ export function createAgentSessionHandlers(args: {
   files: AgentSessionFileAccess;
   remotePlatform?: string;
   runtimeScope?: CodexDiscoveryScope;
+  /**
+   * Where Claude keeps its transcripts, when the session comes from Claude's
+   * own process record (herdr-core) under a configured CLAUDE_CONFIG_DIR.
+   */
+  claudeConfigDir?: string;
   /** A watched pane's conversation changed; tell these owners. */
   onConversationChanged?: (paneId: string, owners: ReadonlySet<object>) => void;
 }) {
-  const resolverContext = createAgentSessionResolverContext(args.runtimeScope);
+  const resolverContext = createAgentSessionResolverContext(args.runtimeScope, {
+    claudeConfigDir: args.claudeConfigDir,
+  });
   const cache = createSessionProjectionCache(args.files);
   const linker = createCodexSessionLinker(args.herdrCall, args.files);
   let watcher: ReturnType<typeof createConversationWatcher> | null = null;
