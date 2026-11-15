@@ -1,3 +1,5 @@
+import { conversationRpc } from "../agent/conversation-rpc";
+import { withCoreRecipient } from "../herdr-core/agent-sessions";
 import type { CoreHostRuntime } from "../herdr-core/host-runtime";
 import {
   answersOnCore,
@@ -10,9 +12,11 @@ export { answersOnCore };
 /**
  * The connection methods a herdr-core connection answers (P4): workspace
  * Files, Git and an agent's worktree, through World's own guarded host
- * helpers on the core's host. Everything else a Herdr (TUI) connection
- * answers is refused for core, never forwarded to it: core terminals,
- * rooms and kills go through world.core.*.
+ * helpers on the core's host, and an agent's Chat, History and Details
+ * through the same handlers a Herdr connection uses (agent-sessions.ts).
+ * Everything else a Herdr (TUI) connection answers is refused for core,
+ * never forwarded to it: core terminals, rooms and kills go through
+ * world.core.*.
  */
 const CORE_HOST_CALLS = {
   "file.list": (host) => host.files.listWorkspaceFiles,
@@ -41,28 +45,67 @@ const CORE_HOST_CALLS = {
       host.agentWorktree.get(params.subject, {
         refresh: params.refresh === true,
       }),
+  "agent_history.get": (host) => host.agentSessions().readHistoryRequest,
+  "agent_history.entry": (host) => host.agentSessions().readEntry,
+  "agent_session.get": (host) => host.agentSessions().readSummary,
+  "agent_turn.get": (host) => host.agentSessions().readTurn,
 } satisfies Record<
-  Exclude<CoreHostMethod, "file.reveal">,
+  Exclude<CoreHostMethod, "file.reveal" | ConversationMethod>,
   (
     host: CoreHostRuntime,
   ) => (params: Record<string, unknown>) => Promise<unknown>
 >;
 
+type ConversationMethod = Extract<
+  CoreHostMethod,
+  `agent_conversation.${string}`
+>;
+
+/** The browser asking, for a watch: who it is and how it is told. */
+export type CoreHostRequester = {
+  remoteAddress?: string;
+  owner?: object;
+  /** Tells the browser a pane it watches changed. */
+  conversationChanged?(paneId: string): void;
+};
+
 /**
  * Answers one connection method on a core host runtime. `file.reveal` needs
  * the requesting browser's address (it opens this computer's file manager
- * only for a local browser).
+ * only for a local browser); a conversation watch needs the browser.
+ * Chat input goes only to the program the request's `recipient` names.
  */
 export async function callCoreHost(
   host: CoreHostRuntime,
   method: string,
   params: Record<string, unknown>,
-  remoteAddress?: string,
+  requester: CoreHostRequester = {},
 ): Promise<unknown> {
   if (method === "file.reveal")
-    return host.files.revealWorkspaceFile(params, remoteAddress ?? "");
+    return host.files.revealWorkspaceFile(
+      params,
+      requester.remoteAddress ?? "",
+    );
   if (!answersOnCore(method)) throw new Error(coreHostRefusal(method));
-  return CORE_HOST_CALLS[method as Exclude<CoreHostMethod, "file.reveal">](
-    host,
-  )(params);
+  if (
+    method === "agent_conversation.watch" ||
+    method === "agent_conversation.unwatch"
+  ) {
+    const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
+    if (!paneId) throw new Error(`${method} requires pane_id`);
+    const { owner, conversationChanged } = requester;
+    if (!owner || !conversationChanged)
+      throw new Error(`${method} needs a browser connection`);
+    if (method === "agent_conversation.watch")
+      host.agentSessions().watch(owner, paneId, conversationChanged);
+    else host.agentSessions().unwatch(owner, paneId);
+    return { ok: true };
+  }
+  if (method.startsWith("agent_conversation."))
+    return withCoreRecipient(params.recipient, () =>
+      conversationRpc(method, params, host.agentSessions().conversation),
+    );
+  return CORE_HOST_CALLS[
+    method as Exclude<CoreHostMethod, "file.reveal" | ConversationMethod>
+  ](host)(params);
 }

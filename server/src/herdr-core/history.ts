@@ -20,7 +20,7 @@ import { coreHarness } from "./topology";
 
 /** Resume flags verified in Herdr's agent_resume.rs, not guessed filenames,
  * and the caller-chosen IDs World launches with (operations.ts). */
-function argvSession(
+export function argvSession(
   agent: string,
   argv: unknown,
 ): CoreHistorySession | undefined {
@@ -58,7 +58,7 @@ function argvSession(
  * leader, so a wrapper leading the group is no evidence. A failed read is
  * no evidence either.
  */
-async function processSession(
+export async function processSession(
   agent: string,
   foreground: { pid?: unknown; name?: unknown; argv?: unknown } | undefined,
   files: AgentSessionFileAccess,
