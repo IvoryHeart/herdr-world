@@ -483,9 +483,15 @@ export class CoreClient {
    * Presses named keys after ~3 s of a person's quiet. Core cannot cancel
    * keys once asked (only sends), so World checks before asking.
    */
-  keys(address: string, keys: readonly string[], timeoutMs = 15_000) {
+  /** `control`: a key the person pressed, not an answer key. */
+  keys(
+    address: string,
+    keys: readonly string[],
+    timeoutMs = 15_000,
+    control = false,
+  ) {
     return this.write(
-      ...coreKeysRequest(address, keys, timeoutMs),
+      ...coreKeysRequest(address, keys, timeoutMs, control),
     ) as Promise<CoreKeysResult>;
   }
 

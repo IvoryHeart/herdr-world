@@ -178,9 +178,11 @@ export type CoreConnectionRuntime = ConnectionRuntime & {
     request: { text: string; force: boolean; onlyIfIdle?: boolean },
     options: { cancel: AbortSignal; timeoutMs?: number },
   ): Promise<CoreSendResult>;
+  /** `control`: a key the person pressed (delivery.ts), not an answer key. */
   keys(
     fence: CoreOperationFence<CoreConnectionRuntime>,
     keys: readonly string[],
+    control?: boolean,
   ): Promise<CoreKeysResult>;
   /**
    * Calls `listener` after every event or snapshot the mirror applies and
@@ -767,11 +769,12 @@ export function createCoreConnectionRuntime(
     keyboard,
     shareLabel,
     shells,
-    keys: (fence, keys) =>
+    keys: (fence, keys, control = false) =>
       write(
         fence,
         true,
-        (current) => current.keys(fence.occupant!.address, keys),
+        (current) =>
+          current.keys(fence.occupant!.address, keys, undefined, control),
         false,
       ),
     watch: (listener) => {

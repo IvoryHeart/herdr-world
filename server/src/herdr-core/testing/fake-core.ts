@@ -445,6 +445,9 @@ export class FakeCore {
     });
   }
 
+  /** What `terminal.read` answers for a terminal; `$` when unset. */
+  readonly readScreens = new Map<string, string>();
+
   /** Holds `terminal.read` replies until the returned release sends them. */
   holdReads(): () => void {
     const held: Array<() => void> = [];
@@ -1081,7 +1084,9 @@ export class FakeCore {
       case "terminal.read": {
         const record = this.terminals.get(String(request.params?.terminal));
         if (!record) return error(-32000, "no terminal", "not_found");
-        const send = () => reply({ complete: true, how: "screen", text: "$" });
+        const text = this.readScreens.get(String(request.params?.terminal));
+        const send = () =>
+          reply({ complete: true, how: "screen", text: text ?? "$" });
         if (this.heldReads) this.heldReads.push(send);
         else send();
         return;

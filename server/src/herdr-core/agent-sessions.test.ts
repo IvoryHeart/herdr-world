@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAgentSessionHandlers } from "../agent/agent-sessions";
@@ -33,7 +33,12 @@ const files = {
   findClaudeSessionForProcess: async () => null,
 };
 
-async function setup(kind = "claude", status = "idle", resume = true) {
+async function setup(
+  kind = "claude",
+  status = "idle",
+  resume = true,
+  access: typeof files = files,
+) {
   const root = await mkdtemp(join(tmpdir(), "hcw-chat-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const fixture = fixtures.find((item) => item.agent === "claude")!;
@@ -58,7 +63,7 @@ async function setup(kind = "claude", status = "idle", resume = true) {
     lease: w.lease(),
     host: null,
     readSettings: async () => defaultGuiSettings(),
-    agentSessionFiles: files,
+    agentSessionFiles: access,
   });
   cleanups.push(async () => host.retire());
   const { panes } = await w.rows();
@@ -225,6 +230,140 @@ describe("one Chat for both runtimes", () => {
       "agent_conversation.unwatch",
       { pane_id: t },
       { owner, conversationChanged: () => {} },
+    );
+  });
+
+  test("an answer to an earlier question never answers the same question asked on a later turn", async () => {
+    const { w, t, call, recipient } = await setup("claude", "blocked");
+    w.fake.readScreens.set(
+      t,
+      await readFile(
+        new URL(
+          "../agent/fixtures/pending-prompts/claude-question.txt",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    const asked = async () =>
+      (
+        (await call("agent_conversation.get")) as {
+          pending_prompt: {
+            fingerprint: string;
+            options: Array<{ key: string }>;
+          } | null;
+        }
+      ).pending_prompt!;
+    const first = await asked();
+    expect(first.fingerprint).toBeString();
+    // The agent goes on working, then asks the identical question again.
+    w.fake.report(t, { state: "working" });
+    w.fake.report(t, { state: "blocked" });
+    await until(async () => (await asked()).fingerprint !== first.fingerprint);
+    await expect(
+      call("agent_conversation.answer", {
+        key: first.options[0]!.key,
+        prompt_fingerprint: first.fingerprint,
+        recipient,
+      }),
+    ).resolves.toMatchObject({ status: "refused" });
+    expect(sends(w)).toEqual([]);
+  });
+
+  test("Chat's key controls and Stop reach a core agent at any status, through core's keys", async () => {
+    const { w, t, call, recipient } = await setup("claude", "idle");
+    const shown = (await call("agent_conversation.get")) as {
+      session_fingerprint: string;
+    };
+    const press = (key: string, extra: Record<string, unknown> = {}) =>
+      call("agent_conversation.press", {
+        key,
+        session_fingerprint: shown.session_fingerprint,
+        recipient,
+        ...extra,
+      });
+    await expect(press("enter")).resolves.toMatchObject({ status: "sent" });
+    await expect(press("ctrl+c")).resolves.toMatchObject({ status: "sent" });
+    // Stop: Esc while the agent works.
+    w.fake.report(t, { state: "working" });
+    await until(
+      async () =>
+        (
+          (await call("agent_conversation.latest")) as {
+            agent_status?: string;
+          }
+        ).agent_status === "working",
+    );
+    await expect(press("esc")).resolves.toMatchObject({ status: "sent" });
+    expect(sends(w).map((c) => (c.params as { keys: string[] }).keys)).toEqual([
+      ["enter"],
+      ["ctrl+c"],
+      ["esc"],
+    ]);
+    // Never without the recipient, and never to another program.
+    await expect(
+      call("agent_conversation.press", {
+        key: "esc",
+        session_fingerprint: shown.session_fingerprint,
+      }),
+    ).resolves.toMatchObject({ status: "refused" });
+    w.fake.replaceWithShell(t);
+    await w.settle();
+    await expect(press("esc")).resolves.toMatchObject({ status: "refused" });
+    expect(sends(w)).toHaveLength(3);
+  });
+
+  test("a harness Chat cannot read still takes Stop's Esc through core", async () => {
+    const { w, t, call, recipient } = await setup("opencode", "working");
+    await expect(
+      call("agent_conversation.press", {
+        key: "esc",
+        session_fingerprint: "",
+        recipient,
+      }),
+    ).resolves.toMatchObject({ status: "sent" });
+    await expect(
+      call("agent_conversation.press", {
+        key: "ctrl+shift+alt+ctrl+x",
+        session_fingerprint: "",
+        recipient,
+      }),
+    ).resolves.toMatchObject({ status: "refused" });
+    expect(sends(w)).toEqual([
+      expect.objectContaining({
+        method: "terminal.keys",
+        params: expect.objectContaining({ terminal: t, keys: ["esc"] }),
+      }),
+    ]);
+  });
+
+  test("a session Claude's process record names is read under the configured Claude directory", async () => {
+    const config = await mkdtemp(join(tmpdir(), "hcw-claude-config-"));
+    cleanups.push(() => rm(config, { recursive: true, force: true }));
+    const before = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = config;
+    cleanups.push(async () => {
+      if (before === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = before;
+    });
+    const id = "0b3e8a52-6f4c-4d1e-9a7b-2c5d8e1f4a60";
+    const project = join(config, "projects", "-example-project");
+    await mkdir(project, { recursive: true });
+    const written = await fixtures
+      .find((item) => item.agent === "claude")!
+      .write(project);
+    await rename(written, join(project, `${id}.jsonl`));
+    const { call } = await setup("claude", "idle", false, {
+      ...files,
+      findClaudeSessionForProcess: async () => id,
+    });
+    const shown = (await call("agent_conversation.get")) as {
+      status: string;
+      messages: Array<{ text: string }>;
+    };
+    expect(shown.status).toBe("ok");
+    expect(shown.messages.map((m) => m.text)).toEqual(
+      expect.arrayContaining([QUESTION, ANSWER]),
     );
   });
 

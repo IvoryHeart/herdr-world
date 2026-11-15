@@ -99,6 +99,10 @@ export function AgentChat({
     [sharedClient, pane.runtime, pane.core_recipient],
   );
   const coreAgent = pane.runtime === "herdr-core";
+  // A herdr-core agent takes messages and keys through core's own send and
+  // keys for every harness, even one whose conversation Chat cannot read:
+  // core checks the occupant against the recipient the person saw.
+  const coreInput = coreAgent && !!pane.core_recipient;
   // The other live agents in this Herdr session whose names are valid and
   // unique there: a message typed here as "name: …" reads as relayed from it.
   const relayFrom = useStoreSelector((state) =>
@@ -181,7 +185,10 @@ export function AgentChat({
   const keys = useChatKeys({
     client: connectionClient,
     paneId: pane.pane_id,
-    sessionFingerprint: conversation?.session_fingerprint ?? null,
+    // "" for a core agent Chat cannot read: its keys go to the occupant.
+    sessionFingerprint:
+      conversation?.session_fingerprint ??
+      (coreInput && conversation !== null ? "" : null),
     scope: answerScope,
     reload: load,
   });
@@ -222,7 +229,11 @@ export function AgentChat({
     async (value: string) => {
       const text = value.trim();
       if (!text) throw new Error("Write a message first.");
-      if (!connectionClient.isCurrent() || !conversation?.session_fingerprint)
+      if (
+        !connectionClient.isCurrent() ||
+        !conversation ||
+        (!conversation.session_fingerprint && !coreInput)
+      )
         throw new Error(
           "The conversation changed. Nothing was sent; check it before sending again.",
         );
@@ -238,7 +249,7 @@ export function AgentChat({
       const result = (await connectionClient.call("agent_conversation.send", {
         pane_id: pane.pane_id,
         text,
-        session_fingerprint: conversation.session_fingerprint,
+        session_fingerprint: conversation.session_fingerprint ?? "",
         baseline: history.messages
           .filter((message) => message.role === "user")
           .map((message) => message.id),
@@ -254,6 +265,7 @@ export function AgentChat({
     [
       connectionClient,
       conversation,
+      coreInput,
       afterCommand,
       history.messages,
       load,
@@ -445,21 +457,35 @@ export function AgentChat({
   const agentName = conversation?.agent ?? pane.agent ?? "";
   const stopOffered =
     liveStatus === "working" && STOPS_WITH_ESCAPE.has(agentName);
-  // herdr-core takes keys only while the agent asks: Stop stays, off, with why.
-  const canStop = stopOffered && !coreAgent;
+  // A herdr-core agent's Esc goes through core's keys, to the program the
+  // person saw; without its recipient nothing can be addressed.
+  const canStop = stopOffered && (!coreAgent || coreInput);
   const [stopNote, setStopNote] = useState("");
+  const coreFingerprint = conversation?.session_fingerprint ?? "";
   const stop = useCallback(async () => {
     try {
-      await connectionClient.call("pane.send_input", {
-        pane_id: pane.pane_id,
-        text: "",
-        keys: ["escape"],
-      });
+      if (coreAgent) {
+        const result = (await connectionClient.call(
+          "agent_conversation.press",
+          {
+            pane_id: pane.pane_id,
+            key: "esc",
+            session_fingerprint: coreFingerprint,
+          },
+        )) as { status: string; message?: string };
+        if (result.status !== "sent")
+          throw new Error(result.message ?? "Nothing was sent.");
+      } else
+        await connectionClient.call("pane.send_input", {
+          pane_id: pane.pane_id,
+          text: "",
+          keys: ["escape"],
+        });
       setStopNote(`Pressed Esc in ${agentName || "the agent"}'s terminal.`);
     } catch (reason) {
       setStopNote(reason instanceof Error ? reason.message : String(reason));
     }
-  }, [agentName, connectionClient, pane.pane_id]);
+  }, [agentName, connectionClient, coreAgent, coreFingerprint, pane.pane_id]);
   const firstEscape = useRef(0);
   useEffect(() => {
     if (!canStop) return;
@@ -561,12 +587,9 @@ export function AgentChat({
         (delivery.state === "unverified" &&
           delivery.fingerprint !== conversation?.session_fingerprint)),
   );
-  // A herdr-core agent takes messages through core's own send for every
-  // harness, even one whose conversation Chat cannot read: core checks the
-  // occupant against the recipient the person saw.
   const canSend =
     (conversation?.status === "ok" && !!conversation.session_fingerprint) ||
-    (coreAgent && !!pane.core_recipient && conversation !== null);
+    (coreInput && conversation !== null);
   return (
     <div className="agent-chat">
       <div className="agent-chat-toolbar agent-chat-now">
@@ -600,7 +623,7 @@ export function AgentChat({
             className="agent-chat-stop"
             disabled={!canStop}
             title={
-              coreAgent
+              !canStop
                 ? CORE_STOP_REASON
                 : // A touch screen has no Esc key to point to.
                   window.matchMedia?.("(pointer: coarse)").matches

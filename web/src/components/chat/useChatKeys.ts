@@ -14,7 +14,9 @@ const KEY_REREADS_MS = [300, 900];
 /**
  * Keys Chat presses in the agent's pane: a command menu's keys and field
  * text, checked against that menu, and the composer's key controls, checked
- * against the session. Each goes to the session Chat shows (`scope` names the
+ * against the session (`""` for a herdr-core agent whose conversation Chat
+ * cannot read: core addresses its occupant; null presses nothing). Each goes
+ * to the session Chat shows (`scope` names the
  * connection, runtime, pane and session); a new scope drops any notice and
  * pending reread.
  */
@@ -64,7 +66,7 @@ export function useChatKeys({
       key: string,
       options: { menu?: string; text?: string } = {},
     ): Promise<string> => {
-      if (!sessionFingerprint || !client.isCurrent())
+      if (sessionFingerprint === null || !client.isCurrent())
         return "The conversation changed. Nothing was sent.";
       setPressing(true);
       try {

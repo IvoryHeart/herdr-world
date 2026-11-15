@@ -46,15 +46,33 @@ export function coreSendParams(
   };
 }
 
-/** Fresh native `terminal.keys` parameters from World's answer keys. */
-export function coreKeysParams(address: string, keys: readonly string[]) {
+/**
+ * A key the person pressed from Chat (Stop's Esc, a composer key control, a
+ * menu's key): Chat's keys (shared/chatKeys.ts) in core's names, modifiers
+ * included. Core refuses a name it cannot encode and types nothing.
+ */
+const CONTROL_KEY =
+  /^(?:(?:ctrl|alt|shift)\+){0,3}(?:[!-~]|enter|esc|tab|backspace|space|up|down|left|right|f(?:[1-9]|1[0-2]))$/;
+
+/**
+ * Fresh native `terminal.keys` parameters: World's answer keys, or with
+ * `control` a key the person pressed.
+ */
+export function coreKeysParams(
+  address: string,
+  keys: readonly string[],
+  control = false,
+) {
+  const allowed = control ? CONTROL_KEY : ANSWER_KEY;
   if (
     !Array.isArray(keys) ||
     keys.length === 0 ||
     keys.length > 8 ||
-    !keys.every((key) => typeof key === "string" && ANSWER_KEY.test(key))
+    !keys.every((key) => typeof key === "string" && allowed.test(key))
   )
-    throw new CoreProtocolError("World presses only answer keys");
+    throw new CoreProtocolError(
+      control ? "Chat cannot press that key" : "World presses only answer keys",
+    );
   return { terminal: localAddress(address), keys: [...keys] };
 }
 
@@ -95,6 +113,11 @@ export function coreKeysRequest(
   address: string,
   keys: readonly string[],
   timeoutMs: number,
+  control = false,
 ) {
-  return ["terminal.keys", coreKeysParams(address, keys), timeoutMs] as const;
+  return [
+    "terminal.keys",
+    coreKeysParams(address, keys, control),
+    timeoutMs,
+  ] as const;
 }

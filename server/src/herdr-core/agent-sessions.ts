@@ -1,9 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import type { RuntimeOperations } from "../adapters/runtime-ports";
+import { CHAT_KEY } from "../../../shared/chatKeys";
 import { createAgentSessionHandlers } from "../agent/agent-sessions";
 import { normalizeAgentName } from "../agent/chat-harnesses";
+import { claudeConfigDirectory } from "../agent/claude-process-session";
 import type {
+  ConversationKeyResult,
   ConversationSendResult,
   ConversationSource,
 } from "../agent/conversation";
@@ -23,6 +26,13 @@ type Row = Record<string, unknown>;
  * without one is refused before anything reaches core.
  */
 const requestInput = new AsyncLocalStorage<{ recipient: string }>();
+
+/**
+ * Set while Chat presses a key the person chose (`agent_conversation.press`:
+ * Stop's Esc, a composer key control, a command menu's key): core takes it
+ * at any status. Other keys answer a question and need the program blocked.
+ */
+const pressing = new AsyncLocalStorage<true>();
 
 /** Runs `operation` with input addressed to the program `recipient` names. */
 export function withCoreRecipient<T>(
@@ -248,7 +258,7 @@ export function createCoreAgentSessions(args: {
         const keys = Array.isArray(params.keys) ? params.keys.map(String) : [];
         if (!text && keys.length > 0)
           return deliver(pane, {
-            kind: "keys",
+            kind: pressing.getStore() ? "control" : "keys",
             keys: keys.map((key) => CORE_KEY[key] ?? key),
           });
         if (text && keys.length === 1 && keys[0] === "enter")
@@ -266,6 +276,9 @@ export function createCoreAgentSessions(args: {
     herdrCall: call,
     files,
     remotePlatform: args.remotePlatform,
+    // The process record names a session under the configured directory
+    // (history.ts reads the same); an SSH host resolves its own.
+    claudeConfigDir: files.remote ? undefined : claudeConfigDirectory(),
     runtimeScope: {
       connectionId: lease.runtime.identity.id,
       generation: lease.generation,
@@ -325,6 +338,38 @@ export function createCoreAgentSessions(args: {
       },
     };
   };
+  /**
+   * A key for a program whose conversation Chat cannot read (Stop's Esc or
+   * a composer key control): core's keys to the occupant alone, as
+   * `sendUnread` does for a message.
+   */
+  const pressUnread = async (
+    pane_id: string,
+    key: string,
+  ): Promise<ConversationKeyResult> => {
+    const refuse = (
+      message: string,
+      reason: "changed" | "unknown_option" = "changed",
+    ): ConversationKeyResult => ({
+      status: "refused",
+      reason,
+      message,
+      menu: null,
+    });
+    if (!CHAT_KEY.test(key))
+      return refuse(
+        "Chat cannot press that key. Nothing was sent.",
+        "unknown_option",
+      );
+    const recipient = requestInput.getStore()?.recipient ?? "";
+    const outcome = await deliverCore(lease, pane_id, recipient, {
+      kind: "control",
+      keys: [CORE_KEY[key] ?? key],
+    });
+    if (outcome.status === "refused") return refuse(outcome.message);
+    if (outcome.status === "uncertain") throw new Error(outcome.message);
+    return { status: "sent", key, menu: null };
+  };
   const conversation: ConversationSource = {
     ...source,
     read: async (target) => inCoreWords(await source.read(target)),
@@ -333,6 +378,36 @@ export function createCoreAgentSessions(args: {
       (await source.latestAll(paneIds)).map(inCoreWords),
     // Core has no trust question Chat can answer: the Terminal tab can.
     trust: undefined,
+    press: async (target) => {
+      if (!requestInput.getStore()?.recipient)
+        return {
+          status: "refused",
+          reason: "changed",
+          message: "Reopen this agent's Chat; nothing was sent.",
+          menu: null,
+        };
+      if (
+        !target.session_fingerprint &&
+        target.menu_fingerprint === undefined &&
+        target.text === undefined
+      )
+        return pressUnread(target.pane_id, target.key);
+      try {
+        return await pressing.run(true, () => source.press(target));
+      } catch (error) {
+        // Core refused before pressing anything (deliver, above).
+        const refusal = /^agent_(?:not_ready|blocked): (.*)$/s.exec(
+          (error as Error)?.message ?? "",
+        );
+        if (!refusal) throw error;
+        return {
+          status: "refused",
+          reason: "changed",
+          message: refusal[1]!,
+          menu: null,
+        };
+      }
+    },
     send: async (target) => {
       if (!requestInput.getStore()?.recipient)
         return {

@@ -47,6 +47,6 @@ export function chatClient(
   };
 }
 
-/** Why Chat's Stop is off for a herdr-core agent. */
+/** Why Chat's Stop is off for a herdr-core agent World cannot address. */
 export const CORE_STOP_REASON =
-  "herdr-core takes keys only while the agent asks you something. Interrupt this turn from the Terminal tab.";
+  "World does not know which program this is for yet. Interrupt this turn from the Terminal tab.";
