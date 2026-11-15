@@ -81,7 +81,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     method === "world.core.watch" ||
     method === "world.core.unwatch" ||
     method === "world.core.input" ||
-    method === "world.core.leave"
+    method === "world.core.hold"
   )
     return handleCoreWatchRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);

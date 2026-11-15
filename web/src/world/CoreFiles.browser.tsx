@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { answersOnCore } from "../../../shared/coreHostMethods";
 import { coreAgentChat } from "./CoreChat";
+import { coreInspectorTerminal } from "./CoreTerminalWatch";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -110,18 +111,17 @@ async function world() {
   return buildWorldObject(worldRuntimeStore.get().connections);
 }
 
-/** The window as WorldControlPlane wires it: its view changes stick, and a
- * core agent's Chat is core's own (coreAgentChat). */
+/** The window as WorldControlPlane wires it: its view changes stick, a core
+ * agent's Chat is core's own (coreAgentChat), its Terminal is core's watch
+ * (coreInspectorTerminal), and Chat's terminal button opens that tab. */
 function CoreAgentWindow({
   agent,
   initial,
   target,
-  onOpenTerminal,
 }: {
   agent: WorldLeafObject;
   initial: WorldInspectorConversation;
   target: HTMLElement;
-  onOpenTerminal(id: string): void;
 }) {
   const [conversation, setConversation] = useState(initial);
   return (
@@ -130,7 +130,10 @@ function CoreAgentWindow({
       target={target}
       floating={false}
       terminalActive={false}
-      chat={coreAgentChat(agent, onOpenTerminal)}
+      chat={coreAgentChat(agent, () =>
+        setConversation((current) => ({ ...current, view: "terminal" })),
+      )}
+      terminal={coreInspectorTerminal(agent, conversation.view === "terminal")}
       onChange={(change) =>
         setConversation((current) => ({ ...current, ...change }))
       }
@@ -213,8 +216,9 @@ async function run() {
     "a core agent stays view-only yet its window opens",
   );
   check(
-    JSON.stringify(worldIntentViews(agent)) === '["history","files","changes"]',
-    `its window has Chat, Files and Changes: ${JSON.stringify(worldIntentViews(agent))}`,
+    JSON.stringify(worldIntentViews(agent)) ===
+      '["history","terminal","files","changes"]',
+    `its window has Chat, Terminal, Files and Changes: ${JSON.stringify(worldIntentViews(agent))}`,
   );
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;inset:0;display:flex";
@@ -232,17 +236,11 @@ async function run() {
   if (!conversation) throw new Error("the core agent's window opens on Files");
   const root = document.createElement("div");
   document.body.append(root);
-  const watched: string[] = [];
   flushSync(() =>
     createRoot(root).render(
       <>
         <CaptureSurface element={host} />
-        <CoreAgentWindow
-          agent={agent}
-          initial={conversation}
-          target={target}
-          onOpenTerminal={(id) => watched.push(id)}
-        />
+        <CoreAgentWindow agent={agent} initial={conversation} target={target} />
         <CoreWorktreesHost />
         <CoreKillConfirmHost />
       </>,
@@ -288,7 +286,7 @@ async function run() {
     () => document.body.textContent?.includes("hello from core") === true,
     "the file preview shows the file",
   );
-  // Its tabs: Chat first, then Files and Changes; no Herdr Terminal tab.
+  // Its tabs: Chat first, then core's Terminal, Files and Changes.
   const tabs = () =>
     [
       ...target.querySelectorAll<HTMLElement>(
@@ -296,8 +294,8 @@ async function run() {
       ),
     ].map((tab) => tab.getAttribute("aria-label") ?? "");
   check(
-    tabs().join() === "Chat,Files,Changes",
-    `the core agent's window has Chat, Files and Changes: ${tabs().join()}`,
+    tabs().join() === "Chat,Terminal,Files,Changes",
+    `the core agent's window has Chat, Terminal, Files and Changes: ${tabs().join()}`,
   );
   if (stage === "files") return;
   // Chat is core's own input and history, with the terminal a tap away.
@@ -312,12 +310,92 @@ async function run() {
     Boolean(target.querySelector("[aria-label='Message to builder']")),
     "Chat has the message box",
   );
-  buttonNamed("Watch terminal", target)!.click();
-  check(
-    watched.join() === agent.id,
-    `Watch terminal opens the agent's terminal window: ${watched.join()}`,
-  );
   if (stage === "chat") return;
+  // Chat's terminal button opens the Terminal tab in this same window: core's
+  // watch, never a Herdr terminal or a second window.
+  check(
+    !target.querySelector(".core-watch"),
+    "the terminal is not watched before its tab is shown",
+  );
+  buttonNamed("Watch terminal", target)!.click();
+  await until(
+    () => target.querySelector(".core-watch") !== null,
+    "Watch terminal opens the Terminal tab with core's watch",
+  );
+  check(
+    target
+      .querySelector("[role=tab][aria-label=Terminal]")
+      ?.getAttribute("aria-selected") === "true",
+    "the Terminal tab is selected",
+  );
+  check(
+    !target.querySelector(".workspace-inspector-terminal-detached"),
+    "no Herdr terminal placeholder stands in",
+  );
+  const watchCall = () => calls.find((c) => c.method === "world.core.watch");
+  await until(() => Boolean(watchCall()), "the tab watches the terminal");
+  const watch = watchCall()!.params;
+  check(
+    watch.connection_id === "box" &&
+      watch.generation === agent.generation &&
+      watch.address === agent.nativeId,
+    `the watch names the agent's terminal and generation: ${JSON.stringify(watch)}`,
+  );
+  // World's relay answers the watch, then the screen arrives.
+  await until(
+    () => calls.some((c) => c.method === "world.core.hold"),
+    "the open view holds its fitted size",
+  );
+  (
+    bridge as unknown as { helloAcceptedForSocket: boolean }
+  ).helloAcceptedForSocket = true;
+  const hold = calls.find((c) => c.method === "world.core.hold")!.params;
+  const push = (body: Record<string, unknown>) =>
+    (bridge as unknown as { onMessage(raw: string): void }).onMessage(
+      JSON.stringify({ core_terminal: { stream: watch.stream, ...body } }),
+    );
+  // No Herdr app has it: core gives World the size it holds.
+  push({ grid: { cols: hold.cols, rows: hold.rows } });
+  push({
+    bytes: btoa(
+      [
+        "builder ready",
+        "$ bun test src/report.test.ts",
+        "bun test v1.4.3",
+        "",
+        "src/report.test.ts:",
+        "\x1b[32m(pass)\x1b[0m report > sums the totals [0.41ms]",
+        "\x1b[32m(pass)\x1b[0m report > keeps empty rows [0.12ms]",
+        "\x1b[32m(pass)\x1b[0m report > names every column [0.09ms]",
+        "",
+        " 3 pass",
+        " 0 fail",
+        "Ran 3 tests across 1 file. [18.00ms]",
+        "$ ",
+      ].join("\r\n"),
+    ),
+  });
+  await until(
+    () =>
+      target
+        .querySelector(".core-watch .xterm-rows")
+        ?.textContent?.includes("builder ready") === true,
+    "the watch draws core's screen",
+  );
+  // Back to Chat and to Terminal again: the one watch stays.
+  target.querySelector<HTMLElement>("[role=tab][aria-label=Chat]")!.click();
+  await until(
+    () => target.querySelector("[aria-label='Chat with builder']") !== null,
+    "Chat shows again",
+  );
+  target.querySelector<HTMLElement>("[role=tab][aria-label=Terminal]")!.click();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  check(
+    calls.filter((c) => c.method === "world.core.watch").length === 1 &&
+      !calls.some((c) => c.method === "world.core.unwatch"),
+    "switching tabs keeps the one watch",
+  );
+  if (stage === "terminal") return;
   // Nothing the window did asked core for a Herdr-only method.
   const herdrOnly = calls.filter(
     (call) => call.connection_id !== null && !answersOnCore(call.method),

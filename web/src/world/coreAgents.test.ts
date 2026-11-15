@@ -20,6 +20,7 @@ import {
   type WorldLeafObject,
 } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
+import { projectAgent } from "./officeAgent";
 import { worldIntentViews, worldNodeOpenView } from "./worldInspectorSelection";
 import { CORE_APP_SPACE_REASON } from "./coreRooms";
 import { worldSwitchTargets } from "./worldSwitchTargets";
@@ -350,7 +351,7 @@ describe("core agents in World's views", () => {
     expect(leaf.capabilities.agentHistory).toBe(false);
   });
 
-  test("a core agent's window opens on core's Chat beside Files and Changes", async () => {
+  test("a core agent's window has a Herdr agent's tabs: Chat, Terminal, Files, Changes", async () => {
     const world = await worldOf();
     const agent = world.leaves.find(
       (l) => l.connectionId === "box-core" && l.kind === "agent",
@@ -358,19 +359,33 @@ describe("core agents in World's views", () => {
     const plain = world.leaves.find(
       (l) => l.connectionId === "box-core" && l.kind === "terminal",
     )!;
-    expect(worldIntentViews(agent)).toEqual(["history", "files", "changes"]);
-    // Either Agents-open setting: an agent opens on Chat, never a Herdr
-    // terminal it does not have.
+    expect(worldIntentViews(agent)).toEqual([
+      "history",
+      "terminal",
+      "files",
+      "changes",
+    ]);
+    // The Agents-open setting applies as to a Herdr agent: Chat, or the
+    // Terminal tab (core's watch, in the same window).
     expect(worldNodeOpenView(agent, "chat")).toBe("history");
-    expect(worldNodeOpenView(agent, "terminal")).toBe("history");
+    expect(worldNodeOpenView(agent, "terminal")).toBe("terminal");
     // A plain core terminal has no Chat.
-    expect(worldIntentViews(plain)).toEqual(["files", "changes"]);
+    expect(worldIntentViews(plain)).toEqual(["terminal", "files", "changes"]);
     // A stale core connection's agent opens nothing.
     const stale = await worldOf(true);
     const gone = stale.leaves.find(
       (l) => l.connectionId === "box-core" && l.kind === "agent",
     )!;
-    expect(worldIntentViews(gone)).not.toContain("history");
+    expect(worldIntentViews(gone)).toEqual([]);
+    // Town opens it (desk tap, Open chat, reception) though World only
+    // watches it; Herdr's own reply path stays closed (canOpenInSpaces).
+    const asAgent = (leaf: WorldLeafObject) =>
+      leaf as WorldLeafObject & { kind: "agent" };
+    const town = projectAgent(asAgent(agent), "room", "host", new Map());
+    expect(town).toMatchObject({ coreChat: true, canOpenInSpaces: false });
+    expect(
+      projectAgent(asAgent(gone), "room", "host", new Map()).coreChat,
+    ).toBe(undefined);
   });
 
   test("a phone's switch list reaches live core agents and terminals", async () => {

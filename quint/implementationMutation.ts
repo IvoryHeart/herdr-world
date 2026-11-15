@@ -34,7 +34,8 @@ export type ImplementationFault =
   | "core-watch-unconfirmed"
   | "core-watch-order"
   | "core-typing-replay"
-  | "core-typing-leave"
+  | "core-seat-resize"
+  | "core-seat-gap"
   | "seen-forget-look"
   | "seen-hidden-look"
   | "seen-stale-look"
@@ -58,7 +59,8 @@ export async function mutateImplementation(
       "core-watch-unconfirmed",
       "core-watch-order",
       "core-typing-replay",
-      "core-typing-leave",
+      "core-seat-resize",
+      "core-seat-gap",
       "core-missing-foreground",
     ],
     "herdr-core-seen": [
@@ -132,7 +134,8 @@ export async function mutateImplementation(
               : name === "herdr-core-runtime" && fault === "core-watch-order"
                 ? "web/src/coreWatch.ts"
                 : name === "herdr-core-runtime" &&
-                    fault.startsWith("core-typing-")
+                    (fault.startsWith("core-typing-") ||
+                      fault.startsWith("core-seat-"))
                   ? "server/src/herdr-core/typing.ts"
                   : name === "herdr-core-seen" && fault === "seen-blind-write"
                     ? "server/src/herdr-core/shared-state.ts"
@@ -190,15 +193,22 @@ export async function mutateImplementation(
         "        this.surface.resize(cols, rows);",
         "        void cols;",
       ],
-      // The key that opened the keyboard is sent again after the attach.
+      // The key that opened the seat is sent again after the attach.
       "core-typing-replay": [
-        "    this.drain(queue);",
-        "    this.drain([...queue.slice(0, 1), ...queue]);",
+        "    for (const waiting of queue) this.input(waiting);",
+        "    for (const waiting of [...queue.slice(0, 1), ...queue]) this.input(waiting);",
       ],
-      // A leave during the attach does not wait for the keys before it.
-      "core-typing-leave": [
-        '    if (this.queue) this.queue.push({ kind: "leave" });\n    else this.drop();',
-        "    this.drop();",
+      // A new size goes to the open seat as a RESIZE: core counts it as a
+      // touch, so World takes the size from the app's pane.
+      "core-seat-resize": [
+        "    if (this.opening || sameSize(this.seatSize, size)) return;",
+        "    if (this.opening || sameSize(this.seatSize, size)) return;\n    if (this.seat) {\n      this.seat.resize(size);\n      this.seatSize = { ...size };\n      return;\n    }",
+      ],
+      // The old seat leaves before the new one is answered: core goes
+      // headless (or to the pane) between them.
+      "core-seat-gap": [
+        "    this.opening = { ...size };\n    this.deps.open(size);",
+        "    if (this.seat) {\n      this.leave(this.seat, this.touched);\n      this.seat = null;\n      this.seatSize = null;\n      this.touched = false;\n    }\n    this.opening = { ...size };\n    this.deps.open(size);",
       ],
     };
     const [guard, replacement] = guards[fault]!;

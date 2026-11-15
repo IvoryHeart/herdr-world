@@ -1,9 +1,9 @@
 /**
- * Watching a herdr-core terminal. Core decides its grid (the desktop app's
- * pane, World's view while you type there, or headless when nobody shows
- * it) and announces it before every paint. The page adopts that grid
- * exactly; watching alone sends core nothing back, and fitting only scales
- * the drawing. Typing is coreTyping.ts.
+ * Watching a herdr-core terminal. Core decides its grid (a Herdr app's pane,
+ * the size World holds for an open view when no app leads, or headless) and
+ * announces it before every paint. The page adopts that grid exactly and
+ * fitting only scales the drawing. Holding a size and typing are
+ * coreTyping.ts.
  */
 
 export type CoreGrid = { cols: number; rows: number };
@@ -154,8 +154,11 @@ export class CoreWatchScreen {
   }
 }
 
-/** Smallest drawing scale before the view scrolls instead of shrinking. */
-export const MIN_WATCH_SCALE = 0.45;
+/**
+ * Smallest drawing scale before the view scrolls instead of shrinking: a
+ * Herdr app's larger grid stays readable (13 px text drawn at 11 px or more).
+ */
+export const MIN_WATCH_SCALE = 0.85;
 
 /**
  * How much to scale a drawn grid so it fits the view, never above actual
@@ -195,21 +198,22 @@ export function watchEndedText(reason: string): string {
 
 /**
  * The grid line under the title. A watched grid is the size core holds: the
- * size a Herdr app's pane set, or core's headless size when no app shows the
- * terminal. World says which. While core still holds the grid World's own
- * attach moved an unviewed terminal to (core's observer rule), it says that
- * too; once another grid replaces it, the line describes only the current one.
+ * size World holds for this view while no Herdr app leads it, a Herdr app's
+ * pane size, or core's headless size. World says which. While core still
+ * holds the grid World's own attach moved an unviewed terminal to (core's
+ * observer rule), it says that too; once another grid replaces it, the line
+ * describes only the current one.
  */
 export function watchGridText(
   grid: CoreGrid | null,
   moved: CoreGridMove | null,
-  /** The grid World asked for while you type here; null when not typing. */
-  typed: CoreGrid | null = null,
+  /** The grid World holds for this view; null before it asked. */
+  held: CoreGrid | null = null,
 ): string {
   if (!grid) return "Waiting for its size…";
   const size = `${grid.cols}×${grid.rows}`;
-  if (typed && sameGrid(typed, grid))
-    return `${size}: World's size while you type here; it goes back when you leave`;
+  if (held && sameGrid(held, grid))
+    return `${size}: fits this window; it goes back when you close it`;
   const headless = sameGrid(grid, CORE_HEADLESS_GRID);
   if (moved && sameGrid(moved.to, grid))
     return `${size}: herdr-core moved it from ${moved.from.cols}×${moved.from.rows} to its headless size when World started watching, because no Herdr app has it open`;

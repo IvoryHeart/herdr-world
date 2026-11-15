@@ -27,8 +27,9 @@ export const coreFaults = [
   "key-twice",
   "key-before-attach",
   "typed-replacement",
-  "leave-overtakes",
-  "automatic-opens",
+  "hold-resizes",
+  "swap-gap",
+  "automatic-untyped",
 ] as const;
 
 export const coreWitnesses: readonly string[] = [
@@ -47,8 +48,9 @@ export const coreWitnesses: readonly string[] = [
   "stallReleased",
   "unconfirmedRefused",
   "typingLed",
-  "sizeReturned",
-  "leftAfterKeys",
+  "seatHeld",
+  "paneRetook",
+  "swapped",
   "replacementRefused",
   "worktreeRemoved",
   "teardownFenced",
@@ -66,6 +68,7 @@ export const coreImplementationFaults = [
   "core-watch-unconfirmed",
   "core-watch-order",
   "core-typing-replay",
-  "core-typing-leave",
+  "core-seat-resize",
+  "core-seat-gap",
   "core-missing-foreground",
 ] as const;

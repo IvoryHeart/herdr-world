@@ -78,16 +78,21 @@ type Active<Socket> = {
 
 /** One `world.core.input` message's bytes: a paste or a burst of keys. */
 export const MAX_CORE_INPUT_BYTES = 64 * 1024;
-/** What may wait for the keyboard's attach before more is refused. */
+/** What may wait for World's seat to attach before more is refused. */
 export const MAX_CORE_QUEUED_INPUT_BYTES = 256 * 1024;
 const MAX_CELLS = 0xffff;
+const isCell = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value > 0 &&
+  value <= MAX_CELLS;
 
 export type CoreInputRequest = {
   stream: string;
   bytes: Uint8Array;
   /** A terminal's own reply (a query answer), not a person typing. */
   automatic: boolean;
-  /** World's fitted grid for this view, sent to core with typed keys. */
+  /** World's fitted grid for this view: a seat opened by a key takes it. */
   size: CoreCellSize;
 };
 
@@ -104,12 +109,7 @@ function parseInput(params: unknown): CoreInputRequest {
     throw new CoreWatchError(
       `typing sends 1 to ${MAX_CORE_INPUT_BYTES} bytes at a time`,
     );
-  const cell = (value: unknown) =>
-    typeof value === "number" &&
-    Number.isInteger(value) &&
-    value > 0 &&
-    value <= MAX_CELLS;
-  if (!cell(p.cols) || !cell(p.rows))
+  if (!isCell(p.cols) || !isCell(p.rows))
     throw new CoreWatchError("typing needs the view's size in cells");
   if (p.automatic !== undefined && typeof p.automatic !== "boolean")
     throw new CoreWatchError("automatic is true or false");
@@ -227,7 +227,7 @@ export class CoreTerminalWatches<Socket extends object> {
       fence,
       lease,
       typing: new CoreTypingSession({
-        open: (size) => void this.openKeyboard(entry, size),
+        open: (size) => void this.openSeat(entry, size),
         fenced: () => this.fenced(entry),
         maxQueuedBytes: MAX_CORE_QUEUED_INPUT_BYTES,
         notSent: () => new CoreWatchError(NOT_SENT),
@@ -303,11 +303,10 @@ export class CoreTerminalWatches<Socket extends object> {
   }
 
   /**
-   * Bytes for the watched terminal. Typed bytes open World's keyboard on
-   * first use (core then takes World's size) and are sent once, in order.
-   * Automatic replies are sent only while the keyboard is open or opening
-   * and core tells them apart; otherwise they are dropped (`sent: false`),
-   * so a watch that nobody types into never sends core anything.
+   * Bytes for the watched terminal, sent on World's seat (`hold`) and once,
+   * in order; typed keys make World the size leader by core's typing rule.
+   * Automatic replies go only on a seat a person typed into and where core
+   * tells them apart; otherwise they are dropped (`sent: false`).
    */
   input(ws: Socket, params: unknown): Promise<CoreInputResult> {
     let request: CoreInputRequest;
@@ -332,25 +331,31 @@ export class CoreTerminalWatches<Socket extends object> {
   }
 
   /**
-   * The page stopped typing (it lost focus or went idle): leave the
-   * keyboard so core gives the size back to the Herdr app's pane, or to
-   * headless. The watch goes on. Anything typed before it is sent first.
+   * The page's view of `stream` is open at this fitted grid: World holds a
+   * seat there (`CoreTypingSession`), which core sizes the terminal to only
+   * while no Herdr app pane has it. A new size swaps the seat; it never sends
+   * RESIZE. The seat stays until the watch ends; there is no give-back on
+   * blur or idle.
    */
-  leave(ws: Socket, stream: unknown): boolean {
-    const entry =
-      typeof stream === "string" ? this.active.get(ws)?.get(stream) : undefined;
-    if (!entry || entry.ended) return false;
-    entry.typing.leave();
+  hold(ws: Socket, params: unknown): boolean {
+    const p = (params ?? {}) as Record<string, unknown>;
+    if (typeof p.stream !== "string" || !STREAM_KEY.test(p.stream))
+      throw new CoreWatchError("holding a size needs a stream key");
+    if (!isCell(p.cols) || !isCell(p.rows))
+      throw new CoreWatchError("holding a size needs the view's size in cells");
+    const entry = this.active.get(ws)?.get(p.stream);
+    if (!entry || entry.ended || !entry.watch) return false;
+    entry.typing.hold({ cols: p.cols, rows: p.rows });
     return true;
   }
 
-  /** Whether the page's watch of `stream` holds a keyboard (for tests). */
+  /** Whether the page's watch of `stream` holds a seat (for tests). */
   typing(ws: Socket, stream: string): "no" | "opening" | "yes" {
     return this.active.get(ws)?.get(stream)?.typing.state ?? "no";
   }
 
-  /** Core's attach for the session's first key; the session sends what waited. */
-  private async openKeyboard(entry: Active<Socket>, size: CoreCellSize) {
+  /** Core's resumed attach for World's seat; the session sends what waited. */
+  private async openSeat(entry: Active<Socket>, size: CoreCellSize) {
     const typing = entry.typing;
     let keys: CoreKeyboard | null = null;
     try {

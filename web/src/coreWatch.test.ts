@@ -3,7 +3,9 @@ import {
   type CoreGrid,
   CoreWatchScreen,
   type CoreWatchReply,
+  MIN_WATCH_SCALE,
   watchGridText,
+  watchScale,
 } from "./coreWatch";
 
 const surface = () => {
@@ -89,5 +91,26 @@ describe("the grid line after World's attach moved a terminal", () => {
     expect(line(screen)).toBe(
       "120×40: the size of the Herdr app or terminal that has it open",
     );
+  });
+});
+
+describe("the grid line while World holds the view's size", () => {
+  test("names World's size, and the app's size when an app leads", () => {
+    const held = grid(100, 30);
+    expect(watchGridText(grid(100, 30), null, held)).toBe(
+      "100×30: fits this window; it goes back when you close it",
+    );
+    expect(watchGridText(grid(132, 40), null, held)).toBe(
+      "132×40: the size of the Herdr app or terminal that has it open",
+    );
+  });
+
+  test("a larger grid stays readable: the view scrolls below the floor", () => {
+    const drawn = { width: 2000, height: 1000 };
+    expect(watchScale(drawn, { width: 400, height: 300 })).toBe(
+      MIN_WATCH_SCALE,
+    );
+    expect(MIN_WATCH_SCALE).toBeGreaterThanOrEqual(0.85);
+    expect(watchScale(drawn, { width: 1800, height: 1000 })).toBe(0.9);
   });
 });

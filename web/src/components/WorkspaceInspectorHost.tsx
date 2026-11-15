@@ -6,6 +6,7 @@ import {
 } from "./WorkspaceInspectorViewSelect";
 import { WorkspaceInspectorLocation } from "./WorkspaceInspectorLocation";
 import { WorkspaceInspectorStatus } from "./WorkspaceInspectorStatus";
+import { InspectorTerminalBody } from "./InspectorTerminalBody";
 import { AgentWorktreeResource } from "./AgentWorktreePicker";
 import type { AgentWorktreeView } from "../useAgentWorktree";
 import { useEffectCallback } from "../useEffectCallback";
@@ -106,6 +107,7 @@ export function WorkspaceInspectorHost({
   workspace,
   historyPane,
   chat,
+  terminal,
   fileSelection,
   onSelectFileTab,
   previewRequestRef,
@@ -162,6 +164,8 @@ export function WorkspaceInspectorHost({
    * input and history): it replaces the Herdr transcript reader.
    */
   chat?: ReactNode;
+  /** Terminal for a runtime not shown through Herdr (InspectorTerminalBody). */
+  terminal?: ReactNode;
   fileSelection: ActiveFilePreviewSelection;
   onSelectFileTab: (path: string) => void;
   previewRequestRef: React.MutableRefObject<number>;
@@ -1324,33 +1328,13 @@ export function WorkspaceInspectorHost({
                 state.view === "terminal" ? "" : "is-hidden"
               }`}
             >
-              {state.view === "terminal" && onFocusTabWindow ? (
-                <div
-                  className="workspace-inspector-terminal-detached"
-                  role="status"
-                >
-                  <span>The terminal is in its tab window.</span>
-                  <button
-                    type="button"
-                    className="workspace-inspector-focus-tab-action"
-                    onClick={onFocusTabWindow}
-                  >
-                    Focus tab window
-                  </button>
-                </div>
-              ) : state.view === "terminal" && terminalDetached ? (
-                <div
-                  className="workspace-inspector-terminal-detached"
-                  role="status"
-                >
-                  Terminal is floating.
-                </div>
-              ) : state.view === "terminal" ? (
-                <div
-                  ref={onTerminalPortalChange}
-                  className="workspace-inspector-terminal-portal"
-                />
-              ) : null}
+              <InspectorTerminalBody
+                shown={state.view === "terminal"}
+                terminal={terminal}
+                terminalDetached={terminalDetached}
+                onFocusTabWindow={onFocusTabWindow}
+                onTerminalPortalChange={onTerminalPortalChange}
+              />
             </div>
           ) : null}
         </div>

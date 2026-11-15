@@ -127,7 +127,7 @@ export function townTargets(
               kind: "agent",
               label: townAgentLabel(model, agent, desk),
               rect,
-              canActivate: agent.canOpenInSpaces,
+              canActivate: agent.canOpenInSpaces || Boolean(agent.coreChat),
             });
           else
             targets.push({

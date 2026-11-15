@@ -167,6 +167,16 @@ async function coreSide(root: string) {
     params: Record<string, unknown>;
   }) => {
     const p = call.params;
+    // The Terminal tab's watch, as World's relay answers it; the page draws
+    // its own pushes (CoreTerminalWatch's own test drives the stream).
+    if (call.method === "world.core.watch")
+      return {
+        stream: p.stream,
+        grid: { cols: 80, rows: 24 },
+        moved_from: null,
+      };
+    if (call.method === "world.core.hold") return { held: true };
+    if (call.method === "world.core.unwatch") return { closed: true };
     if (call.connection_id !== null) {
       if (
         call.connection_id !== "box" ||
@@ -330,7 +340,13 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
         await waitForChromePort(child, profile, log),
       );
       let run = 0;
-      for (const stage of ["files", "chat", "dialog", "remove"] as const)
+      for (const stage of [
+        "files",
+        "chat",
+        "terminal",
+        "dialog",
+        "remove",
+      ] as const)
         for (const theme of ["light", "dark"] as const)
           for (const viewport of VIEWPORTS) {
             run += 1;
@@ -367,9 +383,11 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
                     ? ".workspace-inspector-file-detail"
                     : stage === "chat"
                       ? ".core-chat > *"
-                      : stage === "dialog"
-                        ? ".core-worktrees"
-                        : '.modal[aria-label="Remove worktree"]',
+                      : stage === "terminal"
+                        ? ".core-watch"
+                        : stage === "dialog"
+                          ? ".core-worktrees"
+                          : '.modal[aria-label="Remove worktree"]',
               },
             });
             const stem = `${stage}-${viewport.name}-${theme}`;

@@ -73,7 +73,7 @@ function recordedPushes(): CoreTerminalPush[] {
 }
 
 test.skipIf(!chrome)(
-  "a core terminal adopts core's grid, rescales on rotation, and takes World's size only while you type",
+  "a core Terminal tab holds its fitted size while open, draws an app's grid readably, and takes the first key",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "core-watch-"));
     const { assets } = await buildWorldBrowserBundle("CoreTerminalWatch", dir);
@@ -198,7 +198,7 @@ test.skipIf(!chrome)(
       const captures = Bun.env.HERDR_WORLD_CORE_CAPTURES;
       if (!captures) return;
       await mkdir(captures, { recursive: true });
-      for (const scene of ["watch", "typing"] as const)
+      for (const scene of ["app", "held"] as const)
         for (const theme of ["light", "dark"] as const)
           for (const viewport of VIEWPORTS) {
             mobile = viewport.mobile;

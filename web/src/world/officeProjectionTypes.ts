@@ -41,9 +41,13 @@ export type OfficeAgent = {
   placement: OfficeAgentPlacement;
   stale: boolean;
   canOpenInSpaces: boolean;
+  /**
+   * A live herdr-core agent World's Inspector opens (Chat, Terminal, Files,
+   * Changes) though World only watches it.
+   */
   coreChat?: boolean;
   /** Why World only watches this agent (herdr-core), and its own words. */
-  /** `watch`: its terminal can be watched (never typed into). */
+  /** `watch`: its terminal opens in the Inspector's Terminal tab. */
   viewOnly?: { reason: string; message: string; watch: boolean };
   /** herdr-core: seen and favourite, shared with Herdr's apps. */
   coreShared?: import("./coreShared").CoreShared;

@@ -672,8 +672,10 @@ export class FakeCore {
     const record = this.terminals.get(address);
     if (!record || record.state !== "live") return;
     let leader: FakeViewer | null = null;
+    // Ties (resumed viewers that never typed) go to the last attached,
+    // as Rust's `max_by_key` does in core's `apply_size`.
     for (const v of this.viewers.get(address) ?? [])
-      if (!v.observe && (!leader || v.activeAt > leader.activeAt)) leader = v;
+      if (!v.observe && (!leader || v.activeAt >= leader.activeAt)) leader = v;
     const [cols, rows] = leader?.size ?? FAKE_HEADLESS;
     if ((record.cols === cols && record.rows === rows) || !cols || !rows)
       return;

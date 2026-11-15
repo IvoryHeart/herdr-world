@@ -687,8 +687,8 @@ export default function TownView({
   const openAgent = (agentKey: string) => {
     const agent = agentByKey.get(agentKey)?.agent;
     if (!agent) return;
-    // World can only watch it: its peek shows its words and says why.
-    if (agent.viewOnly) {
+    // World only watches it: its peek says why (a live core agent opens).
+    if (agent.viewOnly && !agent.coreChat) {
       window.clearTimeout(peekTimer.current);
       holdPeek.current = true;
       setPeek({ key: agentKey, anchor: lastPointer.current ?? { x: 0, y: 0 } });
@@ -709,7 +709,7 @@ export default function TownView({
   /** Open Chat explicitly; focus false keeps focus outside the agent's pane. */
   const openChat = (agentKey: string, focus = true) => {
     const agent = agentByKey.get(agentKey)?.agent;
-    if (!agent || agent.stale || !agent.canOpenInSpaces) return;
+    if (!agent || !townTargetActionable(office, agentKey, true)) return;
     if (DEVTOOLS) trace.record("peek", { key: agentKey });
     window.clearTimeout(peekTimer.current);
     holdPeek.current = false;

@@ -278,7 +278,7 @@ async function run() {
     answerField?.disabled === false && answerSend?.disabled === true,
     "Core answers have an editable field; an empty answer cannot send",
   );
-  // Its terminal can be watched (never typed into) from every surface.
+  // Its terminal opens in the Inspector from every surface.
   const watchButtons = [
     ...document.querySelectorAll<HTMLButtonElement>("button"),
   ].filter((button) => button.title === CORE_WATCH_TITLE);

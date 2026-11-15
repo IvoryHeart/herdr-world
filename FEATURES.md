@@ -2157,11 +2157,13 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     When World has more than one connection, Herdr or herdr-core, every push
     names the connection it came from.
   - **Chat and answers.** Open a core agent from Town, Board or Desk, its
-    peek or menu, a phone's ⋯ switch list, or **Needs you → Chat**: it opens
-    in its Inspector window on **Chat**, with **Files** and **Changes** beside
-    it (no Terminal tab: **Watch terminal** in Chat opens the terminal in its
-    own window). The window moves, resizes, docks, minimizes and switches
-    like a Herdr agent's. Type a message and **Send**; a waiting agent has
+    peek or menu (tap its desk, **Open chat**), a phone's ⋯ switch list, or
+    **Needs you → Chat**: it opens in the same Inspector window as a Herdr
+    agent, with **Chat**, **Terminal**, **Files** and **Changes** tabs. **Open
+    chat** opens it on **Chat**; a desk tap follows the Agents open setting.
+    **Watch terminal** in Chat switches to the **Terminal** tab. The window
+    moves by its title bar, resizes, docks, minimizes and switches like a
+    Herdr agent's. Type a message and **Send**; a waiting agent has
     **Answer**, its own status message, **Read question screen**, and answer
     keys. Core's send/keys handle every supported harness identically. History
     is unavailable here; the question screen is explicitly terminal text.
@@ -2247,33 +2249,34 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     fixture's directory and are removed with it. Ranger can read this room
     when you allow it in Ranger settings. No real harness or checkout is
     needed; the fixture runs no agents.
-  - **Watch its terminal.** **Watch terminal** (Needs you, Board's peek, the
+  - **Its terminal.** **Watch terminal** (Needs you, Board's peek, the
     agent's Chat), Town's terminal button and opening a plain core terminal
-    show its live terminal in its own World window at the size core holds: the size of the Herdr app pane (or
-    other typing viewer) that has it open, or core's headless size (200×120
-    by default) when none does. The line under the name says which. Until you
-    type, World only watches: it sends core no keys, size or focus, so
-    rotating a phone, opening its keyboard or resizing the window only scales
-    the drawing (down to 45%, then the view scrolls) and never changes the
-    agent's terminal. When the app resizes or closes its pane, World follows
-    before the next paint. The window moves, resizes, snaps, maximizes,
-    minimizes, restores and switches (phone ⋯) like a Herdr terminal's.
-    Several core terminals may be open, each in its own window; opening one
-    that is open raises it. Minimizing a core terminal ends its watch (and
-    gives back the size if you typed); restoring it watches again.
-  - **Type into its terminal.** The first key you type in the view (or send
-    from the phone's composer) opens World's keyboard for it: core gives the
-    terminal World's fitted size, the line says World has the size, and that
-    key and every key typed while the keyboard opens arrive once, in order.
-    Terminal replies (cursor reports) never open it, and xterm's own focus
-    reports are not sent. Typing in the Herdr app's pane, or clicking it,
-    takes the size back there; the next key in World takes it again. Each
-    key carries the size that fits the window now, so after you resize the
-    window while typing, your next key resizes the terminal; resizing alone
-    sends nothing. World
-    leaves, and core returns the size to the app's pane or its headless size,
-    3 seconds after focus moves out of the view, after a minute with no key,
-    and on Back or closing the view; anything typed before is sent first.
+    open the **Terminal** tab of its Inspector window, which shows the live
+    terminal. While that tab is open and no Herdr app pane holds the
+    terminal, core gives it the size that fits the window (World joins as a
+    viewer that ranks below every app pane), so the text is readable; it
+    keeps that size when focus moves away or you stop typing. Resizing the
+    window resizes the terminal, without a step through core's headless
+    size. Closing the window, or switching it to another node, gives the size
+    back: core returns it to an app's pane, or to its headless size (200×120
+    by default) when none has it open. While a Herdr app pane holds the size,
+    World never resizes it: rotating a phone, opening its keyboard or
+    resizing the window only scales the drawing, never below 85% of its
+    normal size, and the rest scrolls. When the app resizes or closes its
+    pane, World follows before the next paint. The line under the name says
+    whose size it is. The tab mounts when first shown and keeps its watch
+    while you switch to another tab. Several core terminals may be open, each
+    in its own window. Minimizing the window ends its watch and gives back
+    the size; restoring it watches again.
+  - **Type into its terminal.** Click the terminal, or just press a key
+    while its tab is shown (outside any text field): the terminal takes
+    focus, shows its cursor, and that first key arrives once. With two core
+    terminals open, page keys go to the one shown or clicked last. A key
+    typed in World makes World's size lead even over an app pane, by core's
+    own rule; typing in the Herdr app's pane, or clicking it, takes the size
+    back there. Keys typed while World's viewer is still opening arrive
+    once, in order. Terminal replies (cursor reports) go only after you have
+    typed in World, and xterm's own focus reports are not sent.
     A key World could not send says "Not sent" and drops the keys queued
     behind it, so nothing lands out of order; typed bytes are never replayed.
     A replaced program, a lost core connection or a watch that ends refuses
@@ -2289,11 +2292,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     composer message stays while the core connection does: Back, reopening
     the terminal or a watch that ends keep it; a new core connection
     generation (core restarted or reconnected) drops it. The view ends where
-    a phone's keyboard begins, so the composer stays above it. Watching never
-    sizes a terminal: on core 0.1.21 and later a terminal no Herdr app or
-    typing viewer has open keeps its size while World watches it, attaching
-    and leaving. **Exception on older cores:** there core moves such a
-    terminal to its headless size when World starts watching; World says
+    a phone's keyboard begins, so the composer stays above it. The watch
+    itself never sizes a terminal (it is an observer); only the open tab's
+    viewer does, as described above. **Exception on cores before 0.1.21:**
+    there the watch alone may move a terminal to its headless size; World says
     "herdr-core moved it from C×R to its headless size" while that grid lasts;
     once an app's pane opens and sets its own size, the line names that size
     and drops the move. The window's close or a phone's Back closes it;

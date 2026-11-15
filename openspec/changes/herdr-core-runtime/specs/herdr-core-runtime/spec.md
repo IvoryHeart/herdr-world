@@ -247,17 +247,34 @@ popups and verify Windows named-pipe/key behavior on a real owner test host.
   terminal's size (an observer never sizes it, upstream #199); an older core may
   move it to headless on attach, and World reports that move, never hides it
 
-#### Scenario: First key and desktop reclaim
+#### Scenario: One Inspector for a core agent
 
-- **WHEN** the user types in focused World and later clicks the desktop app pane
-- **THEN** World sends the first key once and takes the interactive size, then the
-  desktop app can reclaim its own size
+- **WHEN** the user opens a live core agent from Town, Board, Desk, Needs you,
+  Open chat, the agent menu or a phone's switch list
+- **THEN** it opens in the same Inspector window as a Herdr agent, with Chat,
+  Terminal, Files and Changes tabs; Open chat selects Chat, and the Terminal
+  tab is the core watch, not a separate window
 
-#### Scenario: Leaving gives the size back
+#### Scenario: World holds a readable size while open
 
-- **WHEN** the user stops typing, moves focus out of the view or closes it
-- **THEN** World leaves after the keys typed before, and core returns the grid to
-  the app's pane or its headless size; a terminal reply never takes the size
+- **WHEN** a core terminal's Terminal tab is open and no Herdr app pane holds
+  its size
+- **THEN** core sizes it to the tab's fitted grid and keeps it there through
+  blur and idle; resizing the window resizes the terminal without a headless
+  step, and closing the tab gives the size back to core's rule
+
+#### Scenario: An app pane keeps its size
+
+- **WHEN** a Herdr app pane holds the terminal's size while World shows it
+- **THEN** World never resizes it, draws its grid at a readable scale and
+  scrolls what does not fit; a key typed in World leads by core's own rule and
+  a key or click on the app's pane retakes it
+
+#### Scenario: First key
+
+- **WHEN** the user clicks the Terminal tab or presses a key while it is shown
+- **THEN** the terminal takes focus and shows its cursor, and the key is sent
+  exactly once; a terminal reply goes only on a seat a person typed into
 
 #### Scenario: Room shell on either runtime
 

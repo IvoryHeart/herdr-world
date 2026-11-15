@@ -156,9 +156,12 @@ function InspectorResources({
   onBind,
   onSelectPane,
   chat,
+  terminal,
 }: {
   /** Chat for a runtime World does not read through Herdr (herdr-core). */
   chat?: ReactNode;
+  /** Terminal for a runtime World does not show through Herdr (herdr-core). */
+  terminal?: ReactNode;
   /**
    * The window is shown but its host's session has not loaded this
    * workspace yet (a window restored on page load, on a host not yet opened):
@@ -764,6 +767,7 @@ function InspectorResources({
                 workspace={workspace}
                 historyPane={historyPane}
                 chat={chat}
+                terminal={terminal}
                 historySessionFingerprint={conversation.agentSessionFingerprint}
                 notice={
                   awaitingChat && awaitSince ? (

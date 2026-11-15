@@ -177,7 +177,7 @@ test("heartbeat gaps and absent endpoints cannot become actionable", () => {
 });
 
 test("all ordering, authority, foreground, worktree, observe, launch-brief and typing faults are registered; malformed traces are errors", () => {
-  expect(new Set(coreFaults).size).toBe(29);
+  expect(new Set(coreFaults).size).toBe(30);
   expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
   const states = trace(["connect", "baseline"]);
   states[1]!.target = 7;
@@ -430,7 +430,57 @@ describe("typing into a watched terminal (typing family)", () => {
     states.map((state) => ({ ...state, family: "typing" }));
   const drain = (n: number) => Array<string>(n).fill("frame");
 
-  test("the first key waits for the attach and goes once; World leads, then gives the size back", () => {
+  test("World's open view holds its size alone without typing; a pane takes it; close gives it back", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["watch", 1],
+        ["hold", 3],
+        "attached",
+        ...drain(3),
+        ["pane", 0],
+        ...drain(2),
+      ]),
+    );
+    const held = states.find((state) => state.op === "attached")!.c;
+    expect(held).toMatchObject({
+      seat: 3,
+      grid: 3,
+      worldLeads: false,
+      sent: 0,
+    });
+    expect(states.at(-1)!.c).toMatchObject({ seat: 3, grid: 0, shown: 0 });
+    const witnesses = replayCore(states);
+    for (const name of ["seatHeld"]) expect(witnesses.has(name)).toBe(true);
+    // A seat recorded as leading the pane is caught by the replay.
+    const wrong = structuredClone(states);
+    wrong.at(-1)!.c.grid = 3;
+    return expectObservationMismatch(() => replayCore(wrong), ["core.state"]);
+  });
+
+  test("a new size swaps the seat with no headless step and no stolen size", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["watch", 1],
+        ["hold", 3],
+        "attached",
+        ["hold", 4],
+        "attached",
+        ...drain(6),
+      ]),
+    );
+    for (const state of states.slice(
+      states.findIndex((x) => x.op === "attached"),
+    ))
+      expect(state.c.grid).not.toBe(2);
+    expect(states.at(-1)!.c).toMatchObject({ seat: 4, grid: 4, shown: 4 });
+    expect(replayCore(states).has("swapped")).toBe(true);
+  });
+
+  test("the first key waits for the seat and goes once; World leads; the pane retakes", () => {
     const states = typing(
       trace([
         "connect",
@@ -443,23 +493,23 @@ describe("typing into a watched terminal (typing family)", () => {
         "reply",
         "attached",
         ...drain(2),
-        "leave",
+        "paneTouch",
         ...drain(2),
       ]),
     );
     const sent = states.find((state) => state.op === "attached")!.c;
-    expect(sent).toMatchObject({ keys: 2, sent: 2, waiting: 0, grid: 3 });
+    expect(sent).toMatchObject({ seat: 3, sent: 2, waiting: 0, grid: 3 });
     expect(states.at(-1)!.c).toMatchObject({
-      keys: 0,
       pressed: 2,
       sent: 2,
       refused: 0,
       grid: 0,
       shown: 0,
       stray: false,
+      echo: false,
     });
     const witnesses = replayCore(states);
-    for (const name of ["typingLed", "sizeReturned"])
+    for (const name of ["typingLed", "paneRetook"])
       expect(witnesses.has(name)).toBe(true);
     // A key recorded as sent twice is caught by the replay.
     const twice = structuredClone(states);
@@ -470,31 +520,19 @@ describe("typing into a watched terminal (typing family)", () => {
     return expectObservationMismatch(() => replayCore(twice), ["core.state"]);
   });
 
-  test("a reply alone never opens the keyboard", () => {
+  test("a reply alone never opens a seat", () => {
     const states = typing(
       trace(["connect", "baseline", ["watch", 1], ...drain(2), "reply"]),
     );
-    expect(states.at(-1)!.c).toMatchObject({ keys: 0, sent: 0, grid: 2 });
+    expect(states.at(-1)!.c).toMatchObject({
+      seat: -1,
+      opening: -1,
+      sent: 0,
+      grid: 2,
+    });
     const opened = structuredClone(states);
-    opened.at(-1)!.c.keys = 1;
+    opened.at(-1)!.c.opening = 3;
     return expectObservationMismatch(() => replayCore(opened), ["core.state"]);
-  });
-
-  test("a leave during the attach waits for the keys before it", () => {
-    const states = typing(
-      trace([
-        "connect",
-        "baseline",
-        ["pane", 1],
-        ["watch", 1],
-        "key",
-        "leave",
-        "attached",
-      ]),
-    );
-    expect(states.at(-2)!.c).toMatchObject({ keys: 1, left: true });
-    expect(states.at(-1)!.c).toMatchObject({ keys: 0, sent: 1, grid: 1 });
-    expect(replayCore(states).has("leftAfterKeys")).toBe(true);
   });
 
   test("the desktop pane takes its size back; the next key retakes it", () => {
@@ -531,13 +569,13 @@ describe("typing into a watched terminal (typing family)", () => {
       watching: false,
       sent: 1,
       refused: 1,
-      keys: 0,
+      seat: -1,
       stray: false,
     });
     expect(replayCore(states).has("replacementRefused")).toBe(true);
   });
 
-  test("a refused attach or a lost keyboard sends nothing more; the next key reopens", () => {
+  test("a refused attach or a lost seat sends nothing more; the next key reopens", () => {
     const states = typing(
       trace([
         "connect",
@@ -547,11 +585,11 @@ describe("typing into a watched terminal (typing family)", () => {
         "attachRefused",
         "key",
         "attached",
-        "keyboardLost",
+        "seatLost",
       ]),
     );
     expect(states.at(-1)!.c).toMatchObject({
-      keys: 0,
+      seat: -1,
       pressed: 2,
       sent: 1,
       refused: 1,
