@@ -492,8 +492,8 @@ export function CoreFixturePanel({
         </button>
       </div>
       <span>
-        Scout's seen and favourite are shared with Herdr's apps. These stand in
-        for a person using the phone or desktop app:
+        Scout's seen and pin are shared with Herdr's apps. These stand in for a
+        person using the phone or desktop app:
       </span>
       <div className="connection-profile-actions">
         <button
@@ -515,7 +515,7 @@ export function CoreFixturePanel({
         <button
           type="button"
           disabled={!!pending}
-          onClick={() => run("pin", "Another app changed scout's favourite.")}
+          onClick={() => run("pin", "Another app pinned or unpinned scout.")}
         >
           Another app: pin or unpin scout
         </button>

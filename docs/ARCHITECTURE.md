@@ -98,8 +98,10 @@ Ownership:
 - **World's view layout is in SQLite for both runtimes.** Town room spots
   (Board's `room_pins`) and Board pins are Board tables
   (`storage/world-board.ts`); Desk marks, watchlist and completion seen are in
-  `terminal_marks`. Seen and favourite on core are shared with the official
-  apps as core labels (`herdr.seen`, `herdr.pinned`; `herdr-core/shared-state.ts`).
+  `terminal_marks`. Seen and the pin on core are shared with the official
+  apps as core labels (`herdr.seen`, `herdr.pinned`; `herdr-core/shared-state.ts`):
+  a core tab's desk and card pin is its label, and World's tables keep only
+  where it stands (`web/src/world/corePins.ts`).
 - **Every operation is fenced** by immutable connection ID, runtime generation
   and occupant (`herdr-core/fence.ts`, `herdr-core/occupant.ts`), and the fence
   is rechecked before each dispatch. Nothing falls back to another connection
@@ -207,8 +209,8 @@ core-specific today. They are recorded here and not refactored yet:
   rooms have no World counterpart for (their worktrees live in the focused
   app's `WorktreeLifecycleDialog`, tied to the focused connection);
   `CoreKillConfirm`, a promise around the shared `ConfirmDialog` that adds the
-  list of terminals ending with the kill; and `CoreFavourite`, because only
-  core shares a favourite. Town's step lines and quest badges still skip
+  list of terminals ending with the kill; and `CorePin`, the peek's pin,
+  because only core shares a pin with Herdr's apps. Town's step lines and quest badges still skip
   core agents' conversations (`useTownStepReads.ts`, `agentQuests.ts`).
 
 **Where Rex would map.** Superlogical's public pages, read 2026-11-15, describe

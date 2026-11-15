@@ -166,7 +166,7 @@ World’s core rooms and Herdr’s app layout are arranged separately.
 Core agents support Chat, answers, Terminal, Files, Changes, worktrees and the
 room’s floating shell. World reads core’s status and uses its send/keys for every
 supported harness. Looking at an agent’s foreground Town or Board peek clears
-Done in Herdr’s apps too; favourites are shared. Watching a terminal follows the
+Done in Herdr’s apps too; pins are shared. Watching a terminal follows the
 app’s grid without resizing it; typing takes the size, and leaving gives it back.
 
 Use the latest core: World applies no version pin or certification gate and

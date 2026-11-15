@@ -23,7 +23,12 @@ import {
   writeFloatingTerminalGeometry,
 } from "./floatingTerminalPreferences";
 import { terminalColorKey } from "./terminalColor";
-import { setDeskPinned, useDeskPins } from "./useDeskPins";
+import {
+  leafPinnedBy,
+  setDeskPinned,
+  useCoreDeskPinPositions,
+  useDeskPins,
+} from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
 import { CoreKillConfirmHost } from "./CoreKillConfirm";
 import { CoreWorktreesHost } from "./CoreWorktrees";
@@ -303,6 +308,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   } = useWorldVisualActions(controller);
   const colorChoice = useTerminalColorChoices();
   const deskPins = useDeskPins();
+  useCoreDeskPinPositions();
   const needsYouOpen = useNeedsYouState().open;
   const inspectorTab = (conversation: WorldInspectorConversation) =>
     conversation.tabId
@@ -368,15 +374,23 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   // current handler, so a view never acts on an older selection or host.
   // A phone switches between agents and terminals from ⋯, as its terminal
   // does: agents open on Chat, terminals on Terminal.
+  // Pinned ones come first: a herdr-core agent by its own label (Herdr's
+  // apps list it first too), a Herdr agent or terminal by its desk.
+  const leafPinned = leafPinnedBy(deskPins, world.spaces);
   const switchTargets = (currentId: string, leave?: () => void) =>
     compactArrangement
-      ? worldSwitchTargets(presentedWorld.nodes, currentId, (node) => {
-          leave?.();
-          void applySelection(
-            node.id,
-            node.kind === "agent" ? "history" : "terminal",
-          );
-        })
+      ? worldSwitchTargets(
+          presentedWorld.nodes,
+          currentId,
+          (node) => {
+            leave?.();
+            void applySelection(
+              node.id,
+              node.kind === "agent" ? "history" : "terminal",
+            );
+          },
+          leafPinned,
+        )
       : undefined;
   const stableOpenNodeById = useStableCallback(openNodeById);
   const stableRevealDeskAgent = useStableCallback(revealDeskAgent);

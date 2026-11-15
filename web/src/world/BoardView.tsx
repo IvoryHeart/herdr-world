@@ -56,6 +56,7 @@ import {
   targetOf,
 } from "./board/boardAnchors";
 import { publishBoardCardPins } from "./board/boardCardPins";
+import { coreCardPinChanges, setCoreTabPinned, useCorePins } from "./corePins";
 import { createBoardCardRefs } from "./board/boardCardRefs";
 import {
   type BoardAnchor,
@@ -617,6 +618,8 @@ export default function BoardView({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   /** Cards pinned in place (layout.pinned), for their badge and the bar. */
   const [pinnedKeys, setPinnedKeys] = useState<ReadonlySet<string>>(new Set());
+  /** A herdr-core tab card is pinned exactly when its agents' label is. */
+  const corePins = useCorePins();
   const togglePinRef = useRef<(key: string) => void>(() => {});
   // A phone's full-screen terminal pins its card from its header.
   useEffect(() => {
@@ -1094,6 +1097,29 @@ export default function BoardView({
     // The layout is read through refs; only saved state starts this.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
+  // Pins made or removed in Herdr's apps: a core card pinned there stays
+  // where it stands; one unpinned there rejoins its owner from where it is.
+  useLayoutEffect(() => {
+    if (!loaded.current) return;
+    const { pin, unpin } = coreCardPinChanges(
+      layout.current.pinned,
+      corePins,
+      (key) => cards.current.has(key),
+    );
+    if (!pin.length && !unpin.length) return;
+    for (const key of pin) {
+      const card = cards.current.get(key)!;
+      layout.current.pinned.set(key, { x: card.x, y: card.y });
+    }
+    for (const key of unpin) {
+      layout.current.pinned.delete(key);
+      keepWhereItIs(key, model);
+    }
+    scheduleSave();
+    setPinnedKeys(new Set(layout.current.pinned.keys()));
+    // The layout is read through refs; saved layouts, labels and cards start it.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, corePins, model]);
 
   /** Save the layout shortly after it changes; never before it has loaded. */
   const scheduleSave = () => {
@@ -3360,6 +3386,12 @@ export default function BoardView({
   const togglePin = (key: string) => {
     const card = cards.current.get(key);
     if (!card) return;
+    const core = corePins.get(key);
+    if (core) {
+      // Herdr's apps share this pin; the card follows when the label does.
+      void setCoreTabPinned(core, !core.pinned);
+      return;
+    }
     if (layout.current.pinned.has(key)) {
       layout.current.pinned.delete(key);
       keepWhereItIs(key, model);

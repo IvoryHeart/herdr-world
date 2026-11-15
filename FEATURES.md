@@ -2141,11 +2141,29 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     `herdr.seen` label, only to raise it, and only while it still holds what
     World saw when you looked, so an app's newer look or unread wins; a write
     that fails is not retried and the next look shares it.
-  - **Favourite.** The star in a core agent's Town or Board peek is Herdr's
-    favourite (`herdr.pinned`), shared with every Herdr app: star it in World
-    and the apps pin it; pin it in an app and World's star fills. If the
-    change fails, World says "Couldn't change the favourite in Herdr's apps".
-    Pinned desks and Board cards and Mark reviewed stay World's own.
+  - **Pin, shared with Herdr's apps.** A core agent has one pin, the same
+    one Herdr's phone and desktop apps show (`herdr.pinned`). Pin it in World
+    (**Pin** in its Town or Board peek, **Pin desk in Town** or **Pin card on
+    Board** in its window's menu or a phone terminal's header, Board's card
+    **Pin**) and the apps pin it; pin or unpin it in an app and, within
+    seconds, its Town desk and Board card wear World's pin or lose it. Where a
+    pinned desk or card stands is still World's: Town gives an app-pinned
+    desk its cell where it stands, Board pins the card where it is, and an
+    unpin forgets the place, so a later pin starts where the desk or card is
+    then. A desk holds a tab, so it is pinned while any of its terminals is
+    pinned: World's pin pins the tab's agents (its terminals, when it has no
+    agent), and its unpin clears every terminal's pin in the tab. Pinned
+    agents come first where World lists agents in no order of its own: a
+    phone's ⋯ switch list within the same need (Needs you first, then
+    finished ones, then the rest) and Desk's quiet agents. Lists with their
+    own order (Desk's lanes by time, its Agents directory by recent activity)
+    keep it. The pin is quiet
+    (no colour), so it never competes with Needs you. A host that is offline
+    or reconnecting shows its last pins and refuses changes ("This agent's
+    host is reconnecting: its pin can change once World sees it again"); a
+    failed change says "Couldn't change the pin in Herdr's apps". Herdr's
+    own (TUI) agents keep World's pin only: the TUI has no pin to share.
+    Mark reviewed stays World's own.
   - **Push.** Core agents send the same Web Push notifications as Herdr
     agents (Menu → Behavior & automation → Task notifications): one when an
     agent that was working finishes, one when it starts needing you
@@ -2162,8 +2180,11 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     peek or menu (tap its desk, **Open chat**; Board's peek has **Open**), a
     phone's ⋯ switch list, or **Needs you → Chat**: it opens in the same
     Inspector window as a Herdr agent, with **Chat**, **Terminal**, **Files**
-    and **Changes** tabs. **Open chat** opens it on **Chat**; a desk tap
-    follows the Agents open setting. The window moves by its title bar,
+    and **Changes** tabs. **Open chat** opens it on **Chat**; opening it from
+    Town, Board, Desk or **Needs you** follows the Agents open setting, as for
+    a Herdr agent: set to Chat, the window shows **Terminal** only until World
+    can read the agent's conversation, then turns to **Chat** by itself. A
+    plain shell opens on **Terminal**. The window moves by its title bar,
     resizes, docks, minimizes and switches like a Herdr agent's. Chat is
     Herdr's Chat: the transcript, **Details**, question cards with their
     answer buttons, the composer with attachments and its ⋮ keys, and

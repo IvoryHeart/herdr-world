@@ -1,7 +1,7 @@
 import { watchConversation } from "../conversationWatch";
 import { harnessLabel } from "./agentProfiles";
 import { WorldLoader } from "./WorldLoader";
-import { useCoreRuntimeConnection } from "./runtimeStore";
+import { useCoreRuntimeConnection, worldRuntimeStore } from "./runtimeStore";
 import { useCoreSeen } from "./coreSeen";
 import { coreSharedOf } from "./coreShared";
 import { useEffectCallback } from "../useEffectCallback";
@@ -65,6 +65,7 @@ import {
   type WorkspaceAnnotationRequest,
 } from "../workspaceResource";
 import {
+  chatOpeningPane,
   worldInspectorWindowId,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
@@ -310,13 +311,10 @@ function InspectorResources({
       current = false;
     };
     const currentPane = () =>
-      connectionSnapshot(store.get(), conversation.connectionId).panes.find(
-        (pane) =>
-          pane.workspace_id === conversation.workspaceId &&
-          pane.tab_id === conversation.tabId &&
-          pane.pane_id === conversation.paneId &&
-          pane.terminal_id === conversation.terminalId &&
-          pane.agent === conversation.context.agent,
+      chatOpeningPane(
+        conversation,
+        connectionSnapshot(store.get(), conversation.connectionId).panes,
+        worldRuntimeStore.get().connections,
       );
     const read = async () => {
       if (!current || !baseConnectionClient.isCurrent() || !currentPane())

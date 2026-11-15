@@ -14,6 +14,7 @@ import { spaceRoomActionCapabilities } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import {
+  defaultOpenView,
   worldInspectorContext,
   worldIntentViews,
 } from "./worldInspectorSelection";
@@ -551,6 +552,45 @@ async function run() {
   } finally {
     clearInterval(poll);
   }
+  // Opening a core agent follows the Agents-open setting as a Herdr agent's
+  // does: Chat, waiting on Terminal only until its conversation reads.
+  document.querySelector<HTMLElement>(".core-worktrees")?.remove();
+  const now = await world();
+  const reader = now.leaves.find(
+    (leaf) => leaf.kind === "agent" && leaf.agentName === "reader",
+  ) as WorldLeafObject | undefined;
+  if (!reader) throw new Error("the read model lists the readable agent");
+  const opening = worldInspectorForNode(
+    reader,
+    defaultOpenView(reader)!,
+    worldIntentViews(reader),
+    worldInspectorContext(reader)!,
+    { dock: "right", expanded: true, size: 640 },
+  );
+  check(
+    opening?.view === "terminal" && opening.awaitChatSession === true,
+    `the window waits on Terminal for Chat: ${JSON.stringify(opening?.view)}`,
+  );
+  if (!opening) throw new Error("the readable agent's window opens");
+  const chatTarget = document.createElement("div");
+  chatTarget.style.cssText = "flex:1;min-width:0;height:100%";
+  host.append(chatTarget);
+  const chatRoot = document.createElement("div");
+  document.body.append(chatRoot);
+  flushSync(() =>
+    createRoot(chatRoot).render(
+      <CoreAgentWindow agent={reader} initial={opening} target={chatTarget} />,
+    ),
+  );
+  await until(
+    () =>
+      chatTarget.querySelector(
+        "[role=tab][aria-label=Chat][aria-selected=true]",
+      ) !== null &&
+      chatTarget.textContent?.includes("It describes the demo project.") ===
+        true,
+    "the core agent's window turns to Chat once its conversation reads",
+  );
 }
 
 void run()
