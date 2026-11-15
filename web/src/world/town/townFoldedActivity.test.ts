@@ -61,7 +61,7 @@ function office(revealed = false) {
   return value;
 }
 
-test("Town folds a contiguous prefix independent of attention, pins, selection and last tabs", () => {
+test("Town folds a prefix of its seat order: pins first, never attention, selection or last tabs", () => {
   const desks = Array.from({ length: 26 }, (_, order) => ({
     key: `desk-${order}`,
     order,
@@ -70,18 +70,20 @@ test("Town folds a contiguous prefix independent of attention, pins, selection a
     deskKey: d.key,
     semanticStatus: "working" as const,
   }));
-  const choose = (input: OfficeDesk[]) =>
+  const choose = (input: OfficeDesk[], pinned: OfficeDesk | undefined) =>
     boundedDesks(
       input,
       agents,
       24,
       (d) => d.key === desks[25]!.key,
-      (d) => d.key === desks[24]!.key,
+      (d) => d === pinned,
       true,
     );
-  expect(choose(desks)).toEqual(desks.slice(0, 24));
+  expect(choose(desks, undefined)).toEqual(desks.slice(0, 24));
   const reordered = [desks[25]!, ...desks.slice(0, 25)];
-  expect(choose(reordered)).toEqual(reordered.slice(0, 24));
+  expect(choose(reordered, undefined)).toEqual(reordered.slice(0, 24));
+  // A pinned later tab is admitted; the last unpinned tab of the prefix folds.
+  expect(choose(desks, desks[24])).toEqual([...desks.slice(0, 23), desks[24]!]);
   expect(
     boundedDesks(
       desks,

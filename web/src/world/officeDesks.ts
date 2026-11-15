@@ -22,7 +22,11 @@ export function priorityCandidates(
     : top;
 }
 
-/** Town draws a contiguous native-order prefix. Other views retain bounded priorities. */
+/**
+ * Town draws a prefix of its seat order: pinned desks first, then the rest,
+ * each in native tab order (pinned goes first, townLayout.ts). Attention and
+ * selection never promote a tab. Other views retain bounded priorities.
+ */
 export function boundedDesks(
   desks: readonly OfficeDesk[],
   agents: readonly {
@@ -34,7 +38,15 @@ export function boundedDesks(
   pinned: (desk: OfficeDesk) => boolean,
   preserveTabOrder = false,
 ): OfficeDesk[] {
-  if (preserveTabOrder) return desks.slice(0, limit);
+  if (preserveTabOrder) {
+    if (desks.length <= limit) return [...desks];
+    const lead = desks.filter(pinned);
+    if (!lead.length) return desks.slice(0, limit);
+    const admitted = new Set(
+      [...lead, ...desks.filter((desk) => !pinned(desk))].slice(0, limit),
+    );
+    return desks.filter((desk) => admitted.has(desk));
+  }
   if (desks.length <= limit) return [...desks];
   const need = new Map<string, number>();
   for (const agent of agents) {

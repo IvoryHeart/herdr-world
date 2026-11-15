@@ -1180,9 +1180,30 @@ export default function BoardView({
     const card = cards.current.get(key);
     if (!card) return;
     if (layout.current.pinned.has(key)) {
-      // A pinned tab card's place is derived (its shelf); it glides back.
-      if (!m.tabByKey.has(key))
+      if (!m.tabByKey.has(key)) {
         layout.current.pinned.set(key, { x: card.x, y: card.y });
+        return;
+      }
+      // A pinned tab card's place is derived (its shelf), so it goes back
+      // there. Its spring can cool before it arrives (a slow drop far
+      // away), so the rest of the way is a tween that always lands.
+      const home = homeOf(key, m);
+      if (
+        home &&
+        !tweens.current.has(key) &&
+        Math.hypot(home.x - card.x, home.y - card.y) > 0.5
+      ) {
+        card.vx = card.vy = 0;
+        card.gliding = false;
+        tweens.current.set(key, {
+          fx: card.x,
+          fy: card.y,
+          tx: home.x,
+          ty: home.y,
+          t: 0,
+        });
+        invalidate("change");
+      }
       return;
     }
     const base = baseOf(key, m);

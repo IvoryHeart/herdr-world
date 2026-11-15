@@ -2386,6 +2386,24 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
             "Tidy leaves a pinned card on its shelf",
           );
         }
+        // Drag the pinned card far away and let go slowly: it goes all
+        // the way back to its shelf, though its spring cools on the way.
+        {
+          const from = centre(card(tabKey)!);
+          pointer(card(tabKey)!, "pointerdown", from.x, from.y);
+          for (let step = 1; step <= 12; step++) {
+            pointer(card(tabKey)!, "pointermove", from.x, from.y - step * 50);
+            await settle(16);
+          }
+          await settle(200);
+          pointer(card(tabKey)!, "pointerup", from.x, from.y - 600);
+          await rest();
+          const now = at(tabKey)!;
+          check(
+            Math.hypot(now.x - pinnedAt.x, now.y - pinnedAt.y) < 2,
+            `a pinned card dropped far away returns to its shelf (${Math.round(now.x - pinnedAt.x)}, ${Math.round(now.y - pinnedAt.y)})`,
+          );
+        }
         pinButton().click();
         await waitFor(
           () => !saved.layout.pinned[tabKey],
