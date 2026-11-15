@@ -37,9 +37,9 @@ flowchart TB
   end
 
   nextProvider["Next runtime provider<br/>not built, e.g. Rex"]
-  sqlite[("world.sqlite<br/>core rooms and layout: storage/core-topology.ts<br/>Desk marks, watchlist, completion seen: storage/terminal-marks.ts")]
+  sqlite[("world.sqlite<br/>both runtimes, World's view layout and marks:<br/>Town room spots, Board pins: storage/world-board.ts<br/>Desk marks, watchlist, completion seen: storage/terminal-marks.ts<br/>core only, rooms: storage/core-topology.ts")]
   hostFiles["Host files, Git, worktrees<br/>World's guarded helpers"]
-  tui["Herdr TUI<br/>control and client sockets"]
+  tui["Herdr TUI<br/>owns and persists its workspaces, tabs, panes<br/>control and client sockets"]
   core["herdr-core<br/>writes core.lock"]
   apps["Official Herdr apps and hc"]
   rex["Next runtime, e.g. Rex"]
@@ -55,13 +55,16 @@ flowchart TB
 
   tuiManager --> tuiConn
   tuiConn <-->|"status, output, input, size"| tui
+  tui -->|"structure: workspaces, tabs, panes"| tuiConn
+  tuiConn -->|"create, rename, close, reorder via Herdr RPC"| tui
+  tuiSide -->|"view layout and marks"| sqlite
   tuiConn -->|files| hostFiles
 
   coreManager --> coreHost
   coreHost --> coreOps
   coreHost --> coreWatch
   coreHost -->|files| hostFiles
-  coreOps -->|"rooms and layout"| sqlite
+  coreOps -->|"core rooms, plus view layout and marks"| sqlite
   coreOps -->|"fenced: connection, generation, occupant"| coreMirror
   coreWatch --> coreMirror
   coreMirror <--> coreTransport
@@ -85,10 +88,18 @@ Ownership:
   reported. Agent input uses core's own `terminal.send` and `terminal.keys`.
   Core decides the terminal size. A World observer never sizes a terminal. A
   key typed in World takes the size by core's own rule, as the official apps do.
-- **World owns rooms and layout in SQLite** (`core_topology`), never in a core
-  document or an app's layout. Seen and favourite are shared with the official
+- **Structure belongs to whoever can store it.** On the Herdr TUI, Herdr owns
+  and persists workspaces, tabs, panes, their names and order in its own
+  session. World reads them over Herdr RPC and writes changes through it
+  (`workspace.create`, `tab.rename`, `workspace.close`, `tab.move` and the
+  like), keeping no copy, so the two can't diverge. herdr-core has only
+  terminals and labels, so World owns core rooms in SQLite (`core_topology`),
+  never in a core document or an app's layout.
+- **World's view layout is in SQLite for both runtimes.** Town room spots
+  (Board's `room_pins`) and Board pins are Board tables
+  (`storage/world-board.ts`); Desk marks, watchlist and completion seen are in
+  `terminal_marks`. Seen and favourite on core are shared with the official
   apps as core labels (`herdr.seen`, `herdr.pinned`; `herdr-core/shared-state.ts`).
-  Desk marks, watchlist and completion seen stay in `terminal_marks`.
 - **Every operation is fenced** by immutable connection ID, runtime generation
   and occupant (`herdr-core/fence.ts`, `herdr-core/occupant.ts`), and the fence
   is rechecked before each dispatch. Nothing falls back to another connection
@@ -157,9 +168,11 @@ another provider beside the two above. It must not be a mode of either.
 - **Chat history.** How a terminal's harness session is found, so the shared
   session resolver can read its transcript.
 
-**What World supplies unchanged:** the views (Town, Desk and Board),
-rooms and layout in SQLite, the guarded file, upload and Git
-helpers, and Needs you.
+**What World supplies unchanged:** the views (Town, Desk and Board), their
+view layout and marks in SQLite, the guarded file, upload and Git helpers, and
+Needs you. A runtime that persists its own structure keeps it, as the Herdr TUI
+does. A runtime without its own layout gets World-owned rooms in SQLite, as
+core does.
 
 **Debt a third runtime would have to generalise.** These places are Herdr- or
 core-specific today. They are recorded here and not refactored yet:
