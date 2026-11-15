@@ -165,8 +165,12 @@ another provider beside the two above. It must not be a mode of either.
 - **Launches and placement.** Starting agents and shells, and where they appear.
 - **Host files.** Which host a connection's files and Git commands run on.
   World's guarded helpers do the work.
-- **Chat history.** How a terminal's harness session is found, so the shared
-  session resolver can read its transcript.
+- **Chat.** How a terminal's harness session is found, so the shared
+  session resolver can read its transcript, and how a message reaches the
+  program. Core does both in `herdr-core/agent-sessions.ts`: it answers the
+  shared agent-session handlers' few Herdr calls through core, so Chat,
+  History and Needs you answers are the same code for both runtimes. In the
+  browser, `web/src/coreRecipient.ts` adds the occupant a send is for.
 
 **What World supplies unchanged:** the views (Town, Desk and Board), their
 view layout and marks in SQLite, the guarded file, upload and Git helpers, and
@@ -191,10 +195,18 @@ core-specific today. They are recorded here and not refactored yet:
   core has its own Connections page cards (`components/CoreConnections.tsx`).
 - Core controls have their own RPC namespace (`world.core.*` in `rpc/core.ts`,
   `rpc/core-watch.ts`, `rpc/core-host.ts`) and their own files endpoint
-  (`service/core-files-http.ts`).
-- The windows are runtime-specific: the TUI terminal (`TerminalView.tsx`) beside
-  core's `CoreTerminalWatch`, `CoreChat`, `CoreFiles`, `CoreHistory`,
-  `CoreWorktrees` and `CoreKillConfirm` under `web/src/world/`.
+  (`service/core-files-http.ts`). The browser no longer uses
+  `world.core.history`, `screen`, `send` or `keys`; agent commands still do.
+- Most of the agent window is shared. Still runtime-specific under
+  `web/src/world/`: the Terminal tab (`TerminalView.tsx` for the TUI's attach,
+  `CoreTerminalWatch` for core's watch, with `CoreTerminalComposer` wrapping
+  the shared `TerminalComposer`); `CoreWorktrees`, a room dialog that Herdr
+  rooms have no World counterpart for (their worktrees live in the focused
+  app's `WorktreeLifecycleDialog`, tied to the focused connection);
+  `CoreKillConfirm`, a promise around the shared `ConfirmDialog` that adds the
+  list of terminals ending with the kill; and `CoreFavourite`, because only
+  core shares a favourite. Town's step lines and quest badges still skip
+  core agents' conversations (`useTownStepReads.ts`, `agentQuests.ts`).
 
 **Where Rex would map.** Superlogical's public pages, read 2026-11-15, describe
 Rex as a terminal multiplexer in public beta. They mention long-lived sessions

@@ -7,7 +7,7 @@
  * action too.
  */
 
-import { CORE_WATCH_TITLE, viewOnlyMessage } from "../viewOnly";
+import { viewOnlyMessage } from "../viewOnly";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AgentLatestMessage } from "../AgentHoverCard";
 import { agentStateWord } from "../agentMarks";
@@ -282,15 +282,11 @@ export function BoardPeek({
             <span>Files</span>
           </button>
         ) : null}
-        {leaf.watch ? (
-          <button type="button" title={CORE_WATCH_TITLE} onClick={onOpen}>
-            <span>Watch terminal</span>
-          </button>
-        ) : leaf.viewOnly ? (
+        {leaf.viewOnly && !leaf.watch ? (
           <button type="button" disabled title={leaf.viewOnly}>
             <span>{done ? "Follow up" : "Open"}</span>
           </button>
-        ) : canReply ? (
+        ) : canReply || leaf.watch ? (
           <button type="button" onClick={onOpen}>
             <span>{done ? "Follow up" : "Open"}</span>
           </button>

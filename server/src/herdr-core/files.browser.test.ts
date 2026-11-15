@@ -355,6 +355,12 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
       ] as const)
         for (const theme of ["light", "dark"] as const)
           for (const viewport of VIEWPORTS) {
+            // An empty Chat is mostly background on a large screen.
+            if (
+              stage === "chat" &&
+              !["phone", "laptop"].includes(viewport.name)
+            )
+              continue;
             run += 1;
             await resizeCapture(
               connection.command,

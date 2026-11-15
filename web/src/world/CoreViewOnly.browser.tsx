@@ -358,14 +358,21 @@ async function run() {
     Boolean(done?.querySelector('[aria-label="Mark scout\'s work reviewed"]')),
     "finished core work has the review ✕",
   );
-  // Its terminal opens in the Inspector from the peeks.
+  // Town's terminal button and Board's Open, the one a Herdr agent has,
+  // open the agent's window.
+  const boardOpen = [
+    ...document.querySelectorAll<HTMLButtonElement>(".board-peek button"),
+  ].find((button) => ["Open", "Follow up"].includes(button.textContent ?? ""));
   const watchButtons = [
     ...document.querySelectorAll<HTMLButtonElement>("button"),
   ].filter((button) => button.title === CORE_WATCH_TITLE);
   check(
-    watchButtons.length === 2 && watchButtons.every((b) => !b.disabled),
-    `Town and Board offer the watch: ${watchButtons.length}`,
+    watchButtons.length === 1 &&
+      boardOpen?.disabled === false &&
+      !boardOpen.title,
+    `Town offers the watch, Board the Herdr agent's Open: ${watchButtons.length}`,
   );
+  watchButtons.push(boardOpen!);
   const terminal = document.querySelector<HTMLButtonElement>(
     ".town-peek-terminal",
   );

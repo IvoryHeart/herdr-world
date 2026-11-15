@@ -2007,11 +2007,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   shown. A screen read keeps the connection generation, core process and
   occupant it started with; if the agent at that address is replaced before
   the reply arrives, the read is refused rather than shown as the new
-  occupant's screen. A core connection answers only World's own files,
-  Git and worktree requests; the page and the service both refuse a
-  Herdr-only request (quests, Herdr transcripts, pane reads, terminal input)
-  for it with "… is not available on a herdr-core connection", so Town's
-  step lines and quest badges simply skip core agents.
+  occupant's screen. A core connection answers World's own files, Git and
+  worktree requests, and Chat's conversation, history and input (below);
+  the page and the service both refuse any other Herdr-only request
+  (quests, raw pane reads, terminal input) for it with "… is not available
+  on a herdr-core connection", so Town's step lines and quest badges simply
+  skip core agents.
 - **Core agents in Town, Desk, Board and Needs you.** Agents running in a
   connected herdr-core, including ones started in Herdr's desktop app, sit at
   desks in Town, appear as Board cards, in Desk and, when waiting for you, in
@@ -2157,22 +2158,32 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     When World has more than one connection, Herdr or herdr-core, every push
     names the connection it came from.
   - **Chat and answers.** Open a core agent from Town, Board or Desk, its
-    peek or menu (tap its desk, **Open chat**), a phone's ⋯ switch list, or
-    **Needs you → Chat**: it opens in the same Inspector window as a Herdr
-    agent, with **Chat**, **Terminal**, **Files** and **Changes** tabs. **Open
-    chat** opens it on **Chat**; a desk tap follows the Agents open setting.
-    **Watch terminal** in Chat switches to the **Terminal** tab. The window
-    moves by its title bar, resizes, docks, minimizes and switches like a
-    Herdr agent's. Type a message and **Send**; a waiting agent has
-    **Answer**, its own status message, **Read question screen**, and answer
-    keys. Core's send/keys handle every supported harness identically. History
-    is unavailable here; the question screen is explicitly terminal text.
-    World checks the original core, terminal, program and foreground before
-    every send. Missing evidence or a replacement shell refuses it with a
-    reason. A timeout or lost reply says **Uncertain** and never retries.
-    Core may hold input for a person's draft or quiet period; World requests
-    cancellation if the occupant changes, but a replacement between the check
-    and core's actual typing remains core's window to close (Q3).
+    peek or menu (tap its desk, **Open chat**; Board's peek has **Open**), a
+    phone's ⋯ switch list, or **Needs you → Chat**: it opens in the same
+    Inspector window as a Herdr agent, with **Chat**, **Terminal**, **Files**
+    and **Changes** tabs. **Open chat** opens it on **Chat**; a desk tap
+    follows the Agents open setting. The window moves by its title bar,
+    resizes, docks, minimizes and switches like a Herdr agent's. Chat is
+    Herdr's Chat: the transcript, **Details**, question cards with their
+    answer buttons, the composer with attachments and its ⋮ keys, and
+    **Open Terminal**, which switches to the **Terminal** tab. World finds
+    the conversation from the agent's own session record or its launch
+    command, so agents started before World was connected read too. When it
+    finds none, Chat says so ("World has not found where this agent saves
+    its conversation yet…") and still takes messages; it never offers
+    Herdr's integration install for a core agent. Differences core forces:
+    **Stop** is shown but off ("herdr-core takes keys only while the agent
+    asks you something. Interrupt this turn from the Terminal tab."), and
+    the trust question is answered in the Terminal tab. Messages, answers
+    and keys go through core's own send and keys for every harness. World
+    checks the original core, terminal, program and foreground before every
+    send. Missing evidence or a replacement shell refuses it with a reason
+    ("Reopen this agent's Chat; nothing was sent."). A timeout or lost reply
+    says **Uncertain** and never retries; a message to a harness whose
+    conversation Chat cannot read is marked unverified. Core may hold input
+    for a person's draft or quiet period; World requests cancellation if
+    the occupant changes, but a replacement between the check and core's
+    actual typing remains core's window to close (Q3).
   - **Saved ask answers.** A local Linux core agent using `herdr-world ask`
     can receive the saved answer through the same core send. Its CLI claim
     needs verified process ancestry, with the original foreground binding;
