@@ -891,6 +891,7 @@ export function DeskBoard({
           world={aggregate ?? world}
           filtered={world}
           label={hostLabel}
+          pinned={pinned}
           onReveal={
             onReveal
               ? async (leaf) => {

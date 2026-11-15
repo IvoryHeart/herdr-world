@@ -92,7 +92,7 @@ export function townDragFor(
   const deskKey =
     hit.kind === "desk" ? hit.key : hit.kind === "pane" ? hit.deskKey : null;
   const desk = deskKey ? model.desks.get(deskKey) : undefined;
-  // A pinned desk stays where it is until it is unpinned.
+  // A pinned desk keeps its first seat until it is unpinned.
   if (!desk || !desk.canOpenInSpaces || model.deskPins.has(desk.key))
     return null;
   return {

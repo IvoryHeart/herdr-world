@@ -47,6 +47,11 @@ checks. Current spec synchronization and archive remain after acceptance.
     carries `herdr.pinned`, World's pin writes it (agents first, then
     terminals; unpin clears all), the favourite star is gone, pinned agents
     lead the phone switch list and Desk's quiet agents.
+  - [x] Issue #923: pinned goes first: pinned desks take a room's first
+    seats in tab order on one shared rug (a quiet pin on the desk's
+    front-left corner), pinned cards sit first above their workspace on
+    Board under one band, and pinned agents lead the agent pickers too;
+    World saves no place for a pin.
 - [x] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
   - [x] Issue #869: core-first launches from World (absolute executable, no
     caller/parent/notes, explicit keep; agents placed with a `where` caption,

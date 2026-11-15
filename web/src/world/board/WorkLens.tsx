@@ -5,7 +5,9 @@ import type { WorldSourceStatus } from "../../../../shared/worldSources";
 import { useLayer } from "../../layerStack";
 import { workBadgeText } from "../../../../shared/worldSources";
 import { WORLD_SOURCES_SETTINGS_EVENT } from "../../workspaceResource";
+import { leafPinnedBy, useDeskPins } from "../useDeskPins";
 import type { WorldObject } from "../worldObject";
+import type { BoardDocumentStore } from "./boardDocument";
 import { useWorldSources } from "../worldSources";
 import { actionablePullRequest } from "../../../../shared/pullRequests";
 import { PullRequestCard } from "../PullRequestCard";
@@ -42,8 +44,11 @@ export function WorkLens({
   anchor,
   onSelectAgent,
   onClose,
+  store,
 }: {
   world: WorldObject;
+  /** Board's document store, for the desk pins that order a card's agents. */
+  store?: BoardDocumentStore;
   /** The control that toggles the lens; pressing it is not outside. */
   anchor?: () => Element | null;
   onSelectAgent(id: string): void;
@@ -58,9 +63,17 @@ export function WorkLens({
   const [group, setGroup] = useState<WorkLensGroup>("pull_requests");
   // History days the user opened or closed; the newest day starts open.
   const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
+  const deskPins = useDeskPins(store);
   const columns = useMemo(
-    () => workLensColumns(snapshot, world, group),
-    [snapshot, world, group],
+    () =>
+      workLensColumns(
+        snapshot,
+        world,
+        group,
+        undefined,
+        leafPinnedBy(deskPins, world.spaces),
+      ),
+    [snapshot, world, group, deskPins],
   );
   const attention = usePullRequestAttention(
     columns.flatMap((column) =>

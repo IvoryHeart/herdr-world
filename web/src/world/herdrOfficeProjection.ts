@@ -76,7 +76,8 @@ export type OfficePresentationBounds = {
 export const TOWN_DESK_EXPANSION_STEP = 20;
 
 /**
- * Town rooms reveal a native-order prefix, expanding by 20 desks per action.
+ * Town rooms reveal a prefix of their seat order (pinned desks first, then
+ * native tab order), expanding by 20 desks per action.
  * Layout grows for every admitted desk; other bounds match Office.
  */
 export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
@@ -161,8 +162,8 @@ export function createOfficeProjector(
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
-    // Cache fold targets and Office pin priorities. Town admission itself
-    // remains a native-order prefix regardless of activity or selection.
+    // Cache fold targets and pin priorities. Town admission is a prefix of
+    // its seat order (pinned first) regardless of activity or selection.
     const sameAdmission =
       preferredRoomKey === previousPreferredRoom &&
       pinnedTabs === previousPinned &&
@@ -326,8 +327,8 @@ const NO_DESK_LIMITS: ReadonlyMap<string, number> = new Map();
 
 /**
  * `pinnedTabs` holds the tab card keys of Town's pinned desks (useDeskPins.ts):
- * Office reserves bounded capacity for them. Town instead keeps a contiguous
- * prefix; its pin cells apply only while those tabs are admitted.
+ * Office reserves bounded capacity for them. Town admits a prefix of its seat
+ * order, pinned desks first, so a pinned tab is never folded behind others.
  */
 export function projectWorldOffice(
   world: WorldObject,

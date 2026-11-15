@@ -5,7 +5,7 @@ import {
   type WorkItem,
   type WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
-import type { WorldObject } from "../worldObject";
+import type { WorldLeafObject, WorldObject } from "../worldObject";
 import { linkMatchesPane, paneKey } from "../workLinks";
 
 /**
@@ -86,7 +86,10 @@ export function workLensColumns(
   world: WorldObject,
   group: WorkLensGroup,
   now = Date.now(),
+  /** Whether an agent is pinned: a card lists its pinned agents first. */
+  pinned: (leaf: WorldLeafObject) => boolean = () => false,
 ): WorkLensColumn[] {
+  const pinnedIds = new Set<string>();
   const leaves = new Map(
     world.leaves.map((leaf) => [
       paneKey(leaf.connectionId, leaf.nativeId),
@@ -99,14 +102,22 @@ export function workLensColumns(
     // A restarted runtime or a new agent can reuse the pane ID.
     if (!leaf || !linkMatchesPane(link, leaf)) continue;
     const list = agentsByItem.get(link.itemKey) ?? [];
-    if (!list.some((agent) => agent.id === leaf.id))
+    if (!list.some((agent) => agent.id === leaf.id)) {
+      if (pinned(leaf)) pinnedIds.add(leaf.id);
       list.push({
         id: leaf.id,
         label: leaf.agentName ?? leaf.agentLabel ?? leaf.tabLabel ?? leaf.label,
         idle: leaf.status === "idle" || leaf.status === "done",
       });
+    }
     agentsByItem.set(link.itemKey, list);
   }
+  // A card's agents have no order of their own: pinned ones first.
+  if (pinnedIds.size)
+    for (const list of agentsByItem.values())
+      list.sort(
+        (a, b) => Number(pinnedIds.has(b.id)) - Number(pinnedIds.has(a.id)),
+      );
   const lanes: readonly WorkItem["lane"][] =
     group === "pull_requests" ? PULL_REQUEST_LANES : TICKET_LANES;
   const wanted = (item: WorkItem) =>

@@ -490,8 +490,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tabs open: wide screens show three columns of rooms up to eight tables
     wide, portrait and half-width screens two columns up to six, and phones
     one column up to four, growing downward. A folded room normally shows up to
-    24 tables: the first tabs in the same order as Spaces, without promoting
-    later working, pinned or recent tabs into that prefix. The bottom-right
+    24 tables: pinned desks first, then the first tabs in the same order as
+    Spaces, without promoting later working or recent tabs into that prefix. The bottom-right
     **» +N** tile sits beside the dashed **+** seat and counts hidden tables.
     Each click appends the next 20 tables until all are shown; **Fold** is
     available after the first expansion and returns to the first 24 in one click.
@@ -520,14 +520,21 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     to leave its group; a spawn link stays, since Herdr's stamp records it.
     **M** on a focused table offers the same as **Group with…** and **Leave
     the team**, and the table's accessible name lists its teammates. A
-    pinned table joins a team only in its own room, and keeps its place.
+    pinned table joins a team only in its own room, and keeps its first seat.
   - **Pin a desk** from the first item in its mobile agent window's **⋯** menu
-    (**Pin desk in Town**), or from the desktop window’s **⋯** menu. A
-    pinned table wears a pin and keeps its place: tab reorders, a room growing
-    or Town's own placement leave it, and it cannot be dragged until you unpin
-    it (other tables fill the free places in tab order). A saved pin applies
-    only while its tab is in the room's visible native-order prefix. A pinned
-    desk beyond the fold stays hidden until you expand to reveal it. Its agents stay at it:
+    (**Pin desk in Town**), or from the desktop window’s **⋯** menu. Pinned
+    goes first, as in Herdr's apps: a room's pinned desks take its first
+    seats, in tab order among themselves, and the other tables follow in tab
+    order; unpinning returns a desk to its tab-order seat. A pinned desk
+    cannot be dragged until you unpin it, and a folded room always shows its
+    pinned desks. The room's pinned seats share one floor rug, a pale woven
+    carpet with fringed ends drawn under them as one piece, so the group
+    reads at a glance (a room with no pins has none); like the floor, it
+    shows wherever the room's interior does. Each pinned desk also carries a
+    small quiet pin on its front-left corner, a corner the goal pennant,
+    status marks and name never use; neither the pin nor the rug wears an
+    attention colour. A desk holds a tab, so a desk with several agents is
+    pinned while any of them is. Its agents stay at it:
     they never go to the bar, leave only to wait at reception (blocked, or
     finished and not yet seen) and walk straight back once you have seen them.
     The pin is a World view setting, saved on the World service beside
@@ -835,11 +842,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
     its terminal. Without a conversation yet, an agent starts on Terminal and
     switches to Chat when its session arrives unless you choose another view.
-  - **Pin** in a selected card's bar keeps the card where it is: it shows a
-    pin, and placement, Tidy and settling leave it until **Unpin** (a drag
-    still moves it). On a phone, where the card's terminal covers Board, the
-    pin in the terminal's header pins its card. Pins are saved with the board
-    on the World service.
+  - **Pin** in a selected card's bar puts the card first: a workspace's
+    pinned tab cards sit directly above it, in tab order, in rows of up to
+    three, on one tinted band, and follow it when it moves. Tidy and
+    placement keep them there and clear other cards off the band; a pinned
+    card dragged away glides back. **Unpin** returns the card to free space
+    beside its workspace. A pinned workspace card keeps its place on the
+    board. Bands hide in the zoomed-out overview. On a phone, where the
+    card's terminal covers Board, the pin in the terminal's header pins its
+    card. Pins are saved with the board on the World service.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
   - An agent with a quest shows a ⚑ chip with its progress (such as 2/5, or
@@ -2146,18 +2157,19 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     (**Pin** in its Town or Board peek, **Pin desk in Town** or **Pin card on
     Board** in its window's menu or a phone terminal's header, Board's card
     **Pin**) and the apps pin it; pin or unpin it in an app and, within
-    seconds, its Town desk and Board card wear World's pin or lose it. Where a
-    pinned desk or card stands is still World's: Town gives an app-pinned
-    desk its cell where it stands, Board pins the card where it is, and an
-    unpin forgets the place, so a later pin starts where the desk or card is
-    then. A desk holds a tab, so it is pinned while any of its terminals is
+    seconds, its Town desk and Board card wear World's pin or lose it, and
+    go first or return to tab order. A desk holds a tab, so it is pinned
+    while any of its terminals is
     pinned: World's pin pins the tab's agents (its terminals, when it has no
     agent), and its unpin clears every terminal's pin in the tab. Pinned
     agents come first where World lists agents in no order of its own: a
     phone's ⋯ switch list within the same need (Needs you first, then
-    finished ones, then the rest) and Desk's quiet agents. Lists with their
-    own order (Desk's lanes by time, its Agents directory by recent activity)
-    keep it. The pin is quiet
+    finished ones, then the rest), Desk's quiet agents and its other hosts'
+    agents, the Town master picker in Sounds, a group's member choices and
+    a Work lens card's agents. Lists with their own order (Desk's lanes by
+    time, its Agents directory by recent activity, the desktop window
+    switcher by open windows, search by match, the @-mention picker by
+    workspace) keep it. The pin is quiet
     (no colour), so it never competes with Needs you. A host that is offline
     or reconnecting shows its last pins and refuses changes ("This agent's
     host is reconnecting: its pin can change once World sees it again"); a
