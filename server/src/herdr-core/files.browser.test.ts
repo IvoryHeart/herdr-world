@@ -22,6 +22,7 @@ import {
   removeCoreWorktree,
 } from "../herdr-core/worktrees";
 import { localAgentSessionFiles } from "../agent/session-file-access";
+import { fixtures } from "../agent/testing/conversation-fixtures";
 import { callCoreHost } from "../rpc/core-host";
 import { handleCoreSharedRpc } from "../rpc/core-shared";
 import { runProcessWithCodeTimeout } from "../utils/process-utils";
@@ -129,6 +130,19 @@ async function coreSide(root: string) {
   // it is working on the next.
   world.fake.report(agent, { state: "done", app: "claude-code" });
   world.fake.report(agent, { state: "working", app: "claude-code" });
+  // A second Claude whose conversation World can read: opening it follows
+  // the Agents-open setting (Chat), as a Herdr agent's does.
+  const transcript = await fixtures
+    .find((fixture) => fixture.agent === "claude")!
+    .write(root);
+  const readerArgv = ["/usr/bin/claude", "--resume", transcript];
+  world.fake.create({
+    name: "reader",
+    argv: readerArgv,
+    cwd: main,
+    keep: true,
+    foreground: { pid: 2, name: "claude", argv: readerArgv, cwd: main },
+  });
   await world.settle();
   const lease = world.lease("box");
   const settings = defaultGuiSettings();
@@ -382,12 +396,13 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
         "terminal",
         "dialog",
         "remove",
+        "open-chat",
       ] as const)
         for (const theme of ["light", "dark"] as const)
           for (const viewport of VIEWPORTS) {
             // An empty Chat is mostly background on a large screen.
             if (
-              stage === "chat" &&
+              (stage === "chat" || stage === "open-chat") &&
               !["phone", "laptop"].includes(viewport.name)
             )
               continue;
@@ -423,7 +438,7 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
                 selector:
                   stage === "files"
                     ? ".workspace-inspector-file-detail"
-                    : stage === "chat"
+                    : stage === "chat" || stage === "open-chat"
                       ? ".agent-chat > *"
                       : stage === "terminal"
                         ? ".core-watch"

@@ -21,9 +21,17 @@ import {
 } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
 import { projectAgent } from "./officeAgent";
-import { worldIntentViews, worldNodeOpenView } from "./worldInspectorSelection";
+import {
+  worldInspectorContext,
+  worldIntentViews,
+  worldNodeOpenView,
+} from "./worldInspectorSelection";
 import { CORE_APP_SPACE_REASON } from "./coreRooms";
 import { worldSwitchTargets } from "./worldSwitchTargets";
+import {
+  chatOpeningPane,
+  worldInspectorForNode,
+} from "./worldTerminalPresentation";
 
 /**
  * Core agents through World's real read path into the objects Town, Desk,
@@ -140,6 +148,10 @@ function manager<Runtime>(id: string, runtime: Runtime) {
 }
 
 async function worldOf(coreStale = false, records = coreTerminals) {
+  return buildWorldObject(await connectionsOf(coreStale, records));
+}
+
+async function connectionsOf(coreStale = false, records = coreTerminals) {
   const mirror = new CoreMirror();
   const sight = new CoreFirstSight();
   mirror.baseline(1, records);
@@ -184,13 +196,11 @@ async function worldOf(coreStale = false, records = coreTerminals) {
     async () => {},
   );
   await store.refresh();
-  return buildWorldObject(
-    store
-      .get()
-      .connections.map((c) =>
-        coreStale && c.connectionId === "box-core" ? { ...c, stale: true } : c,
-      ),
-  );
+  return store
+    .get()
+    .connections.map((c) =>
+      coreStale && c.connectionId === "box-core" ? { ...c, stale: true } : c,
+    );
 }
 
 const byName = (leaves: readonly WorldLeafObject[]) =>
@@ -369,8 +379,9 @@ describe("core agents in World's views", () => {
     // Terminal tab (core's watch, in the same window).
     expect(worldNodeOpenView(agent, "chat")).toBe("history");
     expect(worldNodeOpenView(agent, "terminal")).toBe("terminal");
-    // A plain core terminal has no Chat.
+    // A plain core terminal has no Chat, and opens on its Terminal.
     expect(worldIntentViews(plain)).toEqual(["terminal", "files", "changes"]);
+    expect(worldNodeOpenView(plain, "chat")).toBe("terminal");
     // A stale core connection's agent opens nothing.
     const stale = await worldOf(true);
     const gone = stale.leaves.find(
@@ -386,6 +397,64 @@ describe("core agents in World's views", () => {
     expect(
       projectAgent(asAgent(gone), "room", "host", new Map()).coreChat,
     ).toBe(undefined);
+  });
+
+  test("a core agent opened on Chat finds its pane while it waits to read the conversation", async () => {
+    // Opening on Chat waits on Terminal until the conversation reads; the
+    // wait watches the agent's pane. A core agent has no Herdr session, so
+    // the pane must come from World's core observation (it was always
+    // missing, and core agents stayed on Terminal).
+    const connections = await connectionsOf();
+    const agent = buildWorldObject(connections).leaves.find(
+      (l) => l.connectionId === "box-core" && l.kind === "agent",
+    )!;
+    const opening = worldInspectorForNode(
+      agent,
+      worldNodeOpenView(agent, "chat")!,
+      worldIntentViews(agent),
+      worldInspectorContext(agent)!,
+      { dock: "right", expanded: false, size: 520 },
+    )!;
+    expect(opening).toMatchObject({ view: "terminal", awaitChatSession: true });
+    expect(chatOpeningPane(opening, [], connections)).toMatchObject({
+      pane_id: agent.nativeId,
+      runtime: "herdr-core",
+    });
+    // Never from a stale observation or another generation of the core.
+    const stale = await connectionsOf(true);
+    expect(chatOpeningPane(opening, [], stale)).toBeUndefined();
+    expect(
+      chatOpeningPane(
+        { ...opening, runtimeGeneration: opening.runtimeGeneration + 1 },
+        [],
+        connections,
+      ),
+    ).toBeUndefined();
+    // A core connection never falls back to Herdr panes of the same id.
+    expect(
+      chatOpeningPane(
+        opening,
+        [agent.pane],
+        stale.filter((c) => c.connectionId !== "tui"),
+      ),
+    ).toBeUndefined();
+    // A Herdr agent still reads its Herdr session (its host is stale here,
+    // so the window is built by hand).
+    const tui = buildWorldObject(connections).leaves.find(
+      (l) => l.connectionId === "tui" && l.kind === "agent",
+    )!;
+    const tuiOpening = {
+      ...opening,
+      connectionId: tui.connectionId,
+      runtimeGeneration: tui.generation,
+      workspaceId: tui.workspaceId,
+      tabId: tui.tabId,
+      paneId: tui.nativeId,
+      terminalId: tui.terminalId,
+      context: { ...opening.context, agent: tui.pane.agent },
+    };
+    expect(chatOpeningPane(tuiOpening, [tui.pane], connections)).toBe(tui.pane);
+    expect(chatOpeningPane(tuiOpening, [], connections)).toBeUndefined();
   });
 
   test("a phone's switch list reaches live core agents and terminals", async () => {
