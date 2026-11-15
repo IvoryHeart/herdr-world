@@ -12,11 +12,7 @@ import { WorldDeskStore } from "./deskStateStore";
 import { projectAgent } from "./officeAgent";
 import { worldRuntimeStore } from "./runtimeStore";
 import { TownPeek } from "./town/TownPeek";
-import {
-  placeDeskPin,
-  useCoreDeskPinPositions,
-  useDeskPins,
-} from "./useDeskPins";
+import { useDeskPins } from "./useDeskPins";
 import { buildWorldObject, type WorldLeafObject } from "./worldObject";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -121,21 +117,15 @@ const boardStore = {
     for (const op of ops)
       if (op.op === "desk.pin") pins[op.key] = { cell: op.cell };
       else if (op.op === "desk.unpin") delete pins[op.key];
-      else if (op.op === "desk.place" && pins[op.key]?.cell === null)
-        pins[op.key] = { cell: op.cell };
     saved.desk_pins = pins;
     for (const listener of boardListeners) listener();
     return null;
   },
 } as unknown as BoardDocumentStore;
 let townPins: Readonly<Record<string, DeskPin>> = {};
-/** Town reads its desk pins alone; World's root keeps core cells current. */
+/** Town reads its desk pins alone: a core desk's pin is its label. */
 function TownDeskPins() {
   townPins = useDeskPins(boardStore);
-  return null;
-}
-function WorldRoot() {
-  useCoreDeskPinPositions(boardStore);
   return null;
 }
 const coreDesk = () =>
@@ -157,8 +147,9 @@ async function run() {
   const root = createRoot(
     document.body.appendChild(document.createElement("div")),
   );
-  for (const probe of [<WorldRoot key="root" />, <TownDeskPins key="town" />])
-    flushSync(() => createRoot(document.createElement("div")).render(probe));
+  flushSync(() =>
+    createRoot(document.createElement("div")).render(<TownDeskPins />),
+  );
   const show = (leaf: (WorldLeafObject & { kind: "agent" }) | null) => {
     const space = leaf ? (leaf.parentId as string) : "";
     flushSync(() =>
@@ -287,13 +278,13 @@ async function run() {
     `one pin write: ${JSON.stringify(pinWrites())}`,
   );
 
-  // Town's desk wears the pin, and keeps the cell Town gives it.
+  // Town's desk wears the pin (it goes first in its room); World saves
+  // nothing of its own for it.
   check(coreDesk().length === 1, `Town's desk is pinned: ${coreDesk()}`);
   const desk = coreDesk()[0]!;
-  await placeDeskPin(desk, { col: 2, row: 1 }, boardStore);
   check(
-    townPins[desk]?.cell?.col === 2 && saved.desk_pins[desk]?.cell?.col === 2,
-    `the pinned desk keeps its cell: ${JSON.stringify(saved)}`,
+    !saved.desk_pins[desk],
+    `World saves no desk pin for a core desk: ${JSON.stringify(saved)}`,
   );
 
   // 6. Unpin from Board's peek clears it for every client; a pin made in the
@@ -313,7 +304,7 @@ async function run() {
   await sleep(50);
   check(
     coreDesk().length === 0 && !saved.desk_pins[desk],
-    `Town's desk is unpinned and its cell forgotten: ${JSON.stringify(saved)}`,
+    `Town's desk is unpinned: ${JSON.stringify(saved)}`,
   );
   await post("/app", { action: "pin" });
   leaf = await scout((l) => l.pane.favourite === true, "pinned in the app");

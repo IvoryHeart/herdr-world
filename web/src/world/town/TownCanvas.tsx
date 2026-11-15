@@ -68,7 +68,7 @@ import type { TownTarget } from "./townTargets";
 import type { TerminalColors } from "../terminalColor";
 import type { Relation } from "../../../../shared/relations";
 import type { TerminalPlace } from "../relations";
-import { placeDeskPin, type DeskPins } from "../useDeskPins";
+import type { DeskPins } from "../useDeskPins";
 import { useWorldSources } from "../worldSources";
 import {
   NO_FOLDED_ACTIVITY,
@@ -276,8 +276,7 @@ export function TownCanvas({
   useLayoutEffect(() => {
     captureHolding.current = semantics.holding;
   });
-  const { model, placed, layout, teams, targets, deskBadges, blockedSince } =
-    semantics;
+  const { model, layout, teams, targets, deskBadges, blockedSince } = semantics;
   const townBin = useTownBin(model, layout);
   const awayKeys = townBin.away;
   const arrivals = useTownArrivals(model, layout, townBin.route);
@@ -289,8 +288,6 @@ export function TownCanvas({
       welcoming.size ? new Set([...summonedKeys, ...welcoming]) : summonedKeys,
     [summonedKeys, welcoming],
   );
-  // A desk just pinned keeps the cell it has; save it so it stays there.
-  const deskPinned = model.deskPins;
   const fallbackSummary = useMemo(
     () =>
       givenSummary
@@ -303,14 +300,6 @@ export function TownCanvas({
     [givenSummary, projection, observability],
   );
   const summary = givenSummary ?? fallbackSummary!;
-  useEffect(() => {
-    for (const { pinKey, cell } of scene.pinPlacements(
-      deskPinned,
-      layout,
-      placed,
-    ))
-      void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
-  }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
   const ring = useTownCenterRing(
     rendererRef,

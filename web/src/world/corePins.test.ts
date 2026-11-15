@@ -12,12 +12,11 @@ import {
   corePinWrites,
   coreTabPinOf,
   setCoreTabPinned,
-  unpinnedCorePositions,
   withCorePins,
   type CorePins,
 } from "./corePins";
 import type { WorldRuntimeConnection } from "./runtimeStore";
-import { placeDeskPin, setDeskPinned } from "./useDeskPins";
+import { setDeskPinned } from "./useDeskPins";
 
 // Synthetic hosts and terminals only.
 const pane = (
@@ -96,7 +95,7 @@ describe("one pin for herdr-core agents", () => {
     });
   });
 
-  test("Town shows a core desk pinned exactly when its label is, at its saved cell", () => {
+  test("Town shows a core desk pinned exactly when its label is", () => {
     const pins = corePinsOf([
       core([
         pane("t1", "a1", { favourite: true }),
@@ -120,20 +119,6 @@ describe("one pin for herdr-core agents", () => {
       "box-core:t3": { cell: null },
     };
     expect(withCorePins(settled, pins)).toBe(settled);
-  });
-
-  test("a saved position goes once a live core shows it unpinned, never from a stale one", () => {
-    const keys = ["box-core:t1", "box-core:t2", "tui:t1", "box-core:gone"];
-    const live = corePinsOf([
-      core([pane("t1", "a1", { favourite: true }), pane("t2", "a2")]),
-    ]);
-    expect(unpinnedCorePositions(keys, live)).toEqual(["box-core:t2"]);
-    const stale = corePinsOf([
-      core([pane("t1", "a1"), pane("t2", "a2")], {
-        state: "reconnecting" as never,
-      }),
-    ]);
-    expect(unpinnedCorePositions(keys, stale)).toEqual([]);
   });
 
   test("Board pins and unpins core cards to match their labels, only cards it placed on live cores", () => {
@@ -259,7 +244,7 @@ describe("one pin for herdr-core agents", () => {
 // The rule has no ordering of its own: every view is a pure function of one
 // runtime observation and World's saved positions, so checking every
 // combination is exhaustive (openspec/changes/herdr-core-runtime/model.md).
-test("every observation: shown pin is the label, positions go only on a live unpin, stale never writes", async () => {
+test("every observation: shown pin is the label, stale never writes", async () => {
   const cells = [undefined, null, { col: 1, row: 1 }] as const;
   for (const live of [true, false])
     for (const labels of [
@@ -285,9 +270,6 @@ test("every observation: shown pin is the label, positions go only on a live unp
         const shown = withCorePins(saved, pins)["box-core:t1"];
         expect(Boolean(shown), what).toBe(pinned);
         if (shown) expect(shown.cell ?? null, what).toEqual(cell ?? null);
-        expect(unpinnedCorePositions(Object.keys(saved), pins), what).toEqual(
-          live && !pinned && cell !== undefined ? ["box-core:t1"] : [],
-        );
         for (const want of [true, false]) {
           const sent: unknown[] = [];
           await setCoreTabPinned(
@@ -342,26 +324,5 @@ describe("World's desk pin for a core tab is its label", () => {
     expect(patches).toEqual([]);
     await setDeskPinned(target("tui"), true, store, stale);
     expect(patches).toEqual([[{ op: "desk.pin", key: "tui:t1", cell: null }]]);
-  });
-
-  test("Town saves the cell of a desk an app pinned; a saved pin is only filled", async () => {
-    const pins = corePinsOf([core([pane("t1", "a1", { favourite: true })])]);
-    const cell = { col: 1, row: 2 };
-    const fresh = boardStore({});
-    await placeDeskPin("box-core:t1", cell, fresh.store, pins);
-    expect(fresh.patches).toEqual([
-      [{ op: "desk.pin", key: "box-core:t1", cell }],
-    ]);
-    const saved = boardStore({ "box-core:t1": { cell: null } });
-    await placeDeskPin("box-core:t1", cell, saved.store, pins);
-    expect(saved.patches).toEqual([
-      [{ op: "desk.place", key: "box-core:t1", cell }],
-    ]);
-    // A Herdr desk unpinned meanwhile is never pinned again by placing it.
-    const herdr = boardStore({});
-    await placeDeskPin("tui:t1", cell, herdr.store, pins);
-    expect(herdr.patches).toEqual([
-      [{ op: "desk.place", key: "tui:t1", cell }],
-    ]);
   });
 });

@@ -130,10 +130,12 @@ the queued-send replacement window belongs to core (Q3), not World's pre-send ch
 
 ### Requirement: Shared app state with independent World ownership
 
-World SHALL own topology, asks/results, review receipts and where a pinned desk
-or card stands; it SHALL share app placement at launch, seen and the pin under
-M1–M11. A core tab's desk and card SHALL be pinned exactly while one of its
-terminals carries `herdr.pinned`; Herdr (TUI) tabs keep World's own pin. World SHALL read
+World SHALL own topology, asks/results and review receipts; it SHALL share
+app placement at launch, seen and the pin under M1–M11. A core tab's desk and
+card SHALL be pinned exactly while one of its terminals carries
+`herdr.pinned`; Herdr (TUI) tabs keep World's own pin. Pinned SHALL mean
+pinned goes first, as in Herdr's apps: World derives a pinned desk's or
+card's place from the pin and tab order and saves none. World SHALL read
 agent status from core and SHALL NOT write it, including for integrations World
 installed. Native destructive actions SHALL confirm all dying descendants.
 
@@ -157,9 +159,11 @@ installed. Native destructive actions SHALL confirm all dying descendants.
 - **THEN** `herdr.pinned` changes and every client shows it: World's pin pins
   the tab's agents (its terminals when it has none) and its unpin clears every
   terminal in the tab; the desk and card wear World's pin while any terminal
-  is pinned, World keeps only where they stand and forgets it on an unpin it
-  observes live; pinned agents come first in lists with no order of their
-  own (a phone's switch list, Desk's quiet agents); a stale host shows its
+  is pinned; pinned goes first: a room's pinned desks take its first seats in
+  tab order on one shared rug, a workspace's pinned cards sit first, above it
+  in tab order on one band, unpinning returns tab order, and pinned agents
+  come first in lists with no order of their own (a phone's switch list,
+  Desk's quiet agents, agent pickers); a stale host shows its
   last pins and refuses changes; review
   receipts stay World-only; a core agent that finishes after working or
   starts needing World's owner pushes from core status events under Herdr's

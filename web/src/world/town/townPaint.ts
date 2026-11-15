@@ -17,6 +17,7 @@ import {
   townDeskSlots,
   townDeskTable,
   type TownBuilding,
+  type TownCell,
   type TownLayout,
 } from "./townLayout";
 import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
@@ -309,7 +310,95 @@ export type TownFurniture = {
   colorFor: (deskKey: string) => string;
   /** A room's carpet when its workspace has a chosen colour. */
   carpetFor?: (roomKey: string) => string | undefined;
+  /** Pinned desks: they take their room's first seats, on one shared rug. */
+  pinned?: (deskKey: string) => boolean;
 };
+
+/** The pinned seats' rug: a light floor cue, never an attention colour. */
+export const TOWN_PIN_RUG = { fill: "#e7dcc0", edge: "#8f7a5a" } as const;
+
+/**
+ * One rug under a room's pinned desks. Pinned desks take the first seats, so
+ * their cells run on from the room's first: each cell's square meets its
+ * pinned neighbours', and the rug's border runs only along the outside, so
+ * a pinned row that wraps stays one rug. A room without pins has none.
+ */
+function paintPinnedRug(
+  g: CanvasRenderingContext2D,
+  building: TownBuilding,
+  room: TownBuilding["rooms"][number],
+  pinned: (deskKey: string) => boolean,
+) {
+  const cells = room.cells.filter(
+    (cell) => cell.deskKey !== null && pinned(cell.deskKey),
+  );
+  if (!cells.length) return;
+  const at = new Set(cells.map((cell) => `${cell.col},${cell.row}`));
+  const has = (col: number, row: number) => at.has(`${col},${row}`);
+  // A cell is its aisle column and its table: the square is centred on the
+  // table, from half the aisle to half the next aisle, above the top chairs.
+  const square = (cell: TownCell) => ({
+    x: (cell.x - building.x) * T + 8,
+    y: (cell.y - building.y) * T - 6,
+    s: 5 * T,
+  });
+  g.fillStyle = "rgba(0,0,0,.18)";
+  for (const cell of cells) {
+    const { x, y, s } = square(cell);
+    g.fillRect(x + 1, y + 2, s, s);
+  }
+  g.fillStyle = TOWN_PIN_RUG.edge;
+  for (const cell of cells) {
+    const { x, y, s } = square(cell);
+    g.fillRect(x, y, s, s);
+  }
+  const inner = (cell: TownCell, by: number) => {
+    const { x, y, s } = square(cell);
+    const left = has(cell.col - 1, cell.row) ? 0 : by;
+    const right = has(cell.col + 1, cell.row) ? 0 : by;
+    const top = has(cell.col, cell.row - 1) ? 0 : by;
+    const bottom = has(cell.col, cell.row + 1) ? 0 : by;
+    return [x + left, y + top, s - left - right, s - top - bottom] as const;
+  };
+  g.fillStyle = TOWN_PIN_RUG.fill;
+  for (const cell of cells) g.fillRect(...inner(cell, 2));
+  // A stitched line inside the border, so it reads as a rug at any zoom.
+  g.fillStyle = townShade(TOWN_PIN_RUG.fill, -0.16);
+  for (const cell of cells) g.fillRect(...inner(cell, 5));
+  g.fillStyle = TOWN_PIN_RUG.fill;
+  for (const cell of cells) g.fillRect(...inner(cell, 6));
+  // Where a wrapped row turns, close the border and stitch at the corner.
+  for (const cell of cells) {
+    const { x, y, s } = square(cell);
+    for (const dx of [-1, 1])
+      for (const dy of [-1, 1]) {
+        if (
+          !has(cell.col + dx, cell.row) ||
+          !has(cell.col, cell.row + dy) ||
+          has(cell.col + dx, cell.row + dy)
+        )
+          continue;
+        const ex = dx > 0 ? x + s - 2 : x;
+        const ey = dy > 0 ? y + s - 2 : y;
+        const sx = dx > 0 ? x + s - 6 : x + 5;
+        const sy = dy > 0 ? y + s - 6 : y + 5;
+        g.fillStyle = TOWN_PIN_RUG.edge;
+        g.fillRect(ex, ey, 2, 2);
+        g.fillStyle = townShade(TOWN_PIN_RUG.fill, -0.16);
+        g.fillRect(dx > 0 ? sx : x, sy, 6, 1);
+        g.fillRect(sx, dy > 0 ? sy : y, 1, 6);
+      }
+  }
+  // Fringe on the rug's outer ends.
+  g.fillStyle = townShade(TOWN_PIN_RUG.fill, -0.08);
+  for (const cell of cells) {
+    const { x, y, s } = square(cell);
+    for (let yy = y + 4; yy < y + s - 3; yy += 4) {
+      if (!has(cell.col - 1, cell.row)) g.fillRect(x - 2, yy, 2, 1);
+      if (!has(cell.col + 1, cell.row)) g.fillRect(x + s, yy, 2, 1);
+    }
+  }
+}
 
 export function paintTownInterior(
   building: TownBuilding,
@@ -388,6 +477,9 @@ export function paintTownInterior(
       furniture?.carpetFor?.(room.key) ?? townCarpetFor(room.key),
       false,
     );
+  if (furniture?.pinned)
+    for (const room of building.rooms)
+      paintPinnedRug(g, building, room, furniture.pinned);
   // The reception lobby: a tiled floor under the back wall, above the rooms.
   const lobby = (building.lobbyY - building.y) * T;
   const lobbyBottom = lobby + LOBBY_ROWS * T;

@@ -17,7 +17,7 @@ import {
   type TerminalColors,
 } from "../terminalColor";
 import type { DeskPins } from "../useDeskPins";
-import type { TownInput, TownPinnedCells } from "./townLayout";
+import type { TownInput } from "./townLayout";
 import { NO_ROOM_SPOTS, type TownRoomSpots } from "./townRoomPlace";
 
 export type TownSeatRef = { deskKey: string; seat: number };
@@ -38,15 +38,15 @@ export type TownModel = {
   deskColors: ReadonlyMap<string, TerminalColor>;
   /** Rooms' and buildings' chosen colours; absent ones use their defaults. */
   placeColors: TownPlaceColors;
-  /** Pinned desks (useDeskPins.ts): each keeps its cell, its agents stay. */
+  /**
+   * Pinned desks (useDeskPins.ts): they take their rooms' first seats, on
+   * the room's rug, and their agents stay at them.
+   */
   deskPins: ReadonlyMap<string, TownDeskPin>;
 };
 
-/** A pinned desk: the key its pin is saved under, and its cell once placed. */
-export type TownDeskPin = {
-  key: string;
-  cell: { col: number; row: number } | null;
-};
+/** A pinned desk: the key its pin is saved under. */
+export type TownDeskPin = { key: string };
 
 export type TownPlaceColors = {
   rooms: ReadonlyMap<string, TerminalColor>;
@@ -186,7 +186,7 @@ export function townDeskColors(
 
 /**
  * Each pinned desk, by desk key. Like colours, kept apart from the model's
- * layout input; layoutTown takes the cells (`townPinnedCells`).
+ * layout input; layoutTown takes the keys.
  */
 export function townDeskPins(
   projection: HerdrOfficeProjection,
@@ -198,17 +198,9 @@ export function townDeskPins(
   for (const room of projection.rooms)
     for (const desk of room.desks) {
       const key = terminalColorKey(deskTarget(room, desk, ids));
-      const pin = pins[key];
-      if (pin) deskPins.set(desk.key, { key, cell: pin.cell });
+      if (pins[key]) deskPins.set(desk.key, { key });
     }
   return deskPins;
-}
-
-/** The pinned desks' cells as the layout takes them. */
-export function townPinnedCells(
-  deskPins: ReadonlyMap<string, TownDeskPin>,
-): TownPinnedCells {
-  return new Map([...deskPins].map(([deskKey, pin]) => [deskKey, pin.cell]));
 }
 
 export function townModelFromProjection(

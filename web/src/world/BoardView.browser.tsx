@@ -2358,8 +2358,20 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           ) && pinButton().getAttribute("aria-pressed") === "true",
           "a pinned card shows its badge and the bar says Unpin",
         );
-        // Push the pinned card's neighbour onto it, then tidy its workspace:
-        // auto-layout moves the others, never the pinned card.
+        // Pinned goes first: the card takes its workspace's shelf, above
+        // the workspace card, under the pinned band.
+        await rest();
+        {
+          const ws = card("studio:w1")!.getBoundingClientRect();
+          const tab = card(tabKey)!.getBoundingClientRect();
+          check(
+            tab.bottom <= ws.top &&
+              host.querySelectorAll(".board-pin-band").length === 1,
+            "a pinned card sits above its workspace, under one band",
+          );
+        }
+        // Tidy its workspace: auto-layout moves the others, never the
+        // pinned card off its shelf.
         const pinnedAt = at(tabKey)!;
         (
           await boardAction(
@@ -2371,7 +2383,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           const now = at(tabKey)!;
           check(
             Math.hypot(now.x - pinnedAt.x, now.y - pinnedAt.y) < 2,
-            "Tidy leaves a pinned card where it is",
+            "Tidy leaves a pinned card on its shelf",
           );
         }
         pinButton().click();
@@ -2380,6 +2392,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           "Unpin removes the pin",
         );
         check(!card(tabKey)!.querySelector(".board-pin"), "unpinned, no badge");
+        await rest();
+        check(
+          !host.querySelector(".board-pin-band"),
+          "no pinned cards, no band",
+        );
         // A phone's full-screen terminal pins the card from its header,
         // through what Board publishes for it.
         check(

@@ -1,4 +1,4 @@
-import { memo, Suspense, useEffect, useState } from "react";
+import { memo, Suspense, useEffect, useMemo, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
@@ -23,12 +23,7 @@ import {
   writeFloatingTerminalGeometry,
 } from "./floatingTerminalPreferences";
 import { terminalColorKey } from "./terminalColor";
-import {
-  leafPinnedBy,
-  setDeskPinned,
-  useCoreDeskPinPositions,
-  useDeskPins,
-} from "./useDeskPins";
+import { leafPinnedBy, setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
 import { CoreKillConfirmHost } from "./CoreKillConfirm";
 import { CoreWorktreesHost } from "./CoreWorktrees";
@@ -64,7 +59,7 @@ import {
   defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
-import type { WorldObject } from "./worldObject";
+import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { worldSwitchTargets } from "./worldSwitchTargets";
 import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
@@ -106,9 +101,11 @@ const ProfileEditor = lazyWithReload("world-profile-editor", () =>
 function AgentDialogs({
   world,
   onOpenNode,
+  pinned,
 }: {
   world: WorldObject;
   onOpenNode(nodeId: string): void;
+  pinned: (leaf: WorldLeafObject) => boolean;
 }) {
   const [launch, setLaunch] = useState<
     | (Partial<LaunchTarget> & { profileId?: string; from?: AgentStartFrom })
@@ -155,7 +152,11 @@ function AgentDialogs({
   return (
     <Suspense fallback={null}>
       {sounds ? (
-        <SoundsDialog world={world} onClose={() => setSounds(false)} />
+        <SoundsDialog
+          world={world}
+          pinned={pinned}
+          onClose={() => setSounds(false)}
+        />
       ) : null}
       {editing ? (
         <ProfileEditor
@@ -308,7 +309,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   } = useWorldVisualActions(controller);
   const colorChoice = useTerminalColorChoices();
   const deskPins = useDeskPins();
-  useCoreDeskPinPositions();
   const needsYouOpen = useNeedsYouState().open;
   const inspectorTab = (conversation: WorldInspectorConversation) =>
     conversation.tabId
@@ -377,6 +377,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   // Pinned ones come first: a herdr-core agent by its own label (Herdr's
   // apps list it first too), a Herdr agent or terminal by its desk.
   const leafPinned = leafPinnedBy(deskPins, world.spaces);
+  // Every host's agents, for the Town master picker and group members.
+  const aggregatePinned = useMemo(
+    () => leafPinnedBy(deskPins, aggregateWorld.spaces),
+    [deskPins, aggregateWorld.spaces],
+  );
   const switchTargets = (currentId: string, leave?: () => void) =>
     compactArrangement
       ? worldSwitchTargets(
@@ -429,6 +434,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       <AgentDialogs
         world={aggregateWorld}
         onOpenNode={(nodeId) => void openNodeById(nodeId)}
+        pinned={aggregatePinned}
       />
       {active && (view === "town" || view === "board" || view === "desk") ? (
         <TownMasterGreetingHost
@@ -462,6 +468,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       <GroupsWindow
         world={aggregateWorld}
         onOpenTerminal={(id) => void openTerminalById(id)}
+        pinned={aggregatePinned}
       />
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}

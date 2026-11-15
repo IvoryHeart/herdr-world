@@ -108,14 +108,17 @@ import {
   cloneLayout,
   DEFAULT_SIZE,
   emptyLayout,
+  makeShelfRoom,
   type Point,
   placeNew,
   positions,
   type Rect,
   rectAt,
+  shelfOf,
   type Size,
   tidy,
 } from "./board/boardPlacement";
+import { paintShelfBands, shelfBand } from "./board/boardPinFirst";
 import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
 import { BoardZoneColor } from "./board/BoardZoneColor";
 import { WorkLens } from "./board/WorkLens";
@@ -165,6 +168,7 @@ import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
 import "./board/boardBadge.css";
 import "./board/boardRelations.css";
+import "./board/boardPinFirst.css";
 import {
   relationTeams,
   terminalKey,
@@ -694,6 +698,9 @@ export default function BoardView({
   const svgRef = useRef<SVGSVGElement>(null);
   const cardEls = useRef(new Map<string, HTMLElement>());
   const zoneEls = useRef(new Map<string, HTMLElement>());
+  /** The pinned cards' bands (boardPinFirst.ts), placed each frame. */
+  const bandLayer = useRef<HTMLDivElement>(null);
+  const bandEls = useRef(new Map<string, HTMLElement>());
   const paths = useRef(new Map<string, SVGPathElement>());
   const cam = useRef<Camera>({ x: 0, y: 0, s: 0.6 });
   const camGoal = useRef<Camera | null>(null);
@@ -939,7 +946,7 @@ export default function BoardView({
         farRef.current &&
         model.workspaces.length + model.tabs.length > CULL_ABOVE,
     });
-    const at = positions(model, layout.current);
+    const at = positions(model, layout.current, sizeOf);
     for (const [key, point] of at) {
       if (cards.current.has(key)) continue;
       const kind = kindOf(key, model);
@@ -986,7 +993,7 @@ export default function BoardView({
     );
     if (!pending.length) return;
     layout.current = placeNew(m, layout.current, { phone: isPhone(), sizeOf });
-    const at = positions(m, layout.current);
+    const at = positions(m, layout.current, sizeOf);
     for (const tab of pending) {
       const card = cards.current.get(tab.key),
         point = at.get(tab.key);
@@ -1082,7 +1089,7 @@ export default function BoardView({
         },
         { phone: isPhone(), sizeOf },
       );
-      for (const [key, point] of positions(model, layout.current)) {
+      for (const [key, point] of positions(model, layout.current, sizeOf)) {
         const card = cards.current.get(key);
         if (card) {
           card.x = point.x;
@@ -1097,8 +1104,8 @@ export default function BoardView({
     // The layout is read through refs; only saved state starts this.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
-  // Pins made or removed in Herdr's apps: a core card pinned there stays
-  // where it stands; one unpinned there rejoins its owner from where it is.
+  // Pins made or removed in Herdr's apps: a core card pinned there takes
+  // its workspace's first places; one unpinned there takes free space.
   useLayoutEffect(() => {
     if (!loaded.current) return;
     const { pin, unpin } = coreCardPinChanges(
@@ -1107,16 +1114,7 @@ export default function BoardView({
       (key) => cards.current.has(key),
     );
     if (!pin.length && !unpin.length) return;
-    for (const key of pin) {
-      const card = cards.current.get(key)!;
-      layout.current.pinned.set(key, { x: card.x, y: card.y });
-    }
-    for (const key of unpin) {
-      layout.current.pinned.delete(key);
-      keepWhereItIs(key, model);
-    }
-    scheduleSave();
-    setPinnedKeys(new Set(layout.current.pinned.keys()));
+    setCardPins(pin, unpin, model);
     // The layout is read through refs; saved layouts, labels and cards start it.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [saved, corePins, model]);
@@ -1160,6 +1158,16 @@ export default function BoardView({
     return owner ? { x: owner.x, y: owner.y } : null;
   };
   const homeOf = (key: string, m: BoardModel): Point | null => {
+    const tab = m.tabByKey.get(key);
+    if (tab && layout.current.pinned.has(key)) {
+      // A pinned tab card's place is on its workspace's shelf.
+      const owner = cards.current.get(tab.workspaceKey);
+      const space = m.workspaceByKey.get(tab.workspaceKey);
+      const offset = space && shelfOf(space, layout.current, sizeOf).get(key);
+      return owner && offset
+        ? { x: owner.x + offset.x, y: owner.y + offset.y }
+        : null;
+    }
     const pinned = layout.current.pinned.get(key);
     if (pinned) return pinned;
     const base = baseOf(key, m);
@@ -1172,7 +1180,9 @@ export default function BoardView({
     const card = cards.current.get(key);
     if (!card) return;
     if (layout.current.pinned.has(key)) {
-      layout.current.pinned.set(key, { x: card.x, y: card.y });
+      // A pinned tab card's place is derived (its shelf); it glides back.
+      if (!m.tabByKey.has(key))
+        layout.current.pinned.set(key, { x: card.x, y: card.y });
       return;
     }
     const base = baseOf(key, m);
@@ -1290,7 +1300,7 @@ export default function BoardView({
         card.home = homeOf(key, m);
         card.fixed =
           isNoteKey(key) ||
-          layout.current.pinned.has(key) ||
+          (layout.current.pinned.has(key) && !m.tabByKey.has(key)) ||
           tweens.current.has(key) ||
           holdingKey === key;
         return card;
@@ -1657,6 +1667,24 @@ export default function BoardView({
       setStyle(zone, "width", `${x1 - x0 + pad * 2}px`);
       setStyle(zone, "height", `${y1 - y0 + pad * 2 + 10}px`);
     }
+    // Each workspace's pinned cards share a tinted band: the group cue.
+    const bands = new Map<string, Rect>();
+    if (!farRef.current)
+      for (const space of m.workspaces) {
+        if (latest.current.collapsed.has(space.key)) continue;
+        const shelf: { at: Point; size: Size }[] = [];
+        for (const key of space.tabKeys) {
+          const card = layout.current.pinned.has(key)
+            ? cards.current.get(key)
+            : undefined;
+          if (card && held.current?.key !== key)
+            shelf.push({ at: { x: card.x, y: card.y }, size: card.size });
+        }
+        const band = shelfBand(shelf);
+        if (band) bands.set(space.key, band);
+      }
+    if (bandLayer.current)
+      paintShelfBands(bandLayer.current, bands, bandEls.current);
   }
 
   /** Where a string end is drawn: a note, a card, or a pane row in it. */
@@ -2444,7 +2472,7 @@ export default function BoardView({
     const reduce = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    for (const [key, to] of positions(m, layout.current)) {
+    for (const [key, to] of positions(m, layout.current, sizeOf)) {
       const card = cards.current.get(key);
       if (!card) continue;
       if (Math.hypot(card.x - to.x, card.y - to.y) < 1) {
@@ -2514,8 +2542,8 @@ export default function BoardView({
     const doc = latest.current.saved;
     const was = new Map<string, Point>();
     if (!doc?.notes.length) return was;
-    const before = positions(m, from),
-      after = positions(m, to);
+    const before = positions(m, from, sizeOf),
+      after = positions(m, to, sizeOf);
     const collapsed = latest.current.collapsed;
     const obstacles: Rect[] = [];
     for (const [key, point] of after) {
@@ -3379,27 +3407,53 @@ export default function BoardView({
     [],
   );
   /**
-   * Pin a card where it is, or unpin it. A pinned card never moves on its
-   * own: placement, tidying and settling leave it; only a drag moves it.
-   * Unpinned, it belongs where it is beside its owner.
+   * Pin or unpin cards. Pinned goes first: a pinned tab card takes its
+   * workspace's first places (its shelf, boardPinFirst.ts) and unpinned
+   * cards there make room; unpinned, it takes free space around its
+   * workspace. A pinned workspace card stays where it is until dragged.
    */
+  const setCardPins = (
+    pin: readonly string[],
+    unpin: readonly string[],
+    m: BoardModel,
+  ) => {
+    const spaces = new Set<string>();
+    for (const key of pin) {
+      const card = cards.current.get(key);
+      if (!card) continue;
+      layout.current.pinned.set(key, { x: card.x, y: card.y });
+      const tab = m.tabByKey.get(key);
+      if (tab) spaces.add(tab.workspaceKey);
+    }
+    for (const key of unpin) {
+      const tab = m.tabByKey.get(key);
+      layout.current.pinned.delete(key);
+      if (!tab) {
+        keepWhereItIs(key, m);
+        continue;
+      }
+      layout.current.offsets.delete(key);
+      spaces.add(tab.workspaceKey);
+    }
+    for (const space of spaces)
+      layout.current = makeShelfRoom(m, layout.current, space, {
+        phone: isPhone(),
+        sizeOf,
+      });
+    if (spaces.size) travelToLayout(m);
+    else scheduleSave();
+    setPinnedKeys(new Set(layout.current.pinned.keys()));
+  };
   const togglePin = (key: string) => {
-    const card = cards.current.get(key);
-    if (!card) return;
+    if (!cards.current.has(key)) return;
     const core = corePins.get(key);
     if (core) {
       // Herdr's apps share this pin; the card follows when the label does.
       void setCoreTabPinned(core, !core.pinned);
       return;
     }
-    if (layout.current.pinned.has(key)) {
-      layout.current.pinned.delete(key);
-      keepWhereItIs(key, model);
-    } else {
-      layout.current.pinned.set(key, { x: card.x, y: card.y });
-      scheduleSave();
-    }
-    setPinnedKeys(new Set(layout.current.pinned.keys()));
+    if (layout.current.pinned.has(key)) setCardPins([], [key], model);
+    else setCardPins([key], [], model);
   };
   togglePinRef.current = togglePin;
 
@@ -3554,6 +3608,7 @@ export default function BoardView({
               </div>
             );
           })}
+          <div ref={bandLayer} className="board-pin-bands" aria-hidden="true" />
           <svg ref={svgRef} className="board-wires" aria-hidden="true" />
           {/* Cards in their own container, new when a large board is built,
               so React appends them as one subtree instead of placing each
@@ -4353,6 +4408,7 @@ export default function BoardView({
         {workOpen ? (
           <WorkLens
             world={world}
+            store={boardStore}
             anchor={() => workButtonRef.current}
             onClose={() => setWorkOpen(false)}
             onSelectAgent={(id) => {

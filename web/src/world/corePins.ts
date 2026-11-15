@@ -13,8 +13,8 @@ import {
  * One pin for herdr-core agents, shared with Herdr's apps (desktop app
  * `docs/labels.md`): an agent is pinned while its `herdr.pinned` label is
  * set, in every client. World's desk and card pins for a core tab are that
- * label; World keeps only where a pinned desk or card stands (the desk's cell
- * and the card's point in Board's saved layout).
+ * label, and pinned goes first: a pinned desk takes its room's first seats in
+ * Town, a pinned card the first places by its workspace on Board.
  *
  * A desk (a core tab) is pinned while any of its terminals is. Pinning it
  * pins its agents (its terminals, when it has no agent); unpinning it clears
@@ -26,7 +26,7 @@ import {
 export type CoreTabPin = {
   connectionId: string;
   generation: number;
-  /** World observes this core now: pins can be written and positions dropped. */
+  /** World observes this core now: pins can be written. */
   live: boolean;
   pinned: boolean;
   members: readonly { terminal: string; agent: boolean; pinned: boolean }[];
@@ -122,8 +122,7 @@ export function useCorePins(): CorePins {
 
 /**
  * World's saved desk pins as Town shows them: a core tab is pinned exactly
- * when its label says so, at its saved cell if it has one (Town gives it
- * one where it stands otherwise); Herdr tabs keep their saved pins.
+ * when its label says so; Herdr tabs keep their saved pins.
  */
 export function withCorePins<T extends Readonly<Record<string, DeskPin>>>(
   saved: T,
@@ -136,23 +135,6 @@ export function withCorePins<T extends Readonly<Record<string, DeskPin>>>(
     else if (!pin.pinned && has) delete (out ??= { ...saved })[key];
   }
   return (out as T | null) ?? saved;
-}
-
-/**
- * Saved positions of core tabs World sees unpinned now: dropped, so a later
- * pin starts where the desk or card stands then. Only while the core is
- * observed live: a stale host's last pins are never acted on.
- */
-export function unpinnedCorePositions(
-  savedKeys: Iterable<string>,
-  core: CorePins,
-): string[] {
-  const drop: string[] = [];
-  for (const key of savedKeys) {
-    const pin = core.get(key);
-    if (pin?.live && !pin.pinned) drop.push(key);
-  }
-  return drop;
 }
 
 /**
