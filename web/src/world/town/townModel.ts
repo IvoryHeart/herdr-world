@@ -45,8 +45,11 @@ export type TownModel = {
   deskPins: ReadonlyMap<string, TownDeskPin>;
 };
 
-/** A pinned desk: the key its pin is saved under. */
-export type TownDeskPin = { key: string };
+/**
+ * A pinned desk: the key its pin is saved under, and its saved place among
+ * its room's pinned seats (null: none, it follows the saved ones in tab order).
+ */
+export type TownDeskPin = { key: string; rank: number | null };
 
 export type TownPlaceColors = {
   rooms: ReadonlyMap<string, TerminalColor>;
@@ -198,7 +201,8 @@ export function townDeskPins(
   for (const room of projection.rooms)
     for (const desk of room.desks) {
       const key = terminalColorKey(deskTarget(room, desk, ids));
-      if (pins[key]) deskPins.set(desk.key, { key });
+      const pin = pins[key];
+      if (pin) deskPins.set(desk.key, { key, rank: pin.rank ?? null });
     }
   return deskPins;
 }

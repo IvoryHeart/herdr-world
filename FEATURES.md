@@ -520,13 +520,24 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     to leave its group; a spawn link stays, since Herdr's stamp records it.
     **M** on a focused table offers the same as **Group with…** and **Leave
     the team**, and the table's accessible name lists its teammates. A
-    pinned table joins a team only in its own room, and keeps its first seat.
+    pinned table joins a team only in its own room, and keeps its pinned seat.
   - **Pin a desk** from the first item in its mobile agent window's **⋯** menu
     (**Pin desk in Town**), or from the desktop window’s **⋯** menu. Pinned
     goes first, as in Herdr's apps: a room's pinned desks take its first
-    seats, in tab order among themselves, and the other tables follow in tab
-    order; unpinning returns a desk to its tab-order seat. A pinned desk
-    cannot be dragged until you unpin it, and a folded room always shows its
+    seats, in tab order among themselves until you reorder them, and the
+    other tables follow in tab order; unpinning returns a desk to its
+    tab-order seat. Pinned desks reorder on the rug, as pinned browser tabs
+    do: drag a pinned desk (mouse or touch) onto another pinned desk of its
+    room and it takes that desk's place, or press **M** on a focused pinned
+    table and choose a pinned desk's place. Dropped anywhere else (off the
+    rug, on an unpinned desk, in another room) it glides back to its seat;
+    while you drag, the hint says **Unpin to move it out of the front row**.
+    A drag never unpins it, and an unpinned desk cannot take a pinned seat.
+    The order is a World view setting saved with the pin (for a core agent,
+    beside its shared pin, since Herdr's apps have no order for pins), so
+    every device and a reload keep it; Herdr's tab order is unchanged. A desk
+    pinned later, here or in a Herdr app, joins the end of the rug; unpinned
+    and pinned again, it starts at the end. A folded room always shows its
     pinned desks. The room's pinned seats share one floor rug, a pale woven
     carpet with fringed ends drawn under them as one piece, so the group
     reads at a glance (a room with no pins has none); like the floor, it

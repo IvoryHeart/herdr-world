@@ -24,6 +24,11 @@ const herdrInstalled = async () => ({
   binaryPath: "/example/herdr",
 });
 
+/** Fails the test instead of installing or starting a real herdr-core. */
+const refuseCoreSetup = async (): Promise<LocalCoreSetup> => {
+  throw new Error("a test reached the real herdr-core setup");
+};
+
 function capture() {
   const out: string[] = [];
   const err: string[] = [];
@@ -184,6 +189,8 @@ describe("runHerdrCommand", () => {
       {
         ...io,
         loadConfig: () => fakeConfig() as never,
+        detect: herdrInstalled,
+        coreSetup: refuseCoreSetup,
         serviceStatus: () => ({ installed: false, active: false }),
         upgrade: async (options) => {
           received.push(options);

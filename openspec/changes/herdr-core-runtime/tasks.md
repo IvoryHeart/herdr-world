@@ -52,6 +52,10 @@ checks. Current spec synchronization and archive remain after acceptance.
     front-left corner), pinned cards sit first above their workspace on
     Board under one band, and pinned agents lead the agent pickers too;
     World saves no place for a pin.
+  - [x] Issue #925: pinned desks reorder among the pinned seats on their
+    rug (drag or M); elsewhere they glide back with an unpin hint, never
+    unpinning. The order is World's own Town layout (a rank on the desk pin
+    record, created for a core tab), else tab order.
 - [x] P3: core-default launches, placement, core send/keys for every harness and pre-send fences.
   - [x] Issue #869: core-first launches from World (absolute executable, no
     caller/parent/notes, explicit keep; agents placed with a `where` caption,
