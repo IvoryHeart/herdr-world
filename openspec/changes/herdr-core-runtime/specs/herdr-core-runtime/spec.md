@@ -40,6 +40,40 @@ and service/runtime/occupant fences at admission, dispatch and publication.
 - **THEN** observation is unavailable and nothing starts until a separate
   confirmed start action
 
+#### Scenario: Install core where no runtime exists
+
+- **WHEN** the standalone installer or Homebrew's first launch finds neither
+  `hc` nor `herdr`, and `HERDR_WORLD_SKIP_HERDR` is not set
+- **THEN** it installs herdr-core with its official checksum-verified steps,
+  starts it now and at login and registers a local core connection; when
+  either runtime exists it installs and changes nothing
+
+#### Scenario: CLI setup with no Herdr
+
+- **WHEN** `herdr-world herdr setup` or `herdr upgrade --install` finds no Herdr
+  for a local default connection
+- **THEN** an installed herdr-core is kept and no Herdr is installed beside it
+  (setup also starts that core now and at login); with neither, herdr-core is
+  installed and started; on Windows, where World cannot yet connect to a core on
+  the same computer, an installed core is kept and only a computer with neither
+  gets the Herdr TUI
+
+#### Scenario: Confirmed install from World
+
+- **WHEN** a person chooses Install herdr-core for this computer or a Unix SSH
+  host in Manage connections, on a core connection that found nothing running,
+  or on Town's Set up card
+- **THEN** World shows the version, install location, login start and any
+  installed Herdr that stays, and changes nothing until the person confirms;
+  after confirmation it installs (or starts an installed core) only on that
+  host, shows progress and plain errors, then connects; automatic connects and
+  reconnects never install or start core, and an installed runtime is never
+  replaced or updated
+- **AND** offered under a saved core connection, it starts that connection's
+  session and connects that same connection; a connection with its own state
+  directory is refused in plain words, and the install reports failure unless
+  the connection ends ready
+
 #### Scenario: Host stops programs at logout
 
 - **WHEN** core reports `keeps_running_after_logout: false` for a local or Unix

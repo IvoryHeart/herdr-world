@@ -148,3 +148,16 @@ test("Release checks missing and existing external Herdr through the installed l
   expect(reinstall).toBeGreaterThan(before);
   expect(after).toBeGreaterThan(reinstall);
 });
+
+test("Native runtime acceptance installs and starts only a fake herdr-core", () => {
+  const check = readFileSync(
+    new URL("./check-homebrew-runtime.rb", import.meta.url),
+    "utf8",
+  );
+  // A fake curl first on PATH serves the fixture's release; nothing real runs.
+  expect(check).toContain('"PATH" => "#{fake_bin}:');
+  expect(check).toContain('File.join(fake_bin, "curl")');
+  expect(check).toContain('File.join(fake_bin, "systemctl")');
+  expect(check).toContain('"HC_INSTALL_DIR" => nil');
+  expect(check).not.toMatch(/"server", "stop"/);
+});

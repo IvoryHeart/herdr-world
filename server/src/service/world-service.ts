@@ -1,4 +1,5 @@
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
+import { createCoreInstall } from "../herdr-core/install";
 import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
@@ -768,6 +769,10 @@ async function compose(
     connectionProfiles,
     core,
     coreControl: coreRpc,
+    coreInstall: createCoreInstall({
+      profiles: () => connectionProfiles,
+      fixture: core.fixture,
+    }),
     focusedAcquisition,
     agentActivity,
     deskWatches,

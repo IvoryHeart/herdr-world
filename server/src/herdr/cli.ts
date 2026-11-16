@@ -1,6 +1,11 @@
 import { HerdrClient } from "../bridge/herdr-client";
 import { loadServerConfig } from "../config/server-config";
 import {
+  type LocalCoreSetup,
+  type LocalCoreSetupOptions,
+  setupLocalCore,
+} from "../herdr-core/local-setup";
+import {
   detectHerdrSetup,
   type HerdrSetupGuard,
   type HerdrSetupResult,
@@ -18,15 +23,15 @@ import {
 } from "./upgrade";
 
 function herdrHelp(): string {
-  return `Install and start the local Herdr server.
+  return `Install and start a local runtime: herdr-core first, or the Herdr server.
 
 Usage:
   herdr-world herdr setup
   herdr-world herdr status
   herdr-world herdr upgrade [--install] [--only-if-missing] [--no-integrations] [--no-plugin] [--json]
 
-Setup installs the Herdr World-verified Herdr ${VERIFIED_HERDR_VERSION} release
-when no herdr binary is found, then installs and starts a user service running
+With a herdr binary found, setup keeps it (see Core first below for none),
+then installs and starts a user service running
 \`herdr server\` (systemd user service on Linux, launchd LaunchAgent on macOS,
 per-user Task Scheduler task on Windows). Status prints the detected state.
 If Herdr is already running, setup registers future startup without restarting it.
@@ -47,7 +52,15 @@ A normal upgrade also brings this release's harness integrations and plugin up t
 date: \`herdr integration install\` for the codex, claude and pi harnesses found
 on PATH when their integration is missing or outdated (and after every Herdr
 upgrade), and the Herdr World plugin, if installed from GitHub, reinstalled at
-this release's tag. --install also installs Herdr when none is found.
+this release's tag.
+
+Core first: setup, and upgrade --install, with no Herdr on this computer
+keep an installed herdr-core and never install Herdr beside it (setup also
+starts that core now and at login). With neither, they install herdr-core with
+its official, checksum-verified release steps into ~/.local/bin and start it now
+and at login. On Windows an installed herdr-core is kept the same way; with
+neither, Herdr is installed, because World on Windows cannot yet connect to a
+herdr-core on the same computer (Windows hosts over SSH can run core).
 `;
 }
 
@@ -62,6 +75,11 @@ export interface HerdrCommandDeps {
     >,
   ) => Promise<HerdrUpgradeReport>;
   serviceStatus?: () => { installed: boolean; active: boolean };
+  /** The core-first choice for setup and `upgrade --install` with no Herdr. */
+  coreSetup?: (
+    options: Pick<LocalCoreSetupOptions, "setUp" | "log" | "platform">,
+  ) => Promise<LocalCoreSetup>;
+  platform?: NodeJS.Platform;
   log?: (message: string) => void;
   error?: (message: string) => void;
 }
@@ -145,7 +163,7 @@ export async function runHerdrCommand(
       } else {
         log("Herdr is not installed.");
         log(
-          `Run \`herdr-world herdr setup\` to install the verified Herdr ${VERIFIED_HERDR_VERSION} and start it.`,
+          "Run `herdr-world herdr setup` to set up a runtime: an installed herdr-core is kept, otherwise herdr-core is installed (Windows: Herdr).",
         );
       }
       const service = serviceStatus();
@@ -159,6 +177,35 @@ export async function runHerdrCommand(
         }`,
       );
       return 0;
+    }
+
+    const platform = dependencies.platform ?? process.platform;
+    // A remote default connection keeps its own Herdr.
+    if (
+      (action === "setup" ||
+        (action === "upgrade" && flags.includes("--install"))) &&
+      !config.sshHost &&
+      (await detect()).state === "missing"
+    ) {
+      const json = flags.includes("--json");
+      const core = await (dependencies.coreSetup ?? setupLocalCore)({
+        setUp: action === "setup",
+        log: json ? error : log,
+        platform,
+      });
+      if (core.outcome !== "herdr") {
+        if (json) log(JSON.stringify({ runtime: "herdr-core", ...core }));
+        else for (const line of describeCoreSetup(core, platform)) log(line);
+        if (core.outcome === "failed") {
+          error(`herdr-world herdr: ${core.error}`);
+          return 1;
+        }
+        return 0;
+      }
+      if (!json)
+        log(
+          "No herdr-core here, and World on Windows cannot yet connect to one on this computer, so World sets up Herdr.",
+        );
     }
 
     if (action === "upgrade") {
@@ -221,3 +268,27 @@ export async function runHerdrCommand(
     return 1;
   }
 }
+
+function describeCoreSetup(
+  core: LocalCoreSetup,
+  platform: NodeJS.Platform,
+): string[] {
+  if (core.outcome === "kept")
+    return [
+      `herdr-core is installed at ${core.core}; it is kept as it is, so no Herdr was installed.`,
+      platform === "win32"
+        ? "World on Windows cannot yet connect to a herdr-core on this computer; World on another computer can use it over SSH."
+        : CONNECT_HINT,
+    ];
+  if (core.outcome === "set-up")
+    return [
+      core.installed
+        ? "herdr-core is installed and running, and starts at login; no Herdr was installed."
+        : `herdr-core at ${core.core} is running and starts at login; it was not replaced, and no Herdr was installed.`,
+      CONNECT_HINT,
+    ];
+  return [];
+}
+
+const CONNECT_HINT =
+  "To connect World to it, use Install herdr-core on This computer in Hosts > Manage connections; an installed core is set up, never replaced.";

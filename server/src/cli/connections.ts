@@ -49,6 +49,8 @@ Usage:
   herdr-world connections add <id> --ssh <destination> [ssh options] [common options]
   herdr-world connections add <id> --control-socket <path> --client-socket <path>
                                 [common options]
+  herdr-world connections add <id> --core [--ssh <destination> [--windows]]
+                                [--session <name>] [common options]
   herdr-world connections remove <id> [--restart]
   herdr-world connections set-default <id> [--restart]
 
@@ -64,6 +66,12 @@ SSH add options:
   --windows          the SSH host runs Windows
   --herdr-path <path>, --session <name>
                      Windows host executable and Herdr session
+
+herdr-core add options:
+  --core             watch a herdr-core already running on this computer, or
+                     on the --ssh host; World reads core.lock and never starts
+                     core. --session names the core session (default: default).
+                     The default connection stays a Herdr one.
 
 The profiles are the same ones the connection selector edits. A running
 Herdr World keeps its own copy and would overwrite a change made here, so edits
@@ -83,6 +91,7 @@ const ADD_OPTIONS = {
   "remote-control-socket": { type: "string" },
   "remote-client-socket": { type: "string" },
   windows: { type: "boolean" },
+  core: { type: "boolean" },
   "herdr-path": { type: "string" },
   session: { type: "string" },
   "auto-connect": { type: "boolean" },
@@ -173,6 +182,30 @@ function profileFromFlags(
   const label = (values.label as string | undefined) ?? id;
   const autoConnect = values["auto-connect"] === true;
   const ssh = values.ssh as string | undefined;
+  if (values.core === true) {
+    const used = [
+      "control-socket",
+      "client-socket",
+      "remote-control-socket",
+      "remote-client-socket",
+      "herdr-path",
+      "default",
+    ].find((key) => values[key] !== undefined);
+    if (used) throw new UsageError(`--${used} cannot be combined with --core`);
+    if (values.windows && ssh === undefined)
+      throw new UsageError("--windows requires --ssh");
+    return validateConnectionProfile({
+      id,
+      label,
+      type: ssh === undefined ? "local" : "ssh",
+      runtime: "herdr-core",
+      ...(ssh === undefined ? {} : { ssh_destination: ssh }),
+      ...(values.windows ? { remote_platform: "windows" } : {}),
+      core_session: (values.session as string | undefined) ?? "default",
+      core_state_dir: "",
+      auto_connect: autoConnect,
+    });
+  }
   const sshOnly = [
     "remote-control-socket",
     "remote-client-socket",
@@ -380,6 +413,10 @@ export function createConnectionsCommand(
               profiles: [...registry.profiles, profile],
             };
           } else if (explicitOverride(setup)) {
+            if (isCoreProfile(profile))
+              throw new UsageError(
+                "add a Herdr connection before a herdr-core one",
+              );
             next = {
               version: CONNECTION_PROFILE_FILE_VERSION,
               default_connection_id: profile.id,

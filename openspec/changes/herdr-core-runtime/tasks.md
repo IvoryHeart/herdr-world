@@ -116,6 +116,10 @@ checks. Current spec synchronization and archive remain after acceptance.
     offline smoke-runner tests check errors, cleanup and suite admission.
   - [x] README runtime section, FEATURES reference, learner core steps, smoke
     runbook, one feature changelog and this implemented change record.
+- [x] Core-first install (#926, owner ruling 2026-11-16): installers install
+  herdr-core only when no runtime exists; confirmed installs from Manage
+  connections, a core connection that found nothing running and Town's Set up
+  card; installer, service and browser tests use fakes only.
 - [ ] Final parity inventory and owner device acceptance A–D: official desktop
   and phone apps, mobile interaction and a real Windows SSH account. A Linux
   live test or fixture screenshot does not establish these outcomes.

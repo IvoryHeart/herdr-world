@@ -49,8 +49,9 @@ Your shells and agents
 ### Install and open World
 
 1. Install World by following
-   [Install a release](./DEPLOYMENT.md#install-a-release). The standalone
-   installer also installs or upgrades [Herdr](https://herdr.dev).
+   [Install a release](./DEPLOYMENT.md#install-a-release). If neither Herdr
+   nor herdr-core is installed, the standalone installer installs herdr-core
+   and starts it; otherwise it keeps what you have.
 2. Start World and leave it running:
 
    ```bash
@@ -63,8 +64,9 @@ Your shells and agents
 
 3. Open the URL it prints on the same computer. It looks like
    `http://127.0.0.1:8787` and carries a login token.
-4. World opens on **Town**. If Herdr is missing or stopped, Town offers
-   **Set up Herdr**; nothing is installed until you confirm.
+4. World opens on **Town**. If no runtime is running, Town offers **Set up
+   herdr-core** (or **Use the Herdr TUI instead**); nothing is installed until
+   you confirm.
 5. Open **Spaces** from the view picker at the top. Choose **+** (New
    workspace) beside the workspace list, set **Working directory** to your
    project's folder, and choose **Create**.

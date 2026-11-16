@@ -1,27 +1,25 @@
 #!/usr/bin/env bun
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import {
-  renderHerdrBootstrap,
-  type HerdrBootstrapRelease,
-} from "./herdr-bootstrap";
+import { renderHerdrBootstrap } from "./herdr-bootstrap";
 import { readReleaseArchive } from "./release-archive";
 import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
 export function renderHomebrewFormula(
   version: string,
   digests: Record<string, string>,
-  herdr?: HerdrBootstrapRelease,
 ) {
   const source = (platform: string) => `
       url "https://github.com/IvoryHeart/herdr-world/releases/download/v${version}/herdr-world-v${version}-${platform}.tar.xz"
       sha256 "${digests[platform]}"`;
-  const bootstrap = renderHerdrBootstrap(herdr);
   const launcher = readFileSync(
     new URL("./homebrew-launcher.sh", import.meta.url),
     "utf8",
   )
-    .replace("@HERDR_BOOTSTRAP@", bootstrap.trimEnd())
+    .replace("@HERDR_BOOTSTRAP@", renderHerdrBootstrap())
+    // A Ruby heredoc reads backslash escapes and #{...}/#$/#@ interpolation.
+    .replaceAll("\\", "\\\\")
+    .replace(/#(?=[{$@])/g, "\\#")
     .replace(
       "@HERDR_WORLD_BINARY@",
       '#{(libexec/"herdr-world").to_s.shellescape}',
@@ -67,12 +65,12 @@ ${launcher}
 
   def caveats
     <<~EOS
-      World reuses your existing Herdr. On first launch, if Herdr is missing,
-      it installs the verified prebuilt release in ~/.local/bin, outside Homebrew.
-      Existing Herdr installations are not upgraded. Add ~/.local/bin to PATH.
-      If automatic setup fails, World still starts. Retry with
-      herdr-world herdr upgrade --install, or set HERDR_WORLD_SKIP_HERDR=1.
-      Run herdr-world herdr setup to start Herdr as a user service.
+      World uses the herdr-core or Herdr you already have. On first launch, if
+      neither is installed, it installs herdr-core from its official release
+      into ~/.local/bin, outside Homebrew, and starts it now and at each login.
+      Installed runtimes are never replaced or upgraded. If automatic setup
+      fails, World still starts. Retry with herdr-world herdr upgrade --install,
+      or set HERDR_WORLD_SKIP_HERDR=1 to skip it.
     EOS
   end
 

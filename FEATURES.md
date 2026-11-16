@@ -616,9 +616,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
     reception and Board's host label. When the local connection is failing and
-    no host is ready, Town's stage also offers **Set up Herdr** if Herdr is
-    missing or installed but stopped; it installs or starts Herdr only after you
-    confirm, and never appears during a normal start or after you disconnect.
+    no host is ready, Town's stage also offers to set up a runtime. With no
+    runtime installed it offers **Set up herdr-core** first and **Use the Herdr
+    TUI instead** second; with Herdr installed but stopped it offers to start
+    Herdr. **Set up herdr-core** shows the version, where core goes
+    (`~/.local/bin/herdr-core`), that it is checksum-verified and starts at
+    login, then **Install and start** runs it on this computer only, with
+    progress and plain errors (**Try again**). Nothing installs or starts
+    before you confirm, and the card never appears during a normal start or
+    after you disconnect. Once core connects, the card goes away.
     Transient local socket failures and SSH outages keep retrying with
     capped backoff; explicit disconnect/removal and permanent failures stop
     recovery. Cached work never becomes current until a fresh runtime snapshot
@@ -648,10 +654,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     another text field; the browser's own find stays closed. Change the keys
     under **Search the current view** in Settings → Shortcuts.
   See the [Town exercise](./docs/TUTORIAL.md#town).
-- **Reuse existing Herdr on first install.** A fresh standalone install and the Homebrew launcher keep
-  the runtime's existing version and owner. Only a missing Herdr is installed;
-  Homebrew does this on first normal local World launch, without a forced Herdr
-  formula or Intel source build. Explicit runtime upgrades remain available.
+- **herdr-core first on a fresh install.** A fresh standalone install and the
+  Homebrew launcher keep any installed runtime (`hc`/`herdr-core` or `herdr`)
+  with its existing version and owner, and install nothing. When neither is
+  found they install herdr-core: its release list over HTTPS, the archive for
+  this computer checked against its SHA-256 (nothing downloaded runs as a
+  script), `~/.local/bin/herdr-core` plus an `hc` link if free, then core starts
+  now and at login (a systemd user unit or a launchd LaunchAgent) and World
+  gets a `core-local` connection. Homebrew does this on first normal local World
+  launch. A World too old to add the connection, or one already serving, says
+  to add it under **Hosts → Manage connections**. With npm,
+  `herdr-world herdr upgrade --install` does the same when no runtime exists
+  (`--json` prints `{"runtime":"herdr-core",...}`), and `herdr-world herdr
+  setup` with no Herdr keeps an installed herdr-core (starting it now and at
+  login) or installs one; neither ever installs Herdr beside a core. On Windows
+  both keep an installed core the same way, but with neither runtime they
+  install the Herdr TUI, because World on Windows cannot yet connect to a
+  herdr-core on the same computer (Windows hosts over SSH can run core); core's
+  own PowerShell installer covers Windows x64. `HERDR_WORLD_SKIP_HERDR=1` skips
+  all of this.
+  Explicit runtime upgrades remain available.
 - **Finish installer upgrades.** Replacing an existing standalone World executable
   upgrades Herdr and refreshes detected harness integrations and the installed
   World plugin through the same path as `herdr-world update`, then restarts the
@@ -1985,7 +2007,36 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   The manual and daily [release smoke](docs/development.md#herdr-core-release-smoke)
   downloads the newest official release and flags failures for investigation;
   it never changes the installed runtime or its permissions. World’s installers
-  still set up the TUI; install and start core separately before adding it here.
+  set up core only when no runtime is installed.
+  `herdr-world connections add <id> --core [--ssh <destination> [--windows]]
+  [--session <name>]` adds the same connection from a terminal; the default
+  connection stays a Herdr one.
+- **Install herdr-core from Manage connections.** **Hosts → Manage connections**
+  lists this computer and each Unix SSH host it knows, unless a core there is
+  already connected, each with **Install herdr-core…**. A core connection that
+  found nothing running offers the same button under its error. World first
+  checks the host (nothing changes), then asks: **Install herdr-core X on
+  <host>?** with the version, where it goes, that it is downloaded over HTTPS
+  and checked against its SHA-256, whether it starts at login there, and that
+  an installed Herdr stays as it is. An installed but stopped core instead asks
+  **Start and connect**: it is used as it is, never replaced or updated.
+  **Install and start** runs only on that host (over the connection's own
+  OpenSSH destination), one install per host at a time; progress lines show
+  as it goes, and you can close the step while it keeps going. When it
+  finishes, World adds or connects that host's core connection, and reports
+  success only once that connection is ready; otherwise it says World could not
+  connect, and why. Under a saved core connection it starts that connection's
+  session (the step names a session other than `default`) and connects that
+  same connection; a connection with its own state directory is refused,
+  because World only starts core in a session's usual place: start that core
+  yourself, then **Connect**. A failure says what went wrong in plain words with
+  **Try again**. A host without a core
+  build (anything but Linux or macOS on x86_64 or arm64) says so; Windows SSH
+  hosts are not offered. Automatic connects and reconnects never install or
+  start core. Testing switch: open World with `?coreInstall=fake` (or
+  `?coreInstall=error`); the parameter disappears at once and installs are
+  simulated until a reload: progress, then the preview's fixture core (or a
+  checksum error). Nothing is installed.
   **A Windows host over SSH** needs Windows PowerShell (`powershell.exe`,
   built into Windows) and SSH key login. World runs two fixed PowerShell
   scripts there and nothing else: one reads

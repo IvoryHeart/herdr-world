@@ -106,7 +106,8 @@ export function useStoreSelector<T>(
     return value;
   };
 
-  return useSyncExternalStore(store.subscribe, getSnapshot);
+  // The same snapshot serves static rendering (component tests).
+  return useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
 }
 
 export function useOperationalStore(resourceClient?: ConnectionClient) {

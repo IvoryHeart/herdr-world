@@ -95,15 +95,22 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
 
 1. Herdr World supports [Herdr](https://herdr.dev) and
    [herdr-core](https://github.com/herdrdev/herdr-core) (see [Runtimes](#runtimes)).
-   A fresh standalone install
-   reuses existing Herdr and installs it only if missing; Homebrew does the same
-   on first World launch. Set `HERDR_WORLD_SKIP_HERDR=1` to skip this setup.
-   With npm or a Windows archive, run `herdr-world herdr upgrade --install`
-   once if needed.
-   `herdr-world herdr setup` configures future startup as a user service and starts
-   Herdr if down; an already-running server keeps running without a restart. If
-   you open World before Herdr is installed or running, Town offers **Set up
-   Herdr**, which installs or starts it only after you confirm.
+   A fresh standalone install uses whichever runtime is installed and changes
+   nothing about it. When neither `hc` (herdr-core) nor `herdr` is found, it
+   installs herdr-core with core's official checksum-verified steps, starts it
+   now and at login, and connects World to it; Homebrew does the same on first
+   World launch. Set `HERDR_WORLD_SKIP_HERDR=1` to skip this setup.
+   With npm, run `herdr-world herdr upgrade --install` once if needed; it also
+   installs herdr-core first when no runtime exists. On Windows an installed
+   herdr-core is kept, but with neither runtime the command installs the Herdr
+   TUI, because World on Windows cannot yet connect to a herdr-core on the same
+   computer; herdr-core has its own PowerShell installer for Windows x64.
+   `herdr-world herdr setup` configures future Herdr TUI startup as a user
+   service and starts it if down. If you open World with no runtime running,
+   Town offers **Set up herdr-core** first (or **Use the Herdr TUI instead**),
+   and **Hosts → Manage connections** offers **Install herdr-core…** for this
+   computer and each Unix SSH host; each one installs or starts only after you
+   confirm.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash
@@ -151,11 +158,12 @@ updates, and services.
 ## Runtimes
 
 **herdr-core** is the primary runtime for new agents when a core connection is
-ready. Start core separately with `hc server start`, then choose **Hosts → Manage
-connections → Add herdr-core**. Choose this computer, a Unix SSH host or a Windows SSH host; use
+ready. The installers set it up when no runtime is installed. Otherwise start
+core with `hc server start` (or use **Install herdr-core…** in **Hosts → Manage
+connections**, which installs or starts it after you confirm), then choose
+**Add herdr-core** there. Choose this computer, a Unix SSH host or a Windows SSH host; use
 the core session name (`default` unless you changed `HC_SESSION`). World connects
-to that existing core and never starts it during connection or retry. World’s
-installers still set up the Herdr TUI; they do not install core.
+to an existing core and never starts or installs it during connection or retry.
 
 Open **New agent** and choose an installed harness. The launcher says **Starts
 in herdr-core**; agents are kept and placed in Herdr’s apps. Plain shells start

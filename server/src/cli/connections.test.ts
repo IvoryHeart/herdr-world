@@ -81,6 +81,59 @@ describe("herdr-world connections", () => {
     expect(saved.default_connection_id).toBe("local");
   });
 
+  test("--core saves a herdr-core connection; the default stays Herdr", async () => {
+    cli = createTestCli();
+    cli.writeConfig("");
+    expect(
+      await connections([
+        "add",
+        "core-local",
+        "--core",
+        "--auto-connect",
+        "--label",
+        "herdr-core on this computer",
+      ]),
+    ).toBe(EXIT_OK);
+    expect(
+      await connections([
+        "add",
+        "core-dev",
+        "--core",
+        "--ssh",
+        "dev.example.com",
+        "--session",
+        "work",
+      ]),
+    ).toBe(EXIT_OK);
+    const saved = registry(cli);
+    expect(saved.default_connection_id).toBe("local");
+    expect(saved.profiles.slice(1)).toEqual([
+      {
+        id: "core-local",
+        label: "herdr-core on this computer",
+        type: "local",
+        runtime: "herdr-core",
+        core_session: "default",
+        core_state_dir: "",
+        auto_connect: true,
+      },
+      {
+        id: "core-dev",
+        label: "core-dev",
+        type: "ssh",
+        runtime: "herdr-core",
+        ssh_destination: "dev.example.com",
+        core_session: "work",
+        core_state_dir: "",
+        auto_connect: false,
+      },
+    ]);
+    for (const extra of [["--default"], ["--windows"], ["--herdr-path", "/x"]])
+      expect(await connections(["add", "c", "--core", ...extra])).toBe(
+        EXIT_USAGE,
+      );
+  });
+
   test("enforces the same removal and default rules as the server", async () => {
     cli = createTestCli();
     cli.writeConfig("");

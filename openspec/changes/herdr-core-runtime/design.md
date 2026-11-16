@@ -29,6 +29,28 @@ exception. Do not call `hc connect`, `server status` or other CLI probes. EOF ma
 retry automatically through these existing-only transports. Starting a stopped
 core is a separate confirmed action that describes environment/startup effects.
 
+Installing core (owner ruling 2026-11-16) is the one such action. One reviewed
+POSIX script, `scripts/herdr-core-install.sh`, carries core's official steps:
+read the release list over HTTPS, download the archive for this target, check
+its SHA-256, unpack, confirm `--version`, then install to `~/.local/bin` and
+start core now and at login (a systemd user unit or a launchd LaunchAgent).
+Nothing downloaded runs as a script. The installers embed it and use it only
+when neither `hc` nor `herdr` exists; World's service sends it over `sh -s`
+locally or through the profile's OpenSSH destination for the RPC
+`connections.core_install` (`probe`, `install`, `status`). `install` runs only
+after the browser's confirmation, one job per host, and then adds or connects
+that host's core profile. An installed core is used as it is: setup enables the
+login start and starts it, never replacing or updating it. Offered under a saved
+core connection, setup starts that connection's `core_session` (its own login
+entry) and connects that same profile; a profile with its own state directory is
+refused, since World only starts core in a session's usual place. An install
+succeeds only when the profile ends `ready`. `herdr setup` and
+`herdr upgrade --install` with no Herdr make the same choice locally (setup also
+starts an installed core). Windows keeps an installed core and installs nothing
+beside it; with neither runtime it installs the Herdr TUI, because World has no
+local Windows core transport yet (core serves a named pipe; the local provider
+reads a Unix socket). Core's own PowerShell installer covers Windows x64.
+
 ### 3. Identity, ownership and occupants
 
 Durable identity is `(core.id, tN)`; a changed `core.id` marks bindings replaced.
