@@ -134,8 +134,10 @@ World SHALL own topology, asks/results and review receipts; it SHALL share
 app placement at launch, seen and the pin under M1–M11. A core tab's desk and
 card SHALL be pinned exactly while one of its terminals carries
 `herdr.pinned`; Herdr (TUI) tabs keep World's own pin. Pinned SHALL mean
-pinned goes first, as in Herdr's apps: World derives a pinned desk's or
-card's place from the pin and tab order and saves none. World SHALL read
+pinned goes first, as in Herdr's apps: World derives a pinned card's place
+from the pin and tab order and saves none; a Town room's pinned desks keep
+the order the person gave them on its rug as World's own view layout (Herdr's
+apps have no order for pins), else tab order. World SHALL read
 agent status from core and SHALL NOT write it, including for integrations World
 installed. Native destructive actions SHALL confirm all dying descendants.
 
@@ -160,7 +162,8 @@ installed. Native destructive actions SHALL confirm all dying descendants.
   the tab's agents (its terminals when it has none) and its unpin clears every
   terminal in the tab; the desk and card wear World's pin while any terminal
   is pinned; pinned goes first: a room's pinned desks take its first seats in
-  tab order on one shared rug, a workspace's pinned cards sit first, above it
+  tab order on one shared rug, reordered only among themselves there (a drop
+  off the rug goes back; a drag never unpins), a workspace's pinned cards sit first, above it
   in tab order on one band, unpinning returns tab order, and pinned agents
   come first in lists with no order of their own (a phone's switch list,
   Desk's quiet agents, agent pickers); a stale host shows its

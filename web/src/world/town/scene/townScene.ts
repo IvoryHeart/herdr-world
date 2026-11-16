@@ -27,6 +27,7 @@ import {
   townShapeKey,
   type TownLayout,
   type TownHeldCells,
+  type TownPinned,
   type TownPlacementMemory,
   type TownShape,
 } from "../townLayout";
@@ -208,7 +209,7 @@ export class TownScene {
         next.size !== last.size ||
         [...next].some(([key, pin]) => {
           const was = last.get(key);
-          return !was || was.key !== pin.key;
+          return !was || was.key !== pin.key || was.rank !== pin.rank;
         })
       )
         this.pins = next;
@@ -216,9 +217,10 @@ export class TownScene {
     },
   );
 
-  // The pinned desks' keys: the same pins keep the same set.
+  // The pinned desks' places: the same pins keep the same map.
   private readonly pinnedDesks = memo(
-    (pins: TownModel["deskPins"]): ReadonlySet<string> => new Set(pins.keys()),
+    (pins: TownModel["deskPins"]): TownPinned =>
+      new Map([...pins].map(([desk, pin]) => [desk, pin.rank])),
   );
 
   // The same saved room spots keep the same map: only a move places again.
@@ -234,7 +236,7 @@ export class TownScene {
       shape: TownShape,
       held: TownHeldCells,
       spots: ReturnType<typeof townRoomSpots>,
-      pinned: ReadonlySet<string>,
+      pinned: TownPinned,
     ) => {
       const key = townShapeKey(shape);
       const previous =

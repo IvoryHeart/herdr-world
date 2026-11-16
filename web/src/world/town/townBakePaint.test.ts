@@ -271,7 +271,10 @@ test("a room's pinned desks share one rug; a room without pins has none", () => 
     hosts: [{ key: "a", displayOrder: 0 }],
     rooms: [{ key: "a/r", hostKey: "a", order: 0, deskKeys: desks }],
   };
-  const pinned = new Set(["a/r/t3", "a/r/t1"]);
+  const pinned = new Map([
+    ["a/r/t3", null],
+    ["a/r/t1", null],
+  ]);
   const shape = townShapeFor(1440, 900);
   const building = layoutTown(
     input,
@@ -302,6 +305,6 @@ test("a room's pinned desks share one rug; a room without pins has none", () => 
   expect(squares).toBe(pinned.size);
   const room = building.rooms[0]!;
   const first = room.cells.slice(0, 2).map((cell) => cell.deskKey);
-  expect(new Set(first)).toEqual(pinned);
+  expect(new Set(first)).toEqual(new Set(pinned.keys()));
   expect(interior(() => false).join(";")).not.toContain(TOWN_PIN_RUG.fill);
 });

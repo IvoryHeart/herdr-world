@@ -16,7 +16,7 @@ import {
   type CorePins,
 } from "./corePins";
 import type { WorldRuntimeConnection } from "./runtimeStore";
-import { setDeskPinned } from "./useDeskPins";
+import { keepDeskPins, saveDeskPinOrder, setDeskPinned } from "./useDeskPins";
 
 // Synthetic hosts and terminals only.
 const pane = (
@@ -325,4 +325,27 @@ describe("World's desk pin for a core tab is its label", () => {
     await setDeskPinned(target("tui"), true, store, stale);
     expect(patches).toEqual([[{ op: "desk.pin", key: "tui:t1", cell: null }]]);
   });
+  test("a room's pinned order is World's own: a core desk gets a record for its place", async () => {
+    const pins: CorePins = corePinsOf([
+      core([pane("t1", "a1", { agent: "claude" })]),
+    ]);
+    const coreKey = [...pins.keys()][0]!;
+    const { store, patches } = boardStore({});
+    await saveDeskPinOrder([coreKey, "tui:t1"], store, pins);
+    expect(patches).toEqual([
+      [
+        { op: "desk.rank", key: coreKey, rank: 0, create: true },
+        { op: "desk.rank", key: "tui:t1", rank: 1 },
+      ],
+    ]);
+  });
+});
+
+test("desk pins keep their identity until a desk or its saved place changes", () => {
+  const last = { a: { cell: null }, b: { cell: null, rank: 0 } };
+  expect(
+    keepDeskPins(last, { a: { cell: null }, b: { cell: null, rank: 0 } }),
+  ).toBe(last);
+  const moved = { a: { cell: null, rank: 0 }, b: { cell: null, rank: 1 } };
+  expect(keepDeskPins(last, moved)).toBe(moved);
 });
