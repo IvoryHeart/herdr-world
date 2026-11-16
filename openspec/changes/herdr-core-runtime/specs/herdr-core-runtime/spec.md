@@ -40,6 +40,26 @@ and service/runtime/occupant fences at admission, dispatch and publication.
 - **THEN** observation is unavailable and nothing starts until a separate
   confirmed start action
 
+#### Scenario: Install core where no runtime exists
+
+- **WHEN** the standalone installer or Homebrew's first launch finds neither
+  `hc` nor `herdr`, and `HERDR_WORLD_SKIP_HERDR` is not set
+- **THEN** it installs herdr-core with its official checksum-verified steps,
+  starts it now and at login and registers a local core connection; when
+  either runtime exists it installs and changes nothing
+
+#### Scenario: Confirmed install from World
+
+- **WHEN** a person chooses Install herdr-core for this computer or a Unix SSH
+  host in Manage connections, on a core connection that found nothing running,
+  or on Town's Set up card
+- **THEN** World shows the version, install location, login start and any
+  installed Herdr that stays, and changes nothing until the person confirms;
+  after confirmation it installs (or starts an installed core) only on that
+  host, shows progress and plain errors, then connects; automatic connects and
+  reconnects never install or start core, and an installed runtime is never
+  replaced or updated
+
 #### Scenario: Host stops programs at logout
 
 - **WHEN** core reports `keeps_running_after_logout: false` for a local or Unix

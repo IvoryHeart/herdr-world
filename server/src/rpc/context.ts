@@ -62,6 +62,8 @@ export type RpcServices = {
   >;
   /** Control of herdr-core connections (world.core.*). */
   coreControl?: import("./core").CoreRpcServices;
+  /** Confirmed herdr-core installs from World's UI (connections.core_install). */
+  coreInstall?: import("../herdr-core/install").CoreInstall;
   focusedAcquisition: FocusedAcquisition<Socket>;
   agentActivity: AgentActivityCache;
   deskWatches: DeskWatches<Socket>;

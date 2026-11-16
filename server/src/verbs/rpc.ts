@@ -126,6 +126,8 @@ export const rpcVerbs = [
   rpc("connections.connect", "reconcilable", "world"),
   // Testing switch: the in-process herdr-core stand-in (start/kill/remove).
   rpc("connections.core_fixture", "reconcilable", "world"),
+  // Probe, then a confirmed herdr-core install on this computer or an SSH host.
+  rpc("connections.core_install", "reconcilable", "world"),
   rpc("connections.create", "reconcilable", "world"),
   rpc("connections.disconnect", "reconcilable", "world"),
   rpc("connections.list", "read", "world"),

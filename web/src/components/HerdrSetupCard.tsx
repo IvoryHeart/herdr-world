@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Terminal,
 } from "lucide-react";
+import { CoreInstallPanel } from "./CoreInstall";
 import "./HerdrSetupCard.css";
 
 type SetupInfo = {
@@ -28,6 +29,8 @@ export function HerdrSetupCard({
   const [info, setInfo] = useState<SetupInfo | null>(null);
   const [checking, setChecking] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  // With no runtime at all, herdr-core comes first; the Herdr TUI is second.
+  const [coreOpen, setCoreOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const requestInProgress = useRef(false);
@@ -109,6 +112,7 @@ export function HerdrSetupCard({
   if (!info) return children;
 
   const missing = info.state === "missing";
+  const coreFirst = missing && !confirming && !busy;
   const title = busy
     ? "Setting up Herdr"
     : confirming
@@ -144,7 +148,11 @@ export function HerdrSetupCard({
           ) : (
             <Server size={13} aria-hidden="true" />
           )}
-          {missing ? `Verified ${info.verified_version}` : "Installed"}
+          {coreFirst
+            ? "Checksum-verified"
+            : missing
+              ? `Verified ${info.verified_version}`
+              : "Installed"}
         </span>
       </div>
 
@@ -156,12 +164,37 @@ export function HerdrSetupCard({
             : confirming
               ? "This changes the machine running Herdr World, not your browser or a remote SSH host."
               : missing
-                ? "Herdr runs your terminals and agents. Set it up once, then manage your workspace from here."
+                ? "herdr-core runs your terminals and agents. Set it up once on this computer, then manage your workspace from here."
                 : "Herdr is installed but isn't running. Start it in the background to reconnect your terminals and agents."}
         </p>
       </div>
 
-      {busy ? (
+      {coreOpen ? (
+        <CoreInstallPanel
+          host={{ type: "local" }}
+          onClose={() => {
+            setCoreOpen(false);
+            requestAnimationFrame(() => reviewButton.current?.focus());
+          }}
+        />
+      ) : coreFirst ? (
+        <ul className="herdr-setup-steps">
+          <li>
+            <Download size={18} aria-hidden="true" />
+            <div>
+              <strong>herdr-core, the newest release</strong>
+              <span>From releases.herdr.dev, checked with SHA-256</span>
+            </div>
+          </li>
+          <li>
+            <Server size={18} aria-hidden="true" />
+            <div>
+              <strong>Starts now and at login</strong>
+              <span>Independently of Herdr World, which then connects</span>
+            </div>
+          </li>
+        </ul>
+      ) : busy ? (
         <div className="herdr-setup-progress" role="status">
           <LoaderCircle
             size={18}
@@ -215,8 +248,27 @@ export function HerdrSetupCard({
         </div>
       ) : null}
 
-      <div className="herdr-setup-footer">
-        {confirming ? (
+      <div className="herdr-setup-footer" hidden={coreOpen}>
+        {coreFirst ? (
+          <div className="herdr-setup-actions">
+            <button
+              ref={reviewButton}
+              type="button"
+              className="herdr-setup-primary"
+              onClick={() => setCoreOpen(true)}
+            >
+              Set up herdr-core
+              <ArrowRight size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="herdr-setup-cancel"
+              onClick={() => setConfirming(true)}
+            >
+              Use the Herdr TUI instead
+            </button>
+          </div>
+        ) : confirming ? (
           <div className="herdr-setup-actions">
             <button
               type="button"

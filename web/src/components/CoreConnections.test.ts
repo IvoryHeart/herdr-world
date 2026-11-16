@@ -71,3 +71,48 @@ test("kept running or unknown shows nothing", () => {
     expect(markup).not.toContain("loginctl");
   }
 });
+
+const offers = (markup: string) =>
+  markup.match(/>Install herdr-core…<\/button>/g)?.length ?? 0;
+
+test("a core that found nothing running offers the install; connecting alone never installs", () => {
+  const missing = render([
+    connection(
+      {
+        type: "ssh",
+        ssh_destination: "dev@example.test",
+        state: "error",
+        error: { code: "core_missing", message: "herdr-core was not found" },
+        observation: null,
+      },
+      null,
+    ),
+  ]);
+  // The card and the host list each offer it; the host list also has this computer.
+  expect(missing).toContain("herdr-core was not found");
+  expect(missing).toContain('aria-label="Install herdr-core"');
+  expect(missing).toContain("This computer");
+  expect(offers(missing)).toBe(3);
+  const windows = render([
+    connection(
+      {
+        type: "ssh",
+        ssh_destination: "win@example.test",
+        remote_platform: "windows",
+        state: "error",
+        error: { code: "core_missing", message: "herdr-core was not found" },
+        observation: null,
+      },
+      null,
+    ),
+  ]);
+  expect(windows).not.toContain("win@example.test</span>");
+  expect(offers(windows)).toBe(1);
+});
+
+test("a ready local core leaves only the hosts that still lack one", () => {
+  const ready = render([connection({}, null)]);
+  expect(ready).not.toContain("This computer");
+  expect(offers(ready)).toBe(0);
+  expect(offers(render([]))).toBe(1);
+});

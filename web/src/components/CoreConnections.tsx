@@ -2,6 +2,13 @@ import { CircleAlert, X } from "lucide-react";
 import { useState } from "react";
 import { suggestConnectionId } from "../connectionProfiles";
 import { coreFixtureScenario } from "../coreFixture";
+import { useStoreSelector } from "../store";
+import {
+  coreInstallHosts,
+  type CoreInstallHost,
+  hostKey,
+} from "../coreInstall";
+import { CoreInstallPanel } from "./CoreInstall";
 import {
   type CoreConnectionSummary,
   type CoreProfileDraft,
@@ -230,7 +237,7 @@ export function CoreConnectionCards({
   act: (key: string, method: string, id: string, success: string) => void;
   onRemove: (connection: CoreConnectionSummary) => void;
 }) {
-  if (connections.length === 0) return null;
+  const [installing, setInstalling] = useState<string | null>(null);
   return (
     <>
       {connections.map((connection) => {
@@ -303,6 +310,19 @@ export function CoreConnectionCards({
                 <CircleAlert size={13} /> {connection.error.message}
               </div>
             ) : null}
+            {installing === connection.id ? (
+              <CoreInstallPanel
+                host={
+                  connection.type === "ssh"
+                    ? {
+                        type: "ssh",
+                        destination: connection.ssh_destination ?? "",
+                      }
+                    : { type: "local" }
+                }
+                onClose={() => setInstalling(null)}
+              />
+            ) : null}
             {observed?.stops_at_logout ? (
               <div className="connection-core-logout" role="note">
                 <span>
@@ -371,6 +391,15 @@ export function CoreConnectionCards({
                   Disconnect
                 </button>
               )}
+              {offersInstall(connection) && installing !== connection.id ? (
+                <button
+                  type="button"
+                  disabled={!!pending || !!installing}
+                  onClick={() => setInstalling(connection.id)}
+                >
+                  Install herdr-core…
+                </button>
+              ) : null}
               {connection.read_only ? null : (
                 <button
                   type="button"
@@ -384,9 +413,25 @@ export function CoreConnectionCards({
           </section>
         );
       })}
+      <CoreInstallHosts cores={connections} disabled={!!pending} />
     </>
   );
 }
+
+/**
+ * A connection that found no running core on a Unix host offers to install
+ * or start it there. Connecting itself never installs or starts core.
+ */
+function offersInstall(connection: CoreConnectionSummary) {
+  return (
+    connection.remote_platform !== "windows" &&
+    connection.id !== CORE_FIXTURE_ID &&
+    connection.state !== "ready" &&
+    connection.state !== "disconnected" &&
+    !!connection.error
+  );
+}
+const CORE_FIXTURE_ID = "core-fixture";
 
 /** The `?coreFixture` testing switch: drive the stand-in core. */
 export function CoreFixturePanel({
@@ -520,6 +565,58 @@ export function CoreFixturePanel({
           Another app: pin or unpin scout
         </button>
       </div>
+    </section>
+  );
+}
+
+/** Manage connections: each host that could take herdr-core. */
+function CoreInstallHosts({
+  cores,
+  disabled,
+}: {
+  cores: Parameters<typeof coreInstallHosts>[1];
+  disabled: boolean;
+}) {
+  const connections = useStoreSelector((snapshot) => snapshot.connections);
+  const [open, setOpen] = useState<CoreInstallHost | null>(null);
+  const hosts = coreInstallHosts(connections, cores);
+  // A host that just got a ready core keeps its panel until it is closed.
+  if (open && !hosts.some((host) => hostKey(host) === hostKey(open)))
+    hosts.push(open);
+  return (
+    <section
+      className="connection-manager-card core-install-hosts"
+      aria-label="Install herdr-core"
+    >
+      <div className="connection-manager-card-head">
+        <div>
+          <strong>herdr-core</strong>
+          <span>
+            Install herdr-core where it is missing, or start an installed one.
+            World asks first and never replaces a runtime.
+          </span>
+        </div>
+      </div>
+      <ul className="core-install-host-list">
+        {hosts.map((host) => (
+          <li key={hostKey(host)}>
+            <span>
+              {host.type === "local" ? "This computer" : host.destination}
+            </span>
+            {open && hostKey(open) === hostKey(host) ? (
+              <CoreInstallPanel host={host} onClose={() => setOpen(null)} />
+            ) : (
+              <button
+                type="button"
+                disabled={disabled || !!open}
+                onClick={() => setOpen(host)}
+              >
+                Install herdr-core…
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

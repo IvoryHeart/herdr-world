@@ -20,10 +20,10 @@ if [ -n "${HERDR_SSH_HOST:-}${HERDR_SOCKET_PATH:-}${HERDR_CLIENT_SOCKET_PATH:-}$
   bootstrap=0
 fi
 warn_bootstrap() {
-  printf '%s\n' 'Herdr World: Herdr check or installation failed; starting World anyway. Retry with `herdr-world herdr upgrade --install`, or set HERDR_WORLD_SKIP_HERDR=1 to skip automatic setup.' >&2
+  printf '%s\n' 'Herdr World: the runtime check or herdr-core installation failed; starting World anyway. Retry with `herdr-world herdr upgrade --install`, or set HERDR_WORLD_SKIP_HERDR=1 to skip automatic setup.' >&2
 }
 if [ "$bootstrap" = 1 ] && [ "${HERDR_WORLD_SKIP_HERDR:-}" != 1 ]; then
-  if ! install_missing_herdr; then
+  if ! install_missing_runtime; then
     warn_bootstrap
   fi
 fi

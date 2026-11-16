@@ -27,6 +27,13 @@ owner acceptance before the feature merges to main.
 - **Popups.** "we can have world equivalents and give best of both": TUI-only popups get World equivalents.
 - **Windows.** Windows SSH hosts are in scope through a fixed PowerShell named-pipe relay. The owner verifies it on a real Windows host.
 
+## Owner ruling (2026-11-16; verbatim)
+
+- **Install core first.** "herdr-core should always take precedence over herdr or herdr-tui (as in if none in installed, then herdr-core gets installed, otherwise go with whatever is installed and optionally give an option for user to install it from the UI of the world in manage connections or during connecting.)"
+  - When neither `hc` nor `herdr` is found, the standalone installer and Homebrew's first launch install herdr-core with core's official, checksum-verified steps and start it now and at login. An installed runtime is never replaced or updated.
+  - World's UI offers **Install herdr-core** in Manage connections, on a core connection that found nothing running, and first on Town's Set up card. Each install shows what will happen and waits for a confirmation.
+  - This refines "World never starts core": automatic connects and reconnects still never start or install it. Only a confirmed install or setup starts core, and only on the host the person chose.
+
 These rulings supersede the planning alternatives, including O4's status injector
 and O8's per-harness delivery channels. World uses core send/keys for every
 harness and checks the occupant and foreground immediately before sending. The

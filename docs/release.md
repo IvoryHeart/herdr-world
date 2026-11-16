@@ -144,19 +144,19 @@ Each release pins the Herdr it installs and upgrades to
    the upgrade step reinstalls the Codex, Claude and Pi harness integrations after every
    Herdr upgrade.
 
-After changing the verified Herdr table, run `bun scripts/herdr-bootstrap.ts` to
-refresh the standalone installer's checked-in compatibility block. Its parity
-regression ensures the self-contained download script and Homebrew use the same
-canonical shell and verified metadata.
+After changing `scripts/herdr-core-install.sh` or `scripts/homebrew-herdr-bootstrap.sh`,
+run `bun scripts/herdr-bootstrap.ts` to refresh the standalone installer's
+checked-in runtime block. Its parity regression ensures the self-contained
+download script and Homebrew use the same canonical shell.
 
 Standalone installers and World updates read that table. Homebrew generates a
 launcher with no mandatory `herdr` dependency: normal local startup reuses an
-existing runtime or installs the verified prebuilt release only when missing.
-The compatibility bootstrap embeds the current verified Herdr checksums and uses
-atomic no-replace publication; it does not call older World's upgrade command.
+existing runtime (Herdr or herdr-core) or installs herdr-core only when neither
+exists. The bootstrap reads core's release list and checks the archive's
+published SHA-256; it does not call older World's upgrade command.
 Metadata/management commands and remote/custom endpoints do not bootstrap. The
-native smoke check exercises missing installation and preservation across World
-reinstallation on Apple Silicon and Intel; it must not compile a core dependency.
+native smoke check exercises missing herdr-core installation (stopping the core it
+started) and preservation across World reinstallation on Apple Silicon and Intel; it must not compile a core dependency.
 Run the generated Ruby formula/launcher regressions when changing this policy.
 
 ## Publishing a candidate or stable release

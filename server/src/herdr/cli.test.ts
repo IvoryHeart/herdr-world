@@ -193,6 +193,128 @@ describe("runHerdrCommand", () => {
     ]);
   });
 
+  describe("upgrade --install with no Herdr goes core first", () => {
+    const missing = async () => ({ state: "missing" as const });
+    const run = (
+      args: string[],
+      core: () => Promise<{
+        core: string | null;
+        installed: boolean;
+        error?: string;
+      }>,
+      extra: Record<string, unknown> = {},
+    ) => {
+      const io = capture();
+      let upgrades = 0;
+      let setups = 0;
+      const done = runHerdrCommand(["herdr", "upgrade", ...args], "0.3.0", {
+        ...io,
+        loadConfig: () => fakeConfig() as never,
+        detect: missing,
+        platform: "linux",
+        coreSetup: async (log) => {
+          setups++;
+          log(
+            "Installed herdr-core 0.1.21 into /example/.local/bin/herdr-core.",
+          );
+          return core();
+        },
+        upgrade: async () => {
+          upgrades++;
+          return upgradeReport();
+        },
+        ...extra,
+      });
+      return done.then((code) => ({
+        code,
+        io,
+        upgrades: () => upgrades,
+        setups: () => setups,
+      }));
+    };
+
+    test("installs and starts core, and never the Herdr TUI", async () => {
+      const result = await run(
+        ["--install", "--only-if-missing"],
+        async () => ({
+          core: "/example/.local/bin/herdr-core",
+          installed: true,
+        }),
+      );
+      expect(result.code).toBe(0);
+      expect(result.upgrades()).toBe(0);
+      expect(result.io.out).toEqual([
+        "Installed herdr-core 0.1.21 into /example/.local/bin/herdr-core.",
+        "To connect World to it, use Install herdr-core on this computer in Hosts > Manage connections; an installed core is set up, never replaced.",
+      ]);
+    });
+
+    test("an installed core is left alone", async () => {
+      const result = await run(["--install"], async () => ({
+        core: "/example/.local/bin/herdr-core",
+        installed: false,
+      }));
+      expect(result.code).toBe(0);
+      expect(result.upgrades()).toBe(0);
+      expect(result.io.out.at(-2)).toBe(
+        "herdr-core is installed at /example/.local/bin/herdr-core; World uses it, so no Herdr was installed.",
+      );
+    });
+
+    test("a failure is said plainly and exits 1; --json reports it", async () => {
+      const result = await run(["--install", "--json"], async () => ({
+        core: null,
+        installed: false,
+        error: "could not reach releases.herdr.dev",
+      }));
+      expect(result.code).toBe(1);
+      expect(JSON.parse(result.io.out.join("\n"))).toEqual({
+        runtime: "herdr-core",
+        core: null,
+        installed: false,
+        error: "could not reach releases.herdr.dev",
+      });
+      expect(result.io.err).toContain(
+        "herdr-world herdr: could not reach releases.herdr.dev",
+      );
+    });
+
+    const keeps: Array<[string, Record<string, unknown>, string[]]> = [
+      ["Windows", { platform: "win32" }, ["--install"]],
+      [
+        "an installed Herdr",
+        {
+          detect: async () => ({
+            state: "installed",
+            binaryPath: "/example/herdr",
+          }),
+        },
+        ["--install"],
+      ],
+      ["no --install", {}, []],
+      [
+        "a remote default connection",
+        {
+          loadConfig: () =>
+            ({ ...fakeConfig(), sshHost: "dev.example.com" }) as never,
+        },
+        ["--install"],
+      ],
+    ];
+    test.each(keeps)(
+      "%s keeps the Herdr upgrade path",
+      async (_name, extra, args) => {
+        const result = await run(
+          args,
+          async () => ({ core: null, installed: true }),
+          extra,
+        );
+        expect(result.setups()).toBe(0);
+        expect(result.upgrades()).toBe(1);
+      },
+    );
+  });
+
   test("upgrade --json prints the report and failed steps exit 1", async () => {
     const io = capture();
     const report = upgradeReport({

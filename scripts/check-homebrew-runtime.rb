@@ -1,5 +1,7 @@
 # Native acceptance for the installed Homebrew launcher, outside brew's sandbox.
-# Only a temporary World listener starts; Herdr stays a separately owned binary.
+# Only a temporary World listener starts. With no runtime, the launcher installs
+# the real herdr-core into the fixture HOME and starts it (this check stops it
+# again); an existing runtime stays a separately owned, unchanged binary.
 require "digest"
 require "fileutils"
 require "socket"
@@ -11,8 +13,8 @@ world = File.expand_path(world)
 fixture_home = File.expand_path(fixture_home)
 FileUtils.mkdir_p(fixture_home)
 runtime_dir = File.join(fixture_home, ".local", "bin")
-herdr = File.join(runtime_dir, "herdr")
-before = Digest::SHA256.file(herdr).hexdigest if File.exist?(herdr)
+core = File.join(runtime_dir, "herdr-core")
+before = Digest::SHA256.file(core).hexdigest if File.exist?(core)
 log = File.join(fixture_home, "world.log")
 port = TCPServer.open("127.0.0.1", 0) { |socket| socket.addr[1] }
 environment = {
@@ -40,12 +42,12 @@ begin
       end
     end
   end
-  raise "Missing Herdr was not installed" unless File.executable?(herdr)
-  version = IO.popen([herdr, "--version"], &:read)
-  raise "Installed Herdr is not runnable" unless $?.success? && version.match?(/^herdr [0-9]+[.][0-9]+[.][0-9]+/)
-  after = Digest::SHA256.file(herdr).hexdigest
-  raise "Existing Herdr changed" if before && before != after
-  puts before ? "Existing external Herdr preserved" : "Missing Herdr installed and executable"
+  raise "Missing herdr-core was not installed" unless File.executable?(core)
+  version = IO.popen([core, "--version"], &:read)
+  raise "Installed herdr-core is not runnable" unless $?.success? && version.match?(/^hc [0-9]+[.][0-9]+[.][0-9]+/)
+  after = Digest::SHA256.file(core).hexdigest
+  raise "Existing herdr-core changed" if before && before != after
+  puts before ? "Existing herdr-core preserved" : "Missing herdr-core installed and executable"
 rescue
   warn File.readlines(log).last(30).join
   raise
@@ -58,5 +60,9 @@ ensure
     Process.waitpid(pid)
   rescue Errno::ESRCH, Errno::ECHILD
     # The failed child may already have been reaped.
+  end
+  # Stop the core this check's first launch started; the runner is temporary.
+  if !before && File.executable?(core)
+    system(environment, core, "server", "stop", out: File::NULL, err: File::NULL)
   end
 end

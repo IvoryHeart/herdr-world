@@ -1,6 +1,10 @@
 import { HerdrClient } from "../bridge/herdr-client";
 import { loadServerConfig } from "../config/server-config";
 import {
+  type LocalCoreSetup,
+  setupMissingLocalCore,
+} from "../herdr-core/install";
+import {
   detectHerdrSetup,
   type HerdrSetupGuard,
   type HerdrSetupResult,
@@ -47,7 +51,14 @@ A normal upgrade also brings this release's harness integrations and plugin up t
 date: \`herdr integration install\` for the codex, claude and pi harnesses found
 on PATH when their integration is missing or outdated (and after every Herdr
 upgrade), and the Herdr World plugin, if installed from GitHub, reinstalled at
-this release's tag. --install also installs Herdr when none is found.
+this release's tag.
+
+--install with no Herdr on this computer goes core first: an installed
+herdr-core is left as it is; otherwise World installs herdr-core with its
+official, checksum-verified release steps into ~/.local/bin and starts it now
+and at login. It never installs the Herdr TUI beside a core. On Windows, which
+herdr-core supports on x64 only through its own PowerShell installer, --install
+keeps installing Herdr.
 `;
 }
 
@@ -62,6 +73,9 @@ export interface HerdrCommandDeps {
     >,
   ) => Promise<HerdrUpgradeReport>;
   serviceStatus?: () => { installed: boolean; active: boolean };
+  /** Core-first `upgrade --install` when no Herdr is found (not on Windows). */
+  coreSetup?: (log: (line: string) => void) => Promise<LocalCoreSetup>;
+  platform?: NodeJS.Platform;
   log?: (message: string) => void;
   error?: (message: string) => void;
 }
@@ -158,6 +172,33 @@ export async function runHerdrCommand(
             : "not installed"
         }`,
       );
+      return 0;
+    }
+
+    if (
+      action === "upgrade" &&
+      flags.includes("--install") &&
+      (dependencies.platform ?? process.platform) !== "win32" &&
+      !config.sshHost &&
+      (await detect()).state === "missing"
+    ) {
+      const json = flags.includes("--json");
+      const core = await (dependencies.coreSetup ?? setupMissingLocalCore)(
+        json ? error : log,
+      );
+      if (json) log(JSON.stringify({ runtime: "herdr-core", ...core }));
+      else if (core.core && !core.installed)
+        log(
+          `herdr-core is installed at ${core.core}; World uses it, so no Herdr was installed.`,
+        );
+      if (!json && core.core)
+        log(
+          "To connect World to it, use Install herdr-core on this computer in Hosts > Manage connections; an installed core is set up, never replaced.",
+        );
+      if (core.error) {
+        error(`herdr-world herdr: ${core.error}`);
+        return 1;
+      }
       return 0;
     }
 

@@ -49,6 +49,21 @@ async function dispatchConnectionsRpc(
         result = await connectionProfiles.disconnect(params?.id);
       } else if (method === "connections.test") {
         result = await connectionProfiles.test(params?.profile ?? params);
+      } else if (method === "connections.core_install") {
+        // Confirmed in World's UI: probe, install (then connect) or status.
+        const install = rpc.services.coreInstall;
+        if (!install)
+          throw new Error("herdr-core installation is not available");
+        const action = params?.action;
+        result =
+          action === "probe"
+            ? await install.probe(
+                params?.host,
+                params?.fake === "ok" || params?.fake === "error",
+              )
+            : action === "install"
+              ? install.install(params?.host, params?.version, params?.fake)
+              : install.status(params?.host);
       } else if (method === "connections.core_fixture") {
         // Testing switch: an in-process herdr-core double, never a real core.
         const fixture = rpc.services.core?.fixture;
