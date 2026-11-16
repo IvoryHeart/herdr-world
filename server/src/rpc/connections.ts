@@ -60,9 +60,15 @@ async function dispatchConnectionsRpc(
             ? await install.probe(
                 params?.host,
                 params?.fake === "ok" || params?.fake === "error",
+                params?.connection,
               )
             : action === "install"
-              ? install.install(params?.host, params?.version, params?.fake)
+              ? install.install(
+                  params?.host,
+                  params?.version,
+                  params?.fake,
+                  params?.connection,
+                )
               : install.status(params?.host);
       } else if (method === "connections.core_fixture") {
         // Testing switch: an in-process herdr-core double, never a real core.

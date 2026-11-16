@@ -101,8 +101,10 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
    now and at login, and connects World to it; Homebrew does the same on first
    World launch. Set `HERDR_WORLD_SKIP_HERDR=1` to skip this setup.
    With npm, run `herdr-world herdr upgrade --install` once if needed; it also
-   installs herdr-core first when no runtime exists. Windows archives keep the
-   Herdr TUI path: herdr-core has its own PowerShell installer for Windows x64.
+   installs herdr-core first when no runtime exists. On Windows an installed
+   herdr-core is kept, but with neither runtime the command installs the Herdr
+   TUI, because World on Windows cannot yet connect to a herdr-core on the same
+   computer; herdr-core has its own PowerShell installer for Windows x64.
    `herdr-world herdr setup` configures future Herdr TUI startup as a user
    service and starts it if down. If you open World with no runtime running,
    Town offers **Set up herdr-core** first (or **Use the Herdr TUI instead**),

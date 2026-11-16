@@ -320,6 +320,10 @@ export function CoreConnectionCards({
                       }
                     : { type: "local" }
                 }
+                connection={{
+                  id: connection.id,
+                  session: connection.core_session,
+                }}
                 onClose={() => setInstalling(null)}
               />
             ) : null}

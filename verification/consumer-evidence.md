@@ -562,9 +562,11 @@ no downloads, preserved entries and World startup for blocked paths. The standal
 regression separately records that running status skips the new CLI operation.
 The archive-stage check validates the launcher and World inputs. The tap and
 Release native CI use `scripts/check-homebrew-runtime.rb` to launch a temporary
-World listener, install and execute a missing real herdr-core (then stop the core
-it started), then reinstall World and confirm that the existing core's digest stays
-unchanged. World's own connects never start core; only this missing-runtime setup
+World listener with an isolated HOME and PATH: a fake `curl` serves a fake
+herdr-core release, so the launcher's real install steps (manifest, SHA-256,
+unpack, `--version`) install a fake core that is started once and only logs. It
+then reinstalls World and confirms that the existing core's digest stays
+unchanged and that it is not started again; nothing real is downloaded or run. World's own connects never start core; only this missing-runtime setup
 does. Native acceptance belongs to the exact CI head;
 Linux harness results alone do not prove native Homebrew installation acceptance.
 

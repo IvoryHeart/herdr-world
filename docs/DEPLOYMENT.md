@@ -455,9 +455,13 @@ With no Herdr and no herdr-core on this computer, `upgrade --install` installs
 herdr-core instead of Herdr (Linux and macOS): core's official release list over
 HTTPS, its archive checked against the published SHA-256, `~/.local/bin/herdr-core`
 plus an `hc` link if free, then core starts now and at login (a systemd user unit
-or a launchd LaunchAgent). An installed core is left as it is. On Windows, or with
-a remote default connection, the command keeps installing the Herdr TUI; herdr-core
-has its own PowerShell installer for Windows x64. Connect World to the new core
+or a launchd LaunchAgent). An installed core is left as it is, and no Herdr is
+installed beside it; `herdr setup` makes the same choice and also starts an
+installed core now and at login. On Windows an installed core is kept the same
+way, but with neither runtime the command installs the Herdr TUI, because World on
+Windows cannot yet connect to a herdr-core on the same computer (Windows hosts over
+SSH can run core); herdr-core has its own PowerShell installer for Windows x64. A
+remote default connection keeps its own Herdr. Connect World to the new core
 with **Hosts → Manage connections → Install herdr-core…** (it starts the
 installed core and connects) or `herdr-world connections add core-local --core`.
 
@@ -525,7 +529,8 @@ When it runs:
   runtime needs an explicit upgrade through its owner (`brew upgrade herdr` for a
   Homebrew runtime, `herdr update` for Herdr's own installation).
 - **npm and Windows archives**: run `herdr-world herdr upgrade --install` once
-  yourself (herdr-core first when no runtime exists, except on Windows), or use
+  yourself (herdr-core first when no runtime exists; on Windows an installed core
+  is kept, otherwise Herdr is installed), or use
   the menu or **Hosts → Manage connections → Install herdr-core…**.
 
 What the upgrade does:

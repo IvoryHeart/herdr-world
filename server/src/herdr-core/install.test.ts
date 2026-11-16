@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  coreInstallInput,
-  createCoreInstall,
-  parseCoreProbe,
-  setupMissingLocalCore,
-} from "./install";
+import { coreInstallInput, createCoreInstall, parseCoreProbe } from "./install";
 
 const PROBE =
   "target=linux-x86_64\ncore=\nherdr=\ndir=/example/.local/bin\nlogin=systemd\n";
@@ -24,7 +19,11 @@ function harness(
       type: string;
       state: string;
       ssh_destination?: string;
+      core_session?: string;
+      core_state_dir?: string;
     }>;
+    /** What a connect attempt ends in (World's connection state). */
+    connectsTo?: { state: string; error?: { message: string } };
   } = {},
 ) {
   const calls: Call[] = [];
@@ -34,6 +33,7 @@ function harness(
   const setupDone = new Promise<void>((done) => {
     finishSetup = done;
   });
+  const ready = () => options.connectsTo ?? { state: "ready" };
   const install = createCoreInstall({
     profiles: () => ({
       list: () => [
@@ -45,14 +45,19 @@ function harness(
           remote_platform: "windows",
         },
       ],
-      coreList: () => options.coreProfiles ?? [],
+      coreList: () =>
+        (options.coreProfiles ?? []).map((profile) => ({
+          core_session: "default",
+          core_state_dir: "",
+          ...profile,
+        })),
       create: async (value) => {
         created.push(value);
-        return value;
+        return { ...(value as object), ...ready() };
       },
       connect: async (id) => {
         connected.push(id);
-        return id;
+        return { id, ...ready() };
       },
     }),
     fixture: { start: async () => ({}) },
@@ -94,6 +99,12 @@ describe("herdr-core install from World", () => {
   test("the script call is appended with a checked version and closed stdin", () => {
     expect(coreInstallInput("setup", "0.1.21")).toEndWith(
       "\nherdr_core_setup '0.1.21' </dev/null\n",
+    );
+    expect(coreInstallInput("setup", null, "work")).toEndWith(
+      "\nherdr_core_setup '' 'work' </dev/null\n",
+    );
+    expect(() => coreInstallInput("setup", null, "a;b")).toThrow(
+      "invalid herdr-core session",
     );
     expect(coreInstallInput("probe")).toEndWith(
       "\nherdr_core_probe </dev/null\n",
@@ -221,35 +232,112 @@ describe("herdr-core install from World", () => {
     expect(h.calls).toHaveLength(0);
   });
 
-  test("the CLI path leaves an installed core alone and installs a missing one", async () => {
-    const lines: string[] = [];
-    const present = await setupMissingLocalCore(
-      (line) => lines.push(line),
-      async (_argv, _input, _timeout, onLine) => {
-        onLine("target=linux-x86_64\ncore=/example/.local/bin/herdr-core");
-        onLine("dir=/example/.local/bin");
-        return { code: 0, stderr: "" };
-      },
-    );
-    expect(present).toEqual({
-      core: "/example/.local/bin/herdr-core",
-      installed: false,
+  test("an install under a saved connection starts its session and connects only it", async () => {
+    const h = harness({
+      coreProfiles: [
+        { id: "core-local", type: "local", state: "error" },
+        {
+          id: "core-work",
+          type: "local",
+          state: "error",
+          core_session: "work",
+        },
+      ],
     });
-    const inputs: string[] = [];
-    const fresh = await setupMissingLocalCore(
-      (line) => lines.push(line),
-      async (_argv, input, _timeout, onLine) => {
-        inputs.push(input);
-        if (isProbe(input)) for (const line of PROBE.split("\n")) onLine(line);
-        else onLine("herdr-core is running.");
-        return { code: 0, stderr: "" };
-      },
+    const started = h.install.install(
+      { type: "local" },
+      null,
+      undefined,
+      "core-work",
     );
-    expect(fresh).toEqual({
-      core: "/example/.local/bin/herdr-core",
-      installed: true,
+    expect(started).toMatchObject({ session: "work", connection: "core-work" });
+    h.finishSetup();
+    const status = await settle(h.install, { type: "local" });
+    expect(status).toMatchObject({ phase: "done", connection_id: "core-work" });
+    expect(h.calls[0]!.input).toEndWith(
+      "\nherdr_core_setup '' 'work' </dev/null\n",
+    );
+    expect(h.connected).toEqual(["core-work"]);
+    expect(h.created).toHaveLength(0);
+  });
+
+  test("without a chosen connection only the default endpoint's connection is reused", async () => {
+    const h = harness({
+      coreProfiles: [
+        {
+          id: "core-work",
+          type: "local",
+          state: "error",
+          core_session: "work",
+        },
+        {
+          id: "core-custom",
+          type: "local",
+          state: "error",
+          core_state_dir: "/example/state/herdr-core/default",
+        },
+      ],
     });
-    expect(inputs[1]).toContain("herdr_core_setup </dev/null");
-    expect(lines).toEqual(["herdr-core is running."]);
+    h.install.install({ type: "local" }, null);
+    h.finishSetup();
+    const status = await settle(h.install, { type: "local" });
+    expect(status.connection_id).toBe("core-local");
+    expect(h.connected).toHaveLength(0);
+    expect(h.created).toHaveLength(1);
+  });
+
+  test("a custom state directory or another host's connection is refused before anything runs", () => {
+    const h = harness({
+      coreProfiles: [
+        {
+          id: "core-custom",
+          type: "local",
+          state: "error",
+          core_state_dir: "/example/state/herdr-core/default",
+        },
+        {
+          id: "core-dev",
+          type: "ssh",
+          state: "error",
+          ssh_destination: "dev.example.com",
+        },
+      ],
+    });
+    expect(() =>
+      h.install.install({ type: "local" }, null, undefined, "core-custom"),
+    ).toThrow("reads herdr-core from /example/state/herdr-core/default");
+    expect(() =>
+      h.install.install({ type: "local" }, null, undefined, "core-dev"),
+    ).toThrow("not on this host");
+    expect(() =>
+      h.install.install({ type: "local" }, null, undefined, "missing"),
+    ).toThrow("not on this host");
+    expect(h.calls).toHaveLength(0);
+    expect(h.install.status({ type: "local" }).phase).toBe("idle");
+  });
+
+  test("a core World cannot connect to is a failure in plain words, never done", async () => {
+    const h = harness({
+      connectsTo: {
+        state: "reconnecting",
+        error: { message: "herdr-core is not running" },
+      },
+    });
+    h.install.install({ type: "local" }, null);
+    h.finishSetup();
+    const created = await settle(h.install, { type: "local" });
+    expect(created.phase).toBe("failed");
+    expect(created.error).toBe(
+      "herdr-core is installed and started, but World could not connect to it: herdr-core is not running",
+    );
+    const existing = harness({
+      coreProfiles: [{ id: "core-local", type: "local", state: "error" }],
+      connectsTo: { state: "error" },
+    });
+    existing.install.install({ type: "local" }, null);
+    existing.finishSetup();
+    const reconnected = await settle(existing.install, { type: "local" });
+    expect(reconnected.phase).toBe("failed");
+    expect(reconnected.error).toContain("the connection is error");
   });
 });

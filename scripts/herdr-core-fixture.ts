@@ -18,7 +18,7 @@ const TARGETS = [
 export const fakeCoreScript = (version = FIXTURE_CORE_VERSION) => `#!/bin/sh
 case "\${1:-}" in
   --version) echo 'hc ${version}' ;;
-  server) echo "core server \${2:-}" >> "\${HC_FIXTURE_LOG:-/dev/null}"; exit "\${HC_FIXTURE_START_EXIT:-0}" ;;
+  server) echo "core server \${2:-} session=\${HC_SESSION:-}" >> "\${HC_FIXTURE_LOG:-/dev/null}"; exit "\${HC_FIXTURE_START_EXIT:-0}" ;;
   *) exit 2 ;;
 esac
 `;
@@ -72,7 +72,20 @@ echo "systemctl $*" >> "\${HC_FIXTURE_LOG:-/dev/null}"
 export const isolatedPath = (fakeBin: string) => `${fakeBin}:/usr/bin:/bin`;
 
 /** Where a real login entry would be, inside the fixture's HOME. */
-export const loginEntry = (home: string) =>
-  process.platform === "darwin"
-    ? join(home, "Library", "LaunchAgents", "dev.herdr-world.herdr-core.plist")
-    : join(home, ".config", "systemd", "user", "herdr-core-login.service");
+export const loginEntry = (home: string, session = "default") => {
+  const suffix = session === "default" ? "" : `-${session}`;
+  return process.platform === "darwin"
+    ? join(
+        home,
+        "Library",
+        "LaunchAgents",
+        `dev.herdr-world.herdr-core${suffix}.plist`,
+      )
+    : join(
+        home,
+        ".config",
+        "systemd",
+        "user",
+        `herdr-core-login${suffix}.service`,
+      );
+};

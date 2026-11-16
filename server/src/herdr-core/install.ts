@@ -41,11 +41,15 @@ export type CoreInstallStatus = {
   lines: string[];
   /** Plain words when it failed. */
   error?: string;
+  /** The core session set up: the chosen connection's, else `default`. */
+  session: string;
+  /** The saved core connection the install was offered under, if any. */
+  connection?: string;
   /** The connection World connected after it succeeded. */
   connection_id?: string;
 };
 
-type Run = (
+export type Run = (
   argv: string[],
   input: string,
   timeoutMs: number,
@@ -58,7 +62,12 @@ type CoreProfileItem = {
   state: string;
   ssh_destination?: string;
   remote_platform?: string;
+  core_session: string;
+  core_state_dir: string;
 };
+
+/** What create/connect return: the connection after its connect attempt. */
+type ConnectedItem = { state?: unknown; error?: { message?: unknown } };
 
 export type CoreInstallDeps = {
   profiles: () => {
@@ -80,19 +89,32 @@ export type CoreInstallDeps = {
 };
 
 const VERSION = /^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$/;
-const PROBE_TIMEOUT_MS = 30_000;
-const SETUP_TIMEOUT_MS = 15 * 60_000;
+/** Core session names, as connection profiles validate them. */
+const SESSION = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/;
+export const PROBE_TIMEOUT_MS = 30_000;
+export const SETUP_TIMEOUT_MS = 15 * 60_000;
 const MAX_LINES = 40;
 const LATEST_URL = "https://releases.herdr.dev/core/latest.json";
 
-/** The script with one call appended; its stdin is closed for the call. */
+/**
+ * The script with one call appended; its stdin is closed for the call. Setup
+ * takes a version ('' for the newest) and the core session to start.
+ */
 export function coreInstallInput(
   action: "probe" | "setup",
   version?: string | null,
+  session = "default",
 ): string {
   if (version && !VERSION.test(version))
     throw new Error("invalid herdr-core version");
-  const call = `herdr_core_${action}${version ? ` '${version}'` : ""} </dev/null`;
+  if (!SESSION.test(session)) throw new Error("invalid herdr-core session");
+  const args =
+    action === "setup" && session !== "default"
+      ? ` '${version ?? ""}' '${session}'`
+      : version
+        ? ` '${version}'`
+        : "";
+  const call = `herdr_core_${action}${args} </dev/null`;
   return `${installScript}\n${call}\n`;
 }
 
@@ -118,7 +140,7 @@ export function parseCoreProbe(stdout: string): CoreHostProbe {
 }
 
 /** The last thing the script said went wrong, in its own plain words. */
-function plainError(stderr: string, fallback: string): string {
+export function plainError(stderr: string, fallback: string): string {
   const lines = stderr
     .split("\n")
     .map((line) => line.trim())
@@ -132,7 +154,7 @@ function plainError(stderr: string, fallback: string): string {
   return fallback;
 }
 
-const runProcess: Run = async (argv, input, timeoutMs, onLine) => {
+export const runProcess: Run = async (argv, input, timeoutMs, onLine) => {
   const child = Bun.spawn(argv, {
     stdin: new Blob([input]),
     stdout: "pipe",
@@ -169,60 +191,6 @@ async function fetchLatestVersion(): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-export type LocalCoreSetup = {
-  /** The herdr-core World found or installed, if any. */
-  core: string | null;
-  installed: boolean;
-  error?: string;
-};
-
-/**
- * `herdr-world herdr upgrade --install` with no Herdr on this computer: an
- * installed herdr-core is enough and is left alone; otherwise core is
- * installed and started (now and at login), the same steps as the installers.
- */
-export async function setupMissingLocalCore(
-  log: (line: string) => void,
-  run: Run = runProcess,
-): Promise<LocalCoreSetup> {
-  let stdout = "";
-  const probed = await run(
-    ["sh", "-s"],
-    coreInstallInput("probe"),
-    PROBE_TIMEOUT_MS,
-    (line) => {
-      stdout += `${line}\n`;
-    },
-  );
-  if (probed.code !== 0)
-    return {
-      core: null,
-      installed: false,
-      error: plainError(probed.stderr, "could not check for herdr-core"),
-    };
-  const probe = parseCoreProbe(stdout);
-  if (probe.core) return { core: probe.core, installed: false };
-  if (!probe.target)
-    return {
-      core: null,
-      installed: false,
-      error: "herdr-core has no build for this computer",
-    };
-  const result = await run(
-    ["sh", "-s"],
-    coreInstallInput("setup"),
-    SETUP_TIMEOUT_MS,
-    log,
-  );
-  if (result.code !== 0)
-    return {
-      core: null,
-      installed: false,
-      error: plainError(result.stderr, "herdr-core could not be installed"),
-    };
-  return { core: `${probe.dir}/herdr-core`, installed: true };
 }
 
 const hostKey = (host: CoreInstallHost) =>
@@ -264,8 +232,10 @@ export function createCoreInstall(deps: CoreInstallDeps) {
       ? ["sh", "-s"]
       : sshCommandArgv(host.destination, "sh -s", [], "core-install");
 
-  async function probe(value: unknown, fake = false) {
+  async function probe(value: unknown, fake = false, connection?: unknown) {
     const host = hostOf(value);
+    // Offered under a saved connection: refuse one World cannot set up now.
+    chosenConnection(host, connection);
     if (fake)
       return {
         host,
@@ -292,19 +262,71 @@ export function createCoreInstall(deps: CoreInstallDeps) {
     return { host, probe: parseCoreProbe(stdout), version };
   }
 
-  /** The core connection for this host: an existing one connects, else one is added. */
-  async function connectInstalled(host: CoreInstallHost): Promise<string> {
+  const sameHost = (profile: CoreProfileItem, host: CoreInstallHost) =>
+    host.type === "local"
+      ? profile.type === "local"
+      : profile.type === "ssh" && profile.ssh_destination === host.destination;
+
+  /**
+   * The saved core connection an install was offered under. Its session is
+   * the one set up; a custom state directory is refused, because World starts
+   * core only where its session keeps state by default.
+   */
+  function chosenConnection(
+    host: CoreInstallHost,
+    value: unknown,
+  ): CoreProfileItem | null {
+    if (value === undefined || value === null) return null;
+    const profile = deps
+      .profiles()
+      .coreList()
+      .find((item) => item.id === value);
+    if (!profile || !sameHost(profile, host))
+      throw new Error("that herdr-core connection is not on this host");
+    if (!SESSION.test(profile.core_session))
+      throw new Error("invalid herdr-core session");
+    if (profile.core_state_dir)
+      throw new Error(
+        `this connection reads herdr-core from ${profile.core_state_dir}; World only starts core in its session's usual place, so start that core there yourself, then Connect`,
+      );
+    return profile;
+  }
+
+  /** Throws unless World's connection is ready, in its own plain words. */
+  function requireReady(item: unknown) {
+    const connected = item as ConnectedItem | null;
+    if (connected?.state === "ready") return;
+    const why =
+      typeof connected?.error?.message === "string"
+        ? connected.error.message
+        : `the connection is ${String(connected?.state ?? "not connected")}`;
+    throw new Error(
+      `herdr-core is installed and started, but World could not connect to it: ${why}`,
+    );
+  }
+
+  /**
+   * Connects World to the core just set up: the chosen connection, else this
+   * host's connection to the same (default) endpoint, else a new one. Only a
+   * ready connection counts as success.
+   */
+  async function connectInstalled(job: CoreInstallStatus): Promise<string> {
     const profiles = deps.profiles();
+    const host = job.host;
     const existing = profiles
       .coreList()
       .find((profile) =>
-        host.type === "local"
-          ? profile.type === "local"
-          : profile.type === "ssh" &&
-            profile.ssh_destination === host.destination,
+        job.connection
+          ? profile.id === job.connection
+          : sameHost(profile, host) &&
+            profile.core_session === job.session &&
+            !profile.core_state_dir,
       );
+    if (job.connection && !existing)
+      throw new Error("the herdr-core connection was removed meanwhile");
     if (existing) {
-      if (existing.state !== "connected") await profiles.connect(existing.id);
+      if (existing.state !== "ready")
+        requireReady(await profiles.connect(existing.id));
       return existing.id;
     }
     const taken = new Set([
@@ -320,19 +342,21 @@ export function createCoreInstall(deps: CoreInstallDeps) {
           );
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-    await profiles.create({
-      id,
-      label:
-        host.type === "local"
-          ? "herdr-core on this computer"
-          : `herdr-core on ${host.destination}`,
-      type: host.type,
-      runtime: "herdr-core",
-      ...(host.type === "ssh" ? { ssh_destination: host.destination } : {}),
-      core_session: "default",
-      core_state_dir: "",
-      auto_connect: true,
-    });
+    requireReady(
+      await profiles.create({
+        id,
+        label:
+          host.type === "local"
+            ? "herdr-core on this computer"
+            : `herdr-core on ${host.destination}`,
+        type: host.type,
+        runtime: "herdr-core",
+        ...(host.type === "ssh" ? { ssh_destination: host.destination } : {}),
+        core_session: job.session,
+        core_state_dir: "",
+        auto_connect: true,
+      }),
+    );
     return id;
   }
 
@@ -369,7 +393,7 @@ export function createCoreInstall(deps: CoreInstallDeps) {
       } else {
         const result = await run(
           argv(job.host),
-          coreInstallInput("setup", job.version),
+          coreInstallInput("setup", job.version, job.session),
           SETUP_TIMEOUT_MS,
           say,
         );
@@ -378,7 +402,7 @@ export function createCoreInstall(deps: CoreInstallDeps) {
             plainError(result.stderr, "herdr-core could not be installed"),
           );
         say("Connecting World...");
-        job.connection_id = await connectInstalled(job.host);
+        job.connection_id = await connectInstalled(job);
       }
       job.phase = "done";
     } catch (error) {
@@ -389,9 +413,19 @@ export function createCoreInstall(deps: CoreInstallDeps) {
 
   return {
     probe,
-    /** Starts the confirmed install or setup; one at a time per host. */
-    install(value: unknown, version: unknown, fake?: unknown) {
+    /**
+     * Starts the confirmed install or setup; one at a time per host. Offered
+     * under a saved core connection, it sets up that connection's session
+     * and connects exactly that connection.
+     */
+    install(
+      value: unknown,
+      version: unknown,
+      fake?: unknown,
+      connection?: unknown,
+    ) {
       const host = hostOf(value);
+      const chosen = chosenConnection(host, connection);
       const key = hostKey(host);
       if (jobs.get(key)?.phase === "installing")
         throw new Error("herdr-core is already being installed there");
@@ -406,6 +440,8 @@ export function createCoreInstall(deps: CoreInstallDeps) {
         phase: "installing",
         version: (version as string | null | undefined) ?? null,
         lines: [],
+        session: chosen?.core_session ?? "default",
+        ...(chosen ? { connection: chosen.id } : {}),
       };
       jobs.set(key, job);
       void perform(job, fake === "ok" || fake === "error" ? fake : false);
@@ -416,7 +452,7 @@ export function createCoreInstall(deps: CoreInstallDeps) {
       const job = jobs.get(hostKey(host));
       return job
         ? { ...job, lines: [...job.lines] }
-        : { host, phase: "idle", version: null, lines: [] };
+        : { host, phase: "idle", version: null, lines: [], session: "default" };
     },
   };
 }

@@ -654,9 +654,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   launch. A World too old to add the connection, or one already serving, says
   to add it under **Hosts → Manage connections**. With npm,
   `herdr-world herdr upgrade --install` does the same when no runtime exists
-  (`--json` prints `{"runtime":"herdr-core",...}`). Windows is not automated:
-  there the command keeps the Herdr TUI path, and core's own PowerShell
-  installer covers Windows x64. `HERDR_WORLD_SKIP_HERDR=1` skips all of this.
+  (`--json` prints `{"runtime":"herdr-core",...}`), and `herdr-world herdr
+  setup` with no Herdr keeps an installed herdr-core (starting it now and at
+  login) or installs one; neither ever installs Herdr beside a core. On Windows
+  both keep an installed core the same way, but with neither runtime they
+  install the Herdr TUI, because World on Windows cannot yet connect to a
+  herdr-core on the same computer (Windows hosts over SSH can run core); core's
+  own PowerShell installer covers Windows x64. `HERDR_WORLD_SKIP_HERDR=1` skips
+  all of this.
   Explicit runtime upgrades remain available.
 - **Finish installer upgrades.** Replacing an existing standalone World executable
   upgrades Herdr and refreshes detected harness integrations and the installed
@@ -2007,8 +2012,14 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   **Install and start** runs only on that host (over the connection's own
   OpenSSH destination), one install per host at a time; progress lines show
   as it goes, and you can close the step while it keeps going. When it
-  finishes, World adds or connects that host's core connection. A failure says
-  what went wrong in plain words with **Try again**. A host without a core
+  finishes, World adds or connects that host's core connection, and reports
+  success only once that connection is ready; otherwise it says World could not
+  connect, and why. Under a saved core connection it starts that connection's
+  session (the step names a session other than `default`) and connects that
+  same connection; a connection with its own state directory is refused,
+  because World only starts core in a session's usual place: start that core
+  yourself, then **Connect**. A failure says what went wrong in plain words with
+  **Try again**. A host without a core
   build (anything but Linux or macOS on x86_64 or arm64) says so; Windows SSH
   hosts are not offered. Automatic connects and reconnects never install or
   start core. Testing switch: open World with `?coreInstall=fake` (or

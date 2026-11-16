@@ -8,5 +8,9 @@
   running. Town's Set up card offers herdr-core first. Each install shows what
   will happen and waits for a confirmation.
 - `herdr-world connections add <id> --core` adds a herdr-core connection;
-  `herdr-world herdr upgrade --install` installs herdr-core first when no
-  runtime exists (not on Windows).
+  `herdr-world herdr setup` and `herdr upgrade --install` keep an installed
+  herdr-core, or install it when no runtime exists, and never add Herdr beside
+  it. On Windows an installed herdr-core is kept; with neither, Herdr is
+  installed, because World on Windows cannot yet connect to a local core.
+- Install herdr-core under a saved core connection starts that connection's
+  session and connects it, and says so plainly if World still cannot connect.

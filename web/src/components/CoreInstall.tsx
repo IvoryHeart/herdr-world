@@ -35,12 +35,16 @@ const call = (params: Record<string, unknown>) =>
  */
 export function CoreInstallPanel({
   host,
+  connection,
   onClose,
 }: {
   host: CoreInstallHost;
+  /** Offered under a saved core connection: set up its session, connect it. */
+  connection?: { id: string; session: string };
   onClose: () => void;
 }) {
   const [step, setStep] = useState<Step>({ kind: "checking" });
+  const chosen = connection ? { connection: connection.id } : {};
   const mounted = useRef(true);
   const where = hostLabel(host);
 
@@ -78,7 +82,7 @@ export function CoreInstallPanel({
         host,
       })) as CoreInstallStatus;
       if (status.phase === "installing") return void (await follow());
-      const result = (await call({ action: "probe", host })) as {
+      const result = (await call({ action: "probe", host, ...chosen })) as {
         probe: CoreHostProbe;
         version: string | null;
       };
@@ -111,6 +115,7 @@ export function CoreInstallPanel({
         action: "install",
         host,
         version,
+        ...chosen,
       })) as CoreInstallStatus;
       if (!mounted.current) return;
       setStep({ kind: "installing", status });
@@ -142,6 +147,7 @@ export function CoreInstallPanel({
           where={where}
           probe={step.probe}
           version={step.version}
+          session={connection?.session ?? "default"}
           onConfirm={() => void install(step.version)}
           onCancel={onClose}
         />
@@ -177,7 +183,7 @@ export function CoreInstallPanel({
       {step.kind === "failed" ? (
         <>
           <div role="alert" className="connection-profile-error">
-            {`herdr-core was not installed on ${where}: ${step.error}`}
+            {`Could not set up herdr-core on ${where}: ${step.error}`}
           </div>
           <div className="connection-profile-actions">
             <button type="button" onClick={() => void check()}>
@@ -197,12 +203,14 @@ function Confirm({
   where,
   probe,
   version,
+  session,
   onConfirm,
   onCancel,
 }: {
   where: string;
   probe: CoreHostProbe;
   version: string | null;
+  session: string;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -251,7 +259,11 @@ function Confirm({
           </>
         )}
         <li>{loginText(probe.login)}</li>
-        <li>Starts now, then World connects to it</li>
+        <li>
+          {session === "default"
+            ? "Starts now, then World connects to it"
+            : `Starts its "${session}" session now, then World connects to it`}
+        </li>
         {probe.herdr ? (
           <li>
             Herdr at <code>{probe.herdr}</code> stays as it is

@@ -107,11 +107,32 @@ test("setup installs the verified core, starts it at login and now", () => {
     expect(result.log).toContain(
       "systemctl --user enable herdr-core-login.service",
     );
-  expect(result.log).toContain("core server start");
+  expect(result.log).toContain("core server start session=default");
   // No temporary or staged files are left beside the core.
   expect(
     Bun.spawnSync(["ls", "-A", f.bin]).stdout.toString().trim().split("\n"),
   ).toEqual(["hc", "herdr-core"]);
+});
+
+test("setup starts the chosen session, with its own login entry", () => {
+  const f = fixture();
+  const result = f.run("herdr_core_setup  work");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.log).toContain("core server start session=work");
+  expect(existsSync(loginEntry(f.home))).toBe(false);
+  expect(readFileSync(loginEntry(f.home, "work"), "utf8")).toContain(
+    process.platform === "darwin"
+      ? "<string>work</string>"
+      : "Environment=HC_SESSION=work",
+  );
+  if (process.platform !== "darwin")
+    expect(result.log).toContain(
+      "systemctl --user enable herdr-core-login-work.service",
+    );
+  const bad = f.run("herdr_core_enable_login /x/herdr-core a;b");
+  expect(bad.code).not.toBe(0);
+  expect(bad.err).toContain("invalid herdr-core session");
 });
 
 test("an installed core is never replaced, updated or downloaded again", () => {

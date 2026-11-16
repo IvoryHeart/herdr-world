@@ -48,6 +48,16 @@ and service/runtime/occupant fences at admission, dispatch and publication.
   starts it now and at login and registers a local core connection; when
   either runtime exists it installs and changes nothing
 
+#### Scenario: CLI setup with no Herdr
+
+- **WHEN** `herdr-world herdr setup` or `herdr upgrade --install` finds no Herdr
+  for a local default connection
+- **THEN** an installed herdr-core is kept and no Herdr is installed beside it
+  (setup also starts that core now and at login); with neither, herdr-core is
+  installed and started; on Windows, where World cannot yet connect to a core on
+  the same computer, an installed core is kept and only a computer with neither
+  gets the Herdr TUI
+
 #### Scenario: Confirmed install from World
 
 - **WHEN** a person chooses Install herdr-core for this computer or a Unix SSH
@@ -59,6 +69,10 @@ and service/runtime/occupant fences at admission, dispatch and publication.
   host, shows progress and plain errors, then connects; automatic connects and
   reconnects never install or start core, and an installed runtime is never
   replaced or updated
+- **AND** offered under a saved core connection, it starts that connection's
+  session and connects that same connection; a connection with its own state
+  directory is refused in plain words, and the install reports failure unless
+  the connection ends ready
 
 #### Scenario: Host stops programs at logout
 

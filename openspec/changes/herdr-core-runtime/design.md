@@ -40,8 +40,16 @@ locally or through the profile's OpenSSH destination for the RPC
 `connections.core_install` (`probe`, `install`, `status`). `install` runs only
 after the browser's confirmation, one job per host, and then adds or connects
 that host's core profile. An installed core is used as it is: setup enables the
-login start and starts it, never replacing or updating it. Windows is not
-automated; core's own PowerShell installer covers Windows x64.
+login start and starts it, never replacing or updating it. Offered under a saved
+core connection, setup starts that connection's `core_session` (its own login
+entry) and connects that same profile; a profile with its own state directory is
+refused, since World only starts core in a session's usual place. An install
+succeeds only when the profile ends `ready`. `herdr setup` and
+`herdr upgrade --install` with no Herdr make the same choice locally (setup also
+starts an installed core). Windows keeps an installed core and installs nothing
+beside it; with neither runtime it installs the Herdr TUI, because World has no
+local Windows core transport yet (core serves a named pipe; the local provider
+reads a Unix socket). Core's own PowerShell installer covers Windows x64.
 
 ### 3. Identity, ownership and occupants
 

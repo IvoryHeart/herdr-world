@@ -502,7 +502,7 @@ async function coreFirst() {
       document
         .querySelector("[role=alert]")
         ?.textContent?.includes(
-          "herdr-core was not installed on this computer: the download is damaged (checksum mismatch); try again",
+          "Could not set up herdr-core on this computer: the download is damaged (checksum mismatch); try again",
         ) === true,
     "the plain failure",
   );
@@ -523,7 +523,7 @@ async function manageConnections() {
       runtime: "herdr-core",
       state: "error",
       generation: 1,
-      core_session: "default",
+      core_session: "work",
       core_state_dir: "",
       error: { message: "herdr-core is not running on dev.example.com" },
       observation: null,
@@ -562,6 +562,10 @@ async function manageConnections() {
     "card: the installed TUI stays",
   );
   check(
+    text().includes('Starts its "work" session now, then World connects to it'),
+    "card: the connection's own session is the one started",
+  );
+  check(
     !coreCalls.some((call) => call.action === "install"),
     "card: nothing installs before the confirmation",
   );
@@ -580,6 +584,12 @@ async function manageConnections() {
         "dev.example.com",
     ),
     "card: only the chosen host is touched",
+  );
+  check(
+    coreCalls
+      .filter((call) => call.action !== "status")
+      .every((call) => call.connection === "core-dev"),
+    "card: probe and install carry the chosen connection",
   );
   click(button("Done"));
   // The hosts list asks first too, and Cancel changes nothing.
