@@ -10,7 +10,6 @@
 - `herdr-world connections add <id> --core` adds a herdr-core connection;
   `herdr-world herdr setup` and `herdr upgrade --install` keep an installed
   herdr-core, or install it when no runtime exists, and never add Herdr beside
-  it. On Windows an installed herdr-core is kept; with neither, Herdr is
-  installed, because World on Windows cannot yet connect to a local core.
+  it.
 - Install herdr-core under a saved core connection starts that connection's
   session and connects it, and says so plainly if World still cannot connect.

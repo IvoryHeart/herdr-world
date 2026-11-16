@@ -312,37 +312,25 @@ describe("runHerdrCommand", () => {
     });
 
     test.each([[["upgrade", "--install"]], [["setup"]]])(
-      "Windows: %s keeps an installed core and installs no Herdr beside it",
+      "Windows: %s sets up herdr-core and never Herdr",
       async (args: string[]) => {
-        const result = await run(
-          args,
-          { outcome: "kept", core: "C:\\Users\\example\\herdr-core.exe" },
-          { platform: "win32" },
-        );
-        expect(result.code).toBe(0);
-        expect(result.coreCalls).toEqual([
-          { setUp: args[0] === "setup", platform: "win32" },
-        ]);
-        expect(result.upgrades() + result.setups()).toBe(0);
-        expect(result.io.out.at(-1)).toBe(
-          "World on Windows cannot yet connect to a herdr-core on this computer; World on another computer can use it over SSH.",
-        );
-      },
-    );
-
-    test.each([[["upgrade", "--install"]], [["setup"]]])(
-      "Windows with no core: %s sets up Herdr and says why",
-      async (args: string[]) => {
-        const result = await run(
-          args,
-          { outcome: "herdr", core: null },
-          { platform: "win32" },
-        );
-        expect(result.code).toBe(0);
-        expect(result.upgrades() + result.setups()).toBe(1);
-        expect(result.io.out).toContain(
-          "No herdr-core here, and World on Windows cannot yet connect to one on this computer, so World sets up Herdr.",
-        );
+        const core =
+          "C:\\Users\\example\\AppData\\Local\\Programs\\herdr-core\\herdr-core.exe";
+        for (const outcome of [
+          { outcome: "kept", core },
+          { outcome: "set-up", core, installed: true },
+        ] as LocalCoreSetup[]) {
+          const result = await run(args, outcome, { platform: "win32" });
+          expect(result.code).toBe(0);
+          expect(result.coreCalls).toEqual([
+            { setUp: args[0] === "setup", platform: "win32" },
+          ]);
+          expect(result.upgrades() + result.setups()).toBe(0);
+          expect(result.io.out.join("\n")).not.toContain("World sets up Herdr");
+          expect(result.io.out.at(-1)).toContain(
+            "Install herdr-core on This computer",
+          );
+        }
       },
     );
 

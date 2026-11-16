@@ -18,7 +18,8 @@ connection reads the lock through SSH and rebuilds its stream-local forward when
 the path changes. A stale lock or disappearing socket means unavailable.
 Check socket-directory ownership and private mode (0700 on Unix), otherwise refuse.
 
-Windows SSH uses a fixed PowerShell named-pipe relay with no CLI autostart path.
+Windows SSH, and a core on World's own Windows computer, use a fixed PowerShell
+named-pipe relay with no CLI autostart path.
 A probe reads `core.lock` (past the mandatory lock core holds on its first byte)
 and the relay opens exactly that existing pipe at identification level; a pipe
 owned by or granted to anyone but the user, SYSTEM or Administrators is refused,
@@ -46,10 +47,13 @@ entry) and connects that same profile; a profile with its own state directory is
 refused, since World only starts core in a session's usual place. An install
 succeeds only when the profile ends `ready`. `herdr setup` and
 `herdr upgrade --install` with no Herdr make the same choice locally (setup also
-starts an installed core). Windows keeps an installed core and installs nothing
-beside it; with neither runtime it installs the Herdr TUI, because World has no
-local Windows core transport yet (core serves a named pipe; the local provider
-reads a Unix socket). Core's own PowerShell installer covers Windows x64.
+starts an installed core). Windows x64 does the same through
+`scripts/herdr-core-install.ps1`, a PowerShell twin of the sh steps read whole
+from stdin (core's install.ps1 layout, SHA-256 checked, never `update --from`),
+with a Startup folder shortcut for login. A local Windows core is reached by
+running the Windows SSH probe and relay scripts locally: the relay child's stdio
+is the core stream, so the identification-level open and owner/ACL check hold
+and nothing can start core on connect.
 
 ### 3. Identity, ownership and occupants
 

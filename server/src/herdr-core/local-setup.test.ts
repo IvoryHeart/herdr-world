@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { findWindowsCore, setupLocalCore } from "./local-setup";
+import { setupLocalCore } from "./local-setup";
 
 const PROBE = (core = "") =>
   `target=linux-x86_64\ncore=${core}\nherdr=\ndir=/example/.local/bin\nlogin=systemd\n`;
@@ -98,79 +98,73 @@ describe("core first on this computer (CLI)", () => {
     });
   });
 
-  test("Windows keeps an installed core and otherwise hands over to Herdr", async () => {
-    const run = async () => {
-      throw new Error("Windows runs no POSIX script");
+  test("Windows installs and starts core with the PowerShell steps, never Herdr", async () => {
+    const argvs: string[][] = [];
+    const inputs: string[] = [];
+    const dir = "C:\\Users\\example\\AppData\\Local\\Programs\\herdr-core";
+    const run = async (
+      argv: string[],
+      input: string,
+      _timeout: number,
+      onLine: (line: string) => void,
+    ) => {
+      argvs.push(argv);
+      inputs.push(input);
+      if (input.endsWith("\nherdr_core_probe\n"))
+        for (const line of `target=windows-x86_64\ncore=\nherdr=\ndir=${dir}\nlogin=startup\n`.split(
+          "\n",
+        ))
+          onLine(line);
+      else onLine("herdr-core is running.");
+      return { code: 0, stderr: "" };
     };
-    expect(
-      await setupLocalCore({
-        setUp: true,
-        log: () => {},
-        run,
-        platform: "win32",
-        findWindowsCore: () =>
-          "C:\\Users\\example\\AppData\\Local\\Programs\\herdr-core\\herdr-core.exe",
-      }),
-    ).toEqual({
-      outcome: "kept",
-      core: "C:\\Users\\example\\AppData\\Local\\Programs\\herdr-core\\herdr-core.exe",
-    });
     expect(
       await setupLocalCore({
         setUp: false,
         log: () => {},
         run,
         platform: "win32",
-        findWindowsCore: () => null,
       }),
-    ).toEqual({ outcome: "herdr", core: null });
+    ).toEqual({
+      outcome: "set-up",
+      core: `${dir}\\herdr-core.exe`,
+      installed: true,
+    });
+    for (const argv of argvs) {
+      expect(argv[0]).toEndWith("powershell.exe");
+      expect(argv.at(-1)).toBe(
+        "& ([scriptblock]::Create([Console]::In.ReadToEnd()))",
+      );
+    }
+    expect(inputs[0]).toContain("function herdr_core_probe");
+    expect(inputs[1]).toEndWith("\nherdr_core_setup '' 'default'\n");
   });
 
-  test("Windows finds core where its installer puts it, on PATH, or as a core hc", () => {
-    const local = "C:\\Users\\example\\AppData\\Local";
-    const installed = `${local}\\Programs\\herdr-core\\herdr-core.exe`;
-    const none = () => null;
+  test("Windows keeps an installed core as it is", async () => {
+    const core =
+      "C:\\Users\\example\\AppData\\Local\\Programs\\herdr-core\\herdr-core.exe";
+    const inputs: string[] = [];
+    const run = async (
+      _argv: string[],
+      input: string,
+      _timeout: number,
+      onLine: (line: string) => void,
+    ) => {
+      inputs.push(input);
+      for (const line of `target=windows-x86_64\ncore=${core}\nherdr=\ndir=C:\\x\nlogin=startup`.split(
+        "\n",
+      ))
+        onLine(line);
+      return { code: 0, stderr: "" };
+    };
     expect(
-      findWindowsCore(
-        { LOCALAPPDATA: local },
-        (path) => path === installed,
-        none,
-      ),
-    ).toBe(installed);
-    expect(
-      findWindowsCore(
-        { HC_INSTALL_DIR: "D:\\tools\\hc" },
-        (path) => path === "D:\\tools\\hc\\herdr-core.exe",
-        none,
-      ),
-    ).toBe("D:\\tools\\hc\\herdr-core.exe");
-    const which = (found: Record<string, string>) => (name: string) =>
-      found[name] ?? null;
-    expect(
-      findWindowsCore(
-        {},
-        () => false,
-        which({ "herdr-core": "C:\\bin\\herdr-core.exe" }),
-      ),
-    ).toBe("C:\\bin\\herdr-core.exe");
-    const hc = which({ hc: "C:\\bin\\hc.exe" });
-    expect(
-      findWindowsCore(
-        {},
-        () => false,
-        hc,
-        () => "hc 0.1.21",
-      ),
-    ).toBe("C:\\bin\\hc.exe");
-    // Other programs ship an `hc` too.
-    expect(
-      findWindowsCore(
-        {},
-        () => false,
-        hc,
-        () => "hc-tool 2.0",
-      ),
-    ).toBe(null);
-    expect(findWindowsCore({}, () => false, none)).toBe(null);
+      await setupLocalCore({
+        setUp: false,
+        log: () => {},
+        run,
+        platform: "win32",
+      }),
+    ).toEqual({ outcome: "kept", core });
+    expect(inputs).toHaveLength(1);
   });
 });

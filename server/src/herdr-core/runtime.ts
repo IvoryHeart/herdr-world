@@ -43,7 +43,11 @@ import {
   logoutStop,
   summarizeMirror,
 } from "./observations";
-import { connectUnixStream, type CoreStreamConnector } from "./stream";
+import {
+  connectUnixStream,
+  type CoreByteStream,
+  type CoreStreamConnector,
+} from "./stream";
 import {
   CoreFirstSight,
   coreRuntimeReader,
@@ -59,9 +63,15 @@ import {
 import type { RuntimeReader } from "../adapters/runtime-ports";
 
 /** How World reaches a core: never by starting one. */
-export type CoreTransport = {
-  /** Re-reads the endpoint (core.lock) and returns a local socket path. */
-  open(signal: AbortSignal): Promise<string>;
+export type CoreTransport<
+  Endpoint extends string | CoreByteStream = string | CoreByteStream,
+> = {
+  /**
+   * Re-reads the endpoint (core.lock) and returns a local socket path, or
+   * the connected stream itself where no socket exists (a local Windows
+   * core's relay).
+   */
+  open(signal: AbortSignal): Promise<Endpoint>;
   close(): Promise<void>;
 };
 
@@ -416,13 +426,16 @@ export function createCoreConnectionRuntime(
 
   async function startTransport() {
     if (stopped) throw new Error("connection runtime is disposed");
-    const socket = await options.transport.open(abort.signal);
+    const endpoint = await options.transport.open(abort.signal);
     abort.signal.throwIfAborted();
-    const stream = await connect(socket, abort.signal).catch((error) => {
-      throw new CoreUnavailableError("herdr-core is not running", {
-        cause: error,
-      });
-    });
+    const stream =
+      typeof endpoint === "string"
+        ? await connect(endpoint, abort.signal).catch((error) => {
+            throw new CoreUnavailableError("herdr-core is not running", {
+              cause: error,
+            });
+          })
+        : endpoint;
     const opened = await CoreClient.open(stream, {
       onClosed: (error) => fail(error),
     });

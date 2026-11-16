@@ -1,6 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
+import { win32 } from "node:path";
 import {
   sshBridgeCommandArgv,
   sshReadCommandArgv,
@@ -13,6 +14,7 @@ import { runProcessWithCodeTimeout } from "../utils/process-utils";
 import { CoreUnavailableError } from "./client";
 import { CoreEndpointRefusedError, CORE_LOCK_FILE } from "./endpoint";
 import type { CoreTransport } from "./runtime";
+import type { CoreByteStream } from "./stream";
 
 /**
  * herdr-core on a Windows SSH host. Core there listens on a named pipe, which
@@ -125,56 +127,70 @@ export function windowsCoreCommand(script: string): string {
   return command;
 }
 
+/** The scripts' failures in plain words: on a Windows SSH host, or this computer. */
+const ENDPOINT_WORDS = {
+  ssh: {
+    noLock:
+      "no herdr-core has run with this state directory on the Windows host",
+    badLock:
+      "the Windows core.lock does not name a local named pipe World can relay",
+    notRunning: "herdr-core is not running on the Windows host",
+    accessDenied:
+      "this SSH login cannot open the Windows core's pipe. If core was started elevated or over SSH, stop it with 'hc server stop' in an elevated terminal there, then start Herdr normally",
+    untrusted: "the Windows core pipe belongs to, or admits, another account",
+    noPowerShell: "the Windows host needs Windows PowerShell (powershell.exe)",
+    failed: "reading the Windows core.lock failed",
+  },
+  local: {
+    noLock: "no herdr-core has run with this state directory",
+    badLock: "core.lock does not name a named pipe World can open",
+    notRunning: "herdr-core is not running",
+    accessDenied:
+      "World cannot open herdr-core's pipe. If core was started elevated, stop it with 'hc server stop' in an elevated terminal, then start it normally",
+    untrusted: "herdr-core's pipe belongs to, or admits, another account",
+    noPowerShell: "this computer needs Windows PowerShell (powershell.exe)",
+    failed: "reading core.lock failed",
+  },
+} as const;
+
 /** Maps the probe's exit status to World's endpoint errors; returns the pipe name. */
-export function windowsCoreEndpointResult(result: {
-  code: number;
-  stdout: string;
-  stderr?: string;
-}): string {
+export function windowsCoreEndpointResult(
+  result: {
+    code: number;
+    stdout: string;
+    stderr?: string;
+  },
+  where: keyof typeof ENDPOINT_WORDS = "ssh",
+): string {
+  const words = ENDPOINT_WORDS[where];
   switch (result.code) {
     case 0:
       break;
     case WindowsCoreExit.noLock:
-      throw new CoreUnavailableError(
-        "no herdr-core has run with this state directory on the Windows host",
-      );
+      throw new CoreUnavailableError(words.noLock);
     case WindowsCoreExit.badLock:
-      throw new CoreEndpointRefusedError(
-        "the Windows core.lock does not name a local named pipe World can relay",
-      );
+      throw new CoreEndpointRefusedError(words.badLock);
     case WindowsCoreExit.notRunning:
-      throw new CoreUnavailableError(
-        "herdr-core is not running on the Windows host",
-      );
+      throw new CoreUnavailableError(words.notRunning);
     case WindowsCoreExit.accessDenied:
-      throw new CoreEndpointRefusedError(
-        "this SSH login cannot open the Windows core's pipe. If core was started elevated or over SSH, stop it with 'hc server stop' in an elevated terminal there, then start Herdr normally",
-      );
+      throw new CoreEndpointRefusedError(words.accessDenied);
     case WindowsCoreExit.untrusted:
-      throw new CoreEndpointRefusedError(
-        "the Windows core pipe belongs to, or admits, another account",
-      );
+      throw new CoreEndpointRefusedError(words.untrusted);
     default:
       if (
         /powershell\.exe['":\s]+(?:is not recognized|(?:command )?not found)/i.test(
           result.stderr ?? "",
         )
       )
-        throw new CoreEndpointRefusedError(
-          "the Windows host needs Windows PowerShell (powershell.exe)",
-        );
-      throw new CoreUnavailableError(
-        `reading the Windows core.lock failed (${result.code})`,
-      );
+        throw new CoreEndpointRefusedError(words.noPowerShell);
+      throw new CoreUnavailableError(`${words.failed} (${result.code})`);
   }
   const pipe = result.stdout
     .split(/\r?\n/)
     .find((line) => line.startsWith(WINDOWS_PIPE_MARKER))
     ?.slice(WINDOWS_PIPE_MARKER.length);
   if (!pipe || !WINDOWS_PIPE_NAME.test(pipe))
-    throw new CoreEndpointRefusedError(
-      "the Windows core.lock does not name a local named pipe World can relay",
-    );
+    throw new CoreEndpointRefusedError(words.badLock);
   return pipe;
 }
 
@@ -194,7 +210,7 @@ export type WindowsCoreTransportDependencies = {
 export function windowsSshCoreTransport(
   profile: CoreConnectionProfile,
   dependencies: WindowsCoreTransportDependencies = {},
-): CoreTransport {
+): CoreTransport<string> {
   const destination = profile.ssh_destination;
   if (
     profile.type !== "ssh" ||
@@ -335,4 +351,188 @@ async function listenRelay(
       rmSync(path, { force: true });
     },
   };
+}
+
+/**
+ * Windows PowerShell 5.1 from System32, never a `powershell.exe` found first
+ * on PATH.
+ */
+export function windowsPowerShell(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return env.SystemRoot
+    ? win32.join(
+        env.SystemRoot,
+        "System32",
+        "WindowsPowerShell",
+        "v1.0",
+        "powershell.exe",
+      )
+    : "powershell.exe";
+}
+
+/** One fixed script for this computer's Windows PowerShell. */
+export function windowsPowerShellArgv(
+  script: string,
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  return [
+    windowsPowerShell(env),
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-EncodedCommand",
+    Buffer.from(script, "utf16le").toString("base64"),
+  ];
+}
+
+async function readLocalProbe(
+  argv: string[],
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  let child: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">>;
+  try {
+    child = Bun.spawn(argv, {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 20_000,
+    });
+  } catch {
+    return { code: -1, stdout: "", stderr: "powershell.exe: not found" };
+  }
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  return { code, stdout, stderr };
+}
+
+export type WindowsLocalCoreTransportDependencies = {
+  readLocal?: (
+    argv: string[],
+  ) => Promise<{ code: number; stdout: string; stderr?: string }>;
+  spawnRelay?: (argv: string[]) => ChildProcessWithoutNullStreams;
+  env?: Record<string, string | undefined>;
+};
+
+/**
+ * A core on this Windows computer. Core serves a named pipe here, so World
+ * runs the Windows SSH path's two fixed scripts locally instead of over SSH:
+ * the probe on every connect (core.lock under the session's state directory,
+ * `%LOCALAPPDATA%\herdr-core\<session>` by default), then the relay, whose
+ * stdio is the connection. The pipe stays opened by the relay, at
+ * identification level after the owner check, so the same existing-only
+ * rules hold: neither script runs a program, so neither can start a core.
+ */
+export function windowsLocalCoreTransport(
+  profile: CoreConnectionProfile,
+  dependencies: WindowsLocalCoreTransportDependencies = {},
+): CoreTransport {
+  if (profile.type !== "local")
+    throw new Error("a local Windows core connection is on this computer");
+  const env = dependencies.env ?? process.env;
+  const probe = windowsPowerShellArgv(
+    windowsCoreProbeScript(profile.core_session, profile.core_state_dir),
+    env,
+  );
+  const readLocal = dependencies.readLocal ?? readLocalProbe;
+  const spawnRelay =
+    dependencies.spawnRelay ??
+    ((argv: string[]) =>
+      spawn(argv[0]!, argv.slice(1), { stdio: "pipe", windowsHide: true }));
+  let relay: ChildProcessWithoutNullStreams | null = null;
+  let closed = false;
+  return {
+    open: async (signal) => {
+      if (closed || relay)
+        throw new Error("the Windows core transport is used");
+      const pipe = windowsCoreEndpointResult(await readLocal(probe), "local");
+      signal.throwIfAborted();
+      if (closed) throw new Error("the Windows core transport is closed");
+      relay = spawnRelay(
+        windowsPowerShellArgv(windowsCoreRelayScript(pipe), env),
+      );
+      return relayStream(relay, signal);
+    },
+    close: async () => {
+      closed = true;
+      if (relay) await stopChild(relay);
+    },
+  };
+}
+
+/** The relay's stdio as World's byte stream; its exit status says why it ended. */
+function relayStream(
+  child: ChildProcessWithoutNullStreams,
+  signal: AbortSignal,
+): CoreByteStream {
+  const dataListeners: Array<(bytes: Uint8Array) => void> = [];
+  const closeListeners: Array<(error?: Error) => void> = [];
+  const early: Uint8Array[] = [];
+  let closed: { error?: Error } | null = null;
+  const finish = (error?: Error) => {
+    if (closed) return;
+    closed = { error };
+    signal.removeEventListener("abort", stop);
+    for (const listener of closeListeners) listener(error);
+  };
+  const stop = () => {
+    child.kill();
+    finish();
+  };
+  signal.addEventListener("abort", stop, { once: true });
+  child.stdout.on("data", (chunk: Buffer) => {
+    const bytes = new Uint8Array(chunk);
+    if (dataListeners.length === 0) early.push(bytes);
+    for (const listener of dataListeners) listener(bytes);
+  });
+  // Drained so a chatty error stream can never stall the relay.
+  child.stderr.resume();
+  child.stdin.on("error", (error) => finish(error));
+  child.once("error", (error) => finish(error));
+  child.once("close", (code, exitSignal) => {
+    if (code === 0) return finish();
+    if (code === null)
+      return finish(
+        new CoreUnavailableError(`the core relay ended (${exitSignal})`),
+      );
+    try {
+      windowsCoreEndpointResult({ code, stdout: "" }, "local");
+      finish(new CoreUnavailableError(`the core relay ended (${code})`));
+    } catch (error) {
+      finish(error as Error);
+    }
+  });
+  return {
+    write(bytes) {
+      if (!closed) child.stdin.write(bytes);
+    },
+    close: stop,
+    onData(listener) {
+      dataListeners.push(listener);
+      for (const bytes of early.splice(0)) listener(bytes);
+    },
+    onClose(listener) {
+      if (closed) listener(closed.error);
+      else closeListeners.push(listener);
+    },
+  };
+}
+
+async function stopChild(child: ChildProcessWithoutNullStreams) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => child.once("close", resolve));
+  child.kill();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    exited,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        child.kill("SIGKILL");
+        resolve();
+      }, 1500);
+    }),
+  ]);
+  clearTimeout(timer);
 }

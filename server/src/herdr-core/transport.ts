@@ -19,10 +19,10 @@ import {
   resolveLocalCoreEndpoint,
 } from "./endpoint";
 import type { CoreTransport } from "./runtime";
-import { windowsSshCoreTransport } from "./windows";
+import { windowsLocalCoreTransport, windowsSshCoreTransport } from "./windows";
 
 /** A local core: the lock is read again on every connect. */
-export function localCoreTransport(stateDir: string): CoreTransport {
+export function localCoreTransport(stateDir: string): CoreTransport<string> {
   return {
     open: async (signal) => {
       signal.throwIfAborted();
@@ -50,7 +50,7 @@ export function sshCoreTransport(
     onTunnelExit?: (error: SshTunnelError) => void;
   },
   dependencies: SshCoreTransportDependencies = {},
-): CoreTransport {
+): CoreTransport<string> {
   const destination = profile.ssh_destination;
   if (profile.type !== "ssh" || profile.remote_platform || !destination)
     throw new Error("a Unix SSH core connection needs an SSH destination");
@@ -110,11 +110,15 @@ export function coreTransportForProfile(
   options: {
     connectionId: string;
     onTunnelExit?: (error: SshTunnelError) => void;
+    platform?: NodeJS.Platform;
   },
 ): CoreTransport {
   if (profile.type === "ssh" && profile.remote_platform === "windows")
     return windowsSshCoreTransport(profile);
   if (profile.type === "ssh") return sshCoreTransport(profile, options);
+  // Core on this Windows computer serves a named pipe, not a Unix socket.
+  if ((options.platform ?? process.platform) === "win32")
+    return windowsLocalCoreTransport(profile);
   return localCoreTransport(
     profile.core_state_dir || defaultCoreStateDir(profile.core_session),
   );

@@ -2,17 +2,23 @@
 // confirms it in World's UI. It runs World's reviewed copy of core's official
 // install steps (scripts/herdr-core-install.sh, shared with the installers):
 // on this computer through `sh -s`, on an SSH host through the profile's
-// existing OpenSSH destination with the script on stdin. Nothing downloaded is
+// existing OpenSSH destination with the script on stdin. On this computer on
+// Windows it runs the PowerShell twin (scripts/herdr-core-install.ps1) the
+// same way, with Windows PowerShell 5.1. Nothing downloaded is
 // run as a script; an installed core is never replaced or updated. Automatic
 // connects never come here: only the confirmed `install` call starts core.
 // Root tsc reaches this file from scripts/ and needs the `*.sh` declaration.
 // oxlint-disable-next-line triple-slash-reference
 /// <reference path="./text-imports.d.ts" />
+import windowsInstallScript from "../../../scripts/herdr-core-install.ps1" with {
+  type: "text",
+};
 import installScript from "../../../scripts/herdr-core-install.sh" with {
   type: "text",
 };
 import { sshCommandArgv } from "../bridge/ssh-command";
 import { CORE_FIXTURE_CONNECTION_ID } from "./fixture";
+import { windowsPowerShell } from "./windows";
 
 export type CoreInstallHost =
   | { type: "local" }
@@ -28,8 +34,11 @@ export type CoreHostProbe = {
   herdr: string | null;
   /** Where core goes. */
   dir: string;
-  /** How core will start at login, or "none" when the host has no way. */
-  login: "systemd" | "launchd" | "none";
+  /**
+   * How core will start at login (Windows: a Startup folder shortcut), or
+   * "none" when the host has no way.
+   */
+  login: "systemd" | "launchd" | "startup" | "none";
 };
 
 export type CoreInstallStatus = {
@@ -86,6 +95,8 @@ export type CoreInstallDeps = {
   run?: Run;
   latestVersion?: () => Promise<string | null>;
   sleep?: (ms: number) => Promise<void>;
+  /** This computer's platform: Windows runs the PowerShell steps. */
+  platform?: NodeJS.Platform;
 };
 
 const VERSION = /^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$/;
@@ -98,16 +109,23 @@ const LATEST_URL = "https://releases.herdr.dev/core/latest.json";
 
 /**
  * The script with one call appended; its stdin is closed for the call. Setup
- * takes a version ('' for the newest) and the core session to start.
+ * takes a version ('' for the newest) and the core session to start. Windows
+ * gets the PowerShell twin, whose functions have the same names.
  */
 export function coreInstallInput(
   action: "probe" | "setup",
   version?: string | null,
   session = "default",
+  platform: NodeJS.Platform | "posix" = "posix",
 ): string {
   if (version && !VERSION.test(version))
     throw new Error("invalid herdr-core version");
   if (!SESSION.test(session)) throw new Error("invalid herdr-core session");
+  // Both values are validated above, so single quotes are exact.
+  if (platform === "win32")
+    return `${windowsInstallScript}\nherdr_core_${action}${
+      action === "setup" ? ` '${version ?? ""}' '${session}'` : ""
+    }\n`;
   const args =
     action === "setup" && session !== "default"
       ? ` '${version ?? ""}' '${session}'`
@@ -135,7 +153,10 @@ export function parseCoreProbe(stdout: string): CoreHostProbe {
     core: facts.get("core") || null,
     herdr: facts.get("herdr") || null,
     dir: facts.get("dir")!,
-    login: login === "systemd" || login === "launchd" ? login : "none",
+    login:
+      login === "systemd" || login === "launchd" || login === "startup"
+        ? login
+        : "none",
   };
 }
 
@@ -152,6 +173,26 @@ export function plainError(stderr: string, fallback: string): string {
   if (lines.some((line) => /^ssh: |Permission denied|Host key/.test(line)))
     return `could not reach the host over SSH: ${lines.at(-1)}`;
   return fallback;
+}
+
+/**
+ * How this computer runs the steps: `sh -s`, or on Windows, System32's
+ * Windows PowerShell 5.1 running the script read whole from stdin (a script
+ * block from a string, so no execution policy or script file is involved).
+ */
+export function localInstallArgv(
+  platform: NodeJS.Platform = process.platform,
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  if (platform !== "win32") return ["sh", "-s"];
+  return [
+    windowsPowerShell(env),
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    "& ([scriptblock]::Create([Console]::In.ReadToEnd()))",
+  ];
 }
 
 export const runProcess: Run = async (argv, input, timeoutMs, onLine) => {
@@ -227,10 +268,24 @@ export function createCoreInstall(deps: CoreInstallDeps) {
     throw new Error("choose this computer or an SSH host");
   }
 
+  const platform = deps.platform ?? process.platform;
   const argv = (host: CoreInstallHost) =>
     host.type === "local"
-      ? ["sh", "-s"]
+      ? localInstallArgv(platform)
       : sshCommandArgv(host.destination, "sh -s", [], "core-install");
+  /** The script for a host: SSH hosts here are Unix; this computer may not be. */
+  const input = (
+    host: CoreInstallHost,
+    action: "probe" | "setup",
+    version?: string | null,
+    session?: string,
+  ) =>
+    coreInstallInput(
+      action,
+      version,
+      session,
+      host.type === "local" ? platform : "posix",
+    );
 
   async function probe(value: unknown, fake = false, connection?: unknown) {
     const host = hostOf(value);
@@ -250,7 +305,7 @@ export function createCoreInstall(deps: CoreInstallDeps) {
       };
     let stdout = "";
     const [result, version] = await Promise.all([
-      run(argv(host), coreInstallInput("probe"), PROBE_TIMEOUT_MS, (line) => {
+      run(argv(host), input(host, "probe"), PROBE_TIMEOUT_MS, (line) => {
         stdout += `${line}\n`;
       }),
       latestVersion(),
@@ -393,7 +448,7 @@ export function createCoreInstall(deps: CoreInstallDeps) {
       } else {
         const result = await run(
           argv(job.host),
-          coreInstallInput("setup", job.version, job.session),
+          input(job.host, "setup", job.version, job.session),
           SETUP_TIMEOUT_MS,
           say,
         );

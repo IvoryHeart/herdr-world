@@ -656,12 +656,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   `herdr-world herdr upgrade --install` does the same when no runtime exists
   (`--json` prints `{"runtime":"herdr-core",...}`), and `herdr-world herdr
   setup` with no Herdr keeps an installed herdr-core (starting it now and at
-  login) or installs one; neither ever installs Herdr beside a core. On Windows
-  both keep an installed core the same way, but with neither runtime they
-  install the Herdr TUI, because World on Windows cannot yet connect to a
-  herdr-core on the same computer (Windows hosts over SSH can run core); core's
-  own PowerShell installer covers Windows x64. `HERDR_WORLD_SKIP_HERDR=1` skips
-  all of this.
+  login) or installs one; neither ever installs Herdr beside a core. Windows x64
+  works the same way with core's own PowerShell steps (System32 `curl.exe` and
+  `tar.exe`, the zip checked against its SHA-256, nothing downloaded run as a
+  script): `%LOCALAPPDATA%\Programs\herdr-core\herdr-core.exe` plus an `hc.exe`
+  link if free, added to your user PATH, then core starts now and at login (a
+  shortcut in your Startup folder that World rewrites only if it wrote it).
+  World connects to a core on the same Windows computer over its named pipe,
+  read from `core.lock` and opened existing-only, as for Windows SSH hosts.
+  Windows on Arm has no core build, so there setup stops with "herdr-core has
+  no build for this computer". `HERDR_WORLD_SKIP_HERDR=1` skips all of this.
   Explicit runtime upgrades remain available.
 - **Finish installer upgrades.** Replacing an existing standalone World executable
   upgrades Herdr and refreshes detected harness integrations and the installed

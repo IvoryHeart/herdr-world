@@ -30,8 +30,8 @@ certification gating. A newest-release smoke test SHALL flag protocol drift.
 ### Requirement: Existing-only qualified observation
 
 Automatic connection and reconnection SHALL never start core. World SHALL read
-the current endpoint on every attempt, including Windows SSH through a PowerShell
-named-pipe relay. Operations SHALL retain their exact original connection lease
+the current endpoint on every attempt, including Windows SSH and a local Windows
+core through a PowerShell named-pipe relay. Operations SHALL retain their exact original connection lease
 and service/runtime/occupant fences at admission, dispatch and publication.
 
 #### Scenario: Missing endpoint
@@ -54,9 +54,7 @@ and service/runtime/occupant fences at admission, dispatch and publication.
   for a local default connection
 - **THEN** an installed herdr-core is kept and no Herdr is installed beside it
   (setup also starts that core now and at login); with neither, herdr-core is
-  installed and started; on Windows, where World cannot yet connect to a core on
-  the same computer, an installed core is kept and only a computer with neither
-  gets the Herdr TUI
+  installed and started, on Windows x64 as on Linux and macOS
 
 #### Scenario: Confirmed install from World
 

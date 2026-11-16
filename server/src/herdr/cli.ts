@@ -58,9 +58,9 @@ Core first: setup, and upgrade --install, with no Herdr on this computer
 keep an installed herdr-core and never install Herdr beside it (setup also
 starts that core now and at login). With neither, they install herdr-core with
 its official, checksum-verified release steps into ~/.local/bin and start it now
-and at login. On Windows an installed herdr-core is kept the same way; with
-neither, Herdr is installed, because World on Windows cannot yet connect to a
-herdr-core on the same computer (Windows hosts over SSH can run core).
+and at login. On Windows (x64) the same steps, from core's install.ps1, put it
+in %LOCALAPPDATA%\\Programs\\herdr-core, and a Startup folder shortcut starts it
+at login; World connects to it over its named pipe.
 `;
 }
 
@@ -163,7 +163,7 @@ export async function runHerdrCommand(
       } else {
         log("Herdr is not installed.");
         log(
-          "Run `herdr-world herdr setup` to set up a runtime: an installed herdr-core is kept, otherwise herdr-core is installed (Windows: Herdr).",
+          "Run `herdr-world herdr setup` to set up a runtime: an installed herdr-core is kept, otherwise herdr-core is installed.",
         );
       }
       const service = serviceStatus();
@@ -193,19 +193,13 @@ export async function runHerdrCommand(
         log: json ? error : log,
         platform,
       });
-      if (core.outcome !== "herdr") {
-        if (json) log(JSON.stringify({ runtime: "herdr-core", ...core }));
-        else for (const line of describeCoreSetup(core, platform)) log(line);
-        if (core.outcome === "failed") {
-          error(`herdr-world herdr: ${core.error}`);
-          return 1;
-        }
-        return 0;
+      if (json) log(JSON.stringify({ runtime: "herdr-core", ...core }));
+      else for (const line of describeCoreSetup(core)) log(line);
+      if (core.outcome === "failed") {
+        error(`herdr-world herdr: ${core.error}`);
+        return 1;
       }
-      if (!json)
-        log(
-          "No herdr-core here, and World on Windows cannot yet connect to one on this computer, so World sets up Herdr.",
-        );
+      return 0;
     }
 
     if (action === "upgrade") {
@@ -269,16 +263,11 @@ export async function runHerdrCommand(
   }
 }
 
-function describeCoreSetup(
-  core: LocalCoreSetup,
-  platform: NodeJS.Platform,
-): string[] {
+function describeCoreSetup(core: LocalCoreSetup): string[] {
   if (core.outcome === "kept")
     return [
       `herdr-core is installed at ${core.core}; it is kept as it is, so no Herdr was installed.`,
-      platform === "win32"
-        ? "World on Windows cannot yet connect to a herdr-core on this computer; World on another computer can use it over SSH."
-        : CONNECT_HINT,
+      CONNECT_HINT,
     ];
   if (core.outcome === "set-up")
     return [
