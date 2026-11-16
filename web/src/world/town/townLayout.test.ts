@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { townLandscape } from "./townLandscape";
 import {
   layoutTown,
+  townPinnedOrder,
   TOWN_DEFAULT_RENDERED_DESKS,
   TOWN_ROOM_TIERS,
   townDeskSlots,
@@ -456,7 +457,10 @@ test("a desk's furniture follows its panes", () => {
 test("pinned desks take a room's first seats in tab order; unpinned, tab order again", () => {
   const input = town({ a: [5] });
   const keys = input.rooms[0]!.deskKeys;
-  const pinned = new Set([keys[3]!, keys[1]!]);
+  const pinned = new Map([
+    [keys[3]!, null],
+    [keys[1]!, null],
+  ]);
   const first = layoutTown(
     input,
     "wide",
@@ -493,6 +497,31 @@ test("pinned desks take a room's first seats in tab order; unpinned, tab order a
   expect(order(unpinned.layout)).toEqual([...keys]);
 });
 
+test("pinned desks keep the order given on the rug; one pinned later joins the end", () => {
+  const input = town({ a: [5] });
+  const keys = input.rooms[0]!.deskKeys;
+  const order = (pinned: Map<string, number | null>) =>
+    layoutTown(input, "wide", new Map(), undefined, undefined, pinned)
+      .layout.buildings[0]!.rooms[0]!.cells.filter((cell) => cell.deskKey)
+      .map((cell) => cell.deskKey);
+  // Reordered on the rug: tab-3 first, then tab-1.
+  const saved = new Map<string, number | null>([
+    [keys[1]!, 1],
+    [keys[3]!, 0],
+  ]);
+  expect(order(saved).slice(0, 3)).toEqual([keys[3], keys[1], keys[0]]);
+  // Pinned since, without a saved place: after the saved ones, then tab order.
+  saved.set(keys[4]!, null);
+  saved.set(keys[0]!, null);
+  expect(order(saved)).toEqual([keys[3], keys[1], keys[0], keys[4], keys[2]]);
+  expect(townPinnedOrder(keys, saved)).toEqual([
+    keys[3],
+    keys[1],
+    keys[0],
+    keys[4],
+  ]);
+});
+
 test("a pinned desk takes its first seat before a team join holds it", () => {
   const input = town({ a: [4] });
   const keys = input.rooms[0]!.deskKeys;
@@ -504,7 +533,7 @@ test("a pinned desk takes its first seat before a team join holds it", () => {
     new Map(),
     held,
     undefined,
-    new Set([keys[3]!]),
+    new Map([[keys[3]!, null]]),
   );
   expect(cellOf(placed.layout, keys[3]!)).toMatchObject({ col: 0, row: 0 });
   expect(placed.layout.deskCells.size).toBe(4);
@@ -523,7 +552,7 @@ test("a folded room shows its pinned desks first", () => {
     new Map(),
     undefined,
     undefined,
-    new Set([last]),
+    new Map([[last, null]]),
   );
   expect(cellOf(placed.layout, last)).toMatchObject({ col: 0, row: 0 });
 });

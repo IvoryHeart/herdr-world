@@ -266,7 +266,7 @@ function previousTownCanvas() {
       memory?.shape === key ? memory.memory : new Map(),
       undefined,
       undefined,
-      new Set(model.deskPins.keys()),
+      new Map([...model.deskPins].map(([desk, pin]) => [desk, pin.rank])),
     );
     memory = { shape: key, memory: placed.memory };
     const teams = townTeams(

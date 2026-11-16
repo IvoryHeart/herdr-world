@@ -625,6 +625,33 @@ describe("Board store", () => {
     expect(parseBoardDocument(old).layout.desk_pins).toEqual({});
   });
 
+  test("desk ranks: set on a saved pin, created only when asked, survive reload", () => {
+    const store = new BoardStore(path);
+    store.patch([{ op: "desk.pin", key: "alpha:w1:t1", cell: null }]);
+    store.patch([
+      { op: "desk.rank", key: "alpha:w1:t1", rank: 1 },
+      // An unpinned Herdr desk is not pinned again by a rank in flight.
+      { op: "desk.rank", key: "alpha:w1:t2", rank: 0 },
+      // A herdr-core tab (pinned by its label) gets a record for its rank.
+      { op: "desk.rank", key: "alpha:w1:t3", rank: 0, create: true },
+    ]);
+    const expected = {
+      "alpha:w1:t1": { cell: null, rank: 1 },
+      "alpha:w1:t3": { cell: null, rank: 0 },
+    };
+    expect(store.get().layout.desk_pins).toEqual(expected);
+    expect(new BoardStore(path).get().layout.desk_pins).toEqual(expected);
+    // Pinning again starts afresh: the desk joins the end of the order.
+    store.patch([{ op: "desk.pin", key: "alpha:w1:t1", cell: null }]);
+    expect(store.get().layout.desk_pins["alpha:w1:t1"]).toEqual({ cell: null });
+    for (const rank of [-1, 0.5, 4_096, null])
+      expect(() =>
+        store.patch([
+          { op: "desk.rank", key: "alpha:w1:t3", rank: rank as number },
+        ]),
+      ).toThrow("desk rank");
+  });
+
   test("room spots: a host's spots are replaced together, other hosts' kept", () => {
     const store = new BoardStore(path);
     store.patch([
