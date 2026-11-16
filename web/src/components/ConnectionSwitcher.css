@@ -300,6 +300,20 @@
   gap: 2px;
 }
 
+/* A section head without a status dot (herdr-core, Fixture core): title over
+   a wrapping description, never run together (#931). */
+.connection-manager-card-head > div:only-child {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.connection-manager-card-head > div:only-child > span {
+  color: var(--text);
+  font-size: 11px;
+}
+
 .connection-manager-card-head strong,
 .connection-manager-card-head > div:nth-child(2) > span {
   overflow: hidden;
