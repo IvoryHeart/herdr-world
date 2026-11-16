@@ -172,8 +172,14 @@ describe("herdr-core install from World", () => {
     expect(at("during the download; leaving it unchanged")).toBeLessThan(
       at("[IO.File]::Move($staged, $exe)"),
     );
-    // Login start rewrites only World's own shortcut.
+    // Login start rewrites only World's own shortcut, and any valid path
+    // (apostrophes, accents) reaches it escaped, then Base64-encoded.
     at("Herdr World did not write it.");
+    expect(at("EscapeSingleQuotedStringContent($core)")).toBeLessThan(
+      at("-EncodedCommand ' + [Convert]::ToBase64String"),
+    );
+    expect(script).toContain("$link.Arguments = $arguments");
+    expect(script).not.toContain("a login entry cannot hold");
   });
 
   test("probe facts parse; an unsupported target is null", () => {

@@ -193,9 +193,16 @@ function herdr_core_enable_login($core, $session) {
   if ($session -cnotmatch '^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$') { herdr_core_fail "invalid herdr-core session: $session" }
   $suffix = if ($session -ceq 'default') { '' } else { "-$session" }
   if (-not [IO.Path]::IsPathRooted($core)) { herdr_core_fail "herdr-core's path must be absolute" }
-  # Single-quoted inside the shortcut's command: no quotes of any kind.
-  if ($core -cnotmatch '^[A-Za-z]:\\[A-Za-z0-9 \\._()+,~-]+$') {
-    herdr_core_say 'Not starting herdr-core at login: its path has characters a login entry cannot hold.'
+  # Any valid path (apostrophes, accents, other scripts): PowerShell's own
+  # single-quote escaping (it also doubles the typographic quotes it accepts),
+  # then the whole command as UTF-16LE Base64, so the shortcut holds only ASCII.
+  $quoted = [Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($core)
+  $command = "`$env:HC_SESSION='$session'; & '$quoted' server start"
+  $arguments = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+  # A shortcut's arguments hold at most 1023 characters: room for a path of
+  # about 250 characters or more, depending on the session name.
+  if ($arguments.Length -gt 1023) {
+    herdr_core_say 'Not starting herdr-core at login: its path is too long for a Startup shortcut.'
     return
   }
   $startup = [Environment]::GetFolderPath('Startup')
@@ -214,7 +221,7 @@ function herdr_core_enable_login($core, $session) {
   $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $link = $shell.CreateShortcut($file)
   $link.TargetPath = $powershell
-  $link.Arguments = "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -Command `"`$env:HC_SESSION='$session'; & '$core' server start`""
+  $link.Arguments = $arguments
   $link.WorkingDirectory = Split-Path -Parent $core
   $link.WindowStyle = 7
   $link.Description = $marker
