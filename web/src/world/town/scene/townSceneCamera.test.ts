@@ -168,7 +168,13 @@ test("a phone opens at home: the town center on top, the first building under it
     // A taller one keeps its lounge, where idle agents rest, in view.
     [{ width: 390, height: 780 }, office({ alpha: working(2) }), "lounge"],
     // One taller than the screen leaves the center its plaque and doors.
-    [PHONE, town, "plaque"],
+    [
+      PHONE,
+      office(
+        Object.fromEntries([..."abcdefghijkl"].map((k) => [k, working(20)])),
+      ),
+      "plaque",
+    ],
   ] as const) {
     const { view, layout, viewport, camera } = setup(
       size,
@@ -181,13 +187,15 @@ test("a phone opens at home: the town center on top, the first building under it
     expect(camera.z).toBe(camera.limits!.home);
     const top = viewport.inset.top;
     const bottom = viewport.height - viewport.inset.bottom;
-    // The center's plaque is on screen, centred on the buildings' axis.
+    // The center's plaque is on screen, centred on the buildings' axis
+    // (within half a tile: a floor an odd number of tiles narrower than the
+    // widest stands half a tile off it).
     const plaque = townCenterEmblem(layout.center, T);
     const sign = camera.toScreen(plaque.x, plaque.y);
     expect(sign.y).toBeGreaterThan(top);
-    expect(sign.x).toBeCloseTo(
-      camera.toScreen((first.x + first.w / 2) * T, 0).x,
-    );
+    expect(
+      Math.abs(sign.x - camera.toScreen((first.x + first.w / 2) * T, 0).x),
+    ).toBeLessThanOrEqual((T / 2) * camera.z + 0.01);
     const flag = camera.toScreen(0, layout.center.y * T - 40).y;
     const lounge = camera.toScreen(0, (first.y + first.h + TOWN_FACADE) * T).y;
     expect(flag).toBeLessThanOrEqual(top + 0.01);

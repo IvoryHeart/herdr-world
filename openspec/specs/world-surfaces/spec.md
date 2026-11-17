@@ -1417,8 +1417,9 @@ desks MAY reflow to the step's columns. Ordinary and explicitly expanded rooms
 SHALL resize to their current desk count; expanded rooms SHALL retain their
 expanded state until Fold. Room placement SHALL be re-derived from native order when the scene is
 rebuilt. Town SHALL take its shape from its container's size rather than one
-breakpoint: on a phone, rooms SHALL stack in one column and buildings in one
-vertical column; on a portrait screen or a half-width window, rooms SHALL form
+breakpoint: on a phone, rooms up to four desks wide SHALL form three columns,
+spread across the building rather than one long column, and buildings SHALL
+stack in one vertical column; on a portrait screen or a half-width window, rooms SHALL form
 two columns and buildings SHALL stack (or share a street when the window is
 landscape); on a wide screen, rooms SHALL form three columns and buildings
 SHALL share one street. Rooms SHALL fill their building's columns in workspace
