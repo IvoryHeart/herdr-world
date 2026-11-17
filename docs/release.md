@@ -76,6 +76,31 @@ They do not claim every historical upgrade, real Herdr plugin registration, OS s
 upgrade/reboot, npm/Homebrew channel upgrade or manual browser interaction. Test the
 published RC on the owner's existing installation before promoting a stable release.
 
+## Linux systemd installation gate
+
+Before publishing, the Release workflow's Linux x64 package job runs
+`bun run test:install-linux --reuse --version <release-version> --require-docker`
+against the exact package it will upload. A failed case blocks the package job and
+therefore GitHub, npm and Homebrew publication. To reproduce before a release, run
+`bun run test:install-linux` locally; see the [runbook](development.md#linux-installation-acceptance)
+for requirements, pins, failure diagnostics and case maintenance.
+
+The same suite runs in the Linux x64 job of `installer-upgrade.yml`, which feeds
+the existing required **Delivery checks** result. Installation inputs explicitly
+select native packaging in the shared suite rules: the standalone/core installers,
+generated bootstrap and Homebrew sources, release packaging, core install RPC
+implementation and connection-profile registration. The wider existing packaging
+classification also runs it. Every main push selects the full matrix. Ordinary
+docs-only PRs and proven exact-head reuse skip native jobs. Keeping it within the
+native matrix preserves all protected check names and branch rules and makes a
+failed real-install check block the same gate as other installer failures.
+
+This adds real checksum-verified runtime downloads, a real systemd user manager,
+core login startup after reboot, core-only defaults/topology, TUI preservation,
+RPC install/start and latest-stable World upgrade preservation. Network or runtime
+release failures are failures, not skipped acceptance. macOS and Windows remain
+outside this suite; the owner still checks real macOS installation by hand.
+
 ## Pre-merge platform previews
 
 Add the `release-preview` label to a release preparation PR. Its CI run first

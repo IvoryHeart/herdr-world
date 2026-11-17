@@ -173,9 +173,10 @@ export function candidateVersion(tag: string, run: string): string {
 export const upgradeCookieStatus = (tag: string) =>
   tag === "v0.2.3" ? 401 : 200;
 
-export async function plan() {
+/** Shared stable baseline policy for native upgrades and container installs. */
+export async function latestStableRelease(download: typeof fetch = fetch) {
   const api = async (path: string) => {
-    const response = await fetch(
+    const response = await download(
       `https://api.github.com/repos/${repository}/${path}`,
       {
         headers: process.env.GH_TOKEN
@@ -192,17 +193,23 @@ export async function plan() {
     !release.draft && !release.prerelease,
     "Baseline must be published and stable",
   );
-  const version = candidateVersion(
-    release.tag_name,
-    process.env.GITHUB_RUN_ID!,
+  assert(
+    /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(release.tag_name),
+    "Baseline must have a stable version tag",
   );
-  const commit = await api(`commits/${encodeURIComponent(release.tag_name)}`);
+  return { tag: release.tag_name as string, api };
+}
+
+export async function plan() {
+  const { tag, api } = await latestStableRelease();
+  const version = candidateVersion(tag, process.env.GITHUB_RUN_ID!);
+  const commit = await api(`commits/${encodeURIComponent(tag)}`);
   assert(
     /^[0-9a-f]{40}$/.test(commit.sha),
     "Missing immutable baseline revision",
   );
   const values = {
-    baseline_tag: release.tag_name,
+    baseline_tag: tag,
     baseline_sha: commit.sha,
     candidate_version: version,
   };
