@@ -159,7 +159,9 @@ function useSecondClock(running: boolean) {
 }
 
 /**
- * Town's bus stops, the agents waiting at them and the bus. A binned agent
+ * Town's bus stops, the agents waiting at them and the bus. Each stop's sign
+ * is street furniture the canvas draws (townRendererScene.ts); here a stop
+ * is its tap and drop area over that sign and its queue. A binned agent
  * leaves by its front door as the same character, walking as it walks
  * indoors, to the stop nearest its room, where a clock shows the time to
  * the next bus. While the service says a bus is out, it drives the route on
@@ -207,6 +209,12 @@ export const TownBusLayer = memo(function TownBusLayer({
     waiting.set(rider.stop.key, list);
   }
   const passengers = riders.filter((rider) => rider.entry.riding);
+  // The canvas draws the stops' signs; those where agents wait show red.
+  const waitingKey = [...waiting.keys()].sort().join("\n");
+  const waitingStops = useMemo(
+    () => new Set(waitingKey ? waitingKey.split("\n") : []),
+    [waitingKey],
+  );
   const now = useSecondClock(riders.length > 0);
   // The stops this trip halts at, kept for the whole trip so the bus never
   // jumps when a rider is put back; a stop is only ever added.
@@ -280,6 +288,7 @@ export const TownBusLayer = memo(function TownBusLayer({
         }
       }
       const handle = renderer.current;
+      handle?.setWaitingStops(waitingStops);
       const aboard = new Set<string>();
       for (const rider of riders) {
         const id = rider.entry.id;
@@ -378,7 +387,17 @@ export const TownBusLayer = memo(function TownBusLayer({
       framed.current = null;
       cancelAnimationFrame(frame);
     };
-  }, [bin, route, riders, returning, timeline, lookOf, framed, renderer]);
+  }, [
+    bin,
+    route,
+    riders,
+    returning,
+    timeline,
+    lookOf,
+    framed,
+    renderer,
+    waitingStops,
+  ]);
 
   const [upstairs, downstairs] = SEATS;
   const seats = [
@@ -443,12 +462,7 @@ export const TownBusLayer = memo(function TownBusLayer({
             // Dropping an agent here (its sign or its queue) puts it in the bin.
             data-bin-drop=""
             onClick={openWorldBin}
-          >
-            <span className="town-bus-pole" aria-hidden="true" />
-            <span className="town-bus-flag" aria-hidden="true">
-              <span className="town-bus-roundel" />
-            </span>
-          </button>,
+          />,
           more && last ? (
             <span
               key={`${stop.key}-more`}
