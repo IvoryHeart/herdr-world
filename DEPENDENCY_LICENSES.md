@@ -934,6 +934,7 @@ Sources:
 
 Sources:
 
+- `@isaacs/nonrecursive-glob-match@1.1.0` — `LICENSE.md`
 - `lru-cache@11.5.3` — `LICENSE.md`
 
     # Blue Oak Model License
@@ -2749,7 +2750,6 @@ Sources:
 
 Sources:
 
-- `source-map-js@1.2.1` — `LICENSE`
 - `source-map-js@1.2.2` — `LICENSE`
 
 
@@ -6400,7 +6400,7 @@ Sources:
 
 Sources:
 
-- `minimatch@10.2.6` — `LICENSE.md`
+- `minimatch@11.0.1` — `LICENSE.md`
 
     # Blue Oak Model License
 
@@ -11880,7 +11880,7 @@ Sources:
 
 Sources:
 
-- `zod@4.6.5` — `LICENSE`
+- `zod@4.6.7` — `LICENSE`
 
     MIT License
 
