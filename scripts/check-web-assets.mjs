@@ -15,8 +15,11 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // headroom instead; total bytes and the initial budgets are what users pay for
 // and stay as they are. The always-mounted herdr-core kill confirmation
 // shares ConfirmDialog with Town and Board, splitting ModalDialogs into its
-// own chunk (181 files on 2026-11-11).
-const maxFileCount = 184;
+// own chunk (181 files on 2026-11-11). End shell confirms the same way from
+// the float shell's lazy chunk, which moves that confirmation and the float
+// shell's read model into one shared chunk and its CSS (185 files, no new
+// bytes, on 2026-11-17).
+const maxFileCount = 186;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
