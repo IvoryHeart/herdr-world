@@ -229,6 +229,8 @@ export const TownPostOffice = memo(function TownPostOffice({
   const pile = parcels.slice(shown.length);
   const quiet = office.status !== "open";
   const connect = office.status === "off" || office.status === "closed";
+  // Work opens only once GitHub has answered; loading keeps the old sign.
+  const work = office.status === "open" ? openWork : undefined;
   return (
     <>
       <button
@@ -236,14 +238,14 @@ export const TownPostOffice = memo(function TownPostOffice({
         className="town-post-sign"
         data-quiet={quiet || undefined}
         style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 34 }}
-        aria-label={`Post office: ${spoken(office)}${!connect && openWork ? ". Open all pull requests" : ""}`}
+        aria-label={`Post office: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
         title={quiet && office.status === "closed" ? office.detail : undefined}
         onPointerDown={(event) => event.stopPropagation()}
         onFocus={reveal}
         onClick={(event) => {
           event.stopPropagation();
           if (connect) openSourcesSettings();
-          else if (openWork) openWork();
+          else if (work) work();
           else
             yardRef.current
               ?.querySelector<HTMLElement>(".town-post-parcel")

@@ -319,6 +319,31 @@ if (process.env.TOWN_POST_DOM !== "1") {
     await closed.close();
   });
 
+  test("before GitHub answers, the sign does not open the Work lens", async () => {
+    // A cold page: the first sources request has not returned any source.
+    await act(async () =>
+      worldSourcesStore.publishSettled({
+        observedAt: Date.now(),
+        refreshing: true,
+        sources: [],
+        items: [],
+        links: [],
+        actions: [],
+      } satisfies Snapshot),
+    );
+    let opened = 0;
+    const office = await mount(false, () => {
+      opened += 1;
+    });
+    const sign = office.sign()!;
+    expect(sign.getAttribute("aria-label")).not.toContain(
+      "Open all pull requests",
+    );
+    await act(async () => sign.click());
+    expect(opened).toBe(0);
+    await office.close();
+  });
+
   test("Town's Work lens is Board's kanban, over the post office's pull requests", async () => {
     await publish([
       fixturePullRequest(1, { title: "Synthetic ready change" }),
