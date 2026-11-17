@@ -126,6 +126,10 @@ GNU accepts. Preserve command basenames when constructing a fixture PATH; use a
 shell blocked on stdin or a compiled probe when a process needs an unusual name.
 This covers the known CI tool gap without container startup in the pre-push gate.
 
+Ranger recovery fixtures use a saved synthetic custom model with a loopback
+endpoint. They exercise the real SDK in source and standalone processes without
+relying on fetch-preload ordering to redirect a production provider address.
+
 Process fixtures run fake behavior in the test process where practical. The
 [diagnostics adapter](../scripts/browser-diagnostics.ts) and
 [native plugin dispatch](../server/src/config/plugin-command.ts) accept narrow

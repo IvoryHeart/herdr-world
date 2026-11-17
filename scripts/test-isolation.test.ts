@@ -174,8 +174,11 @@ test("fake runtime", async () => {
     writeFileSync(fake, "#!/bin/sh\\necho synthetic\\n", {mode:0o755});
     expect(Bun.spawnSync([fake]).stdout.toString().trim()).toBe("synthetic");
   }
-  const server = Bun.serve({hostname:"127.0.0.1",port:0,fetch:()=>new Response("fixture")});
-  try { expect(await (await fetch(server.url)).text()).toBe("fixture"); } finally {server.stop(true);}
+  const server = Bun.serve({hostname:"127.0.0.1",port:0,fetch:(request)=>new URL(request.url).pathname === "/redirect" ? new Response(null, {status:302,headers:{location:"/"}}) : new Response("fixture")});
+  try {
+    expect(await (await fetch(server.url)).text()).toBe("fixture");
+    expect((await fetch(new URL("/redirect",server.url), {redirect:"manual"})).status).toBe(302);
+  } finally {server.stop(true);}
 });`);
   expect(result.code).toBe(0);
 });

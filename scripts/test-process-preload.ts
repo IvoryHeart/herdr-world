@@ -128,7 +128,12 @@ if (
     ((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       guardURL(input instanceof Request ? input.url : String(input), "fetch");
       // A redirect must not turn a fixture URL into a real download/login.
-      return originalFetch(input, { ...init, redirect: "error" });
+      const redirect =
+        init?.redirect ?? (input instanceof Request ? input.redirect : "error");
+      return originalFetch(input, {
+        ...init,
+        redirect: redirect === "manual" ? "manual" : "error",
+      });
     }) as typeof fetch,
     originalFetch,
   );
