@@ -55,6 +55,16 @@ test("clock follows this device's time; the other modes hold their hour", () => 
   expect(townDaylightHour("night", new Date(2026, 10, 17, 12))).toBe(23);
 });
 
+test("clock reads time through Date.now, so an installed test clock governs it", () => {
+  const realNow = Date.now;
+  Date.now = () => new Date(2026, 10, 17, 6, 15).getTime();
+  try {
+    expect(townDaylightHour("clock")).toBe(6.25);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test("day leaves the town as painted; night darkens it and lights its lamps", () => {
   const day = townSky(townDaylightHour("day"));
   expect(townSkyIsClear(day)).toBe(true);

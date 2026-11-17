@@ -5,6 +5,7 @@ import {
   TOWN_BUS_DWELL_MS,
   TOWN_QUEUE_ROW,
   TOWN_QUEUE_ROWS,
+  TOWN_STOP_SPACING,
   townBinRiders,
   townBusAlong,
   townBusAt,
@@ -22,6 +23,7 @@ import {
   townRiderWalkBack,
   townRiderWalkMs,
   townStopClock,
+  type TownBusStop,
 } from "./townBus";
 import { TownGround, type TownShape } from "./townLayout";
 import { TOWN_WALK_SPEED } from "./townActors";
@@ -43,7 +45,12 @@ const town = (hosts: Record<string, number[]>) => ({
   ),
 });
 
-const shapes = [TOWN_SHAPES.phone, TOWN_SHAPES.medium, TOWN_SHAPES.wide];
+const shapes = [
+  TOWN_SHAPES.phone,
+  TOWN_SHAPES.portrait,
+  TOWN_SHAPES.medium,
+  TOWN_SHAPES.wide,
+];
 const towns: Record<string, number[]>[] = [
   { a: [2] },
   { a: [3, 2], b: [1] },
@@ -51,6 +58,8 @@ const towns: Record<string, number[]>[] = [
   // A shorter last row, and a wider one below a narrower one.
   Object.fromEntries([..."abcdefgh"].map((key) => [key, [1]])),
   { a: [1], b: [1], c: [1], d: [1], e: [1, 1, 1, 1] },
+  // Stacked buildings a tile or two different in width (#889).
+  { a: [3, 2], b: [1], c: [2, 2, 2], d: [2, 2] },
 ];
 
 test("every road crossing has a stop, and the bus passes each on its way off the map", () => {
@@ -58,21 +67,49 @@ test("every road crossing has a stop, and the bus passes each on its way off the
     for (const hosts of towns) {
       const { layout } = layoutTown(town(hosts), shape);
       const route = townBusRoute(layout);
-      const crossings = new Set<string>();
+      const crossings: { x: number; road: number }[] = [];
       for (const road of layout.roads)
         for (const side of layout.verticalRoads)
           if (side.y0 === road + 5 || side.y1 === road)
-            crossings.add(`${side.x}:${road}`);
-      expect(route.stops.map((stop) => stop.key).sort()).toEqual(
-        [...crossings].sort(),
-      );
+            crossings.push({ x: side.x, road });
+      const stopAt = (stop: TownBusStop) => {
+        const [x, road] = stop.key.split(":").map(Number);
+        return { x: x!, road: road! };
+      };
+      // Each stop stands at a crossing, and each crossing has a stop on its
+      // street: its own, or one fewer than TOWN_STOP_SPACING tiles away that
+      // it shares (stacked buildings of slightly different widths).
+      for (const stop of route.stops)
+        expect(crossings).toContainEqual(stopAt(stop));
+      for (const crossing of crossings)
+        expect(
+          route.stops.some((stop) => {
+            const at = stopAt(stop);
+            return (
+              at.road === crossing.road &&
+              Math.abs(at.x - crossing.x) < TOWN_STOP_SPACING
+            );
+          }),
+        ).toBe(true);
+      // Stops on one street stand far enough apart for their queues.
+      for (const a of route.stops)
+        for (const b of route.stops)
+          if (a !== b && stopAt(a).road === stopAt(b).road)
+            expect(Math.abs(stopAt(a).x - stopAt(b).x)).toBeGreaterThanOrEqual(
+              TOWN_STOP_SPACING,
+            );
       // The leftmost junctions too: each edge road meets both its streets
-      // at a stop, on the map.
+      // at a stop, on the map (two rows' edge roads a tile apart share one).
       const edges = layout.verticalRoads.filter((side) => side.edge);
       expect(edges.length).toBeGreaterThan(0);
       for (const side of edges)
         for (const road of [side.y0 - 5, side.y1]) {
-          const stop = route.stops.find((s) => s.key === `${side.x}:${road}`);
+          const stop = route.stops.find((s) => {
+            const at = stopAt(s);
+            return (
+              at.road === road && Math.abs(at.x - side.x) < TOWN_STOP_SPACING
+            );
+          });
           expect(stop).toBeDefined();
           expect(stop!.wait.x).toBeGreaterThan(0);
         }

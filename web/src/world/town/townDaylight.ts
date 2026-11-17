@@ -70,10 +70,13 @@ export function resetTownDaylightForTest() {
   listeners.clear();
 }
 
-/** The hour the town shows, 0–24. */
+/**
+ * The hour the town shows, 0–24. The clock is read through Date.now so a
+ * page's installed test clock governs it too.
+ */
 export function townDaylightHour(
   current: TownDaylightMode = townDaylightMode(),
-  now = new Date(),
+  now = new Date(Date.now()),
 ) {
   return current === "clock"
     ? now.getHours() + now.getMinutes() / 60
