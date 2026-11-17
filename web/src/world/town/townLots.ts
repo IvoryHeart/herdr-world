@@ -32,8 +32,18 @@ const ADD_ROOM_GAP = 1;
 /** The bar's leftmost x: the doorway still fits inside the left wall. */
 const MIN_BAR_X = 2 + ADD_ROOM_WIDTH + ADD_ROOM_GAP;
 const MIN_BUILDING_WIDTH = 38;
-/** A phone's one-column building: the bar, counter and queue still fit. */
+/** A phone's narrowest building: the bar, counter and queue still fit. */
 const MIN_PHONE_BUILDING_WIDTH = 26;
+/** How many desks wide a phone's room grows before it extends downward. */
+export const TOWN_PHONE_DESK_COLUMNS = 4;
+
+/**
+ * The phone shape: narrow, with rooms at most four desks wide. Its buildings
+ * may be narrower than other shapes', and so is its town center.
+ */
+export const townPhoneShape = (shape: TownShape) =>
+  shape.formFactor === "narrow" &&
+  shape.deskColumns === TOWN_PHONE_DESK_COLUMNS;
 export const MARGIN = 3;
 export const ROAD_GAP = 5;
 /** Phones keep the reception board in the yard above each building. */
@@ -61,9 +71,7 @@ export type TownColumnSpan = { x0: number; x1: number; bottom: number };
 
 /** The narrowest building of a shape. */
 const minWidthOf = (shape: TownShape) =>
-  shape.formFactor === "narrow" && shape.roomColumns === 1
-    ? MIN_PHONE_BUILDING_WIDTH
-    : MIN_BUILDING_WIDTH;
+  townPhoneShape(shape) ? MIN_PHONE_BUILDING_WIDTH : MIN_BUILDING_WIDTH;
 
 /**
  * A building's size, bar and + Add room doorway from its room columns
@@ -118,7 +126,7 @@ export function townPlaceLots(
   shape: TownShape,
 ) {
   const narrow = shape.formFactor === "narrow";
-  const centerW = townCenterWidth(shape.roomColumns === 1);
+  const centerW = townCenterWidth(townPhoneShape(shape));
   const perRow = narrow
     ? 1
     : floors.length <= 4
