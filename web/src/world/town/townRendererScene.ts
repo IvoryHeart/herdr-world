@@ -17,6 +17,7 @@ import {
   type TownCell,
   type TownLayout,
 } from "./townLayout";
+import { townBusRoute } from "./townBus";
 import { paintTownCenter } from "./townCenterPaint";
 import { townPostLot } from "./townPost";
 import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
@@ -27,6 +28,7 @@ import {
   type TownHostTheme,
 } from "./townPaint";
 import {
+  TOWN_BUS_STOP_SIGN,
   townCanvas,
   townCharacter,
   townHash,
@@ -108,12 +110,16 @@ export type TownOutdoorItem = { x: number; y: number; place: () => void };
 
 /**
  * The town's outdoor items, each placed when the ground chunk under it is
- * painted, and the plaza fountain, added to `outdoor` now.
+ * painted, and the plaza fountain, added to `outdoor` now. Bus stop signs
+ * stand with the lamps, in the scene's depth order; each placed sign goes
+ * into `signs` by stop key, its flag red while `waiting` says so.
  */
 export function townOutdoor(
   layout: TownLayout,
   sprites: TownStaticSprites,
   outdoor: Container,
+  signs: Map<string, Sprite>,
+  waiting: (stopKey: string) => boolean,
 ): TownOutdoorItem[] {
   const add = (canvas: TownCanvas, x: number, y: number, z: number) => {
     const sprite = new Sprite(textureOf(canvas));
@@ -130,6 +136,22 @@ export function townOutdoor(
       y: lamp.y * T,
       place: () =>
         add(sprites.lamp, lamp.x * T + 5, lamp.y * T - 22, lamp.y * T + 8),
+    });
+  // The pole stands just right of where the stop's first rider waits.
+  for (const stop of townBusRoute(layout).stops)
+    outdoorItems.push({
+      x: stop.wait.x,
+      y: stop.wait.y,
+      place: () =>
+        signs.set(
+          stop.key,
+          add(
+            waiting(stop.key) ? sprites.busStopWaiting : sprites.busStop,
+            stop.wait.x + 1,
+            stop.wait.y - TOWN_BUS_STOP_SIGN.height,
+            stop.wait.y + 1,
+          ),
+        ),
     });
   for (const bush of layout.bushes)
     outdoorItems.push({

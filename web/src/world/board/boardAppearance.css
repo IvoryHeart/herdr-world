@@ -1,8 +1,10 @@
 /* Board: a pin board drawn from World's theme tokens, so a light theme reads as
    a whiteboard and a dark theme as a blackboard. */
-.board {
+.board,
+.town-work {
   /* The prototype's palettes: a blackboard for dark themes (the default)
-     and a whiteboard for light ones. */
+     and a whiteboard for light ones. Town's Work lens (.town-work) follows
+     the theme the same way. */
   --board-ground: #1c2320;
   --board-grid: #2b3430;
   --board-card: #252d29;
@@ -19,6 +21,8 @@
   --s-done: #6dd29a;
   --s-idle: #8e978e;
   --s-unknown: #c3a2ff;
+}
+.board {
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -34,7 +38,8 @@
     transparent 1.4px
   );
 }
-:root[data-theme="light"] .board:not([data-surface="blackboard"]),
+:root[data-theme="light"]
+  :is(.board:not([data-surface="blackboard"]), .town-work),
 .board[data-surface="whiteboard"] {
   --board-ground: #f2f3ee;
   --board-grid: #d6d9cf;

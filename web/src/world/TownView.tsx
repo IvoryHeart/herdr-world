@@ -1,5 +1,5 @@
 import { lazyIndex } from "./town/lazyIndex";
-import { AnswerOutboxContext } from "./town/answerOutbox";
+import { TownContexts, useTownWork } from "./town/TownWorkLens";
 import { TownStepStore } from "./town/townStepStore";
 import { useTownStepReads } from "./town/useTownStepReads";
 import { townScaleSceneRequested } from "./town/townScaleScene";
@@ -171,9 +171,9 @@ export default function TownView({
   );
   const preferencesRef = useRef(preferences);
   const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
-  // The one reviewed record, Desk's stop mark. Town
-  // sees only reviewed records, so the service's stop notices do not
-  // re-render a busy Town.
+  const workLens = useTownWork(world, onSelect); // The post office's Work.
+  // The one reviewed record, Desk's stop mark. Town sees only reviewed
+  // records, so the service's stop notices do not re-render a busy Town.
   const work = useReviewedWork(undefined, false);
   const [sceneHover, setSceneHover] = useState<WorldCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
@@ -607,8 +607,7 @@ export default function TownView({
       });
     openOfficeTerminal(key);
   };
-  // The phone's Back closes the composer, then the peek or chooser, before
-  // it leaves Town.
+  // Phone Back closes the composer, then the peek or chooser, then Town.
   useSystemBack(
     peek !== null,
     () => {
@@ -782,7 +781,7 @@ export default function TownView({
   const toolbar = <WorldViewToolbar viewLabel="Town" {...search.toolbar} />;
 
   return (
-    <AnswerOutboxContext.Provider value={townSummary.openOutbox}>
+    <TownContexts outbox={townSummary.openOutbox} openWork={workLens.open}>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults
         world={world}
@@ -994,7 +993,8 @@ export default function TownView({
           submitRenameRoom={submitRenameRoom}
           closeRoom={closeRoom}
         />
+        {workLens.lens}
       </div>
-    </AnswerOutboxContext.Provider>
+    </TownContexts>
   );
 }

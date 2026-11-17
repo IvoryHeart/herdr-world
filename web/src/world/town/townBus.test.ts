@@ -62,7 +62,7 @@ const towns: Record<string, number[]>[] = [
   { a: [3, 2], b: [1], c: [2, 2, 2], d: [2, 2] },
 ];
 
-test("every road crossing right of a lot has a stop, and the bus passes each on its way off the map", () => {
+test("every road crossing has a stop, and the bus passes each on its way off the map", () => {
   for (const shape of shapes)
     for (const hosts of towns) {
       const { layout } = layoutTown(town(hosts), shape);
@@ -70,7 +70,7 @@ test("every road crossing right of a lot has a stop, and the bus passes each on 
       const crossings: { x: number; road: number }[] = [];
       for (const road of layout.roads)
         for (const side of layout.verticalRoads)
-          if (!side.edge && (side.y0 === road + 5 || side.y1 === road))
+          if (side.y0 === road + 5 || side.y1 === road)
             crossings.push({ x: side.x, road });
       const stopAt = (stop: TownBusStop) => {
         const [x, road] = stop.key.split(":").map(Number);
@@ -98,6 +98,16 @@ test("every road crossing right of a lot has a stop, and the bus passes each on 
             expect(Math.abs(stopAt(a).x - stopAt(b).x)).toBeGreaterThanOrEqual(
               TOWN_STOP_SPACING,
             );
+      // The leftmost junctions too: each edge road meets both its streets
+      // at a stop, on the map.
+      const edges = layout.verticalRoads.filter((side) => side.edge);
+      expect(edges.length).toBeGreaterThan(0);
+      for (const side of edges)
+        for (const road of [side.y0 - 5, side.y1]) {
+          const stop = route.stops.find((s) => s.key === `${side.x}:${road}`);
+          expect(stop).toBeDefined();
+          expect(stop!.wait.x).toBeGreaterThan(0);
+        }
       // Every street is driven edge to edge, from off the map to off it.
       expect(route.legs.map((leg) => leg.y)).toEqual(
         [...new Set(layout.roads)]

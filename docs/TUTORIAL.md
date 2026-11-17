@@ -204,7 +204,8 @@ Around it you will find:
   days. Each building's reception board shows its own share. Costs need a
   price table; see [harness usage](./usage.md).
 - **The post office.** With GitHub connected, your open pull requests wait here
-  as parcels. Tap one for its card and **Merge…**.
+  as parcels. Tap one for its card and **Merge…**. Tap its sign to see every
+  pull request on the Work board.
 
 After 30 minutes or more away, the board starts with **Since you left**: what
 is new for you, what finished and what merged.

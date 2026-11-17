@@ -200,7 +200,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens (**Details**, **Merge…** and the rest). A merged parcel is carried
     off the yard (with calm or reduced motion it just goes); a closed one
     fades. More than the yard holds make a "+N" pile that opens the rest as a
-    list. With the GitHub source off, signed out or not yet answered, the
+    list. Click the post office's sign, or **All pull requests** at the top of
+    the pile's list or the phone sign's list, to open Board's **Work** lens
+    over Town: every pull request in the same columns, with the Tickets tab,
+    each card's actions and the same Escape, Back or press-outside close. An
+    agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
     post office is closed and says to connect GitHub in **Sources**, with no
     parcels and no counts; when a refresh fails it keeps the last list as
     unknown and says GitHub is out of date. On a phone it folds to a sign on
@@ -209,7 +213,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     requests, open World with `?townPostFixture` (synthetic pull requests in
     every state; ten seconds later the first ready one merges),
     `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
-    the page drops the parameter at once and only the post office uses it.
+    the page drops the parameter at once and only the post office and the
+    Work lens it opens use it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -236,7 +241,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right. A matching road runs down the left
     of each row's first building, so the town is bounded by roads on both
-    sides; it has no bus stop.
+    sides; its crossings have bus stops like every other.
   - The land around the town is generated: woods with pines, meadows, hedged
     flower gardens and orchards, ponds with reeds, winding footpaths, and each
     street running on beyond the town as a country lane. It fills the whole
@@ -598,8 +603,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     those waiting at a stop queue along its pavement in joining order, in
     two rows when long, with a **+N** board at the end for any more; one put
     back walks home from the queue and those behind step up;
-    there is a stop at every road crossing (crossings a step or two apart on
-    one street share one), and a countdown board over those
+    there is a stop at every road crossing, the leftmost included (crossings a
+    step or two apart on one street share one); its sign
+    is street furniture like the lamps, drawn behind buildings and agents and
+    under labels and panels, and shrinking with the town as it zooms out (on
+    a phone zoomed far out, the floating bin is the easier target). A
+    countdown board over those
     waiting counts down to the bus reaching that stop (**due** a few seconds
     before it pulls in). The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
