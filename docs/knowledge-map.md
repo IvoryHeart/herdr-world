@@ -30,6 +30,15 @@ React version evidence and the development diagnostic patch are maintained in
 [the installed-renderer regression](../web/src/testing/reactPerformanceTracks.test.ts).
 Notification wiring is described in the [World startup guide](../web/src/world/README.md#application-startup-and-owner-questions).
 
+Test isolation and tool portability are maintained in the
+[test runner](../scripts/run-tests.ts), [startup environment](../scripts/test-isolation.ts),
+[process preload](../scripts/test-process-preload.ts), [tripwire](../scripts/test-tripwire.ts)
+and [portability lint](../scripts/test-portability.ts). See the
+[subprocess controls](../scripts/test-isolation.test.ts),
+[coreutils regressions](../scripts/test-portability.test.ts),
+[contributor guide](../CONTRIBUTING.md#validation) and
+[development guide](development.md) for isolation, fakes and explicit live opt-out.
+
 | When changing | Current contract | Start in source | Focused evidence or runbook |
 | --- | --- | --- | --- |
 | Core harness inventory, profile aliases and transcript reading | [Core runtime requirement](../openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md), [harness matrix](core-harnesses.md) | [Harness names](../server/src/herdr-core/harness.ts), [native launch brief](../server/src/herdr-core/launch-brief.ts), [history reader](../server/src/herdr-core/history.ts), [shared Chat on core](../server/src/herdr-core/agent-sessions.ts) | [Shared transcript fixtures](../server/src/agent/testing/conversation-fixtures.ts), [reader parity and fences](../server/src/herdr-core/history.test.ts), [live harness-name smoke](../server/src/herdr-core/harnesses.live.test.ts), [Chat browser captures](../server/src/herdr-core/files.browser.test.ts) |

@@ -11,7 +11,11 @@ import { join } from "node:path";
  */
 export async function warmChrome(
   chrome: string,
-  options: { timeoutMs?: number; log?: (message: string) => void } = {},
+  options: {
+    timeoutMs?: number;
+    log?: (message: string) => void;
+    env?: NodeJS.ProcessEnv;
+  } = {},
 ): Promise<number | undefined> {
   const log = options.log ?? ((message: string) => console.info(message));
   const profile = mkdtempSync(join(tmpdir(), "chrome-warmup-"));
@@ -29,7 +33,7 @@ export async function warmChrome(
         "--dump-dom",
         "about:blank",
       ],
-      { stdout: "ignore", stderr: "ignore" },
+      { stdout: "ignore", stderr: "ignore", env: options.env ?? process.env },
     );
     const timer = setTimeout(
       () => child.kill("SIGKILL"),

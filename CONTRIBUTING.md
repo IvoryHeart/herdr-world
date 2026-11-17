@@ -44,6 +44,39 @@ assets required by server typechecks and process tests.
 | Full local gate | `bun run check:delivery` runs every check, in parallel lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. |
 | Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); disk management belongs to the owner and never blocks a check. |
 
+Tests launched with `bun run test`, the local gates and CI receive a fresh
+HOME, XDG config/cache/data/state/runtime directories and World data directory
+**before Bun starts**, including its cached `os.homedir()`. PATH contains system
+tools and the selected Bun/Node/Chrome executables, without user bin directories
+or installed `herdr`, `herdr-core`, `hc` or `herdr-world`. Runtime variables,
+SSH credentials/config redirects, harness homes, tokens and proxies are removed;
+only the runner's queue/assets/label markers survive. Direct `bun test` refuses
+with the wrapper command to use. Fixtures must inject every runtime dependency,
+including detection, and create their own synthetic configuration.
+
+The test tripwire refuses real runtime/service commands, core/World installers,
+SSH connections, downloads and non-loopback network requests. Loopback fixtures
+use dynamically assigned ports; 8787/8788 and sockets outside test scratch are
+refused, except short sockets actually bound by a test fixture. The runner fails even if application code catches the error. Shell
+children inherit guarded service/download/SSH commands; source Bun children
+inherit the preload. Installer fixtures need fake commands in their scratch PATH
+and an explicit scratch HOME. This is an accidental-side-effect guard, not a
+security sandbox for hostile code.
+
+Live suites opt out explicitly with `bun run test --live <file.live.test.ts>`;
+name only live files, never a directory or the ordinary inventory. They still
+get scratch HOME/XDG/data and retain their existing fixture lifecycle/cleanup.
+Supply their documented live binary/fixture variables explicitly. The separate
+`bun scripts/herdr-core-smoke.ts` release smoke downloads a verified binary and
+uses this live route; ordinary tests cannot inherit its opt-out or binary.
+
+`bun run lint` also checks test portability: never rename a coreutils executable
+(e.g. symlink `sleep` as a fake harness/process name). GNU tools may accept this
+while uutils on CI refuses it with “Security violation”. Keep the basename, use
+`sh -c 'read line'` for an idle named process, or build a purpose-specific probe.
+This cheap rule runs locally and in CI, without a container/tool download on each
+push. Native platform lanes remain responsible for their OS-specific behavior.
+
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
 writing files, and its `pre-push` hook runs the applicable check. Use focused checks

@@ -79,11 +79,17 @@ echo "systemctl $*" >> "\${HC_FIXTURE_LOG:-/dev/null}"
 `,
   );
   chmodSync(join(fakeBin, "systemctl"), 0o755);
+  writeFileSync(
+    join(fakeBin, "launchctl"),
+    '#!/bin/sh\necho "launchctl $*" >> "${HC_FIXTURE_LOG:-/dev/null}"\n',
+    { mode: 0o755 },
+  );
   return { version, sha256, archive };
 }
 
 /** A PATH holding the fakes and system tools only, never the user's own core. */
-export const isolatedPath = (fakeBin: string) => `${fakeBin}:/usr/bin:/bin`;
+export const isolatedPath = (fakeBin: string) =>
+  `${fakeBin}:${process.env.PATH}`;
 
 /** Where a real login entry would be, inside the fixture's HOME. */
 export const loginEntry = (home: string, session = "default") => {

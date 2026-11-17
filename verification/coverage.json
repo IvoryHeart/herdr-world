@@ -2133,6 +2133,8 @@
       "requirement": "openspec/specs/distribution-boundaries/spec.md",
       "properties": "Publication follows verified merged commit; artifact matrix complete; duplicate jobs cannot publish conflicting versions",
       "existingTests": [
+        "scripts/test-isolation.test.ts",
+        "scripts/test-portability.test.ts",
         "scripts/release-validation.test.ts",
         "scripts/check-binary-format.test.ts",
         "scripts/ci-workflow.test.ts",
@@ -2160,6 +2162,8 @@
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
+          "scripts/test-isolation.test.ts",
+          "scripts/test-portability.test.ts",
           "scripts/release-validation.test.ts",
           "scripts/ci-workflow.test.ts",
           "scripts/validation-scope.test.ts",
