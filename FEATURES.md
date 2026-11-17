@@ -689,7 +689,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **herdr-core first on a fresh install.** A fresh standalone install and the
   Homebrew launcher keep any installed runtime (`hc`/`herdr-core` or `herdr`)
   with its existing version and owner, and install nothing. When neither is
-  found they install herdr-core: its release list over HTTPS, the archive for
+  found they install herdr-core: its release list over HTTPS (a dropped connection is
+  retried up to three times; an HTTP error fails at once), the archive for
   this computer checked against its SHA-256 (nothing downloaded runs as a
   script; on macOS a release without the signed Herdr Core.app is refused
   before anything in it runs), `~/.local/bin/herdr-core` plus an `hc` link if
@@ -799,8 +800,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   their system colours and meanings.
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
   the card in Board and its table in Town (tabs beyond a room's drawn tables
-  show it in Spaces and Board). A tab starts with a stable default colour, or
-  its workspace's Board colour; choose another from the terminal's icon in its
+  show it in Spaces and Board). Colour is quiet identity, never attention: the
+  palette's eight tones are muted and equally light, so only status (the agent
+  marks, each with its own glyph) uses loud colour. A tab without a colour of
+  its own shows its room's: the workspace's chosen colour, or else the room's
+  stable default, so a room reads as one colour and only rooms differ by
+  default. Choose another from the terminal's icon in its
   window header or the appearance button in the phone terminal's app bar, the
   terminal window's menu (**Colour**), the tab's menu in Spaces, the swatch in
   an agent's peek in Town, or the selected card in Board, and reset a tab's own
@@ -817,9 +822,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     its reception board), its Board zone (swatch on the zone label) and its
     Spaces header; it is not passed on to tabs. **Default colour** returns a
     place to its own default.
-  - A desk moved to another room keeps the colour it showed, even a default or
-    its old room's, saved as its own colour: it no longer follows its room's
-    colour, and **Default colour** resets it to its new tab's default.
+  - A desk moved to another room keeps a colour picked for it. Without one it
+    takes its new room's colour, like every desk there.
   - A spawned agent's tab without a colour of its own takes the colour of the
     tab that spawned it (before its workspace's colour), and keeps following it
     when moved. A chosen colour always wins.

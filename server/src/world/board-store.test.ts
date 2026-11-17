@@ -22,7 +22,7 @@ import {
   type BoardAnchor,
 } from "./board-store";
 import {
-  defaultTerminalColorFor,
+  defaultRoomColorFor,
   resolveTerminalColor,
 } from "../../../shared/terminalColor";
 import { encodeRecipient, recipientOps, sessionOf } from "./board-recipient";
@@ -485,7 +485,7 @@ describe("Board store", () => {
     ]);
   });
 
-  describe("a moved tab keeps the colour it showed", () => {
+  describe("a moved tab keeps only a colour picked for it", () => {
     const ids = new Set(["w1", "w2", "w3"]);
     const move = (
       store: BoardStore,
@@ -528,23 +528,28 @@ describe("Board store", () => {
         workspaceIds: ids,
       }).color;
 
-    test("a default colour is kept by saving it for the new tab", () => {
+    test("a tab without a colour of its own takes its new room's default", () => {
       const store = new BoardStore(path);
-      const before = shown(store, "w1", "w1:t1");
-      store.patch(
+      expect(
         move(store, "w1:t1", { tab_id: "w2:t4", from: "w1", workspace: "w2" }),
-      );
-      expect(shown(store, "w2", "w2:t4")).toBe(before);
+      ).toEqual([]);
+      expect(shown(store, "w2", "w2:t4")).toBe(defaultRoomColorFor("alpha:w2"));
     });
 
-    test("an inherited workspace colour is kept; the workspace keeps its own", () => {
+    test("a tab showing its room's colour takes the new room's; both rooms keep theirs", () => {
       const store = new BoardStore(path);
-      store.patch([{ op: "card.color", key: "alpha:w2", color: "pink" }]);
+      store.patch([
+        { op: "card.color", key: "alpha:w2", color: "pink" },
+        { op: "card.color", key: "alpha:w3", color: "teal" },
+      ]);
       store.patch(
         move(store, "w2:t4", { tab_id: "w3:t1", from: "w2", workspace: "w3" }),
       );
-      expect(shown(store, "w3", "w3:t1")).toBe("pink");
-      expect(store.get().layout.colors["alpha:w2"]).toBe("pink");
+      expect(shown(store, "w3", "w3:t1")).toBe("teal");
+      expect(store.get().layout.colors).toEqual({
+        "alpha:w2": "pink",
+        "alpha:w3": "teal",
+      });
     });
 
     test("a tab's own colour stays its own when it matches the new room's", () => {
@@ -569,7 +574,7 @@ describe("Board store", () => {
       const store = new BoardStore(path);
       // A colour the new tab would not show by default, so it must be saved.
       const own =
-        defaultTerminalColorFor("alpha:w2:t9") === "pink" ? "orange" : "pink";
+        defaultRoomColorFor("alpha:w2") === "pink" ? "orange" : "pink";
       store.patch([
         { op: "card.color", key: "alpha:w1", color: "green" },
         { op: "card.color", key: "alpha:tab:w1", color: own },
@@ -1002,13 +1007,21 @@ describe("Relations in the Board store", () => {
     };
     const colors = { before: {}, workspaceIds: new Set(["w1", "w2"]) };
     expect(
-      moveFollowOps(document, "studio", "w1:t1", moved, colors),
-    ).toMatchObject([{ op: "card.color", key: "studio:w2:t9" }]);
-    expect(
       moveFollowOps(document, "studio", "w1:t1", moved, {
         ...colors,
         inherited: true,
       }),
     ).toEqual([]);
+    // A colour picked for the tab still moves with it.
+    expect(
+      moveFollowOps(document, "studio", "w1:t1", moved, {
+        ...colors,
+        before: { "studio:w1:t1": "teal" },
+        inherited: true,
+      }),
+    ).toMatchObject([
+      { op: "card.color", key: "studio:w2:t9", color: "teal" },
+      { op: "card.color", key: "studio:w1:t1", color: null },
+    ]);
   });
 });
