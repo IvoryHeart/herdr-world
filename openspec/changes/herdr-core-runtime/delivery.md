@@ -106,14 +106,23 @@ Use a disposable test account and candidate World, never the owner's runtime.
   keep enabled, then close the app pane and see it ended in World. Launch an
   unplaced shell; record desktop/phone behavior separately.
 
-Owner results, 2026-11-15 (A–D are not complete):
+Owner results, 2026-11-15 to 2026-11-17, on the herdr-core preview with
+core 0.1.21, the official phone app and a macOS browser over LAN:
 
+- A (Observe), B (Seen), C (Control) and D (Placement) pass. The one exception
+  is C's repeat over Windows SSH, which was not tested.
 - Opening and closing an agent from World and from the app works.
 - A plain shell launched from World without a room shows under the app's
   spaces, not its Inbox.
-- Pinning in the app reached World as `herdr.pinned` but had no visible cue
-  there. The owner ruled that app and World pins are one pin (issue #921):
-  World's desk and card pin for a core agent is now that label.
+- Pins: the owner ruled that app and World pins are one pin (issue #921). A
+  pin made in the app shows on the agent's Town desk and Board card, and a pin
+  made in World shows in the app. Pinned desks go first on a shared rug
+  (#923) and reorder among themselves (#925).
+- Install: from Manage connections, **Install herdr-core…** installed and
+  started core on a macOS SSH host, and World connected to it (#926). An
+  earlier failure on the same host came from the `?coreInstall=error` test
+  switch, which #931 now labels.
+- Not tested by the owner: the Windows local core (#929) and Windows SSH.
 
 ## Upstream questions (for the owner to post)
 
