@@ -889,6 +889,41 @@ describe("conversation binding and remote admission", () => {
     expect(prompts).toEqual([]);
   });
 
+  test.each([
+    ["π ⠋ Running tests", "π ⠴ Running tests"],
+    ["⠋ Running tests", "⠴ Running tests"],
+    ["π ✳ Running tests", "π ✶ Running tests"],
+  ])("watch identity ignores spinner frames in %s", async (first, next) => {
+    const fixture = fixtures.find((item) => item.agent === "claude")!;
+    const dir = await mkdtemp(join(root, "title-spinner-"));
+    const path = await fixture.write(dir);
+    const agent = {
+      ...pane("claude", {
+        source: "herdr:claude",
+        agent: "claude",
+        kind: "path",
+        value: path,
+      }),
+      terminal_title: first,
+    };
+    const chat = source(herdr(agent));
+    try {
+      const before = await chat.identity({ pane_id: "w1:p1" });
+      expect(before.paths).toContain(path);
+      agent.terminal_title = next;
+      expect(await chat.identity({ pane_id: "w1:p1" })).toEqual(before);
+      agent.terminal_title = next.replace("Running tests", "Review results");
+      const taskChanged = await chat.identity({ pane_id: "w1:p1" });
+      expect(taskChanged.key).not.toBe(before.key);
+      agent.agent_status = "working";
+      expect((await chat.identity({ pane_id: "w1:p1" })).key).not.toBe(
+        taskChanged.key,
+      );
+    } finally {
+      chat.dispose();
+    }
+  });
+
   test("watching reuses a resolved Codex title until it stops matching", async () => {
     const dir = join(process.env.CODEX_HOME!, "sessions", "2026", "10", "20");
     await mkdir(dir, { recursive: true });

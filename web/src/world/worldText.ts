@@ -1,3 +1,5 @@
+import { withoutTitleSpinner } from "../../../shared/titleActivity";
+
 export function boundedLabel(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
   const normalized = value.trim();
@@ -23,8 +25,8 @@ export function agentThreadTitle(
   agent: unknown,
 ): string | undefined {
   if (typeof value !== "string") return undefined;
-  const cleaned = value
-    .replace(/^[\s\u2800-\u28ff✳✶✻✽✢·*•◐◓◑◒⏺]+/u, "")
+  const cleaned = withoutTitleSpinner(value)
+    .replace(/^[\s·*•]+/u, "")
     .split(" | ")[0]
     ?.trim();
   if (!cleaned) return undefined;

@@ -10,9 +10,9 @@ const chrome =
 const root = resolve(import.meta.dir, "../..");
 type Result = { mounted: boolean; entry: string | null; errors: string[] };
 
-test.skipIf(!chrome)(
-  "the real Vite application entry mounts without startup exceptions",
-  async () => {
+test.skipIf(!chrome).each([false, true])(
+  "the real application entry mounts and consumes its switch (title-spinner preview: %s)",
+  async (spinnerPreview) => {
     const artifacts = join(root, ".agents/delivery");
     await mkdir(artifacts, { recursive: true });
     const directory = await mkdtemp(join(artifacts, "app-startup-"));
@@ -49,7 +49,8 @@ test.skipIf(!chrome)(
             name: "application-startup-observer",
             configureServer(server) {
               server.middlewares.use((request, response, next) => {
-                if (request.url === "/") pageRequested.resolve();
+                if (request.url === "/" || request.url?.startsWith("/?"))
+                  pageRequested.resolve();
                 if (
                   request.url !== "/__startup_result" ||
                   request.method !== "POST"
@@ -73,7 +74,7 @@ test.skipIf(!chrome)(
                   injectTo: "head-prepend",
                   children: `
           (() => {
-            const errors=[]; let sent=false;
+            const errors=[]; let sent=false; let previewStarted=false;
             const report=mounted=>{
               if(sent)return;sent=true;
               fetch('/__startup_result',{method:'POST',body:JSON.stringify({mounted,
@@ -81,9 +82,37 @@ test.skipIf(!chrome)(
             };
             window.addEventListener('error',event=>{errors.push(event.message);report(false);});
             window.addEventListener('unhandledrejection',event=>{errors.push(String(event.reason));report(false);});
+            const preview=async()=>{
+              const task=document.querySelector('[data-testid="task-title"]');
+              const raw=document.querySelector('[data-testid="raw-title"]');
+              const buttons=[...document.querySelectorAll('button')];
+              const frame=buttons.find(button=>button.textContent==='Next spinner frame');
+              const changeTask=buttons.find(button=>button.textContent==='Change task');
+              const change=(button,target)=>new Promise(resolve=>{
+                const observer=new MutationObserver(()=>{observer.disconnect();resolve();});
+                observer.observe(target,{subtree:true,childList:true,characterData:true});
+                button.click();
+              });
+              if(new URL(location.href).searchParams.has('titleSpinnerFixture'))errors.push('Preview switch retained');
+              if(new URL(location.href).searchParams.get('keep')!=='yes')errors.push('Other query parameter lost');
+              if(task.textContent!=='π Running tests')errors.push('Initial task title differs');
+              for(let index=0;index<6;index++){
+                const before=raw.textContent;
+                await change(frame,raw);
+                if(raw.textContent===before)errors.push('Spinner did not advance');
+                if(task.textContent!=='π Running tests')errors.push('Spinner changed task title');
+              }
+              await change(changeTask,task);
+              if(task.textContent!=='π Review results')errors.push('Real task change lost');
+              report(errors.length===0);
+            };
             const inspect=()=>{
               const boundary=document.querySelector('#root > pre');
               if(boundary){errors.push(boundary.textContent);report(false);return;}
+              if(${spinnerPreview} && document.querySelector('[data-testid="task-title"]')){
+                if(!previewStarted){previewStarted=true;preview().catch(error=>{errors.push(String(error));report(false);});}
+                return;
+              }
               if(document.querySelector('#root .world-foundation-shell')){setTimeout(()=>report(true),250);return;}
               if(!sent)requestAnimationFrame(inspect);
             };
@@ -115,7 +144,7 @@ test.skipIf(!chrome)(
           "--window-size=1440,900",
           `--user-data-dir=${join(directory, "profile")}`,
           ...SWIFTSHADER_FLAGS,
-          address,
+          spinnerPreview ? address + "?titleSpinnerFixture&keep=yes" : address,
         ],
         { stdout: "ignore", stderr: "ignore" },
       );

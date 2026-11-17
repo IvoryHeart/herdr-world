@@ -40,6 +40,14 @@ maintenance](react-19.md).
 
 ## Development tools
 
+To check harness title spinners without running agents, open
+`/?titleSpinnerFixture` on a development or preview World. The testing-only page
+removes the parameter immediately and shows a synthetic `π`-prefixed title.
+Click **Next spinner frame**: the raw title changes while **Displayed task**
+stays `π Running tests`. Click **Change task**: it becomes `π Review results`.
+Reload to leave the preview. This checks title display; the snapshot activity
+and conversation-identity regressions check service admission and refresh.
+
 World's event traces and renderer counters exist only in development builds:
 `bun run dev:web`, or a production-style build with
 `HERDR_WORLD_BUILD_DEVTOOLS=1 bun run build:web`. In such a build, Board's

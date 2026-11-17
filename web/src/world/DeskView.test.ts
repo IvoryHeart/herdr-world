@@ -468,6 +468,21 @@ describe("finding agents", () => {
     expect(agentThreadTitle("codex", "codex")).toBeUndefined();
     expect(agentThreadTitle(undefined, "codex")).toBeUndefined();
   });
+
+  test.each(["⠋", "⠴", "✳", "✶", "◐", "◓"])(
+    "omits the spinner %s after a title prefix without losing task text",
+    (spinner) => {
+      expect(
+        agentThreadTitle(`π ${spinner} Running tests | demo`, "claude"),
+      ).toBe("π Running tests");
+      expect(
+        agentThreadTitle(`π ${spinner} Review results | demo`, "claude"),
+      ).toBe("π Review results");
+      expect(agentThreadTitle(`${spinner} Fix *.ts · keep a*b`, "claude")).toBe(
+        "Fix *.ts · keep a*b",
+      );
+    },
+  );
 });
 
 describe("aggregate Desk ownership", () => {

@@ -9,7 +9,15 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/vendor.css";
 import { OverlayScrollbarLayer } from "./components/OverlayScrollbarLayer";
+import TitleSpinnerFixture from "./testing/TitleSpinnerFixture";
 
+// Testing-only preview: consume the switch before view routing rewrites the URL.
+const previewUrl = new URL(location.href);
+const titleSpinnerFixture = previewUrl.searchParams.has("titleSpinnerFixture");
+if (titleSpinnerFixture) {
+  previewUrl.searchParams.delete("titleSpinnerFixture");
+  history.replaceState(history.state, "", previewUrl);
+}
 const WorldFoundationApp = React.lazy(
   () => import("./world/WorldFoundationApp"),
 );
@@ -49,14 +57,16 @@ initializeShortcutPreferences();
 // rewrites the URL; each drops its parameter at once.
 coreFixtureEnabled();
 coreInstallFake();
-const stopInstanceNameSync = initializeInstanceName();
+const stopInstanceNameSync = titleSpinnerFixture
+  ? () => {}
+  : initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <React.Suspense fallback={null}>
-        <WorldFoundationApp />
+        {titleSpinnerFixture ? <TitleSpinnerFixture /> : <WorldFoundationApp />}
       </React.Suspense>
       <OverlayScrollbarLayer />
     </ErrorBoundary>
