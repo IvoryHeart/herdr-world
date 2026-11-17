@@ -141,6 +141,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     A queued agent without a Herdr name is labelled with its room rather than
     its harness, and its tooltip adds the desk, so the board says where each
     one waits from.
+    A closed reception is a small marquee over the door, so hundreds of
+    agents never bury the town under boards: the building's name, how many
+    need you and the first five faces waiting (amber waiting, green done),
+    with `+N` for the rest. Hover it, Tab to it, or tap it or its lobby, and
+    the full board opens over it with every name, the sign, Tidy rooms and
+    the expenses; it closes when the pointer or focus leaves.
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
@@ -219,7 +225,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
     the front of the crowd, and the others move up. Under calm motion the
-    crowd stands still, still grumbling or napping. An agent whose state is
+    crowd stands still, still grumbling or napping. The crowd takes turns:
+    one `#@!` bubble per lobby at a time, passing every couple of seconds
+    (under calm motion one grumbler keeps it). Zoomed out to the room cards,
+    bubbles that would stack thin to one per small patch of screen, the most
+    urgent there (blocked, then a question, out of fuel, finished, then the
+    crowd); zoom in to see each one. An agent whose state is
     unknown sits at its desk scratching its head under a purple `??` instead
     of dozing.
   - An agent that stopped because its harness hit a subscription or usage
@@ -506,8 +517,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     focus or a tap; a click on the plate selects the table and a double click
     opens it. On touch screens the first tap on a table opens its card, and a
     second tap (or a double tap) opens the table. Zoomed out to the room
-    cards, a mouse anywhere over a room shows the same room numbers under
-    its card.
+    cards, each room's card is a slim label hanging from its rug's top edge:
+    its name, a waiting badge and a thin bar of working, waiting, done and
+    quiet; hovering or focusing it adds the count line. A mouse anywhere over
+    a room shows the same room numbers under its label.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
     agent from the keyboard). Tables lift from the room-summary zoom in, even

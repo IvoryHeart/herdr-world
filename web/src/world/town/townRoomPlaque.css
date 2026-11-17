@@ -236,7 +236,8 @@
 .town-room-overview-card {
   z-index: 7;
   left: 50%;
-  top: calc(50% + 30px * var(--iz));
+  /* Just under the room's label on its rug's top edge (town.css). */
+  top: calc(3px + 26px * var(--iz));
   border-radius: 8px;
   transform: translateX(-50%) scale(var(--iz));
   transform-origin: 50% 0;
