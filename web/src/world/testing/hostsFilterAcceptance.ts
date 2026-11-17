@@ -16,6 +16,21 @@ import {
   type HostFilterGroup,
 } from "./browserCases";
 import { worldBrowserBundle } from "./worldBrowserBundle";
+
+/** A hang guard for one case's page, not a speed budget. */
+const FIXTURE_MS = 45_000;
+/**
+ * The Town frame cases (town-idle, town-idle-draws, town-walk-anchor) step
+ * a 1440 px Town frame by frame in software GL, so they take the runner's
+ * pixel speed: 30 s on the fastest CI runners and 45 s and more on slower
+ * ones (the renderer-only town-idle-draws went from 24 s to 45 s), with the
+ * same code. Their guard leaves room for that spread, as Town's own browser
+ * checks do (TownCanvas.ts).
+ */
+const TOWN_FRAMES_FIXTURE_MS = 90_000;
+const fixtureMs = (operation: string) =>
+  operation.startsWith("town-") ? TOWN_FRAMES_FIXTURE_MS : FIXTURE_MS;
+
 export function registerHostsFilterTests(group: HostFilterGroup) {
   test
     .skipIf(!chrome)
@@ -75,7 +90,7 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
             throw new Error(`Browser exited ${code}`);
           }),
           "Hosts filter browser acceptance",
-          45_000,
+          fixtureMs(operation),
         );
         if (Array.isArray(observed) && observed.length)
           console.info(
@@ -90,6 +105,6 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
         await rm(dir, { recursive: true, force: true });
       }
     },
-    60_000 + BROWSER_STARTUP_TIMEOUT_MS,
+    TOWN_FRAMES_FIXTURE_MS + 15_000 + BROWSER_STARTUP_TIMEOUT_MS,
   );
 }

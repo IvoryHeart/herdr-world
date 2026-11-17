@@ -114,8 +114,9 @@
   cursor: not-allowed;
 }
 
-/* A place's card: a room's or table's summary, in the Town board's look.
-   A room's card also holds Rename and Close, so one hover shows them all. */
+/* A place's card: a room's or table's summary, in Town's overlay style
+   (townOverlay.css). A room's card also holds Rename and Close, so one hover
+   shows them all. */
 .town-place-card {
   position: absolute;
   display: grid;
@@ -123,17 +124,7 @@
   box-sizing: border-box;
   width: max-content;
   max-width: 260px;
-  padding: 8px 10px;
-  color: #f1efe6;
-  background: rgba(30, 22, 14, 0.94);
-  border: 2px solid #7a5536;
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
-  /* The board's text: the Town shell's font, not the plaque's lettering. */
-  font-family: var(--town-ui-font, "Rubik", system-ui, sans-serif);
-  font-size: 13px;
   font-weight: 400;
-  line-height: 1.3;
   text-align: left;
   white-space: normal;
   opacity: 0;
@@ -197,7 +188,6 @@
 .town-desk-card {
   left: 32px;
   top: calc(44px + 10px * clamp(1, var(--iz), 1.6));
-  border-radius: 5px;
   transform: translateX(-50%) scale(var(--iz));
   transform-origin: 50% 0;
 }
@@ -238,7 +228,6 @@
   left: 50%;
   /* Just under the room's label on its rug's top edge (town.css). */
   top: calc(3px + 26px * var(--iz));
-  border-radius: 8px;
   transform: translateX(-50%) scale(var(--iz));
   transform-origin: 50% 0;
 }

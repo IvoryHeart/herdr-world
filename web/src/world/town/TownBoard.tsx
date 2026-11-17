@@ -94,7 +94,9 @@ export function TownBoard({
         onKeyDown={closeOnEscape}
       >
         <span data-status="working">{counts.working}</span>
-        <span data-status="blocked">!{counts.needsYou}</span>
+        <span data-status="blocked" data-attention={counts.needsYou > 0}>
+          !{counts.needsYou}
+        </span>
         <span data-status="done">✓{counts.finished}</span>
         {lowest ? <TownFuelChip lowest={lowest} now={now} /> : null}
       </button>
@@ -166,7 +168,10 @@ export function TownBoard({
   );
 }
 
-/** The board's agent numbers, one short word per column: busy, waiting, done and quiet. */
+/**
+ * The board's agent numbers, one short word per column: busy, waiting, done
+ * and quiet. Only a waiting count above zero takes the attention colour.
+ */
 function TownBoardCounts({ counts }: { counts: TownSummaryCounts }) {
   return (
     <dl className="town-board-counts">
@@ -174,7 +179,7 @@ function TownBoardCounts({ counts }: { counts: TownSummaryCounts }) {
         <dt>Busy</dt>
         <dd>{counts.working}</dd>
       </div>
-      <div>
+      <div data-status="blocked" data-attention={counts.needsYou > 0}>
         <dt>Waiting</dt>
         <dd>{counts.needsYou}</dd>
       </div>

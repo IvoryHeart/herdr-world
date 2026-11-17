@@ -84,6 +84,7 @@ import {
   type TownReceptionTakes,
 } from "./townReceptionFilter";
 import "./townBoard.css";
+import "./townOverlay.css";
 import { useTownCanvasSearch } from "./useTownCanvasSearch";
 import "./townTeams.css";
 import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";

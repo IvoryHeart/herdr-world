@@ -10,6 +10,7 @@ import { AgentLatestMessage } from "../AgentHoverCard";
 import { CORE_WATCH_TITLE as WATCH_TITLE } from "../viewOnly";
 import type { TownChoice, TownConversation } from "./townChat";
 import { townPortrait } from "./townSprites";
+import "./townOverlay.css";
 import { store } from "../../store";
 import { canOpenRoomShell, openRoomShell } from "../floatShell";
 import type { WorldLeafObject } from "../worldObject";
@@ -279,7 +280,11 @@ export function TownPeek({
         />
       </div>
       {choices.length && canReply ? (
-        <div className="town-answers" role="group" aria-label="Answers">
+        <div
+          className="town-answers town-answers-question"
+          role="group"
+          aria-label="Answers"
+        >
           {choices.map((choice, index) => (
             <button
               key={choice.key}
