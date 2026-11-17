@@ -89,5 +89,9 @@ test("a change of mode eases the sky to its target and then rests", () => {
     ({ sky, moving } = townSkyToward(sky, target, 1 / 60));
   expect(sky).toEqual(target);
   expect(frames).toBeGreaterThan(10);
+  // The sun's shadows ease with the sky rather than jumping.
+  ({ sky } = townSkyToward(townSky(8), townSky(18), 1 / 60));
+  expect(sky.shadowX).toBeGreaterThan(townSky(8).shadowX);
+  expect(sky.shadowX).toBeLessThan(townSky(18).shadowX);
   expect(frames).toBeLessThan(200);
 });

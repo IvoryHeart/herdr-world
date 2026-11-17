@@ -215,9 +215,9 @@ export const TOWN_WAITING_PULSE_RATE = 15;
 /* ---------- drawing ---------- */
 
 const MAP_SCALE = 0.5;
-const FEATHER = 20;
+export const TOWN_LIGHT_FEATHER = 20;
 
-function radialTexture() {
+export function radialTexture() {
   const [canvas, g] = townCanvas(128, 128);
   const gradient = g.createRadialGradient(64, 64, 0, 64, 64, 64);
   // A bright core and a long soft skirt.
@@ -230,14 +230,14 @@ function radialTexture() {
   });
 }
 
-function softRectTexture() {
+export function softRectTexture() {
   const size = 64;
   const [canvas, g] = townCanvas(size, size);
   const image = g.createImageData(size, size);
   for (let y = 0; y < size; y += 1)
     for (let x = 0; x < size; x += 1) {
       const edge = Math.min(x, y, size - 1 - x, size - 1 - y);
-      const t = Math.min(1, edge / FEATHER);
+      const t = Math.min(1, edge / TOWN_LIGHT_FEATHER);
       const i = (y * size + x) * 4;
       image.data[i] = image.data[i + 1] = image.data[i + 2] = 255;
       image.data[i + 3] = Math.round(t * t * (3 - 2 * t) * 255);
@@ -270,19 +270,27 @@ export function createTownLighting(options: {
   const lit = root.addChild(new Container());
   const waiting: { sprite: NineSliceSprite; area: TownLightArea }[] = [];
   const lights: { sprite: Sprite | NineSliceSprite; power: number }[] = [];
-  let sky: TownSky = { r: 1, g: 1, b: 1, lights: 0 };
+  let sky: TownSky = {
+    r: 1,
+    g: 1,
+    b: 1,
+    lights: 0,
+    sun: 1,
+    shadowX: 0,
+    shadowY: 0,
+  };
   let drawn = "";
 
   const softRect = (area: TownLightArea) => {
     const sprite = new NineSliceSprite({
       texture: soft,
-      leftWidth: FEATHER,
-      rightWidth: FEATHER,
-      topHeight: FEATHER,
-      bottomHeight: FEATHER,
+      leftWidth: TOWN_LIGHT_FEATHER,
+      rightWidth: TOWN_LIGHT_FEATHER,
+      topHeight: TOWN_LIGHT_FEATHER,
+      bottomHeight: TOWN_LIGHT_FEATHER,
     });
     // The edge is `feather` world pixels whatever the area's size.
-    const k = area.feather / FEATHER;
+    const k = area.feather / TOWN_LIGHT_FEATHER;
     sprite.scale.set(k);
     sprite.position.set(area.x - area.feather / 2, area.y - area.feather / 2);
     sprite.width = (area.w + area.feather) / k;

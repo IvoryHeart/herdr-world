@@ -65,6 +65,7 @@ import {
   townSkyIsClear,
   townSkyToward,
 } from "./townDaylight";
+import { createTownAtmosphere, townAtmospherePlan } from "./townAtmosphere";
 import {
   createTownLighting,
   townLightPlan,
@@ -248,19 +249,30 @@ export async function createTownRenderer(
   // Drag effects sit above the scene and survive a scene rebuild.
   const dragLayer = new Container();
   const puffLayer = new Graphics();
+  // Sun and cloud shadows lie on the ground, under the buildings.
+  const atmosphereGround = new Container();
   world.addChild(
     landLayer,
     groundLayer,
+    atmosphereGround,
     sceneLayer,
     fxLayer,
     dragLayer,
     puffLayer,
   );
   // Town's light (townLighting.ts): a lightmap multiplied over the world,
-  // then the waiting lobbies' amber, both under screen-space marks.
+  // then lamp heads and fireflies (townAtmosphere.ts) and the waiting
+  // lobbies' amber, all under screen-space marks.
   const lightMapLayer = new Container();
+  const atmosphereGlow = new Container();
   const glowLayer = new Container();
-  app.stage.addChild(world, lightMapLayer, glowLayer, screenLayer);
+  app.stage.addChild(
+    world,
+    lightMapLayer,
+    atmosphereGlow,
+    glowLayer,
+    screenLayer,
+  );
   /** The open questions the lights were last planned with. */
   let litAsking: ReadonlySet<string> | undefined;
   const lighting = createTownLighting({
@@ -269,6 +281,11 @@ export async function createTownRenderer(
     glowLayer,
   });
   lighting.resize(element.clientWidth, element.clientHeight);
+  const atmosphere = createTownAtmosphere({
+    ground: atmosphereGround,
+    glow: atmosphereGlow,
+  });
+  let atmosphereLayout: TownLayout | null = null;
   let sky = townSky(townDaylightHour());
   let skyEasing = false;
   const unsubscribeDaylight = subscribeTownDaylight(() => {
@@ -295,6 +312,10 @@ export async function createTownRenderer(
   let clock = 0;
   let ambient = new TownAmbient(clock);
   let ambientTimer: ReturnType<typeof setTimeout> | null = null;
+  // A frame woken only for drifting atmosphere counts apart, unless anything
+  // else was `wanted` since the last frame (atmosphereFrames).
+  let atmosphereWake = false;
+  let wanted = false;
   const cancelAmbient = () => {
     if (ambientTimer !== null) clearTimeout(ambientTimer);
     ambientTimer = null;
@@ -609,6 +630,7 @@ export async function createTownRenderer(
   let lastTraced = "";
   const request = (reason: string) => {
     forced = true;
+    wanted = true;
     if (reason !== "capture") onInvalidate?.(reason);
     if (DEVTOOLS && onTrace) frameReasons.add(reason);
     frames?.request("state");
@@ -627,6 +649,8 @@ export async function createTownRenderer(
   const drawFrame = (now: number, why: string[]) => {
     if (disposed || !layout || !model) return;
     cancelAmbient();
+    if (atmosphereWake && !wanted) stats.atmosphereFrames += 1;
+    atmosphereWake = wanted = false;
     const elapsed = last ? Math.max(0, (now - last) / 1000) : 1 / 60;
     const dt = Math.min(0.05, elapsed);
     last = now;
@@ -696,6 +720,7 @@ export async function createTownRenderer(
       )
     )
       ambient.every(TOWN_WAITING_PULSE_RATE);
+    const drift = atmosphere.update(sky, clock, animated, world);
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);
     const onlyFilling =
@@ -753,14 +778,19 @@ export async function createTownRenderer(
         : null;
     // Animation sleeps under calm or reduced motion; timed state changes don't.
     const motionAt = animated ? ambient.next : Infinity;
-    const wakeAt = Math.min(motionAt, ambient.change);
+    // Drifting atmosphere's next frame, on its own rate (townAtmosphere.ts).
+    const driftAt = drift ? (Math.floor(clock * drift) + 1) / drift : Infinity;
+    const wakeAt = Math.min(motionAt, ambient.change, driftAt);
     if (next) frames?.request(next);
     else if (Number.isFinite(wakeAt))
       ambientTimer = setTimeout(
         () => {
           ambientTimer = null;
           forced = true;
-          frames?.request(wakeAt === motionAt ? "motion" : "state");
+          atmosphereWake = driftAt < Math.min(motionAt, ambient.change);
+          frames?.request(
+            wakeAt === motionAt || wakeAt === driftAt ? "motion" : "state",
+          );
         },
         Math.max(1, (wakeAt - clock) * 1000 - 16),
       );
@@ -790,6 +820,7 @@ export async function createTownRenderer(
     stats.interactionPaused = paused;
     if (paused) last = 0;
   });
+  canvas.addEventListener("webglcontextrestored", () => (wanted = true));
 
   const onMotion = (event: MediaQueryListEvent) => {
     camera.reducedMotion = event.matches;
@@ -910,6 +941,10 @@ export async function createTownRenderer(
         litAsking = nextState.askingKeys;
         lighting.sync(townLightPlan(nextLayout, nextModel, litAsking));
       }
+      if (nextLayout !== atmosphereLayout) {
+        atmosphereLayout = nextLayout;
+        atmosphere.sync(townAtmospherePlan(nextLayout));
+      }
       if (dirty.scene) {
         dimDirty = true;
         request("scene");
@@ -952,6 +987,7 @@ export async function createTownRenderer(
       topology.clear();
       unsubscribeDaylight();
       lighting.destroy();
+      atmosphere.destroy();
       agentViews.dispose();
       app.destroy(true, { children: true, texture: false });
       stats.destroys += 1;

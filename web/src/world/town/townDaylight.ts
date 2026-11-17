@@ -3,6 +3,8 @@
  * or night the user picked with the button under the zoom controls; the
  * choice is kept per browser. The renderer's lighting (townLighting.ts) reads
  * the sky: how the scene is tinted and how strongly lamps and rooms light it.
+ * Its atmosphere (townAtmosphere.ts) reads the sun: where buildings' shadows
+ * fall and how strongly, and how much cloud shadow drifts over the land.
  */
 
 import { worldLocalStorage } from "../../browserStorage";
@@ -90,25 +92,30 @@ export type TownSky = {
   b: number;
   /** How strongly lamps and lit rooms light the town: 0 by day, 1 at night. */
   lights: number;
+  /** The sun's strength: its shadows and drifting cloud shadows, 0 at night. */
+  sun: number;
+  /** Where a building's shadow falls from it, in world pixels. */
+  shadowX: number;
+  shadowY: number;
 };
 
-/** [hour, ambient colour, lights]; the sky eases between neighbours. */
-const KEYS: readonly (readonly [number, number, number])[] = [
-  [0, 0x48538f, 1],
-  [5, 0x4a5590, 1],
-  [6.4, 0xc59aa6, 0.55],
-  [8, 0xfff0dc, 0],
-  [12, 0xffffff, 0],
-  [16.5, 0xfff3de, 0],
-  [18.4, 0xffc08a, 0.3],
-  [19.4, 0xa87aa0, 0.85],
-  [20.6, 0x525a96, 1],
-  [24, 0x48538f, 1],
+/** [hour, ambient colour, lights, sun]; the sky eases between neighbours. */
+const KEYS: readonly (readonly [number, number, number, number])[] = [
+  [0, 0x48538f, 1, 0],
+  [5, 0x4a5590, 1, 0],
+  [6.4, 0xc59aa6, 0.55, 0.25],
+  [8, 0xfff0dc, 0, 0.8],
+  [12, 0xffffff, 0, 1],
+  [16.5, 0xfff3de, 0, 0.9],
+  [18.4, 0xffc08a, 0.3, 0.7],
+  [19.4, 0xa87aa0, 0.85, 0.2],
+  [20.6, 0x525a96, 1, 0],
+  [24, 0x48538f, 1, 0],
 ];
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** The sky at an hour: the ambient colour and how much artificial light shows. */
+/** The sky at an hour: its colour, how much artificial light shows, the sun. */
 export function townSky(hour: number): TownSky {
   const h = ((hour % 24) + 24) % 24;
   let i = 0;
@@ -119,11 +126,19 @@ export function townSky(hour: number): TownSky {
   const s = t * t * (3 - 2 * t);
   const channel = (shift: number) =>
     mix((a[1] >> shift) & 255, (b[1] >> shift) & 255, s) / 255;
+  // The sun rises on the right and sets on the left, so shadows sweep from
+  // left to right through the day: short at noon, long toward both ends, and
+  // always falling a little toward the viewer.
+  const day = Math.min(1, Math.max(0, (h - 6) / 14));
+  const length = 9 + 30 * ((day - 0.5) * 2) ** 2;
   return {
     r: channel(16),
     g: channel(8),
     b: channel(0),
     lights: mix(a[2], b[2], s),
+    sun: mix(a[3], b[3], s),
+    shadowX: (day - 0.5) * 2 * length,
+    shadowY: 5 + length * 0.35,
   };
 }
 
@@ -139,9 +154,11 @@ export function townSkyToward(current: TownSky, target: TownSky, dt: number) {
   const k = 1 - Math.exp(-dt * 4);
   const next = { ...current };
   let far = 0;
-  for (const key of ["r", "g", "b", "lights"] as const) {
+  for (const key of Object.keys(target) as (keyof TownSky)[]) {
     next[key] = current[key] + (target[key] - current[key]) * k;
-    far = Math.max(far, Math.abs(target[key] - next[key]));
+    // Shadows are measured in world pixels, the rest from 0 to 1.
+    const unit = key === "shadowX" || key === "shadowY" ? 40 : 1;
+    far = Math.max(far, Math.abs(target[key] - next[key]) / unit);
   }
   return far < 0.004
     ? { sky: target, moving: false }

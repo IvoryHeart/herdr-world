@@ -482,6 +482,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     what needs you: a **Waiting** count above zero, a waiting agent's peek,
     the first answer to an agent's question and a **low** fuel gauge. The
     time-of-day button keeps one neutral colour at dusk and night.
+  - The time of day also gives the town depth. By day each building casts a
+    sun shadow that swings from left in the morning to right in the evening,
+    short at noon and long toward dawn and dusk, and faint cloud shadows drift
+    east across the land. At night street lamps glow at their heads and
+    fireflies wander over open grass away from buildings. It stays quiet:
+    shadows and clouds lie on the ground under the buildings, so they never
+    shade a room, a desk or a status mark, and the status light and amber
+    waiting pulse stay above it all. Under calm motion or reduced motion
+    nothing drifts: clouds and fireflies hold still. While they drift, Town
+    redraws only as often as they move a screen pixel, at most 12 times a
+    second. Rugs are woven with a bound edge, and room walls shade the floor
+    along their foot.
   - Zoomed into a room or desk, every agent that needs you outside the view
     gets an arrow on the view's edge pointing at it, with its mark (**!**,
     **?** or **✓**); arrows pointing the same way or at one building merge

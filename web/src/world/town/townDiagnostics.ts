@@ -19,6 +19,11 @@ export type TownRendererDiagnostics = {
   activeApplications: number;
   activeTickers: number;
   frames: number;
+  /**
+   * Of those, frames woken only to move drifting atmosphere (clouds,
+   * fireflies; townAtmosphere.ts), at most TOWN_ATMOSPHERE_MAX_RATE a second.
+   */
+  atmosphereFrames: number;
   sceneRenders: number;
   /** Single buildings baked again after their colours, pins or desks changed. */
   buildingBakes: number;
@@ -116,6 +121,7 @@ export function diagnostics(): TownRendererDiagnostics {
     activeApplications: 0,
     activeTickers: 0,
     frames: 0,
+    atmosphereFrames: 0,
     sceneRenders: 0,
     buildingBakes: 0,
     groundPainted: 0,

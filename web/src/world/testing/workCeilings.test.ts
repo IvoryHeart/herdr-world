@@ -170,6 +170,21 @@ test("a static Town has no per-second draw allowance", () => {
   expect(
     workViolations({ idle: { draws: 64 } }, TOWN_STATIC_WORK_CEILINGS, "Town"),
   ).toEqual(["Town idle: draws 64 > 0"]);
+  // Drifting atmosphere is counted apart, and capped.
+  expect(
+    workViolations(
+      { idle: { draws: 0, "atmosphere-draws": 12 } },
+      TOWN_STATIC_WORK_CEILINGS,
+      "Town",
+    ),
+  ).toEqual([]);
+  expect(
+    workViolations(
+      { idle: { draws: 0, "atmosphere-draws": 60 } },
+      TOWN_STATIC_WORK_CEILINGS,
+      "Town",
+    ),
+  ).toEqual(["Town idle: atmosphere-draws 60 > 12"]);
 });
 
 test("Town has no allowance for unused Board topology preparation", () => {
