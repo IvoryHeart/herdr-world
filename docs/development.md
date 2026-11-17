@@ -101,6 +101,9 @@ cannot change Bun's cached home), removes inherited runtime/account settings and
 builds a PATH from system tools plus the selected toolchain. Installed Herdr,
 core and World, real harness records and SSH configuration are unavailable.
 Tests that need configuration must write synthetic fixtures under scratch.
+Runner-owned browser diagnostics retain `HERDR_DIAGNOSTIC_CHROME`,
+`HERDR_BROWSER_DIAGNOSTICS_DIR` and `HERDR_BROWSER_DIAGNOSTICS_MODE`, including
+through nested runners, so CI's Chrome adapter can launch and write its artifacts.
 
 The preload guards Bun and Node process calls, fetch, WebSocket and socket
 connections. Shell children also receive guarded service, SSH and download
@@ -118,7 +121,10 @@ Only named live files may use `--live`; ordinary inventory ignores inherited
 live flags. Live suites still get a scratch home and keep their existing isolated
 runtime setup and teardown. `bun scripts/herdr-core-smoke.ts` is the separate,
 explicit download-and-live release check. Direct `bun test` explains which
-wrapper to use and exits before loading tests.
+wrapper to use and exits before loading tests. The resource-verification gate uses
+this explicit live route for its real-cgroup controls, retaining
+`HERDR_RESOURCE_MANAGER=user|system` only in live runs; ordinary test inventory
+cannot inherit that selection.
 
 The portability lint in `bun run lint` catches renamed coreutils process fixtures:
 uutils dispatches on the executable name and may reject a symlinked `sleep` that

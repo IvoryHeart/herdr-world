@@ -252,3 +252,53 @@ test("explicit live selection retains scratch HOME and its supplied binary", asy
   );
   expect(result.code).toBe(0);
 });
+
+test.each(["lifecycle", "stderr"])(
+  "browser diagnostics runner variables reach its adapter (%s)",
+  async (mode) => {
+    const root = scratch();
+    const fakeChrome = join(root, "fake-chrome");
+    const directory = join(root, "diagnostics");
+    const adapter = fileURLToPath(
+      new URL("./browser-diagnostics.ts", import.meta.url),
+    );
+    writeFileSync(
+      fakeChrome,
+      '#!/usr/bin/env bun\nconsole.error("synthetic chrome");\n',
+      { mode: 0o755 },
+    );
+    const result = await run(
+      `
+import {readFileSync, readdirSync} from "node:fs";
+import {join} from "node:path";
+test("diagnostics adapter launches", async () => {
+  expect(process.env.HERDR_DIAGNOSTIC_CHROME).toBe(${JSON.stringify(fakeChrome)});
+  expect(process.env.HERDR_BROWSER_DIAGNOSTICS_DIR).toBe(${JSON.stringify(directory)});
+  expect(process.env.HERDR_BROWSER_DIAGNOSTICS_MODE).toBe(${JSON.stringify(mode)});
+  expect(process.env.HERDR_SESSION).toBeUndefined();
+  expect(process.env.HERDR_RESOURCE_MANAGER).toBeUndefined();
+  const child = Bun.spawn([process.execPath, process.env.CHROME_BIN!, "--fixture-argument"], {stdout:"pipe", stderr:"pipe"});
+  const [code, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+  expect(stderr).toContain("synthetic chrome");
+  expect(code).toBe(0);
+  const files = readdirSync(${JSON.stringify(directory)});
+  expect(files).toHaveLength(1);
+  const events = readFileSync(join(${JSON.stringify(directory)}, files[0]!), "utf8").trim().split("\\n").map(line=>JSON.parse(line));
+  expect(events[0].data).toEqual({args:["--fixture-argument"], mode:${JSON.stringify(mode)}});
+  expect(events.at(-1).data.code).toBe(0);
+});`,
+      {
+        ...process.env,
+        CI: "false",
+        CHROME_BIN: adapter,
+        HERDR_DIAGNOSTIC_CHROME: fakeChrome,
+        HERDR_BROWSER_DIAGNOSTICS_DIR: directory,
+        HERDR_BROWSER_DIAGNOSTICS_MODE: mode,
+        HERDR_SESSION: "host-value",
+        HERDR_RESOURCE_MANAGER: "system",
+      },
+    );
+    expect(result.text).toContain("1 pass");
+    expect(result.code).toBe(0);
+  },
+);

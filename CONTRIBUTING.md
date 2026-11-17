@@ -50,7 +50,8 @@ HOME, XDG config/cache/data/state/runtime directories and World data directory
 tools and the selected Bun/Node/Chrome executables, without user bin directories
 or installed `herdr`, `herdr-core`, `hc` or `herdr-world`. Runtime variables,
 SSH credentials/config redirects, harness homes, tokens and proxies are removed;
-only the runner's queue/assets/label markers survive. Direct `bun test` refuses
+only the runner's queue/assets/label markers and browser-diagnostics settings
+survive. Direct `bun test` refuses
 with the wrapper command to use. Fixtures must inject every runtime dependency,
 including detection, and create their own synthetic configuration.
 
@@ -69,6 +70,9 @@ get scratch HOME/XDG/data and retain their existing fixture lifecycle/cleanup.
 Supply their documented live binary/fixture variables explicitly. The separate
 `bun scripts/herdr-core-smoke.ts` release smoke downloads a verified binary and
 uses this live route; ordinary tests cannot inherit its opt-out or binary.
+The resource-verification gate also invokes named live controls through this
+wrapper. Only live runs retain its `HERDR_RESOURCE_MANAGER=user|system` selection;
+ordinary runs drop it so an inherited setting cannot enable real-cgroup tests.
 
 `bun run lint` also checks test portability: never rename a coreutils executable
 (e.g. symlink `sleep` as a fake harness/process name). GNU tools may accept this

@@ -20,6 +20,10 @@ const runnerVariables = new Set([
   "HERDR_WORLD_TEST_ASSETS",
   "HERDR_WORLD_TEST_LABEL",
   "HERDR_CHROME_WARM",
+  // The CI diagnostics adapter needs these through nested test runners.
+  "HERDR_DIAGNOSTIC_CHROME",
+  "HERDR_BROWSER_DIAGNOSTICS_DIR",
+  "HERDR_BROWSER_DIAGNOSTICS_MODE",
 ]);
 const forbiddenBinaries = /^(?:herdr|herdr-core|hc|herdr-world)(?:\.exe)?$/i;
 const services = /^(?:systemctl|launchctl)(?:\.exe)?$/i;
@@ -74,6 +78,9 @@ export function isolatedTestEnv(
   env.PATH = isolatedPath(directory, inherited);
   if (live) {
     env[LIVE] = "1";
+    // Only explicit resource live controls may select a real systemd manager.
+    if (["user", "system"].includes(inherited.HERDR_RESOURCE_MANAGER ?? ""))
+      env.HERDR_RESOURCE_MANAGER = inherited.HERDR_RESOURCE_MANAGER;
     for (const [key, value] of Object.entries(inherited))
       if (
         /^(?:HERDR_CORE_BIN|HERDR_WORLD_LIVE_|HERDR_WORLD_PWSH|HERDR_LIVE_|HC_)/.test(
