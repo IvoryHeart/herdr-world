@@ -353,6 +353,8 @@ describe("herdr-core connections", () => {
     // No Herdr TUI connection is left behind for Town to show disconnected.
     expect(w.service.list()).toEqual([]);
     expect(w.tuiManager.defaultId()).toBe("core-local");
+    // Global status and the startup ping ask for the default runtime: none.
+    expect(w.tuiManager.defaultReadyRuntime()).toBeNull();
     expect(w.service.coreList().map((item) => item.id)).toEqual(["core-local"]);
     // A restarted World loads the same registry.
     expect(

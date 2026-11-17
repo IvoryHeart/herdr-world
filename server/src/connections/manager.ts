@@ -254,7 +254,13 @@ export class ConnectionManager<
     return this.requireEntry(connectionId).runtime;
   }
 
+  /**
+   * Global and optional consumers (status, startup ping, setup) ask for the
+   * default without naming a connection. An external default (herdr-core)
+   * has no runtime here, so they get none; qualified accessors still throw.
+   */
   defaultRuntime(): Runtime | null {
+    if (!this.entries.has(this.defaultConnectionId)) return null;
     return this.currentRuntime(this.defaultConnectionId);
   }
 
@@ -279,6 +285,7 @@ export class ConnectionManager<
   }
 
   defaultReadyRuntime(): Runtime | null {
+    if (!this.entries.has(this.defaultConnectionId)) return null;
     return this.readyRuntime(this.defaultConnectionId);
   }
 

@@ -524,6 +524,18 @@ async function townPlacement() {
     check(!card(), `greeting: ${cardState} card gone once ready`);
     check(greeting(), `greeting: opens once the ${cardState} card is gone`);
   }
+  // A failed default that cannot be set up here (an SSH default, say) shows
+  // no card, so nothing holds the greeting back.
+  allowed = false;
+  const unavailable = townWorld(failing);
+  key++;
+  show(unavailable);
+  greet(unavailable);
+  await settle();
+  await settle();
+  check(!card(), "greeting: no card when setup is unavailable");
+  check(greeting(), "greeting: not held when setup is unavailable");
+  allowed = true;
   hostRoot.unmount();
   host.remove();
   figureRoot.unmount();

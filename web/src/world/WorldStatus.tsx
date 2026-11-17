@@ -1,7 +1,6 @@
 import { ConnectionSwitcher } from "../components/ConnectionSwitcher";
 import { HerdrSetupCard } from "../components/HerdrSetupCard";
 import type { WorldRuntimeState } from "./runtimeStore";
-import { useGreetingHold } from "./townMasterGreeting";
 import type { WorldObject } from "./worldObject";
 
 export function WorldTopbarStatus({
@@ -109,13 +108,12 @@ export function TownHerdrSetupOffer({
 }) {
   // Hosts changes presentation, never whether any runtime is already ready.
   const offered = localHerdrSetupOffer(aggregate);
-  // The Town Master's greeting waits while the card is up (#935).
-  useGreetingHold(offered);
   if (!offered) return null;
   const local = aggregate.hosts.find((host) => host.connection.isDefault)!;
   return (
     <div className="town-herdr-setup">
-      <HerdrSetupCard key={local.connection.connectionId} />
+      {/* The Town Master's greeting waits while the card is up (#935). */}
+      <HerdrSetupCard key={local.connection.connectionId} holdGreeting />
     </div>
   );
 }

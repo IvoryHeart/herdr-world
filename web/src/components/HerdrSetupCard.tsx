@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Terminal,
 } from "lucide-react";
+import { useGreetingHold } from "../world/townMasterGreeting";
 import { CoreInstallPanel } from "./CoreInstall";
 import "./HerdrSetupCard.css";
 
@@ -20,10 +21,13 @@ export function HerdrSetupCard({
   compact = false,
   enabled = true,
   children = null,
+  holdGreeting = false,
 }: {
   compact?: boolean;
   enabled?: boolean;
   children?: ReactNode;
+  /** Town: the Town Master's greeting waits while this card is on screen. */
+  holdGreeting?: boolean;
 }) {
   const titleId = useId();
   const [info, setInfo] = useState<SetupInfo | null>(null);
@@ -61,6 +65,10 @@ export function HerdrSetupCard({
       });
     return () => controller.abort();
   }, [enabled]);
+
+  // Held while checking too, so the greeting never opens under a card that
+  // is about to appear; released when setup is unavailable (#935).
+  useGreetingHold(holdGreeting && enabled && (checking || info !== null));
 
   function cancel() {
     setConfirming(false);
