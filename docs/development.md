@@ -173,9 +173,10 @@ the archive against its SHA-256, and runs every `server/src/herdr-core/*.live.te
 suite. It installs nothing. Live cores use isolated scratch HOME/XDG directories;
 the harness stops their processes and the runner removes the download. Without
 `HERDR_CORE_BIN`, ordinary test runs skip live-core cases. PowerShell-on-Linux
-checks exercise framing and pipe relay behavior; Windows ACLs, a real Windows
-SSH host, official-app visibility and phone behavior still require owner checks
-in [the handover](../openspec/changes/herdr-core-runtime/delivery.md#owner-device-acceptance).
+checks exercise framing and pipe relay behavior; real Windows ACLs, local core
+and SSH behavior remain [known limits](../openspec/specs/herdr-core-runtime/spec.md#known-limits).
+Recorded official-app and phone results remain historical evidence
+in [the handover](../openspec/changes/archive/2026-11-17-herdr-core-runtime/delivery.md#owner-device-acceptance).
 
 ## Verification
 

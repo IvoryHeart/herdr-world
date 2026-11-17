@@ -243,7 +243,7 @@ describe("one pin for herdr-core agents", () => {
 
 // The rule has no ordering of its own: every view is a pure function of one
 // runtime observation and World's saved positions, so checking every
-// combination is exhaustive (openspec/changes/herdr-core-runtime/model.md).
+// combination is exhaustive (openspec/changes/archive/2026-11-17-herdr-core-runtime/model.md).
 test("every observation: shown pin is the label, stale never writes", async () => {
   const cells = [undefined, null, { col: 1, row: 1 }] as const;
   for (const live of [true, false])

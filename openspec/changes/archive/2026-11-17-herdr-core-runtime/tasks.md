@@ -9,7 +9,8 @@
 
 Checked items record implemented paths and their maintained tests, not device
 acceptance. [Delivery](delivery.md) separates traffic, authority/model and owner
-checks. Current spec synchronization and archive remain after acceptance.
+checks. The closure record below supersedes the pre-merge acceptance blockers;
+the handover remains historical evidence, including what was not tested.
 
 - [x] P1: coexisting providers, qualified connections and ordered core mirror.
   - [x] Issue #865: existing-only local and Unix SSH connections (core.lock on
@@ -120,8 +121,19 @@ checks. Current spec synchronization and archive remain after acceptance.
   herdr-core only when no runtime exists; confirmed installs from Manage
   connections, a core connection that found nothing running and Town's Set up
   card; installer, service and browser tests use fakes only.
-- [ ] Final parity inventory and owner device acceptance A–D: official desktop
-  and phone apps, mobile interaction and a real Windows SSH account. A Linux
-  live test or fixture screenshot does not establish these outcomes.
-- [ ] Obtain independent design/model review and separate implementation mapping
-  acceptance; synchronize current specs and archive only after full delivery.
+
+## Closure (2026-11-17)
+
+The integration merged to main as `917c6c8aa` in PR #933, whose handoff records
+the whole-branch review (#934), checks and owner device results. The owner then
+authorized archiving in issue #943: "Lets go ahead and archive it."
+This supersedes the original two pre-merge acceptance blockers; it does not claim
+new device evidence or independent promotion of the bounded model mappings.
+
+- [x] Reconcile delivery with the merged integration and owner acceptance:
+  A–D passed with the documented Windows exception. Windows local core and
+  Windows SSH remain untested on real hardware; no fixture or Linux test is
+  presented as that evidence.
+- [x] Synchronize the capability requirements and record Windows, unreleased
+  upstream changes after 0.1.21, and Q1–Q11 as known limits in the current spec;
+  archive the change while preserving `delivery.md` as historical evidence.
