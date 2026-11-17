@@ -261,6 +261,8 @@ export async function createTownRenderer(
   const lightMapLayer = new Container();
   const glowLayer = new Container();
   app.stage.addChild(world, lightMapLayer, glowLayer, screenLayer);
+  /** The open questions the lights were last planned with. */
+  let litAsking: ReadonlySet<string> | undefined;
   const lighting = createTownLighting({
     app,
     mapLayer: lightMapLayer,
@@ -901,7 +903,13 @@ export async function createTownRenderer(
       // still takes the new model and layout.
       if (dirty.scene || dirty.actors.size)
         syncActors(dirty.first, dirty.first ? undefined : dirty.actors);
-      if (dirty.scene) lighting.sync(townLightPlan(nextLayout, nextModel));
+      // Lights follow the town and its open questions: a question asked or
+      // answered changes a desk, a room and a reception without a new scene.
+      // An unchanged plan draws nothing new (lighting.sync compares).
+      if (dirty.scene || nextState.askingKeys !== litAsking) {
+        litAsking = nextState.askingKeys;
+        lighting.sync(townLightPlan(nextLayout, nextModel, litAsking));
+      }
       if (dirty.scene) {
         dimDirty = true;
         request("scene");

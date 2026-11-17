@@ -60,7 +60,7 @@ test("each desk throws its most urgent agent's state colour", () => {
   const room = roomOf(model, layout, "room");
   const lights = room.cells
     .filter((cell) => cell.deskKey)
-    .map((cell) => townDeskLight(model, cell.deskKey!));
+    .map((cell) => townDeskLight(model, cell.deskKey!, new Set()));
   expect(lights).toEqual(["working", "blocked", "done", null, "done"]);
   const colours = townLightPlan(layout, model).points.map((p) => p.color);
   expect(colours).toContain(TOWN_STATE_LIGHT.working);
@@ -123,4 +123,49 @@ test("the waiting pulse moves with motion and holds steady without it", () => {
   expect(seen.size).toBeGreaterThan(3);
   for (const t of [0, 0.2, 0.4, 0.6, 0.8, 1])
     expect(townWaitingPulse(t, false)).toBe(1);
+});
+
+test("an open question lights its desk, room and reception whatever the status", () => {
+  for (const status of ["idle", "working", "done"] as const) {
+    const { model, layout } = scene(
+      office({ room: [status], quiet: ["idle"] }),
+    );
+    const room = roomOf(model, layout, "room");
+    const deskKey = room.cells.find((cell) => cell.deskKey)!.deskKey!;
+    const agentKey = model.desks.get(deskKey)!.paneDevices[0]!.agentKey!;
+    const asking = new Set([agentKey]);
+    expect(townDeskLight(model, deskKey, asking)).toBe("blocked");
+    const plan = townLightPlan(layout, model, asking);
+    expect(plan.waiting).toHaveLength(1);
+    expect(plan.waiting[0]!.color).toBe(TOWN_WAITING_AMBER);
+    expect(plan.points.map((p) => p.color)).toContain(TOWN_STATE_LIGHT.blocked);
+    expect(plan.areas.some((area) => inside(room, area))).toBe(true);
+    // The other room stays dark: its quiet agent asks nothing.
+    const quiet = roomOf(model, layout, "quiet");
+    expect(plan.areas.some((area) => inside(quiet, area))).toBe(false);
+    // Answered, the question takes its light with it.
+    const answered = townLightPlan(layout, model, new Set());
+    expect(answered.waiting).toEqual([]);
+    expect(townDeskLight(model, deskKey, new Set())).toBe(
+      status === "idle" ? null : status,
+    );
+  }
+});
+
+test("a plain terminal asking a question lights its desk and reception", () => {
+  const { model, layout } = scene(office({ room: ["idle"] }));
+  const room = roomOf(model, layout, "room");
+  const deskKey = room.cells.find((cell) => cell.deskKey)!.deskKey!;
+  // The fixture seats agents only; take this one's away to leave a terminal.
+  const device = model.desks.get(deskKey)!.paneDevices[0]!;
+  delete (device as { agentKey?: string }).agentKey;
+  const listed = model.projection.paneRoster.find(
+    (entry) => entry.device.key === device.key,
+  )!.device;
+  delete (listed as { agentKey?: string }).agentKey;
+  const asking = new Set([device.nodeId]);
+  expect(townDeskLight(model, deskKey, new Set())).toBeNull();
+  expect(townDeskLight(model, deskKey, asking)).toBe("blocked");
+  expect(townLightPlan(layout, model).waiting).toEqual([]);
+  expect(townLightPlan(layout, model, asking).waiting).toHaveLength(1);
 });

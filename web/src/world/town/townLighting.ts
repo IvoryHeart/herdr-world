@@ -8,8 +8,12 @@
  * pulses amber over its lobby by day and by night; under calm or reduced
  * motion the pulse holds as a steady mark.
  *
- * `townLightPlan` decides what is lit from the town alone; the Pixi side only
- * draws it.
+ * An agent with an open question for you waits on you whatever its runtime
+ * status says: its desk throws amber, its room is lit and its reception
+ * pulses, as Town's reception and attention list already treat it.
+ *
+ * `townLightPlan` decides what is lit from the town and its open questions;
+ * the Pixi side only draws it.
  */
 
 import {
@@ -21,6 +25,7 @@ import {
   Sprite,
   Texture,
 } from "pixi.js";
+import type { OfficePaneDevice } from "../herdrOfficeProjection";
 import type { TownSky } from "./townDaylight";
 import {
   TOWN_LOBBY_HEIGHT,
@@ -72,20 +77,39 @@ export type TownLightPlan = {
 
 const RANK: readonly TownDeskLight[] = ["done", "working", "blocked"];
 
+/**
+ * Open questions, keyed as Town's reception keys them: an agent's key, or a
+ * plain terminal's node ID.
+ */
+type TownAsking = ReadonlySet<string>;
+const NO_ASKS: TownAsking = new Set();
+
+const asks = (device: OfficePaneDevice, asking: TownAsking) =>
+  asking.has(device.agentKey ?? device.nodeId);
+
+/** A seat's state: a question for you is waiting, whatever the runtime says. */
+const townDeskLightOf = (
+  model: TownModel,
+  device: OfficePaneDevice,
+  asking: TownAsking,
+) =>
+  asks(device, asking)
+    ? "blocked"
+    : model.agents.get(device.agentKey!)?.semanticStatus;
+
 /** The light a desk throws: its most urgent agent's state, or none. */
 export function townDeskLight(
   model: TownModel,
   deskKey: string,
+  asking: TownAsking,
 ): TownDeskLight | null {
-  let light: TownDeskLight | null = null;
-  for (const device of model.desks.get(deskKey)?.paneDevices ?? []) {
-    const status = device.agentKey
-      ? model.agents.get(device.agentKey)?.semanticStatus
-      : undefined;
-    const rank = RANK.indexOf(status as TownDeskLight);
-    if (rank > (light ? RANK.indexOf(light) : -1)) light = RANK[rank]!;
-  }
-  return light;
+  let rank = -1;
+  for (const device of model.desks.get(deskKey)?.paneDevices ?? [])
+    rank = Math.max(
+      rank,
+      RANK.indexOf(townDeskLightOf(model, device, asking) as TownDeskLight),
+    );
+  return RANK[rank] ?? null;
 }
 
 /** Whether a room has work in it: someone working or waiting on you. */
@@ -98,8 +122,15 @@ export function townRoomLit(model: TownModel, roomKey: string) {
 export function townLightPlan(
   layout: TownLayout,
   model: TownModel,
+  asking: TownAsking = NO_ASKS,
 ): TownLightPlan {
   const plan: TownLightPlan = { areas: [], points: [], waiting: [] };
+  // Hosts with someone waiting on you at reception: a blocked agent, or an
+  // open question from an agent or a plain terminal.
+  const waitingAt = new Set<string>();
+  for (const { device } of model.projection.paneRoster)
+    if (townDeskLightOf(model, device, asking) === "blocked")
+      waitingAt.add(device.hostKey);
   for (const lamp of layout.lamps)
     plan.points.push({
       x: lamp.x * T + 8,
@@ -122,9 +153,7 @@ export function townLightPlan(
     const bx = building.x * T;
     const by = building.y * T;
     const bw = building.w * T;
-    let waiting = 0;
-    for (const room of building.rooms)
-      waiting += model.roomCounts.get(room.key)?.blocked ?? 0;
+    const waiting = waitingAt.has(building.hostKey);
     const lobby = {
       x: bx + 6,
       y: by + 6,
@@ -145,19 +174,13 @@ export function townLightPlan(
         power: 1,
       });
     for (const room of building.rooms) {
-      if (townRoomLit(model, room.key))
-        plan.areas.push({
-          x: room.x * T + 2,
-          y: room.y * T + 2,
-          w: room.w * T - 4,
-          h: room.h * T - 4,
-          feather: 18,
-          color: WARM,
-          power: 0.6,
-        });
+      let lit = townRoomLit(model, room.key);
       for (const cell of room.cells) {
-        const light = cell.deskKey ? townDeskLight(model, cell.deskKey) : null;
+        const light =
+          cell.deskKey && townDeskLight(model, cell.deskKey, asking);
         if (!light) continue;
+        // An open question at a desk lights its room as a blocked agent does.
+        lit ||= light === "blocked";
         const table = townDeskTable(cell.seats);
         plan.points.push({
           x: (cell.x + 1) * T + table.x + table.w / 2,
@@ -167,6 +190,16 @@ export function townLightPlan(
           power: 0.95,
         });
       }
+      if (lit)
+        plan.areas.push({
+          x: room.x * T + 2,
+          y: room.y * T + 2,
+          w: room.w * T - 4,
+          h: room.h * T - 4,
+          feather: 18,
+          color: WARM,
+          power: 0.6,
+        });
     }
   }
   return plan;

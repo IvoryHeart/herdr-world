@@ -458,8 +458,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     working, amber waiting on you, green done), and street lamps light the
     roads. A reception whose building has someone waiting on you pulses amber
     over its lobby by day and by night; under calm motion or reduced motion
-    the pulse holds as a steady mark. A failed host's cached building stays
-    dark. Day leaves the town as painted.
+    the pulse holds as a steady mark. An agent or terminal with an open
+    question for you counts as waiting on you whatever its runtime status.
+    A failed host's cached building stays dark. Day leaves the town as
+    painted.
   - Zoomed into a room or desk, every agent that needs you outside the view
     gets an arrow on the view's edge pointing at it, with its mark (**!**,
     **?** or **✓**); arrows pointing the same way or at one building merge
