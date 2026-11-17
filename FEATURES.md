@@ -450,6 +450,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation.
+  - Light is Town's status language. The button under **ALL** sets the time
+    of day: it cycles **clock** (follows this device's time), **day**,
+    **dusk** and **night**, and each browser keeps its choice. As the sky
+    darkens, rooms with someone working or waiting on you are lit and quiet
+    rooms stay dark; each desk throws its agent's state colour (blue-white
+    working, amber waiting on you, green done), and street lamps light the
+    roads. A reception whose building has someone waiting on you pulses amber
+    over its lobby by day and by night; under calm motion or reduced motion
+    the pulse holds as a steady mark. An agent or terminal with an open
+    question for you counts as waiting on you whatever its runtime status.
+    A failed host's cached building stays dark. Day leaves the town as
+    painted.
   - Zoomed into a room or desk, every agent that needs you outside the view
     gets an arrow on the view's edge pointing at it, with its mark (**!**,
     **?** or **✓**); arrows pointing the same way or at one building merge

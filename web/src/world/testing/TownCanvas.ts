@@ -115,10 +115,11 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           // A hang guard, not a speed budget. Extended and max towns at large
           // windows paint far more pixels in software, and each topology
           // change glides over drawn frames; CI runners differ by about 1.5x
-          // (the 1080x1920 slow-frame case took 54 s to 80 s on main).
+          // (the 1080x1920 slow-frame case took 54 s to 80 s on main, and the
+          // 1440x900 typical case 40 s on CI against 20 s locally).
           scale === "extended" || scale === "protected" || scale === "max"
             ? LARGE_TOWN_FIXTURE_MS
-            : 40_000,
+            : 60_000,
         );
         expect(failures).toEqual([]);
       } finally {

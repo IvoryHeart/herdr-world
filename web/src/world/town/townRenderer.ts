@@ -57,6 +57,20 @@ import {
 import type { TownModel } from "./townModel";
 import type { TerminalColor } from "../terminalColor";
 import { createTownLookResolver } from "./townAppearance";
+import {
+  subscribeTownDaylight,
+  townDaylightHour,
+  townDaylightMode,
+  townSky,
+  townSkyIsClear,
+  townSkyToward,
+} from "./townDaylight";
+import {
+  createTownLighting,
+  townLightPlan,
+  townWaitingPulse,
+  TOWN_WAITING_PULSE_RATE,
+} from "./townLighting";
 import { createTownBinnedDesks, TOWN_CRUMB_RATE } from "./townBinnedDesks";
 import {
   townCarpetFor,
@@ -242,7 +256,25 @@ export async function createTownRenderer(
     dragLayer,
     puffLayer,
   );
-  app.stage.addChild(world, screenLayer);
+  // Town's light (townLighting.ts): a lightmap multiplied over the world,
+  // then the waiting lobbies' amber, both under screen-space marks.
+  const lightMapLayer = new Container();
+  const glowLayer = new Container();
+  app.stage.addChild(world, lightMapLayer, glowLayer, screenLayer);
+  /** The open questions the lights were last planned with. */
+  let litAsking: ReadonlySet<string> | undefined;
+  const lighting = createTownLighting({
+    app,
+    mapLayer: lightMapLayer,
+    glowLayer,
+  });
+  lighting.resize(element.clientWidth, element.clientHeight);
+  let sky = townSky(townDaylightHour());
+  let skyEasing = false;
+  const unsubscribeDaylight = subscribeTownDaylight(() => {
+    skyEasing = true;
+    request("daylight");
+  });
 
   let model: TownModel | null = null;
   /** A desk's table is drawn in its terminal colour. */
@@ -464,10 +496,16 @@ export async function createTownRenderer(
           glowSprite.visible = glow && !lite && color !== undefined;
           if (glowSprite.visible) {
             glowSprite.tint = color!;
+            // Under calm or reduced motion a waiting desk holds steady.
+            const still = state.calm || camera.reducedMotion;
             const pulse =
               info.state === "blocked"
-                ? 0.55 + 0.35 * Math.sin(clock * 5)
-                : 0.5 + 0.08 * Math.sin(clock * 23 + seat);
+                ? still
+                  ? 0.9
+                  : 0.55 + 0.35 * Math.sin(clock * 5)
+                : still
+                  ? 0.5
+                  : 0.5 + 0.08 * Math.sin(clock * 23 + seat);
             glowSprite.alpha = info.state === "shell" ? 0.3 : pulse;
             if (info.state !== "shell" && visible(glowSprite))
               ambient.continuous();
@@ -640,15 +678,33 @@ export async function createTownRenderer(
       ambient,
       searchFx,
     );
+    const animated = !camera.reducedMotion && !state.calm;
+    const skyTarget = townSky(townDaylightHour());
+    let skyMoving = false;
+    if (skyEasing && animated)
+      ({ sky, moving: skyMoving } = townSkyToward(sky, skyTarget, dt));
+    else sky = skyTarget;
+    skyEasing = skyMoving;
+    // Following the clock, the sky is looked at again each minute.
+    if (townDaylightMode() === "clock") ambient.changeAt(clock + 60);
+    if (
+      lighting.update(
+        sky,
+        world,
+        camera.viewport,
+        townWaitingPulse(clock, animated),
+      )
+    )
+      ambient.every(TOWN_WAITING_PULSE_RATE);
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);
-    const animated = !camera.reducedMotion && !state.calm;
     const onlyFilling =
       materializing &&
       !urgent &&
       !forced &&
       !cameraMoved &&
       !roofsMoving &&
+      !skyMoving &&
       !actorsMoved &&
       !camera.flying &&
       !transitioning &&
@@ -657,6 +713,7 @@ export async function createTownRenderer(
       !(animated && frames?.motionAllowed && ambient.next === clock);
     forced = false;
     if (!onlyFilling || now - lastRender >= TOWN_FILL_RENDER_MS) {
+      lighting.render(townSkyIsClear(sky));
       app.renderer.render(app.stage);
       lastRender = now;
     }
@@ -683,6 +740,7 @@ export async function createTownRenderer(
     const moving =
       cameraMoved ||
       roofsMoving ||
+      skyMoving ||
       actorsMoved ||
       camera.flying ||
       materializing ||
@@ -710,6 +768,7 @@ export async function createTownRenderer(
       const causes = Object.entries({
         camera: cameraMoved,
         roofs: roofsMoving,
+        sky: skyMoving,
         actors: actorsMoved,
         flight: camera.flying,
         materialize: materializing,
@@ -844,6 +903,13 @@ export async function createTownRenderer(
       // still takes the new model and layout.
       if (dirty.scene || dirty.actors.size)
         syncActors(dirty.first, dirty.first ? undefined : dirty.actors);
+      // Lights follow the town and its open questions: a question asked or
+      // answered changes a desk, a room and a reception without a new scene.
+      // An unchanged plan draws nothing new (lighting.sync compares).
+      if (dirty.scene || nextState.askingKeys !== litAsking) {
+        litAsking = nextState.askingKeys;
+        lighting.sync(townLightPlan(nextLayout, nextModel, litAsking));
+      }
       if (dirty.scene) {
         dimDirty = true;
         request("scene");
@@ -854,6 +920,7 @@ export async function createTownRenderer(
         Math.max(1, viewport.width),
         Math.max(1, viewport.height),
       );
+      lighting.resize(viewport.width, viewport.height);
       camera.viewport = viewport;
       if (layout) camera.configure(layout, viewport);
       request("viewport");
@@ -883,6 +950,8 @@ export async function createTownRenderer(
       motion.removeEventListener("change", onMotion);
       frames?.dispose();
       topology.clear();
+      unsubscribeDaylight();
+      lighting.destroy();
       agentViews.dispose();
       app.destroy(true, { children: true, texture: false });
       stats.destroys += 1;
