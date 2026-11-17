@@ -54,6 +54,8 @@ only the runner's queue/assets/label markers and browser-diagnostics settings
 survive. Direct `bun test` refuses
 with the wrapper command to use. Fixtures must inject every runtime dependency,
 including detection, and create their own synthetic configuration.
+Scratch executable checks resolve both the fixture and scratch-root identities,
+including macOS temporary-directory aliases; links to host executables stay refused.
 
 The test tripwire refuses real runtime/service commands, core/World installers,
 SSH connections, downloads and non-loopback network requests. Loopback fixtures
@@ -66,7 +68,9 @@ security sandbox for hostile code.
 
 Live suites opt out explicitly with `bun run test --live <file.live.test.ts>`;
 name only live files, never a directory or the ordinary inventory. They still
-get scratch HOME/XDG/data and retain their existing fixture lifecycle/cleanup.
+get scratch HOME/config/cache/data/state and retain their existing fixture
+lifecycle/cleanup. They bypass process/network and shell-command guards; a supplied
+`XDG_RUNTIME_DIR` is retained so live resource controls can reach the user manager.
 Supply their documented live binary/fixture variables explicitly. The separate
 `bun scripts/herdr-core-smoke.ts` release smoke downloads a verified binary and
 uses this live route; ordinary tests cannot inherit its opt-out or binary.

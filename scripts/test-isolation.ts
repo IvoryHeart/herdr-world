@@ -75,9 +75,13 @@ export function isolatedTestEnv(
   env.GIT_CONFIG_GLOBAL = join(directory, "gitconfig");
   env.GIT_TERMINAL_PROMPT = "0";
   env.BUN_INSTALL_CACHE_DIR = join(directory, "bun-cache");
-  env.PATH = isolatedPath(directory, inherited);
+  env.PATH = isolatedPath(directory, inherited, live);
   if (live) {
     env[LIVE] = "1";
+    // The user systemd bus lives here; live resource controls must reach the
+    // explicitly selected manager while all persistent state stays in scratch.
+    if (inherited.XDG_RUNTIME_DIR)
+      env.XDG_RUNTIME_DIR = inherited.XDG_RUNTIME_DIR;
     // Only explicit resource live controls may select a real systemd manager.
     if (["user", "system"].includes(inherited.HERDR_RESOURCE_MANAGER ?? ""))
       env.HERDR_RESOURCE_MANAGER = inherited.HERDR_RESOURCE_MANAGER;
@@ -95,7 +99,11 @@ export function isolatedTestEnv(
   return env;
 }
 
-function isolatedPath(directory: string, inherited: NodeJS.ProcessEnv): string {
+function isolatedPath(
+  directory: string,
+  inherited: NodeJS.ProcessEnv,
+  live: boolean,
+): string {
   const bin = join(directory, "bin");
   mkdirSync(bin);
   const system =
@@ -117,7 +125,7 @@ function isolatedPath(directory: string, inherited: NodeJS.ProcessEnv): string {
       for (const name of readdirSync(dir)) {
         if (
           forbiddenBinaries.test(name) ||
-          services.test(name) ||
+          (!live && services.test(name)) ||
           existsSync(join(bin, name))
         )
           continue;
@@ -142,7 +150,7 @@ function isolatedPath(directory: string, inherited: NodeJS.ProcessEnv): string {
       copyFileSync(path, join(bin, `${name}.exe`));
     else symlinkSync(path, join(bin, name));
   }
-  if (process.platform !== "win32") {
+  if (process.platform !== "win32" && !live) {
     for (const name of ["systemctl", "launchctl", "ssh", "curl", "wget"]) {
       const original = system.map((dir) => join(dir, name)).find(existsSync);
       const target = join(bin, name);

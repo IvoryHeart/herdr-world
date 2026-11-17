@@ -15,9 +15,12 @@ function fixtureExecutable(command: string, env: NodeJS.ProcessEnv): boolean {
   const path = Bun.which(command, { PATH: env.PATH });
   if (!root || !path) return false;
   try {
+    // macOS temporary roots can use /var or /tmp aliases for /private/… .
+    // Compare filesystem identities on both sides, including the guarded bin.
+    const executable = realpathSync(path);
     return (
-      inside(realpathSync(path), root) &&
-      !inside(realpathSync(path), join(root, "bin"))
+      inside(executable, realpathSync(root)) &&
+      !inside(executable, realpathSync(join(root, "bin")))
     );
   } catch {
     return false;

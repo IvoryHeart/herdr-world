@@ -34,7 +34,7 @@ Test isolation and tool portability are maintained in the
 [test runner](../scripts/run-tests.ts), [startup environment](../scripts/test-isolation.ts),
 [process preload](../scripts/test-process-preload.ts), [tripwire](../scripts/test-tripwire.ts)
 and [portability lint](../scripts/test-portability.ts). See the
-[subprocess and browser-diagnostics controls](../scripts/test-isolation.test.ts),
+[subprocess, aliased scratch-root, live shell and browser-diagnostics controls](../scripts/test-isolation.test.ts),
 [resource-gate live startup](../scripts/verification-resources.test.ts),
 [coreutils regressions](../scripts/test-portability.test.ts),
 [contributor guide](../CONTRIBUTING.md#validation) and

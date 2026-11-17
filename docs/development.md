@@ -114,12 +114,17 @@ scratch executables. Installer fixtures pass an explicit scratch HOME and PATH
 with fake curl/service/runtime commands. Use dynamic loopback ports and scratch
 sockets; never use the running services on 8787/8788. The guard prevents accidental
 host operations; it is not a sandbox for deliberately adversarial test code.
+Executable checks compare resolved filesystem identities for both the fixture
+and its scratch root, so macOS `/var` and `/tmp` aliases work without permitting
+fixture symlinks to host executables.
 
 Run a live test explicitly, for example
 `HERDR_CORE_BIN=/path/to/disposable/core bun run test --live server/src/herdr-core/core.live.test.ts`.
 Only named live files may use `--live`; ordinary inventory ignores inherited
 live flags. Live suites still get a scratch home and keep their existing isolated
-runtime setup and teardown. `bun scripts/herdr-core-smoke.ts` is the separate,
+runtime setup and teardown. They bypass both preload and shell-command guards,
+and retain a supplied `XDG_RUNTIME_DIR` for user-manager access; config, cache,
+data and state remain in scratch. `bun scripts/herdr-core-smoke.ts` is the separate,
 explicit download-and-live release check. Direct `bun test` explains which
 wrapper to use and exits before loading tests. The resource-verification gate uses
 this explicit live route for its real-cgroup controls, retaining

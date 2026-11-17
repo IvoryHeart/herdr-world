@@ -1,5 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -183,6 +189,61 @@ test("fake runtime", async () => {
   expect(result.code).toBe(0);
 });
 
+test.skipIf(process.platform === "win32")(
+  "runtime fixtures work when the scratch root has a filesystem alias",
+  async () => {
+    const root = scratch();
+    const physical = join(root, "physical");
+    const alias = join(root, "alias");
+    mkdirSync(physical);
+    symlinkSync(physical, alias);
+    const result = await run(
+      `
+import {writeFileSync, realpathSync} from "node:fs";
+import {join} from "node:path";
+import {spawnSync} from "node:child_process";
+test("aliased fixture", () => {
+  expect(realpathSync(process.env.HOME!)).not.toBe(process.env.HOME);
+  const fake = join(process.env.HOME!, "herdr-world");
+  writeFileSync(fake, "#!/bin/sh\\necho synthetic\\n", {mode:0o755});
+  const env = {...process.env, PATH:""};
+  expect(Bun.spawnSync([fake], {env}).stdout.toString().trim()).toBe("synthetic");
+  expect(spawnSync(fake, [], {env, encoding:"utf8"}).stdout.trim()).toBe("synthetic");
+});`,
+      { ...process.env, TMPDIR: alias, TMP: alias, TEMP: alias },
+    );
+    expect(result.text).toContain("1 pass");
+    expect(result.code).toBe(0);
+  },
+);
+
+for (const target of ["host", "guarded-bin"])
+  test.skipIf(process.platform === "win32")(
+    `an aliased runtime fixture symlink cannot authorize a ${target} executable`,
+    async () => {
+      const root = scratch();
+      const physical = join(root, "physical");
+      const alias = join(root, "alias");
+      mkdirSync(physical);
+      symlinkSync(physical, alias);
+      const result = await run(
+        `
+import {symlinkSync} from "node:fs";
+import {join} from "node:path";
+test("external executable", () => {
+  const fake = join(process.env.HOME!, "herdr-world");
+  symlinkSync(${target === "host" ? '"/bin/sh"' : 'join(process.env.HERDR_WORLD_TEST_ISOLATION!, "bin", "launchctl")'}, fake);
+  try {Bun.spawnSync([fake, "-c", "echo escaped"]);} catch {}
+});`,
+        { ...process.env, TMPDIR: alias, TMP: alias, TEMP: alias },
+      );
+      expect(result.code).not.toBe(0);
+      expect(result.text).toContain(
+        "[test-tripwire] refused runtime command herdr-world",
+      );
+    },
+  );
+
 test("#926: omitted detection fake reaches the real core installer tripwire", async () => {
   const result = await run(`
 import {runHerdrCommand} from ${JSON.stringify(fileURLToPath(new URL("../server/src/herdr/cli.ts", import.meta.url)))};
@@ -227,6 +288,7 @@ test("only an explicit named live selection opts out; parent markers cannot", ()
     PI_CODING_AGENT_DIR: "/example/pi",
     ANTIGRAVITY_CONVERSATIONS_DIR: "/example/conversations",
     OPENCODE_CONFIG_DIR: "/example/opencode",
+    XDG_RUNTIME_DIR: "/example/host-runtime",
   });
   expect(env.HERDR_WORLD_TEST_LIVE).toBeUndefined();
   expect(env.HERDR_CORE_BIN).toBeUndefined();
@@ -235,6 +297,7 @@ test("only an explicit named live selection opts out; parent markers cannot", ()
   expect(env.PI_CODING_AGENT_DIR).toBeUndefined();
   expect(env.ANTIGRAVITY_CONVERSATIONS_DIR).toBeUndefined();
   expect(env.OPENCODE_CONFIG_DIR).toBeUndefined();
+  expect(env.XDG_RUNTIME_DIR).not.toBe("/example/host-runtime");
   expect(env[ISOLATION]).not.toBe("/example/old");
 });
 
@@ -252,6 +315,40 @@ test("explicit live selection retains scratch HOME and its supplied binary", asy
   );
   expect(result.code).toBe(0);
 });
+
+test.skipIf(process.platform === "win32")(
+  "explicit live shell tools bypass guards and retain the supplied user-manager socket directory",
+  async () => {
+    const runtime = scratch();
+    const result = await run(
+      `
+import {realpathSync} from "node:fs";
+test("live shell controls", async () => {
+  if (process.platform === "linux" && Bun.which("systemctl")) {
+    const result = Bun.spawnSync(["sh", "-c", "command systemctl --version"]);
+    expect(result.stderr.toString()).not.toContain("[test-tripwire]");
+    expect(result.exitCode).toBe(0);
+  }
+  // Following a local redirect also proves the shell download wrapper is gone.
+  // No real download or user-manager operation is needed for this control.
+  const server = Bun.serve({hostname:"127.0.0.1",port:0,fetch:(request)=>new URL(request.url).pathname === "/redirect" ? new Response(null, {status:302,headers:{location:"/"}}) : new Response("fixture")});
+  try {
+    expect(realpathSync(Bun.which("curl")!)).not.toStartWith(process.env.HERDR_WORLD_TEST_ISOLATION!);
+    const child = Bun.spawn(["sh", "-c", 'command curl -fsSL "$1"', "fixture", new URL("/redirect",server.url).href], {stdout:"pipe",stderr:"pipe"});
+    const [code, out, err] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect(code, err).toBe(0);
+    expect(out).toBe("fixture");
+  } finally {server.stop(true);}
+  expect(process.env.XDG_RUNTIME_DIR).toBe(${JSON.stringify(runtime)});
+});`,
+      { ...process.env, XDG_RUNTIME_DIR: runtime },
+      "shell.live.test.ts",
+      true,
+    );
+    expect(result.text).toContain("1 pass");
+    expect(result.code).toBe(0);
+  },
+);
 
 test.each(["lifecycle", "stderr"])(
   "browser diagnostics runner variables reach its adapter (%s)",
