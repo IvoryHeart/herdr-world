@@ -86,8 +86,10 @@ Ownership:
 
 - **Core owns status, input and size.** World mirrors core's status as
   reported. Agent input uses core's own `terminal.send` and `terminal.keys`.
-  Core decides the terminal size. A World observer never sizes a terminal. A
-  key typed in World takes the size by core's own rule, as the official apps do.
+  Core decides the terminal size. While an agent's Terminal tab is open, World
+  holds a seat at the tab's fitted grid; by core's rule it sets the size only
+  when no Herdr app pane holds the terminal, and never takes it from one. A key
+  typed in World takes the size by core's own rule, as the official apps do.
 - **Structure belongs to whoever can store it.** On the Herdr TUI, Herdr owns
   and persists workspaces, tabs, panes, their names and order in its own
   session. World reads them over Herdr RPC and writes changes through it
@@ -106,9 +108,12 @@ Ownership:
   and occupant (`herdr-core/fence.ts`, `herdr-core/occupant.ts`), and the fence
   is rechecked before each dispatch. Nothing falls back to another connection
   or runtime.
-- **World never starts core.** Connects and reconnects read `core.lock` and
-  open only an endpoint that already exists (`herdr-core/stream.ts`). A core
-  that is not running stays unavailable until the user starts it.
+- **World starts core only when a person confirms it.** Connects and
+  reconnects read `core.lock` and open only an endpoint that already exists
+  (`herdr-core/stream.ts`). A core that is not running stays unavailable until
+  someone starts it. Only the installers, or a confirmed **Install
+  herdr-core…** (`connections.core_install`, `herdr-core/install.ts`), install
+  and start core, on the chosen host.
 
 The [herdr-core design](../openspec/changes/herdr-core-runtime/design.md) and
 [requirements](../openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md)
@@ -133,13 +138,14 @@ sequenceDiagram
   B->>S: world.core.watch, rpc/core-watch.ts
   S->>C: terminal.attach as observer with resize notifications, watches.ts
   C-->>B: RESIZE, then history and output via the service
+  B->>S: world.core.hold at the tab's fitted grid
+  S->>C: resumed seat, sizes the terminal only while no app pane holds it, typing.ts
   B->>S: first key, world.core.input
-  S->>C: interactive attach, the key takes the size by core's rule, typing.ts
-  S->>C: queued keys sent once, each batch re-fenced
-  B->>S: world.core.leave when focus leaves or on Back
-  B->>S: open Chat, world.core.history
-  S-->>B: transcript from the session resolver, history.ts
-  B->>S: Chat message, world.core.send
+  S->>C: the key on the seat, sent once, each batch re-fenced
+  B->>S: world.core.unwatch when the tab closes
+  B->>S: open Chat, the shared agent-session handlers, rpc/core-host.ts
+  S-->>B: transcript from the session resolver, agent-sessions.ts
+  B->>S: Chat message, the shared agent-session handlers
   Note over S: recipient checked against the current occupant and foreground, delivery.ts
   S->>C: terminal.send
 ```
@@ -186,9 +192,10 @@ core does.
 **Debt a third runtime would have to generalise.** These places are Herdr- or
 core-specific today. They are recorded here and not refactored yet:
 
-- The runtime kind is a two-value union: `ConnectionRuntimeKind`
-  (`connections/profiles.ts`) and `WorldRuntimeKind`
-  (`world/runtime-registry.ts`), both `"herdr" | "herdr-core"`. The snapshot
+- The runtime kind is a two-value union: `WorldRuntimeKind`
+  (`world/runtime-registry.ts`) and the browser's host and pane fields, all
+  `"herdr" | "herdr-core"`. `isCoreProfile` (`connections/profiles.ts`) tells
+  the two connection kinds apart. The snapshot
   marks only core (`runtime?: "herdr-core"` in `world/snapshot.ts`).
 - `worldRuntimeRegistry(tui, core)` takes exactly two managers.
 - Code branches on `runtime === "herdr-core"` in more than 20 service and browser
@@ -200,8 +207,8 @@ core-specific today. They are recorded here and not refactored yet:
   core has its own Connections page cards (`components/CoreConnections.tsx`).
 - Core controls have their own RPC namespace (`world.core.*` in `rpc/core.ts`,
   `rpc/core-watch.ts`, `rpc/core-host.ts`) and their own files endpoint
-  (`service/core-files-http.ts`). The browser no longer uses
-  `world.core.history`, `screen`, `send` or `keys`; agent commands still do.
+  (`service/core-files-http.ts`). Chat, History and answers use the shared
+  agent-session handlers (`rpc/core-host.ts`), not `world.core.*`.
 - Most of the agent window is shared. Still runtime-specific under
   `web/src/world/`: the Terminal tab (`TerminalView.tsx` for the TUI's attach,
   `CoreTerminalWatch` for core's watch, with `CoreTerminalComposer` wrapping
@@ -212,6 +219,26 @@ core-specific today. They are recorded here and not refactored yet:
   list of terminals ending with the kill; and `CorePin`, the peek's pin,
   because only core shares a pin with Herdr's apps. Town's step lines and quest badges still skip
   core agents' conversations (`useTownStepReads.ts`, `agentQuests.ts`).
+- Capabilities are not declared per node. Core nodes are marked view-only
+  (`CORE_VIEW_ONLY_REASON`) and let back in through `coreControl`,
+  `isCoreResourceNode` and `inspectorAdmits` exceptions (`world/worldObject.ts`,
+  `worldInspectorSelection.ts`, `officeAgent.ts`, `NeedsYouItem.tsx`).
+- The page's per-connection method gate is a core-only allowlist (`api.ts`
+  with `shared/coreHostMethods.ts`), and core connections skip the browser's
+  runtime lease (`world/runtimeStore.ts`). Core panes come from the runtime
+  store's snapshot, not the Herdr pane store (`worldTerminalPresentation.ts`).
+- Floating shells have a separate core path (`world/floatShell.ts`,
+  `rpc/float.ts`, `herdr-core/float-shell.ts`), and New room filters hosts by
+  runtime and skips the endpoint check for core
+  (`components/CreateWorkspaceDialog.tsx`).
+- The `herdr-world` CLI picks its runtime itself: the task summary and spawn
+  stamp choose Herdr or core (`herdr/task-summary.ts`, `herdr/spawn-stamp.ts`),
+  the World CLI service takes a separate core dependency
+  (`world/world-cli-*.ts`), and the connections and doctor commands branch on
+  `isCoreProfile` (`cli/connections.ts`, `cli/doctor.ts`).
+- `connections/profile-service.ts` branches on `isCoreProfile` for writability,
+  migration, startup and replacement, rather than asking a per-runtime
+  connection manager.
 
 **Where Rex would map.** Superlogical's public pages, read 2026-11-15, describe
 Rex as a terminal multiplexer in public beta. They mention long-lived sessions

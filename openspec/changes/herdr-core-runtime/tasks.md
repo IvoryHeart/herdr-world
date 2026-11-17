@@ -51,7 +51,7 @@ checks. Current spec synchronization and archive remain after acceptance.
     seats in tab order on one shared rug (a quiet pin on the desk's
     front-left corner), pinned cards sit first above their workspace on
     Board under one band, and pinned agents lead the agent pickers too;
-    World saves no place for a pin.
+    World saves no seat for a pin; #925 adds only its rank among pins.
   - [x] Issue #925: pinned desks reorder among the pinned seats on their
     rug (drag or M); elsewhere they glide back with an unpin hint, never
     unpinning. The order is World's own Town layout (a rank on the desk pin

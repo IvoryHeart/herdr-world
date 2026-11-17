@@ -376,8 +376,8 @@ export async function focusWorldNode(
 ) {
   if (isCurrent?.() === false)
     throw new Error("Inspector activation was superseded");
-  // A herdr-core node has no Herdr pane to focus: its window shows Files
-  // and Changes through its own generation-qualified client.
+  // A herdr-core node has no Herdr pane to focus: its window reads through
+  // its own generation-qualified client.
   if (!node.actionable && isCoreResourceNode(node)) return;
   const agentSessionId =
     typeof agentSession === "string" ? agentSession : agentSession?.value;

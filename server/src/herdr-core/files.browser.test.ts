@@ -257,12 +257,6 @@ async function coreSide(root: string) {
               ? null
               : parseCoreKillConfirmation(p.confirmation),
         });
-      case "world.core.history":
-        return {
-          status: "unavailable",
-          detail: "No conversation linked yet.",
-          entries: [],
-        };
       case "world.core.kill_plan":
         return planCoreKill(lease, await coreRoomTerminals(lease, workspaceId));
       default:

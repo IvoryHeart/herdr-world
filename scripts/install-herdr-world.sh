@@ -412,6 +412,11 @@ herdr_core_install() (
   core="$tmp/release/herdr-core"
   [ -f "$core" ] && [ ! -L "$core" ] ||
     herdr_core_fail "the download holds no herdr-core" || exit 1
+  # On macOS the signed bundle is checked before anything downloaded runs.
+  if [ "$(uname -s)" = Darwin ] && [ -d "$tmp/release/Herdr Core.app" ]; then
+    /usr/bin/codesign --verify --strict -R '=identifier "dev.herdr.core" and anchor apple generic and certificate leaf[subject.OU] = "2W9652Q7QR"' "$tmp/release/Herdr Core.app" ||
+      herdr_core_fail "the download is not a signed Herdr release" || exit 1
+  fi
   mkdir -p "$bin" || herdr_core_fail "cannot create $bin" || exit 1
   if ! "$core" --version >/dev/null 2>&1; then
     # A noexec temporary directory: check it again beside its destination.
@@ -434,8 +439,6 @@ herdr_core_install() (
     exit 0
   fi
   if [ "$bundle" = 1 ]; then
-    /usr/bin/codesign --verify --strict -R '=identifier "dev.herdr.core" and anchor apple generic and certificate leaf[subject.OU] = "2W9652Q7QR"' "$tmp/release/Herdr Core.app" ||
-      herdr_core_fail "the download is not a signed Herdr release" || exit 1
     "$bundled" --hc-install-bundle "$bundled" "$bin/herdr-core" ||
       herdr_core_fail "installing Herdr Core.app failed" || exit 1
   else

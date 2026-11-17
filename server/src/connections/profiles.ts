@@ -76,7 +76,6 @@ export type TuiConnectionProfile =
   | LocalConnectionProfile
   | SshConnectionProfile;
 export type ConnectionProfile = TuiConnectionProfile | CoreConnectionProfile;
-export type ConnectionRuntimeKind = "herdr" | "herdr-core";
 
 export function isCoreProfile(
   profile: object | null | undefined,
@@ -85,10 +84,6 @@ export function isCoreProfile(
     Boolean(profile) &&
     (profile as { runtime?: unknown }).runtime === "herdr-core"
   );
-}
-
-export function connectionRuntimeKind(profile: object): ConnectionRuntimeKind {
-  return isCoreProfile(profile) ? "herdr-core" : "herdr";
 }
 
 export function connectionRecoveryFingerprint(

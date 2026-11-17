@@ -452,3 +452,215 @@ describe("one Chat for both runtimes", () => {
     ).resolves.toMatchObject({ status: "refused" });
   });
 });
+
+/**
+ * Which conversation a core agent's Chat reads: the agent's own process
+ * record, then its launch arguments, never a guess or another program's.
+ */
+describe("finding a core agent's conversation", () => {
+  const SESSION = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+  const LAUNCHED = "11111111-2222-4333-8444-555555555555";
+  const PID = 77;
+
+  type Shown = { status: string; messages?: Array<{ text: string }> };
+
+  /** A host whose Claude records name `records[pid]` (read live, so a test
+   * can change them), with transcripts only for the IDs in `transcripts`. */
+  async function claudeHost(
+    records: Map<number, string | Error>,
+    transcripts: string[],
+  ) {
+    const root = await mkdtemp(join(tmpdir(), "hcw-chat-host-"));
+    cleanups.push(() => rm(root, { recursive: true, force: true }));
+    const path = await fixtures
+      .find((fixture) => fixture.agent === "claude")!
+      .write(root);
+    const lookups: number[] = [];
+    // An SSH host's lookups: a session ID never resolves on this machine.
+    const access: AgentSessionFileAccess = {
+      ...files,
+      remote: true,
+      findClaudeSessionById: async (id: string) =>
+        transcripts.includes(id) ? localAgentSessionFiles.statFile(path) : null,
+      findClaudeSuccessor: async () => null,
+      findClaudeSessionForProcess: async (pid: number) => {
+        lookups.push(pid);
+        const found = records.get(pid);
+        if (found instanceof Error) throw found;
+        return found ?? null;
+      },
+    };
+    return { access, lookups };
+  }
+
+  async function claudeLaunched(
+    access: AgentSessionFileAccess,
+    argv: string[] = ["claude", "--session-id", LAUNCHED],
+  ) {
+    const chat = await setup("claude", "idle", false, access);
+    chat.w.fake.foreground(chat.t, { pid: PID, name: "claude", argv });
+    await chat.w.settle();
+    return chat;
+  }
+
+  test("the process record outranks the launch ID after /clear", async () => {
+    const { access, lookups } = await claudeHost(new Map([[PID, SESSION]]), [
+      SESSION,
+    ]);
+    const { call } = await claudeLaunched(access);
+    const shown = (await call("agent_conversation.get")) as Shown;
+    expect(shown.status).toBe("ok");
+    expect(shown.messages!.map((m) => m.text)).toEqual(
+      expect.arrayContaining([QUESTION, ANSWER]),
+    );
+    expect(lookups).toContain(PID);
+  });
+
+  test("a conversation that has not started yet shows no messages", async () => {
+    // The record names the launched session, which has no transcript yet.
+    const { access } = await claudeHost(new Map([[PID, LAUNCHED]]), []);
+    const { call } = await claudeLaunched(access);
+    const shown = (await call("agent_conversation.get")) as Shown;
+    expect(shown.status).not.toBe("ok");
+    expect(shown.messages ?? []).toEqual([]);
+  });
+
+  test("without a record, the launch ID names the conversation", async () => {
+    const { access } = await claudeHost(new Map(), [LAUNCHED]);
+    const { call } = await claudeLaunched(access);
+    const shown = (await call("agent_conversation.get")) as Shown;
+    expect(shown.status).toBe("ok");
+    expect(shown.messages!.map((m) => m.text)).toEqual(
+      expect.arrayContaining([QUESTION, ANSWER]),
+    );
+  });
+
+  test("without a matching record or launch ID, Chat asks for a link instead of guessing", async () => {
+    for (const record of [undefined, new Error("permission denied")]) {
+      const { access } = await claudeHost(
+        new Map(record ? [[PID, record]] : []),
+        [SESSION, LAUNCHED],
+      );
+      const { call } = await claudeLaunched(access, ["claude"]);
+      const shown = (await call("agent_conversation.get")) as Shown & {
+        unavailable?: { reason: string };
+      };
+      expect(shown.status).toBe("unavailable");
+      expect(shown.unavailable?.reason).toBe("no_session");
+    }
+  });
+
+  test("an agent killed and replaced at the same address never shows the old conversation", async () => {
+    const { access, lookups } = await claudeHost(new Map([[PID, SESSION]]), [
+      SESSION,
+    ]);
+    const { w, t, call } = await claudeLaunched(access, ["claude"]);
+    expect(((await call("agent_conversation.get")) as Shown).status).toBe("ok");
+    // The host keeps the old record; the new Claude has its own process,
+    // which has none yet.
+    w.fake.replaceWithShell(t);
+    w.fake.foreground(t, { pid: PID + 1, name: "claude", argv: ["claude"] });
+    await w.settle();
+    const shown = (await call("agent_conversation.get")) as Shown;
+    expect(lookups).toEqual([PID, PID + 1]);
+    expect(shown.status).not.toBe("ok");
+    expect(shown.messages ?? []).toEqual([]);
+  });
+
+  test("a replacement that reuses the pid never shows the old conversation", async () => {
+    const records = new Map<number, string | Error>([[PID, SESSION]]);
+    const { access, lookups } = await claudeHost(records, [SESSION]);
+    const { w, t, call } = await claudeLaunched(access, ["claude"]);
+    expect(((await call("agent_conversation.get")) as Shown).status).toBe("ok");
+    // Within the lookup cache's moment, the new program gets the same pid.
+    w.fake.replaceWithShell(t, { reusePid: true });
+    w.fake.foreground(t, { pid: PID, name: "claude", argv: ["claude"] });
+    // The new process has no record of its own yet.
+    records.delete(PID);
+    await w.settle();
+    const shown = (await call("agent_conversation.get")) as Shown;
+    expect(lookups).toEqual([PID, PID]);
+    expect(shown.status).not.toBe("ok");
+    expect(shown.messages ?? []).toEqual([]);
+  });
+
+  test("pi's launch session ID identifies its conversation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "hcw-chat-pi-"));
+    cleanups.push(() => rm(root, { recursive: true, force: true }));
+    const path = await fixtures.find((f) => f.agent === "pi")!.write(root);
+    const asked: string[] = [];
+    const { w, t, call } = await setup("pi", "idle", false, {
+      ...files,
+      remote: true,
+      findPiSessionById: async (id: string) => {
+        asked.push(id);
+        return localAgentSessionFiles.statFile(path);
+      },
+    });
+    w.fake.foreground(t, {
+      pid: PID,
+      name: "pi",
+      argv: ["pi", "--session-id", LAUNCHED],
+    });
+    await w.settle();
+    const shown = (await call("agent_conversation.get")) as Shown;
+    expect(shown.status).toBe("ok");
+    expect(shown.messages!.map((m) => m.text)).toEqual(
+      expect.arrayContaining([QUESTION, ANSWER]),
+    );
+    expect(asked).toContain(LAUNCHED);
+  });
+
+  // Every harness whose launch arguments can name a transcript path reads
+  // the same transcript through core as through Herdr's report.
+  for (const [agent, flag] of [
+    ["claude", "--resume"],
+    ["pi", "--session"],
+    ["kimi", "--session"],
+    ["omp", "--resume"],
+    ["codex", "resume"],
+  ] as const)
+    test(`core ${agent} reads the same native transcript as TUI`, async () => {
+      const fixture = fixtures.find((f) => f.agent === agent)!;
+      const root = await mkdtemp(join(tmpdir(), "hcw-chat-native-"));
+      cleanups.push(() => rm(root, { recursive: true, force: true }));
+      const path = await fixture.write(root);
+      const { w, t, call } = await setup(agent, "idle", false);
+      w.fake.foreground(t, {
+        pid: PID,
+        name: agent,
+        argv: [agent, flag, path],
+      });
+      await w.settle();
+      const history = (await call("agent_history.get", {
+        history_version: 2,
+      })) as { entries: unknown[] };
+      const tui = createAgentSessionHandlers({
+        herdrCall: async (method) => {
+          if (method !== "agent.get") throw new Error(method);
+          return {
+            agent: {
+              pane_id: t,
+              agent,
+              agent_status: "idle",
+              agent_session: {
+                source: "herdr",
+                agent,
+                kind: "path",
+                value: path,
+              },
+            },
+          };
+        },
+        files,
+      });
+      cleanups.push(async () => tui.conversationWatch.stop());
+      const herdr = (await tui.readHistoryRequest({
+        pane_id: t,
+        history_version: 2,
+      })) as { entries: unknown[] };
+      expect(history.entries.length).toBeGreaterThan(0);
+      expect(history.entries).toEqual(herdr.entries);
+      expect(sends(w)).toEqual([]);
+    });
+});

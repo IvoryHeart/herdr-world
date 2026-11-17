@@ -135,10 +135,12 @@ export function createCoreAgentSessions(args: {
   /** Browsers watching a pane, and how each is told it changed. */
   const senders = new WeakMap<object, (paneId: string) => void>();
   // The process record is a file read on the agent's host; a send reads the
-  // agent several times within a moment.
-  const recorded = new Map<number, { at: number; value: unknown }>();
+  // agent several times within a moment. Keyed by occupant as well as pid: a
+  // replacement that reuses the pid must not see the old program's session.
+  const recorded = new Map<string, { at: number; value: unknown }>();
   const sessionOf = async (
     agent: string,
+    address: string,
     record: Row | undefined,
   ): Promise<Row | undefined> => {
     const foreground = record?.foreground as
@@ -146,13 +148,16 @@ export function createCoreAgentSessions(args: {
       | undefined;
     let found: Awaited<ReturnType<typeof processSession>>;
     const pid = foreground?.pid;
-    const cached = typeof pid === "number" ? recorded.get(pid) : undefined;
+    const key =
+      typeof pid === "number"
+        ? JSON.stringify([address, view.occupancy(address) ?? 0, pid])
+        : undefined;
+    const cached = key ? recorded.get(key) : undefined;
     if (cached && Date.now() - cached.at < 1000)
       found = cached.value as typeof found;
     else {
       found = await processSession(agent, foreground, files);
-      if (typeof pid === "number")
-        recorded.set(pid, { at: Date.now(), value: found });
+      if (key) recorded.set(key, { at: Date.now(), value: found });
       if (recorded.size > 64) recorded.clear();
     }
     if (found) return { ...found, source: "core-process", agent };
@@ -195,7 +200,8 @@ export function createCoreAgentSessions(args: {
     const record = view.terminal(address) as Row | undefined;
     const foreground = record?.foreground as { cwd?: unknown } | undefined;
     const agent = normalizeAgentName(String(row.agent ?? ""));
-    const session = linked(address) ?? (await sessionOf(agent, record));
+    const session =
+      linked(address) ?? (await sessionOf(agent, address, record));
     const turn = pane.turn;
     return {
       ...row,

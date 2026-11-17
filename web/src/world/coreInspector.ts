@@ -18,7 +18,7 @@ export function coreInspectorConversation(
   world: WorldObject,
   conversation: WorldInspectorConversation,
 ): WorldInspectorConversation[] | null {
-  // A herdr-core window (Files and Changes only) lives as long as World
+  // A herdr-core window lives as long as World
   // observes its node in the same core generation.
   const current = worldNodeForInspectorConversation(world, conversation);
   const coreHost = world.hosts.find(

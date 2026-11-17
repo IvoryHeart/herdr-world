@@ -55,22 +55,6 @@ function shared(): Registry {
   return next;
 }
 
-/** Testing seam: replace the sharer's transport and foreground source. */
-export function resetCoreSeenForTests(
-  send: (target: CoreShared) => Promise<unknown>,
-  foreground: () => boolean,
-) {
-  const looking = new Map<symbol, CoreShared>();
-  const sharer = new CoreSeenSharer(send);
-  registry = {
-    sharer,
-    looking,
-    foreground,
-    refresh: () => sharer.update([...looking.values()], foreground()),
-  };
-  return registry;
-}
-
 /**
  * Marks `target` as looked at while the calling view stays drawn. Pass
  * null for anything that is not a herdr-core agent. The look follows the

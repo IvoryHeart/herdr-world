@@ -85,7 +85,7 @@ above; you can keep the TUI connected too.
    herdr-core**, choose where it runs, and keep session **default** unless you
    changed it. Save and connect; its card shows the version and live terminals.
 2. Return to **Town** and choose **New agent**. The launcher says **Starts in
-   herdr-core**. Choose your harness and project folder, then start it. The
+   herdr-core**. Choose your harness, then start it. The
    agent also appears in Herdr’s apps. Choose a TUI room for a TUI launch.
 3. Tap the agent’s desk. Its window opens with **Chat**, **Terminal**, **Files**
    and **Changes**, like a Herdr agent’s. On **Terminal**, type to control it;

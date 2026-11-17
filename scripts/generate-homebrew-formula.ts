@@ -65,7 +65,7 @@ ${launcher}
 
   def caveats
     <<~EOS
-      World uses the herdr-core or Herdr you already have. On first launch, if
+      World uses the herdr-core or Herdr you already have. When it starts and
       neither is installed, it installs herdr-core from its official release
       into ~/.local/bin, outside Homebrew, and starts it now and at each login.
       Installed runtimes are never replaced or upgraded. If automatic setup

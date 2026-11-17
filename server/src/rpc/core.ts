@@ -1,15 +1,6 @@
 import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import { harnessReadiness } from "../agent/harness-readiness";
 import { profileLaunch } from "../agent/profile-launch";
-import {
-  readCoreHistory,
-  parseCoreHistorySession,
-} from "../herdr-core/history";
-import {
-  createAgentSessionFileAccess,
-  type AgentSessionFileAccess,
-} from "../agent/session-file-access";
-import { runBinaryProcessWithTimeout } from "../workspace/process";
 import { coreHarnessNames } from "../herdr-core/harness";
 import { shQuote, runProcessWithCodeTimeout } from "../utils/process-utils";
 import type { ConnectionManager } from "../connections/manager";
@@ -29,12 +20,7 @@ import {
   planCoreKill,
   renameCoreRoom,
 } from "../herdr-core/operations";
-import { deliverCore } from "../herdr-core/delivery";
-import { coreRecipientChange } from "../herdr-core/recipient";
-import {
-  type CoreConnectionRuntime,
-  readCoreScreen,
-} from "../herdr-core/runtime";
+import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import {
   createCoreWorktree,
   listCoreWorktrees,
@@ -60,7 +46,6 @@ export type CoreRpcServices = {
   host(connectionId: string): CoreHost | null;
   /** Test seam: how the readiness probe runs. */
   run?: typeof runProcessWithCodeTimeout;
-  historyFiles?(connectionId: string): AgentSessionFileAccess;
 };
 
 /**
@@ -114,12 +99,6 @@ export function composeCore(
     }),
   };
   return { core, rpc };
-}
-
-function address(value: unknown): string {
-  if (typeof value !== "string" || !isLocalCoreAddress(value))
-    throw new CoreOperationRefused("Name the terminal.");
-  return value;
 }
 
 function addresses(value: unknown): string[] {
@@ -256,80 +235,6 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         );
         reply({ ok: true });
         return invalidate();
-      // Session input (M4/§8): core's own send and keys, only to the
-      // program the browser's recipient token names. Never retried.
-      case "world.core.send": {
-        const text = typeof p.text === "string" ? p.text : "";
-        return reply(
-          await deliverCore(
-            lease,
-            address(p.terminal),
-            String(p.recipient ?? ""),
-            p.answer === true
-              ? { kind: "answer", text }
-              : { kind: "message", text },
-          ),
-        );
-      }
-      case "world.core.keys":
-        return reply(
-          await deliverCore(
-            lease,
-            address(p.terminal),
-            String(p.recipient ?? ""),
-            {
-              kind: "keys",
-              keys: Array.isArray(p.keys)
-                ? p.keys.filter((key): key is string => typeof key === "string")
-                : [],
-            },
-          ),
-        );
-      case "world.core.history": {
-        const host = core.host(connectionId);
-        if (!host)
-          throw new CoreOperationRefused("World cannot reach that host.");
-        return reply(
-          await readCoreHistory(
-            lease,
-            address(p.terminal),
-            String(p.recipient ?? ""),
-            {
-              files:
-                core.historyFiles?.(connectionId) ??
-                createAgentSessionFileAccess({
-                  sshHost: host.destination,
-                  runBinaryProcessWithTimeout,
-                  shQuote,
-                }),
-              windows: host.windows,
-              session: parseCoreHistorySession(p.session),
-            },
-          ),
-        );
-      }
-      case "world.core.screen": {
-        const terminal = address(p.terminal);
-        const view = lease.runtime.core;
-        if (
-          !view.epoch ||
-          coreRecipientChange(
-            String(p.recipient ?? ""),
-            view.epoch.coreId,
-            view.terminal(terminal),
-            view.occupancy(terminal),
-          )
-        )
-          throw new CoreOperationRefused("The agent changed; reopen its Chat.");
-        const screen = await readCoreScreen(lease, address(p.terminal)).catch(
-          () => {
-            throw new CoreOperationRefused("World could not read its screen.");
-          },
-        );
-        return reply({
-          text: typeof screen.text === "string" ? screen.text : "",
-        });
-      }
       case "world.core.room.close": {
         const outcome = await closeCoreRoom(
           lease,

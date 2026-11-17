@@ -6,7 +6,7 @@ core host. This inventory is data, not a core-version gate.
 
 Sources inspected on 2026-11-11:
 
-- Core's latest official release, **0.1.20**: [run handler](https://github.com/herdrdev/herdr-core/blob/v0.1.20/crates/herdr-core/src/api/run.rs),
+- Core release **0.1.20**, the latest on 2026-11-11 (0.1.21 since): [run handler](https://github.com/herdrdev/herdr-core/blob/v0.1.20/crates/herdr-core/src/api/run.rs),
   [status records](https://github.com/herdrdev/herdr-core/blob/v0.1.20/crates/herdr-core/src/status.rs),
   [OpenRPC](https://github.com/herdrdev/herdr-core/blob/v0.1.20/schema/hc.openrpc.json), [compatibility tests](https://github.com/herdrdev/herdr-core/blob/v0.1.20/crates/herdr-core/tests/compat.rs).
   Core ships **no finite harness list**: it runs arbitrary programs. First-message

@@ -169,8 +169,8 @@ test("dispatch rechecks current authorization, capabilities and preconditions", 
   expect(() => admitVerb(move, params, admission)).toThrow("precondition");
 });
 
-test("core transcript reading is browser-only and grants no actor input authority", () => {
-  const verb = registeredVerb("rpc", "world.core.history")!;
+test("core room reads are browser-only and grant no other actor authority", () => {
+  const verb = registeredVerb("rpc", "world.core.worktree.list")!;
   expect(verb.recovery).toBe("read");
   for (const actor of [
     "cli_verified",
@@ -185,8 +185,7 @@ test("core transcript reading is browser-only and grants no actor input authorit
         {
           connection_id: "box",
           connection_generation: 1,
-          terminal: "t1",
-          recipient: "token",
+          workspace_id: "w1",
         },
         { ...admitted(), actor },
       ),

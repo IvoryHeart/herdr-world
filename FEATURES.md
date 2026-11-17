@@ -620,7 +620,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     runtime installed it offers **Set up herdr-core** first and **Use the Herdr
     TUI instead** second; with Herdr installed but stopped it offers to start
     Herdr. **Set up herdr-core** shows the version, where core goes
-    (`~/.local/bin/herdr-core`), that it is checksum-verified and starts at
+    (`~/.local/bin/herdr-core`; on Windows
+    `%LOCALAPPDATA%\Programs\herdr-core`), that it is checksum-verified and starts at
     login, then **Install and start** runs it on this computer only, with
     progress and plain errors (**Try again**). Nothing installs or starts
     before you confirm, and the card never appears during a normal start or
@@ -2035,8 +2036,8 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   because World only starts core in a session's usual place: start that core
   yourself, then **Connect**. A failure says what went wrong in plain words with
   **Try again**. A host without a core
-  build (anything but Linux or macOS on x86_64 or arm64) says so; Windows SSH
-  hosts are not offered. Automatic connects and reconnects never install or
+  build (anything but Linux or macOS on x86_64 or arm64, or Windows x64 on
+  this computer) says so; Windows SSH hosts are not offered. Automatic connects and reconnects never install or
   start core. Testing switch: open World with `?coreInstall=fake` (or
   `?coreInstall=error`); the parameter disappears at once and installs on
   every host, real SSH hosts included, are simulated until a reload:
@@ -2370,10 +2371,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     fixture's directory and are removed with it. Ranger can read this room
     when you allow it in Ranger settings. No real harness or checkout is
     needed; the fixture runs no agents.
-  - **Its terminal.** **Watch terminal** (Needs you, Board's peek, the
-    agent's Chat), Town's terminal button and opening a plain core terminal
-    open the **Terminal** tab of its Inspector window, which shows the live
-    terminal. While that tab is open and no Herdr app pane holds the
+  - **Its terminal.** Town's terminal button and opening a plain core
+    terminal open the **Terminal** tab of its Inspector window, which shows
+    the live terminal. While that tab is open and no Herdr app pane holds the
     terminal, core gives it the size that fits the window (World joins as a
     viewer that ranks below every app pane), so the text is readable; it
     keeps that size when focus moves away or you stop typing. Resizing the

@@ -120,5 +120,5 @@ export function hostCount(hosts: readonly Pick<WorldHost, "endpoint">[]) {
 
 /** How a menu names a host's runtime; Herdr (TUI) hosts read as before. */
 export function hostRuntimeLabel(host: Pick<WorldHost, "runtime">) {
-  return host.runtime === "herdr-core" ? "herdr-core" : null;
+  return host.runtime === "herdr" ? null : host.runtime;
 }

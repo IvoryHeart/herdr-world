@@ -14,7 +14,7 @@ owner acceptance before the feature merges to main.
   - When core is present, World starts new agents in core.
   - World-started agents appear in Herdr's apps: placement is on for agents, and plain shells start in core unplaced.
   - The TUI stays a per-launch choice.
-- **Shared seen.** "world view would clear 'done'": seen and favourite are shared with Herdr's apps.
+- **Shared seen.** "world view would clear 'done'": seen and the pin are shared with Herdr's apps.
 - **No duplication.** "we should not duplicate and rely on herdr-core to do the things it does":
   - World reads agent status from core and never writes it.
   - Messages, answers and asks go through core's own send and keys, for every harness. World checks the occupant and its foreground right before each send, shows a timeout as "uncertain", and builds no per-harness side channel.
@@ -48,7 +48,7 @@ it does not authorize automatic startup during observation/reconnect.
 - Add an existing-only local/Unix SSH/Windows SSH core provider alongside TUI,
   with an ordered bounded mirror and per-connection runtime authority.
 - Show both providers in World, with core status, app placement, shared seen and
-  favourite, live observation, typing/mobile uploads and event-driven push.
+  pin, live observation, typing/mobile uploads and event-driven push.
 - Route launches, native send/keys, kills, files/Git/worktrees, asks, Ranger,
   task summaries, spawn stamps and the room shell through their owning provider.
 - Check ordering and authority through the composed model and production replay,

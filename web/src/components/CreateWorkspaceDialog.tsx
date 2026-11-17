@@ -16,7 +16,7 @@ import { useId, useMemo } from "react";
 import { Folder } from "lucide-react";
 import type { WorkspacePathInfo } from "../../../shared/workspacePath";
 import { bridge, type ConnectionClient } from "../api";
-import { worldHosts, type WorldHost } from "../worldHosts";
+import { hostRuntimeLabel, worldHosts, type WorldHost } from "../worldHosts";
 import { createCoreRoom } from "../world/coreControl";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
@@ -281,8 +281,8 @@ export function CreateWorkspaceDialog({
             </option>
             {ready.map((host) => (
               <option key={host.id} value={host.id}>
-                {host.runtime === "herdr-core"
-                  ? `${host.label} · herdr-core`
+                {hostRuntimeLabel(host)
+                  ? `${host.label} · ${hostRuntimeLabel(host)}`
                   : host.label}
               </option>
             ))}

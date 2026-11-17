@@ -5,7 +5,7 @@ assets plus version, lineage and licence material. They do not contain Herdr, a 
 Roamgate application or the retired Rust bridge. Instead the executable pins one
 verified Herdr release (`server/src/herdr/release.ts`: version, per-platform package
 checksums and the checksum of Herdr's Windows `install.ps1`). When neither herdr-core
-nor Herdr is installed, the standalone installer and Homebrew's first launch install
+nor Herdr is installed, the standalone installer and each Homebrew launch install
 herdr-core with its official checksum-verified steps (`scripts/herdr-core-install.sh`,
 embedded in both) and start it now and at login; an installed runtime is kept. Replacing an
 existing World executable uses the CLI update finalization to upgrade Herdr and

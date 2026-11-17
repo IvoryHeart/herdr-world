@@ -2,11 +2,6 @@ import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { afterEach, describe, expect, test } from "bun:test";
 import { coreWorld } from "../herdr-core/testing/core-world";
 import type { CoreHost } from "../herdr-core/host";
-import type { ServerWebSocket } from "bun";
-import { createRpcDispatcher } from "../service/rpc-dispatch";
-import { createLegacyRoutingLogger } from "../connections/protocol";
-import type { RpcServices } from "./context";
-import { localAgentSessionFiles } from "../agent/session-file-access";
 import { handleCoreRpc } from "./core";
 import type { BridgeRpcContext } from "./context";
 
@@ -104,39 +99,6 @@ describe("world.core.* answers only the core connection it names", () => {
     });
   });
 
-  test("browser input binds the original recipient, rejects replacement, and checks generation", async () => {
-    const w = await world();
-    const t = w.fake.create({
-      argv: ["claude"],
-      foreground: { pid: 77, name: "claude", argv: ["claude"] },
-    });
-    await w.settle();
-    const pane = (await w.rows()).panes.find((p) => p.pane_id === t)!;
-    const params = {
-      connection_id: "box",
-      connection_generation: w.lease().generation,
-      terminal: t,
-      recipient: pane.core_recipient,
-      text: "hello",
-    };
-    expect(
-      (await call(w, "world.core.send", params)).reply?.result,
-    ).toMatchObject({ status: "sent" });
-    expect(
-      (
-        await call(w, "world.core.send", {
-          ...params,
-          connection_generation: -1,
-        })
-      ).error,
-    ).toContain("reconnected");
-    w.fake.replaceWithShell(t);
-    await w.settle();
-    expect(
-      (await call(w, "world.core.send", params)).reply?.result,
-    ).toMatchObject({ status: "refused", reason: "changed" });
-    expect(w.fake.deliveredInput).toHaveLength(1);
-  });
   test("a stale generation or a TUI connection is refused, nothing sent", async () => {
     const w = await world();
     const generation = w.lease().generation;
@@ -307,73 +269,4 @@ describe("world.core.* answers only the core connection it names", () => {
       });
     },
   );
-});
-
-test("core history crosses browser admission and the real dispatcher as a read-only verb", async () => {
-  const w = await world();
-  const t = w.fake.create({
-    argv: ["claude"],
-    foreground: { pid: 77, name: "claude", argv: ["claude"] },
-  });
-  await w.settle();
-  const pane = (await w.rows()).panes.find((p) => p.pane_id === t)!;
-  const ws = {} as ServerWebSocket<unknown>;
-  const replies: Record<string, any>[] = [];
-  let reads = 0;
-  const services = {
-    clients: new Set([ws]),
-    snapshotAdmission: { acknowledge: () => false },
-    safeSend: (_ws: unknown, body: string) => {
-      replies.push(JSON.parse(body));
-      return true;
-    },
-    markRpcError: () => {},
-    connectionManager: w.core.manager,
-    coreControl: {
-      manager: w.core.manager,
-      topology: w.topology,
-      host: () => host(),
-      historyFiles: () => ({
-        ...localAgentSessionFiles,
-        statFile: async (path: string) => ({ path, mtimeMs: 1 }),
-        readText: async () => {
-          reads++;
-          return "";
-        },
-      }),
-    },
-  } as unknown as RpcServices;
-  const dispatch = createRpcDispatcher(
-    services,
-    createLegacyRoutingLogger({ log: () => {} }),
-  );
-  const params = {
-    connection_id: "box",
-    connection_generation: w.lease().generation,
-    terminal: t,
-    recipient: pane.core_recipient,
-    session: { kind: "path", value: "/work/example/chat.jsonl" },
-  };
-  await dispatch(
-    ws,
-    JSON.stringify({ id: "read", method: "world.core.history", params }),
-  );
-  expect(replies.at(-1)?.error).toBeUndefined();
-  expect(replies.at(-1)?.result).toMatchObject({
-    status: "ok",
-    source: "linked",
-    entries: [],
-  });
-  expect(reads).toBe(1);
-  await dispatch(
-    ws,
-    JSON.stringify({
-      id: "invalid",
-      method: "world.core.history",
-      params: { ...params, session: { kind: "path", value: 42 } },
-    }),
-  );
-  expect(replies.at(-1)?.error.message).toContain("invalid parameters");
-  expect(reads).toBe(1);
-  expect(w.fake.deliveredInput).toHaveLength(0);
 });

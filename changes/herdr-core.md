@@ -13,12 +13,11 @@
   core’s send/keys for every supported harness. Replaced programs or missing
   foreground evidence refuse delivery; uncertain sends never retry. Core still
   owns the window in which an already queued send can reach a replacement shell.
-- Share seen and favourite with Herdr’s apps. A foreground Town or Board peek
+- Share seen and the pin with Herdr’s apps. A foreground Town or Board peek
   clears Done there too; marking unread elsewhere is respected for that look.
-  Core status events drive Web Push; World’s review marks and desk/card pins
-  stay World’s own.
-- Watch a live core terminal at its app’s grid without resizing it. Type to
-  take the size; leaving, closing or idling gives it back. Phone composition
+  Core status events drive Web Push; World’s review marks stay World’s own.
+- Watch a live core terminal without taking the size from a Herdr app pane.
+  Type to take the size by core’s rule; closing the view gives it back. Phone composition
   and uploads work on the core host, and drafts survive reopening within the
   same connection generation.
 - Open Files and Changes, transfer files and manage Git worktrees for core

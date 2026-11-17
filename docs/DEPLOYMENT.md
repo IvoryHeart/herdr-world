@@ -318,12 +318,15 @@ npm install --global @ivoryheart/herdr-world
 Choose one channel. Homebrew uses the published platform archive; npm installs a
 small launcher and the matching platform binary. npm needs Node.js 22.14.0 or newer
 and optional dependencies enabled. Homebrew installs only World into its keg,
-without a mandatory `herdr` formula dependency. On first normal World launch, the
-launcher reuses an existing Herdr; if missing, it installs the verified prebuilt
-Herdr in its own default location. This applies to Apple Silicon, Intel and Linux.
-No Intel source build is needed. Add `~/.local/bin` to `PATH` for direct `herdr` use.
-npm leaves Herdr to you (see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
-Neither starts Herdr. For an existing installation, stop the old World process
+without a mandatory `herdr` formula dependency. On a normal World launch, the
+launcher reuses an installed herdr-core or Herdr; while neither is installed, it
+installs herdr-core from its checksum-verified official release into
+`~/.local/bin` and starts it now and at each login. Installed runtimes are never
+replaced. `HERDR_WORLD_SKIP_HERDR=1` skips this. This applies to Apple Silicon,
+Intel and Linux. No Intel source build is needed. Add `~/.local/bin` to `PATH`
+for direct `hc` use. npm leaves the runtime to you (see
+[Herdr installation and upgrades](#herdr-installation-and-upgrades)) and starts
+none. For an existing installation, stop the old World process
 before upgrading the channel.
 
 For a release candidate, request its exact version. The standalone installer
