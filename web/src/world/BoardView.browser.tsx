@@ -27,7 +27,7 @@ import {
   fixtureWorld,
   type FixtureSpace,
 } from "./board/boardFixture";
-import { defaultTerminalColor } from "./terminalColor";
+import { defaultRoomColor } from "./terminalColor";
 import { worldRelationInputs } from "./relations";
 import {
   joinGroup,
@@ -2306,11 +2306,12 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           );
           await bringIntoView(() => card(tabKey)!);
         }
-        // Every tab has its terminal colour; choose one it does not have.
-        const pick = defaultTerminalColor(tabKey) === "teal" ? "pink" : "teal";
+        // Every tab has its terminal colour, its room's by default; choose
+        // one it does not have.
+        const pick = defaultRoomColor("studio:w1") === "teal" ? "pink" : "teal";
         check(
           card(tabKey)!.classList.contains("board-tinted"),
-          "a tab shows its default terminal colour",
+          "a tab shows its room's terminal colour",
         );
         const before = getComputedStyle(card(tabKey)!).backgroundColor;
         host
@@ -2459,6 +2460,13 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         spawned.leaves.find(
           (leaf) => leaf.connectionId === "studio" && leaf.tabId === tabId,
         )!;
+      const parentKey = "studio:w1:t1",
+        childKey = "studio:w1:t2";
+      // A colour picked for the parent, unlike the room's that the child
+      // would otherwise show.
+      const parentColor =
+        defaultRoomColor("studio:w1") === "teal" ? "pink" : "teal";
+      saved.layout.colors = { [parentKey]: parentColor };
       mount(2, recordSpawns(spawned), null);
       await rest();
       await bringIntoView(() => card("studio:w1:t2")!);
@@ -2468,13 +2476,10 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           null,
         "a spawned tab is not strung to its parent",
       );
-      const parentKey = "studio:w1:t1",
-        childKey = "studio:w1:t2";
       check(
-        defaultTerminalColor(parentKey) !== defaultTerminalColor(childKey) &&
-          getComputedStyle(card(childKey)!).backgroundColor ===
-            getComputedStyle(card(parentKey)!).backgroundColor,
-        "a spawned tab shows its parent's colour, not its own default",
+        getComputedStyle(card(childKey)!).backgroundColor ===
+          getComputedStyle(card(parentKey)!).backgroundColor,
+        "a spawned tab shows its parent's colour, not its room's",
       );
       const groups = () => saved.relations?.groups ?? [];
       const moving = "studio:w2:t1",
