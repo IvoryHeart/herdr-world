@@ -185,6 +185,8 @@ test("generated assets, binaries and workspace dependencies stay ignored", () =>
   }
 });
 
+// Twenty-one oxlint processes run one after another; on a loaded machine
+// (the parallel pre-push lane) they exceed the default 5 s.
 test("effect and storage core time uses injected ports, including globalThis access", () => {
   for (const path of [
     "server/src/effects/fixture.ts",
@@ -213,4 +215,4 @@ test("effect and storage core time uses injected ports, including globalThis acc
       "server/src/effects/fixture.test.ts",
     ),
   ).toEqual([]);
-});
+}, 30_000);
