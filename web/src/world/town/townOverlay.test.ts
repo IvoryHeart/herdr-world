@@ -147,7 +147,6 @@ test("one rule gives every overlay its surface, border, radius, shadow and type"
     "border: 1px solid var(--town-glass-line)",
     "border-radius: var(--town-glass-radius)",
     "box-shadow: var(--town-glass-shadow)",
-    "backdrop-filter: var(--town-glass-blur)",
     "font-family:",
   ]) {
     expect(shared[0]!.body).toContain(property);
@@ -159,6 +158,14 @@ test("one rule gives every overlay its surface, border, radius, shadow and type"
     .filter((rule) => SURFACE_PROPERTIES.test(rule.body))
     .map((rule) => `${rule.file}: ${rule.selectors.join(", ")}`);
   expect(overrides).toEqual([]);
+});
+
+test("no overlay blurs the animated Town behind it", async () => {
+  // A backdrop filter over the canvas is recomputed on every Town frame.
+  const blurred = (await townRules())
+    .filter((rule) => /backdrop-filter\s*:/.test(rule.body))
+    .map((rule) => `${rule.file}: ${rule.selectors.join(", ")}`);
+  expect(blurred).toEqual([]);
 });
 
 /** Whether a colour reads as amber or gold: warm hue, saturated, not dark. */

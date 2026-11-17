@@ -16,7 +16,9 @@
 .town-summary,
 .board-lens-dock {
   /* Board view docks the Town lens legend and recap (BoardLenses.tsx). */
-  /* 88 % opaque: text keeps WCAG AA over a white or a black town. */
+  /* 88 % opaque: text keeps WCAG AA over a white or a black town. No
+     backdrop blur: the canvas below redraws every frame, so a blur would be
+     recomputed each frame (it timed out software-GL browser tests). */
   --town-glass: rgba(14, 17, 28, 0.88);
   --town-glass-line: rgba(255, 255, 255, 0.14);
   /* Insets inside a surface: count cells, buttons, gauges. */
@@ -30,7 +32,6 @@
   --town-glass-pad: 10px 12px;
   --town-glass-gap: 6px;
   --town-glass-shadow: 0 10px 30px rgba(4, 6, 14, 0.42);
-  --town-glass-blur: blur(10px) saturate(1.2);
   --town-glass-label:
     700 10px "Silkscreen", "Pixelify Sans", ui-monospace, monospace;
   /* The one colour for what needs you (Town's wait colour). */
@@ -51,8 +52,6 @@
   border: 1px solid var(--town-glass-line);
   border-radius: var(--town-glass-radius);
   box-shadow: var(--town-glass-shadow);
-  -webkit-backdrop-filter: var(--town-glass-blur);
-  backdrop-filter: var(--town-glass-blur);
   font-family: var(
     --town-ui-font,
     "Rubik",
