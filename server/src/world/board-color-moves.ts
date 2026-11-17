@@ -48,11 +48,12 @@ export function trackColorEdits(
 }
 
 /**
- * A moved tab keeps the colour it showed (shared/terminalColor.ts), chosen,
- * inherited or default: its new tab ID would otherwise give it another
- * default. It is saved as the moved tab's own colour. Read from
- * `colors.before`, taken before the move, so a close of the old tab seen
- * during the move cannot lose it.
+ * A moved tab keeps only a colour someone picked for it (shared/terminalColor.ts):
+ * it is saved under the tab's new ID, collision-aware. A tab without one
+ * takes its new room's colour, as every desk without a colour of its own
+ * does, so nothing is saved; a spawned tab's inherited colour follows its
+ * terminals, not its tab ID. Read from `colors.before`, taken before the move,
+ * so a close of the old tab seen during the move cannot lose the choice.
  */
 export function colorFollowOps(
   connectionId: string,
@@ -67,27 +68,20 @@ export function colorFollowOps(
   const { before, workspaceIds } = colors;
   const { source_workspace_id: from, workspace_id: to } = moved;
   if (!from || !to) return [];
-  // A spawned tab's inherited colour follows its terminals, not its tab ID.
-  if (
-    colors.inherited &&
-    !before[tabCardKey(connectionId, movedTab, workspaceIds)]
-  )
-    return [];
   const previousKey = tabCardKey(connectionId, movedTab, workspaceIds);
   const nextKey = tabCardKey(connectionId, moved.tab_id, workspaceIds);
   if (previousKey === nextKey) return [];
-  const { color } = resolveTerminalColor(before, {
+  const { color, own } = resolveTerminalColor(before, {
     connectionId,
     workspaceId: from,
     tabId: movedTab,
     workspaceIds,
   });
-  // Always as the tab's own colour: one that merely matched the new room's
-  // would otherwise be lost to it, and change when that room is recoloured.
-  const ops: BoardOp[] = [
+  if (!own) return [];
+  // Still the tab's own colour when it matches the new room's: it would
+  // otherwise change when that room is recoloured.
+  return [
     { op: "card.color", key: nextKey, color: color as CardColor },
+    { op: "card.color", key: previousKey, color: null },
   ];
-  if (before[previousKey])
-    ops.push({ op: "card.color", key: previousKey, color: null });
-  return ops;
 }

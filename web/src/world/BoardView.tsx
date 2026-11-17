@@ -154,9 +154,9 @@ import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { TraceOverlay } from "./devtools/TraceOverlay";
 import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
 import {
-  defaultTerminalColor,
   hostColorKey,
   placeColor,
+  resolveTerminalByKeys,
   TERMINAL_COLOR_HEX,
 } from "./terminalColor";
 import { WorldSearchResults } from "./WorldSearchResults";
@@ -174,7 +174,6 @@ import {
   terminalKey,
   type TerminalRef,
 } from "../../../shared/relations";
-import { inheritedColorKey } from "../../../shared/terminalColor";
 import { aimAtBin } from "./bin/binDrop";
 import { putAgentInBin } from "./bin/WorldBin";
 import { keyTakenByViewSearch } from "./viewSearchShortcut";
@@ -3366,11 +3365,9 @@ export default function BoardView({
     () => withInheritedColors(cardColors, related.relations, related.places),
     [cardColors, related],
   );
+  // The one rule Town and Spaces use too (shared/terminalColor.ts).
   const tabColor = (tab: BoardTab) =>
-    cardColors[tab.key] ??
-    shownColors[inheritedColorKey(tab.key)] ??
-    cardColors[tab.workspaceKey] ??
-    defaultTerminalColor(tab.key);
+    resolveTerminalByKeys(shownColors, tab.key, tab.workspaceKey).color;
   /** The workspace or tab whose colour the bar changes. */
   const colorKey =
     [...selectedKeys].find((key) => model.tabByKey.has(key)) ??
