@@ -39,22 +39,12 @@ export function summarizeHerdrEvent(event: any): string {
 }
 
 /** The browsers connected to one service: labels, sends, cleanup, RPC logs. */
-/** Per-socket state a page's socket holds elsewhere in the service. */
-export type SocketOwner = {
-  release(socket: Socket): void;
-  drained?(socket: Socket): void;
-};
-
 export function createBrowserClients(deps: {
   logger: Logger;
   clock: Clock;
   /** Every current connection runtime, for terminal views and counts. */
   forEachRuntime(visit: (runtime: LegacyConnectionRuntime) => void): void;
-  /**
-   * What holds per-socket state: each is released when its page's socket
-   * closes and told when the socket's send buffer drains after backpressure.
-   */
-  sockets?(): readonly SocketOwner[];
+  closed?(socket: Socket): void;
   countChanged?(): void;
 }) {
   const { logger } = deps;
@@ -143,14 +133,14 @@ export function createBrowserClients(deps: {
     const viewedTerminals: string[] = [];
     deps.forEachRuntime((runtime) => {
       viewedTerminals.push(...runtime.terminalBridge.viewedTerminals(ws));
-      runtime.terminals.closeViewer(ws);
+      runtime.terminalBridge.cleanupWs(ws);
     });
     const snapshot = {
       client: clientLabel(ws),
       viewedTerminals,
     };
     clients.delete(ws);
-    for (const owner of deps.sockets?.() ?? []) owner.release(ws);
+    deps.closed?.(ws);
     notifyBrowserClientCount();
     return snapshot;
   });
@@ -180,9 +170,6 @@ export function createBrowserClients(deps: {
   }
 
   return {
-    drained: (ws: Socket) => {
-      for (const owner of deps.sockets?.() ?? []) owner.drained?.(ws);
-    },
     clients,
     clientSessions,
     conversationWatchers,

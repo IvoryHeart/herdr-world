@@ -103,25 +103,6 @@ export interface Pane {
   /** Runtime-provided labels for known semantic agent states. */
   state_labels?: Record<string, string>;
   agent_status: string;
-  /** Present only on herdr-core terminals (watched and typed into through world.core.*). */
-  runtime?: "herdr-core";
-  /** Opaque binding to the addressed core program and foreground. */
-  core_recipient?: string;
-  /** herdr-core: why a blocked program waits (permission, question, auth). */
-  blocked_kind?: string;
-  /** herdr-core: the program's own status message (OSC 7501 `msg`). */
-  status_message?: string;
-  /** herdr-core agents: core's turn counter (it rises as a turn ends). */
-  turn?: number;
-  /** herdr-core: the last turn a person saw in any Herdr client (`herdr.seen`). */
-  seen_turn?: number;
-  /** herdr-core: a favourite in every Herdr client (`herdr.pinned`). */
-  favourite?: boolean;
-  /**
-   * herdr-core: the service's fingerprint of the program in this terminal
-   * (core, address, pid, program); a verified ask from it carries the same.
-   */
-  core_occupant_fingerprint?: string;
   /** Herdr agent.list state-change sequence, scoped to this server lifetime. */
   state_change_seq?: number;
   /** Session file modification time in epoch milliseconds, from the bridge. */

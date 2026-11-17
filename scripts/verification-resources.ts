@@ -483,31 +483,6 @@ export async function verifyPostExitCancellation(
   assert(record.peakBytes > 0, "Cancellation skipped accounting");
 }
 
-/** Run real-cgroup controls before accepting constrained verification. */
-export function runResourceRegressions(
-  root: string,
-  system: boolean,
-  signal?: AbortSignal,
-) {
-  return runVerificationProcess(
-    [
-      process.execPath,
-      resolve(import.meta.dir, "run-tests.ts"),
-      "--live",
-      "scripts/verification-resources.live.test.ts",
-    ],
-    {
-      cwd: root,
-      timeoutMs: 45000,
-      env: {
-        ...process.env,
-        HERDR_RESOURCE_MANAGER: system ? "system" : "user",
-      },
-      signal,
-    },
-  );
-}
-
 if (import.meta.main) {
   assert(
     process.argv
@@ -529,10 +504,17 @@ if (import.meta.main) {
   process.on("SIGTERM", stop);
   try {
     // Real-cgroup regressions include the required over-budget OOM control.
-    const regressions = await runResourceRegressions(
-      root,
-      system,
-      cancellation.signal,
+    const regressions = await runVerificationProcess(
+      [process.execPath, "test", "scripts/verification-resources.live.test.ts"],
+      {
+        cwd: root,
+        timeoutMs: 45000,
+        env: {
+          ...process.env,
+          HERDR_RESOURCE_MANAGER: system ? "system" : "user",
+        },
+        signal: cancellation.signal,
+      },
     );
     assert.equal(
       regressions.code,

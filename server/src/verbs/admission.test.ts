@@ -12,36 +12,6 @@ const admitted = (): Admission => ({
 });
 const move = registeredVerb("cli", "town desk move")!;
 
-test("core seen and favourite schemas admit native IDs and refuse names or routes", () => {
-  const browser: Admission = { ...admitted(), actor: "browser" };
-  for (const [method, fields] of [
-    ["world.core.seen", { turn: 1, seen: null }],
-    ["world.core.favourite", { favourite: true }],
-  ] as const) {
-    const verb = registeredVerb("rpc", method);
-    const params = {
-      connection_id: "core-example",
-      connection_generation: 3,
-      ...fields,
-    };
-    for (const terminal of ["t19", "t1b", "t1z", "t6kf3jk5"])
-      admitVerb(verb, { ...params, terminal }, browser);
-    for (const terminal of [
-      "t0",
-      "t01",
-      "t1a",
-      "t1l",
-      "t1B",
-      "box/t1b",
-      "reviewer",
-      `t1${"b".repeat(200)}`,
-    ])
-      expect(() => admitVerb(verb, { ...params, terminal }, browser)).toThrow(
-        "invalid parameters",
-      );
-  }
-});
-
 test("unknown verbs and denied actors cannot dispatch", () => {
   expect(() => admitVerb(undefined, {}, admitted())).toThrow("unregistered");
   expect(() =>
@@ -167,28 +137,4 @@ test("dispatch rechecks current authorization, capabilities and preconditions", 
   available = true;
   current = false;
   expect(() => admitVerb(move, params, admission)).toThrow("precondition");
-});
-
-test("core room reads are browser-only and grant no other actor authority", () => {
-  const verb = registeredVerb("rpc", "world.core.worktree.list")!;
-  expect(verb.recovery).toBe("read");
-  for (const actor of [
-    "cli_verified",
-    "cli_unverified",
-    "assistant",
-    "reconciler",
-    "automation",
-  ] as const) {
-    expect(() =>
-      admitVerb(
-        verb,
-        {
-          connection_id: "box",
-          connection_generation: 1,
-          workspace_id: "w1",
-        },
-        { ...admitted(), actor },
-      ),
-    ).toThrow("denied");
-  }
 });

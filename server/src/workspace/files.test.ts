@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import {
   runProcessWithInputTimeout,
   runBinaryProcessWithTimeout,
@@ -28,7 +27,7 @@ describe("workspace file handlers", () => {
       runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async (method: string) => {
           if (method === "workspace.get")
             return { workspace: { cwd: "/preview" } };
@@ -41,7 +40,7 @@ describe("workspace file handlers", () => {
             };
           throw new Error(`unexpected call ${method}`);
         },
-      } as any),
+      } as any,
       sshHost: () => undefined,
       shQuote,
       runProcessWithCodeTimeout: async (argv) => {
@@ -63,7 +62,7 @@ describe("workspace file handlers", () => {
       runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async (method: string) => {
           if (method === "workspace.get")
             return {
@@ -74,7 +73,7 @@ describe("workspace file handlers", () => {
             };
           throw new Error(`unexpected call ${method}`);
         },
-      } as any),
+      } as any,
       sshHost: () => undefined,
       shQuote,
       runProcessWithCodeTimeout: async (argv) => {
@@ -113,7 +112,7 @@ describe("workspace file handlers", () => {
         runBinaryProcessWithTimeout,
         bindProcess: (argv) => argv,
         runProcessWithInputTimeout,
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async (method: string, params: Record<string, unknown>) => {
             expect(params.workspace_id).toBe("w1");
             if (method === "workspace.get")
@@ -128,7 +127,7 @@ describe("workspace file handlers", () => {
               };
             throw new Error(`unexpected call ${method}`);
           },
-        } as any),
+        } as any,
         sshHost: () => host,
         shQuote,
         runProcessWithCodeTimeout: async (argv, _timeout, options) => {
@@ -183,7 +182,7 @@ describe("workspace file handlers", () => {
         runBinaryProcessWithTimeout,
         bindProcess: (argv) => argv,
         runProcessWithInputTimeout,
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async (method: string) => {
             calls.push(method);
             if (method === "workspace.get") {
@@ -202,7 +201,7 @@ describe("workspace file handlers", () => {
             }
             throw new Error(`unexpected call ${method}`);
           },
-        } as any),
+        } as any,
         sshHost: () => undefined,
         runProcessWithCodeTimeout: async () => ({
           code: 0,
@@ -232,7 +231,7 @@ describe("workspace file handlers", () => {
       runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async (method: string) => {
           if (method === "workspace.get") {
             return { workspace: { workspace_id: "w1", label: "Repo" } };
@@ -251,7 +250,7 @@ describe("workspace file handlers", () => {
           }
           throw new Error(`unexpected call ${method}`);
         },
-      } as any),
+      } as any,
       sshHost: () => undefined,
       runProcessWithCodeTimeout: async (argv) => {
         calls.push(argv);
@@ -276,7 +275,7 @@ describe("workspace file handlers", () => {
         runBinaryProcessWithTimeout,
         bindProcess: (argv) => argv,
         runProcessWithInputTimeout,
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async (method: string) => {
             if (method === "workspace.get") {
               return {
@@ -288,7 +287,7 @@ describe("workspace file handlers", () => {
             }
             throw new Error(`unexpected call ${method}`);
           },
-        } as any),
+        } as any,
         sshHost: () => undefined,
         runProcessWithCodeTimeout: async () => ({
           code: 0,
@@ -369,7 +368,7 @@ describe("workspace file handlers", () => {
         runBinaryProcessWithTimeout,
         bindProcess: (argv) => argv,
         runProcessWithInputTimeout,
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async (method: string) => {
             if (method === "workspace.get") {
               return {
@@ -381,7 +380,7 @@ describe("workspace file handlers", () => {
             }
             throw new Error(`unexpected call ${method}`);
           },
-        } as any),
+        } as any,
         sshHost: () => undefined,
         runProcessWithCodeTimeout: async () => ({
           code: 0,
@@ -419,7 +418,7 @@ describe("workspace file handlers", () => {
       runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
-      ...herdrRuntimeFixture({ call: async () => ({}) } as any),
+      herdr: { call: async () => ({}) } as any,
       sshHost: () => undefined,
       runProcessWithCodeTimeout: async () => ({
         code: 0,

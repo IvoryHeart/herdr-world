@@ -1,4 +1,3 @@
-import { tmpdir } from "node:os";
 import { afterEach, expect, test } from "bun:test";
 import {
   existsSync,
@@ -274,7 +273,7 @@ function processIsAlive(pid: number): boolean {
 
 test("production bridge supervises two independent SSH profile tunnels", async () => {
   if (process.platform === "win32") return;
-  const root = join(tmpdir(), `herdr-gui-ssh-process-${crypto.randomUUID()}`);
+  const root = join("/tmp", `herdr-gui-ssh-process-${crypto.randomUUID()}`);
   roots.push(root);
   const bin = join(root, "bin");
   const state = join(root, "state");
@@ -283,7 +282,7 @@ test("production bridge supervises two independent SSH profile tunnels", async (
   const alphaRemote = await fakeHerdr(root, "ssh-alpha");
   const betaRemote = await fakeHerdr(root, "ssh-beta");
   const fakeHome = join(
-    tmpdir(),
+    "/tmp",
     `hgui-legacy-${crypto.randomUUID().slice(0, 8)}`,
   );
   roots.push(fakeHome);

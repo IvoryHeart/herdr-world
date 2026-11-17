@@ -405,7 +405,6 @@ export function createTownTopology(ctx: TownTopologyContext) {
       sprites,
       colorFor: ctx.deskColor,
       carpetFor: ctx.carpetFor,
-      pinned: (deskKey) => model.deskPins.has(deskKey),
       own: (canvas) => own(canvas, textures),
       textures,
       roofAlpha: roof ?? (camera.z >= (camera.limits?.roof ?? 0) ? 0 : 1),

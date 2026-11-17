@@ -173,32 +173,3 @@ test("a usage-limit stop is read with the quest, without one, and ends with the 
   expect(reads.stops().size).toBe(0);
   expect(titleOf(reads)).toBe("Next");
 });
-
-test("a herdr-core agent is never asked for a quest; a Herdr agent beside it is", async () => {
-  // Recorded on a core preview: agent_quest.list went to `local-core`
-  // every few seconds and core refused each one.
-  const calls: string[][] = [];
-  const client = {
-    connectionId: "example",
-    generation: 1,
-    isCurrent: () => true,
-    call: async (_method: string, params: { pane_ids: string[] }) => {
-      calls.push(params.pane_ids);
-      return { quests: [] };
-    },
-  } as unknown as ConnectionClient;
-  const core = {
-    ...leaf("L1"),
-    id: "core-1",
-    connectionId: "core",
-    pane: { pane_id: "w1:p2", runtime: "herdr-core" },
-  } as unknown as WorldLeafObject;
-  const asked: string[] = [];
-  const reads = new AgentQuestReads((candidate) => {
-    asked.push(candidate.id);
-    return client;
-  });
-  await reads.read([core, leaf("L1")]);
-  expect(asked).toEqual(["leaf-1"]);
-  expect(calls).toEqual([["w1:p1"]]);
-});

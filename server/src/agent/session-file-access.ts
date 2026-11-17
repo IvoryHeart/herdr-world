@@ -5,10 +5,6 @@ import { basename, join, resolve } from "node:path";
 import { sshCommandArgv, sshReadCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
 import {
-  claudeProcessRecordCommand,
-  claudeProcessSession,
-} from "./claude-process-session";
-import {
   claudeSuccessorCandidates,
   findClaudeSuccessor,
   parseClaudeCandidatePaths,
@@ -55,12 +51,6 @@ export type AgentSessionFileAccess = {
   findPiSessionById(id: string): Promise<SessionFile | null>;
   /** Optional host-local discovery for a Herdr-reported Claude UUID. */
   findClaudeSessionById?(id: string): Promise<SessionFile | null>;
-  /**
-   * The session Claude Code's own record names for the live process `pid`
-   * on this host, bound to its start time (claude-process-session.ts).
-   * Null when there is no record or it is not that process's.
-   */
-  findClaudeSessionForProcess?(pid: number): Promise<string | null>;
   /**
    * The newest Pi session started in a directory: without Herdr's Pi
    * integration, nothing names the pane's session.
@@ -292,17 +282,6 @@ export function createAgentSessionFileAccess(args: {
           );
         return parseClaudeCandidatePaths(result.stdout);
       });
-    };
-    local.findClaudeSessionForProcess = async (pid) => {
-      if (process.platform === "win32") return null;
-      const result = await args.runBinaryProcessWithTimeout(
-        ["sh", "-c", claudeProcessRecordCommand(pid)],
-        SESSION_FILE_TIMEOUT_MS,
-      );
-      if (result.code === 44) return null;
-      if (result.code !== 0)
-        throw new Error(result.stderr || "Claude process lookup failed.");
-      return claudeProcessSession(pid, result.stdout.toString("utf8"));
     };
     return local;
   }
@@ -558,29 +537,6 @@ find -L "$root" -mindepth 2 -maxdepth 2 -type f -name ${args.shQuote(`${id}.json
       if (file && file.path !== path)
         throw new Error("Invalid Claude session lookup path.");
       return file;
-    },
-    async findClaudeSessionForProcess(pid) {
-      const command = claudeProcessRecordCommand(pid);
-      const result = await args.runBinaryProcessWithTimeout(
-        sshReadCommandArgv(
-          host,
-          `bash -lc ${args.shQuote(command)}`,
-          [],
-          "agent.session.find",
-        ),
-        SESSION_FILE_TIMEOUT_MS,
-      );
-      if (result.code === 44) return null;
-      if (result.code !== 0)
-        throw new Error(
-          (
-            result.stderr ||
-            `remote Claude process lookup exited ${result.code}`
-          )
-            .trim()
-            .slice(0, 1000),
-        );
-      return claudeProcessSession(pid, result.stdout.toString("utf8"));
     },
     async clockOffset() {
       const before = Date.now();

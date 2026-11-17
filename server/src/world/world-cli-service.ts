@@ -1,15 +1,10 @@
-import {
-  identifyCoreAsker,
-  type CoreAnswerConnections,
-} from "../herdr-core/ask-recipient";
 import { createAskRecipients, type AnswerLease } from "./ask-recipient";
-import type { CoreCallerSource } from "./world-cli-actor";
 import { createAnswerRecorder } from "./answer-record";
 import { createAnswerDispatcher } from "./answer-dispatch";
 import {
   ANSWER_DELIVERY_VERB,
   answeringAgent,
-  herdrRecipient,
+  validRecipient,
 } from "./ask-delivery-types";
 import { randomBytes } from "node:crypto";
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
@@ -35,7 +30,6 @@ import type { TownMoveContext } from "./town-move";
 type Lease = AnswerLease;
 
 export function createWorldCliService(deps: {
-  core?(): CoreAnswerConnections | CoreCallerSource | null;
   ledger(): LedgerStore;
   attention?(): WorldLedgerStorage["outbox"];
   effects?(): WorldLedgerStorage["effects"];
@@ -76,7 +70,6 @@ export function createWorldCliService(deps: {
   let deliveryRevision = 0;
   const recipients = createAskRecipients({
     connections: deps.connections,
-    core: deps.core,
     clock: deps.clock ?? { now, monotonic: () => performance.now() },
     incarnation,
   });
@@ -121,7 +114,7 @@ export function createWorldCliService(deps: {
                 delivery: ask.delivery?.answer,
                 can_resend:
                   !ask.withdrawn &&
-                  herdrRecipient(ask.recipient) &&
+                  validRecipient(ask.recipient) &&
                   ["uncertain", "refused"].includes(entry.state),
               },
             ]
@@ -180,7 +173,7 @@ export function createWorldCliService(deps: {
             generation: lease.generation,
             isCurrent: () => lease.isCurrent(),
             call: (method, params, beforeSend) =>
-              lease.runtime.tui.call(method, params, 5000, beforeSend),
+              lease.runtime.herdr.call(method, params, 5000, beforeSend),
           }
         );
       },
@@ -200,12 +193,6 @@ export function createWorldCliService(deps: {
       log: (message) => console.warn(message),
     });
   const cli = createWorldCli({
-    identifyCore: async (terminal, locate) => {
-      const core = deps.core?.();
-      return core && "list" in core
-        ? identifyCoreAsker(core, terminal, locate)
-        : undefined;
-    },
     recordAnswer: recordAnswer
       ? async (id, text, actor, recheck) => {
           const revision = await recordAnswer(
@@ -274,7 +261,7 @@ export function createWorldCliService(deps: {
                 params: Record<string, unknown>,
                 recheck?: () => void,
               ) =>
-                lease.runtime.tui.call(method, params, 5_000, () => {
+                lease.runtime.herdr.call(method, params, 5_000, () => {
                   if (stopped.signal.aborted)
                     throw new CliError(
                       "refused",
@@ -290,10 +277,6 @@ export function createWorldCliService(deps: {
             },
           ];
         }),
-    core: () => {
-      const core = deps.core?.();
-      return core && "hosts" in core ? core : null;
-    },
     defaultConnectionId: () => deps.connections().defaultId(),
     snapshot: async () => {
       const snapshots = deps.snapshots();
@@ -321,7 +304,7 @@ export function createWorldCliService(deps: {
             return lease.isCurrent();
           },
           call: (method, params) =>
-            lease.runtime.tui.call(method, params, 10_000, () => {
+            lease.runtime.herdr.call(method, params, 10_000, () => {
               recheck?.();
               if (!lease.isCurrent())
                 throw new CliError(

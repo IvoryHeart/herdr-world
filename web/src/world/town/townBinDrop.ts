@@ -4,8 +4,7 @@ import type { WorldObject } from "../worldObject";
 
 /**
  * An agent, or every agent at a desk, dropped on the bin or a bus stop in
- * Town: each live, actionable agent is put in the bin (a herdr-core one
- * after its children are confirmed).
+ * Town: each live, actionable agent is put in the bin.
  */
 export function putTownDropInBin(
   office: Pick<HerdrOfficeProjection, "rooms" | "roster">,
@@ -27,11 +26,7 @@ export function putTownDropInBin(
       (entry) => entry.agent.key === agentKey,
     )?.agent;
     const node = agent && world.nodeById.get(agent.nodeId);
-    if (
-      node?.kind === "agent" &&
-      !node.stale &&
-      (node.actionable || node.coreControl)
-    )
+    if (node?.kind === "agent" && !node.stale && node.actionable)
       void putAgentInBin(node, "town", world);
   }
 }

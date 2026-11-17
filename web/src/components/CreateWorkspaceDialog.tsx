@@ -16,19 +16,11 @@ import { useId, useMemo } from "react";
 import { Folder } from "lucide-react";
 import type { WorkspacePathInfo } from "../../../shared/workspacePath";
 import { bridge, type ConnectionClient } from "../api";
-import { hostRuntimeLabel, worldHosts, type WorldHost } from "../worldHosts";
-import { createCoreRoom } from "../world/coreControl";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
 import { useSuggestedName } from "./useSuggestedName";
 import "./CreateWorkspaceDialog.css";
 
-/**
- * New room (a Herdr workspace) on a chosen host. Every host of `worldHosts`
- * can take one: a herdr-core host gets a room of World's layout there, by
- * name (core rooms have no working directory of their own), so it is offered
- * only when no folder was asked for.
- */
 export function CreateWorkspaceDialog({
   open,
   initialName,
@@ -53,36 +45,29 @@ export function CreateWorkspaceDialog({
     connectionId: string;
     runtimeGeneration: number;
   } | null>(null);
-  const hosts = useStoreSelector(worldHosts);
-  const ready = hosts.filter(
-    (host) =>
-      host.state === "ready" &&
-      (host.runtime === "herdr" || !initialCwd?.trim()),
+  const ready = snapshot.connections.filter(
+    (connection) => connection.state === "ready",
   );
   const destinationSource = useRef({ ready, inherited, initialDestination });
   destinationSource.current = { ready, inherited, initialDestination };
-  const current: WorldHost | null =
-    (destination &&
-      ready.find(
-        (host) =>
-          host.id === destination.connectionId &&
-          host.generation === destination.runtimeGeneration,
-      )) ||
-    null;
-  const inCore = current?.runtime === "herdr-core";
+  const current =
+    destination &&
+    ready.some(
+      (connection) =>
+        connection.id === destination.connectionId &&
+        connection.generation === destination.runtimeGeneration,
+    );
   const createReason = !current
     ? "Choose a current destination host."
-    : inCore
-      ? null
-      : endpointCreationReason(
-          connectionSnapshot(snapshot, destination!.connectionId),
-          "workspace.create",
-          destination!.connectionId === initialDestination?.connectionId &&
-            destination!.runtimeGeneration ===
-              initialDestination.runtimeGeneration
-            ? initialDestination.sourceWorkspaceId
-            : undefined,
-        );
+    : endpointCreationReason(
+        connectionSnapshot(snapshot, destination!.connectionId),
+        "workspace.create",
+        destination!.connectionId === initialDestination?.connectionId &&
+          destination!.runtimeGeneration ===
+            initialDestination.runtimeGeneration
+          ? initialDestination.sourceWorkspaceId
+          : undefined,
+      );
   const labelRef = useRef<HTMLInputElement>(null);
   const [label, setLabel, namePending] = useSuggestedName(
     open,
@@ -112,7 +97,7 @@ export function CreateWorkspaceDialog({
   }, [open]);
   const client = useMemo(
     () =>
-      destination && !inCore
+      destination
         ? bridge.connection(
             destination.connectionId,
             destination.runtimeGeneration,
@@ -121,7 +106,6 @@ export function CreateWorkspaceDialog({
     [
       destination?.connectionId,
       destination?.runtimeGeneration,
-      inCore,
       snapshot.connectionGeneration,
       snapshot.status,
       snapshot.terminalAttachEpoch,
@@ -156,7 +140,7 @@ export function CreateWorkspaceDialog({
     setPathState(null);
   }, [open, client]);
 
-  const input = inCore ? "" : cwd.trim();
+  const input = cwd.trim();
   useEffect(() => {
     if (!open || !input || !client) return;
     let cancelled = false;
@@ -194,7 +178,7 @@ export function CreateWorkspaceDialog({
       createReason ||
       checking ||
       pathError ||
-      (!inCore && !client?.isCurrent())
+      !client?.isCurrent()
     )
       return;
     if (!destination) return;
@@ -202,18 +186,6 @@ export function CreateWorkspaceDialog({
     setSubmitting(true);
     setCreateError("");
     try {
-      if (inCore) {
-        await createCoreRoom(
-          {
-            connectionId: destination.connectionId,
-            generation: destination.runtimeGeneration,
-          },
-          // An empty name is the service's "Room": never unnamed.
-          label.trim(),
-        );
-        onClose();
-        return;
-      }
       await store.createQualifiedWorkspace(
         destination,
         label.trim() || undefined,
@@ -279,11 +251,9 @@ export function CreateWorkspaceDialog({
             <option value="" disabled>
               Choose a host
             </option>
-            {ready.map((host) => (
-              <option key={host.id} value={host.id}>
-                {hostRuntimeLabel(host)
-                  ? `${host.label} · ${hostRuntimeLabel(host)}`
-                  : host.label}
+            {ready.map((connection) => (
+              <option key={connection.id} value={connection.id}>
+                {connection.label}
               </option>
             ))}
           </select>
@@ -300,88 +270,75 @@ export function CreateWorkspaceDialog({
           />
         </label>
 
-        {inCore ? (
-          <p className="workspace-path-hint">
-            Agents in a new herdr-core room start in herdr-core&apos;s own
-            folder on that host.
-          </p>
-        ) : (
-          <>
-            <label className="form-field">
-              <span>Working directory</span>
-              <input
-                ref={cwdRef}
-                value={cwd}
-                onChange={(e) => {
-                  setCwd(e.currentTarget.value);
-                  setCreateError("");
-                }}
-                placeholder="Optional, e.g. ~/Developer/project"
-                spellCheck={false}
-                autoComplete="off"
-                disabled={submitting}
-                aria-invalid={!!pathError}
-                aria-describedby={pathHintId}
-              />
-            </label>
-            <div
-              id={pathHintId}
-              className="workspace-path-hint"
-              aria-live="polite"
-            >
-              {checking ? (
-                <p role="status">Checking directory...</p>
-              ) : pathError ? (
-                <p className="modal-error" role="alert">
-                  {pathError}
-                </p>
-              ) : checked?.info ? (
-                <p>
-                  Directory: <code>{checked.info.path}</code>
-                </p>
-              ) : (
-                <p>
-                  Use an absolute path or ~/ on the connected host. Leave blank
-                  to use the default directory.
-                </p>
-              )}
-            </div>
-            {checked?.info?.directories.length ? (
-              <div
-                className="workspace-path-directories"
-                role="list"
-                aria-label="Directory suggestions"
-              >
-                {checked.info.directories.map((directory) => (
-                  <div key={directory} role="listitem">
-                    <button
-                      type="button"
-                      className="ghost"
-                      disabled={submitting}
-                      title={directory}
-                      onClick={() => {
-                        setCwd(
-                          directory.endsWith("/") ? directory : `${directory}/`,
-                        );
-                        setCreateError("");
-                        cwdRef.current?.focus();
-                      }}
-                    >
-                      <Folder size={14} aria-hidden="true" />
-                      <span>
-                        {directory
-                          .split(directory.startsWith("/") ? "/" : /[/\\]/)
-                          .filter(Boolean)
-                          .pop()}
-                        /
-                      </span>
-                    </button>
-                  </div>
-                ))}
+        <label className="form-field">
+          <span>Working directory</span>
+          <input
+            ref={cwdRef}
+            value={cwd}
+            onChange={(e) => {
+              setCwd(e.currentTarget.value);
+              setCreateError("");
+            }}
+            placeholder="Optional, e.g. ~/Developer/project"
+            spellCheck={false}
+            autoComplete="off"
+            disabled={submitting}
+            aria-invalid={!!pathError}
+            aria-describedby={pathHintId}
+          />
+        </label>
+        <div id={pathHintId} className="workspace-path-hint" aria-live="polite">
+          {checking ? (
+            <p role="status">Checking directory...</p>
+          ) : pathError ? (
+            <p className="modal-error" role="alert">
+              {pathError}
+            </p>
+          ) : checked?.info ? (
+            <p>
+              Directory: <code>{checked.info.path}</code>
+            </p>
+          ) : (
+            <p>
+              Use an absolute path or ~/ on the connected host. Leave blank to
+              use the default directory.
+            </p>
+          )}
+        </div>
+        {checked?.info?.directories.length ? (
+          <div
+            className="workspace-path-directories"
+            role="list"
+            aria-label="Directory suggestions"
+          >
+            {checked.info.directories.map((directory) => (
+              <div key={directory} role="listitem">
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={submitting}
+                  title={directory}
+                  onClick={() => {
+                    setCwd(
+                      directory.endsWith("/") ? directory : `${directory}/`,
+                    );
+                    setCreateError("");
+                    cwdRef.current?.focus();
+                  }}
+                >
+                  <Folder size={14} aria-hidden="true" />
+                  <span>
+                    {directory
+                      .split(directory.startsWith("/") ? "/" : /[/\\]/)
+                      .filter(Boolean)
+                      .pop()}
+                    /
+                  </span>
+                </button>
               </div>
-            ) : null}
-          </>
-        )}
+            ))}
+          </div>
+        ) : null}
 
         {createError ? (
           <p className="modal-error" role="alert">

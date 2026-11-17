@@ -1,12 +1,10 @@
-import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
-import { createCoreInstall } from "../herdr-core/install";
 import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import type { Server, ServerWebSocket } from "bun";
 import { createProfileServices } from "../agent/profile-service";
-import { createRuntimeAssistantContext } from "./assistant-context";
+import { createAssistantContext } from "../assistant/context";
 import { HerdrClient } from "../bridge/herdr-client";
 import { createServiceForwards } from "./forward-service";
 import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
@@ -28,11 +26,10 @@ import {
   loadConnectionProfileBootstrap,
   type StartupLocalProfile,
 } from "../connections/profile-service";
-import { connectionFailureReporters } from "../connections/failure-reporters";
-import { type TuiConnectionProfile } from "../connections/profiles";
-import { composeCore } from "../rpc/core";
-import { coreCallerSource } from "../herdr-core/ask-caller";
-import { ownedBy, worldRuntimeRegistry } from "../world/runtime-registry";
+import {
+  type ConnectionProfile,
+  connectionRecoveryFingerprint,
+} from "../connections/profiles";
 import {
   createLegacyRoutingLogger,
   serializeHerdrEventEnvelope,
@@ -48,8 +45,7 @@ import {
 } from "../http/herdr-setup";
 import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
-import { connectionTaskPush } from "../notifications/task-push";
-import type { ObservedSnapshots, RpcServices } from "../rpc/context";
+import type { RpcServices } from "../rpc/context";
 import {
   createSourcesHttpHandler,
   storedSourceSettings,
@@ -59,8 +55,13 @@ import { CheckoutResolver } from "../sources/links";
 import { readSourceSecrets, writeSourceSecrets } from "../sources/secrets";
 import { SourcesService } from "../sources/service";
 import { herdrEventName } from "../utils/herdr-events";
-import { serverLogger } from "../utils/logger";
+import {
+  createRecoveryReporter,
+  type RecoveryReporter,
+  serverLogger,
+} from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
+import { createWorkspaceWorktree } from "../worktree/create";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
 import { createBinService } from "./bin-service";
@@ -195,7 +196,10 @@ async function compose(
     logger,
     clock,
     forEachRuntime: (visit) => connectionManager.forEachCurrentRuntime(visit),
-    sockets: () => [focusedAcquisition, deskWatches, core.pages],
+    closed: (socket) => {
+      focusedAcquisition.release(socket);
+      deskWatches.release(socket);
+    },
     countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
@@ -248,8 +252,10 @@ async function compose(
     };
   }
 
+  const connectionFailureReporters = new Map<string, RecoveryReporter>();
   const readyConnectionGenerations = new Map<string, number>();
-  let worldSnapshots: ObservedSnapshots | null = null;
+  let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null =
+    null;
   let worldUsage: WorldUsageService | null = null;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
@@ -277,8 +283,8 @@ async function compose(
     publishBoardChanged,
   );
 
+  /** The agent CLI (world-cli-service.ts). */
   const worldCli = createWorldCliService({
-    core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
     attention: () => storage.attention(),
@@ -294,22 +300,8 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
-  const { core, rpc: coreRpc } = composeCore({
-    logger: logger.child("connections"),
-    changed: publishConnectionsChanged,
-    observed: publishWorldInvalidation,
-    profiles: () => connectionProfiles,
-    topology: storage.coreTopology,
-    // Its pages are always this service's sockets.
-    sendToPage: (ws, line) =>
-      safeSend(ws as ServerWebSocket<unknown>, line, "core-terminal"),
-    push: (task, isCurrent) => webPush.notify(task, isCurrent),
-    readSettings: () => settings.read(),
-  });
-  const coreCallers = coreCallerSource(() => coreRpc);
   /** The agent bin: reversible holding, a scheduled bus, then a durable fenced close. */
   const bin = createBinService({
-    core: () => core.manager, // herdr-core closes are native kills
     incarnation: serviceIncarnation,
     clock,
     scheduler,
@@ -351,14 +343,23 @@ async function compose(
       connectionId,
       connectionGeneration,
       revision,
-      observedConnections,
+      connectionManager,
     );
     broadcast(line, "world-invalidation");
   }
 
-  const connectionFailureReporter = connectionFailureReporters(
-    logger.child("connections"),
-  );
+  function connectionFailureReporter(connectionId: string): RecoveryReporter {
+    let reporter = connectionFailureReporters.get(connectionId);
+    if (!reporter) {
+      reporter = createRecoveryReporter({
+        logger: logger.child("connections"),
+        failureMessage: "connection degraded",
+        recoveryMessage: "connection recovered",
+      });
+      connectionFailureReporters.set(connectionId, reporter);
+    }
+    return reporter;
+  }
 
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
@@ -409,10 +410,6 @@ async function compose(
       }
     },
     logger.child("connections"),
-  );
-  const observedConnections = worldRuntimeRegistry(
-    connectionManager,
-    core.manager,
   );
   const agentActivity = new AgentActivityCache({
     clock,
@@ -473,24 +470,37 @@ async function compose(
       safeSend(socket, JSON.stringify({ control }), "world-desk-reads"),
   });
   worldSnapshots = new WorldSnapshotService(
-    observedConnections,
+    connectionManager,
     () => clock.now(),
     (connectionId, generation) =>
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    ownedBy(connectionManager, observeHost),
-    ownedBy(connectionManager, observeTerminalSettings),
+    observeHost,
+    observeTerminalSettings,
     serviceIncarnation,
   );
 
-  const assistantContext = createRuntimeAssistantContext({
-    profiles: () => [
-      ...connectionProfiles.list(),
-      ...connectionProfiles.coreList(),
-    ],
-    tui: connectionManager,
-    core: coreRpc,
+  const assistantContext = createAssistantContext({
+    catalog: () => connectionProfiles.list(),
+    lease: (id) => connectionManager.readyRuntimeLease(id),
+    recoveryFingerprint: (id) => {
+      const profile = connectionProfiles
+        .list()
+        .find((profile) => profile.id === id);
+      if (!profile)
+        throw new Error("Ranger connection is no longer configured");
+      return connectionRecoveryFingerprint(profile);
+    },
+    createWorktree: (runtime, params, isCurrent, beforeDispatch) =>
+      createWorkspaceWorktree(
+        runtime,
+        params,
+        isCurrent,
+        undefined,
+        undefined,
+        beforeDispatch,
+      ),
   });
   let assistantServiceTask: Promise<
     Awaited<
@@ -568,7 +578,7 @@ async function compose(
   });
 
   function runtimeFactoryForProfile(
-    profile: TuiConnectionProfile | StartupLocalProfile,
+    profile: ConnectionProfile | StartupLocalProfile,
   ) {
     const identity = connectionIdentityForProfile(profile);
     return (context: ConnectionRuntimeContext) => {
@@ -603,20 +613,23 @@ async function compose(
           clientLabel,
           markRpcError,
           taskNotificationSource: config.taskNotificationSource,
-          onTaskEvent: (event) =>
+          onTaskEvent: (event) => {
+            const connections = connectionProfiles.list();
             webPush.notify(
-              connectionTaskPush(
-                event,
-                identity.id,
-                context.generation,
-                [
-                  ...connectionProfiles.list(),
-                  ...connectionProfiles.coreList(),
-                ],
-                identity.label,
-              ),
+              {
+                ...event,
+                connectionId: identity.id,
+                connectionLabel:
+                  connections.length > 1
+                    ? (connections.find(
+                        (connection) => connection.id === identity.id,
+                      )?.label ?? identity.label)
+                    : undefined,
+                runtimeGeneration: context.generation,
+              },
               context.isCurrent,
-            ),
+            );
+          },
           onEvent: (event, eventIdentity, kind) => {
             if (!context.isCurrent()) return;
             publishWorldInvalidation(
@@ -631,7 +644,7 @@ async function compose(
               event,
               {
                 call: (rpc, rpcParams) =>
-                  runtime.tui.call(rpc, rpcParams, 10_000),
+                  runtime.herdr.call(rpc, rpcParams, 10_000),
                 isCurrent: context.isCurrent,
                 changed: publishBoardChanged,
               },
@@ -681,19 +694,10 @@ async function compose(
 
   const connectionProfiles = new ConnectionProfileService({
     manager: connectionManager,
-    core: core.support,
     store: storage.connections,
     changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
     createRuntime: runtimeFactoryForProfile,
-    // The setup card's lookup; a ready implicit local server is Herdr (#935).
-    noHerdrTui: () =>
-      findHerdrBinary() === null &&
-      !(
-        connectionManager.has(STARTUP_DEFAULT_CONNECTION_ID) &&
-        connectionManager.status(STARTUP_DEFAULT_CONNECTION_ID).state ===
-          "ready"
-      ),
     retry: {
       schedule: (callback, delayMs) => scheduler.schedule(callback, delayMs),
     },
@@ -776,12 +780,6 @@ async function compose(
     clients,
     connectionManager,
     connectionProfiles,
-    core,
-    coreControl: coreRpc,
-    coreInstall: createCoreInstall({
-      profiles: () => connectionProfiles,
-      fixture: core.fixture,
-    }),
     focusedAcquisition,
     agentActivity,
     deskWatches,
@@ -885,7 +883,6 @@ async function compose(
             auth,
             browsers,
             connectionManager,
-            core: coreRpc,
             legacyRoutingLogger,
             snapshotAdmission,
             handleRpc,
@@ -982,7 +979,6 @@ async function compose(
       await forwards.stop();
       await disposeAssistant();
       await connectionManager.stopAll();
-      await core.stop();
       await usageStopped;
       await startTask?.catch(() => {});
       await disposeAssistant();

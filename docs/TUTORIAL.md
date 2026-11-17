@@ -35,13 +35,13 @@ Your browser or phone
       |
 Herdr World   (the app you see)
       |
-Herdr or herdr-core (runs your terminals)
+Herdr         (runs your terminals)
       |
 Your shells and agents
 ```
 
-- **Herdr or herdr-core** runs the terminals. They keep running when you close
-  the browser, but stop if the computer sleeps or shuts down.
+- **Herdr** runs the terminals. They keep running when you close the browser,
+  but stop if the computer sleeps or shuts down.
 - **World** shows them in your browser and lets you act on them.
 - **Agents** stay ordinary command-line tools. World does not provide models
   or sign you in to them.
@@ -49,9 +49,8 @@ Your shells and agents
 ### Install and open World
 
 1. Install World by following
-   [Install a release](./DEPLOYMENT.md#install-a-release). If neither Herdr
-   nor herdr-core is installed, the standalone installer installs herdr-core
-   and starts it; otherwise it keeps what you have.
+   [Install a release](./DEPLOYMENT.md#install-a-release). The standalone
+   installer also installs or upgrades [Herdr](https://herdr.dev).
 2. Start World and leave it running:
 
    ```bash
@@ -64,9 +63,8 @@ Your shells and agents
 
 3. Open the URL it prints on the same computer. It looks like
    `http://127.0.0.1:8787` and carries a login token.
-4. World opens on **Town**. If no runtime is running, Town offers **Set up
-   herdr-core** (or **Use the Herdr TUI instead**); nothing is installed until
-   you confirm.
+4. World opens on **Town**. If Herdr is missing or stopped, Town offers
+   **Set up Herdr**; nothing is installed until you confirm.
 5. Open **Spaces** from the view picker at the top. Choose **+** (New
    workspace) beside the workspace list, set **Working directory** to your
    project's folder, and choose **Create**.
@@ -75,24 +73,6 @@ Your shells and agents
 
 **You are done when:** the terminal shows your project's folder. Get this
 working before you set up remote access.
-
-### Use an existing herdr-core
-
-Already using herdr-core with Herdr’s apps? Use these steps instead of steps 4–6
-above; you can keep the TUI connected too.
-
-1. Start core separately. In World, open **Hosts → Manage connections → Add
-   herdr-core**, choose where it runs, and keep session **default** unless you
-   changed it. Save and connect; its card shows the version and live terminals.
-2. Return to **Town** and choose **New agent**. The launcher says **Starts in
-   herdr-core**. Choose your harness, then start it. The
-   agent also appears in Herdr’s apps. Choose a TUI room for a TUI launch.
-3. Tap the agent’s desk. Its window opens with **Chat**, **Terminal**, **Files**
-   and **Changes**, like a Herdr agent’s. On **Terminal**, type to control it;
-   the text fits the window. Close the window to give the size back.
-4. Finish a turn, then look at its Town peek. Done clears in Herdr’s apps too.
-   Pin it from its peek: it is pinned in Herdr’s apps too. Continue with either
-   runtime below.
 
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 
@@ -211,8 +191,7 @@ is new for you, what finished and what merged.
 
 ### Rearrange Town
 
-These moves change the real Herdr TUI tabs and panes, and agents keep running.
-Core rooms keep their own World layout; Herdr’s app layout stays separate.
+These moves change the real Herdr tabs and panes, and agents keep running.
 
 - **Move a table to another room:** zoom in until you see tables, then drag
   one onto another room of the same building. On a phone, hold it first. From

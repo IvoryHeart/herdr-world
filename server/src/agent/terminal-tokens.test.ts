@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import {
   profileTokens,
@@ -49,14 +48,14 @@ test("metadata failures, invalid values and retired leases cannot report a save"
     generation: 3,
     isCurrent: () => current,
     runtime: {
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async (method: string, params: unknown) => {
           if (method === "pane.get")
             return { pane: { pane_id: "w1:p1", terminal_id: "term_a" } };
           writes.push(params);
           throw new Error("metadata_token_limit");
         },
-      }),
+      },
     },
   };
   await expect(
@@ -93,14 +92,14 @@ test("a lease retired during dispatch cannot publish a saved result", async () =
         generation: 1,
         isCurrent: () => current,
         runtime: {
-          ...herdrRuntimeFixture({
+          herdr: {
             call: async (method) => {
               if (method === "pane.get")
                 return { pane: { pane_id: "w1:p1", terminal_id: "term_a" } };
               current = false;
               return {};
             },
-          }),
+          },
         },
       },
       "w1:p1",
@@ -171,7 +170,7 @@ test("superseded-claim cleanup cannot erase a newer revision observed at dispatc
       generation: 1,
       isCurrent: () => true,
       runtime: {
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async (method) => {
             calls.push(method);
             return {
@@ -182,7 +181,7 @@ test("superseded-claim cleanup cannot erase a newer revision observed at dispatc
               },
             };
           },
-        }),
+        },
       },
     },
     "w1:p1",

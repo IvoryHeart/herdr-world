@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -131,7 +130,7 @@ test.each(scenarios)(
       isCurrent: () => true,
       runtime: {
         sshHost: () => undefined,
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async (
             method: string,
             _params: unknown,
@@ -147,7 +146,7 @@ test.each(scenarios)(
             writes.push(method);
             return { ok: true };
           },
-        }),
+        },
       },
     };
     const snapshot = {

@@ -38,7 +38,7 @@ test("Pages installs locked dependencies before testing, building and rendering 
   expect(setupIndex).toBeGreaterThan(-1);
   expect(installIndex).toBeGreaterThan(setupIndex);
   for (const command of [
-    "bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts",
+    "bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts",
     "bun run build:site",
     "bun run film:render",
   ]) {

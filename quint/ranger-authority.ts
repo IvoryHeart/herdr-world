@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../server/src/adapters/testing/runtime";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -56,7 +55,7 @@ export async function replayRangerAuthority(
       source: "synthetic",
     },
     recoveryIdentity: async () => "synthetic-boot",
-    ...herdrRuntimeFixture({
+    herdr: {
       call: async (
         method: string,
         params: Record<string, unknown> = {},
@@ -111,7 +110,7 @@ export async function replayRangerAuthority(
           };
         throw new Error(`Unexpected Ranger fixture method ${method}`);
       },
-    }),
+    },
   } as unknown as LegacyConnectionRuntime;
   const lease = { runtime, generation: 1, isCurrent: () => current };
   const context = createAssistantContext({

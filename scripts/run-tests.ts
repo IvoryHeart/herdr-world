@@ -1,10 +1,5 @@
-import { fileURLToPath } from "node:url";
 import { availableParallelism } from "node:os";
-import {
-  isolatedTestEnv,
-  liveTestArgs,
-  tripwireFailures,
-} from "./test-isolation";
+import { join } from "node:path";
 import { acquireCheckSlot, heldEnv } from "./check-lock";
 import { warmChrome } from "./chrome-warmup";
 import {
@@ -22,11 +17,10 @@ import { cleanupRunTemp, createRunTemp, sweepStaleRunTemps } from "./test-temp";
 // `--web-browser` selects the Chrome-driven suites outside World, which CI runs
 // as their own job; HERDR_TEST_EXCLUDE_WORLD_BROWSER=1 leaves out everything
 // that job and the World shards run.
-const selection = liveTestArgs(process.argv.slice(2));
-const webBrowser = selection.args[0] === "--web-browser";
+const webBrowser = process.argv[2] === "--web-browser";
 const args = webBrowser
-  ? [...webBrowserSuites, ...selection.args.slice(1)]
-  : selection.args;
+  ? [...webBrowserSuites, ...process.argv.slice(3)]
+  : process.argv.slice(2);
 const excludeWorld = process.env.HERDR_TEST_EXCLUDE_WORLD_BROWSER === "1";
 const runWorldAfter = args.length === 0 && !excludeWorld;
 if (excludeWorld || runWorldAfter) await assertWorldBrowserInventory();
@@ -71,23 +65,14 @@ const releaseSlot = usesBrowser
   ? await acquireCheckSlot("browser", { lane: "browser tests" })
   : () => {};
 const directory = createRunTemp();
-const env = isolatedTestEnv(directory, process.env, selection.live);
 // Once per CI job: nested runners inherit the flag.
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 const warm = process.env.CI === "true" && process.env.HERDR_CHROME_WARM !== "1";
-if (warm && chrome) await warmChrome(chrome, { env });
+if (warm && chrome) await warmChrome(chrome);
 
 try {
-  const commands = [
-    [
-      process.execPath,
-      "test",
-      "--preload",
-      fileURLToPath(new URL("./test-temp-preload.ts", import.meta.url)),
-      ...testArgs,
-    ],
-  ];
+  const commands = [[process.execPath, "test", ...testArgs]];
   if (runWorldAfter)
     commands.push([process.execPath, "scripts/run-world-tests.ts"]);
   for (const command of commands) {
@@ -96,7 +81,12 @@ try {
       stdout: "inherit",
       stderr: "inherit",
       env: {
-        ...env,
+        ...process.env,
+        TMPDIR: directory,
+        TMP: directory,
+        TEMP: directory,
+        // Never the user's World data (see test-temp-preload.ts).
+        HERDR_WORLD_DATA_DIR: join(directory, "herdr-world-data"),
         ...(warm ? { HERDR_CHROME_WARM: "1" } : {}),
         ...(usesBrowser ? heldEnv("browser") : {}),
       },
@@ -109,11 +99,6 @@ try {
     process.on("SIGHUP", hangup);
     try {
       process.exitCode = await child.exited;
-      const failures = tripwireFailures(env);
-      if (failures) {
-        console.error(failures);
-        process.exitCode = 1;
-      }
     } finally {
       process.off("SIGINT", interrupt);
       process.off("SIGTERM", terminate);

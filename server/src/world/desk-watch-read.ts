@@ -18,9 +18,10 @@ export async function readDeskWatch(
 ): Promise<DeskReadResult> {
   const pane = async () => {
     if (!isCurrent()) return null;
-    const raw = await connection.operations.getTerminal(
+    const raw = await connection.herdr.call(
+      "pane.get",
       { pane_id: target.pane_id },
-      { timeoutMs: 5000 },
+      5000,
     );
     let observed = record(raw?.pane) ? raw.pane : record(raw) ? raw : null;
     if (!observed || observed.pane_id !== target.pane_id || !isCurrent())
@@ -29,9 +30,10 @@ export async function readDeskWatch(
       !deskSessionFingerprint(observed.agent_session) &&
       (observed.agent || target.session)
     ) {
-      const result = await connection.operations.getAgent(
+      const result = await connection.herdr.call(
+        "agent.get",
         { target: target.pane_id },
-        { timeoutMs: 5000 },
+        5000,
       );
       const agent = record(result?.agent) ? result.agent : null;
       if (
@@ -54,9 +56,10 @@ export async function readDeskWatch(
   if (!before) return { retired: true };
   const result =
     kind === "screen"
-      ? await connection.operations.readTerminal(
+      ? await connection.herdr.call(
+          "pane.read",
           { pane_id: target.pane_id, source: "visible", strip_ansi: true },
-          { timeoutMs: 8000 },
+          8000,
         )
       : before.agent
         ? await connection.agentSessions.readTurn({
@@ -72,8 +75,7 @@ export async function readDeskWatch(
   if (
     !(await pane()) ||
     !isCurrent() ||
-    (record(result) &&
-      (result as Record<string, unknown>).session_changed === true)
+    (record(result) && result.session_changed === true)
   )
     return { retired: true };
   return { result };

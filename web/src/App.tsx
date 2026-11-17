@@ -190,7 +190,6 @@ import {
 } from "./store";
 import { paneShortcutAction } from "./paneShortcuts";
 import { pluginActionShortcut } from "./pluginActionShortcuts";
-import { hideFloatShell, useFloatShellTarget } from "./world/floatShell";
 import {
   adjacentTabId,
   closeShortcutTarget,
@@ -322,31 +321,6 @@ function PopupOverlay({
         terminalFontFamily={terminalFontFamily}
         terminalFontScale={terminalFontScale}
       />
-    </Suspense>
-  );
-}
-
-// In PopupOverlay's chunk; TerminalView's chunk brings xterm's styles.
-const LazyFloatShellOverlay = lazyWithReload("float-shell-overlay", () =>
-  Promise.all([
-    import("./components/TerminalView"),
-    import("./components/PopupOverlay"),
-  ]).then(([, module]) => ({ default: module.FloatShellOverlay })),
-);
-
-/** World's float shell on herdr-core; xterm loads only once one opens. */
-function FloatShellOverlay(props: {
-  terminalTheme: ITheme;
-  terminalFontFamily: string;
-  terminalFontScale: number;
-}) {
-  const open = useFloatShellTarget() !== null;
-  // The phone's Back hides it first, as it closes other popups.
-  useSystemBack(open, hideFloatShell, "popup");
-  if (!open) return null;
-  return (
-    <Suspense fallback={null}>
-      <LazyFloatShellOverlay {...props} />
     </Suspense>
   );
 }
@@ -4916,11 +4890,6 @@ export default function App({
             />
           </OperationalContext.Provider>
         ))}
-      <FloatShellOverlay
-        terminalTheme={terminalTheme}
-        terminalFontFamily={terminalFontFamily}
-        terminalFontScale={terminalFontScale}
-      />
       {paneJumpOpen ? (
         <PaneJumpOverlay
           entries={paneJumpOptions}

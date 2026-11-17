@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -56,7 +55,7 @@ type Runtime = ConnectionRuntime & AnswerLease["runtime"];
 async function receiver() {
   const sends: string[] = [];
   const reads: string[] = [];
-  const call: AnswerLease["runtime"]["tui"]["call"] = async (
+  const call: AnswerLease["runtime"]["herdr"]["call"] = async (
     method,
     _params,
     _timeout,
@@ -126,7 +125,7 @@ async function receiver() {
       startBackground() {},
       async stop() {},
       sshHost: () => null,
-      ...herdrRuntimeFixture({ call }),
+      herdr: { call },
       agentSessions: { conversation: source },
     }),
   });
@@ -234,7 +233,7 @@ async function fixture(kind: "alert" | "answer") {
                   generation: lease.generation,
                   isCurrent: lease.isCurrent,
                   call: (method, params, beforeSend) =>
-                    lease.runtime.tui.call(method, params, 5000, beforeSend),
+                    lease.runtime.herdr.call(method, params, 5000, beforeSend),
                 }
               );
             },

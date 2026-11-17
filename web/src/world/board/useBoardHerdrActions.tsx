@@ -20,9 +20,7 @@ import {
   requestWorkspaceStep,
 } from "../herdrOrder";
 import { spaceRoomActionCapabilities } from "../officeRoomActions";
-import { openCoreWorktrees } from "../CoreWorktrees";
 import {
-  closeCoreRoomConfirmed,
   closeRoom,
   renameRoom,
   RoomRenameCloseDialogs,
@@ -151,7 +149,6 @@ export function useBoardHerdrActions({
   boardRef,
   notify,
   onOpen,
-  onOpenFiles,
   deskStore = sharedDeskStore(),
 }: {
   model: BoardModel;
@@ -161,7 +158,6 @@ export function useBoardHerdrActions({
   notify: Notify;
   /** Open a pane as the user opens it: an agent's Chat, else its terminal. */
   onOpen(id: string): unknown;
-  onOpenFiles?: (id: string) => unknown;
   /** The one reviewed record; World's shared Desk store by default. */
   deskStore?: WorldDeskStore;
 }) {
@@ -248,22 +244,17 @@ export function useBoardHerdrActions({
       ? space
       : null;
   };
-  const openDialog = (mode: RoomDialog["mode"], space: BoardWorkspace) => {
-    const target: RoomRenameCloseTarget = {
-      connectionId: space.connectionId,
-      generation: space.generation,
-      workspaceId: space.nativeId,
-      ...(spaceRoomActionCapabilities(space.space).core
-        ? { core: true as const }
-        : {}),
-    };
-    // A core room names every terminal that ends in its own confirmation.
-    if (mode === "close" && target.core) {
-      void closeCoreRoomConfirmed(target, space.label);
-      return;
-    }
-    setDialog({ mode, workspaceKey: space.key, label: space.label, target });
-  };
+  const openDialog = (mode: RoomDialog["mode"], space: BoardWorkspace) =>
+    setDialog({
+      mode,
+      workspaceKey: space.key,
+      label: space.label,
+      target: {
+        connectionId: space.connectionId,
+        generation: space.generation,
+        workspaceId: space.nativeId,
+      },
+    });
 
   /* ---------- Herdr's order ---------- */
   const run = async (label: string, move: () => Promise<string | null>) => {
@@ -363,26 +354,9 @@ export function useBoardHerdrActions({
     if (space) {
       const can = spaceRoomActionCapabilities(space.space);
       const host = model.hostByKey.get(space.hostKey);
-      if (!can.rename && !can.close && !can.worktrees) return null;
+      if (!can.rename && !can.close) return null;
       return (
         <>
-          {can.worktrees ? (
-            <button
-              type="button"
-              title="Worktrees: new, open or remove"
-              onClick={() =>
-                openCoreWorktrees({
-                  connectionId: space.connectionId,
-                  generation: space.generation,
-                  workspaceId: space.nativeId,
-                  label: space.label,
-                  linked: can.linkedWorktree === true,
-                })
-              }
-            >
-              Worktrees…
-            </button>
-          ) : null}
           {can.rename ? (
             <button type="button" onClick={() => openDialog("rename", space)}>
               Rename…
@@ -397,7 +371,7 @@ export function useBoardHerdrActions({
               Close…
             </button>
           ) : null}
-          {can.rename && host && !can.core
+          {can.rename && host
             ? orderButtons(
                 host.workspaceKeys,
                 space.key,
@@ -488,14 +462,6 @@ export function useBoardHerdrActions({
           setPeek(null);
           void onOpen(peeked.pane.leaf.id);
         }}
-        onFiles={
-          onOpenFiles
-            ? () => {
-                setPeek(null);
-                void onOpenFiles(peeked.pane.leaf.id);
-              }
-            : undefined
-        }
         onClose={() => setPeek(null)}
         onHold={(held) => {
           hover.current.held = held;

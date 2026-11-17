@@ -2,10 +2,10 @@
  * Pure Office town layout.
  *
  * Hosts become buildings, workspaces become rooms on carpets and tabs become
- * team tables in desk cells. Desk slots follow Herdr's tab order, pinned
- * desks first. Desks seated by a team join (townJoinSeats.ts) and room
- * columns keep their places while a scene is live, and every room capacity
- * step contains the previous one.
+ * team tables in desk cells. Desk slots follow Herdr's tab order. The
+ * placement memory keeps pinned desks, desks seated by a team join
+ * (townJoinSeats.ts) and room columns in place while a scene is live, and
+ * every room capacity step contains the previous one.
  */
 
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
@@ -274,30 +274,14 @@ type RoomMemory = {
   rank?: number;
 };
 
-/** Cells desks keep by desk key: a team join's seats (townJoinSeats.ts). */
-export type TownHeldCells = ReadonlyMap<string, { col: number; row: number }>;
-
 /**
- * Pinned desks by desk key, with each one's saved place among its room's
- * pinned seats (null: none saved).
+ * Pinned desks' cells by desk key. A null cell (a desk just pinned) keeps the
+ * cell the desk has in this scene until Town saves it.
  */
-export type TownPinned = ReadonlyMap<string, number | null>;
-
-const NO_PINNED: TownPinned = new Map();
-
-/**
- * A room's pinned desks in seat order: by saved place, then the ones without
- * one in tab order, so a desk pinned later joins the end of the saved order.
- */
-export function townPinnedOrder(
-  deskKeys: readonly string[],
-  pinned: TownPinned,
-): string[] {
-  const rank = (key: string) => pinned.get(key) ?? Number.MAX_SAFE_INTEGER;
-  return deskKeys
-    .filter((key) => pinned.has(key))
-    .sort((a, b) => rank(a) - rank(b));
-}
+export type TownPinnedCells = ReadonlyMap<
+  string,
+  { col: number; row: number } | null
+>;
 
 /** Placement memory carried between layouts of one live scene. */
 export type TownPlacementMemory = Map<string, RoomMemory>;
@@ -318,27 +302,24 @@ export function townTierFor(
  * Assign desks to grid coordinates. Desk slots follow Herdr's tab order: the
  * i-th tab takes the i-th cell in reading order, so a reorder in Herdr, Spaces
  * or Town moves desks, and a closed desk leaves no gap. Room size
- * follows the current desk count.
+ * follows the current desk count; pinned cells persist.
  *
- * Pinned desks go first, as pinned agents do in Herdr's apps: they take the
- * room's first cells and stand on its rug, in the order the user gave them
- * on the rug, else tab order (townPinnedOrder). A desk a team join
- * seated (`held`) keeps its cell unless a pinned desk needs it; the other
- * desks take the free cells in tab order.
+ * A pinned desk keeps its cell whatever the tab order or room size, and the
+ * room grows to hold it; the other desks take the free cells in tab order.
  */
 function placeRoomDesks(
   deskKeys: readonly string[],
+  previous: RoomMemory | undefined,
   maxCols: number,
-  held: TownHeldCells | undefined,
-  pinned: TownPinned,
+  pins: TownPinnedCells | undefined,
   reserveFoldActions: boolean,
 ): { memory: RoomMemory; overflow: string[]; cols: number; rows: number } {
-  const lead = pinned.size ? townPinnedOrder(deskKeys, pinned) : [];
   const fixed = new Map<string, { col: number; row: number }>();
-  if (held?.size)
+  if (pins?.size)
     for (const key of deskKeys) {
-      const cell = held.get(key);
-      if (cell && !pinned.has(key) && cell.col < maxCols) fixed.set(key, cell);
+      if (!pins.has(key)) continue;
+      const cell = pins.get(key) ?? previous?.cells.get(key);
+      if (cell && cell.col < maxCols) fixed.set(key, cell);
     }
   const needed = Math.max(
     deskKeys.length + (reserveFoldActions ? 2 : 1),
@@ -371,12 +352,6 @@ function placeRoomDesks(
   const capacity = cols * rows - (reserveFoldActions ? 2 : 1);
   const cells = new Map<string, { col: number; row: number }>();
   const taken = new Set<number>();
-  for (const key of lead) {
-    if (cells.size >= capacity) break;
-    const index = cells.size;
-    cells.set(key, { col: index % cols, row: Math.floor(index / cols) });
-    taken.add(index);
-  }
   for (const [key, { col, row }] of fixed) {
     const index = row * cols + col;
     if (col >= cols || row >= rows || taken.has(index)) continue;
@@ -419,11 +394,11 @@ function draftBuilding(
   memory: TownPlacementMemory,
   nextMemory: TownPlacementMemory,
   shape: TownShape,
-  held: TownHeldCells | undefined,
+  pins: TownPinnedCells | undefined,
   spots: TownRoomSpots,
-  pinned: TownPinned,
 ): DraftBuilding {
   const placed = rooms.map((room) => {
+    const previous = memory.get(room.key);
     const {
       memory: roomMemory,
       overflow,
@@ -431,9 +406,9 @@ function draftBuilding(
       rows,
     } = placeRoomDesks(
       room.deskKeys,
+      previous,
       shape.deskColumns,
-      held,
-      pinned,
+      pins,
       !!room.deskFold,
     );
     nextMemory.set(room.key, roomMemory);
@@ -553,12 +528,9 @@ export function layoutTown(
   input: TownInput,
   shapeOrFormFactor: TownShape | TownFormFactor,
   memory: TownPlacementMemory = new Map(),
-  /** Cells desks seated by a team join keep (townJoinSeats.ts). */
-  held?: TownHeldCells,
+  pins?: TownPinnedCells,
   /** Where the user put rooms (townRoomPlace.ts); others stack. */
   roomSpots: TownRoomSpots = NO_ROOM_SPOTS,
-  /** Pinned desks, by desk key: they take their rooms' first cells. */
-  pinned: TownPinned = NO_PINNED,
 ): { layout: TownLayout; memory: TownPlacementMemory } {
   const shape = shapeOf(shapeOrFormFactor);
   const formFactor = shape.formFactor;
@@ -575,9 +547,8 @@ export function layoutTown(
       memory,
       nextMemory,
       shape,
-      held,
+      pins,
       roomSpots,
-      pinned,
     ),
   );
   const seatsOf = new Map<string, number>();
@@ -938,4 +909,26 @@ export function townReflowShift(
         y: (moved.y - nearest.y) * TOWN_TILE,
       }
     : { x: 0, y: 0 };
+}
+
+/**
+ * The cell a desk being pinned keeps: where the user sees it. While a reflow
+ * is held (TownCanvas) that is the visible layout, not the pending one; a
+ * desk the visible layout lacks takes its pending cell.
+ */
+export function townPinCell(
+  visible: TownLayout,
+  pending: TownLayout,
+  deskKey: string,
+): { col: number; row: number } | null {
+  for (const layout of [visible, pending]) {
+    const at = layout.deskCells.get(deskKey);
+    const cell = at
+      ? layout.buildings
+          .flatMap((building) => building.rooms)
+          .find((room) => room.key === at.roomKey)?.cells[at.cellIndex]
+      : undefined;
+    if (cell) return { col: cell.col, row: cell.row };
+  }
+  return null;
 }

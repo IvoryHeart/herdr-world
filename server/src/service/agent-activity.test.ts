@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { AgentActivityCache } from "../world/agent-activity-cache";
@@ -36,7 +35,7 @@ test("two sockets share observer activity; fresh lists and new holders reuse its
   const runtime = (id: string) => {
     const host = hosts.get(id)!;
     return {
-      ...herdrRuntimeFixture({
+      herdr: {
         async call(method: string) {
           if (method !== "agent.list") return {};
           return {
@@ -51,7 +50,7 @@ test("two sockets share observer activity; fresh lists and new holders reuse its
             ],
           };
         },
-      }),
+      },
       agentSessions: {
         async enrichActivity(result: any) {
           host.stats++;

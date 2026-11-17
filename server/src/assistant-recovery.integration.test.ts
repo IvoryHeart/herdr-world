@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type {
   AssistantSnapshot,
   AssistantWorkspace,
@@ -17,7 +18,6 @@ import { BinReader, BinWriter, encodeFrame } from "./bridge/bincode";
 import type { LocalConnectionProfile } from "./connections/profiles";
 
 const PASSWORD = "assistant-recovery-password";
-const PROVIDER = "recovery-fixture";
 const PARTIAL = "This interrupted answer must not be kept.";
 const ANSWER = "Recovered the workspace status without repeating the read.";
 const BrowserSocket = WebSocket as unknown as new (
@@ -102,7 +102,7 @@ async function fixture(
   await writeFile(
     join(assistantDirectory, "auth.json"),
     JSON.stringify({
-      [PROVIDER]: { type: "api_key", key: "synthetic-recovery-key" },
+      anthropic: { type: "api_key", key: "synthetic-recovery-key" },
     }),
     { mode: 0o600 },
   );
@@ -357,20 +357,21 @@ async function fixture(
     }),
     { mode: 0o600 },
   );
-  // Use the supported custom model configuration, so the SDK's actual
-  // transport targets the loopback fake in source and standalone runs alike.
+  // Keep the real SDK and bridge startup. Redirect only the model transport,
+  // and reject external fetches rather than exposing a production test hook.
+  const preload = join(root, "model-transport.ts");
   await writeFile(
-    join(assistantDirectory, "models.json"),
-    JSON.stringify({
-      providers: {
-        [PROVIDER]: {
-          baseUrl: model.url.href,
-          api: "anthropic-messages",
-          models: [{ id: "test-model" }],
-        },
-      },
-    }),
-    { mode: 0o600 },
+    preload,
+    `
+const nativeFetch = globalThis.fetch;
+globalThis.fetch = (input, init) => {
+  const request = new Request(input, init);
+  const url = new URL(request.url);
+  if (url.hostname !== "api.anthropic.com") throw new Error("Unexpected external fetch in recovery fixture");
+  const target = new URL(url.pathname + url.search, ${JSON.stringify(model.url.href)});
+  return nativeFetch(new Request(target, request));
+};
+`,
   );
   const environment = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -391,6 +392,7 @@ async function fixture(
         cwd: join(import.meta.dir, "../.."),
         env: {
           ...environment,
+          BUN_OPTIONS: `--preload ${pathToFileURL(preload).href}`,
           HOME: root,
           USERPROFILE: root,
           APPDATA: root,
@@ -628,11 +630,11 @@ async function configureRanger(client: Awaited<ReturnType<typeof browser>>) {
     (await client.rpc("connections.connect", { id: "healthy" })).state,
   ).toBe("ready");
   const initial: AssistantSnapshot = await client.rpc("bridge.assistant.get");
-  const model = initial.models.find((entry) => entry.provider === PROVIDER);
+  const model = initial.models.find((entry) => entry.provider === "anthropic");
   expect(model).toBeDefined();
   await client.rpc("bridge.assistant.configure", {
     config: {
-      provider: PROVIDER,
+      provider: "anthropic",
       model: model!.id,
       credential_source: "assistant",
       allowed_workspaces: [{ connection_id: "healthy", workspace_id: "w1" }],

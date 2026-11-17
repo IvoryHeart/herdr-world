@@ -1,4 +1,3 @@
-import { observedInspectorConversation } from "./coreInspector";
 import type { AgentSessionIdentity } from "../types";
 import { useCreationProgress } from "../creationRequests";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -17,11 +16,7 @@ import {
   resourceScopeForWorkspace,
 } from "../workspaceResource";
 import { worldRuntimeStore, type WorldRuntimePriority } from "./runtimeStore";
-import {
-  buildWorldObject,
-  inspectorAdmits,
-  type WorldObjectNode,
-} from "./worldObject";
+import { buildWorldObject, type WorldObjectNode } from "./worldObject";
 import { createWorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import {
@@ -34,9 +29,9 @@ import {
 import { createInspectorTerminalFocuser } from "./inspectorTerminalFocus";
 import { requestChatInputFocus } from "../chatFocus";
 import {
-  bindWorldIntentAbort,
   worldSelectionIsCurrent,
   worldNodeForWorkspaceSurfaceSelection,
+  worldNodeForInspectorConversation,
   worldNodeForInspectorPaneFocus,
   worldIntentViews,
   worldInspectorContext,
@@ -79,7 +74,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     deskReadingPane,
     connectionSelection,
     operationalSnapshot,
-    hosts,
     hostsFilter,
     aggregateWorld,
     world,
@@ -185,7 +179,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
           space.connectionId === node.connectionId &&
           space.generation === node.generation &&
           space.nativeId === workspaceId &&
-          inspectorAdmits(space),
+          space.actionable,
       )?.workspace;
     if (!workspace) return null;
     const preferences = readInspectorPreferences(
@@ -208,10 +202,20 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     floatingInspectorPortalsRef,
   );
 
-  const bindSelectionIntentAbort = bindWorldIntentAbort(
-    intentRequestRef,
-    setIntentOpening,
-  );
+  const bindSelectionIntentAbort = (
+    signal: AbortSignal | undefined,
+    requestId: number,
+  ) => {
+    if (!signal) return () => {};
+    const abort = () => {
+      if (intentRequestRef.current !== requestId) return;
+      intentRequestRef.current += 1;
+      setIntentOpening(false);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    return () => signal.removeEventListener("abort", abort);
+  };
 
   const applySelection = async (
     id: string | null,
@@ -237,7 +241,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       : undefined;
     setIntentError(null);
     setVisualConversationAnchors(null);
-    if (!next || next.kind === "host" || !inspectorAdmits(next)) {
+    if (!next || next.kind === "host" || !next.actionable) {
       setSelection(next);
       setIntentOpening(false);
       return true;
@@ -367,7 +371,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   );
   const openInBackground = (id: string, requestedView: InspectorView) => {
     const next = world.nodeById.get(id);
-    if (!next || next.kind === "host" || !inspectorAdmits(next)) return false;
+    if (!next || next.kind === "host" || !next.actionable) return false;
     const windowId = worldInspectorWindowIdForNode(next);
     if (
       inspectorConversationsRef.current.some(
@@ -667,13 +671,71 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
       return;
     let changed = false;
     const retained = inspectorConversations.flatMap((conversation) => {
-      const next = observedInspectorConversation(
+      const current = worldNodeForInspectorConversation(
         aggregateWorld,
-        operationalSnapshot,
         conversation,
       );
-      changed ||= next[0] !== conversation;
-      return next;
+      const focusedTopology = connectionSnapshot(
+        operationalSnapshot,
+        conversation.connectionId,
+      );
+      const owner = operationalSnapshot.connections.find(
+        (connection) => connection.id === conversation.connectionId,
+      );
+      // Only the focused list can prove removal from the bounded projection.
+      const focusedListIsCurrent =
+        owner?.state === "ready" &&
+        focusedTopology.status === "connected" &&
+        focusedTopology.lastTopologyObservationStartedAt >
+          (conversation.focusedListAdmissionAt ?? 0) &&
+        focusedTopology.serverRuntimeGeneration ===
+          conversation.runtimeGeneration;
+      const stillOpen = conversation.tabId
+        ? focusedTopology.tabs.some(
+            (tab) =>
+              tab.tab_id === conversation.tabId &&
+              tab.workspace_id === conversation.workspaceId,
+          )
+        : focusedTopology.workspaces.some(
+            (workspace) => workspace.workspace_id === conversation.workspaceId,
+          );
+      if (
+        owner?.generation !== conversation.runtimeGeneration ||
+        (focusedListIsCurrent && !stillOpen)
+      ) {
+        changed = true;
+        return [];
+      }
+      if (
+        !current ||
+        current.generation !== conversation.runtimeGeneration ||
+        !current.actionable
+      ) {
+        return [conversation];
+      }
+      const view = worldIntentInitialView(current, null);
+      const context = worldInspectorContext(current);
+      const observed =
+        view && context
+          ? worldInspectorForNode(
+              current,
+              view,
+              worldIntentViews(current),
+              context,
+              {
+                dock: conversation.dock,
+                expanded: conversation.expanded,
+                size: conversation.size,
+              },
+            )
+          : null;
+      if (!observed) {
+        changed = true;
+        return [];
+      }
+      const next = reconcileWorldInspectorConversation(conversation, observed);
+      if (next !== conversation) changed = true;
+      return [next];
     });
     if (changed) {
       const retainedIds = new Set(retained.map(worldInspectorWindowId));
@@ -1010,7 +1072,6 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     deskReadingPane,
     connectionSelection,
     operationalSnapshot,
-    hosts,
     hostsFilter,
     aggregateWorld,
     world,

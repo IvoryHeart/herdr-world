@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { handleDeskRpc } from "./desk";
 import type { BridgeRpcContext } from "./context";
@@ -53,13 +52,13 @@ function fixture() {
                   generation: 3,
                   isCurrent: () => current,
                   runtime: {
-                    ...herdrRuntimeFixture({
+                    herdr: {
                       call: async () => {
                         const result = { panes: [pane] };
                         await defer?.();
                         return result;
                       },
-                    }),
+                    },
                   },
                 },
         },

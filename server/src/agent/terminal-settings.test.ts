@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -42,7 +41,7 @@ function fixture() {
       generation,
       isCurrent: () => host.online && host.generation === generation,
       runtime: {
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async (method: string, params: Record<string, unknown>) => {
             const pane = host.panes.find((p) => p.pane_id === params.pane_id);
             if (method === "pane.list")
@@ -60,7 +59,7 @@ function fixture() {
             }
             throw new Error(`unexpected ${method}`);
           },
-        }),
+        },
       },
     };
   };

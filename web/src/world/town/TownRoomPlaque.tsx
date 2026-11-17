@@ -5,14 +5,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  GitBranch,
-  Move,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Move, Pencil, Trash2 } from "lucide-react";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import type { OfficeRoom } from "../herdrOfficeProjection";
 import type { PlaceColorChoice, TownRoomActions } from "./TownCanvas";
@@ -240,28 +233,17 @@ export function TownRoomPlaque({
             className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"
             type="button"
             aria-label={`Rename room ${label}`}
-            title={actions.roomViewOnly?.(room.key) ?? `Rename ${label}`}
+            title={`Rename ${label}`}
             disabled={!actions.canRenameRoom(room.key)}
             onClick={() => actions.onRenameRoom(room.key)}
           >
             <Pencil size={14} aria-hidden="true" />
           </button>
-          {actions.canManageWorktrees?.(room.key) ? (
-            <button
-              className="world-room-overlay-action town-plaque-action"
-              type="button"
-              aria-label={`Worktrees of room ${label}`}
-              title="Worktrees: new, open or remove"
-              onClick={() => actions.onWorktrees?.(room.key)}
-            >
-              <GitBranch size={14} aria-hidden="true" />
-            </button>
-          ) : null}
           <button
             className="world-room-overlay-action world-room-overlay-action-danger town-plaque-action"
             type="button"
             aria-label={`Close room ${label}`}
-            title={actions.roomViewOnly?.(room.key) ?? `Close ${label}`}
+            title={`Close ${label}`}
             disabled={!actions.canCloseRoom(room.key)}
             onClick={() => actions.onCloseRoom(room.key)}
           >

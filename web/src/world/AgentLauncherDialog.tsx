@@ -30,7 +30,6 @@ import { HarnessReadinessSummary } from "./HarnessReadinessSummary";
 import { ProfileSprite } from "./ProfileSprite";
 import type { WorldObject } from "./worldObject";
 import { store } from "../store";
-import { launchInCore } from "./coreControl";
 import { WorldLoader } from "./WorldLoader";
 import {
   launchConfirmedTerminal,
@@ -86,8 +85,7 @@ export function AgentLauncherDialog({
   const rooms = useMemo(
     () =>
       world.spaces.filter((space) => {
-        if ((space.actionable || space.coreControl) && !space.stale)
-          return true;
+        if (space.actionable && !space.stale) return true;
         const host = world.hosts.find(({ id }) => id === space.parentId);
         return (
           host?.connection.state === "ready" &&
@@ -116,10 +114,7 @@ export function AgentLauncherDialog({
     const home = preferred?.home_room
       ? rooms.find((space) => space.label === preferred.home_room)
       : undefined;
-    // herdr-core is the primary runtime where it runs: with no room asked
-    // for, a new agent starts there. Herdr (TUI) stays a per-launch choice.
-    const core = rooms.find((space) => space.coreControl);
-    const chosen = explicit ? exact : (home ?? core ?? rooms[0]);
+    const chosen = explicit ? exact : (home ?? rooms[0]);
     return chosen ? { id: chosen.id, generation: chosen.generation } : null;
   });
   const room = selection
@@ -129,15 +124,13 @@ export function AgentLauncherDialog({
           space.generation === selection.generation,
       ) ?? null)
     : null;
-  const inCore = Boolean(room?.coreControl);
   const target: LaunchTarget | null =
-    (room?.actionable || room?.coreControl) && !room.stale
+    room?.actionable && !room.stale
       ? {
           connectionId: room.connectionId,
           generation: room.generation,
           workspaceId: room.nativeId,
           workspaceLabel: room.label,
-          ...(room.coreControl ? { runtime: "herdr-core" as const } : {}),
         }
       : null;
   const [task, setTask] = useState("");
@@ -162,7 +155,6 @@ export function AgentLauncherDialog({
   const connectionId = room?.connectionId;
   const generation = room?.generation;
   const workspaceId = room?.nativeId;
-  const runtime = room?.coreControl ? ("herdr-core" as const) : undefined;
   useEffect(() => {
     setCatalog(null);
     setCatalogError(null);
@@ -174,12 +166,7 @@ export function AgentLauncherDialog({
     )
       return;
     let current = true;
-    launcherCatalog({
-      connectionId,
-      generation,
-      workspaceId,
-      ...(runtime ? { runtime } : {}),
-    })
+    launcherCatalog({ connectionId, generation, workspaceId })
       .then((next) => current && mounted.current && setCatalog(next))
       .catch(
         (cause: unknown) =>
@@ -192,7 +179,7 @@ export function AgentLauncherDialog({
     return () => {
       current = false;
     };
-  }, [connectionId, generation, workspaceId, runtime, checks]);
+  }, [connectionId, generation, workspaceId, checks]);
 
   const launch = async (choice: { profile?: AgentProfile; kind?: string }) => {
     if (!mounted.current || !target || operation.current || attempt.current)
@@ -239,15 +226,7 @@ export function AgentLauncherDialog({
         });
       if (!mounted.current) return;
       // A ready agent opens and the dialog closes; anything else stays
-      // here with its reason and a way to open the tab. World has no
-      // terminal stream for a core agent yet: it arrives in Town instead,
-      // with any note core's start left for the person.
-      if (terminalId && target.runtime === "herdr-core") {
-        if (result.message)
-          store.notify({ kind: "info", message: result.message });
-        dismiss();
-        return;
-      }
+      // here with its reason and a way to open the tab.
       if (terminalId) {
         onOpen({
           connectionId: target.connectionId,
@@ -261,14 +240,7 @@ export function AgentLauncherDialog({
         attempt.current = false;
         setAttempted(false);
       }
-      setOutcome(
-        retainedOutcome(
-          target,
-          target.runtime === "herdr-core"
-            ? { status: result.status, message: result.message }
-            : result,
-        ),
-      );
+      setOutcome(retainedOutcome(target, result));
     } catch (cause) {
       if (mounted.current)
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -292,24 +264,14 @@ export function AgentLauncherDialog({
     setOutcome(null);
     setError(null);
     try {
-      if (target.runtime === "herdr-core") {
-        // A plain shell: in World's room, not placed in Herdr's apps.
-        const result = await launchInCore(target, {
-          label: "Shell",
-          text: "",
-          shell: true,
-        });
-        if (result.status !== "started" && result.status !== "sent")
-          throw new Error(result.message ?? "herdr-core did not start it");
-      } else
-        await store.createQualifiedTab(
-          {
-            connectionId: target.connectionId,
-            runtimeGeneration: target.generation,
-          },
-          target.workspaceId,
-          { numberedLabel: true },
-        );
+      await store.createQualifiedTab(
+        {
+          connectionId: target.connectionId,
+          runtimeGeneration: target.generation,
+        },
+        target.workspaceId,
+        { numberedLabel: true },
+      );
       dismiss();
     } catch (cause) {
       if (mounted.current)
@@ -354,7 +316,7 @@ export function AgentLauncherDialog({
   };
 
   // One Log in per harness that needs it, opening its own login command.
-  const loggedOut = (inCore ? [] : (catalog?.readiness ?? []))
+  const loggedOut = (catalog?.readiness ?? [])
     .filter((ready) => ready.logged_in === false && ready.can_log_in)
     .map((ready) => ready.kind);
   // Kinds this host has (or may have: no readiness for it); the rest of
@@ -400,9 +362,7 @@ export function AgentLauncherDialog({
               detail={
                 pressed.key === "terminal"
                   ? undefined
-                  : inCore
-                    ? "Asking herdr-core to start it."
-                    : "Creating its tab, starting it and waiting until it is ready."
+                  : "Creating its tab, starting it and waiting until it is ready."
               }
             />
           ) : null}
@@ -481,18 +441,10 @@ export function AgentLauncherDialog({
                   {rooms.map((space) => (
                     <option key={space.id} value={space.id}>
                       {space.label} · {space.hostLabel}
-                      {space.coreControl ? " · herdr-core" : ""}
                     </option>
                   ))}
                 </select>
               </label>
-              {room ? (
-                <p className="agent-launcher-note agent-launcher-runtime">
-                  {inCore
-                    ? "Starts in herdr-core. Herdr's apps show the agent and keep it running; closing its pane in an app ends it. World and the apps arrange it separately."
-                    : "Starts in Herdr (TUI)."}
-                </p>
-              ) : null}
               <label className="agent-field">
                 <span>Agent task (optional)</span>
                 <textarea
@@ -527,11 +479,7 @@ export function AgentLauncherDialog({
                 <Terminal size={24} aria-hidden="true" />
                 <span>
                   <b>Terminal</b>
-                  <small>
-                    {inCore
-                      ? "A plain shell in this room, not shown in Herdr's apps"
-                      : "A plain shell in this room"}
-                  </small>
+                  <small>A plain shell in this room</small>
                 </span>
               </button>
               <div className="agent-launcher-section-head">

@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,7 +20,6 @@ for (const mode of [
   "retired-read",
   "unknown-read",
   "held-read",
-  "beside-core",
 ])
   test(`snapshot GC confirms native absence and admission: ${mode}`, async () => {
     const root = mkdtempSync(join(tmpdir(), "appearance-snapshot-rpc-"));
@@ -76,30 +74,26 @@ for (const mode of [
           warn: (_message: string, error: unknown) => warnings.push(error),
         },
         connectionManager: {
-          // As the real manager: an ID it does not own (herdr-core) throws.
-          readyRuntimeLease: (id: string) => {
-            if (id !== "alpha") throw new Error(`unknown connection: ${id}`);
-            return {
-              generation: 3,
-              isCurrent: () => current,
-              runtime: {
-                ...herdrRuntimeFixture({
-                  call: async () => {
-                    if (mode === "held-read") return heldNative.promise;
-                    if (mode === "unknown-read") throw new Error("unavailable");
-                    if (mode === "native-edit") edit();
-                    if (mode === "retired-read") current = false;
-                    return {
-                      panes:
-                        mode === "cached-live"
-                          ? [{ terminal_id: "old-terminal" }]
-                          : [],
-                    };
-                  },
-                }),
+          readyRuntimeLease: () => ({
+            generation: 3,
+            isCurrent: () => current,
+            runtime: {
+              herdr: {
+                call: async () => {
+                  if (mode === "held-read") return heldNative.promise;
+                  if (mode === "unknown-read") throw new Error("unavailable");
+                  if (mode === "native-edit") edit();
+                  if (mode === "retired-read") current = false;
+                  return {
+                    panes:
+                      mode === "cached-live"
+                        ? [{ terminal_id: "old-terminal" }]
+                        : [],
+                  };
+                },
               },
-            };
-          },
+            },
+          }),
         },
         worldSnapshots: {
           observation: new WorldObservation("synthetic-service"),
@@ -110,35 +104,6 @@ for (const mode of [
               revision: 1,
               observed_at: 1,
               connections: [
-                ...(mode === "beside-core"
-                  ? [
-                      {
-                        connection_id: "box-core",
-                        runtime: "herdr-core",
-                        generation: 1,
-                        snapshot_generation: 1,
-                        state: "ready",
-                        stale: false,
-                        actionable: true,
-                        snapshot: {
-                          panes: [
-                            {
-                              pane_id: "t1",
-                              terminal_id: "t1",
-                              workspace_id: "hc:unplaced",
-                              tab_id: "hc:unplaced:tab:main",
-                              agent: "claude",
-                              agent_status: "idle",
-                            },
-                          ],
-                          tabs: [],
-                          workspaces: [],
-                          coverage: { panes: 1, tabs: 0, workspaces: 0 },
-                          agents: [],
-                        },
-                      },
-                    ]
-                  : []),
                 {
                   connection_id: "alpha",
                   generation: 3,
@@ -174,11 +139,7 @@ for (const mode of [
     expect(Object.keys(board.get().appearance ?? {})).toHaveLength(
       mode.endsWith("edit")
         ? 2
-        : mode === "absent" ||
-            mode === "held-read" ||
-            // A core connection beside it changes nothing: alpha's absent
-            // pane is still collected, and no observer fails on core's ID.
-            mode === "beside-core"
+        : mode === "absent" || mode === "held-read"
           ? 0
           : 1,
     );

@@ -52,56 +52,11 @@ export type SshConnectionProfile = {
   remote_session?: string;
 };
 
-/**
- * A herdr-core connection: World reads the core's `core.lock` on every
- * connect and talks to that endpoint directly. It never starts a core.
- */
-export type CoreConnectionProfile = {
-  id: string;
-  label: string;
-  type: "local" | "ssh";
-  runtime: "herdr-core";
-  /** OpenSSH alias or user@host; empty for a local core. */
-  ssh_destination?: string;
-  /** A Windows SSH host: World relays core's named pipe through PowerShell. */
-  remote_platform?: "windows";
-  /** Core's `HC_SESSION` name (`default` unless the core was started with one). */
-  core_session: string;
-  /** Absolute core state directory; empty means the session's default. */
-  core_state_dir: string;
-  auto_connect: boolean;
-};
-
-export type TuiConnectionProfile =
-  | LocalConnectionProfile
-  | SshConnectionProfile;
-export type ConnectionProfile = TuiConnectionProfile | CoreConnectionProfile;
-
-export function isCoreProfile(
-  profile: object | null | undefined,
-): profile is CoreConnectionProfile {
-  return (
-    Boolean(profile) &&
-    (profile as { runtime?: unknown }).runtime === "herdr-core"
-  );
-}
+export type ConnectionProfile = LocalConnectionProfile | SshConnectionProfile;
 
 export function connectionRecoveryFingerprint(
   profile: ConnectionProfile,
 ): string {
-  if (isCoreProfile(profile))
-    return createHash("sha256")
-      .update(
-        JSON.stringify([
-          profile.runtime,
-          profile.type,
-          profile.ssh_destination ?? "",
-          ...(profile.remote_platform ? [profile.remote_platform] : []),
-          profile.core_session,
-          profile.core_state_dir,
-        ]),
-      )
-      .digest("hex");
   const target =
     profile.type === "local"
       ? [profile.type, profile.control_socket_path, profile.client_socket_path]
@@ -368,112 +323,11 @@ export function validateSshConnectionProfile(
   };
 }
 
-const CORE_SESSION = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/;
-/** `C:\\...`: a drive-absolute Windows directory with no traversal. */
-const WINDOWS_DIRECTORY =
-  /^[A-Za-z]:\\(?:[^\\/:*?"<>|\u0000-\u001f\u007f-\u009f]+\\?)*$/;
-
-function validateWindowsDirectory(value: unknown): string {
-  if (
-    typeof value !== "string" ||
-    value.length > 260 ||
-    !WINDOWS_DIRECTORY.test(value) ||
-    value.split("\\").some((part) => part === "." || part === "..")
-  )
-    throw new Error("core_state_dir must be an absolute Windows directory");
-  return value;
-}
-
-export function validateCoreConnectionProfile(
-  value: unknown,
-  platform: string = process.platform,
-): CoreConnectionProfile {
-  assertPlainObject(value, "connection profile");
-  const ssh = value.type === "ssh";
-  if (value.type !== "local" && !ssh)
-    throw new Error("invalid connection profile type");
-  assertExactKeys(
-    value,
-    [
-      "id",
-      "label",
-      "type",
-      "runtime",
-      "core_session",
-      "core_state_dir",
-      "auto_connect",
-      ...(ssh ? ["ssh_destination"] : []),
-      ...(ssh && value.remote_platform !== undefined
-        ? ["remote_platform"]
-        : []),
-    ],
-    "connection profile",
-  );
-  const id = validateConnectionId(value.id);
-  if (id === STARTUP_DEFAULT_CONNECTION_ID) {
-    throw new Error(`${STARTUP_DEFAULT_CONNECTION_ID} is reserved`);
-  }
-  if (value.runtime !== "herdr-core") throw new Error("invalid runtime");
-  if (
-    value.remote_platform !== undefined &&
-    value.remote_platform !== "windows"
-  )
-    throw new Error("invalid remote_platform");
-  const windows = value.remote_platform === "windows";
-  if (typeof value.auto_connect !== "boolean") {
-    throw new Error("auto_connect must be a boolean");
-  }
-  if (
-    typeof value.core_session !== "string" ||
-    !CORE_SESSION.test(value.core_session)
-  )
-    throw new Error("core_session must be a herdr-core session name");
-  let stateDir = "";
-  if (value.core_state_dir !== "") {
-    // A Windows core: this computer on Windows, or a Windows SSH host.
-    if (windows || (!ssh && platform === "win32"))
-      stateDir = validateWindowsDirectory(value.core_state_dir);
-    else
-      try {
-        stateDir = ssh
-          ? validateRemoteSocketPath(value.core_state_dir, "core_state_dir")
-          : validateSocketPath(
-              value.core_state_dir,
-              "core_state_dir",
-              platform,
-            );
-      } catch {
-        throw new Error("core_state_dir must be an absolute directory path");
-      }
-  }
-  return {
-    id,
-    label: validateLabel(value.label),
-    type: ssh ? "ssh" : "local",
-    runtime: "herdr-core",
-    ...(ssh
-      ? { ssh_destination: validateSshDestination(value.ssh_destination) }
-      : {}),
-    ...(windows ? { remote_platform: "windows" as const } : {}),
-    core_session: value.core_session,
-    core_state_dir: stateDir,
-    auto_connect: value.auto_connect,
-  };
-}
-
 export function validateConnectionProfile(
   value: unknown,
   platform: string = process.platform,
 ): ConnectionProfile {
   assertPlainObject(value, "connection profile");
-  if (value.runtime === "herdr-core")
-    return validateCoreConnectionProfile(value, platform);
-  if (value.runtime === "herdr") {
-    const tui: Record<string, unknown> = { ...value };
-    delete tui.runtime;
-    return validateConnectionProfile(tui, platform);
-  }
-  if (value.runtime !== undefined) throw new Error("invalid runtime");
   if (value.type === "local") {
     return validateLocalConnectionProfile(value, platform);
   }
@@ -517,8 +371,6 @@ export function validateConnectionRegistry(
   if (!ids.has(defaultConnectionId)) {
     throw new Error("default connection profile does not exist");
   }
-  // A herdr-core default is valid: a computer with only herdr-core has no
-  // Herdr connection to be its default (#935).
   return {
     version: value.version,
     default_connection_id: defaultConnectionId,
@@ -755,23 +607,6 @@ export function publicConnectionProfile(
   profile: ConnectionProfile,
   readOnly = false,
 ): PublicConnectionProfile {
-  if (isCoreProfile(profile))
-    return {
-      id: profile.id,
-      label: profile.label,
-      type: profile.type,
-      runtime: "herdr-core",
-      ...(profile.ssh_destination
-        ? { ssh_destination: profile.ssh_destination }
-        : {}),
-      ...(profile.remote_platform
-        ? { remote_platform: profile.remote_platform }
-        : {}),
-      core_session: profile.core_session,
-      core_state_dir: profile.core_state_dir,
-      auto_connect: profile.auto_connect,
-      read_only: readOnly,
-    };
   if (profile.type === "ssh") {
     return {
       id: profile.id,

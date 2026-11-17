@@ -1,7 +1,3 @@
-import {
-  createHerdrRuntimePorts,
-  createTuiPassThrough,
-} from "../../adapters/herdr-runtime";
 import type { ServerWebSocket } from "bun";
 import type { LegacyConnectionRuntime } from "../../connections/runtime";
 import type { HerdrRuntimeOptions, Scheduler } from "../ports";
@@ -121,37 +117,25 @@ export class AcquisitionHost {
           result: {},
         }),
       );
-    const herdr = {
-      call,
-      ping: async () => ({ version: "0.9.3", protocol: 14 }),
-    };
-    const terminalBridge = {
-      handleTerminalRpc: async (socket: ServerWebSocket<unknown>, id: string) =>
-        reply(socket, id),
-      navigationMode: async () => "shared",
-      tabMoveSupported: async () => true,
-      endpointAvailability: () =>
-        structuredClone(this.model.endpointAvailability),
-      statusTerminals: () => [],
-      viewedTerminals: () => [],
-      cleanupWs() {},
-      dispose() {},
-      browserClientCountChanged() {},
-    };
     return {
-      ...createHerdrRuntimePorts({
-        client: herdr,
-        terminalBridge: () => terminalBridge,
-      }),
-      tui: createTuiPassThrough("herdr", herdr),
       identity: options.identity,
       async startTransport() {},
       startBackground() {},
       async stop() {},
       sshHost: () => undefined,
-      herdr,
+      herdr: { call, ping: async () => ({ version: "0.9.3", protocol: 14 }) },
       handleSettingsRpc: reply,
-      terminalBridge,
+      terminalBridge: {
+        handleTerminalRpc: reply,
+        navigationMode: async () => "shared",
+        tabMoveSupported: async () => true,
+        endpointAvailability: () =>
+          structuredClone(this.model.endpointAvailability),
+        statusTerminals: () => [],
+        viewedTerminals: () => [],
+        cleanupWs() {},
+        browserClientCountChanged() {},
+      },
       worktreeParents: { enrichWorkspaceList: async (value: unknown) => value },
       status: {
         enrichWorkspacesWithGitStatus: async (value: unknown) => value,

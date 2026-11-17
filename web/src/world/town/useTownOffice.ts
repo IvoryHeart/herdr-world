@@ -20,7 +20,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
   );
   const deskPins = useDeskPins();
   const roomPins = useRoomPins();
-  // Preserve the pin-key identity; pinned tabs are admitted first in folded rooms.
+  // Preserve the pin-key identity across cell changes; pins do not promote tabs.
   const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
   const pinnedTabs = useMemo(
     () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),

@@ -4,7 +4,6 @@ import type {
   OfficeDesk,
   OfficeRoom,
 } from "../herdrOfficeProjection";
-import { TOWN_PINNED_HINT } from "./townDrag";
 import type { TownMoveResult } from "./townMoves";
 import type { townTeamActions, TownMenuEntry } from "./townTeamActions";
 
@@ -20,8 +19,6 @@ export type TownMoveMenuDeps = {
   deskForKey(key: string): OfficeDesk | null;
   roomForKey(key: string | null): OfficeRoom | null;
   agentOf(key: string): OfficeAgent | undefined;
-  /** A room's pinned desks by desk key, front first (townPinOrder.ts). */
-  pinnedSeats(room: OfficeRoom): string[];
   close(): void;
   runDeskReorder(deskKey: string, ontoKey: string | null): Promise<unknown>;
   runDeskMove(deskKey: string, roomKey: string): Promise<TownMoveResult>;
@@ -50,42 +47,19 @@ export function townMoveMenu(
       : [];
     // Within its room a desk takes another desk's slot, as in a drag.
     const home = desk ? deps.roomForKey(desk.roomKey) : null;
+    const slots = home?.desks ?? [];
+    const lastDrawn = slots[slots.length - 1];
     const reorder = (ontoKey: string | null) => () => {
       deps.close();
       void deps.runDeskReorder(flow.deskKey, ontoKey);
     };
-    // A pinned desk moves only among the pinned seats, and an unpinned one
-    // takes none of them, as in a drag.
-    const pinned = home ? deps.pinnedSeats(home) : [];
-    if (desk && pinned.includes(desk.key)) {
-      const seats = pinned.filter((key) => key !== desk.key);
-      return {
-        title: `Move ${desk.displayLabel}`,
-        detail: seats.length
-          ? `Choose a pinned desk’s place. ${TOWN_PINNED_HINT}`
-          : `No other pinned desk in this room. ${TOWN_PINNED_HINT}`,
-        entries: [
-          ...seats.map((key) => ({
-            key,
-            label: `${deps.deskForKey(key)?.displayLabel ?? "desk"}’s place`,
-            detail: `Pinned desk ${pinned.indexOf(key) + 1} in ${home?.displayLabel}`,
-            onChoose: reorder(key),
-          })),
-          ...deps.teams.teamEntries(desk),
-        ],
-      };
-    }
-    const slots = (home?.desks ?? []).filter(
-      (other) => !pinned.includes(other.key),
-    );
-    const lastDrawn = slots[slots.length - 1];
     const places = [
       ...slots
         .filter((other) => other.key !== desk?.key)
         .map((other) => ({
           key: other.key,
           label: `${other.displayLabel}’s place`,
-          detail: `Desk ${pinned.length + slots.indexOf(other) + 1} in ${home?.displayLabel}`,
+          detail: `Desk ${slots.indexOf(other) + 1} in ${home?.displayLabel}`,
           onChoose: reorder(other.key),
         })),
       // Last means last of the drawn desks: in a room with hidden desks

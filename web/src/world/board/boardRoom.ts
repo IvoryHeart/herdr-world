@@ -75,7 +75,6 @@ export function projectBoardRoom(
       shellOnly: panes.length > 0 && panes.every((pane) => !pane.isAgent),
       stale: space.stale,
       actionable: space.actionable,
-      ...(space.viewOnly ? { viewOnly: space.viewOnly } : {}),
       panes,
     });
   }
@@ -88,7 +87,6 @@ export function projectBoardRoom(
     label: space.label,
     stale: space.stale,
     actionable: space.actionable,
-    ...(space.viewOnly ? { viewOnly: space.viewOnly } : {}),
     tabKeys,
     statuses: statuses.sort(boardStatusOrder),
     squares: squares.sort((a, b) =>

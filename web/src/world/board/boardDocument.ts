@@ -82,11 +82,7 @@ export type BoardString = {
 };
 /** A desk's cell in its Town room (server/src/world/board-store.ts). */
 export type DeskCell = { col: number; row: number };
-/**
- * A pinned Town desk; `rank` is its place among its room's pinned seats once
- * the user reordered them there (`cell` is no longer read).
- */
-export type DeskPin = { cell: DeskCell | null; rank?: number };
+export type DeskPin = { cell: DeskCell | null };
 /** A room's top-left in its Town building, in tiles from its corner. */
 export type RoomSpot = { x: number; y: number };
 export type BoardDocument = {
@@ -145,7 +141,6 @@ export type BoardOp =
   | { op: "desk.pin"; key: string; cell: DeskCell | null }
   | { op: "desk.unpin"; key: string }
   | { op: "desk.place"; key: string; cell: DeskCell }
-  | { op: "desk.rank"; key: string; rank: number; create?: boolean }
   | { op: "room.place"; connection_id: string; spots: Record<string, RoomSpot> }
   | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | { op: "group.interest"; id: string; interest: GroupInterest | null }

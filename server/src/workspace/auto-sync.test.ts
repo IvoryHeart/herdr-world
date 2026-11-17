@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { systemClock, systemScheduler } from "../service/ports";
 import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { describe, expect, test } from "bun:test";
@@ -272,11 +271,11 @@ describe("workspace auto-sync lifecycle", () => {
         clock: systemClock,
         scheduler: systemScheduler,
         connectionId,
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async () => ({
             workspaces: [{ workspace_id: "same", cwd: "/repo" }],
           }),
-        } as any),
+        } as any,
         sshHost: () => undefined,
         shQuote,
         runProcessWithCodeTimeout: async () => ({
@@ -321,14 +320,14 @@ describe("workspace auto-sync lifecycle", () => {
     const autoSync = createWorkspaceAutoSync({
       clock: systemClock,
       scheduler: systemScheduler,
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async () => {
           workspaceCalls += 1;
           return {
             workspaces: [{ workspace_id: "w1", cwd: "/repo" }],
           };
         },
-      } as any),
+      } as any,
       sshHost: () => undefined,
       shQuote,
       runProcessWithCodeTimeout: async () => ({
@@ -386,9 +385,9 @@ describe("workspace auto-sync lifecycle", () => {
     const autoSync = createWorkspaceAutoSync({
       clock: systemClock,
       scheduler: systemScheduler,
-      ...herdrRuntimeFixture({
+      herdr: {
         call: () => workspaceResult.promise,
-      } as any),
+      } as any,
       sshHost: () => undefined,
       shQuote,
       runProcessWithCodeTimeout: async () => ({

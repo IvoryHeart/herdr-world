@@ -151,38 +151,6 @@ describe("World sources in the browser", () => {
     expect(JSON.stringify(decoded)).not.toContain("leak");
   });
 
-  test("a Work lens card lists its pinned agents first", () => {
-    const world = fixtureWorld([
-      fixtureHost("local-1", [
-        {
-          label: "widgets",
-          tabs: [
-            { label: "login", panes: [["working"]] },
-            { label: "docs", panes: [["working"]] },
-          ],
-        },
-      ]),
-    ]);
-    const [first, second] = world.leaves;
-    const data = snapshot(
-      [pr(1)],
-      [first!, second!].map((leaf) =>
-        link(leaf.nativeId, pr(1).key, { generation: leaf.generation }),
-      ),
-    );
-    const agents = (
-      pinned?: (leaf: (typeof world.leaves)[number]) => boolean,
-    ) =>
-      workLensColumns(data, world, "pull_requests", undefined, pinned)
-        .flatMap((column) => column.cards)
-        .flatMap((card) => card.agents.map((agent) => agent.id));
-    expect(agents()).toEqual([first!.id, second!.id]);
-    expect(agents((leaf) => leaf.id === second!.id)).toEqual([
-      second!.id,
-      first!.id,
-    ]);
-  });
-
   test("the Work lens lays pull requests by lane and names linked agents", () => {
     const world = fixtureWorld([
       fixtureHost("local-1", [

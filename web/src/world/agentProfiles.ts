@@ -1,6 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { bridge } from "../api";
-import { coreCatalog, launchInCore } from "./coreControl";
 import {
   HARNESS_CHOICES,
   type AgentLook,
@@ -127,8 +126,6 @@ export type LaunchTarget = {
   generation: number;
   workspaceId: string;
   workspaceLabel: string;
-  /** A herdr-core room: started there through world.core.launch. */
-  runtime?: "herdr-core";
 };
 export type LaunchOutcome = {
   status: "sent" | "started" | "uncertain" | "failed";
@@ -184,12 +181,10 @@ export type LauncherCatalog = {
 
 /** Kinds, skills and harness readiness on a host (for a workspace's folder). */
 export async function launcherCatalog(
-  target: Pick<LaunchTarget, "connectionId" | "generation" | "runtime"> & {
+  target: Pick<LaunchTarget, "connectionId" | "generation"> & {
     workspaceId?: string;
   },
 ): Promise<LauncherCatalog> {
-  if (target.runtime === "herdr-core")
-    return parseLauncherCatalog(await coreCatalog(target));
   const result = (await bridge
     .connection(target.connectionId, target.generation)
     .call(
@@ -254,12 +249,7 @@ export async function launchAgent(
     /** The agent that started this one; the service stamps the spawn. */
     parent?: { paneId: string; terminalId?: string };
   },
-): Promise<LaunchOutcome> {
-  if (target.runtime === "herdr-core")
-    return launchInCore(target, {
-      ...choice,
-      ...(choice.parent ? { parentPaneId: choice.parent.paneId } : {}),
-    });
+) {
   return (await bridge.connection(target.connectionId, target.generation).call(
     "launcher.start",
     {

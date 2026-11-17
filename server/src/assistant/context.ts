@@ -1,13 +1,3 @@
-import { mapScopeReads } from "./scope-reads";
-import {
-  assistantCoreRuntime,
-  coreAgentMention,
-  CORE_HISTORY_UNAVAILABLE,
-  CORE_TERMINAL_WINDOW,
-  recoveryIdentity,
-  type RuntimeLease,
-} from "./core-context";
-export { CORE_HISTORY_UNAVAILABLE } from "./core-context";
 import { createHash, randomUUID } from "node:crypto";
 import type {
   AssistantActionKind,
@@ -31,20 +21,24 @@ import { sanitizeExplorerPath } from "../workspace/file-paths";
 import {
   prepareAssistantAction,
   readAssistantPaneOccupant,
-  type AssistantActionLease,
   type AssistantWorktreeCreator,
 } from "./actions";
 import {
-  type AssistantCoreWorktreeCreator,
-  prepareCoreAssistantAction,
-} from "./core-actions";
-import { AssistantUserError } from "./errors";
-import { terminalReadLines } from "./tools";
+  ASSISTANT_DEFAULT_TERMINAL_LINES,
+  ASSISTANT_MAX_TERMINAL_LINES,
+} from "./tools";
 
+const MAX_SCOPE_READS = 8;
 const MAX_ITEMS = 80;
 const MAX_TEXT = 32_000;
 const INCOMPLETE_NOTICE =
   "Some data was truncated. This is partial evidence; do not infer that omitted records do not exist.";
+
+type RuntimeLease = {
+  runtime: LegacyConnectionRuntime;
+  generation: number;
+  isCurrent(): boolean;
+};
 
 /** Private recovery metadata. Never include these identities in model context. */
 export type RecoveryTarget = AssistantWorkspaceRef & {
@@ -107,14 +101,48 @@ function relativePath(value: unknown): string {
   return path;
 }
 
+/** Keep admission reads bounded, ordered and fail-closed without queued work escaping. */
+async function mapScopeReads<T, R>(
+  items: readonly T[],
+  read: (item: T, index: number, signal: AbortSignal) => Promise<R>,
+  signal?: AbortSignal,
+): Promise<R[]> {
+  signal?.throwIfAborted();
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", abort, { once: true });
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (!controller.signal.aborted && next < items.length) {
+      const index = next++;
+      try {
+        results[index] = await read(items[index]!, index, controller.signal);
+      } catch (error) {
+        // Preserve the first failure and stop every leased read and queued item.
+        controller.abort(error);
+      }
+    }
+  }
+  try {
+    // Only these fixed workers are concurrent. Leased reads stop promptly on
+    // abort; uncancellable transport calls are still bounded by this limit.
+    await Promise.all(
+      Array.from({ length: Math.min(MAX_SCOPE_READS, items.length) }, worker),
+    );
+    controller.signal.throwIfAborted();
+    return results;
+  } finally {
+    signal?.removeEventListener("abort", abort);
+  }
+}
+
 export function createAssistantContext(args: {
   catalog(): { id: string; label: string }[];
   lease(connectionId: string): RuntimeLease | null;
   /** SHA-256 of the configured endpoint, excluding labels and transient tunnels. */
   recoveryFingerprint?(connectionId: string): string;
   createWorktree?: AssistantWorktreeCreator;
-  /** Creates a worktree room on a herdr-core host (worktrees.ts). */
-  createCoreWorktree?: AssistantCoreWorktreeCreator;
 }) {
   // Keep each turn's original leases, including runtime identity, out of model data.
   const scopes = new WeakMap<AssistantWorkspace[], Map<string, RuntimeLease>>();
@@ -180,9 +208,10 @@ export function createAssistantContext(args: {
     const result = await readLeased(
       lease,
       () =>
-        lease.runtime.operations.getWorkspace(
+        lease.runtime.herdr.call(
+          "workspace.get",
           { workspace_id: workspaceId },
-          { timeoutMs: 5000 },
+          5000,
         ),
       `workspace ${workspaceId}`,
       signal,
@@ -229,23 +258,11 @@ export function createAssistantContext(args: {
     paneId: string,
     signal?: AbortSignal,
   ): Promise<Extract<AssistantMentionTarget, { kind: "agent" }>> {
-    const core = assistantCoreRuntime(lease.runtime);
-    if (core)
-      return coreAgentMention(
-        target,
-        core,
-        paneId,
-        workspaceMention(target),
-        mentionLabel,
-        (op) =>
-          readLeased(lease, op, `agent identity for pane ${paneId}`, signal),
-      );
-    const tui = lease.runtime as LegacyConnectionRuntime;
     const occupant = await readAssistantPaneOccupant(
       (method, params) =>
         readLeased(
           lease,
-          () => tui.tui.call(method, params, 5000),
+          () => lease.runtime.herdr.call(method, params, 5000),
           `agent identity for pane ${paneId}`,
           signal,
         ),
@@ -319,9 +336,10 @@ export function createAssistantContext(args: {
           const result = await readLeased(
             lease,
             () =>
-              lease.runtime.operations.listTerminals(
+              lease.runtime.herdr.call(
+                "pane.list",
                 { workspace_id: target.workspace_id },
-                { timeoutMs: 5000 },
+                5000,
               ),
             `panes for workspace ${target.workspace_id}`,
             readSignal,
@@ -465,8 +483,7 @@ export function createAssistantContext(args: {
         const endpoint = fingerprint(connectionId);
         const payload = await readLeased(
           lease,
-          () =>
-            lease.runtime.operations.listWorkspaces({}, { timeoutMs: 5000 }),
+          () => lease.runtime.herdr.call("workspace.list", {}, 5000),
           `workspace list for connection ${connectionId}`,
         );
         if (!Array.isArray(payload?.workspaces))
@@ -618,7 +635,7 @@ export function createAssistantContext(args: {
         if (expected) {
           let pending = bootIds.get(connectionId);
           if (!pending) {
-            pending = recoveryIdentity(lease, readSignal, readLeased);
+            pending = recoveryIdentity(lease, readSignal);
             bootIds.set(connectionId, pending);
           }
           const bootId = await pending;
@@ -654,6 +671,16 @@ export function createAssistantContext(args: {
     return captured;
   }
 
+  async function recoveryIdentity(lease: RuntimeLease, signal?: AbortSignal) {
+    if (!lease.runtime.recoveryIdentity) return null;
+    return readLeased(
+      lease,
+      () => lease.runtime.recoveryIdentity(signal),
+      "Ranger recovery server identity",
+      signal,
+    );
+  }
+
   async function recoveryScope(
     captured: AssistantWorkspace[],
     signal?: AbortSignal,
@@ -669,7 +696,7 @@ export function createAssistantContext(args: {
         assertCurrent(lease, readSignal);
         const endpoint = fingerprint(connectionId);
         const bootId = endpoint
-          ? await recoveryIdentity(lease, readSignal, readLeased)
+          ? await recoveryIdentity(lease, readSignal)
           : null;
         return { connectionId, endpoint, bootId };
       },
@@ -797,13 +824,9 @@ export function createAssistantContext(args: {
     const output: Record<string, unknown>[] = [];
     for (const target of selected) {
       const lease = leases.get(target.connection_id)!;
-      const { operations } = lease.runtime;
-      const core = assistantCoreRuntime(lease.runtime);
       assertCurrent(lease, signal);
       if (kind === "history" || kind === "diff")
         assertUnixHost(lease.runtime, `Ranger ${kind} read`);
-      if (kind === "history" && core)
-        throw new AssistantUserError(CORE_HISTORY_UNAVAILABLE);
       const currentWorkspace = await workspace(
         lease,
         target.workspace_id,
@@ -815,9 +838,10 @@ export function createAssistantContext(args: {
         const payload = await readLeased(
           lease,
           () =>
-            operations.listTerminals(
+            lease.runtime.herdr.call(
+              "pane.list",
               { workspace_id: target.workspace_id },
-              { timeoutMs: 5000 },
+              5000,
             ),
           `panes for workspace ${target.workspace_id}`,
           signal,
@@ -826,7 +850,6 @@ export function createAssistantContext(args: {
           (pane) => pane.workspace_id === target.workspace_id,
         );
         data = {
-          ...(core ? { runtime: "herdr-core" } : {}),
           ...(lease.runtime.remotePlatform === "windows"
             ? { remote_platform: "windows" }
             : {}),
@@ -843,15 +866,10 @@ export function createAssistantContext(args: {
           truncated: panes.length > MAX_ITEMS,
         };
       } else if (kind === "history" || kind === "terminal") {
-        const targetPaneId = identifier(params.pane_id, "pane_id");
-        paneId = targetPaneId;
+        paneId = identifier(params.pane_id, "pane_id");
         const payload = await readLeased(
           lease,
-          () =>
-            operations.getTerminal(
-              { pane_id: targetPaneId },
-              { timeoutMs: 5000 },
-            ),
+          () => lease.runtime.herdr.call("pane.get", { pane_id: paneId }, 5000),
           `pane ${paneId}`,
           signal,
         );
@@ -870,9 +888,7 @@ export function createAssistantContext(args: {
           const history = await readLeased(
             lease,
             () =>
-              (
-                lease.runtime as LegacyConnectionRuntime
-              ).agentSessions.readHistory({
+              lease.runtime.agentSessions.readHistory({
                 pane_id: paneId,
                 workspace_id: target.workspace_id,
               }),
@@ -914,20 +930,30 @@ export function createAssistantContext(args: {
               ),
           };
         } else {
-          const lines = terminalReadLines(params.lines);
+          if (
+            params.lines !== undefined &&
+            (!Number.isInteger(params.lines) ||
+              Number(params.lines) < 1 ||
+              Number(params.lines) > ASSISTANT_MAX_TERMINAL_LINES)
+          ) {
+            throw new Error(
+              `Terminal lines must be between 1 and ${ASSISTANT_MAX_TERMINAL_LINES}`,
+            );
+          }
           // Herdr can collect idle agents' application history and restore their viewport.
           const result = await readLeased(
             lease,
             () =>
-              operations.readTerminal(
+              lease.runtime.herdr.call(
+                "pane.read",
                 {
-                  pane_id: targetPaneId,
+                  pane_id: paneId,
                   source: "recent",
-                  lines,
+                  lines: params.lines ?? ASSISTANT_DEFAULT_TERMINAL_LINES,
                   format: "text",
                   strip_ansi: true,
                 },
-                { timeoutMs: 25_000 },
+                25_000,
               ),
             `terminal output for pane ${paneId}; this Herdr connection may not support pane.read`,
             signal,
@@ -945,10 +971,9 @@ export function createAssistantContext(args: {
           }
           data = {
             pane_id: paneId,
-            requested_lines: lines,
-            terminal_window: core
-              ? CORE_TERMINAL_WINDOW
-              : "Most recent available terminal output; older output outside the requested line window is not included. Application history recovery depends on Herdr support and agent state",
+            requested_lines: params.lines ?? ASSISTANT_DEFAULT_TERMINAL_LINES,
+            terminal_window:
+              "Most recent available terminal output; older output outside the requested line window is not included. Application history recovery depends on Herdr support and agent state",
             text: terminal.text.slice(-MAX_TEXT),
             truncated:
               terminal.truncated === true || terminal.text.length > MAX_TEXT,
@@ -1095,29 +1120,14 @@ export function createAssistantContext(args: {
     const paneId =
       typeof params.pane_id === "string" ? params.pane_id : undefined;
     if (paneId) await assertMentionAgent(captured, target, paneId, signal);
-    const core = assistantCoreRuntime(lease.runtime);
-    const prepared = core
-      ? await prepareCoreAssistantAction({
-          kind,
-          target,
-          lease: {
-            runtime: core,
-            generation: lease.generation,
-            isCurrent: () => lease.isCurrent(),
-          },
-          params,
-          signal,
-          createWorktree: args.createCoreWorktree,
-        })
-      : await prepareAssistantAction({
-          kind,
-          target,
-          // Not core, so this lease's runtime is a Herdr (TUI) one.
-          lease: lease as AssistantActionLease,
-          params,
-          signal,
-          createWorktree: args.createWorktree,
-        });
+    const prepared = await prepareAssistantAction({
+      kind,
+      target,
+      lease,
+      params,
+      signal,
+      createWorktree: args.createWorktree,
+    });
     if (paneId) await assertMentionAgent(captured, target, paneId, signal);
     if (
       !paneId ||

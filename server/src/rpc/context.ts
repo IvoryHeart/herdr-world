@@ -1,4 +1,3 @@
-import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import type { ServerWebSocket } from "bun";
 import type {
   ConnectionRpcRequest,
@@ -27,11 +26,6 @@ type Socket = ServerWebSocket<unknown>;
 type DeskService = ReturnType<typeof createWorldDeskService>;
 
 /** What the rpc/ namespace handlers share with their World service. */
-/** World's aggregate snapshot over Herdr (TUI) and herdr-core connections. */
-export type ObservedSnapshots = WorldSnapshotService<
-  LegacyConnectionRuntime | CoreConnectionRuntime
->;
-
 export type RpcServices = {
   persistentMarks?: import("../world/persistent-terminal-marks").PersistentTerminalMarks;
   clock: import("../service/ports").Clock;
@@ -46,24 +40,7 @@ export type RpcServices = {
   board(): BoardStorePort;
   clients: Set<Socket>;
   connectionManager: ConnectionManager<LegacyConnectionRuntime>;
-  connectionProfiles: ConnectionProfileService<
-    LegacyConnectionRuntime,
-    CoreConnectionRuntime
-  >;
-  /**
-   * herdr-core connections (seen and favourite shared with Herdr's apps),
-   * the in-process preview fixture (a testing switch), the pages watching
-   * its terminals and World's float shells on core connections
-   * (world.float.*).
-   */
-  core?: Pick<
-    import("../herdr-core/connections").CoreConnections,
-    "manager" | "fixture" | "floats" | "watches"
-  >;
-  /** Control of herdr-core connections (world.core.*). */
-  coreControl?: import("./core").CoreRpcServices;
-  /** Confirmed herdr-core installs from World's UI (connections.core_install). */
-  coreInstall?: import("../herdr-core/install").CoreInstall;
+  connectionProfiles: ConnectionProfileService<LegacyConnectionRuntime>;
   focusedAcquisition: FocusedAcquisition<Socket>;
   agentActivity: AgentActivityCache;
   deskWatches: DeskWatches<Socket>;
@@ -106,7 +83,7 @@ export type RpcServices = {
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
-  worldSnapshots: ObservedSnapshots | null;
+  worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null;
   worldUsage?: import("../usage/service").WorldUsageService;
 };
 

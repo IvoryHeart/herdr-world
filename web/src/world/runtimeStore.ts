@@ -85,8 +85,6 @@ export type WorldRuntimeConnection = {
   connectionId: string;
   label: string;
   source: string;
-  /** herdr-core agents are observed only; absent means Herdr (TUI). */
-  runtime?: "herdr-core";
   isDefault: boolean;
   state: ConnectionLifecycleState;
   generation: number;
@@ -114,10 +112,6 @@ type WorldRuntimeClient = {
     generation: number,
   ): { isCurrent(): boolean };
   call(method: string, params?: Record<string, unknown>): Promise<unknown>;
-  /** herdr-core generations World observed ready (their Files and Git). */
-  setCoreRuntimeGenerations?(
-    connections: Array<{ id: string; generation: number }>,
-  ): void;
   onControl(callback: (control: BridgeControlMsg) => void): () => void;
   onStatus(callback: (status: ConnectionStatus) => void): () => void;
 };
@@ -302,9 +296,6 @@ function parseConnection(value: unknown): WorldRuntimeConnection | null {
     connectionId: item.connection_id,
     label: item.label,
     source: item.source,
-    ...(item.runtime === "herdr-core"
-      ? { runtime: "herdr-core" as const }
-      : {}),
     isDefault: item.is_default,
     state: item.state as ConnectionLifecycleState,
     generation: item.generation as number,
@@ -713,11 +704,8 @@ export class WorldRuntimeStore {
             changed = true;
             return observed;
           }
-          // A core connection has no browser runtime lease: World only
-          // observes it, and its health arrives with the snapshot.
           if (
             !connection.actionable ||
-            connection.runtime === "herdr-core" ||
             !this.client.connection ||
             this.client
               .connection(connection.connectionId, connection.generation)
@@ -920,14 +908,6 @@ export class WorldRuntimeStore {
   }
 
   private set(next: WorldRuntimeState) {
-    this.client.setCoreRuntimeGenerations?.(
-      next.connections
-        .filter(
-          (c) => c.runtime === "herdr-core" && c.state === "ready" && !c.stale,
-        )
-        .map((c) => ({ id: c.connectionId, generation: c.generation })),
-    );
-
     this.state = next;
     for (const listener of this.listeners) listener();
   }
@@ -941,23 +921,4 @@ export function useWorldRuntime(): WorldRuntimeState {
     worldRuntimeStore.get,
     worldRuntimeStore.get,
   );
-}
-
-/**
- * A herdr-core connection as World last observed it, or null for any other
- * connection (a Herdr one re-renders nothing here). Windows of core agents
- * read their rooms and terminals from it: core has no Herdr session.
- */
-export function useCoreRuntimeConnection(
-  connectionId: string,
-): WorldRuntimeConnection | null {
-  const select = () =>
-    worldRuntimeStore
-      .get()
-      .connections.find(
-        (connection) =>
-          connection.connectionId === connectionId &&
-          connection.runtime === "herdr-core",
-      ) ?? null;
-  return useSyncExternalStore(worldRuntimeStore.subscribe, select, select);
 }

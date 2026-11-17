@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { describe, expect, test } from "bun:test";
 import { repoSettingsKey, type GuiSettings } from "../config/gui-settings";
 import { attachWorktreeParents, createWorktreeParentStore } from "./parents";
@@ -100,7 +99,7 @@ describe("worktree parent metadata", () => {
     const addQueued = deferred();
     const addStore = createWorktreeParentStore({
       connectionId: "alpha",
-      ...herdrRuntimeFixture({ call: async () => ({}) }),
+      herdr: { call: async () => ({}) },
       sshHost: () => undefined,
       readSettings: async () => stored,
       updateSettings: async (update, shouldCommit = () => true) => {
@@ -137,7 +136,7 @@ describe("worktree parent metadata", () => {
     const removeQueued = deferred();
     const removeStore = createWorktreeParentStore({
       connectionId: "alpha",
-      ...herdrRuntimeFixture({ call: async () => ({}) }),
+      herdr: { call: async () => ({}) },
       sshHost: () => undefined,
       readSettings: async () => stored,
       updateSettings: async (update, shouldCommit = () => true) => {

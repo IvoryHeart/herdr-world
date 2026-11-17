@@ -1,5 +1,3 @@
-import { coreFixtureEnabled } from "./coreFixture";
-import { coreInstallFake } from "./coreInstall";
 import { initializeLayoutPreferences } from "./layoutPreferences";
 import { initializeShortcutPreferences } from "./shortcutPreferences";
 import { initializeInstanceName } from "./instanceName";
@@ -45,10 +43,6 @@ class ErrorBoundary extends React.Component<
 
 initializeLayoutPreferences();
 initializeShortcutPreferences();
-// Testing switches: read `?coreFixture` and `?coreInstall` before any view
-// rewrites the URL; each drops its parameter at once.
-coreFixtureEnabled();
-coreInstallFake();
 const stopInstanceNameSync = initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
 

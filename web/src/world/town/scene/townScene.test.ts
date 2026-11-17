@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { WorldSourcesSnapshot } from "../../../../../shared/worldSources";
 import type { HerdrOfficeProjection } from "../../herdrOfficeProjection";
 import { terminalColorKey, type TerminalColors } from "../../terminalColor";
+import type { DeskPins } from "../../useDeskPins";
 import type { Relation } from "../../../../../shared/relations";
 import type { TerminalPlace } from "../../relations";
 import {
@@ -16,6 +17,7 @@ import {
   townDeskColorTarget,
   townDeskPins,
   townModelFromProjection,
+  townPinnedCells,
   townPlaceColors,
 } from "../townModel";
 import { townTargets } from "../townTargets";
@@ -186,24 +188,41 @@ test("a colour change repaints without placing the town again", () => {
   expect(again.model.deskColors).toBe(painted.model.deskColors);
 });
 
-test("a pinned desk takes its room's first seat; unpinned, its tab order", () => {
+test("a desk pinned without a cell is saved once, at the cell it has", () => {
   const { scene } = setup();
   const desk = small.rooms[0]!.desks[1]!;
   const key = terminalColorKey(townDeskColorTarget(small, desk)!);
-  const first = (state: ReturnType<typeof scene.derive>) =>
-    state.layout.buildings
-      .flatMap((building) => building.rooms)
-      .find((room) => room.cells.some((cell) => cell.deskKey === desk.key))!
-      .cells[0]!.deskKey;
-  const plain = scene.derive(inputs(small));
-  expect(first(plain)).toBe(small.rooms[0]!.desks[0]!.key);
-  const pinned = scene.derive(
-    inputs(small, { deskPins: { [key]: { cell: null } } }),
+  const pins: DeskPins = { [key]: { cell: null } };
+  const pinned = scene.derive(inputs(small, { deskPins: pins }));
+  const placements = scene.pinPlacements(
+    pinned.model.deskPins,
+    pinned.layout,
+    pinned.placed,
   );
-  expect(pinned.model.deskPins.has(desk.key)).toBe(true);
-  expect(first(pinned)).toBe(desk.key);
-  const unpinned = scene.derive(inputs(small));
-  expect(first(unpinned)).toBe(small.rooms[0]!.desks[0]!.key);
+  expect(placements).toHaveLength(1);
+  expect(placements[0]!.pinKey).toBe(key);
+  const cell = pinned.layout.buildings
+    .flatMap((building) => building.rooms.flatMap((room) => room.cells))
+    .find((entry) => entry.deskKey === desk.key)!;
+  expect(placements[0]!.cell).toEqual({ col: cell.col, row: cell.row });
+  // Not again while its save is in flight; again if the save ends unplaced.
+  expect(
+    scene.pinPlacements(pinned.model.deskPins, pinned.layout, pinned.placed),
+  ).toHaveLength(0);
+  scene.pinPlaced(key);
+  expect(
+    scene.pinPlacements(pinned.model.deskPins, pinned.layout, pinned.placed),
+  ).toHaveLength(1);
+  // A pin with its cell needs no save.
+  const saved = scene.derive(
+    inputs(small, {
+      deskPins: { [key]: { cell: { col: cell.col, row: cell.row } } },
+    }),
+  );
+  scene.pinPlaced(key);
+  expect(
+    scene.pinPlacements(saved.model.deskPins, saved.layout, saved.placed),
+  ).toHaveLength(0);
 });
 
 test("blocked agents keep the time they became blocked until they are not", () => {
@@ -264,9 +283,7 @@ function previousTownCanvas() {
       model.input,
       shape,
       memory?.shape === key ? memory.memory : new Map(),
-      undefined,
-      undefined,
-      new Map([...model.deskPins].map(([desk, pin]) => [desk, pin.rank])),
+      townPinnedCells(model.deskPins),
     );
     memory = { shape: key, memory: placed.memory };
     const teams = townTeams(

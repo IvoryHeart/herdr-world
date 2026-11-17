@@ -1,4 +1,4 @@
-import { memo, Suspense, useEffect, useMemo, useState } from "react";
+import { memo, Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
@@ -23,10 +23,8 @@ import {
   writeFloatingTerminalGeometry,
 } from "./floatingTerminalPreferences";
 import { terminalColorKey } from "./terminalColor";
-import { leafPinnedBy, setDeskPinned, useDeskPins } from "./useDeskPins";
+import { setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
-import { CoreKillConfirmHost } from "./CoreKillConfirm";
-import { CoreWorktreesHost } from "./CoreWorktrees";
 import { BoardHub } from "./board/BoardHub";
 import { requestTownSummary } from "./town/townSummaryRequest";
 import { useTerminalColorChoices } from "./useTerminalColors";
@@ -59,16 +57,21 @@ import {
   defaultOpenView,
   worldNodeForInspectorPaneFocus,
 } from "./worldInspectorSelection";
-import type { WorldLeafObject, WorldObject } from "./worldObject";
-import { worldSwitchTargets } from "./worldSwitchTargets";
+import type {
+  WorldAgentStatus,
+  WorldLeafObject,
+  WorldObject,
+  WorldObjectNode,
+} from "./worldObject";
 import { useWorldAnchorPresent, type WorldAnchorFeed } from "./worldAnchorFeed";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
-import {
-  coreInspectorTerminal,
-  useCoreTerminalDrafts,
-} from "./CoreTerminalWatch";
+
+/** Switch to lists the agents waiting on you, then finished ones, then the rest. */
+function switchToRank(status: WorldAgentStatus) {
+  return status === "blocked" ? 0 : status === "done" ? 1 : 2;
+}
 
 // Memoized: an agent window opening, moving or updating changes none of a
 // view's data, so the view must not re-render with the control plane.
@@ -101,11 +104,9 @@ const ProfileEditor = lazyWithReload("world-profile-editor", () =>
 function AgentDialogs({
   world,
   onOpenNode,
-  pinned,
 }: {
   world: WorldObject;
   onOpenNode(nodeId: string): void;
-  pinned: (leaf: WorldLeafObject) => boolean;
 }) {
   const [launch, setLaunch] = useState<
     | (Partial<LaunchTarget> & { profileId?: string; from?: AgentStartFrom })
@@ -152,11 +153,7 @@ function AgentDialogs({
   return (
     <Suspense fallback={null}>
       {sounds ? (
-        <SoundsDialog
-          world={world}
-          pinned={pinned}
-          onClose={() => setSounds(false)}
-        />
+        <SoundsDialog world={world} onClose={() => setSounds(false)} />
       ) : null}
       {editing ? (
         <ProfileEditor
@@ -261,7 +258,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     closeIntent,
     previewTerminalById,
     closeDeskReading,
-    openTerminalById: openInspectorTerminalById,
+    openTerminalById,
+    openNodeById,
     closeInspector,
     focusFloatingInspector,
     retireInspectors,
@@ -360,43 +358,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     };
   };
 
-  // A herdr-core agent or terminal opens in the same Inspector as a Herdr
-  // one: its Chat, its watched Terminal (World holds the size that fits it
-  // while no Herdr app leads), Files and Changes.
-  useCoreTerminalDrafts([aggregateWorld, world]);
-  const coreNode = (id: string) =>
-    aggregateWorld.nodeById.get(id) ?? world.nodeById.get(id);
-  const openTerminalById = openInspectorTerminalById;
-  const openNodeById = (id: string, signal?: AbortSignal) =>
-    openTerminalById(id, signal, world, null);
-
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
-  // A phone switches between agents and terminals from ⋯, as its terminal
-  // does: agents open on Chat, terminals on Terminal.
-  // Pinned ones come first: a herdr-core agent by its own label (Herdr's
-  // apps list it first too), a Herdr agent or terminal by its desk.
-  const leafPinned = leafPinnedBy(deskPins, world.spaces);
-  // Every host's agents, for the Town master picker and group members.
-  const aggregatePinned = useMemo(
-    () => leafPinnedBy(deskPins, aggregateWorld.spaces),
-    [deskPins, aggregateWorld.spaces],
-  );
-  const switchTargets = (currentId: string, leave?: () => void) =>
-    compactArrangement
-      ? worldSwitchTargets(
-          presentedWorld.nodes,
-          currentId,
-          (node) => {
-            leave?.();
-            void applySelection(
-              node.id,
-              node.kind === "agent" ? "history" : "terminal",
-            );
-          },
-          leafPinned,
-        )
-      : undefined;
   const stableOpenNodeById = useStableCallback(openNodeById);
   const stableRevealDeskAgent = useStableCallback(revealDeskAgent);
   const stablePreviewTerminalById = useStableCallback(previewTerminalById);
@@ -418,7 +381,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   // The Town Master never greets over the welcome that asks for a first
   // connection, nor over an open window or sheet (TownMasterGreetingHost).
   const greetingHeld =
-    controller.hosts.length === 0 && inspectorConversations.length === 0;
+    connectionSelection.connections.length === 0 &&
+    inspectorConversations.length === 0;
   const greetingWindowsOpen =
     needsYouOpen ||
     visibleFloatingInspectors.length > 0 ||
@@ -434,7 +398,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       <AgentDialogs
         world={aggregateWorld}
         onOpenNode={(nodeId) => void openNodeById(nodeId)}
-        pinned={aggregatePinned}
       />
       {active && (view === "town" || view === "board" || view === "desk") ? (
         <TownMasterGreetingHost
@@ -443,8 +406,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
           windowsOpen={greetingWindowsOpen}
         />
       ) : null}
-      <CoreKillConfirmHost />
-      <CoreWorktreesHost />
       <WorldBin
         always={view === "town" || view === "board"}
         bus={view === "town"}
@@ -468,7 +429,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       <GroupsWindow
         world={aggregateWorld}
         onOpenTerminal={(id) => void openTerminalById(id)}
-        pinned={aggregatePinned}
       />
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}
@@ -502,7 +462,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       {/* The browser tab and app icon count what Needs you lists, in every
           view (Spaces too) and in preview scenes. */}
       <NeedsYouTabBadge world={world} />
-      {controller.hosts.length === 0 && inspectorConversations.length === 0 ? (
+      {connectionSelection.connections.length === 0 &&
+      inspectorConversations.length === 0 ? (
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
         <div
@@ -582,9 +543,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         conversationNodeIds={conversationNodeIds}
                         onSelect={stableSelectNode}
                         onOpen={stableOpenNodeById}
-                        onOpenFiles={(id) =>
-                          stableOpenInspectorView(id, "files")
-                        }
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
@@ -945,15 +903,35 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               bin: inspectorBin(conversation),
               // The colour is chosen from the swatch beside the name.
               back: view === "town" ? { label: "Back to Town" } : undefined,
-              switchTo: switchTargets(conversation.nodeId),
+              // A phone switches between agents and terminals from ⋯, as
+              // its terminal does: agents open on Chat, terminals on Terminal.
+              // The list is the hosts the filter shows, live ones only, those
+              // that need you first; the menu scrolls rather than cutting.
+              switchTo: compactArrangement
+                ? presentedWorld.nodes
+                    .filter(
+                      (node: WorldObjectNode): node is WorldLeafObject =>
+                        (node.kind === "agent" || node.kind === "terminal") &&
+                        node.actionable &&
+                        !node.stale &&
+                        node.id !== conversation.nodeId,
+                    )
+                    .sort(
+                      (a, b) => switchToRank(a.status) - switchToRank(b.status),
+                    )
+                    .map((node) => ({
+                      id: node.id,
+                      label: node.label,
+                      detail: `${node.stateLabels[node.status] ?? node.status} · ${node.spaceLabel}`,
+                      onSelect: () =>
+                        void applySelection(
+                          node.id,
+                          node.kind === "agent" ? "history" : "terminal",
+                        ),
+                    }))
+                : undefined,
             }}
             terminalColor={inspectorColor(conversation)}
-            terminal={coreInspectorTerminal(coreNode(conversation.nodeId), {
-              selected: conversation.view === "terminal",
-              shown: visibleFloatingInspectorIds.has(
-                worldInspectorWindowId(conversation),
-              ),
-            })}
             townSkin={view === "town"}
             onBind={() =>
               void store

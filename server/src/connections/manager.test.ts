@@ -121,36 +121,6 @@ describe("connection manager", () => {
     ]);
   });
 
-  test("an external default gives global consumers no runtime, and qualified calls still fail", async () => {
-    // A herdr-core default after a restart: the registry names it, this
-    // manager owns none of it.
-    const restarted = new ConnectionManager<FakeRuntime>("core-local");
-    expect(restarted.defaultReadyRuntime()).toBeNull();
-    expect(restarted.defaultRuntime()).toBeNull();
-    expect(() => restarted.readyRuntime("core-local")).toThrow(
-      "unknown connection: core-local",
-    );
-
-    // Registered while running: a ready local runtime is never the answer.
-    const manager = new ConnectionManager<FakeRuntime>("local");
-    manager.register({
-      identity: identity("local"),
-      createRuntime: fakeFactory("local"),
-    });
-    await manager.start("local");
-    expect(manager.defaultReadyRuntime()?.identity.id).toBe("local");
-    expect(() => manager.setDefault("local", { external: true })).toThrow(
-      "unknown connection",
-    );
-    manager.setDefault("core-local", { external: true });
-    expect(manager.defaultId()).toBe("core-local");
-    expect(manager.defaultReadyRuntime()).toBeNull();
-    expect(manager.defaultRuntime()).toBeNull();
-    expect(() => manager.status("core-local")).toThrow("unknown connection");
-    expect(manager.readyRuntime("local")?.identity.id).toBe("local");
-    await manager.stopAll();
-  });
-
   test("unregister drains a non-default runtime and prevents racing restarts", async () => {
     const stop = deferred();
     let runtime: FakeRuntime | undefined;

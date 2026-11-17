@@ -8,7 +8,7 @@ import { ConnectionManager, type ConnectionRuntime } from "./manager";
 import {
   ConnectionProfileService,
   connectionIdentityForProfile,
-  type TuiManagedProfile,
+  type ManagedConnectionProfile,
 } from "./profile-service";
 import {
   ConnectionProfileStore,
@@ -86,7 +86,7 @@ async function fixture(
         readOnly: false,
       })),
     },
-    createRuntime: (profile: TuiManagedProfile) => () => {
+    createRuntime: (profile: ManagedConnectionProfile) => () => {
       const identity = connectionIdentityForProfile(profile);
       const exited = deferred();
       const tunnel =

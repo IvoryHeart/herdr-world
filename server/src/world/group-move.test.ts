@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -87,7 +86,7 @@ function setup(options: Parameters<typeof fakeHerdr>[0] = {}) {
   return {
     context,
     request,
-    ...herdrRuntimeFixture(herdr),
+    herdr,
     source,
     destination,
     board,
@@ -491,10 +490,7 @@ test("the actual CLI service injects the RPC-owned queue and exact lease", async
           connectionId: "connection-a",
           generation: 4,
           isCurrent: state.context.isCurrent,
-          runtime: {
-            sshHost: () => null,
-            ...herdrRuntimeFixture({ call: state.context.call }),
-          },
+          runtime: { sshHost: () => null, herdr: { call: state.context.call } },
         };
       },
     }),

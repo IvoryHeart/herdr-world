@@ -318,15 +318,12 @@ npm install --global @ivoryheart/herdr-world
 Choose one channel. Homebrew uses the published platform archive; npm installs a
 small launcher and the matching platform binary. npm needs Node.js 22.14.0 or newer
 and optional dependencies enabled. Homebrew installs only World into its keg,
-without a mandatory `herdr` formula dependency. On a normal World launch, the
-launcher reuses an installed herdr-core or Herdr; while neither is installed, it
-installs herdr-core from its checksum-verified official release into
-`~/.local/bin` and starts it now and at each login. Installed runtimes are never
-replaced. `HERDR_WORLD_SKIP_HERDR=1` skips this. This applies to Apple Silicon,
-Intel and Linux. No Intel source build is needed. Add `~/.local/bin` to `PATH`
-for direct `hc` use. npm leaves the runtime to you (see
-[Herdr installation and upgrades](#herdr-installation-and-upgrades)) and starts
-none. For an existing installation, stop the old World process
+without a mandatory `herdr` formula dependency. On first normal World launch, the
+launcher reuses an existing Herdr; if missing, it installs the verified prebuilt
+Herdr in its own default location. This applies to Apple Silicon, Intel and Linux.
+No Intel source build is needed. Add `~/.local/bin` to `PATH` for direct `herdr` use.
+npm leaves Herdr to you (see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
+Neither starts Herdr. For an existing installation, stop the old World process
 before upgrading the channel.
 
 For a release candidate, request its exact version. The standalone installer
@@ -451,31 +448,8 @@ verified release:
 herdr-world herdr status
 herdr-world herdr setup             # register future startup; start only if down
 herdr-world herdr upgrade           # Herdr, harness integrations and plugin
-herdr-world herdr upgrade --install # no runtime found: install herdr-core
+herdr-world herdr upgrade --install # also install Herdr when none is found
 ```
-
-With no Herdr and no herdr-core on this computer, `upgrade --install` installs
-herdr-core instead of Herdr (Linux and macOS): core's official release list over
-HTTPS, its archive checked against the published SHA-256 (on macOS the archive
-must carry the signed `Herdr Core.app`, and `codesign` verifies the executable
-before anything downloaded runs), `~/.local/bin/herdr-core` plus an `hc` link
-if free, then core starts now and at login (a systemd user unit
-or a launchd LaunchAgent). An installed core is left as it is, and no Herdr is
-installed beside it; `herdr setup` makes the same choice and also starts an
-installed core now and at login. Windows x64 makes the same choice with core's
-own PowerShell steps: core's release list over HTTPS through System32 `curl.exe`,
-the zip checked against its SHA-256 before System32 `tar.exe` opens it, then
-`%LOCALAPPDATA%\Programs\herdr-core\herdr-core.exe` (`HC_INSTALL_DIR` elsewhere)
-plus an `hc.exe` link if free, added to the user PATH. Core starts now and at
-login through a hidden `Herdr World herdr-core.lnk` shortcut in your Startup
-folder; World rewrites only a shortcut it wrote. World reaches that core over its
-named pipe: on every connect it reads `core.lock` in the session's state directory
-(`%LOCALAPPDATA%\herdr-core\<session>` by default) and opens only the existing
-pipe, after the same owner check as for Windows SSH hosts; it never starts core
-to connect. Windows on Arm has no core build. A remote default connection keeps
-its own Herdr. Connect World to the new core
-with **Hosts → Manage connections → Install herdr-core…** (it starts the
-installed core and connects) or `herdr-world connections add core-local --core`.
 
 World looks for Herdr in `HERDR_BIN_PATH`, then `PATH`, then Herdr's default
 location: `~/.local/bin/herdr` on Linux and macOS, or
@@ -502,14 +476,9 @@ reopening are separate; this setup behavior does not verify macOS login recovery
 
 When it runs:
 
-- **Fresh standalone install**: checks for herdr-core (`hc`/`herdr-core`) and
-  Herdr. If either is installed it changes nothing. If neither is, it installs
-  herdr-core as above, starts it now and at login, and saves a `core-local`
-  connection as World's default (no Local Herdr profile is saved, so Town
-  shows only the herdr-core building) so World connects when it starts (an older World says to add it
-  under **Hosts → Manage connections** instead). Run `herdr-world herdr upgrade`
-  later to set up Herdr's harness integrations and plugin, or choose
-  **Runtime → Update Herdr integrations**.
+- **Fresh standalone install**: checks Herdr and installs it only if missing.
+  Run `herdr-world herdr upgrade` afterwards to set up its harness integrations
+  and plugin, or choose **Runtime → Update Herdr integrations**.
 - **Standalone installer replacing World**: finishes the same Herdr upgrade and
   World service restart as `herdr-world update`, including for a pinned release
   candidate. Output names each integration's result and gives retry commands
@@ -524,14 +493,14 @@ When it runs:
 - **Menu**: **Runtime → Upgrade Herdr** appears when Herdr or its running server is
   older than the verified release. **Runtime → Update Herdr integrations** appears
   when only harness integrations or the plugin are behind.
-- **Homebrew**: the launcher checks for a runtime before normal local World startup,
-  using the same `HERDR_BIN_PATH`, `PATH` and default-location lookup for Herdr and
-  `hc`/`herdr-core` on `PATH` or in `~/.local/bin`. It reuses any existing
-  installation, including standalone, version-managed and Homebrew-owned runtimes.
-  If neither is found, it installs herdr-core outside the World keg with the same
-  checksum-verified steps, starts it now and at login and saves the `core-local`
-  connection. Existing
-  runtimes are never automatically upgraded by this bootstrap. Metadata and
+- **Homebrew**: the launcher checks for Herdr before normal local World startup,
+  using the same `HERDR_BIN_PATH`, `PATH` and default-location lookup. It reuses any
+  existing installation, including standalone, version-managed and Homebrew-owned
+  runtimes. If missing, it installs the verified prebuilt release outside the World
+  keg, without starting a Herdr service or refreshing integrations. Downloads must
+  match the pinned checksum and version; atomic publication never replaces a runtime
+  appearing during setup. Existing
+  versions are never automatically upgraded by this bootstrap. Metadata and
   management commands do not bootstrap; remote/custom endpoints also skip it.
   A failed check or download prints a warning and World still starts, so SSH
   profiles and in-app setup remain available; retry with
@@ -542,8 +511,7 @@ When it runs:
   runtime needs an explicit upgrade through its owner (`brew upgrade herdr` for a
   Homebrew runtime, `herdr update` for Herdr's own installation).
 - **npm and Windows archives**: run `herdr-world herdr upgrade --install` once
-  yourself (herdr-core first when no runtime exists, on Windows x64 too), or use
-  the menu or **Hosts → Manage connections → Install herdr-core…**.
+  yourself, or use the menu.
 
 What the upgrade does:
 
@@ -1111,15 +1079,6 @@ Allow specific workspaces in Ranger settings before asking it to read status,
 terminal output, agent history or Git changes. New installations allow no
 workspaces. Manual approval is the default for proposed workspace actions; high
 permission is an explicit setting.
-
-Core rooms appear beside TUI workspaces. Allow the core room in Ranger's
-settings, then ask for its status, Git changes or an agent's terminal screen.
-Core reads use only the visible screen; history is explicitly unavailable.
-Ranger can preview a new worktree or prompt for confirmation; core handles
-prompt delivery under the original program and foreground, and uncertain
-sends never retry automatically. Use World's launch, bin and room controls
-for core lifecycle actions. A saved task retains core's durable identity and
-refuses a wiped or replaced core.
 
 Tasks run in separate service-owned conversations, either once, at an interval,
 or daily. Monitoring tasks can notify only when Ranger detects a meaningful

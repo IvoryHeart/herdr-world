@@ -300,20 +300,6 @@
   gap: 2px;
 }
 
-/* A section head without a status dot (herdr-core, Fixture core): title over
-   a wrapping description, never run together (#931). */
-.connection-manager-card-head > div:only-child {
-  grid-column: 1 / -1;
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.connection-manager-card-head > div:only-child > span {
-  color: var(--text);
-  font-size: 11px;
-}
-
 .connection-manager-card-head strong,
 .connection-manager-card-head > div:nth-child(2) > span {
   overflow: hidden;
@@ -359,30 +345,6 @@
   white-space: nowrap;
 }
 
-/* A herdr-core connection's observed terminals (live or stale). */
-.connection-core-terminals {
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  list-style: none;
-  font-size: 11px;
-}
-
-.connection-core-terminals code {
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-code);
-}
-
-.modal fieldset.form-field {
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-
 .connection-profile-error {
   display: flex;
   align-items: flex-start;
@@ -391,26 +353,6 @@
   color: var(--danger-text);
   font-size: 12px;
   line-height: 1.4;
-}
-
-.connection-core-logout {
-  display: grid;
-  gap: 4px;
-  color: var(--warning-text);
-  font-size: 12px;
-}
-
-.connection-core-logout svg {
-  vertical-align: -2px;
-}
-
-.connection-core-logout code {
-  justify-self: start;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  color: var(--text-code);
-  font-size: 11px;
-  user-select: all;
 }
 
 .connection-profile-error svg {

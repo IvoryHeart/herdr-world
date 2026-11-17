@@ -18,7 +18,6 @@ import {
   type ConnectionClient,
 } from "../api";
 import { type TaskNotificationPreferences } from "../taskPush";
-import type { CoreConnectionProfileSummary } from "../worldHosts";
 
 export interface ServerSessionState {
   /** ConnectionManager generation that owns every server resource below. */
@@ -66,11 +65,6 @@ export interface State extends ServerSessionState {
   connectionPaused: boolean;
   bridgeStatus: BridgeStatus | null;
   connections: ConnectionSummary[];
-  /**
-   * herdr-core profiles from the same catalogue reply. They are hosts for
-   * World's lists and choices (`worldHosts`), never Herdr (TUI) connections.
-   */
-  coreConnections?: CoreConnectionProfileSummary[];
   /** A validated catalogue has been admitted on the current transport. */
   catalogueReady: boolean;
   defaultConnectionId: string;

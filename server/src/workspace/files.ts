@@ -1,4 +1,4 @@
-import type { HostResources } from "../adapters/runtime-ports";
+import type { HerdrClient } from "../bridge/herdr-client";
 import { sshReadCommandArgv } from "../bridge/ssh-command";
 import { checkoutPath as getCheckoutPath } from "./utils";
 import {
@@ -68,7 +68,7 @@ const MAX_FILE_RESOLUTION_CANDIDATES = 32;
 const MAX_FILE_RESOLUTION_PATH_LENGTH = 4096;
 
 export function createFileHandlers({
-  resources,
+  herdr,
   sshHost,
   runProcessWithCodeTimeout,
   runProcessWithInputTimeout,
@@ -79,7 +79,7 @@ export function createFileHandlers({
   revealPath = revealLocalPath,
   resolveAgentWorktreeTarget,
 }: {
-  resources: HostResources;
+  herdr: HerdrClient;
   sshHost: () => string | undefined;
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
   runProcessWithInputTimeout: RunProcessWithInputTimeout;
@@ -99,7 +99,7 @@ export function createFileHandlers({
     if (workspace[agentRoot]) return workspace[agentRoot] as string;
     const checkoutPath = getCheckoutPath(workspace);
     if (checkoutPath) return checkoutPath;
-    const paneResult = await resources.listTerminals({});
+    const paneResult = await herdr.call("pane.list");
     const panes = Array.isArray((paneResult as any)?.panes)
       ? (paneResult as any).panes
       : [];
@@ -117,7 +117,7 @@ export function createFileHandlers({
     workspaceId: string,
     params: Record<string, unknown>,
   ) {
-    const result = await resources.getWorkspace({
+    const result = await herdr.call("workspace.get", {
       workspace_id: workspaceId,
     });
     const workspace = (result as any)?.workspace ?? result;
@@ -597,7 +597,7 @@ export function createFileHandlers({
     const workspaceRoot = await resolveCandidate(getCheckoutPath(workspace));
     if (workspaceRoot) return workspaceRoot;
 
-    const paneResult = await resources.listTerminals({});
+    const paneResult = await herdr.call("pane.list");
     const panes = Array.isArray((paneResult as any)?.panes)
       ? (paneResult as any).panes
       : [];
@@ -641,8 +641,8 @@ export function createFileHandlers({
   async function readWorkspacePullRequest(params: Record<string, unknown>) {
     let { root } = await workspaceAndGitRoot(params, "git.pull_request");
     if (params.worktree_path !== undefined) {
-      const listed = (await resources.listWorktrees({
-        workspace_id: String(params.workspace_id ?? ""),
+      const listed = (await herdr.call("worktree.list", {
+        workspace_id: params.workspace_id,
       })) as {
         worktrees?: {
           path: string;

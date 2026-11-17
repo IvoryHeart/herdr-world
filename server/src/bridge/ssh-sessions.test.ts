@@ -1,4 +1,3 @@
-import { tmpdir } from "node:os";
 import { afterEach, describe, expect, jest, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -47,7 +46,7 @@ function fakeMaster(
   destination: string,
   isAlive: () => Promise<boolean> = async () => true,
 ) {
-  const directory = mkdtempSync(join(tmpdir(), "rg-sessions-test-"));
+  const directory = mkdtempSync("/tmp/rg-sessions-test-");
   directories.push(directory);
   const controlPath = join(directory, "m.ctl");
   writeFileSync(controlPath, "");

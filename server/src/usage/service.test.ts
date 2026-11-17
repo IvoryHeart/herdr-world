@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { WorldUsageService } from "./service";
 import { usageDigest, type RuntimeUsage } from "./host";
@@ -68,9 +67,7 @@ function setup(hosts = ["alpha"], collectionMs = 20_000) {
   let read: (signal: AbortSignal) => Promise<RuntimeUsage> = async () =>
     structuredClone(data);
   const runtime = {
-    ...herdrRuntimeFixture({
-      call: async () => ({ agents: inventory ?? agents }),
-    }),
+    herdr: { call: async () => ({ agents: inventory ?? agents }) },
     usage: async (
       _agents: unknown,
       _now: number,

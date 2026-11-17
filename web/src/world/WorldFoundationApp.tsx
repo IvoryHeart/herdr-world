@@ -34,13 +34,11 @@ import {
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   writeInspectorPreferences,
 } from "../workspaceResource";
-import { coreAuthorityFrom, provideFloatShellAuthority } from "./floatShell";
 import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
 import { buildWorldObject, type WorldObject } from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
 import { HostsControl } from "./HostsControl";
-import { worldHosts } from "../worldHosts";
 import { WorldNavigator } from "./WorldNavigator";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import { WorldTopbarStatus } from "./WorldStatus";
@@ -162,12 +160,14 @@ export default function WorldFoundationApp() {
   const topbarConnectionId = useStoreSelector(
     (snapshot) => snapshot.activeConnectionId,
   );
-  const hosts = useStoreSelector(worldHosts);
+  const conversationConnections = useStoreSelector(
+    (snapshot) => snapshot.connections,
+  );
   const catalogueReady = useStoreSelector(
     (snapshot) => snapshot.catalogueReady,
   );
   const hostsFilter = useHostsFilter(
-    hosts.map((host) => host.id),
+    conversationConnections.map((connection) => connection.id),
     catalogueReady,
   );
   const topbarWorld = useMemo(
@@ -218,10 +218,9 @@ export default function WorldFoundationApp() {
 
   useLayoutEffect(() => {
     if (conversationStatus !== "connected" || !catalogueReady) return;
-    // Windows of every current host stay, a herdr-core host's included.
-    const lease = hosts.map((host) => ({
-      connectionId: host.id,
-      runtimeGeneration: host.generation,
+    const lease = conversationConnections.map((connection) => ({
+      connectionId: connection.id,
+      runtimeGeneration: connection.generation,
     }));
     const retained = retainWorldInspectorConversations(
       inspectorConversations,
@@ -238,7 +237,12 @@ export default function WorldFoundationApp() {
         Object.entries(current).filter(([nodeId]) => retainedIds.has(nodeId)),
       ),
     );
-  }, [catalogueReady, hosts, conversationStatus, inspectorConversations]);
+  }, [
+    catalogueReady,
+    conversationConnections,
+    conversationStatus,
+    inspectorConversations,
+  ]);
 
   useEffect(() => {
     // The shell and views present the focused host's variant of the World.
@@ -246,14 +250,7 @@ export default function WorldFoundationApp() {
       () => store.get().activeConnectionId,
     );
     worldRuntimeStore.start();
-    // Open again in a core float shell takes authority from this read model.
-    const offFloat = provideFloatShellAuthority(
-      coreAuthorityFrom(worldRuntimeStore),
-    );
-    return () => {
-      offFloat();
-      worldRuntimeStore.stop();
-    };
+    return () => worldRuntimeStore.stop();
   }, []);
 
   useEffect(() => {
@@ -434,7 +431,7 @@ export default function WorldFoundationApp() {
           )}
           connectionControl={
             <HostsControl
-              connections={hosts}
+              connections={conversationConnections}
               ids={hostsFilter.ids}
               explanation={hostsFilter.explanation}
               onChange={hostsFilter.setIds}

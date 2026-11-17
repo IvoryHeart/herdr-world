@@ -7,11 +7,6 @@ export type WorldBrowserEntry =
   | "ProductionContexts"
   | "AnswerDeliveries"
   | "NeedsYouCard"
-  | "CoreViewOnly"
-  | "CoreControl"
-  | "CoreTerminalWatch"
-  | "CoreSharedState"
-  | "CoreFiles"
   | "QuestionCards";
 export type WorldBrowserBundle = {
   directory: string;

@@ -7,13 +7,10 @@ import {
   CONNECTION_PROFILE_FILE_VERSION,
   type ConnectionProfile,
   ConnectionProfileStore,
-  isCoreProfile,
   type PersistedConnectionRegistry,
   validateConnectionProfile,
 } from "../connections/profiles";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
-import { HerdrClient } from "../bridge/herdr-client";
-import { detectHerdrSetup } from "../herdr/bootstrap";
 import {
   type CliCommand,
   type CliContext,
@@ -40,8 +37,6 @@ import {
 export interface ConnectionsDependencies {
   probe?: ListenerProbe;
   test?: typeof testConnectionProfile;
-  /** Whether this computer has the Herdr TUI; `herdr status`'s detection. */
-  herdrInstalled?: (implicit: StartupLocalProfile) => Promise<boolean>;
 }
 
 function connectionsHelp(): string {
@@ -53,8 +48,6 @@ Usage:
   herdr-world connections add <id> --ssh <destination> [ssh options] [common options]
   herdr-world connections add <id> --control-socket <path> --client-socket <path>
                                 [common options]
-  herdr-world connections add <id> --core [--ssh <destination> [--windows]]
-                                [--session <name>] [common options]
   herdr-world connections remove <id> [--restart]
   herdr-world connections set-default <id> [--restart]
 
@@ -70,14 +63,6 @@ SSH add options:
   --windows          the SSH host runs Windows
   --herdr-path <path>, --session <name>
                      Windows host executable and Herdr session
-
-herdr-core add options:
-  --core             watch a herdr-core already running on this computer, or
-                     on the --ssh host; World reads core.lock and never starts
-                     core. --session names the core session (default: default).
-                     The first saved connection keeps the local Herdr server
-                     as the default; without the Herdr TUI, core is the
-                     default and no Local profile is saved.
 
 The profiles are the same ones the connection selector edits. A running
 Herdr World keeps its own copy and would overwrite a change made here, so edits
@@ -97,7 +82,6 @@ const ADD_OPTIONS = {
   "remote-control-socket": { type: "string" },
   "remote-client-socket": { type: "string" },
   windows: { type: "boolean" },
-  core: { type: "boolean" },
   "herdr-path": { type: "string" },
   session: { type: "string" },
   "auto-connect": { type: "boolean" },
@@ -131,13 +115,6 @@ function implicitDefault(
 }
 
 function describe(profile: ManagedConnectionProfile): string {
-  if (isCoreProfile(profile)) {
-    const where =
-      profile.type === "ssh"
-        ? ` ${profile.ssh_destination}${profile.remote_platform === "windows" ? " (Windows)" : ""}`
-        : "";
-    return `${profile.type === "ssh" ? "ssh  " : "local"}  herdr-core${where} (session ${profile.core_session})`;
-  }
   if (profile.type === "local") return `local  ${profile.control_socket_path}`;
   const remote =
     profile.remote_platform === "windows"
@@ -188,29 +165,6 @@ function profileFromFlags(
   const label = (values.label as string | undefined) ?? id;
   const autoConnect = values["auto-connect"] === true;
   const ssh = values.ssh as string | undefined;
-  if (values.core === true) {
-    const used = [
-      "control-socket",
-      "client-socket",
-      "remote-control-socket",
-      "remote-client-socket",
-      "herdr-path",
-    ].find((key) => values[key] !== undefined);
-    if (used) throw new UsageError(`--${used} cannot be combined with --core`);
-    if (values.windows && ssh === undefined)
-      throw new UsageError("--windows requires --ssh");
-    return validateConnectionProfile({
-      id,
-      label,
-      type: ssh === undefined ? "local" : "ssh",
-      runtime: "herdr-core",
-      ...(ssh === undefined ? {} : { ssh_destination: ssh }),
-      ...(values.windows ? { remote_platform: "windows" } : {}),
-      core_session: (values.session as string | undefined) ?? "default",
-      core_state_dir: "",
-      auto_connect: autoConnect,
-    });
-  }
   const sshOnly = [
     "remote-control-socket",
     "remote-client-socket",
@@ -260,14 +214,6 @@ export function createConnectionsCommand(
 ): CliCommand {
   const probe = dependencies.probe ?? probeListener;
   const test = dependencies.test ?? testConnectionProfile;
-  const herdrInstalled =
-    dependencies.herdrInstalled ??
-    (async (implicit: StartupLocalProfile) =>
-      (
-        await detectHerdrSetup({
-          ping: () => new HerdrClient(implicit.control_socket_path).ping(),
-        })
-      ).state !== "missing");
   return {
     name: "connections",
     summary: "list, test and edit Herdr connection profiles",
@@ -363,10 +309,6 @@ export function createConnectionsCommand(
         const results = await Promise.all(
           selected.map(async (profile) => {
             try {
-              if (isCoreProfile(profile))
-                throw new Error(
-                  "herdr-core connections are tested from the Connections page",
-                );
               const result = await test(profile);
               return {
                 id: profile.id,
@@ -426,21 +368,6 @@ export function createConnectionsCommand(
               profiles: [...registry.profiles, profile],
             };
           } else if (explicitOverride(setup)) {
-            if (isCoreProfile(profile))
-              throw new UsageError(
-                "add a Herdr connection before a herdr-core one",
-              );
-            next = {
-              version: CONNECTION_PROFILE_FILE_VERSION,
-              default_connection_id: profile.id,
-              profiles: [profile],
-            };
-          } else if (
-            isCoreProfile(profile) &&
-            !(await herdrInstalled(implicitDefault(context, setup)))
-          ) {
-            // Like the web UI: no Herdr TUI, so no Local profile; core is
-            // the default (#935).
             next = {
               version: CONNECTION_PROFILE_FILE_VERSION,
               default_connection_id: profile.id,

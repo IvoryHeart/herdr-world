@@ -1,20 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import {
-  FolderOpen,
-  SquareTerminal,
-  Terminal as ShellIcon,
-} from "lucide-react";
+import { SquareTerminal } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { agentStateWord } from "../agentMarks";
 import { AgentLatestMessage } from "../AgentHoverCard";
-import { CORE_WATCH_TITLE as WATCH_TITLE } from "../viewOnly";
 import type { TownChoice, TownConversation } from "./townChat";
 import { townPortrait } from "./townSprites";
-import { store } from "../../store";
-import { canOpenRoomShell, openRoomShell } from "../floatShell";
-import type { WorldLeafObject } from "../worldObject";
-import { useCoreSeen } from "../coreSeen";
-import { CorePinButton } from "../CorePin";
 import { ContextFillBar } from "../../components/ContextFillBar";
 import { useAgentContextFill } from "../agentContextFill";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
@@ -50,8 +40,6 @@ export function TownPeek({
   onAnswer,
   onChat,
   onTerminal,
-  leaf = null,
-  onFiles,
   onNext,
   onClose,
   onHold,
@@ -87,16 +75,6 @@ export function TownPeek({
   /** Open the agent's one window on Chat. */
   onChat(): void;
   onTerminal(): void;
-  /**
-   * The agent's live World object: its peek offers the room's floating
-   * shell (Herdr Float, or World's own on core).
-   */
-  leaf?: WorldLeafObject | null;
-  /**
-   * Open the agent's window on Files: offered for a herdr-core agent, whose
-   * terminal World cannot open, but whose folder it can show.
-   */
-  onFiles?: (() => void) | null;
   onNext: (() => void) | null;
   onClose(): void;
   onHold(hold: boolean): void;
@@ -107,10 +85,6 @@ export function TownPeek({
   const follow = useRef(true);
   const latest = conversation?.latest ?? null;
   const text = `${latest?.id ?? ""}${question.join("\n")}`;
-  // A herdr-core agent drawn here is seen in Herdr's apps too.
-  useCoreSeen(
-    agent.coreShared ? { ...agent.coreShared, stale: agent.stale } : null,
-  );
   const contextFill = useAgentContextFill({
     connectionId: agent.currentPaneRef.connectionId,
     generation: agent.currentPaneRef.generation,
@@ -193,64 +167,16 @@ export function TownPeek({
             }
           />
         ) : null}
-        {agent.coreShared ? (
-          <CorePinButton
-            className="town-peek-pin"
-            target={agent.coreShared}
-            disabled={agent.stale}
-          />
-        ) : null}
         <button
           type="button"
           className="town-peek-terminal"
           aria-label={`Open ${agent.displayLabel}'s terminal`}
-          title={
-            agent.viewOnly && !agent.viewOnly.watch
-              ? agent.viewOnly.reason
-              : agent.viewOnly
-                ? WATCH_TITLE
-                : "Open terminal"
-          }
-          disabled={Boolean(agent.viewOnly && !agent.viewOnly.watch)}
+          title="Open terminal"
           onClick={onTerminal}
         >
           <SquareTerminal size={15} aria-hidden="true" />
           <span>Open terminal</span>
         </button>
-        {leaf && canOpenRoomShell(leaf) ? (
-          <button
-            type="button"
-            className="town-peek-terminal town-peek-shell"
-            aria-label={`Open a shell in ${agent.displayLabel}'s room`}
-            title="A shell in this room's folder that keeps running when hidden"
-            onClick={() => {
-              onClose();
-              openRoomShell(leaf).catch((cause: unknown) =>
-                store.notify({
-                  kind: "error",
-                  message: `No shell for ${agent.displayLabel}`,
-                  detail:
-                    cause instanceof Error ? cause.message : String(cause),
-                }),
-              );
-            }}
-          >
-            <ShellIcon size={15} aria-hidden="true" />
-            <span>Shell</span>
-          </button>
-        ) : null}
-        {onFiles ? (
-          <button
-            type="button"
-            className="town-peek-terminal town-peek-files"
-            aria-label={`Open ${agent.displayLabel}'s files`}
-            title="Files and Changes"
-            onClick={onFiles}
-          >
-            <FolderOpen size={15} aria-hidden="true" />
-            <span>Files</span>
-          </button>
-        ) : null}
         <button
           type="button"
           className="town-peek-close"
@@ -275,7 +201,6 @@ export function TownPeek({
           conversation={conversation}
           taskSummary={agent.taskSummary}
           question={question}
-          {...(agent.viewOnly ? { viewOnly: agent.viewOnly } : {})}
         />
       </div>
       {choices.length && canReply ? (
@@ -297,33 +222,25 @@ export function TownPeek({
         {agent.semanticStatus === "done" ? (
           <button
             type="button"
-            disabled={!review.ready || Boolean(agent.viewOnly)}
+            disabled={!review.ready}
             title={
-              agent.viewOnly
-                ? agent.viewOnly.reason
-                : review.ready
-                  ? undefined
-                  : review.failed
-                    ? "The latest report could not be read"
-                    : "Reading the latest report…"
+              review.ready
+                ? undefined
+                : review.failed
+                  ? "The latest report could not be read"
+                  : "Reading the latest report…"
             }
             onClick={onReviewed}
           >
             <span>Mark reviewed</span>
           </button>
         ) : null}
-        {agent.semanticStatus === "done" && review.failed && !agent.viewOnly ? (
+        {agent.semanticStatus === "done" && review.failed ? (
           <button type="button" onClick={review.onRetry}>
             <span>Retry</span>
           </button>
         ) : null}
-        {agent.viewOnly && !agent.coreChat ? (
-          <button type="button" disabled title={agent.viewOnly.reason}>
-            <span>
-              {agent.semanticStatus === "done" ? "Follow up" : "Open chat"}
-            </span>
-          </button>
-        ) : canReply || agent.coreChat ? (
+        {canReply ? (
           <button type="button" onClick={onChat}>
             <span>
               {agent.semanticStatus === "done" ? "Follow up" : "Open chat"}

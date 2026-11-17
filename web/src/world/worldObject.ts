@@ -1,4 +1,3 @@
-import { isLocalCoreAddress } from "../../../shared/coreAddress";
 export { worldObjectWithWatches } from "./worldWatches";
 import { agentActivityAt } from "../../../shared/agentMetadata";
 import { sha256 } from "./worldDigest";
@@ -61,73 +60,8 @@ type WorldObjectBase = {
   selectedHost: boolean;
   stale: boolean;
   actionable: boolean;
-  /**
-   * Why a live node can be seen but not controlled (a herdr-core agent).
-   * Such a node is never stale and never actionable: its controls stay
-   * visible, disabled with this reason.
-   */
-  viewOnly?: string;
-  /**
-   * A live herdr-core node: World starts agents and shells there, manages
-   * its own rooms and ends terminals through world.core.* (coreControl.ts),
-   * never through the TUI paths `actionable` admits.
-   */
-  coreControl?: true;
   capabilities: WorldActionCapabilities;
 };
-
-/** An unlabelled room's name: Herdr's number, else (herdr-core) "Room". */
-function unnamedSpace(workspace: { number?: number | null }) {
-  return typeof workspace.number === "number"
-    ? `Space ${workspace.number}`
-    : "Room";
-}
-
-/** The one reason every view-only control shows. */
-export const CORE_VIEW_ONLY_REASON = "World can't mark core work reviewed yet";
-
-/**
- * A live herdr-core node World's Inspector opens: one whose terminal World
- * watches (its Terminal tab) or whose Files and Changes it can show. A core
- * agent adds its Chat.
- */
-export function isCoreResourceNode(node: {
-  stale: boolean;
-  viewOnly?: string;
-  coreControl?: true;
-  watch?: unknown;
-  capabilities: Pick<WorldActionCapabilities, "files" | "changes">;
-}): boolean {
-  return (
-    !node.stale &&
-    node.coreControl === true &&
-    node.viewOnly !== undefined &&
-    (node.watch !== undefined ||
-      node.capabilities.files ||
-      node.capabilities.changes)
-  );
-}
-
-/** A node the World window (inspector) may open: actionable, or core resources. */
-export function inspectorAdmits(node: {
-  stale: boolean;
-  actionable: boolean;
-  viewOnly?: string;
-  coreControl?: true;
-  watch?: unknown;
-  capabilities: Pick<WorldActionCapabilities, "files" | "changes">;
-}): boolean {
-  return node.actionable || isCoreResourceNode(node);
-}
-
-/** Live in the view: current, whether or not World can control it. */
-export function isLiveNode(node: {
-  stale: boolean;
-  actionable: boolean;
-  viewOnly?: string;
-}) {
-  return !node.stale && (node.actionable || node.viewOnly !== undefined);
-}
 
 export type WorldHostObject = WorldObjectBase & {
   kind: "host";
@@ -150,8 +84,6 @@ export type WorldLeafObject = WorldObjectBase & {
   appearance?: { status?: string; avatar?: string };
   kind: "agent" | "terminal";
   parentId: string;
-  /** Set for an agent herdr-core runs; absent on the TUI (herdr). */
-  runtime?: "herdr-core";
   pane: Pane;
   workspaceId: string;
   tabId: string;
@@ -173,12 +105,6 @@ export type WorldLeafObject = WorldObjectBase & {
   watched?: boolean;
   lastActivityAt?: number;
   spaceLabel: string;
-  /**
-   * A live herdr-core terminal World watches in its Inspector's Terminal tab
-   * (typing goes through core's input): its connection's current generation
-   * and core address.
-   */
-  watch?: { connectionId: string; generation: number; address: string };
 };
 
 export type WorldObjectNode =
@@ -431,20 +357,16 @@ function hostState(
 function actionCapabilities(
   kind: WorldObjectKind,
   state: WorldHostState,
-  viewOnly: string | undefined,
 ): WorldActionCapabilities {
-  const live = state === "active" || state === "ready-inactive";
-  const operational = !viewOnly && live;
+  const operational = state === "active" || state === "ready-inactive";
   const leaf = kind === "agent" || kind === "terminal";
   const space = kind === "space";
   return {
-    activateHost: !viewOnly && state === "ready-inactive",
+    activateHost: state === "ready-inactive",
     openTerminal: operational && leaf,
     openSpaces: operational && (leaf || space),
-    // A live herdr-core node's Files and Changes come from World's own host
-    // helpers (P4), so they open even though its terminal and chat cannot.
-    files: live && (leaf || space),
-    changes: live && (leaf || space),
+    files: operational && (leaf || space),
+    changes: operational && (leaf || space),
     agentHistory: operational && kind === "agent",
     roomMutation: operational && space,
     launcher: operational && space,
@@ -681,21 +603,10 @@ function* constructHost(
 ): Generator<number, WorldHostObject> {
   const connectionHostState = hostState(connection, selectedConnectionId);
   const selectedHost = connection.connectionId === selectedConnectionId;
-  const live =
+  const hostCapabilities = actionCapabilities("host", connectionHostState);
+  const operational =
     connectionHostState === "active" ||
     connectionHostState === "ready-inactive";
-  // herdr-core: World starts, places and ends terminals there (coreControl),
-  // while Chat uses its own core send route, without TUI authority.
-  const viewOnly =
-    live && connection.runtime === "herdr-core"
-      ? CORE_VIEW_ONLY_REASON
-      : undefined;
-  const operational = live && !viewOnly;
-  const hostCapabilities = actionCapabilities(
-    "host",
-    connectionHostState,
-    viewOnly,
-  );
   const observedGeneration =
     connection.snapshotGeneration ?? connection.generation;
   const id = worldObjectId(
@@ -737,7 +648,10 @@ function* constructHost(
       "space",
       workspace.workspace_id,
     );
-    const spaceLabel = boundedLabel(workspace.label, unnamedSpace(workspace));
+    const spaceLabel = boundedLabel(
+      workspace.label,
+      `Space ${workspace.number ?? ""}`,
+    );
     const roomPanes = panesByWorkspace.get(workspace.workspace_id) ?? [];
     const metadata = new Map<Pane, Record<string, unknown> | null>();
     const paneInputs: string[] = [];
@@ -752,7 +666,6 @@ function* constructHost(
     }
     const roomCache = roomInputCache(workspace, [
       connection.connectionId,
-      connection.runtime ?? "herdr",
       observedGeneration,
       hostLabel,
       connectionHostState,
@@ -776,11 +689,7 @@ function* constructHost(
       const isAgent =
         typeof pane.agent === "string" && pane.agent.trim().length > 0;
       const kind = isAgent ? "agent" : "terminal";
-      const capabilities = actionCapabilities(
-        kind,
-        connectionHostState,
-        viewOnly,
-      );
+      const capabilities = actionCapabilities(kind, connectionHostState);
       const tab = tabsById.get(pane.tab_id);
       const tabLabel = boundedOptionalText(tab?.label, 100);
       const agentMetadata = isAgent ? (metadata.get(pane) ?? null) : null;
@@ -843,21 +752,8 @@ function* constructHost(
         hostLabel,
         hostState: connectionHostState,
         selectedHost,
-        stale: connection.stale || !live,
+        stale: connection.stale || !operational,
         actionable: operational,
-        ...(viewOnly ? { viewOnly, coreControl: true as const } : {}),
-        ...(viewOnly && !connection.stale && isLocalCoreAddress(pane.pane_id)
-          ? {
-              watch: {
-                connectionId: connection.connectionId,
-                generation: connection.generation,
-                address: pane.pane_id,
-              },
-            }
-          : {}),
-        ...(connection.runtime === "herdr-core"
-          ? { runtime: "herdr-core" as const }
-          : {}),
         capabilities,
         pane,
         workspaceId: pane.workspace_id,
@@ -903,14 +799,13 @@ function* constructHost(
       parentId: id,
       connectionId: connection.connectionId,
       generation: observedGeneration,
-      label: boundedLabel(workspace.label, unnamedSpace(workspace)),
+      label: boundedLabel(workspace.label, `Space ${workspace.number ?? ""}`),
       hostLabel,
       hostState: connectionHostState,
       selectedHost,
-      stale: connection.stale || !live,
+      stale: connection.stale || !operational,
       actionable: operational,
-      ...(viewOnly ? { viewOnly, coreControl: true as const } : {}),
-      capabilities: actionCapabilities("space", connectionHostState, viewOnly),
+      capabilities: actionCapabilities("space", connectionHostState),
       workspace,
       tabs: tabsByWorkspace.get(workspace.workspace_id) ?? [],
       children,
@@ -947,9 +842,8 @@ function* constructHost(
     hostLabel,
     hostState: connectionHostState,
     selectedHost,
-    stale: connection.stale || !live,
+    stale: connection.stale || !operational,
     actionable: operational,
-    ...(viewOnly ? { viewOnly, coreControl: true as const } : {}),
     capabilities: hostCapabilities,
     connection,
     spaces,

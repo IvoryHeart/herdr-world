@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -172,9 +171,9 @@ test("the actual snapshot RPC adopts a legacy tab colour from maintained dense m
                 generation: host.generation,
                 isCurrent: () => true,
                 runtime: {
-                  ...herdrRuntimeFixture({
+                  herdr: {
                     call: async () => ({ panes: host.snapshot?.panes ?? [] }),
-                  }),
+                  },
                 },
               }
             : null;

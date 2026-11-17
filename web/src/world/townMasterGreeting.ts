@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { AgentLook } from "../../../shared/agentProfile";
 import { worldLocalStorage } from "../browserStorage";
 import {
@@ -38,8 +33,6 @@ export type GreetingSnapshot = {
   visit: GreetingVisit | null;
   /** Where the card opens on wide screens: the figure or a summary card. */
   anchor: HTMLElement | null;
-  /** Cards on screen that the greeting waits behind (Town's setup card). */
-  holds: number;
 };
 
 export type GreetingDeps = {
@@ -55,7 +48,6 @@ export class TownMasterGreeting {
     pending: false,
     visit: null,
     anchor: null,
-    holds: 0,
   };
   #hiddenAt: number | null = null;
   /** The figure opened the card: it comes back after stepping aside. */
@@ -123,17 +115,6 @@ export class TownMasterGreeting {
 
   anchor(element: HTMLElement | null) {
     if (this.#state.anchor !== element) this.#set({ anchor: element });
-  }
-
-  /** A card the greeting must not cover, nor be covered by, is on screen. */
-  hold() {
-    this.#set({ holds: this.#state.holds + 1 });
-    let held = true;
-    return () => {
-      if (!held) return;
-      held = false;
-      this.#set({ holds: this.#state.holds - 1 });
-    };
   }
 
   #set(patch: Partial<GreetingSnapshot>) {
@@ -294,18 +275,6 @@ export function useGreetingWatch() {
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
-}
-
-/**
- * Holds the greeting back while `active` (Town's Herdr or herdr-core setup
- * card is on screen, #935): it waits, and opens once the card is gone.
- * Before paint, so the two never show together for a frame.
- */
-export function useGreetingHold(active: boolean) {
-  useLayoutEffect(
-    () => (active ? sharedGreeting().hold() : undefined),
-    [active],
-  );
 }
 
 /** A ref for the element the card opens at in this view. */

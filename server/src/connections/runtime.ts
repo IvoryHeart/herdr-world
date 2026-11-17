@@ -1,5 +1,3 @@
-import { herdrAdapter } from "../adapters/herdr";
-import { createTuiPassThrough } from "../adapters/herdr-runtime";
 import type { Clock, Scheduler } from "../service/ports";
 import {
   TERMINAL_DEFAULT_SIZE,
@@ -201,11 +199,6 @@ export function createLegacyConnectionRuntime(args: {
     logger: logger.child("herdr"),
     connectionId: identity.id,
   });
-  const { operations, sessions, resources, terminals } = herdrAdapter.runtime!({
-    client: herdr,
-    terminalBridge: () => terminalBridge,
-  });
-  const tui = createTuiPassThrough("herdr", herdr);
   const agentSessionFiles = createAgentSessionFileAccess({
     sshHost: config.sshHost,
     runBinaryProcessWithTimeout,
@@ -219,7 +212,7 @@ export function createLegacyConnectionRuntime(args: {
     remotePlatform,
     "Agent history",
     createAgentSessionHandlers({
-      herdrCall: (...args) => tui.call(...args),
+      herdrCall: (...args) => herdr.call(...args),
       files: agentSessionFiles,
       runtimeScope: {
         connectionId: identity.id,
@@ -245,7 +238,7 @@ export function createLegacyConnectionRuntime(args: {
     }),
   );
   const agentCheckout = createAgentCheckoutContext({
-    resources,
+    herdr,
     sshHost,
     runProcessWithCodeTimeout,
     shQuote,
@@ -256,7 +249,7 @@ export function createLegacyConnectionRuntime(args: {
     createAgentWorktree({
       connectionId: identity.id,
       generation: args.connectionGeneration ?? 0,
-      resources,
+      herdr,
       ...createWorktreeGit({ sshHost, runProcessWithCodeTimeout, shQuote }),
       readSessionMetadata: agentSessions.readWorktreeMetadata,
     }),
@@ -266,7 +259,7 @@ export function createLegacyConnectionRuntime(args: {
     args.settings.update(update, shouldCommit);
   const worktreeParents = createWorktreeParentStore({
     connectionId: identity.id,
-    resources,
+    herdr,
     sshHost,
     readSettings,
     updateSettings,
@@ -285,7 +278,7 @@ export function createLegacyConnectionRuntime(args: {
     remotePlatform,
     "Workspace file and Git access",
     createFileHandlers({
-      resources,
+      herdr,
       sshHost,
       runProcessWithCodeTimeout,
       runProcessWithInputTimeout,
@@ -325,7 +318,7 @@ export function createLegacyConnectionRuntime(args: {
     connectionId: identity.id,
     logger: logger.child("auto-sync"),
     formatError: sanitizeConnectionError,
-    resources,
+    herdr,
     sshHost,
     runProcessWithCodeTimeout,
     shQuote,
@@ -340,7 +333,7 @@ export function createLegacyConnectionRuntime(args: {
     "Worktree hook access",
     createWorktreeHookRunner({
       connectionId: identity.id,
-      resources,
+      herdr,
       sshHost,
       runProcess,
       runProcessWithCode,
@@ -384,7 +377,7 @@ export function createLegacyConnectionRuntime(args: {
     connectionId: identity.id,
     connectionGeneration: args.connectionGeneration,
     settings: args.settings,
-    resources,
+    herdr,
     sshHost,
     readWorktreeHooks: worktreeHooks.readWorktreeHooks,
     resolveWorkspaceGitRoot: async (workspaceId) =>
@@ -432,17 +425,18 @@ export function createLegacyConnectionRuntime(args: {
       return protocol;
     },
     createEmptyWorkspace: createEmptyWorkspaceCreator(
-      (method, params, timeoutMs) => tui.call(method, params, timeoutMs),
+      (method, params, timeoutMs) => herdr.call(method, params, timeoutMs),
     ),
     validateCreationSource: async (source) => {
-      const result = await operations.getTerminal(
+      const result = await herdr.call(
+        "pane.get",
         { pane_id: source.pane_id },
-        { timeoutMs: 5000 },
+        5000,
       );
       assertEndpointCreationSource(source, result?.pane);
     },
     focusedWorkspaceId: async () => {
-      const result = await operations.listWorkspaces({}, { timeoutMs: 5000 });
+      const result = await herdr.call("workspace.list", {}, 5000);
       return (
         result?.workspaces?.find(
           (workspace: { focused?: boolean }) => workspace.focused,
@@ -450,18 +444,14 @@ export function createLegacyConnectionRuntime(args: {
       );
     },
     appViewportSize: async () => {
-      const panes = (await operations.listTerminals({}, { timeoutMs: 5000 }))
-        ?.panes;
+      const panes = (await herdr.call("pane.list", {}, 5000))?.panes;
       const pane = Array.isArray(panes)
         ? (panes.find((item: { focused?: boolean }) => item?.focused) ??
           panes[0])
         : null;
       if (typeof pane?.pane_id !== "string") return null;
       const area = (
-        await operations.terminalLayout(
-          { pane_id: pane.pane_id },
-          { timeoutMs: 5000 },
-        )
+        await herdr.call("pane.layout", { pane_id: pane.pane_id }, 5000)
       )?.layout?.area;
       // A squeezed area is never the observer's size: keep the app offsets
       // around the default area instead.
@@ -484,7 +474,7 @@ export function createLegacyConnectionRuntime(args: {
     },
     lookupPaneId: async (terminalId) => {
       try {
-        const result = await operations.listTerminals({}, { timeoutMs: 5000 });
+        const result = await herdr.call("pane.list", {}, 5000);
         const panes = (result as { panes?: unknown } | null)?.panes;
         if (!Array.isArray(panes)) return null;
         for (const pane of panes) {
@@ -512,7 +502,7 @@ export function createLegacyConnectionRuntime(args: {
       if (!paneId) return false;
       for (let attempt = 0; attempt < 6; attempt += 1) {
         try {
-          const result = await operations.terminalLayout({ pane_id: paneId });
+          const result = await herdr.call("pane.layout", { pane_id: paneId });
           const area = result?.layout?.area;
           if (
             area &&
@@ -637,11 +627,11 @@ export function createLegacyConnectionRuntime(args: {
     pendingTaskEvents.set(paneId, event);
     // Resolve labels on demand so push works without a browser and after renames.
     const [workspaceResult, tabResult] = await Promise.all([
-      operations
-        .getWorkspace({ workspace_id: event.workspaceId }, { timeoutMs: 5000 })
+      herdr
+        .call("workspace.get", { workspace_id: event.workspaceId }, 5000)
         .catch(() => null),
-      operations
-        .listTabs({ workspace_id: event.workspaceId }, { timeoutMs: 5000 })
+      herdr
+        .call("tab.list", { workspace_id: event.workspaceId }, 5000)
         .catch(() => null),
     ]);
     // An older lookup must not publish over a newer notification for this pane.
@@ -726,7 +716,6 @@ export function createLegacyConnectionRuntime(args: {
   let taskListRevision = 0;
   const agentStatusSubscriptions = createAgentStatusSubscriptionLoop({
     herdr,
-    operations,
     connectionId: identity.id,
     onSubscribeError: (error) =>
       agentStatusRecovery.failure(sanitizeConnectionError(error), {
@@ -823,7 +812,7 @@ export function createLegacyConnectionRuntime(args: {
     signal?.throwIfAborted();
     if (disposed) throw new Error("connection runtime is disposed");
     if (worldEnv("DISABLE_ENDPOINT") === "1") return null;
-    const ping = await tui.call("ping", {}, 5_000);
+    const ping = await herdr.call("ping", {}, 5_000);
     signal?.throwIfAborted();
     if (disposed) throw new Error("connection runtime is disposed");
     if (!isTerminalHelloProtocol(ping.protocol)) return null;
@@ -904,7 +893,7 @@ export function createLegacyConnectionRuntime(args: {
       identity.id,
       args.connectionGeneration ?? 0,
     );
-    terminals.dispose();
+    terminalBridge.dispose();
     const subscriptionStop = subscriptionLoop.stop();
     const agentStatusStop = agentStatusSubscriptions.stop();
     const lastStepStop = lastStepTurns
@@ -934,11 +923,6 @@ export function createLegacyConnectionRuntime(args: {
     sshHost,
     runProcessWithCodeTimeout,
     herdr,
-    tui,
-    operations,
-    sessions,
-    resources,
-    terminals,
     worktreeParents,
     handleHerdrInfo,
     handleImageUpload,

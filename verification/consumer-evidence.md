@@ -516,21 +516,15 @@ restoration remain outside this evidence.
 The generated World formula has no mandatory Herdr dependency. It installs only
 World and a launcher into its keg. Normal local startup uses the compiled
 runtime's read-only status lookup to preserve any existing Herdr, regardless of
-version or installation owner, and any `hc`/`herdr-core` (owner ruling
-2026-11-16, #926). With neither runtime, a generated Unix bootstrap embeds
-`scripts/herdr-core-install.sh`: core's release list over HTTPS, the target
-archive checked against its published SHA-256, `--version` confirmed, then core
-started now and at login and a `core-local` connection saved through
-`connections add --core`. Nothing downloaded runs as a script. This path supports
-the immutable 0.2.7 binary without calling its upgrade command; a World that
-refuses `--core` gets a Manage connections hint. The standalone installer embeds
-the same block, checked against the canonical shell. A strict 0.2.7 fixture must
-still end with an installed core.
-`scripts/herdr-core-install.test.ts` runs the script against a local fixture
-release (fake archive, fake `systemctl`/`launchctl`, isolated HOME and PATH):
-install, checksum and version refusals, an existing core left alone, and
-start-at-login units. The installer tests cover none, TUI only, core only,
-both and skip. Explicit installations
+version or installation owner. A missing runtime uses a generated Unix bootstrap with the verified release's
+pinned SHA-256 and version. It rechecks discovery after download and publishes by
+an atomic hard link that cannot replace an existing file, symlink or directory.
+This compatibility path supports the immutable 0.2.7 binary without calling its
+upgrade command. The standalone installer probes CLI capabilities: it uses the Unix
+`--install --only-if-missing` operation when supported and the same compatibility
+bootstrap for pinned older binaries. Its self-contained generated block is checked
+against the canonical shell and verified metadata. A strict 0.2.7 fixture rejects
+the new flag and must still end with an executable Herdr. Explicit installations
 and bootstrap diagnose a blocking non-executable entry without modifying it or
 repeatedly downloading. Discovery's installed label alone is not admission:
 `assertHerdrBinaryRunnable` validates the selected CLI path, and the shared shell
@@ -562,12 +556,9 @@ no downloads, preserved entries and World startup for blocked paths. The standal
 regression separately records that running status skips the new CLI operation.
 The archive-stage check validates the launcher and World inputs. The tap and
 Release native CI use `scripts/check-homebrew-runtime.rb` to launch a temporary
-World listener with an isolated HOME and PATH: a fake `curl` serves a fake
-herdr-core release, so the launcher's real install steps (manifest, SHA-256,
-unpack, `--version`) install a fake core that is started once and only logs. It
-then reinstalls World and confirms that the existing core's digest stays
-unchanged and that it is not started again; nothing real is downloaded or run. World's own connects never start core; only this missing-runtime setup
-does. Native acceptance belongs to the exact CI head;
+World listener, install and execute a missing real Herdr, then reinstall World and
+confirm that the existing external runtime's digest stays unchanged. Herdr's server
+is never started by bootstrap. Native acceptance belongs to the exact CI head;
 Linux harness results alone do not prove native Homebrew installation acceptance.
 
 ### World update notification lifetime (Q36)

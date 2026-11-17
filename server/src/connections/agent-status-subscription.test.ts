@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
@@ -168,7 +167,7 @@ test("subscribes per agent pane and forwards status events", async () => {
   const paneLists: Array<{ result: unknown; revision?: number }> = [];
   client.on("event", (event) => events.push(event));
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     onPaneListStart: () => 17,
     onPaneList: (result, revision) => paneLists.push({ result, revision }),
@@ -204,7 +203,7 @@ test("rebuilds the subscription when a membership event changes the pane set", a
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 5,
@@ -244,7 +243,7 @@ test("rebuilds immediately when a pane move replaces the subscribed pane id", as
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 5,
@@ -278,7 +277,7 @@ test("ignores unrelated events and membership events that do not change the set"
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 5,
@@ -323,7 +322,7 @@ test("retries with a fresh listing when herdr rejects the subscription", async (
   const client = new HerdrClient(herdr.path);
   const errors: string[] = [];
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     onSubscribeError: (error) => errors.push(error.message),
     retryDelayMs: 10,
@@ -344,7 +343,7 @@ test("waits for an agent pane before subscribing", async () => {
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 5,
@@ -370,7 +369,7 @@ test("resubscribes when the subscription socket closes", async () => {
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 5,
@@ -392,7 +391,7 @@ test("honors a rebuild requested while a listing was in flight", async () => {
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 0,
@@ -442,7 +441,7 @@ test("recovers when subscribe throws synchronously", async () => {
   } as unknown as HerdrClient;
   const errors: string[] = [];
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(flaky),
+    herdr: flaky,
     connectionId: "test",
     onSubscribeError: (error) => errors.push(error.message),
     retryDelayMs: 10,
@@ -463,7 +462,7 @@ test("stop is idempotent and closes the active subscription", async () => {
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
   const loop = createAgentStatusSubscriptionLoop({
-    ...herdrRuntimeFixture(client),
+    herdr: client,
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 5,

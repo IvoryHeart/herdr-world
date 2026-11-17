@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  TOWN_PINNED_HINT,
   townDragFor,
   townDropTarget,
   townMagnetDesk,
@@ -61,7 +60,7 @@ function model(pinned: string[] = []) {
     ] as never),
     agentSeats: new Map([["ag", { deskKey: "d1", seat: 0 }]]),
     deskPins: new Map(
-      pinned.map((key) => [key, { key: `pin:${key}`, rank: null }]),
+      pinned.map((key) => [key, { key: `pin:${key}`, cell: null }]),
     ),
   } as unknown as TownModel;
 }
@@ -75,10 +74,10 @@ test("a held press picks up a desk from the room-card zoom in, an agent only zoo
     { kind: "desk", key: "d1", from: "r1" },
   );
   expect(townDragFor({ kind: "agent", key: "ag" }, m, "overview")).toBeNull();
-  // A pinned desk lifts too: it moves among its room's pinned seats.
+  // A pinned desk stays put at every zoom.
   expect(
     townDragFor({ kind: "desk", key: "d1" }, model(["d1"]), "overview"),
-  ).toMatchObject({ kind: "desk", key: "d1", from: "r1" });
+  ).toBeNull();
   expect(townDragFor({ kind: "desk", key: "d1" }, m, "room")).toMatchObject({
     kind: "desk",
     key: "d1",
@@ -223,8 +222,9 @@ test("a standing agent does not stand for its desk's slot", () => {
   ).toBeNull();
 });
 
-test("an unpinned desk takes no pinned seat", () => {
+test("a pinned desk is not picked up, and no desk takes its place", () => {
   const m = model(["d2"]);
+  expect(townDragFor({ kind: "desk", key: "d2" }, m, "room")).toBeNull();
   // Its agents can still be moved; the pin is the desk's.
   expect(
     townDragFor({ kind: "agent", key: "ag" }, model(["d1"]), "desk"),
@@ -234,63 +234,6 @@ test("an unpinned desk takes no pinned seat", () => {
     key: null,
     label: "d2 is pinned: unpin it to take its place",
   });
-});
-
-test("a pinned desk reorders among its room's pinned seats and goes back from anywhere else", () => {
-  const m = model(["d1", "d2"]);
-  const drag = townDragFor({ kind: "desk", key: "d2" }, m, "room")!;
-  // Onto another pinned desk of its room, or its seated agent: take its place.
-  for (const hit of [
-    { kind: "desk", key: "d1" },
-    { kind: "pane", key: "p", deskKey: "d1" },
-    { kind: "agent", key: "ag" },
-  ] as const)
-    expect(townDropTarget(drag, hit, m)).toMatchObject({
-      key: "d1",
-      label: "Put d2 in d1’s place",
-      action: "reorder",
-    });
-  // Off the rug, in another room or host, on nothing: back, with the hint.
-  for (const hit of [
-    { kind: "cell", roomKey: "r1", cellIndex: 2 },
-    { kind: "room", key: "r1" },
-    { kind: "room", key: "r2" },
-    { kind: "desk", key: "d3" },
-    { kind: "room", key: "r3" },
-    { kind: "desk", key: "d2" },
-    null,
-  ] as const)
-    expect(townDropTarget(drag, hit, m)).toEqual({
-      key: null,
-      label: TOWN_PINNED_HINT,
-    });
-  // An unpinned desk of its room is not a pinned seat.
-  const one = model(["d2"]);
-  expect(
-    townDropTarget(
-      townDragFor({ kind: "desk", key: "d2" }, one, "room")!,
-      { kind: "desk", key: "d1" },
-      one,
-    ),
-  ).toEqual({ key: null, label: TOWN_PINNED_HINT });
-  // Resting on a desk in another room does not group it there.
-  expect(
-    townDropTarget(drag, { kind: "desk", key: "d3" }, m, new Map(), "d3"),
-  ).toEqual({ key: null, label: TOWN_PINNED_HINT });
-  // In its own room it still groups, and leaves a team on the floor.
-  expect(
-    townDropTarget(drag, { kind: "desk", key: "d1" }, m, new Map(), "d1"),
-  ).toMatchObject({ key: "d1", action: "group" });
-  expect(
-    townDropTarget(
-      drag,
-      { kind: "room", key: "r1" },
-      m,
-      new Map(),
-      null,
-      new Set(["d2"]),
-    ),
-  ).toMatchObject({ key: "r1", action: "ungroup" });
 });
 
 test("a room lifts by its edge, never its floor, and not from the roofs", () => {

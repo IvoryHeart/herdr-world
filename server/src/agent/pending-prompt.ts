@@ -109,14 +109,8 @@ export type PromptOption = {
 /** Lines of recent output read for a blocked agent's prompt. */
 export const PROMPT_SCREEN_LINES = 80;
 
-/**
- * What the prompt was read under: the pane's session and state sequence
- * (Herdr's number, or core's occupancy and turn as a string).
- */
-export type PromptContext = {
-  session: string | null;
-  seq: number | string | null;
-};
+/** What the prompt was read under: the pane's session and state sequence. */
+export type PromptContext = { session: string | null; seq: number | null };
 
 const BOX_TOP = /^\s*╭─+╮\s*$/;
 const BOX_BOTTOM = /^\s*╰─+╯\s*$/;

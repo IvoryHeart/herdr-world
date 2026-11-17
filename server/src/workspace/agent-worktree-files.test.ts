@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import {
   runProcessWithInputTimeout,
   runBinaryProcessWithTimeout,
@@ -85,7 +84,7 @@ test("Inspector Files, Changes and HTTP downloads use the agent's linked checkou
     const model = createAgentWorktree({
       connectionId: "alpha",
       generation: 7,
-      ...herdrRuntimeFixture(herdr),
+      herdr,
       ...git,
       readSessionMetadata: async () => null,
     });
@@ -111,7 +110,7 @@ test("Inspector Files, Changes and HTTP downloads use the agent's linked checkou
       runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
-      ...herdrRuntimeFixture(herdr as HerdrClient),
+      herdr: herdr as HerdrClient,
       sshHost: () => undefined,
       runProcessWithCodeTimeout,
       shQuote,

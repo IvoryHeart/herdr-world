@@ -1,9 +1,5 @@
-import { deliverCore } from "../herdr-core/delivery";
-import { CoreFenceError } from "../herdr-core/fence";
-import { CoreRpcError } from "../herdr-core/client";
 import {
   ANSWER_DELIVERY_VERB,
-  herdrRecipient,
   originalAsker,
   sameRecipient,
 } from "./ask-delivery-types";
@@ -105,90 +101,12 @@ export function createAnswerDispatcher(deps: {
       const binding = bindings.get(entry.id)!;
       const ask = sameAnswer(entry),
         recipient = entry.intent?.condition.recipient;
-      if (
-        binding.state === "attached" &&
-        binding.kind === "core" &&
-        ask &&
-        recipient?.adapter === "herdr-core"
-      ) {
-        const prompt = answerPrompt(ask);
-        let marked = false;
-        try {
-          await binding.lease.send(
-            prompt.text,
-            async () => {
-              if (!actorAllowed(entry) || !binding.lease.isCurrent())
-                return false;
-              marked = await context.beforeSubmit();
-              return marked && context.guard() && binding.lease.isCurrent();
-            },
-            () => actorAllowed(entry) && context.guard(),
-          );
-          return {
-            state: "delivered",
-            receipt: { source: "herdr-core", pointer: prompt.pointer },
-          };
-        } catch (error) {
-          const refused =
-            error instanceof CoreRpcError ||
-            (error instanceof CoreFenceError && error.stage !== "publication");
-          return {
-            state: refused || !marked ? "refused" : "uncertain",
-            reason: refused
-              ? "Core refused the answer or its original occupant/foreground changed; use ask get"
-              : "The core send outcome is uncertain; never retried automatically, use ask get",
-            ...(refused ? { not_submitted: true } : {}),
-          };
-        } finally {
-          bindings.delete(entry.id);
-        }
-      }
-      // Only a Herdr (TUI) Chat session takes answers from World today.
-      if (
-        binding.state !== "attached" ||
-        binding.kind === "core" ||
-        !ask ||
-        !recipient ||
-        !herdrRecipient(recipient)
-      )
+      if (binding.state !== "attached" || !ask || !recipient)
         return {
           state: "refused",
           reason: "Original answer binding is unavailable",
         };
       const prompt = answerPrompt(ask);
-      if (binding.core) {
-        try {
-          const result = await deliverCore(
-            binding.lease,
-            recipient.pane_id,
-            recipient.conversation.fingerprint,
-            { kind: "message", text: prompt.text },
-            {
-              beforeSubmit: () => context.beforeSubmit(),
-              guard: () => actorAllowed(entry) && context.guard(),
-            },
-          );
-          if (result.status === "sent")
-            return {
-              state: "delivered",
-              receipt: {
-                source: "herdr-core",
-                turn: result.turn,
-                fingerprint: recipient.conversation.fingerprint,
-                pointer: prompt.pointer,
-              },
-            };
-          if (result.status === "uncertain")
-            return { state: "uncertain", reason: result.message };
-          return {
-            state: "refused",
-            reason: result.message,
-            not_submitted: true,
-          };
-        } finally {
-          bindings.delete(entry.id);
-        }
-      }
       let marked = false,
         confirmed = false;
       try {

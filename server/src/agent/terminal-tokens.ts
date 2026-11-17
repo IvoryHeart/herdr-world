@@ -1,11 +1,3 @@
-import {
-  createHerdrControlPorts,
-  createTuiPassThrough,
-} from "../adapters/herdr-runtime";
-import type {
-  RuntimeOperations,
-  SessionProducers,
-} from "../adapters/runtime-ports";
 import { AGENT_NAME } from "../../../shared/agentProfile";
 
 export const TERMINAL_SETTINGS_SOURCE = "herdr-world:terminal-settings";
@@ -22,8 +14,13 @@ export type SettingsLease = {
   generation: number;
   isCurrent(): boolean;
   runtime: {
-    operations: Pick<RuntimeOperations, "getTerminal" | "listTerminals">;
-    sessions: Pick<SessionProducers, "reportMetadata">;
+    herdr: {
+      call(
+        method: string,
+        params: Record<string, unknown>,
+        timeout?: number,
+      ): Promise<unknown>;
+    };
   };
 };
 export type MasterClaim = {
@@ -135,10 +132,7 @@ export async function writeTerminalTokens(
   if (typeof write !== "function") validate(write);
   if (!lease.isCurrent()) throw new Error("terminal settings runtime changed");
   const pane = paneOf(
-    await lease.runtime.operations.getTerminal(
-      { pane_id: paneId },
-      { timeoutMs: 10_000 },
-    ),
+    await lease.runtime.herdr.call("pane.get", { pane_id: paneId }, 10_000),
   );
   if (!lease.isCurrent()) throw new Error("terminal settings runtime changed");
   if (pane.pane_id !== paneId || pane.terminal_id !== terminalId)
@@ -155,9 +149,10 @@ export async function writeTerminalTokens(
   if (!lease.isCurrent()) throw new Error("terminal settings runtime changed");
   validate(tokens);
   if (!Object.keys(tokens).length) return pane;
-  await lease.runtime.sessions.reportMetadata(
+  await lease.runtime.herdr.call(
+    "pane.report_metadata",
     { pane_id: paneId, source: TERMINAL_SETTINGS_SOURCE, tokens },
-    { timeoutMs: 10_000 },
+    10_000,
   );
   if (!lease.isCurrent())
     throw new Error("terminal settings runtime changed during write");
@@ -208,13 +203,7 @@ export function terminalSettingsMoveCall(
           missing[key as keyof SettingTokens] = value;
       if (Object.keys(missing).length)
         await writeTerminalTokens(
-          {
-            generation: 0,
-            isCurrent,
-            runtime: createHerdrControlPorts(
-              createTuiPassThrough("herdr", { call }),
-            ),
-          },
+          { generation: 0, isCurrent, runtime: { herdr: { call } } },
           String(moved.pane_id),
           String(before.terminal_id),
           missing,

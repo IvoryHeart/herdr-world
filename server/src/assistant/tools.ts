@@ -9,21 +9,6 @@ import { AssistantUserError, surfaceAssistantUserError } from "./errors";
 
 export const ASSISTANT_DEFAULT_TERMINAL_LINES = 120;
 export const ASSISTANT_MAX_TERMINAL_LINES = 1000;
-
-export function terminalReadLines(value: unknown): number {
-  if (
-    value !== undefined &&
-    (!Number.isInteger(value) ||
-      Number(value) < 1 ||
-      Number(value) > ASSISTANT_MAX_TERMINAL_LINES)
-  ) {
-    throw new Error(
-      `Terminal lines must be between 1 and ${ASSISTANT_MAX_TERMINAL_LINES}`,
-    );
-  }
-  return Number(value ?? ASSISTANT_DEFAULT_TERMINAL_LINES);
-}
-
 const UNIX_ONLY_NOTE =
   'Unavailable for workspaces that workspace_status reports with remote_platform "windows".';
 
@@ -62,9 +47,9 @@ export const workspaceTools = (
   label: `Read workspace ${kind}`,
   description:
     kind === "status"
-      ? 'List authorized workspaces, panes, agents and task status. Omit identifiers to list the authorized scope. Workspaces on herdr-core hosts report runtime "herdr-core": their agent history is unavailable and Ranger can only create worktrees there.'
+      ? "List authorized workspaces, panes, agents and task status. Omit identifiers to list the authorized scope."
       : kind === "terminal"
-        ? `Read recent terminal output from an authorized workspace. Use identifiers from workspace_status. Choose lines from 1 to ${ASSISTANT_MAX_TERMINAL_LINES} (default ${ASSISTANT_DEFAULT_TERMINAL_LINES}); request more when earlier context is needed. Available output depends on Herdr support and agent state; application-owned history may remain unavailable. Results retain at most 32,000 newest characters and indicate truncation. A herdr-core workspace (workspace_status runtime "herdr-core") returns only the visible screen; lines does not apply there.`
+        ? `Read recent terminal output from an authorized workspace. Use identifiers from workspace_status. Choose lines from 1 to ${ASSISTANT_MAX_TERMINAL_LINES} (default ${ASSISTANT_DEFAULT_TERMINAL_LINES}); request more when earlier context is needed. Available output depends on Herdr support and agent state; application-owned history may remain unavailable. Results retain at most 32,000 newest characters and indicate truncation.`
         : kind === "diff"
           ? `Read working-tree changes from an authorized workspace. Use identifiers from workspace_status. Omit path to list changed files, then pass an entry's path and kind to read its diff. Supported kinds are staged, unstaged, untracked and conflicted; omitting kind reads unstaged changes. ${UNIX_ONLY_NOTE}`
           : `Read ${kind} from an authorized workspace. Use identifiers from workspace_status. ${UNIX_ONLY_NOTE}`,

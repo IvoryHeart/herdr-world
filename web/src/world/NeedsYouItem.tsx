@@ -1,4 +1,3 @@
-import { CORE_WATCH_TITLE, viewOnlyMessage } from "./viewOnly";
 import { MessageSquare, Paperclip, SendHorizontal, X } from "lucide-react";
 import {
   type ReactNode,
@@ -16,7 +15,6 @@ import type { AnswerResult, TrustChoice } from "../components/chat/types";
 import { MarkdownPreview } from "../components/markdown";
 import { AgentHoverCard } from "./AgentHoverCard";
 import { leafOwner, useConversationRead } from "./conversationRead";
-import { chatClient } from "../coreRecipient";
 import { townAgo } from "./town/TownRail";
 import { askDeliveryMessage, type WorldAsk } from "./worldAsks";
 import type { WorldLeafObject } from "./worldObject";
@@ -80,7 +78,6 @@ export function NeedsYouMessage({
   onOpened?(): void;
 }) {
   const { leaf } = item;
-  const core = leaf?.pane.runtime === "herdr-core";
   const name = itemName(item);
   const unverified = item.kind === "asks" && !item.ask.actor.verified;
   const who = `${name}${unverified ? " (unverified)" : ""}`;
@@ -109,17 +106,13 @@ export function NeedsYouMessage({
           type="button"
           className="needs-you-name"
           aria-label={`Open ${name}'s window`}
-          title={(!core && leaf.viewOnly) || `Open ${name}'s window`}
+          title={`Open ${name}'s window`}
           aria-describedby={card ? cardId : undefined}
-          aria-disabled={!core && leaf.viewOnly ? true : undefined}
           onPointerEnter={(event) =>
             event.pointerType === "mouse" && setCard(true)
           }
           onPointerLeave={() => setCard(false)}
-          // A view-only agent has no window yet: the name shows its card.
-          onClick={() =>
-            !core && leaf.viewOnly ? setCard(true) : onChat(leaf.id)
-          }
+          onClick={() => onChat(leaf.id)}
         >
           {name}
         </button>
@@ -139,11 +132,7 @@ export function NeedsYouMessage({
           aria-label={
             done ? `Follow up with ${name}` : `Chat with ${name} about this`
           }
-          title={
-            (!core && leaf.viewOnly) ||
-            (done ? "Follow up in Chat" : "Open in Chat")
-          }
-          disabled={!core && Boolean(leaf.viewOnly)}
+          title={done ? "Follow up in Chat" : "Open in Chat"}
           onClick={() => onChat(leaf.id)}
         >
           <MessageSquare size={16} aria-hidden="true" />
@@ -177,15 +166,6 @@ export function NeedsYouMessage({
           onAnswer={onAnswer}
           onAttach={onAttach}
           onDismiss={onDismiss}
-        />
-      ) : item.leaf.viewOnly && !core ? (
-        <NeedsYouViewOnly
-          leaf={item.leaf}
-          name={name}
-          kind={item.kind}
-          reason={item.leaf.viewOnly}
-          head={head}
-          onOpenTerminal={() => onOpenTerminal(item.leaf.id)}
         />
       ) : (
         <NeedsYouAgent
@@ -525,86 +505,6 @@ type Answered = Pick<
 > & { question: string[]; fingerprint: string };
 
 /**
- * An agent World only watches: its status as its runtime reports it, the
- * program's own words, and its controls disabled with the reason. No
- * transcript or screen is read, so nothing waits on a read that cannot come.
- */
-function NeedsYouViewOnly({
-  leaf,
-  name,
-  kind,
-  reason,
-  head,
-  onOpenTerminal,
-}: {
-  leaf: WorldLeafObject;
-  name: string;
-  kind: "needs" | "done";
-  reason: string;
-  head: Head;
-  onOpenTerminal(): void;
-}) {
-  return (
-    <>
-      {head(
-        kind === "done" ? (
-          <button
-            type="button"
-            className="needs-you-icon"
-            aria-label={`Mark ${name}'s work reviewed`}
-            title={reason}
-            disabled
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
-        ) : null,
-      )}
-      <p className="needs-you-empty">{viewOnlyMessage(leaf)}</p>
-      {kind === "needs" ? (
-        // Answering comes with core sends: the field stays, disabled with why.
-        <form
-          aria-label={`Question from ${name}`}
-          className="needs-you-field"
-          onSubmit={(event) => event.preventDefault()}
-        >
-          <input
-            aria-label={`Your answer to ${name}`}
-            placeholder={`Answer ${name}…`}
-            title={reason}
-            disabled
-          />
-          <button
-            type="submit"
-            className="needs-you-icon needs-you-send"
-            aria-label="Send answer"
-            title={reason}
-            disabled
-          >
-            <SendHorizontal size={16} aria-hidden="true" />
-          </button>
-        </form>
-      ) : null}
-      <div className="needs-you-replies">
-        <small className="needs-you-notice">{reason}</small>
-        {leaf.watch ? (
-          <button
-            type="button"
-            title={CORE_WATCH_TITLE}
-            onClick={onOpenTerminal}
-          >
-            Watch Terminal
-          </button>
-        ) : (
-          <button type="button" disabled title={reason}>
-            Open Terminal
-          </button>
-        )}
-      </div>
-    </>
-  );
-}
-
-/**
  * A blocked or finished agent's latest message, as Chat reads it. A blocked
  * agent's question is answered with Chat's checked answer and receipt, its
  * options as quick replies; finished work is marked reviewed (✕) in the one
@@ -646,13 +546,8 @@ function NeedsYouAgent({
   }, [prompt?.fingerprint]);
   const [marking, setMarking] = useState(false);
   const [markError, setMarkError] = useState(false);
-  // A herdr-core agent's answer names the program the person saw.
-  const owner = () => {
-    const client = leafOwner(leaf);
-    return client ? chatClient(client, leaf.pane) : null;
-  };
   const answer = async (key: string, text?: string) => {
-    const client = owner();
+    const client = leafOwner(leaf);
     if (!prompt || !client || answering) return;
     setAnswering(true);
     setNotice("");
@@ -682,7 +577,7 @@ function NeedsYouAgent({
   };
   // Claude's folder-trust question, as in Chat.
   const trust = async (choice: TrustChoice) => {
-    const client = owner();
+    const client = leafOwner(leaf);
     if (!prompt?.trust || !client || answering) return;
     setAnswering(true);
     setNotice("");

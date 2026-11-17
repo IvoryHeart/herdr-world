@@ -1,4 +1,3 @@
-import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   chmodSync,
@@ -32,7 +31,7 @@ afterEach(() => {
 });
 
 function tempDirectory() {
-  const directory = mkdtempSync(join(tmpdir(), "rg-openssh-test-"));
+  const directory = mkdtempSync("/tmp/rg-openssh-test-");
   directories.push(directory);
   return directory;
 }

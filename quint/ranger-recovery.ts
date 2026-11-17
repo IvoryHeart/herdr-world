@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../server/src/adapters/testing/runtime";
 import assert from "node:assert/strict";
 import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -49,7 +48,7 @@ export async function replayRangerRecovery(
     },
     recoveryIdentity: async () =>
       boot ? "synthetic-boot" : "synthetic-replaced-boot",
-    ...herdrRuntimeFixture({
+    herdr: {
       call: async (method: string) => {
         assert.equal(method, "workspace.get");
         return {
@@ -60,7 +59,7 @@ export async function replayRangerRecovery(
           },
         };
       },
-    }),
+    },
   } as unknown as LegacyConnectionRuntime;
   const context = createAssistantContext({
     catalog: () => [{ id: "synthetic-host", label: "Synthetic host" }],

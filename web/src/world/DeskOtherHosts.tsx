@@ -49,13 +49,10 @@ export function DeskOtherHosts({
   filtered,
   label,
   onReveal,
-  pinned = () => false,
 }: {
   world: WorldObject;
   filtered: WorldObject;
   label: string | undefined;
-  /** Whether an agent is pinned: a host's agents list pinned ones first. */
-  pinned?: (leaf: WorldLeafObject) => boolean;
   onReveal?: (leaf: WorldLeafObject) => Promise<DeskRevealResult>;
 }) {
   const [expanded, setExpanded] = useState<{
@@ -103,14 +100,11 @@ export function DeskOtherHosts({
                 : {
                     connectionId: host.connectionId,
                     label: host.label,
-                    // Pinned first; a stable sort keeps the rest in order.
-                    agents: world.leaves
-                      .filter(
-                        (leaf) =>
-                          leaf.kind === "agent" &&
-                          leaf.connectionId === host.connectionId,
-                      )
-                      .sort((a, b) => Number(pinned(b)) - Number(pinned(a))),
+                    agents: world.leaves.filter(
+                      (leaf) =>
+                        leaf.kind === "agent" &&
+                        leaf.connectionId === host.connectionId,
+                    ),
                   },
             );
           }}

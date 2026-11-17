@@ -13,8 +13,6 @@ import { type WorldRuntimePriority } from "./runtimeStore";
 import { readOfficePreferences, type TownOpens } from "./officePreferences";
 import { worldLocalStorage } from "../browserStorage";
 import {
-  inspectorAdmits,
-  isCoreResourceNode,
   type WorldHostObject,
   type WorldObject,
   type WorldObjectNode,
@@ -65,8 +63,7 @@ export function worldNodeForInspectorConversation(
   conversation: WorldInspectorConversation,
 ): WorldObjectNode | null {
   const valid = (node: WorldObjectNode) =>
-    node.kind !== "host" &&
-    inspectorAdmits(node) &&
+    node.actionable &&
     node.connectionId === conversation.connectionId &&
     node.generation === conversation.runtimeGeneration &&
     worldInspectorWindowIdForNode(node) ===
@@ -89,7 +86,7 @@ export function worldNodeForInspectorPaneFocus(
     world.leaves.find(
       (node) =>
         node.nativeId === paneId &&
-        inspectorAdmits(node) &&
+        node.actionable &&
         worldInspectorWindowIdForNode(node) === windowId,
     ) ?? null
   );
@@ -97,19 +94,8 @@ export function worldNodeForInspectorPaneFocus(
 
 export function worldIntentViews(node: WorldObjectNode): InspectorView[] {
   if (node.kind === "host") return [];
-  // A live herdr-core node opens in the same Inspector: an agent's Chat
-  // (the shared Chat, read through core), the watched terminal, Files and
-  // Changes.
-  const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
-  const core = leaf !== null && isCoreResourceNode(leaf);
-  const coreChat =
-    core && leaf.kind === "agent" && leaf.pane.runtime === "herdr-core";
-  const coreTerminal = core && leaf.watch !== undefined;
   return [
-    ...(coreChat ? (["history"] as const) : []),
-    ...(node.capabilities.openTerminal || coreTerminal
-      ? (["terminal"] as const)
-      : []),
+    ...(node.capabilities.openTerminal ? (["terminal"] as const) : []),
     ...(node.capabilities.files ? (["files"] as const) : []),
     ...(node.capabilities.changes ? (["changes"] as const) : []),
     ...(node.kind === "agent" && node.capabilities.agentHistory
@@ -200,8 +186,7 @@ export const selectionShowsProfile = (
   selected: WorldObjectNode | null,
   current: boolean,
 ) =>
-  !!selected &&
-  (selected.kind === "host" || !current || !inspectorAdmits(selected));
+  !!selected && (selected.kind === "host" || !current || !selected.actionable);
 
 export function worldSnapshotPriorityForNode(
   node: WorldObjectNode,
@@ -376,9 +361,6 @@ export async function focusWorldNode(
 ) {
   if (isCurrent?.() === false)
     throw new Error("Inspector activation was superseded");
-  // A herdr-core node has no Herdr pane to focus: its window reads through
-  // its own generation-qualified client.
-  if (!node.actionable && isCoreResourceNode(node)) return;
   const agentSessionId =
     typeof agentSession === "string" ? agentSession : agentSession?.value;
   const target = workspaceTarget(node);
@@ -482,22 +464,4 @@ export function reconcileObservedInspectors(
     const replacement = after.get(id);
     return replacement ? [replacement] : [];
   });
-}
-
-/** Bind the selection owner once; abort cannot cancel a later intent. */
-export function bindWorldIntentAbort(
-  intentRequestRef: { current: number },
-  onAbort: (opening: boolean) => void,
-) {
-  return (signal: AbortSignal | undefined, requestId: number) => {
-    if (!signal) return () => {};
-    const abort = () => {
-      if (intentRequestRef.current !== requestId) return;
-      intentRequestRef.current += 1;
-      onAbort(false);
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    if (signal.aborted) abort();
-    return () => signal.removeEventListener("abort", abort);
-  };
 }

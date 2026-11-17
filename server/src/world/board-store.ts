@@ -254,12 +254,6 @@ function deskCell(value: unknown): DeskCell {
     fail("desk cell");
   return { col: value.col as number, row: value.row as number };
 }
-/** A pinned desk's place among its room's pinned seats. */
-function deskRank(value: unknown): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) fail("desk rank");
-  if ((value as number) >= DESK_CELL_MAX * DESK_CELL_MAX) fail("desk rank");
-  return value as number;
-}
 function deskPins(value: unknown): Record<string, DeskPin> {
   if (value === undefined) return {};
   if (!isObject(value)) fail("desk_pins must be an object");
@@ -267,11 +261,7 @@ function deskPins(value: unknown): Record<string, DeskPin> {
   for (const [key, entry] of Object.entries(value)) {
     text(key, "desk_pins key", BOARD_LIMITS.key);
     if (!isObject(entry)) fail("desk pin");
-    const pin: DeskPin = {
-      cell: entry.cell === null ? null : deskCell(entry.cell),
-    };
-    if (entry.rank !== undefined) pin.rank = deskRank(entry.rank);
-    out[key] = pin;
+    out[key] = { cell: entry.cell === null ? null : deskCell(entry.cell) };
   }
   return out;
 }
@@ -741,16 +731,6 @@ function applyOp(
         next.layout.desk_pins[text(op.key, "desk key", BOARD_LIMITS.key)];
       const cell = deskCell(op.cell);
       if (pin && !pin.cell) pin.cell = cell;
-      return;
-    }
-    case "desk.rank": {
-      // Never re-pins a Herdr desk unpinned meanwhile.
-      const key = text(op.key, "desk key", BOARD_LIMITS.key);
-      const rank = deskRank(op.rank);
-      const pin = next.layout.desk_pins[key];
-      if (pin) pin.rank = rank;
-      else if (op.create === true)
-        next.layout.desk_pins[key] = { cell: null, rank };
       return;
     }
     case "room.place": {

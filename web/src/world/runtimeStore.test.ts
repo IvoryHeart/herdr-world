@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../../../server/src/adapters/testing/runtime";
 import { describe, expect, test } from "bun:test";
 import type { BridgeControlMsg } from "../api";
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
@@ -262,7 +261,7 @@ describe("World aggregate runtime store", () => {
         generation: 1,
         isCurrent: () => true,
         runtime: {
-          ...herdrRuntimeFixture({
+          herdr: {
             async call(method: string) {
               if (method === "workspace.list") started.push(id);
               if (id !== "host-11") await release.promise;
@@ -271,7 +270,7 @@ describe("World aggregate runtime store", () => {
               if (method === "pane.list") return { panes: [] };
               return { agents: [] };
             },
-          }),
+          },
         },
       }),
     });

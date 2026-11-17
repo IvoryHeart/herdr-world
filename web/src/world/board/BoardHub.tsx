@@ -97,10 +97,7 @@ export function boardHubActions({
         ]
       : [],
   );
-  // A herdr-core host takes a room too (New workspace offers it as a host).
-  const hostReady = world.hosts.some(
-    (host) => (host.actionable || host.coreControl) && !host.stale,
-  );
+  const hostReady = world.hosts.some((host) => host.actionable && !host.stale);
   return [
     launchAction(
       space

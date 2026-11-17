@@ -117,11 +117,6 @@ jobs:
         env:
           INSTALLER_REPORT_DIR: ${{ runner.temp }}/installer-report
         run: bun scripts/installer-upgrade.ts verify
-      # Feeds the existing native result required by Delivery checks. No new
-      # protected report or branch-rule name; docs/reuse still skip native work.
-      - name: Verify real Linux installations and reboot in systemd containers
-        if: matrix.platform == 'linux-x64'
-        run: bun run test:install-linux --reuse --version "$HERDR_WORLD_BUILD_VERSION" --require-docker
       - name: Retain compact installer evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

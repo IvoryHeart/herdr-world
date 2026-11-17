@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
@@ -37,7 +36,7 @@ test("a real tap file becomes a Claude gauge on the board at its next refresh", 
   homes.push(home);
   let now = Date.parse("2026-11-07T13:40:00Z");
   const runtime = {
-    ...herdrRuntimeFixture({ call: async () => ({ agents: [] }) }),
+    herdr: { call: async () => ({ agents: [] }) },
     usage: async (_agents: unknown, at: number) => ({
       ...validateHostUsage(
         await collectHarnessUsage(

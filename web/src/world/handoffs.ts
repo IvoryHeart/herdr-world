@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionClient } from "../api";
 import { connectionClientScopeGeneration } from "../useConnectionClient";
-import {
-  isLiveNode,
-  type WorldLeafObject,
-  type WorldObject,
-} from "./worldObject";
+import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { useDeskWatch } from "./useDeskWatch";
 import type { DeskReadNotice } from "../../../shared/deskAcquisition";
 
@@ -89,10 +85,10 @@ const REFRESH_MS = 20_000;
 // sessions are history, not work waiting for review.
 export const IDLE_WINDOW_MS = 12 * 60 * 60_000;
 
-/** Every live agent in the host filter, including view-only core agents. */
+/** Every agent in the host filter that can be acted on now. */
 export function operationalAgents(world: WorldObject): WorldLeafObject[] {
   return world.leaves.filter(
-    (leaf) => leaf.kind === "agent" && isLiveNode(leaf),
+    (leaf) => leaf.kind === "agent" && leaf.actionable && !leaf.stale,
   );
 }
 
@@ -105,7 +101,10 @@ export function deskAgents(
     ...operationalAgents(world),
     ...world.leaves.filter(
       (leaf) =>
-        leaf.kind === "terminal" && isLiveNode(leaf) && asking.has(leaf.id),
+        leaf.kind === "terminal" &&
+        leaf.actionable &&
+        !leaf.stale &&
+        asking.has(leaf.id),
     ),
   ];
 }
@@ -119,8 +118,7 @@ const ATTENTION_ORDER: Record<string, number> = {
 
 /**
  * The agents whose transcripts and screens are read, most urgent first, so a
- * bounded read never hides an agent that is waiting on the operator. View-only
- * (core) agents have no transcript or screen read, so they take no slot.
+ * bounded read never hides an agent that is waiting on the operator.
  */
 export function pollingTargets(
   leaves: readonly WorldLeafObject[],
@@ -129,7 +127,6 @@ export function pollingTargets(
   if (limit <= 0) return [];
   const tiers = new Map<number, WorldLeafObject[]>();
   for (const leaf of leaves) {
-    if (leaf.viewOnly !== undefined) continue;
     const priority = ATTENTION_ORDER[leaf.status] ?? 4;
     const tier = tiers.get(priority) ?? [];
     tier.push(leaf);

@@ -24,10 +24,10 @@ import {
 import {
   layoutTown,
   townGeometryKey,
+  townPinCell,
   townShapeKey,
   type TownLayout,
-  type TownHeldCells,
-  type TownPinned,
+  type TownPinnedCells,
   type TownPlacementMemory,
   type TownShape,
 } from "../townLayout";
@@ -39,6 +39,7 @@ import {
   townDeskColors,
   townDeskPins,
   townModelFromProjection,
+  townPinnedCells,
   townRoomSpots,
   type RoomPins,
   townPlaceColors,
@@ -56,13 +57,13 @@ import type { TownClock } from "./ports";
  */
 export const TOWN_REFLOW_IDLE_MS = 1200;
 
-const NO_CELLS: TownHeldCells = new Map();
+const NO_CELLS: TownPinnedCells = new Map();
 
 export type TownSemanticInputs = {
   projection: HerdrOfficeProjection;
   /** Saved terminal colours (useTerminalColors); desks use their tab's. */
   terminalColors: TerminalColors;
-  /** Desk pins (useDeskPins); pinned desks take their rooms' first seats. */
+  /** Saved desk pins (useDeskPins); a pinned desk keeps its cell. */
   deskPins: DeskPins;
   /** Where the user put rooms (useRoomPins); other rooms stack. */
   roomPins?: RoomPins;
@@ -93,6 +94,12 @@ export type TownSemantics = {
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
   /** When each blocked agent became blocked (wall clock), for queue order. */
   blockedSince: ReadonlyMap<string, number>;
+};
+
+/** A pinned desk whose cell is not saved yet: save `cell` under `pinKey`. */
+export type TownPinPlacement = {
+  pinKey: string;
+  cell: { col: number; row: number };
 };
 
 /** Recompute only when an argument changes identity, as `useMemo` does. */
@@ -129,6 +136,7 @@ export class TownScene {
   private pins: ReadonlyMap<string, TownDeskPin> = new Map();
   private roomSpots = NO_ROOM_SPOTS;
   private readonly blocked = new Map<string, number>();
+  private readonly placing = new Set<string>();
 
   /**
    * `wake` asks the adapter to derive again: a held reflow re-checks whether
@@ -209,7 +217,12 @@ export class TownScene {
         next.size !== last.size ||
         [...next].some(([key, pin]) => {
           const was = last.get(key);
-          return !was || was.key !== pin.key || was.rank !== pin.rank;
+          return (
+            !was ||
+            was.key !== pin.key ||
+            was.cell?.col !== pin.cell?.col ||
+            was.cell?.row !== pin.cell?.row
+          );
         })
       )
         this.pins = next;
@@ -217,10 +230,12 @@ export class TownScene {
     },
   );
 
-  // The pinned desks' places: the same pins keep the same map.
-  private readonly pinnedDesks = memo(
-    (pins: TownModel["deskPins"]): TownPinned =>
-      new Map([...pins].map(([desk, pin]) => [desk, pin.rank])),
+  private readonly pinnedCells = memo(townPinnedCells);
+
+  // Pins win over cells a join holds.
+  private readonly fixedCells = memo(
+    (pins: TownPinnedCells, held: TownPinnedCells): TownPinnedCells =>
+      held.size ? new Map([...held, ...pins]) : pins,
   );
 
   // The same saved room spots keep the same map: only a move places again.
@@ -234,14 +249,13 @@ export class TownScene {
     (
       input: TownModel["input"],
       shape: TownShape,
-      held: TownHeldCells,
+      cells: ReturnType<typeof townPinnedCells>,
       spots: ReturnType<typeof townRoomSpots>,
-      pinned: TownPinned,
     ) => {
       const key = townShapeKey(shape);
       const previous =
         this.memory?.shape === key ? this.memory.memory : new Map();
-      const result = layoutTown(input, shape, previous, held, spots, pinned);
+      const result = layoutTown(input, shape, previous, cells, spots);
       this.memory = { shape: key, memory: result.memory };
       return result.layout;
     },
@@ -285,9 +299,8 @@ export class TownScene {
     const placed = this.place(
       model.input,
       shape,
-      joinCells,
+      this.fixedCells(this.pinnedCells(model.deskPins), joinCells),
       this.spotsOf(projection, inputs.roomPins ?? NO_ROOM_PINS),
-      this.pinnedDesks(model.deskPins),
     );
     // While the user presses, scrolls or zooms, a reflow that would move rooms
     // or buildings waits until they pause (then the camera follows the room in
@@ -342,6 +355,33 @@ export class TownScene {
       deskBadges,
       blockedSince: this.blocked,
     };
+  }
+
+  /**
+   * Desks just pinned keep the cell they have: the cells to save now. Each is
+   * returned once until `pinPlaced` reports its save finished.
+   */
+  pinPlacements(
+    deskPins: TownModel["deskPins"],
+    layout: TownLayout,
+    placed: TownLayout,
+  ): TownPinPlacement[] {
+    const placements: TownPinPlacement[] = [];
+    for (const [deskKey, pin] of deskPins) {
+      if (pin.cell || this.placing.has(pin.key)) continue;
+      const cell = townPinCell(layout, placed, deskKey);
+      if (!cell) continue;
+      this.placing.add(pin.key);
+      placements.push({
+        pinKey: pin.key,
+        cell: { col: cell.col, row: cell.row },
+      });
+    }
+    return placements;
+  }
+
+  pinPlaced(pinKey: string) {
+    this.placing.delete(pinKey);
   }
 
   dispose() {

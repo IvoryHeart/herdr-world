@@ -1,4 +1,3 @@
-import { tmpdir } from "node:os";
 import { afterEach, describe, expect, jest, test } from "bun:test";
 import {
   chmodSync,
@@ -348,7 +347,7 @@ describe.skipIf(process.platform === "win32")("orphaned master sweep", () => {
   }
 
   test("ends masters only in private runtime directories of a dead Roamgate", async () => {
-    const root = mkdtempSync(join(tmpdir(), "rg-sweep-test-"));
+    const root = mkdtempSync("/tmp/rg-sweep-test-");
     roots.push(root);
     const deadPid = 2 ** 22 + 17;
     const orphan = await runtimeDirectory(root, "herdr-world-ssh-Orph01", {
@@ -370,7 +369,7 @@ describe.skipIf(process.platform === "win32")("orphaned master sweep", () => {
       await runtimeDirectory(root, "other-ssh-Orph01", { owner: deadPid }),
     ];
     // A symlink to an orphan-looking directory is not followed.
-    const elsewhere = mkdtempSync(join(tmpdir(), "rg-sweep-target-"));
+    const elsewhere = mkdtempSync("/tmp/rg-sweep-target-");
     roots.push(elsewhere);
     const target = await runtimeDirectory(elsewhere, "herdr-world-ssh-Targ01", {
       owner: deadPid,
@@ -415,7 +414,7 @@ describe.skipIf(process.platform === "win32")("orphaned master sweep", () => {
     }
   });
   test("a failed orphan exit keeps its control socket available for retry", async () => {
-    const root = mkdtempSync(join(tmpdir(), "rg-sweep-retry-"));
+    const root = mkdtempSync("/tmp/rg-sweep-retry-");
     roots.push(root);
     const directory = await runtimeDirectory(root, "herdr-world-ssh-Retry1", {
       owner: 2 ** 22 + 19,

@@ -225,21 +225,3 @@ test("every working agent on screen is read, in turns of at most TOWN_STEP_BATCH
   ]);
   for (const entry of leaves) expect(store.get(entry.id)?.kind).toBe("edit");
 });
-
-test("a herdr-core agent is never read or watched for a Herdr step", async () => {
-  // Recorded on a core preview: the page asked `local-core` for
-  // agent_conversation.latest and .watch, and core refused both.
-  const core = {
-    ...leaf("core"),
-    pane: { pane_id: "pane-core", agent: "claude", runtime: "herdr-core" },
-  } as unknown as WorldLeafObject;
-  const { store, calls, watched, answer } = setup([leaf("a"), core]);
-  answer(({ pane_ids }) => ({
-    conversations: pane_ids.map((id) => reply(id, "Edit")),
-  }));
-  store.want(["a", "core"]);
-  await settle();
-  expect([...watched.keys()]).toEqual(["pane-a"]);
-  expect(calls.map((call) => call.params.pane_ids)).toEqual([["pane-a"]]);
-  expect(store.get("core")).toBeUndefined();
-});

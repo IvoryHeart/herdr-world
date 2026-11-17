@@ -1,6 +1,6 @@
-import type { HostResources } from "../adapters/runtime-ports";
 import type { Clock, Scheduler } from "../service/ports";
 import type { RuntimeStatusPort } from "../storage/runtime-status";
+import type { HerdrClient } from "../bridge/herdr-client";
 import { gitShellCommandArgv } from "./git-shell";
 import {
   connectionSettingsPrefix,
@@ -231,7 +231,7 @@ export function createWorkspaceAutoSync(args: {
   connectionId?: string;
   formatError?: (error: unknown) => string;
   logger?: Logger;
-  resources: HostResources;
+  herdr: HerdrClient;
   sshHost: () => string | undefined;
   shQuote: (value: string) => string;
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
@@ -313,7 +313,7 @@ export function createWorkspaceAutoSync(args: {
       );
       if (enabledEntries.length === 0) return;
 
-      const workspaceResult = await args.resources.listWorkspaces({});
+      const workspaceResult = await args.herdr.call("workspace.list");
       if (!current(generation)) return;
       const workspaces = Array.isArray((workspaceResult as any)?.workspaces)
         ? (workspaceResult as any).workspaces

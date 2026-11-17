@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import type { ConnectionStatus } from "../connections/types";
 import { WorldSnapshotService } from "./snapshot";
@@ -13,7 +12,7 @@ for (const mode of ["complete", "dirty", "malformed", "retired"])
     }));
     let current = true;
     const runtime = {
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async (method: string): Promise<unknown> => {
           if (method === "workspace.list")
             return { workspaces: [{ workspace_id: "w1" }] };
@@ -24,7 +23,7 @@ for (const mode of ["complete", "dirty", "malformed", "retired"])
           if (mode === "retired") current = false;
           return mode === "malformed" ? {} : { panes };
         },
-      }),
+      },
     };
     const observed: number[] = [];
     const status: ConnectionStatus = {

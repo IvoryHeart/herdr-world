@@ -1,4 +1,3 @@
-import { lazyIndex } from "./town/lazyIndex";
 import { AnswerOutboxContext } from "./town/answerOutbox";
 import { TownStepStore } from "./town/townStepStore";
 import { useTownStepReads } from "./town/useTownStepReads";
@@ -113,7 +112,19 @@ import {
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
 
+/** Town's chrome insets: Needs you is a World tab now, not a Town rail. */
 const TOWN_CHROME = { left: 0, right: 0 };
+
+/** A keyed index of a list, built the first time it is read. */
+function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
+  let index: Map<string, T> | null = null;
+  const read = () =>
+    (index ??= new Map(items.map((item) => [keyOf(item), item])));
+  return {
+    get: (key: string) => read().get(key),
+    has: (key: string) => read().has(key),
+  };
+}
 
 export default function TownView({
   world,
@@ -565,12 +576,7 @@ export default function TownView({
     trace,
   });
   const openReply = (key: string) => {
-    if (!townTargetActionable(office, key)) {
-      const nodeId = deviceByKey.get(key)?.device.nodeId;
-      const viewOnly = nodeId ? world.nodeById.get(nodeId)?.viewOnly : null;
-      if (viewOnly) toast("error", viewOnly);
-      return;
-    }
+    if (!townTargetActionable(office, key)) return;
     // A desk with more panes than seats lists them all rather than guessing.
     if (crowdedDesk(key)) {
       window.clearTimeout(peekTimer.current);
@@ -687,13 +693,6 @@ export default function TownView({
   const openAgent = (agentKey: string) => {
     const agent = agentByKey.get(agentKey)?.agent;
     if (!agent) return;
-    // World only watches it: its peek says why (a live core agent opens).
-    if (agent.viewOnly && !agent.coreChat) {
-      window.clearTimeout(peekTimer.current);
-      holdPeek.current = true;
-      setPeek({ key: agentKey, anchor: lastPointer.current ?? { x: 0, y: 0 } });
-      return;
-    }
     const node = world.nodeById.get(agent.nodeId);
     const opens = node
       ? worldNodeOpenView(node, preferences.townOpens)
@@ -709,7 +708,7 @@ export default function TownView({
   /** Open Chat explicitly; focus false keeps focus outside the agent's pane. */
   const openChat = (agentKey: string, focus = true) => {
     const agent = agentByKey.get(agentKey)?.agent;
-    if (!agent || !townTargetActionable(office, agentKey, true)) return;
+    if (!agent || agent.stale || !agent.canOpenInSpaces) return;
     if (DEVTOOLS) trace.record("peek", { key: agentKey });
     window.clearTimeout(peekTimer.current);
     holdPeek.current = false;
@@ -854,21 +853,8 @@ export default function TownView({
             onChat={() => openChat(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);
-              if (!peekAgent.viewOnly?.watch) openOfficeTerminal(peekAgent.key);
-              else void onOpenTerminal(peekAgent.nodeId).catch(() => undefined);
+              openOfficeTerminal(peekAgent.key);
             }}
-            leaf={peekLeaf}
-            onFiles={
-              peekAgent.viewOnly &&
-              onOpenInspectorView &&
-              world.nodeById.get(peekAgent.nodeId)?.capabilities.files
-                ? () => {
-                    holdPeek.current = false;
-                    setPeek(null);
-                    onOpenInspectorView(peekAgent.nodeId, "files", true);
-                  }
-                : null
-            }
             onNext={
               reception.step(peekAgent.key, peek!.anchor) ??
               (nextCall(peekAgent.key)

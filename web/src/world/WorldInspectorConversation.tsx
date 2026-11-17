@@ -1,9 +1,6 @@
 import { watchConversation } from "../conversationWatch";
 import { harnessLabel } from "./agentProfiles";
 import { WorldLoader } from "./WorldLoader";
-import { useCoreRuntimeConnection, worldRuntimeStore } from "./runtimeStore";
-import { useCoreSeen } from "./coreSeen";
-import { coreSharedOf } from "./coreShared";
 import { useEffectCallback } from "../useEffectCallback";
 import type { Conversation } from "../components/chat/types";
 import { TerminalAppearanceEditor } from "./TerminalAppearanceEditor";
@@ -19,7 +16,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -65,7 +61,6 @@ import {
   type WorkspaceAnnotationRequest,
 } from "../workspaceResource";
 import {
-  chatOpeningPane,
   worldInspectorWindowId,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
@@ -116,21 +111,11 @@ const emptyFile = (): ActiveFilePreviewSelection => ({
 export default function WorldInspectorConversationView(
   props: Parameters<typeof InspectorResources>[0],
 ) {
-  const core = useCoreRuntimeConnection(props.conversation.connectionId);
   return (
     <OperationalContext.Provider
       value={{
         connectionId: props.conversation.connectionId,
         runtimeGeneration: props.conversation.runtimeGeneration,
-        ...(core
-          ? {
-              resourceTopology: {
-                workspaces: core.snapshot?.workspaces ?? [],
-                tabs: core.snapshot?.tabs ?? [],
-                panes: core.snapshot?.panes ?? [],
-              },
-            }
-          : {}),
       }}
     >
       <InspectorResources {...props} />
@@ -158,10 +143,7 @@ function InspectorResources({
   onTerminalPortalChange,
   onBind,
   onSelectPane,
-  terminal,
 }: {
-  /** Terminal for a runtime World does not show through Herdr (herdr-core). */
-  terminal?: ReactNode;
   /**
    * The window is shown but its host's session has not loaded this
    * workspace yet (a window restored on page load, on a host not yet opened):
@@ -224,7 +206,7 @@ function InspectorResources({
         }
       : null,
   );
-  const hostTopology = useStoreSelector(
+  const { workspaces, panes, tabs, status, catalogueReady } = useStoreSelector(
     (snapshot) => ({
       workspaces: snapshot.workspaces,
       tabs: snapshot.tabs,
@@ -234,23 +216,6 @@ function InspectorResources({
     }),
     shallowEqual,
   );
-  // A herdr-core window (Files and Changes) reads World's observation of
-  // its core: there is no Herdr session for it.
-  const core = useCoreRuntimeConnection(conversation.connectionId);
-  const coreLive =
-    core !== null &&
-    core.state === "ready" &&
-    !core.stale &&
-    core.generation === conversation.runtimeGeneration;
-  const { workspaces, panes, tabs, status, catalogueReady } = core
-    ? {
-        workspaces: core.snapshot?.workspaces ?? [],
-        tabs: core.snapshot?.tabs ?? [],
-        panes: core.snapshot?.panes ?? [],
-        status: coreLive ? hostTopology.status : ("disconnected" as const),
-        catalogueReady: coreLive,
-      }
-    : hostTopology;
   const workspace = workspaces.find(
     (candidate) => candidate.workspace_id === conversation.workspaceId,
   );
@@ -262,13 +227,6 @@ function InspectorResources({
           candidate.tab_id === conversation.tabId,
       )
     : undefined;
-  // An open, drawn agent window is a look like a peek: Herdr's apps see the
-  // core agent's turn as seen (generation- and turn-qualified, coreSeen.ts).
-  const coreShared =
-    core && target && historyPane && conversation.context.kind === "agent"
-      ? coreSharedOf(conversation.connectionId, core.generation, historyPane)
-      : null;
-  useCoreSeen(coreShared ? { ...coreShared, stale: !coreLive } : null);
   const worktree = useAgentWorktree(baseConnectionClient, {
     enabled: conversation.context.kind === "agent",
     active: ["files", "changes", "commits"].includes(conversation.view),
@@ -311,10 +269,13 @@ function InspectorResources({
       current = false;
     };
     const currentPane = () =>
-      chatOpeningPane(
-        conversation,
-        connectionSnapshot(store.get(), conversation.connectionId).panes,
-        worldRuntimeStore.get().connections,
+      connectionSnapshot(store.get(), conversation.connectionId).panes.find(
+        (pane) =>
+          pane.workspace_id === conversation.workspaceId &&
+          pane.tab_id === conversation.tabId &&
+          pane.pane_id === conversation.paneId &&
+          pane.terminal_id === conversation.terminalId &&
+          pane.agent === conversation.context.agent,
       );
     const read = async () => {
       if (!current || !baseConnectionClient.isCurrent() || !currentPane())
@@ -770,7 +731,6 @@ function InspectorResources({
                 visible={Boolean(target)}
                 workspace={workspace}
                 historyPane={historyPane}
-                terminal={terminal}
                 historySessionFingerprint={conversation.agentSessionFingerprint}
                 notice={
                   awaitingChat && awaitSince ? (

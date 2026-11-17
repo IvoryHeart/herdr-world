@@ -46,17 +46,9 @@ test("fresh Unix and Windows data roots use only the World namespace", () => {
   expect(dataRoot(root, "win32", join(root, "custom"), {})).toBe(
     join(root, "custom", "herdr-world"),
   );
-  // The runner supplies APPDATA on every platform. Exercise the absent case
-  // explicitly rather than depending on a Linux developer's environment.
-  const appData = process.env.APPDATA;
-  delete process.env.APPDATA;
-  try {
-    expect(dataRoot(root, "win32", undefined, {})).toBe(
-      join(root, "AppData", "Roaming", "herdr-world"),
-    );
-  } finally {
-    if (appData !== undefined) process.env.APPDATA = appData;
-  }
+  expect(dataRoot(root, "win32", undefined, {})).toBe(
+    join(root, "AppData", "Roaming", "herdr-world"),
+  );
   expect(defaultDataFile("settings.json", root, "linux", undefined, {})).toBe(
     join(root, ".config", "herdr-world", "settings.json"),
   );

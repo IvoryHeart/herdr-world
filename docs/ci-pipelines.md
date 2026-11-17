@@ -33,7 +33,6 @@ for compatibility with branch rules.
 | `check:delivery` | Static lane plus all test lanes and behavioral verification |
 | `check:pr-body <file>` | CI knowledge-map and changelog policy against a committed PR diff and draft description; optional base ref follows the file |
 | `check:docs` | Notices, fragments, formatting, site and specs for qualifying Markdown changes |
-| `test:install-linux` | Real Linux x64 installer, runtime downloads, systemd user unit/reboot, RPC setup and stable upgrade in disposable Docker containers; [runbook](development.md#linux-installation-acceptance) |
 
 The static lane uses `typecheck:quick` because its production build follows.
 It retains all three TypeScript projects and production asset checks while
@@ -77,14 +76,6 @@ lifecycle steps skipped, so metadata reuse does not wait for a macOS runner.
 When packaging is selected, each report runs its complete native checks on
 its declared macOS architecture. Their aggregate must succeed in every mode;
 cancellation and missing reports still fail delivery.
-
-Native packaging also runs `test:install-linux` in the existing Linux x64
-installer-upgrade matrix job. The shared selection explicitly includes installation
-scripts, generated/Homebrew bootstrap sources, core install code and connection
-registration. Its failure blocks the existing installer result required by
-Delivery checks; protected report names are unchanged. All main pushes select it.
-The Release Linux x64 package job runs it on the archive before publication.
-Local source gates do not implicitly run Docker; use the command explicitly.
 
 Tooling-only PRs use `scripts/validation-scope.ts` in CI and pre-push. The complete
 diff must contain only `scripts/agent/**` (including tests),

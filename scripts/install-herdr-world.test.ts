@@ -17,11 +17,9 @@ import { fileURLToPath } from "node:url";
 import { shQuote } from "../server/src/utils/process-utils";
 import { renderStandaloneBootstrap } from "./herdr-bootstrap";
 import {
-  FIXTURE_CORE_VERSION,
-  isolatedPath,
-  loginEntry,
-  writeCoreRelease,
-} from "./herdr-core-fixture";
+  VERIFIED_HERDR_VERSION,
+  VERIFIED_HERDR_SHA256,
+} from "../server/src/herdr/release";
 
 const temporaryRoots: string[] = [];
 
@@ -82,9 +80,8 @@ if [ "$*" = "update --finish-install" ]; then
   exit "\${FINISH_STEP_CODE:-0}"
 fi
 if [ "\${1:-}" = herdr ] && [ -n "\${HERDR_CALL_LOG:-}" ]; then echo "$*" >> "$HERDR_CALL_LOG"; fi
-if [ "\${1:-}" = connections ]; then
-  [ -z "\${HERDR_CALL_LOG:-}" ] || echo "$*" >> "$HERDR_CALL_LOG"
-  [ "${version}" != 0.2.7 ] || exit 2
+if [ "$*" = "herdr --help" ]; then
+  if [ "${version}" = 0.2.7 ]; then echo 'herdr upgrade --install'; else echo 'herdr upgrade --install --only-if-missing'; fi
   exit 0
 fi
 if [ "$*" = "herdr status" ]; then
@@ -92,6 +89,13 @@ if [ "$*" = "herdr status" ]; then
   elif [ "$HERDR_FIXTURE_STATE" = running ]; then echo 'Herdr is running (version 0.9.5, protocol 22).';
   else echo "Herdr is installed but not running: $HERDR_INSTALL_DIR/herdr"; fi
   exit 0
+fi
+if [ "\${1:-}" = "herdr" ]; then
+  if [ "${version}" = 0.2.7 ]; then echo 'unknown herdr upgrade option' >&2; exit 2; fi
+  if [ "\${HERDR_FIXTURE_STATE:-missing}" != missing ]; then exit 0; fi
+  echo "$*" >> "$HERDR_STEP_LOG"
+  echo "Installed Herdr 0.9.5."
+  exit "\${HERDR_STEP_CODE:-0}"
 fi
 exit 1
 `,
@@ -127,11 +131,28 @@ exit 1
     join(assets, `${versionedArchive}.sha256`),
     `${digest}  ${versionedArchive}\n`,
   );
-  writeCoreRelease(assets, fakeBin);
+  const payload = `#!/bin/sh\necho 'herdr ${VERIFIED_HERDR_VERSION}'\n`;
+  for (const target of Object.keys(VERIFIED_HERDR_SHA256))
+    writeFileSync(join(assets, `herdr-${target}`), payload);
+  const runtimeDigest = createHash("sha256").update(payload).digest("hex");
   const installerScript = join(root, "install-herdr-world.sh");
   writeFileSync(
     installerScript,
-    readFileSync(new URL("./install-herdr-world.sh", import.meta.url), "utf8"),
+    renderStandaloneBootstrap(
+      readFileSync(
+        new URL("./install-herdr-world.sh", import.meta.url),
+        "utf8",
+      ),
+      {
+        version: VERIFIED_HERDR_VERSION,
+        digests: Object.fromEntries(
+          Object.keys(VERIFIED_HERDR_SHA256).map((target) => [
+            target,
+            runtimeDigest,
+          ]),
+        ),
+      },
+    ),
   );
   const fakeCurl = join(fakeBin, "curl");
   writeFileSync(
@@ -147,6 +168,9 @@ while [ "$#" -gt 0 ]; do
     *) url="$1"; shift ;;
   esac
 done
+case "\${url##*/}" in
+  herdr-linux-*|herdr-macos-*) echo 'compatibility download' >> "$HERDR_STEP_LOG" ;;
+esac
 cp "$FIXTURE_DIR/\${url##*/}" "$out"
 `,
     { mode: 0o755 },
@@ -160,8 +184,6 @@ cp "$FIXTURE_DIR/\${url##*/}" "$out"
     installDir,
     product,
     herdrStepLog: join(root, "herdr-step.log"),
-    coreLog: join(root, "core.log"),
-    core: join(root, ".local", "bin", "herdr-core"),
     installerScript,
     binary,
     runtimeDir: join(root, "runtime"),
@@ -189,10 +211,7 @@ function runInstaller(
       ...process.env,
       HOME: fixture.root,
       HERDR_INSTALL_DIR: fixture.runtimeDir,
-      PATH: isolatedPath(fixture.fakeBin),
-      XDG_CONFIG_HOME: undefined,
-      HC_INSTALL_DIR: undefined,
-      HC_FIXTURE_LOG: fixture.coreLog,
+      PATH: `${fixture.fakeBin}:${process.env.PATH ?? ""}`,
       FIXTURE_DIR: fixture.assets,
       HERDR_WORLD_RELEASE_BASE_URL: releaseBaseUrl,
       HERDR_WORLD_INSTALL_DIR: fixture.installDir,
@@ -509,110 +528,89 @@ process.exit(await runCli(process.argv.slice(2), context));
     );
   });
 
-  const REGISTER =
-    "connections add core-local --core --default --auto-connect --label herdr-core on this computer";
-  const coreStarted = (fixture: ReturnType<typeof createInstallerFixture>) =>
-    existsSync(fixture.coreLog) &&
-    readFileSync(fixture.coreLog, "utf8").includes("core server start");
-
-  test("with no runtime, installs herdr-core and starts it now and at login", () => {
+  test("installs the verified Herdr only when missing", () => {
     const fixture = createInstallerFixture();
     const result = runInstaller(fixture);
     expect(result.exitCode).toBe(0);
-    expect(result.stderr.toString()).toBe("");
-    expect(result.stdout.toString()).toContain(
-      `Installed herdr-core ${FIXTURE_CORE_VERSION}`,
+    expect(result.stdout.toString()).toContain("Installed Herdr 0.9.5.");
+    expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
+      "herdr upgrade --install --only-if-missing --no-integrations --no-plugin\n",
     );
-    expect(result.stdout.toString()).toContain("herdr-core is running.");
-    expect(existsSync(fixture.core)).toBe(true);
-    expect(readFileSync(loginEntry(fixture.root), "utf8")).toContain(
-      fixture.core,
-    );
-    expect(coreStarted(fixture)).toBe(true);
-    // World connects to it when it starts; it never starts core itself.
-    expect(readFileSync(fixture.calls, "utf8")).toBe(
-      `herdr status\n${REGISTER}\n`,
-    );
-    expect(result.stdout.toString()).toContain(
-      "World will connect to herdr-core when it starts.",
-    );
-    // The Herdr TUI is never installed by the installer any more.
-    expect(existsSync(join(fixture.runtimeDir, "herdr"))).toBe(false);
-    expect(existsSync(fixture.herdrStepLog)).toBe(false);
   });
 
-  test("an older pinned World release still gets herdr-core first", () => {
+  test("pinned 0.2.7 rejects new flags but installs missing Herdr through the safe fallback", () => {
     const fixture = createInstallerFixture(undefined, "0.2.7");
+    const rejection = Bun.spawnSync(
+      [fixture.binary, "herdr", "upgrade", "--install", "--only-if-missing"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(rejection.exitCode).not.toBe(0);
+    expect(rejection.stderr.toString()).toContain(
+      "unknown herdr upgrade option",
+    );
     const result = runInstaller(fixture, undefined, {
       HERDR_WORLD_VERSION: "0.2.7",
     });
     expect(result.exitCode).toBe(0);
     expect(result.stderr.toString()).toBe("");
-    expect(existsSync(fixture.core)).toBe(true);
-    // That release cannot save a core connection; the person adds it.
-    expect(readFileSync(fixture.calls, "utf8")).toBe(
-      `herdr status\n${REGISTER}\n`,
+    expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
+      "compatibility download\n",
     );
-    expect(result.stdout.toString()).toContain(
-      "If World does not list herdr-core, add it under Hosts > Manage connections.",
+    const runtime = Bun.spawnSync(
+      [join(fixture.runtimeDir, "herdr"), "--version"],
+      { stdout: "pipe" },
+    );
+    expect(runtime.exitCode).toBe(0);
+    expect(runtime.stdout.toString().trim()).toBe(
+      `herdr ${VERIFIED_HERDR_VERSION}`,
     );
   });
 
-  test.each(["older", "current", "newer", "package-managed", "running"])(
-    "with only the Herdr TUI (%s), installs and starts nothing",
+  test("running but undiscoverable Herdr skips the new-CLI installation path", () => {
+    const fixture = createInstallerFixture();
+    expect(
+      Bun.spawnSync([fixture.binary, "herdr", "--help"], {
+        stdout: "pipe",
+      }).stdout.toString(),
+    ).toContain("--only-if-missing");
+    const result = runInstaller(fixture, undefined, {
+      HERDR_FIXTURE_STATE: "running",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr.toString()).toBe("");
+    expect(readFileSync(fixture.calls, "utf8")).toBe("herdr status\n");
+    expect(existsSync(join(fixture.runtimeDir, "herdr"))).toBe(false);
+    expect(existsSync(fixture.herdrStepLog)).toBe(false);
+  });
+
+  test.each(["older", "current", "newer", "package-managed"])(
+    "reuses an existing %s Herdr",
     (state) => {
       const fixture = createInstallerFixture();
       const result = runInstaller(fixture, undefined, {
         HERDR_FIXTURE_STATE: state,
       });
       expect(result.exitCode).toBe(0);
-      expect(result.stderr.toString()).toBe("");
-      expect(existsSync(fixture.core)).toBe(false);
-      expect(existsSync(loginEntry(fixture.root))).toBe(false);
-      expect(existsSync(fixture.coreLog)).toBe(false);
       expect(existsSync(fixture.herdrStepLog)).toBe(false);
     },
   );
 
-  test.each(["missing", "current"])(
-    "with herdr-core installed (Herdr TUI %s), changes nothing",
-    (state) => {
-      const fixture = createInstallerFixture();
-      mkdirSync(join(fixture.core, ".."), { recursive: true });
-      writeFileSync(fixture.core, "#!/bin/sh\necho 'hc 0.0.1'\n", {
-        mode: 0o755,
-      });
-      const result = runInstaller(fixture, undefined, {
-        HERDR_FIXTURE_STATE: state,
-      });
-      expect(result.exitCode).toBe(0);
-      expect(result.stderr.toString()).toBe("");
-      expect(readFileSync(fixture.core, "utf8")).toContain("0.0.1");
-      expect(existsSync(loginEntry(fixture.root))).toBe(false);
-      expect(existsSync(fixture.coreLog)).toBe(false);
-    },
-  );
-
-  test("HERDR_WORLD_SKIP_HERDR=1 leaves every runtime alone", () => {
+  test("HERDR_WORLD_SKIP_HERDR=1 leaves Herdr alone", () => {
     const fixture = createInstallerFixture();
     const result = runInstaller(fixture, undefined, {
       HERDR_WORLD_SKIP_HERDR: "1",
     });
     expect(result.exitCode).toBe(0);
     expect(existsSync(join(fixture.installDir, "herdr-world"))).toBe(true);
-    expect(existsSync(fixture.calls)).toBe(false);
-    expect(existsSync(fixture.core)).toBe(false);
-    expect(existsSync(fixture.coreLog)).toBe(false);
+    expect(existsSync(fixture.herdrStepLog)).toBe(false);
   });
 
-  test("a herdr-core failure is reported without undoing the World install", () => {
+  test("a Herdr failure is reported without undoing the World install", () => {
     const fixture = createInstallerFixture();
-    const result = runInstaller(fixture, undefined, {
-      HC_FIXTURE_START_EXIT: "1",
-    });
+    const result = runInstaller(fixture, undefined, { HERDR_STEP_CODE: "1" });
     expect(result.exitCode).toBe(0);
     expect(existsSync(join(fixture.installDir, "herdr-world"))).toBe(true);
-    expect(result.stderr.toString()).toContain("herdr-core did not start");
+    expect(result.stderr.toString()).toContain("Herdr installation failed");
     expect(result.stderr.toString()).toContain("herdr upgrade --install");
   });
 });

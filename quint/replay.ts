@@ -1,4 +1,3 @@
-import type { CoreState } from "./herdr-core-runtime";
 import type { EffectState } from "./effect-recovery";
 import type { BaseState } from "./observation-base";
 import type { BindingModelState } from "./binding-resolution";
@@ -40,8 +39,6 @@ type RefreshState = {
   status: string;
 };
 export type TraceState = CreditState & {
-  c: CoreState;
-  family?: string;
   effect: EffectState;
   incarnation: number;
   binding: BindingModelState;

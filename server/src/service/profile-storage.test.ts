@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
@@ -246,7 +245,7 @@ test("a lease retired while its watermark commits cannot receive terminal metada
       generation: 1,
       isCurrent: () => current,
       runtime: {
-        ...herdrRuntimeFixture({
+        herdr: {
           call: async (method: string) => {
             if (method === "pane.get")
               return {
@@ -262,7 +261,7 @@ test("a lease retired while its watermark commits cannot receive terminal metada
             }
             throw new Error(`unexpected ${method}`);
           },
-        }),
+        },
       },
     }),
     () => {},
@@ -303,7 +302,7 @@ test("terminal settings import their SQLite legacy records once and never restor
     generation: 1,
     isCurrent: () => true,
     runtime: {
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async (method: string, params: Record<string, unknown>) => {
           if (method === "pane.get")
             return {
@@ -320,7 +319,7 @@ test("terminal settings import their SQLite legacy records once and never restor
           }
           throw new Error(`unexpected ${method}`);
         },
-      }),
+      },
     },
   });
   const store = await open(paths),

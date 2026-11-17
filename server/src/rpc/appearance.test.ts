@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -60,7 +59,7 @@ function fixture() {
                   generation: 3,
                   isCurrent: () => current,
                   runtime: {
-                    ...herdrRuntimeFixture({
+                    herdr: {
                       call: async (method: string) => {
                         calls.push(method);
                         const result =
@@ -83,7 +82,7 @@ function fixture() {
                         if (fail) throw new Error("synthetic native failure");
                         return result;
                       },
-                    }),
+                    },
                   },
                 },
         },

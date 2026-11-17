@@ -382,7 +382,7 @@ export function WindowControls({
                   }
                   title={
                     item.toggle
-                      ? "A pinned desk goes first in its room, and its agents stay at it"
+                      ? "A pinned desk keeps its place in Town, and its agents stay at it"
                       : undefined
                   }
                   role={

@@ -11,7 +11,6 @@ import { dirname, join } from "node:path";
 import {
   isToolingOnlyChange,
   isToolingPath,
-  isInstallationInput,
   repositorySelection,
   selectValidation,
 } from "./validation-scope";
@@ -89,33 +88,6 @@ const graph: Graph = {
     [webBrowserSuites[0]!, new Set([chat])],
   ]),
 };
-
-test("installation inputs require the native job containing systemd acceptance", () => {
-  for (const path of [
-    "scripts/install-herdr-world.sh",
-    "scripts/herdr-core-install.sh",
-    "scripts/herdr-core-install.ps1",
-    "scripts/herdr-bootstrap.ts",
-    "scripts/homebrew-herdr-bootstrap.sh",
-    "scripts/homebrew-launcher.sh",
-    "scripts/generate-homebrew-formula.ts",
-    "scripts/package-release.sh",
-    "scripts/install-linux/scenarios.py",
-    "server/src/herdr-core/install.ts",
-    "server/src/connections/profile-service.ts",
-    "server/src/cli/connections.ts",
-  ]) {
-    expect(isInstallationInput(path)).toBe(true);
-    const known = { ...graph, files: new Set([...graph.files, path]) };
-    expect(selectValidation(known, [path]).packaging).toBe(true);
-    expect(selectValidation(known, [path], () => false, [chat]).packaging).toBe(
-      true,
-    );
-  }
-  expect(isInstallationInput("docs/development.md")).toBe(false);
-  expect(selectValidation(graph, ["README.md"]).packaging).toBe(false);
-  expect(selectValidation(graph, []).packaging).toBe(true);
-});
 
 test("browser Chat selects nearby consumers without verification, runtime suites or platforms", () => {
   const selection = selectValidation(graph, [chat]);

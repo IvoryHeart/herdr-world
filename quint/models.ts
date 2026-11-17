@@ -1,7 +1,6 @@
 // Larger independent cases start first to keep a bounded worker pool occupied.
 export const verificationModels = [
   "effect-recovery",
-  "herdr-core-runtime",
   "space-admission",
   "browser-preparation",
   "observation-base",
@@ -15,5 +14,4 @@ export const verificationModels = [
   "creation-flow",
   "chunk-assembly",
   "ranger-authority",
-  "herdr-core-seen",
 ] as const;

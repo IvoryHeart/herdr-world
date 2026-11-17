@@ -1,4 +1,3 @@
-import type { HostResources } from "../adapters/runtime-ports";
 import {
   repoSettingsKey,
   type GuiSettings,
@@ -6,6 +5,10 @@ import {
 } from "../config/gui-settings";
 
 const CUSTOM_SETTINGS_KEY = "worktree_parent_by_checkout";
+
+type HerdrCaller = {
+  call(method: string, params?: Record<string, unknown>): Promise<any>;
+};
 
 type ParentRecords = Record<string, string>;
 
@@ -89,13 +92,13 @@ export function attachWorktreeParents(
 
 export function createWorktreeParentStore({
   connectionId,
-  resources,
+  herdr,
   sshHost,
   readSettings,
   updateSettings,
 }: {
   connectionId?: string;
-  resources: HostResources;
+  herdr: HerdrCaller;
   sshHost: () => string | undefined;
   readSettings: () => Promise<GuiSettings>;
   updateSettings: GuiSettingsStore["update"];
@@ -109,14 +112,14 @@ export function createWorktreeParentStore({
       result?.worktree?.workspace_id ??
       result?.worktree?.open_workspace_id;
     if (workspaceId) {
-      const response = await resources
-        .getWorkspace({ workspace_id: String(workspaceId) })
+      const response = await herdr
+        .call("workspace.get", { workspace_id: String(workspaceId) })
         .catch(() => null);
       if (response?.workspace) return response.workspace;
     }
     const path = checkoutPath(result?.worktree ?? result);
     if (!path) return null;
-    const response = await resources.listWorkspaces({}).catch(() => null);
+    const response = await herdr.call("workspace.list", {}).catch(() => null);
     return (
       response?.workspaces?.find(
         (workspace: any) => checkoutPath(workspace) === path,

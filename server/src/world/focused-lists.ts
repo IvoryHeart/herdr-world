@@ -21,21 +21,8 @@ export async function readFocusedList(
   params: Record<string, unknown> = {},
   activity?: FocusedActivity,
 ): Promise<any> {
-  const query = params;
-  const read = () => {
-    switch (method) {
-      case "workspace.list":
-        return connection.operations.listWorkspaces(query);
-      case "tab.list":
-        return connection.operations.listTabs(query);
-      case "pane.list":
-        return connection.operations.listTerminals(query);
-      case "agent.list":
-        return connection.operations.listAgents(query);
-    }
-  };
   if (method === "agent.list" && activity?.cache) {
-    const raw = await read();
+    const raw = await connection.herdr.call(method, params);
     return activity.cache.enrich(
       activity.owner,
       raw,
@@ -49,7 +36,7 @@ export async function readFocusedList(
   }
   if (method === "agent.list" && connection.remotePlatform !== "windows")
     return connection.agentSessions.listWithActivity(params);
-  let result: any = await read();
+  let result = await connection.herdr.call(method, params);
   if (method === "workspace.list") {
     if (connection.remotePlatform !== "windows") {
       result = await connection.worktreeParents.enrichWorkspaceList(result);

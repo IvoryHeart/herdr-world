@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { ConnectionManager } from "../connections/manager";
@@ -37,7 +36,7 @@ test("two browser dispatchers record only delivered focused replies to the share
           async startTransport() {},
           startBackground() {},
           async stop() {},
-          ...herdrRuntimeFixture({
+          herdr: {
             async call(method: string, params: unknown) {
               calls.push({ id, method, params });
               if (method === "workspace.list") return { workspaces: [{ id }] };
@@ -45,7 +44,7 @@ test("two browser dispatchers record only delivered focused replies to the share
               if (method === "pane.list") return { panes: [] };
               return { agents: [] };
             },
-          }),
+          },
           worktreeParents: {
             async enrichWorkspaceList(result: object) {
               return { ...result, parents: "synthetic" };
@@ -201,7 +200,7 @@ test("socket cleanup releases acquisition once and publishes the changed browser
     logger: silentLogger,
     clock: { now: () => 0, monotonic: () => 0 },
     forEachRuntime() {},
-    sockets: () => [{ release: (socket) => void released.push(socket) }],
+    closed: (socket) => released.push(socket),
     countChanged: () => counts.push(browsers.clients.size),
   });
   const one = {} as ServerWebSocket<unknown>,

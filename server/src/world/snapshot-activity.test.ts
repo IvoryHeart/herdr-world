@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import type { ConnectionStatus } from "../connections/types";
 import { createPaneActivityClassifier } from "../utils/herdr-events";
@@ -12,7 +11,7 @@ function fixture() {
   let calls = 0;
   let title = "Working";
   const runtime = {
-    ...herdrRuntimeFixture({
+    herdr: {
       async call(method: string) {
         calls++;
         const results: Record<string, unknown> = {
@@ -33,7 +32,7 @@ function fixture() {
         await gate;
         return results[method];
       },
-    }),
+    },
   };
   const service = new WorldSnapshotService(
     {

@@ -26,22 +26,12 @@ export async function observationCase(shape: Shape) {
         connectionId: id,
         generation,
         runtime: {
-          operations: {
-            listWorkspaces: async () => {
+          herdr: {
+            async call(method: string) {
               calls++;
-              return { workspaces: structuredClone(host.workspaces) };
-            },
-            listTabs: async () => {
-              calls++;
-              return { tabs: structuredClone(host.tabs) };
-            },
-            listTerminals: async () => {
-              calls++;
-              return { panes: structuredClone(host.panes) };
-            },
-            listAgents: async () => {
-              calls++;
-              return { agents: structuredClone(host.agents) };
+              const key = `${method.split(".")[0]}s` as keyof typeof host;
+              // Clone approximates a decoded isolated response. No real native IPC here.
+              return { [key]: structuredClone(host[key]) };
             },
           },
         },

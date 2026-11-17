@@ -90,33 +90,6 @@ describe("partitionDesk", () => {
     ]);
     expect(lanes.quiet.map((agent) => agent.id)).toEqual(["old", "unknown"]);
   });
-
-  test("lists pinned quiet agents first, keeping observation order within each", () => {
-    const pinned = new Set(["core-agent-2", "core-agent-4"]);
-    const lanes = partitionDesk(
-      [
-        leaf("core-agent-1", "idle"),
-        leaf("core-agent-2", "idle"),
-        leaf("core-agent-3", "unknown"),
-        leaf("core-agent-4", "idle"),
-        leaf("blocked", "blocked"),
-      ],
-      () => ({ receipt: null, current: true }),
-      new Set(),
-      NOW,
-      new Map(),
-      new Map(),
-      new Map(),
-      (agent) => pinned.has(agent.id),
-    );
-    expect(lanes.quiet.map((agent) => agent.id)).toEqual([
-      "core-agent-2",
-      "core-agent-4",
-      "core-agent-1",
-      "core-agent-3",
-    ]);
-    expect(lanes.needs.map((item) => item.leaf.id)).toEqual(["blocked"]);
-  });
 });
 
 describe("pane screens", () => {

@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { describe, expect, test } from "bun:test";
 import {
   agentCheckoutSessionFingerprint,
@@ -42,13 +41,13 @@ describe("agent checkout context", () => {
   });
   test("uses the live pane report and never a browser path", async () => {
     const context = createAgentCheckoutContext({
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async () => ({
           pane_id: "p1",
           agent_session: session,
           tokens: agentCheckoutTokens(session, "/worktrees/agent-a"),
         }),
-      }),
+      },
       sshHost: () => undefined,
       shQuote: (value) => `'${value}'`,
       runProcessWithCodeTimeout: async () => ({
@@ -82,7 +81,7 @@ describe("agent checkout context", () => {
       started = resolve;
     });
     const context = createAgentCheckoutContext({
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async () => {
           paneReads += 1;
           return paneReads === 1
@@ -100,7 +99,7 @@ describe("agent checkout context", () => {
                 ),
               };
         },
-      }),
+      },
       sshHost: () => undefined,
       shQuote: (value) => `'${value}'`,
       runProcessWithCodeTimeout: async () => {
@@ -138,7 +137,7 @@ describe("agent checkout context", () => {
       started = resolve;
     });
     const context = createAgentCheckoutContext({
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async () => {
           paneReads += 1;
           return {
@@ -150,7 +149,7 @@ describe("agent checkout context", () => {
             ),
           };
         },
-      }),
+      },
       sshHost: () => undefined,
       shQuote: (value) => `'${value}'`,
       runProcessWithCodeTimeout: async () => {
@@ -186,13 +185,13 @@ describe("agent checkout context", () => {
   });
   test("makes missing metadata and a replaced session unavailable", async () => {
     const context = createAgentCheckoutContext({
-      ...herdrRuntimeFixture({
+      herdr: {
         call: async () => ({
           pane_id: "p1",
           agent_session: { ...session, value: "synthetic-session-b" },
           tokens: {},
         }),
-      }),
+      },
       sshHost: () => undefined,
       shQuote: (value) => value,
       runProcessWithCodeTimeout: async () => ({

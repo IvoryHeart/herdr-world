@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { readFocusedList, readFocusedLists } from "./focused-lists";
@@ -8,7 +7,7 @@ test("a failed list waits for sibling reads before releasing its observation slo
   const entered = Promise.withResolvers<void>();
   const connection = {
     remotePlatform: "windows",
-    ...herdrRuntimeFixture({
+    herdr: {
       async call(method: string) {
         if (method === "pane.list") {
           entered.resolve();
@@ -16,7 +15,7 @@ test("a failed list waits for sibling reads before releasing its observation slo
         }
         throw new Error(`synthetic ${method} failure`);
       },
-    }),
+    },
   } as unknown as LegacyConnectionRuntime;
   let settled = false;
   const reading = readFocusedLists(connection).then(
@@ -39,11 +38,11 @@ test("a failed list waits for sibling reads before releasing its observation slo
 test("Windows agent lists never use local activity enrichment", async () => {
   const connection = {
     remotePlatform: "windows",
-    ...herdrRuntimeFixture({
+    herdr: {
       async call() {
         return { agents: [{ pane_id: "synthetic-pane" }] };
       },
-    }),
+    },
     agentSessions: {
       listWithActivity() {
         throw new Error("must not read local sessions");

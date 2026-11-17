@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import {
   runProcessWithInputTimeout,
   runBinaryProcessWithTimeout,
@@ -48,14 +47,14 @@ function handlers(workspace: string) {
     runBinaryProcessWithTimeout,
     bindProcess: (argv) => argv,
     runProcessWithInputTimeout,
-    ...herdrRuntimeFixture({
+    herdr: {
       call: async (method: string) => {
         expect(method).toBe("workspace.get");
         return {
           workspace: { workspace_id: "w1", label: "Workspace", cwd: workspace },
         };
       },
-    } as unknown as HerdrClient),
+    } as unknown as HerdrClient,
     sshHost: () => undefined,
     runProcessWithCodeTimeout: async () => {
       throw new Error("Unexpected remote call");

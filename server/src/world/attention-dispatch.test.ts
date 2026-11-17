@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -289,7 +288,7 @@ test("service replies for this ask without waiting for an unrelated alert drain"
         isCurrent: () => true,
         runtime: {
           sshHost: () => null,
-          ...herdrRuntimeFixture({
+          herdr: {
             async call(_method: string, params: Record<string, unknown>) {
               if (String(params.body).includes("q-attention")) {
                 entered.resolve();
@@ -297,7 +296,7 @@ test("service replies for this ask without waiting for an unrelated alert drain"
               }
               return { shown: true, reason: "shown" };
             },
-          }),
+          },
         },
       }),
     }),

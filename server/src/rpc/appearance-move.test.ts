@@ -1,4 +1,3 @@
-import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -114,7 +113,7 @@ for (const editBeforeClose of [false, true])
         params: { tab_id: "w1:t1", workspace_id: "w2", allow_close_room: true },
         route: { scope: "connection", connectionId: "alpha", generation: 3 },
         requestIsCurrent: () => true,
-        connection: { ...herdrRuntimeFixture({ call }) },
+        connection: { herdr: { call } },
         sendReply: (reply: Record<string, unknown>) => {
           result = reply.result;
           return true;

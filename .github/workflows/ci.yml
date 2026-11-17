@@ -318,7 +318,7 @@ jobs:
             - name: Verify Bun-free installation and prepare the native compatibility launcher
               if: needs.validation-scope.outputs.packaging == 'true'
               run: |
-                  bun run test scripts/install-plugin.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
+                  bun test scripts/install-plugin.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
                   cp server/herdr-world server/herdr-world-plugin.exe
             - name: Exercise the real plugin-managed launchd lifecycle
               if: needs.validation-scope.outputs.packaging == 'true'
@@ -370,7 +370,7 @@ jobs:
                   bun-version: "1.4.4"
                   no-cache: true
             - name: Verify native Windows installation and frozen actions
-              run: bun run test scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
+              run: bun test scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
 
     release-preview:
         name: Downloadable preview (${{ matrix.platform }})

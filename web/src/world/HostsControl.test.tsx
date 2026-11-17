@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ConnectionSummary } from "../api";
-import { worldHosts } from "../worldHosts";
 import { HostsControl } from "./HostsControl";
 
 test("selected host label and badge count matching endpoints consistently", () => {
@@ -20,7 +19,7 @@ test("selected host label and badge count matching endpoints consistently", () =
   );
   const markup = renderToStaticMarkup(
     <HostsControl
-      connections={worldHosts({ connections })}
+      connections={connections}
       ids={connections.map(({ id }) => id)}
       explanation=""
       onChange={() => {}}
@@ -29,43 +28,4 @@ test("selected host label and badge count matching endpoints consistently", () =
   expect(markup).toContain('title="Hosts (2)"');
   expect(markup).toContain('class="world-hosts-count">2</span>');
   expect(markup).toContain('class="connection-switcher-label">2 hosts</span>');
-});
-
-test("a herdr-core host is listed with its runtime and counted", () => {
-  const hosts = worldHosts({
-    connections: [
-      {
-        id: "tui",
-        label: "Synthetic Herdr",
-        source: "test",
-        is_default: true,
-        generation: 1,
-        state: "ready",
-      },
-    ],
-    coreConnections: [
-      {
-        id: "core",
-        label: "Synthetic core",
-        type: "local",
-        runtime: "herdr-core",
-        state: "ready",
-        generation: 2,
-        core_session: "",
-        core_state_dir: "",
-        auto_connect: true,
-        read_only: false,
-      },
-    ],
-  });
-  const markup = renderToStaticMarkup(
-    <HostsControl
-      connections={hosts}
-      ids={["core"]}
-      explanation=""
-      onChange={() => {}}
-    />,
-  );
-  expect(markup).toContain('class="connection-switcher-label">1 hosts</span>');
-  expect(markup).toContain('title="Hosts (2)"');
 });
