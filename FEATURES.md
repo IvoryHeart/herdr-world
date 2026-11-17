@@ -196,7 +196,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens (**Details**, **Merge…** and the rest). A merged parcel is carried
     off the yard (with calm or reduced motion it just goes); a closed one
     fades. More than the yard holds make a "+N" pile that opens the rest as a
-    list. With the GitHub source off, signed out or not yet answered, the
+    list. Click the post office's sign, or **All pull requests** at the top of
+    the pile's list or the phone sign's list, to open Board's **Work** lens
+    over Town: every pull request in the same columns, with the Tickets tab,
+    each card's actions and the same Escape, Back or press-outside close. An
+    agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
     post office is closed and says to connect GitHub in **Sources**, with no
     parcels and no counts; when a refresh fails it keeps the last list as
     unknown and says GitHub is out of date. On a phone it folds to a sign on
@@ -205,7 +209,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     requests, open World with `?townPostFixture` (synthetic pull requests in
     every state; ten seconds later the first ready one merges),
     `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
-    the page drops the parameter at once and only the post office uses it.
+    the page drops the parameter at once and only the post office and the
+    Work lens it opens use it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to

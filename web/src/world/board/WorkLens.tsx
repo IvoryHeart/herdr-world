@@ -1,7 +1,11 @@
 import { ChevronRight, ExternalLink, Settings2, X } from "lucide-react";
-import "./workLensCards.css";
+import "./boardAppearance.css";
+import "./workLens.css";
 import { useMemo, useRef, useState } from "react";
-import type { WorldSourceStatus } from "../../../../shared/worldSources";
+import type {
+  WorldSourcesSnapshot,
+  WorldSourceStatus,
+} from "../../../../shared/worldSources";
 import { useLayer } from "../../layerStack";
 import { workBadgeText } from "../../../../shared/worldSources";
 import { WORLD_SOURCES_SETTINGS_EVENT } from "../../workspaceResource";
@@ -35,8 +39,9 @@ function neverSetUp(source: WorldSourceStatus) {
 }
 
 /**
- * The Work lens over Board: pull requests from review to merged, and tickets
- * by status. A card's agents jump to their Board cards. It is a layer:
+ * The Work lens: pull requests from review to merged, and tickets by status.
+ * Board opens it over its cards and Town from its post office (#887); a
+ * card's agents jump to their Board cards or open in Town. It is a layer:
  * Escape, Back or a press outside closes it.
  */
 export function WorkLens({
@@ -45,8 +50,20 @@ export function WorkLens({
   onSelectAgent,
   onClose,
   store,
+  sources,
+  className,
+  agentAction = (label) => `Show agent ${label} on Board`,
 }: {
   world: WorldObject;
+  /**
+   * The sources to show; the live ones without it. Town passes its post
+   * office's, so the post office's testing fixture shows here too.
+   */
+  sources?: WorldSourcesSnapshot;
+  /** Extra classes for the lens, such as Town's palette and placement. */
+  className?: string;
+  /** A card's agent button's accessible name. */
+  agentAction?(label: string): string;
   /** Board's document store, for the desk pins that order a card's agents. */
   store?: BoardDocumentStore;
   /** The control that toggles the lens; pressing it is not outside. */
@@ -54,7 +71,8 @@ export function WorkLens({
   onSelectAgent(id: string): void;
   onClose(): void;
 }) {
-  const snapshot = useWorldSources();
+  const live = useWorldSources();
+  const snapshot = sources ?? live;
   const sectionRef = useRef<HTMLElement | null>(null);
   useLayer(true, onClose, {
     element: () => sectionRef.current,
@@ -93,7 +111,7 @@ export function WorkLens({
   return (
     <section
       ref={sectionRef}
-      className="work-lens"
+      className={className ? `work-lens ${className}` : "work-lens"}
       aria-label="Work: pull requests and tickets"
     >
       <header className="work-lens-head">
@@ -200,6 +218,7 @@ export function WorkLens({
                               card={card}
                               compact
                               onSelectAgent={onSelectAgent}
+                              agentAction={agentAction}
                             />
                           ))}
                         </ul>
@@ -225,6 +244,7 @@ export function WorkLens({
                       key={card.item.key}
                       card={card}
                       onSelectAgent={onSelectAgent}
+                      agentAction={agentAction}
                     />
                   ),
                 )}
@@ -242,10 +262,12 @@ function WorkCard({
   card: { item, agents },
   compact = false,
   onSelectAgent,
+  agentAction,
 }: {
   card: WorkLensCard;
   compact?: boolean;
   onSelectAgent(id: string): void;
+  agentAction(label: string): string;
 }) {
   return (
     <li className="work-card" data-source={item.source}>
@@ -273,7 +295,7 @@ function WorkCard({
               key={agent.id}
               type="button"
               onClick={() => onSelectAgent(agent.id)}
-              aria-label={`Show agent ${agent.label} on Board`}
+              aria-label={agentAction(agent.label)}
             >
               {agent.label}
             </button>

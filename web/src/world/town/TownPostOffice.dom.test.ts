@@ -29,6 +29,8 @@ if (process.env.TOWN_POST_DOM !== "1") {
   for (const [key, value] of Object.entries({
     HTMLButtonElement: browser.HTMLButtonElement,
     KeyboardEvent: browser.KeyboardEvent,
+    CustomEvent: browser.CustomEvent,
+    NodeFilter: browser.NodeFilter,
     PointerEvent: browser.PointerEvent ?? browser.MouseEvent,
     MouseEvent: browser.MouseEvent,
     FocusEvent: browser.FocusEvent,
@@ -52,6 +54,11 @@ if (process.env.TOWN_POST_DOM !== "1") {
   const { layoutTown, TOWN_SHAPES } = await import("./townLayout");
   const { TownPostOffice, TOWN_POST_LEAVE_MS } = await import(
     "./TownPostOffice"
+  );
+  const { TownOpenWorkContext, TownWorkLens } = await import("./TownWorkLens");
+  const { fixtureWorld } = await import("../board/boardFixture");
+  const { PULL_REQUEST_LANES } = await import(
+    "../../../../shared/worldSources"
   );
   type Snapshot =
     import("../../../../shared/worldSources").WorldSourcesSnapshot;
@@ -102,17 +109,22 @@ if (process.env.TOWN_POST_DOM !== "1") {
       } satisfies Snapshot),
     );
 
-  async function mount(narrow = false) {
+  /** Mounts the post office; `work` stands for Town's Work lens. */
+  async function mount(narrow = false, work: (() => void) | null = null) {
     const host = document.createElement("div");
     host.className = "town-world";
     document.body.append(host);
     const root = createRoot(host);
     await act(async () =>
       root.render(
-        createElement(TownPostOffice, {
-          layout: town(narrow),
-          renderer: { current: null },
-        }),
+        createElement(
+          TownOpenWorkContext.Provider,
+          { value: work },
+          createElement(TownPostOffice, {
+            layout: town(narrow),
+            renderer: { current: null },
+          }),
+        ),
       ),
     );
     return {
@@ -245,5 +257,107 @@ if (process.env.TOWN_POST_DOM !== "1") {
     // A pillar box marks the folded sign, as one stands by the house door.
     expect(fold.querySelector(".town-post-box")).not.toBeNull();
     await office.close();
+  });
+
+  test("in Town, its sign and both lists open every pull request in the Work lens", async () => {
+    await publish(
+      Array.from({ length: 30 }, (_, index) =>
+        fixturePullRequest(index + 1, { checks: "pending" }),
+      ),
+    );
+    let opened = 0;
+    const work = () => {
+      opened += 1;
+    };
+    const office = await mount(false, work);
+    const sign = office.sign()!;
+    expect(sign.getAttribute("aria-label")).toBe(
+      "Post office: 0 ready to merge, 0 failing, 30 waiting. Open all pull requests",
+    );
+    await act(async () => sign.click());
+    expect(opened).toBe(1);
+    // The pile's list leads with every pull request, not only its own.
+    await act(async () =>
+      office.host.querySelector<HTMLButtonElement>(".town-post-pile")!.click(),
+    );
+    const pileList = document.querySelector(".town-post-popover")!;
+    const all = pileList.querySelector<HTMLButtonElement>(".town-post-all")!;
+    expect(pileList.firstElementChild).toBe(all);
+    expect(all.textContent).toBe("All pull requests");
+    await act(async () => all.click());
+    expect(opened).toBe(2);
+    expect(document.querySelector(".town-post-popover")).toBeNull();
+    await office.close();
+
+    // On a phone the folded sign's list offers it too.
+    const folded = await mount(true, work);
+    await act(async () =>
+      folded.host.querySelector<HTMLButtonElement>(".town-post-fold")!.click(),
+    );
+    await act(async () =>
+      document
+        .querySelector<HTMLButtonElement>(".town-post-popover .town-post-all")!
+        .click(),
+    );
+    expect(opened).toBe(3);
+    await folded.close();
+
+    // Without GitHub, the sign still says how to connect and opens Sources.
+    await publish([], "not_connected", "Sign in with gh auth login.");
+    const closed = await mount(false, work);
+    let settings = 0;
+    const onSettings = () => {
+      settings += 1;
+    };
+    window.addEventListener(WORLD_SOURCES_SETTINGS_EVENT, onSettings);
+    expect(closed.sign()!.getAttribute("aria-label")).toBe(
+      "Post office: Closed · connect GitHub in Sources",
+    );
+    await act(async () => closed.sign()!.click());
+    window.removeEventListener(WORLD_SOURCES_SETTINGS_EVENT, onSettings);
+    expect([settings, opened]).toEqual([1, 3]);
+    await closed.close();
+  });
+
+  test("Town's Work lens is Board's kanban, over the post office's pull requests", async () => {
+    await publish([
+      fixturePullRequest(1, { title: "Synthetic ready change" }),
+      fixturePullRequest(2, { checks: "fail", lane: "fixing" }),
+    ]);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    let closed = 0;
+    await act(async () =>
+      root.render(
+        createElement(TownWorkLens, {
+          world: fixtureWorld([]),
+          onSelectAgent: () => {},
+          onClose: () => {
+            closed += 1;
+          },
+        }),
+      ),
+    );
+    const lens = host.querySelector<HTMLElement>(".work-lens.town-work")!;
+    expect(
+      [...lens.querySelectorAll<HTMLElement>(".work-lens-column")].map(
+        (column) => column.dataset.lane,
+      ),
+    ).toEqual([...PULL_REQUEST_LANES]);
+    expect(
+      lens.querySelector('.work-lens-column[data-lane="fixing"]')!.textContent,
+    ).toContain("#2");
+    expect(lens.textContent).toContain("Synthetic ready change");
+    // Keys carry on in the lens, not the sign beneath it.
+    expect(document.activeElement?.textContent).toBe("Pull requests");
+    await act(async () =>
+      lens
+        .querySelector<HTMLButtonElement>('[aria-label="Close Work"]')!
+        .click(),
+    );
+    expect(closed).toBe(1);
+    await act(async () => root.unmount());
+    host.remove();
   });
 }
