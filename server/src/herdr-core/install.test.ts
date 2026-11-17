@@ -1,11 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { coreInstallInput, createCoreInstall, parseCoreProbe } from "./install";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  coreInstallInput,
+  createCoreInstall,
+  localInstallArgv,
+  parseCoreProbe,
+} from "./install";
 
 const PROBE =
   "target=linux-x86_64\ncore=\nherdr=\ndir=/example/.local/bin\nlogin=systemd\n";
 
 const isProbe = (input: string) =>
-  input.endsWith("\nherdr_core_probe </dev/null\n");
+  /\nherdr_core_probe(?: <\/dev\/null)?\n$/.test(input);
 
 type Call = { argv: string[]; input: string };
 
@@ -24,6 +31,7 @@ function harness(
     }>;
     /** What a connect attempt ends in (World's connection state). */
     connectsTo?: { state: string; error?: { message: string } };
+    platform?: NodeJS.Platform;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -61,6 +69,7 @@ function harness(
       },
     }),
     fixture: { start: async () => ({}) },
+    platform: options.platform ?? "linux",
     latestVersion: async () => "0.1.21",
     sleep: async () => {},
     run: async (argv, input, _timeout, onLine) => {
@@ -114,6 +123,65 @@ describe("herdr-core install from World", () => {
     );
   });
 
+  test("Windows gets the PowerShell steps with the same calls, quoted", () => {
+    const setup = coreInstallInput("setup", "0.1.21", "work", "win32");
+    expect(setup).toContain("function herdr_core_setup($requested, $session)");
+    expect(setup).toEndWith("\nherdr_core_setup '0.1.21' 'work'\n");
+    expect(coreInstallInput("setup", null, "default", "win32")).toEndWith(
+      "\nherdr_core_setup '' 'default'\n",
+    );
+    expect(coreInstallInput("probe", null, "default", "win32")).toEndWith(
+      "\nherdr_core_probe\n",
+    );
+    expect(() =>
+      coreInstallInput("setup", "1.0.0'; Remove-Item ~ '", "default", "win32"),
+    ).toThrow("invalid herdr-core version");
+    expect(localInstallArgv("linux")).toEqual(["sh", "-s"]);
+    expect(localInstallArgv("win32", { SystemRoot: "C:\\Windows" })).toEqual([
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "& ([scriptblock]::Create([Console]::In.ReadToEnd()))",
+    ]);
+  });
+
+  test("the Windows steps check the download before using it and run nothing downloaded as a script", () => {
+    const script = readFileSync(
+      join(import.meta.dir, "../../../scripts/herdr-core-install.ps1"),
+      "utf8",
+    );
+    // PowerShell reads stdin in the console's code page.
+    expect(/^[\x09\x0a\x0d\x20-\x7e]*$/.test(script)).toBe(true);
+    expect(script).not.toMatch(
+      /Invoke-Expression|\biex\b|Invoke-RestMethod|\birm\b|Invoke-WebRequest|ExecutionPolicy|update --from|-Force -LiteralPath \$new/i,
+    );
+    const at = (text: string) => {
+      const index = script.indexOf(text);
+      expect(index).toBeGreaterThan(-1);
+      return index;
+    };
+    // HTTPS only, from core's release server, checksum before unpacking.
+    expect(script).toContain("--proto '=https' --proto-redir '=https'");
+    at('StartsWith("$releases/core/"');
+    expect(at("if ($got -cne $want)")).toBeLessThan(at("& $tar -xf"));
+    expect(at("& $tar -xf")).toBeLessThan(at("& $new --version"));
+    // Never replaces a core: re-checked after download, published with a
+    // move that fails when the name exists.
+    expect(at("during the download; leaving it unchanged")).toBeLessThan(
+      at("[IO.File]::Move($staged, $exe)"),
+    );
+    // Login start rewrites only World's own shortcut, and any valid path
+    // (apostrophes, accents) reaches it escaped, then Base64-encoded.
+    at("Herdr World did not write it.");
+    expect(at("EscapeSingleQuotedStringContent($core)")).toBeLessThan(
+      at("-EncodedCommand ' + [Convert]::ToBase64String"),
+    );
+    expect(script).toContain("$link.Arguments = $arguments");
+    expect(script).not.toContain("a login entry cannot hold");
+  });
+
   test("probe facts parse; an unsupported target is null", () => {
     expect(parseCoreProbe(PROBE)).toEqual({
       target: "linux-x86_64",
@@ -127,6 +195,15 @@ describe("herdr-core install from World", () => {
         "target=unsupported\ncore=/x/hc\nherdr=\ndir=/x\nlogin=\n",
       ),
     ).toMatchObject({ target: null, core: "/x/hc", login: "none" });
+    expect(
+      parseCoreProbe(
+        "target=windows-x86_64\r\ncore=\r\nherdr=\r\ndir=C:\\x\r\nlogin=startup\r\n",
+      ),
+    ).toMatchObject({
+      target: "windows-x86_64",
+      dir: "C:\\x",
+      login: "startup",
+    });
     expect(() => parseCoreProbe("hello")).toThrow("did not describe itself");
   });
 
@@ -180,6 +257,27 @@ describe("herdr-core install from World", () => {
         auto_connect: true,
       },
     ]);
+  });
+
+  test("on Windows this computer runs the PowerShell steps; SSH hosts keep sh", async () => {
+    const h = harness({
+      platform: "win32",
+      probe: "target=windows-x86_64\ncore=\nherdr=\ndir=C:\\x\nlogin=startup\n",
+    });
+    const probed = await h.install.probe({ type: "local" });
+    expect(probed.probe.login).toBe("startup");
+    expect(h.calls[0]!.argv[0]).toEndWith("powershell.exe");
+    expect(h.calls[0]!.input).toContain("function herdr_core_probe");
+    await h.install.probe({ type: "ssh", destination: "dev.example.com" });
+    expect(h.calls[1]!.argv.at(-1)).toBe("sh -s");
+    expect(h.calls[1]!.input).toEndWith("\nherdr_core_probe </dev/null\n");
+    h.install.install({ type: "local" }, "0.1.21");
+    h.finishSetup();
+    expect((await settle(h.install, { type: "local" })).phase).toBe("done");
+    expect(h.calls[2]!.input).toEndWith(
+      "\nherdr_core_setup '0.1.21' 'default'\n",
+    );
+    expect(h.created).toMatchObject([{ id: "core-local", type: "local" }]);
   });
 
   test("an existing core profile for the host is connected, not duplicated", async () => {

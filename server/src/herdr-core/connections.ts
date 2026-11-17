@@ -166,9 +166,11 @@ export function createCoreConnections(args: {
       const transport = transportFor(profile, () => {});
       const abort = new AbortController();
       try {
-        const socket = await transport.open(abort.signal);
+        const endpoint = await transport.open(abort.signal);
         const client = await CoreClient.open(
-          await (args.connect ?? connectUnixStream)(socket, abort.signal),
+          typeof endpoint === "string"
+            ? await (args.connect ?? connectUnixStream)(endpoint, abort.signal)
+            : endpoint,
         );
         try {
           await client.status();

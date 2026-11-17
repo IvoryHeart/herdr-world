@@ -1,9 +1,9 @@
 // `herdr-world herdr setup` and `herdr upgrade --install` on this computer
 // when no Herdr is found: the CLI form of the installers' core-first choice.
-import { existsSync } from "node:fs";
 import { win32 } from "node:path";
 import {
   coreInstallInput,
+  localInstallArgv,
   PROBE_TIMEOUT_MS,
   parseCoreProbe,
   plainError,
@@ -17,8 +17,6 @@ export type LocalCoreSetup =
   | { outcome: "kept"; core: string }
   /** Core installed when missing, then started now and at login. */
   | { outcome: "set-up"; core: string; installed: boolean }
-  /** Windows with no core: World sets up the Herdr TUI (see setupLocalCore). */
-  | { outcome: "herdr"; core: null }
   | { outcome: "failed"; core: string | null; error: string };
 
 export type LocalCoreSetupOptions = {
@@ -30,67 +28,26 @@ export type LocalCoreSetupOptions = {
   log: (line: string) => void;
   platform?: NodeJS.Platform;
   run?: Run;
-  /** Windows: the installed herdr-core, if any. */
-  findWindowsCore?: () => string | null;
 };
-
-const CORE_VERSION = /^hc [0-9]/;
-
-/**
- * Finds herdr-core on this Windows computer where core's own PowerShell
- * installer puts it (HC_INSTALL_DIR, else %LOCALAPPDATA%\Programs\herdr-core),
- * herdr-core on PATH, or an `hc` that says it is core. Reads only.
- */
-export function findWindowsCore(
-  env: Record<string, string | undefined> = process.env,
-  exists: (path: string) => boolean = existsSync,
-  which: (name: string) => string | null = (name) => Bun.which(name),
-  version: (path: string) => string = (path) => {
-    try {
-      const result = Bun.spawnSync([path, "--version"], { timeout: 5_000 });
-      return result.stdout.toString().trim();
-    } catch {
-      return "";
-    }
-  },
-): string | null {
-  const dir =
-    env.HC_INSTALL_DIR ||
-    (env.LOCALAPPDATA
-      ? win32.join(env.LOCALAPPDATA, "Programs", "herdr-core")
-      : "");
-  if (dir && exists(win32.join(dir, "herdr-core.exe")))
-    return win32.join(dir, "herdr-core.exe");
-  const core = which("herdr-core");
-  if (core) return core;
-  const hc = which("hc");
-  return hc && CORE_VERSION.test(version(hc)) ? hc : null;
-}
 
 /**
  * The core-first choice for this computer once no Herdr was found: an
  * installed herdr-core is kept (and with setUp, started now and at login);
  * otherwise core is installed with World's reviewed copy of its official
- * steps and started now and at login.
- *
- * Windows: an installed core is kept and nothing else is installed. With no
- * core, World sets up the Herdr TUI instead, because World on Windows cannot
- * connect to a core on the same computer (core serves a named pipe there and
- * World's local core connection reads a Unix socket), so a new core would
- * leave World with no runtime. Windows hosts reached over SSH do use core.
+ * steps and started now and at login. Windows runs the PowerShell copy of
+ * core's install.ps1 steps and starts core at login from the Startup folder;
+ * World there reaches the core over its named pipe.
  */
 export async function setupLocalCore(
   options: LocalCoreSetupOptions,
 ): Promise<LocalCoreSetup> {
-  if ((options.platform ?? process.platform) === "win32") {
-    const core = (options.findWindowsCore ?? findWindowsCore)();
-    return core ? { outcome: "kept", core } : { outcome: "herdr", core: null };
-  }
+  const platform = options.platform ?? process.platform;
+  const argv = localInstallArgv(platform);
   const run = options.run ?? runProcess;
   let stdout = "";
   const probed = await run(
-    ["sh", "-s"],
-    coreInstallInput("probe"),
+    argv,
+    coreInstallInput("probe", null, "default", platform),
     PROBE_TIMEOUT_MS,
     (line) => {
       stdout += `${line}\n`;
@@ -113,8 +70,8 @@ export async function setupLocalCore(
     };
   // The setup step installs nothing when a core is there.
   const result = await run(
-    ["sh", "-s"],
-    coreInstallInput("setup"),
+    argv,
+    coreInstallInput("setup", null, "default", platform),
     SETUP_TIMEOUT_MS,
     options.log,
   );
@@ -131,7 +88,11 @@ export async function setupLocalCore(
     };
   return {
     outcome: "set-up",
-    core: probe.core ?? `${probe.dir}/herdr-core`,
+    core:
+      probe.core ??
+      (platform === "win32"
+        ? win32.join(probe.dir, "herdr-core.exe")
+        : `${probe.dir}/herdr-core`),
     installed: !probe.core,
   };
 }

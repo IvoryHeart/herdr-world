@@ -238,8 +238,7 @@ export function Confirm({
       <>
         <p>
           herdr-core has no build for {where}. It runs on Linux and macOS
-          (x86_64 and arm64); on Windows x64 use herdr-core&apos;s own
-          PowerShell installer.
+          (x86_64 and arm64) and on Windows x64.
         </p>
         <div className="connection-profile-actions">
           <button type="button" onClick={onCancel}>

@@ -435,9 +435,9 @@ export function validateCoreConnectionProfile(
     throw new Error("core_session must be a herdr-core session name");
   let stateDir = "";
   if (value.core_state_dir !== "") {
-    if (!ssh && platform === "win32")
-      throw new Error("herdr-core state directories are POSIX paths");
-    if (windows) stateDir = validateWindowsDirectory(value.core_state_dir);
+    // A Windows core: this computer on Windows, or a Windows SSH host.
+    if (windows || (!ssh && platform === "win32"))
+      stateDir = validateWindowsDirectory(value.core_state_dir);
     else
       try {
         stateDir = ssh

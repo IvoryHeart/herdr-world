@@ -35,6 +35,7 @@ import {
   windowsCoreEndpointResult,
   windowsCoreProbeScript,
   windowsCoreRelayScript,
+  windowsLocalCoreTransport,
   windowsSshCoreTransport,
 } from "./windows";
 
@@ -241,7 +242,7 @@ describe("herdr-core on Windows SSH hosts: the fixed scripts", () => {
     });
   });
 
-  test("Windows core profiles: SSH only, with a Windows state directory", () => {
+  test("Windows SSH core profiles need a Windows state directory", () => {
     const profile = windowsProfile({
       core_state_dir: String.raw`C:\Users\dev\AppData\Local\herdr-core\default`,
     });
@@ -482,5 +483,158 @@ describe("herdr-core on Windows SSH hosts: the relay", () => {
     await expect(transport.open(new AbortController().signal)).rejects.toThrow(
       "used",
     );
+  });
+});
+
+describe("herdr-core on this Windows computer: the local relay", () => {
+  const localProfile = () =>
+    validateCoreConnectionProfile(
+      {
+        id: "core-local",
+        label: "This computer",
+        type: "local",
+        runtime: "herdr-core",
+        core_session: "default",
+        core_state_dir: "",
+        auto_connect: true,
+      },
+      "win32",
+    );
+
+  function local() {
+    const profile = localProfile();
+    const h = host(profile);
+    // The fake host decodes SSH's one command string; locally the same
+    // fixed script arrives as an argv for Windows PowerShell.
+    const transport = windowsLocalCoreTransport(profile, {
+      env: {},
+      readLocal: (argv) => h.windows.readRemote([argv.join(" ")]),
+      spawnRelay: (argv) => h.windows.spawnRelay([argv.join(" ")]),
+    });
+    cleanups.push(() => transport.close());
+    return { ...h, transport };
+  }
+
+  test("only this computer, with a Windows state directory", () => {
+    expect(() =>
+      windowsLocalCoreTransport(windowsProfile(), { env: {} }),
+    ).toThrow("this computer");
+    const profile = validateCoreConnectionProfile(
+      {
+        ...localProfile(),
+        core_state_dir: String.raw`C:\Users\example\AppData\Local\herdr-core\work`,
+      },
+      "win32",
+    );
+    expect(profile.core_state_dir).toContain("herdr-core");
+    expect(() =>
+      validateCoreConnectionProfile(
+        { ...localProfile(), core_state_dir: "/home/example/state" },
+        "win32",
+      ),
+    ).toThrow("Windows directory");
+    expect(() =>
+      coreTransportForProfile(profile, {
+        connectionId: "c",
+        platform: "win32",
+      }),
+    ).not.toThrow();
+  });
+
+  test("bytes cross both ways through the same fixed scripts, and close ends the relay", async () => {
+    const h = local();
+    const socket = join(h.root, "pipes", PIPE);
+    const received: Uint8Array[] = [];
+    const server = Bun.listen({
+      unix: socket,
+      socket: {
+        open(sock) {
+          sock.write("hello from core");
+        },
+        data(_sock, bytes) {
+          received.push(new Uint8Array(bytes));
+        },
+      },
+    });
+    cleanups.push(() => server.stop(true));
+    h.windows.pipes.set(PIPE, { socket, owner: "user", denied: false });
+    h.windows.lock = `\\\\.\\pipe\\${PIPE}`;
+    const stream = await h.transport.open(new AbortController().signal);
+    if (typeof stream === "string") throw new Error("expected the relay");
+    const got: Uint8Array[] = [];
+    let ended: { error?: Error } | null = null;
+    stream.onData((bytes) => got.push(bytes));
+    stream.onClose((error) => {
+      ended = { error };
+    });
+    stream.write(new TextEncoder().encode("hello from World"));
+    await until(
+      () =>
+        Buffer.concat(got).toString() === "hello from core" &&
+        Buffer.concat(received).toString() === "hello from World",
+    );
+    expect(h.windows.probes).toHaveLength(1);
+    expect(decodeWindowsCommand(h.windows.relays[0]!.at(-1)!)).toBe(
+      windowsCoreRelayScript(PIPE),
+    );
+    await expect(
+      h.transport.open(new AbortController().signal),
+    ).rejects.toThrow("used");
+    await h.transport.close();
+    await until(() => ended !== null && h.windows.running().length === 0);
+  });
+
+  test("refusals speak of this computer and start nothing", async () => {
+    const stopped = local();
+    await expect(
+      stopped.transport.open(new AbortController().signal),
+    ).rejects.toThrow("no herdr-core has run");
+    expect(stopped.windows.relays).toHaveLength(0);
+
+    for (const [patch, message] of [
+      [{ owner: "other" as const }, "another account"],
+      [{ denied: true }, "elevated"],
+    ] as const) {
+      const h = local();
+      const core = fakeCore();
+      await h.windows.serve(core, PIPE);
+      Object.assign(h.windows.pipes.get(PIPE)!, patch);
+      const error = await h.transport
+        .open(new AbortController().signal)
+        .catch((caught: Error) => caught);
+      expect(error).toBeInstanceOf(CoreEndpointRefusedError);
+      expect((error as Error).message).toContain(message);
+      expect((error as Error).message).not.toContain("Windows host");
+      expect(h.windows.relays).toHaveLength(0);
+    }
+
+    const killed = local();
+    const core = fakeCore();
+    await killed.windows.serve(core, PIPE);
+    killed.windows.kill(core, PIPE);
+    const error = await killed.transport
+      .open(new AbortController().signal)
+      .catch((caught: Error) => caught);
+    expect(error).toBeInstanceOf(CoreUnavailableError);
+    expect((error as Error).message).toBe("herdr-core is not running");
+  });
+
+  test("World's connection test reaches a running core on this computer", async () => {
+    const h = local();
+    const core = fakeCore();
+    await h.windows.serve(core, PIPE);
+    core.create({ name: "agent", argv: ["claude"], reported: true });
+    const connections = createCoreConnections({
+      logger: silentLogger,
+      changed: () => {},
+      profiles: () => null as never,
+      transportFor: () => h.transport,
+    });
+    cleanups.push(() => connections.stop());
+    await expect(
+      connections.support.test!(localProfile()),
+    ).resolves.toMatchObject({
+      ok: true,
+    });
   });
 });

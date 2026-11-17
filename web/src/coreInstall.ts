@@ -21,7 +21,7 @@ export type CoreHostProbe = {
   core: string | null;
   herdr: string | null;
   dir: string;
-  login: "systemd" | "launchd" | "none";
+  login: "systemd" | "launchd" | "startup" | "none";
 };
 
 export type CoreInstallStatus = {
@@ -105,5 +105,7 @@ export function loginText(login: CoreHostProbe["login"]): string {
     ? "Starts at login (a systemd user unit)"
     : login === "launchd"
       ? "Starts at login (a launchd LaunchAgent)"
-      : "Cannot start at login there (no systemd user manager or launchd); it starts now only";
+      : login === "startup"
+        ? "Starts at login (a Startup folder shortcut)"
+        : "Cannot start at login there (no systemd user manager or launchd); it starts now only";
 }
