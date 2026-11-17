@@ -1,0 +1,155 @@
+/*
+ * Reception at scale (#903): a closed reception is a small marquee over the
+ * door, the host's name, its count and a few faces. The full board opens over
+ * it on hover, keyboard focus or a tap on the lobby ([data-open]). The board is
+ * positioned out of flow, so the marquee keeps its size while it opens and the
+ * board placement (townBoardPlacement) never moves it from under the pointer.
+ */
+
+.town-reception {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 260px;
+  padding: 3px 5px 3px 9px;
+  color: #f1efe6;
+  background: rgba(14, 17, 24, 0.86);
+  border: 1px solid #4b5568;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  cursor: default;
+}
+
+.town-reception-busy {
+  border-color: #ffb547;
+}
+
+.town-reception:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-reception-marquee {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.town-reception-marquee-name {
+  min-width: 0;
+  margin-right: 3px;
+  overflow: hidden;
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #a9b2a4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.town-reception-busy .town-reception-marquee-name {
+  color: #ffd79a;
+}
+
+.town-reception-marquee b {
+  flex: none;
+  min-width: 16px;
+  margin-right: 2px;
+  padding: 0 5px;
+  font:
+    700 10px / 15px "Silkscreen",
+    ui-monospace,
+    monospace;
+  text-align: center;
+  color: #2a1a04;
+  background: #ffb547;
+  border-radius: 999px;
+}
+
+/* A face: the portrait's head in a small frame, amber waiting, green done. */
+.town-reception-face {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  background: #232b3d;
+  border: 1px solid #ffb547;
+  border-radius: 6px;
+}
+
+.town-reception-face[data-done] {
+  border-color: #7be08f;
+}
+
+.town-reception-face img {
+  display: block;
+  width: 24px;
+  height: 34px;
+  margin: 1px 0 0 -3px;
+  image-rendering: pixelated;
+}
+
+.town-reception-marquee-more {
+  flex: none;
+  padding: 0 3px;
+  font:
+    700 10px "Silkscreen",
+    ui-monospace,
+    monospace;
+  color: #a9b2a4;
+}
+
+/* The full board, standing on the marquee's foot. */
+.town-reception-board {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  display: grid;
+  gap: 6px;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: max(100%, 160px);
+  max-width: 420px;
+  padding: 8px 10px 10px;
+  background: rgba(14, 17, 24, 0.94);
+  border: 2px solid #4b5568;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  /* Hidden overlays take no taps, and their controls take no focus. */
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s;
+}
+
+.town-reception-busy .town-reception-board {
+  border-color: #ffb547;
+}
+
+.town-world:not([data-level="desk"]) .town-reception:is(:hover, :focus-within),
+.town-reception[data-open="true"] {
+  z-index: 5;
+}
+
+.town-world:not([data-level="desk"])
+  .town-reception:is(:hover, :focus-within)
+  .town-reception-board,
+.town-reception[data-open="true"] .town-reception-board {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-reception-board {
+    transition: none;
+  }
+}

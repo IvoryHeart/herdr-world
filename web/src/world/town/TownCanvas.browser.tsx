@@ -3,6 +3,7 @@ import { checkTownEdgeArrows } from "./townEdgeArrows.browser";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
 import { checkTownBuildingSigns } from "./townBuildingSigns.browser";
 import { checkTownReceptionFilter } from "./townReceptionFilter.browser";
+import { checkTownReceptionMarquee } from "./townReceptionMarquee.browser";
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { TERMINAL_COMPOSER_REQUEST_EVENT } from "../terminalComposerRequest";
 import { StrictMode, useEffect, useState } from "react";
@@ -1296,6 +1297,7 @@ async function run() {
   }
   if (scale === "reception") {
     try {
+      await checkTownReceptionMarquee(host, check, waitFor);
       await checkTownReceptionFilter(host, check, waitFor);
     } finally {
       root.unmount();
