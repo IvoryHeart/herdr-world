@@ -86,7 +86,7 @@ export function uiSettingValueError(value: unknown): string | null {
 
 export const DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES = 10;
 
-function defaultGuiSettings(): GuiSettings {
+export function defaultGuiSettings(): GuiSettings {
   return {
     version: 1,
     title_suffix: "",

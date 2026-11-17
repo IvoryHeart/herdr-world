@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Tab } from "../types";
-import { worldTabPin } from "./useDeskPins";
+import { leafPinnedBy, worldTabPin } from "./useDeskPins";
+import type { WorldLeafObject, WorldSpaceObject } from "./worldObject";
 import { terminalColorKey } from "./terminalColor";
 
 const owner = { connectionId: "conn-a", workspaceIds: ["w1"] };
@@ -52,5 +53,40 @@ describe("the phone terminal's pin", () => {
     expect(pin.pinnedOf(owner, tab)).toBe(true);
     pin.onPin(owner, tab, false);
     expect(toggled).toEqual([key]);
+  });
+});
+
+describe("whether a leaf is pinned", () => {
+  const spaces = [
+    { connectionId: "conn-a", nativeId: "w1" },
+  ] as WorldSpaceObject[];
+  const herdr = (tabId: string) =>
+    ({
+      runtime: "herdr",
+      connectionId: "conn-a",
+      workspaceId: "w1",
+      tabId,
+      pane: {},
+    }) as unknown as WorldLeafObject;
+  const core = (favourite: boolean) =>
+    ({
+      runtime: "herdr-core",
+      connectionId: "conn-a",
+      workspaceId: "w1",
+      tabId: "w1:t2",
+      pane: { favourite },
+    }) as unknown as WorldLeafObject;
+
+  test("a Herdr leaf follows its tab's desk pin", () => {
+    const pinned = leafPinnedBy({ [key]: { cell: null } }, spaces);
+    expect(pinned(herdr("w1:t2"))).toBe(true);
+    expect(pinned(herdr("w1:t3"))).toBe(false);
+  });
+
+  test("a herdr-core leaf follows its own label, not its desk", () => {
+    expect(leafPinnedBy({}, spaces)(core(true))).toBe(true);
+    expect(leafPinnedBy({ [key]: { cell: null } }, spaces)(core(false))).toBe(
+      false,
+    );
   });
 });

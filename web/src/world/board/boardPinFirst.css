@@ -1,0 +1,19 @@
+/* Pinned goes first (boardPinFirst.ts): a workspace's pinned cards sit on
+   one quiet band above it, the group cue. Neutral, never the selection or
+   attention colour. */
+.board-pin-bands {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.board-pin-band {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  border: 1.5px solid color-mix(in srgb, var(--board-soft) 45%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--board-soft) 16%, transparent);
+  pointer-events: none;
+}

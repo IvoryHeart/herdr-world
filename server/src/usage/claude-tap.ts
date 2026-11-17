@@ -8,7 +8,7 @@ import type { RunProcessWithCodeTimeout } from "../workspace/file-types";
  * Claude agent it passes per-launch settings (`--settings`) whose status line
  * is this tap: it records the numbers for the usage collector, then runs the
  * user's own status line command, if any, with the same input and its output
- * unchanged. The user's settings files are only read, never written.
+ * unchanged. The integration installer also registers it for host-wide sessions.
  */
 
 /** The tap keeps its newest reading in ~/.cache/herdr-world/claude-status-line.json. */
@@ -73,21 +73,126 @@ export function claudeStatusLineTap(
           : null,
     });
   }
-  if (windows.length)
+  if (windows.length) {
+    const dir = path.join(home, ".cache", "herdr-world"),
+      file = path.join(dir, "claude-status-line.json"),
+      lock = `${file}.lock`,
+      temporary = `${file}.${pid}.tmp`;
+    // Every Claude session's tap writes this one file with its own last
+    // snapshot, so taps run concurrently and an older session's can arrive
+    // after a fresher one. Read, merge and replace is one transaction under
+    // an exclusive lock file: without it two taps could both read 20 %, one
+    // commit 23 % and the other then replace it with its 22 %.
+    // The lock names its holder: a removed lock's inode can be reused.
+    const token = `${pid} ${now} ${Math.random()}`;
+    const mine = () => {
+      try {
+        return fs.readFileSync(lock, "utf8") === token;
+      } catch {
+        return false;
+      }
+    };
+    let held = false;
     try {
-      const dir = path.join(home, ".cache", "herdr-world"),
-        file = path.join(dir, "claude-status-line.json"),
-        temporary = `${file}.${pid}.tmp`;
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-      fs.writeFileSync(
-        temporary,
-        JSON.stringify({ version: 1, at: now, windows }),
-        { mode: 0o600 },
-      );
-      fs.renameSync(temporary, file);
+      const pause = new Int32Array(new SharedArrayBuffer(4));
+      // A tap holds the lock for milliseconds: wait up to half a second.
+      for (let attempt = 0; attempt < 100 && !held; attempt++) {
+        try {
+          const fd = fs.openSync(lock, "wx", 0o600);
+          held = true;
+          try {
+            fs.writeFileSync(fd, token);
+          } finally {
+            fs.closeSync(fd);
+          }
+          break;
+        } catch (error: any) {
+          if (error?.code !== "EEXIST") throw error;
+        }
+        try {
+          // A lock this old was left by a tap that died: move it aside and
+          // remove it, but put back a fresh lock moved by mistake.
+          const age = Date.now() - fs.lstatSync(lock).mtimeMs,
+            holder = fs.readFileSync(lock, "utf8");
+          if (age > 10_000) {
+            const moved = `${lock}.${pid}.stale`;
+            fs.renameSync(lock, moved);
+            if (fs.readFileSync(moved, "utf8") !== holder)
+              try {
+                fs.linkSync(moved, lock);
+              } catch {
+                // Another tap holds a new lock; the moved one's holder sees
+                // it is no longer the lock and commits nothing.
+              }
+            fs.unlinkSync(moved);
+            continue;
+          }
+        } catch {
+          // Released meanwhile, or another tap is clearing it: try again.
+        }
+        Atomics.wait(pause, 0, 0, 5);
+      }
+      // Still held after the wait: skip this reading rather than risk
+      // replacing a higher one; the next status line update records it.
+      if (held) {
+        // Within a window (same resets_at) usage only rises until the reset:
+        // keep the highest reading, and a stored later window over an
+        // earlier one.
+        let saved: Record<string, any> = {};
+        try {
+          saved = object(JSON.parse(fs.readFileSync(file, "utf8")));
+        } catch {
+          // No earlier reading, or a damaged one: this reading stands.
+        }
+        for (const [i, w] of windows.entries()) {
+          const old = object(
+            (Array.isArray(saved.windows) && saved.version === 1
+              ? saved.windows
+              : []
+            ).find((o: any) => object(o).window_minutes === w.window_minutes),
+          );
+          if (
+            typeof old.used_percent === "number" &&
+            Number.isFinite(old.used_percent) &&
+            old.used_percent >= 0 &&
+            old.used_percent <= 100 &&
+            Number.isSafeInteger(old.resets_at) &&
+            w.resets_at !== null &&
+            (old.resets_at > w.resets_at ||
+              (old.resets_at === w.resets_at &&
+                old.used_percent > w.used_percent))
+          )
+            windows[i] = {
+              window_minutes: w.window_minutes,
+              used_percent: old.used_percent,
+              resets_at: old.resets_at,
+            };
+        }
+        fs.writeFileSync(
+          temporary,
+          JSON.stringify({ version: 1, at: now, windows }),
+          { mode: 0o600 },
+        );
+        // Commit only while the lock is still this tap's own.
+        if (mine()) fs.renameSync(temporary, file);
+        else fs.unlinkSync(temporary);
+      }
     } catch {
       // A reading is optional; the user's status line is not.
+      try {
+        fs.unlinkSync(temporary);
+      } catch {
+        // Nothing prepared.
+      }
+    } finally {
+      try {
+        if (held && mine()) fs.unlinkSync(lock);
+      } catch {
+        // Already cleared as stale.
+      }
     }
+  }
   // The session's settings directory: the directory Claude Code started in.
   const project = path.resolve(
     typeof object(raw.workspace).project_dir === "string"
@@ -156,7 +261,10 @@ export function claudeStatusLineTap(
     }
   // The user's own status line, by Claude Code's precedence below the flag:
   // local project, shared project, then user settings.
-  const config = env.CLAUDE_CONFIG_DIR?.trim() || path.join(home, ".claude");
+  const configured = env.CLAUDE_CONFIG_DIR?.trim();
+  const config = configured?.startsWith("~")
+    ? path.join(home, configured.slice(1).replace(/^[/\\]/, ""))
+    : configured || path.join(home, ".claude");
   for (const file of [
     path.join(local, ".claude", "settings.local.json"),
     path.join(project, ".claude", "settings.json"),
@@ -169,7 +277,31 @@ export function claudeStatusLineTap(
       continue;
     }
     if (!("statusLine" in settings)) continue;
-    const line = object(settings.statusLine);
+    let line = object(settings.statusLine);
+    if (
+      file === path.join(config, "settings.json") &&
+      typeof line.command === "string" &&
+      line.command.includes("herdr-world-claude-tap")
+    ) {
+      try {
+        const saved = JSON.parse(
+          fs.readFileSync(
+            path.join(config, "herdr-world", "claude-status-line.json"),
+            "utf8",
+          ),
+        );
+        if (
+          saved.version === 1 &&
+          JSON.parse(saved.installed).statusLine.command === line.command
+        )
+          line =
+            saved.before === null
+              ? {}
+              : object(JSON.parse(saved.before).statusLine);
+      } catch {
+        /* Missing or damaged backup: never recurse. */
+      }
+    }
     return line.type === "command" &&
       typeof line.command === "string" &&
       line.command.trim() &&

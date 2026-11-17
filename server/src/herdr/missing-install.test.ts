@@ -185,6 +185,8 @@ test("CLI missing-only flag reaches the protected operation without integration 
         error: (line) => {
           throw new Error(line);
         },
+        // Herdr is present, so --install must keep it; never reach real core.
+        detect: async () => ({ state: "installed", binaryPath: f.binary }),
         upgrade: (options) =>
           upgradeHerdr({ ...f.deps, onlyIfMissing: false, ...options }),
       },

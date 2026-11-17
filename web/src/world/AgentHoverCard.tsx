@@ -7,6 +7,7 @@ import {
   type LatestConversation,
 } from "./conversationRead";
 import type { WorldLeafObject } from "./worldObject";
+import { viewOnlyMessage } from "./viewOnly";
 
 /**
  * An agent's latest message as Chat reads it (never terminal text), the
@@ -17,16 +18,24 @@ export function AgentLatestMessage({
   conversation,
   taskSummary,
   question = [],
+  viewOnly,
 }: {
   conversation: LatestConversation | null;
   taskSummary?: string;
   question?: readonly string[];
+  /** A view-only agent: its own words and why World only watches it. */
+  viewOnly?: { message: string; reason: string };
 }) {
   const latest = conversation?.latest ?? null;
   const unavailable = conversation?.unavailable ?? null;
   return (
     <>
-      {unavailable ? (
+      {viewOnly ? (
+        <div className="town-peek-unavailable is-view-only" role="status">
+          <strong>{viewOnly.message}</strong>
+          <span>{viewOnly.reason}</span>
+        </div>
+      ) : unavailable ? (
         <div className="town-peek-unavailable" role="status">
           <strong>Conversation unavailable</strong>
           <span>{unavailable.detail}</span>
@@ -78,7 +87,8 @@ export function AgentHoverCard({
   /** Shown over the content below instead of pushing it down (hover). */
   floating?: boolean;
 }) {
-  const read = useConversationRead(leaf, true);
+  // A view-only agent has no conversation World can read.
+  const read = useConversationRead(leaf, !leaf.viewOnly);
   return (
     <div
       className={floating ? "agent-hover-card is-floating" : "agent-hover-card"}
@@ -94,6 +104,14 @@ export function AgentHoverCard({
         <AgentLatestMessage
           conversation={read.conversation}
           taskSummary={leaf.taskSummary}
+          {...(leaf.viewOnly
+            ? {
+                viewOnly: {
+                  message: viewOnlyMessage(leaf),
+                  reason: leaf.viewOnly,
+                },
+              }
+            : {})}
         />
       </div>
     </div>

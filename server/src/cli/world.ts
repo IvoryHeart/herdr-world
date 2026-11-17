@@ -221,7 +221,12 @@ export function httpTransport(context: CliContext): WorldCliTransport {
         body: JSON.stringify({
           command,
           params,
-          caller: paneId ? { pane_id: paneId } : {},
+          caller: {
+            ...(paneId ? { pane_id: paneId } : {}),
+            ...(context.runtime.env.HC_TERMINAL_ID
+              ? { core_terminal_id: context.runtime.env.HC_TERMINAL_ID }
+              : {}),
+          },
         }),
         // The service is on this machine; its certificate is often self-signed.
         tls: { rejectUnauthorized: false },

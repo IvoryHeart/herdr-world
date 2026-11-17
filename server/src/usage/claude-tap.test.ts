@@ -142,6 +142,183 @@ test("input without limits leaves the last reading in place", () => {
   expect(reading(home)).toBe(before);
 });
 
+test("sessions writing out of order keep the highest reading per window until it resets", () => {
+  const { home } = sandbox();
+  const fiveHour = 1_900_003_600,
+    week = 1_900_400_000;
+  const session = (five: number, seven: number, resets = fiveHour) =>
+    JSON.stringify({
+      rate_limits: {
+        five_hour: { used_percentage: five, resets_at: resets },
+        seven_day: { used_percentage: seven, resets_at: week },
+      },
+    });
+  const used = () =>
+    JSON.parse(reading(home)).windows.map(
+      (w: { used_percent: number; resets_at: number }) => [
+        w.used_percent,
+        w.resets_at / 1000,
+      ],
+    );
+  // A fresh session sees 23 % / 22 %; an older one still holds 22 % / 21 %.
+  claudeStatusLineTap(session(23, 22), ports(home));
+  claudeStatusLineTap(session(22, 21), { ...ports(home), now: now + 1 });
+  expect(used()).toEqual([
+    [23, fiveHour],
+    [22, week],
+  ]);
+  expect(JSON.parse(reading(home)).at).toBe(now + 1);
+  // A rise in either window is kept.
+  claudeStatusLineTap(session(22, 30), ports(home));
+  expect(used()).toEqual([
+    [23, fiveHour],
+    [30, week],
+  ]);
+  // A new five-hour window starts fresh; a session still in the old one
+  // cannot bring it back.
+  const next = fiveHour + 18_000;
+  claudeStatusLineTap(session(1, 30, next), ports(home));
+  claudeStatusLineTap(session(40, 30, fiveHour), ports(home));
+  expect(used()).toEqual([
+    [1, next],
+    [30, week],
+  ]);
+  // Without a reset time nothing is comparable: the new reading stands.
+  claudeStatusLineTap(
+    JSON.stringify({ rate_limits: { five_hour: { used_percentage: 0 } } }),
+    ports(home),
+  );
+  expect(JSON.parse(reading(home)).windows).toEqual([
+    { window_minutes: 300, used_percent: 0, resets_at: null },
+  ]);
+});
+
+/** One session's status line input with a five-hour reading in one window. */
+const fiveHourAt = (used: number) =>
+  JSON.stringify({
+    rate_limits: {
+      five_hour: { used_percentage: used, resets_at: 1_900_003_600 },
+    },
+  });
+const fiveHourUsed = (home: string) =>
+  JSON.parse(reading(home)).windows[0].used_percent as number;
+
+test("concurrent taps never lower the reading: one reads, merges and replaces at a time", () => {
+  const { home } = sandbox();
+  const dir = join(home, ".cache", "herdr-world");
+  claudeStatusLineTap(fiveHourAt(20), ports(home));
+  const committed: number[] = [fiveHourUsed(home)];
+  const logged = {
+    ...fs,
+    renameSync(from: fs.PathLike, to: fs.PathLike) {
+      fs.renameSync(from, to);
+      committed.push(fiveHourUsed(home));
+    },
+  };
+  // Tap A has read 20 % and prepared 22 % when tap B, holding 23 %, runs.
+  // B cannot read until A commits, so it can neither be overwritten by A's
+  // 22 % nor commit from the old 20 %.
+  let interleaved = false;
+  claudeStatusLineTap(fiveHourAt(22), {
+    ...ports(home),
+    pid: 1,
+    fs: {
+      ...logged,
+      writeFileSync(...args: Parameters<typeof fs.writeFileSync>) {
+        if (!interleaved) {
+          interleaved = true;
+          claudeStatusLineTap(fiveHourAt(23), {
+            ...ports(home),
+            pid: 2,
+            fs: logged,
+          });
+        }
+        return fs.writeFileSync(...args);
+      },
+    },
+  });
+  expect(interleaved).toBe(true);
+  expect(committed).toEqual([20, 22]);
+  // B's next status line update commits its 23 %; a stale 22 % keeps it.
+  claudeStatusLineTap(fiveHourAt(23), { ...ports(home), pid: 2, fs: logged });
+  claudeStatusLineTap(fiveHourAt(22), { ...ports(home), pid: 1, fs: logged });
+  expect(committed).toEqual([20, 22, 23, 23]);
+  expect(fs.readdirSync(dir)).toEqual(["claude-status-line.json"]);
+});
+
+test("a tap waits for the lock holder and merges with what it committed", () => {
+  const { home } = sandbox();
+  const dir = join(home, ".cache", "herdr-world"),
+    file = join(dir, "claude-status-line.json"),
+    lock = `${file}.lock`;
+  claudeStatusLineTap(fiveHourAt(20), ports(home));
+  // Tap A holds the lock; it commits 24 % while tap B waits with 23 %.
+  fs.writeFileSync(lock, "");
+  let waited = 0;
+  claudeStatusLineTap(fiveHourAt(23), {
+    ...ports(home),
+    fs: {
+      ...fs,
+      openSync(...args: Parameters<typeof fs.openSync>) {
+        try {
+          return fs.openSync(...args);
+        } catch (error) {
+          if (waited++ === 0) {
+            const before = reading(home);
+            fs.writeFileSync(
+              file,
+              before.replace('"used_percent":20', '"used_percent":24'),
+            );
+            fs.unlinkSync(lock);
+          }
+          throw error;
+        }
+      },
+    },
+  });
+  expect(waited).toBe(1);
+  expect(fiveHourUsed(home)).toBe(24);
+  expect(fs.readdirSync(dir)).toEqual(["claude-status-line.json"]);
+});
+
+test("a lock left by a dead tap is cleared, and a tap whose lock was cleared commits nothing", () => {
+  const { home } = sandbox();
+  const dir = join(home, ".cache", "herdr-world"),
+    file = join(dir, "claude-status-line.json"),
+    lock = `${file}.lock`;
+  claudeStatusLineTap(fiveHourAt(20), ports(home));
+  fs.writeFileSync(lock, "");
+  const old = new Date(Date.now() - 60_000);
+  fs.utimesSync(lock, old, old);
+  claudeStatusLineTap(fiveHourAt(21), ports(home));
+  expect(fiveHourUsed(home)).toBe(21);
+  expect(fs.readdirSync(dir)).toEqual(["claude-status-line.json"]);
+
+  // Paused past the stale age, tap A's lock was cleared and another tap now
+  // holds a new one: A drops its prepared reading and leaves that lock alone.
+  let replaced = false;
+  claudeStatusLineTap(fiveHourAt(30), {
+    ...ports(home),
+    fs: {
+      ...fs,
+      writeFileSync(...args: Parameters<typeof fs.writeFileSync>) {
+        if (!replaced) {
+          replaced = true;
+          fs.unlinkSync(lock);
+          fs.writeFileSync(lock, "");
+        }
+        return fs.writeFileSync(...args);
+      },
+    },
+  });
+  expect(replaced).toBe(true);
+  expect(fiveHourUsed(home)).toBe(21);
+  expect(fs.readdirSync(dir).sort()).toEqual([
+    "claude-status-line.json",
+    "claude-status-line.json.lock",
+  ]);
+});
+
 test("Claude's local settings sit at the canonical Git root when the user owns it", () => {
   const { home } = sandbox();
   const line = (command: string) => ({

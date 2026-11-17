@@ -1,4 +1,5 @@
 import type { TObject, TSchema } from "typebox";
+import type { RuntimePorts } from "./runtime-ports";
 
 /** Data only: safe to serialize to clients. Configuration contains no secrets. */
 export type AdapterDescriptor = {
@@ -63,9 +64,15 @@ export type AdapterSource = {
   watch?(invalidate: () => void): () => void;
 };
 
-export type AdapterDefinition<Context> = {
+export type AdapterDefinition<
+  Context,
+  RuntimeContext = never,
+  Viewer = never,
+> = {
   descriptor: AdapterDescriptor;
   open(context: Context): AdapterSource;
+  /** Observation-only adapters need not implement runtime control. */
+  runtime?(context: RuntimeContext): RuntimePorts<Viewer>;
 };
 
 export type AdapterOwner = {

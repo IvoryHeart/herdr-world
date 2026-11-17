@@ -1,5 +1,7 @@
 module effect_recovery {
   pure val BROKEN = false
+  // Possible opaque dispatch survives recovery as uncertainty, never blind replay.
+  pure def opaqueReplayBlocked(ever, recovery, owner) = ever and recovery == "opaque" and not(owner)
   type Effect = { recovery: str, phase: str, resume: str, attempt: int, ever: bool, applied: int, receipt: bool, handle: bool, authorized: bool, cancelled: bool, binding: str, version: int, supported: int, owner: bool, peerClaimed: bool, peerAttempt: int }
   var effect: Effect
   var incarnation: int
@@ -33,7 +35,7 @@ module effect_recovery {
   action recover = all {
     Set("pending", "uncertain").contains(effect.phase), effect.attempt < 2, effect.version == effect.supported,
     val observing = effect.ever and (effect.recovery == "reconcilable" or effect.recovery == "reattachable")
-    val opaque = effect.phase == "uncertain" and effect.recovery == "opaque" and not(effect.owner)
+    val opaque = effect.phase == "uncertain" and opaqueReplayBlocked(effect.ever, effect.recovery, effect.owner)
     val noClaim = (opaque and not(BROKEN)) or (effect.cancelled and not(observing))
     val known = observing and effect.applied > 0 and effect.binding == "attached"
     val blocked = effect.cancelled or not(effect.authorized) or effect.binding != "attached" or (effect.ever and effect.recovery == "reattachable")

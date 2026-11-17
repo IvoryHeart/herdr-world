@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import {
   runProcessWithInputTimeout,
   runBinaryProcessWithTimeout,
@@ -486,7 +487,7 @@ describe("createFileHandlers git support end to end", () => {
       runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
-      herdr: {
+      ...herdrRuntimeFixture({
         call: async (method: string) => {
           if (method === "workspace.get") {
             return {
@@ -499,7 +500,7 @@ describe("createFileHandlers git support end to end", () => {
           }
           throw new Error(`unexpected call ${method}`);
         },
-      } as any,
+      } as any),
       sshHost: () => undefined,
       runProcessWithCodeTimeout,
       shQuote,

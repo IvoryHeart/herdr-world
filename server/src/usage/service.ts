@@ -20,10 +20,10 @@ import { normalizeAgentName } from "../agent/chat-harnesses";
 import { boundUsageDetails, summarizeUsage } from "./summary";
 import { contextWindowTokens } from "./context-window";
 
-import type { HerdrCall } from "../agent/session-types";
+import type { RuntimeOperations } from "../adapters/runtime-ports";
 
 type UsageRuntime = {
-  herdr: { call: HerdrCall };
+  operations: RuntimeOperations;
   usage(
     agents: Record<string, unknown>[],
     now: number,
@@ -159,12 +159,9 @@ export class WorldUsageService {
           // One native post-read inventory checks all claims, including new or
           // previously unlinked agents. A failed/changed inventory is unattributed.
           try {
-            const current = (await lease.runtime.herdr.call(
-              "agent.list",
+            const current = (await lease.runtime.operations.listAgents(
               {},
-              8000,
-              undefined,
-              owner.signal,
+              { timeoutMs: 8000, signal: owner.signal },
             )) as { agents?: Record<string, unknown>[] };
             value.truncated ||=
               Array.isArray(current.agents) && current.agents.length > 128;

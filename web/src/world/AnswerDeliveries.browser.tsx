@@ -246,6 +246,7 @@ function Fixture() {
                 onMaximize() {},
                 onClose: panel.onClose,
                 onSnap() {},
+                onFit() {},
                 onFloat() {},
               }}
               onBody={registry.panelBodyRef(panel.id)}

@@ -11,6 +11,7 @@ import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
 import { formatOfficeUsage } from "../officeObservability";
 import { townScaleUsageClient } from "./townScaleUsage";
 import { townScaleConnections } from "./townScaleScene";
+import { townFuelGauges } from "./townLimits";
 import {
   townCityExpenses,
   townExpenseText,
@@ -22,6 +23,41 @@ import {
   townUsageCurrent,
   townPlaceEconomy,
 } from "./townPlaceUsage";
+
+test("Claude tap preview consumes its URL switch and renders synthetic fuel without changing usage", async () => {
+  const snapshot = townUsageFixture();
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  let cleaned = "";
+  let client: { call(method: string): Promise<unknown> };
+  try {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        location: {
+          href: "https://example.com/?town-economy-preview=claude-tap",
+        },
+        history: {
+          state: null,
+          replaceState: (_state: unknown, _unused: string, url: URL) => {
+            cleaned = String(url);
+          },
+        },
+      },
+    });
+    client = townEconomyPreviewClient({ call: async () => snapshot });
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "window", descriptor);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+  expect(cleaned).toBe("https://example.com/");
+  const preview = (await client.call("world.usage.get")) as typeof snapshot;
+  expect(preview.total).toEqual(snapshot.total);
+  expect(preview.entities).toEqual(snapshot.entities);
+  const gauges = townFuelGauges(preview.limits, preview.observed_at);
+  expect(
+    gauges.some((g) => g.harness === "claude" && g.windows[0]?.left === 58),
+  ).toBe(true);
+});
 
 test("town-scale replaces live economy for the city, buildings, cards and Town board", async () => {
   const now = Date.UTC(2026, 10, 8, 12);

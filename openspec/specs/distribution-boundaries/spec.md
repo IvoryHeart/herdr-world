@@ -22,7 +22,7 @@ release that World version verified, in Herdr's own default location.
   runtime, a second Roamgate executable or the retired Rust compatibility bridge
 
 #### Scenario: Installation reuses existing Herdr
-- **WHEN** the standalone World installer runs, or the Homebrew launcher starts
+- **WHEN** the standalone World installer performs a fresh install, or the Homebrew launcher starts
   the normal local World listener
 - **THEN** an existing Herdr discovered through its explicit binary, PATH or default
   location retains its version and installation owner
@@ -42,13 +42,27 @@ release that World version verified, in Herdr's own default location.
   available
 
 #### Scenario: Explicit update brings Herdr forward
-- **WHEN** an explicit World update or Herdr upgrade runs with an older Herdr
+- **WHEN** an explicit World update, installer replacement or Herdr upgrade runs with an older Herdr
 - **THEN** World upgrades Herdr from the checksum-verified release and keeps a
   replaced binary for rollback
 - **AND** it never downgrades a newer Herdr or Herdr server, replaces a package- or
   version-managed Herdr, or stops a running Herdr server; it hands a running server
   off live only when it can confirm that no service manager runs that server, and
   otherwise reports that a restart is needed
+
+#### Scenario: Installer replacement finishes the World upgrade
+- **WHEN** the standalone installer replaces an existing World executable with a release
+  supporting update finalization
+- **THEN** the new executable uses the same finalization as the CLI update, without
+  selecting or downloading another World version
+- **AND** it reports the Herdr upgrade/current state, harness integration and plugin
+  outcomes, then restarts a running managed World service only when it uses that executable
+- **AND** it reports whether the service restarted or why it did not; a failed Herdr
+  step gives retry guidance and still permits the World restart
+- **AND** `HERDR_WORLD_SKIP_HERDR=1` skips Herdr and its integrations while preserving
+  the World restart; a failed restart reports failure without undoing the World install
+- **AND** a selected older release without finalization support retains missing-only
+  bootstrap and reports manual restart and upgrade guidance
 
 #### Scenario: Explicit persistent setup finds a running Herdr
 - **WHEN** the user explicitly requests managed setup for the default local session and sockets

@@ -414,6 +414,8 @@ test("composed shared acquisition: real Bridge/store and second socket over two 
       type: "world_desk_reads",
       kind: "screen",
     });
+    // Register the worker's waiter before the service can publish the reading.
+    await browser.command("fence");
     await clock.advance(0);
     const [screenFrame, turnFrame, storeFrame] = await Promise.all([
       screen,

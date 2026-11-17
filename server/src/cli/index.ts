@@ -21,6 +21,7 @@ import { createCompletionCommand } from "./completion";
 import { configCommand } from "./config";
 import { createConnectionsCommand } from "./connections";
 import { createDoctorCommand } from "./doctor";
+import { integrationCommand } from "./integration";
 import { createPushCommand } from "./push";
 import { serviceRuntime } from "./service-context";
 import { runServiceLogs } from "./service-logs";
@@ -88,6 +89,7 @@ export function cliCommands(): CliCommand[] {
   const commands: CliCommand[] = [
     serviceCommand,
     herdrCommand,
+    integrationCommand,
     stampCommand,
     createDoctorCommand(),
     urlCommand,

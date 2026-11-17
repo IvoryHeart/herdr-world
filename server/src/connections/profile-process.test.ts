@@ -528,7 +528,10 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       "alpha",
       "beta",
     ]);
-    expect((await rpc("bridge.status")).connections[0]).toMatchObject({
+    const status = await rpc("bridge.status");
+    // The page polls bridge.status for its catalogue: core hosts must ride along.
+    expect(status.core_connections).toEqual(catalog.core_connections);
+    expect(status.connections[0]).toMatchObject({
       id: "alpha",
       type: "local",
       read_only: false,

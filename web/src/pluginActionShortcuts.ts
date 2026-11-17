@@ -12,6 +12,17 @@ type PluginActionShortcutEvent = Pick<
 > &
   Partial<Pick<KeyboardEvent, "code" | "isComposing" | "keyCode">>;
 
+const PLUGIN_ACTIONS = {
+  "plugin.herdrFloat.toggle": { pluginId: "herdr-float", actionId: "toggle" },
+} as const satisfies Record<string, PluginActionShortcut>;
+
+/** The plugin action a shortcut id stands for, for controls that invoke it. */
+export function pluginActionShortcutFor(
+  id: keyof typeof PLUGIN_ACTIONS,
+): PluginActionShortcut {
+  return PLUGIN_ACTIONS[id];
+}
+
 /**
  * Resolve a keydown into a Herdr plugin action to invoke, from the fixed set
  * of plugin action shortcuts World currently knows about. There is no
@@ -22,7 +33,7 @@ export function pluginActionShortcut(
   bindings: ShortcutBindings = getShortcutSnapshot().preset.bindings,
 ): PluginActionShortcut | null {
   if (matchesShortcut(event, "plugin.herdrFloat.toggle", bindings)) {
-    return { pluginId: "herdr-float", actionId: "toggle" };
+    return PLUGIN_ACTIONS["plugin.herdrFloat.toggle"];
   }
   return null;
 }

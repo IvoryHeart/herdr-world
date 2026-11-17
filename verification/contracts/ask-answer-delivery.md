@@ -79,3 +79,13 @@ session projection. The direct SQLite transition matrix, actual worker/process
 fault schedules and real Chat/CLI/browser consumers are the selected alternative
 here; adding an abstract model would not establish those platform boundaries.
 No new or expanded Quint claim is made.
+
+Core asks use the same durable runner through native `terminal.send`, with a
+verified local Linux process-ancestry capture and the program/foreground token.
+`server/src/herdr-core/ask-delivery.test.ts` checks TUI/core delivered-state
+parity, replaced recipients retaining the answer without input, unverified claims
+and lost-core uncertainty without replay. Core recipients additionally refuse
+old runtime generations; reconnect does not establish continuity. The Q52 model
+checks the production pre-dispatch recipient comparison, while execution-time
+queued replacement remains an explicit upstream Q3 assumption. These additions
+do not expand the accepted SQLite or native-runtime continuity claims above.

@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import {
   runProcessWithInputTimeout,
   runBinaryProcessWithTimeout,
@@ -77,11 +78,11 @@ test.skipIf(!chrome)(
       runBinaryProcessWithTimeout,
       bindProcess: (argv) => argv,
       runProcessWithInputTimeout,
-      herdr: {
+      ...herdrRuntimeFixture({
         call: async () => ({
           workspace: { worktree: { checkout_path: workspace } },
         }),
-      } as any,
+      } as any),
       sshHost: () => undefined,
       runProcessWithCodeTimeout: async () => {
         throw new Error("Unexpected SSH call");

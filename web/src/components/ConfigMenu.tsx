@@ -27,6 +27,7 @@ import {
   Shirt,
   Volume2,
   Hand,
+  Inbox,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
@@ -39,6 +40,7 @@ import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
 import {
   herdrUpgradeMenuEntry,
   herdrUpgradeOffered,
+  OperationalContext,
   shallowEqual,
   store,
   useStoreSelector,
@@ -495,6 +497,35 @@ export function ConfigMenu({
                     <span />
                   </button>
                 </div>
+                <div className="config-preference-row">
+                  <span className="config-item-icon">
+                    <Inbox size={15} />
+                  </span>
+                  <div className="config-item-copy">
+                    <strong>Count on tab and app icon</strong>
+                    <span>
+                      The browser tab and installed app show how many things
+                      need you (this browser)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Count on tab and app icon"
+                    aria-checked={officePreferences.tabBadge}
+                    className={
+                      "settings-switch" +
+                      (officePreferences.tabBadge ? " is-on" : "")
+                    }
+                    onClick={() =>
+                      updateOfficePreferences({
+                        tabBadge: !officePreferences.tabBadge,
+                      })
+                    }
+                  >
+                    <span />
+                  </button>
+                </div>
                 {DEVTOOLS ? (
                   <div className="config-preference-row">
                     <span className="config-item-icon">
@@ -805,17 +836,23 @@ export function ConfigMenu({
           includes loading and all Configuration detail dialogs. */}
       {configurationTab
         ? createPortal(
-            <Suspense
-              fallback={
-                <ConfigurationLoadingDialog onClose={closeConfiguration} />
-              }
-            >
-              <ConfigurationDialog
-                {...configuration}
-                initialTab={configurationTab}
-                onClose={closeConfiguration}
-              />
-            </Suspense>,
+            // Configuration names the active connection, so it uses that
+            // connection's current lease. A World view's context is its
+            // selection's host, or none at all, which left Integrations and
+            // Connection settings on a client that was never current.
+            <OperationalContext.Provider value={null}>
+              <Suspense
+                fallback={
+                  <ConfigurationLoadingDialog onClose={closeConfiguration} />
+                }
+              >
+                <ConfigurationDialog
+                  {...configuration}
+                  initialTab={configurationTab}
+                  onClose={closeConfiguration}
+                />
+              </Suspense>
+            </OperationalContext.Provider>,
             document.body,
           )
         : null}

@@ -1,4 +1,5 @@
 @layer reset, base, components, sections, utilities;
+@import url("./home.css");
 
 @layer reset {
   *,
@@ -852,10 +853,6 @@
     align-items: center;
   }
 
-  .bento-worktrees .branch-map {
-    margin-block: 44px;
-  }
-
   .bento-copy {
     padding: 44px;
   }
@@ -1089,135 +1086,6 @@
     border-radius: 50%;
     background: rgba(167, 139, 250, 0.18);
     font-size: 0.57rem;
-  }
-
-  .branch-map {
-    margin: 24px 36px;
-    padding: 24px;
-    border: 1px solid var(--line-strong);
-    border-radius: 18px;
-    background: #0b101a;
-    box-shadow: var(--shadow-soft);
-  }
-
-  .branch-root,
-  .branch-worktree {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .branch-map svg {
-    width: 18px;
-    height: 18px;
-    flex: 0 0 auto;
-    fill: none;
-    stroke: var(--blue-bright);
-    stroke-width: 1.6;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .branch-root > svg {
-    width: 36px;
-    height: 36px;
-    padding: 8px;
-    border: 1px solid var(--line-strong);
-    border-radius: 10px;
-    background: rgba(122, 162, 247, 0.1);
-  }
-
-  .branch-map strong {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.82rem;
-    font-weight: 600;
-  }
-
-  .branch-root strong {
-    font-size: 0.95rem;
-  }
-
-  .branch-root small {
-    display: block;
-    color: var(--muted);
-    font-size: 0.7rem;
-  }
-
-  .branch-root .branch-label {
-    margin-bottom: 3px;
-    color: var(--blue-bright);
-    font-size: 0.6rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .branch-children {
-    display: grid;
-    gap: 10px;
-    margin: 16px 0 0 17px;
-    padding-left: 24px;
-  }
-
-  .branch-worktree {
-    position: relative;
-    padding: 12px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: rgba(122, 162, 247, 0.04);
-  }
-
-  .branch-worktree::before,
-  .branch-worktree::after {
-    position: absolute;
-    left: -25px;
-    background: var(--line-strong);
-    content: "";
-  }
-
-  .branch-worktree::before {
-    top: -11px;
-    bottom: -1px;
-    width: 1px;
-  }
-
-  .branch-worktree:first-child::before {
-    top: -17px;
-  }
-
-  .branch-worktree:last-child::before {
-    bottom: 50%;
-  }
-
-  .branch-worktree::after {
-    top: 50%;
-    width: 24px;
-    height: 1px;
-  }
-
-  .branch-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 6px;
-    padding: 2px 7px;
-    border-radius: 5px;
-    color: #93e8ae;
-    background: rgba(84, 209, 122, 0.08);
-    font-size: 0.65rem;
-  }
-
-  .branch-status.is-changed {
-    color: #ffe0a3;
-    background: rgba(240, 196, 83, 0.08);
-  }
-
-  .branch-status::before {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: currentColor;
-    content: "";
   }
 
   .showcase-section {
@@ -1986,10 +1854,6 @@
     grid-template-columns: 1fr;
   }
 
-  .bento-worktrees .branch-map {
-    margin-top: 0;
-  }
-
   .agent-stack {
     padding: 0 34px 42px;
   }
@@ -2195,16 +2059,6 @@
   .mini-agent b {
     grid-column: 2;
     justify-self: start;
-  }
-
-  .branch-map {
-    margin-inline: 16px;
-    padding: 16px;
-  }
-
-  .branch-worktree {
-    gap: 8px;
-    padding: 10px;
   }
 
   .terminal-preview {

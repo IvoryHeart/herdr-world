@@ -68,6 +68,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           )
         : 0;
       let stalledResponseVerified = false;
+      let basedRefreshVerified = false;
       const admission = new WorldSnapshotAdmission();
       const diagnostic = Boolean(Bun.env.WORLD_TRACE_PREFIX);
       const traceTimeline = diagnostic && Bun.env.WORLD_TIMINGS_ONLY !== "1";
@@ -337,10 +338,12 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
                 hello: true,
                 bridge_protocol_version: 2,
                 default_connection_id: "alpha",
+                service_incarnation: fixture?.service.observation.incarnation,
                 capabilities: {
                   connection_id: true,
                   connection_scoped_http: true,
                   connection_runtime_generation: true,
+                  world_observation_v1: Boolean(fixture),
                   world_snapshot_chunks: true,
                   world_snapshot_chunk_admission: true,
                 },
@@ -397,11 +400,18 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               const refresh = ++revision === 2;
               if (refresh) fixture!.startStalledAttentionRefresh();
               const began = Date.now();
-              const snapshotResult = await fixture!.service.snapshot(
-                request.params,
-              );
+              const snapshotResult = await fixture!.snapshot(request.params);
               task.endAt = Date.now();
-              if (refresh)
+              if (refresh) {
+                basedRefreshVerified =
+                  request.params?.base?.service_incarnation ===
+                    fixture!.service.observation.incarnation &&
+                  request.params.base.hosts.length === fixture!.hostCount &&
+                  snapshotResult.connections.every(
+                    (host) =>
+                      host.connection_id === "alpha" ||
+                      (host.unchanged === true && !("snapshot" in host)),
+                  );
                 stalledResponseVerified =
                   Date.now() - began >= 19900 &&
                   fixture!.stalledIds.every((id) =>
@@ -410,6 +420,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
                         connection.connection_id === id && connection.stale,
                     ),
                   );
+              }
               const framing = {
                 stage: "framing",
                 beginAt: Date.now(),
@@ -573,6 +584,27 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               phases: observed.phases,
             }),
           );
+        if (Bun.env.WORLD_TRACE_PREFIX)
+          await Bun.write(
+            `${Bun.env.WORLD_TRACE_PREFIX}-${view}${entry ? `-${entry}` : ""}-${width}-inputs.json`,
+            JSON.stringify({
+              sent,
+              inputs: calls.filter((call) => call.method === "terminal.input"),
+              acknowledgements: observed.acknowledgements,
+              nativeInputs: observed.nativeInputs,
+              socketInputs: observed.socketInputs,
+              dispatches,
+              serviceTasks,
+              serviceInputs,
+              serviceSends,
+              socketReplies: observed.socketReplies,
+              cloneAdmissions: observed.cloneAdmissions,
+              bridgeReplies: observed.bridgeReplies,
+              loopDelays,
+              phases: observed.phases,
+              frameStalls: observed.frameStalls,
+            }),
+          );
         expect(observed.failures).toEqual([]);
         if (view === "uncertain") {
           expect(
@@ -620,27 +652,6 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           const dispatch = inputs.map(
             (call, index) => call.receivedAt - sent[index]!.dueAt,
           );
-          if (Bun.env.WORLD_TRACE_PREFIX)
-            await Bun.write(
-              `${Bun.env.WORLD_TRACE_PREFIX}-${view}${entry ? `-${entry}` : ""}-${width}-inputs.json`,
-              JSON.stringify({
-                sent,
-                inputs,
-                acknowledgements: observed.acknowledgements,
-                nativeInputs: observed.nativeInputs,
-                socketInputs: observed.socketInputs,
-                dispatches,
-                serviceTasks,
-                serviceInputs,
-                serviceSends,
-                socketReplies: observed.socketReplies,
-                cloneAdmissions: observed.cloneAdmissions,
-                bridgeReplies: observed.bridgeReplies,
-                loopDelays,
-                phases: observed.phases,
-                frameStalls: observed.frameStalls,
-              }),
-            );
           console.info(
             "Production dense " +
               view +
@@ -684,6 +695,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             },
           );
           expect(stalledResponseVerified).toBe(true);
+          expect(basedRefreshVerified).toBe(true);
           expect(observed.receivedFrames).toBeGreaterThan(500);
           expect(observed.presentedFrames).toBeGreaterThan(10);
           expect(observed.presentedFrames).toBeLessThan(

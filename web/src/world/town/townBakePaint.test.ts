@@ -2,7 +2,12 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { terminalColorKey, type TerminalColors } from "../terminalColor";
 import type { DeskPins } from "../useDeskPins";
-import { townShapeFor, type TownBuilding } from "./townLayout";
+import {
+  layoutTown,
+  townShapeFor,
+  type TownBuilding,
+  type TownInput,
+} from "./townLayout";
 import { townDeskColorTarget, type TownModel } from "./townModel";
 import {
   paintTownFacade,
@@ -10,6 +15,7 @@ import {
   paintTownRoof,
   townChosenCarpet,
   townHostTheme,
+  TOWN_PIN_RUG,
 } from "./townPaint";
 import { buildTownSprites, townRandom } from "./townSprites";
 import { manualClock, town, working } from "./scene/townScene.fixture";
@@ -98,6 +104,7 @@ function paint(
       colorFor: (deskKey) => model.deskColors.get(deskKey) ?? "blue",
       carpetFor: (roomKey) =>
         townChosenCarpet(model.placeColors.rooms.get(roomKey)),
+      pinned: (deskKey) => model.deskPins.has(deskKey),
     }),
     paintTownFacade(building, theme),
     paintTownRoof(building, theme, host?.stale ?? false),
@@ -176,7 +183,11 @@ test("baking only the dirty buildings paints the town as a full bake does", () =
   };
   const pins: Record<string, DeskPins> = {
     none: {},
-    pin: { [desk(base, "beta")]: { cell: { col: 0, row: 0 } } },
+    pin: { [desk(base, "beta")]: { cell: null } },
+    pins: {
+      [desk(base, "alpha", 1)]: { cell: null },
+      [desk(base, "gamma")]: { cell: null },
+    },
   };
   const hostChanges = ["none", "stale", "theme", "staleAndTheme"] as const;
   const scene = new TownScene(manualClock().clock, () => {});
@@ -251,4 +262,49 @@ test("baking only the dirty buildings paints the town as a full bake does", () =
   }
   expect(seen.size).toBe(hostChanges.length);
   expect(rebakes).toBeGreaterThan(10);
+});
+
+test("a room's pinned desks share one rug; a room without pins has none", () => {
+  const sprites = buildTownSprites();
+  const desks = ["a/r/t0", "a/r/t1", "a/r/t2", "a/r/t3", "a/r/t4"];
+  const input: TownInput = {
+    hosts: [{ key: "a", displayOrder: 0 }],
+    rooms: [{ key: "a/r", hostKey: "a", order: 0, deskKeys: desks }],
+  };
+  const pinned = new Map([
+    ["a/r/t3", null],
+    ["a/r/t1", null],
+  ]);
+  const shape = townShapeFor(1440, 900);
+  const building = layoutTown(
+    input,
+    shape,
+    new Map(),
+    undefined,
+    undefined,
+    pinned,
+  ).layout.buildings[0]!;
+  const interior = (isPinned: (deskKey: string) => boolean) =>
+    (
+      paintTownInterior(building, townHostTheme("a", undefined, undefined), {
+        table: sprites.table,
+        tableSmall: sprites.tableSmall,
+        chair: sprites.chair,
+        chairBack: sprites.chairBack,
+        colorFor: () => "blue",
+        pinned: isPinned,
+      }) as unknown as RecordingCanvas
+    ).log;
+  const log = interior((key) => pinned.has(key));
+  // One edge square per pinned seat, drawn after the room carpets.
+  const edge = log.indexOf(`fillStyle=${JSON.stringify(TOWN_PIN_RUG.edge)}`);
+  expect(edge).toBeGreaterThan(-1);
+  const squares = log
+    .slice(edge + 1)
+    .findIndex((entry) => entry.startsWith("fillStyle="));
+  expect(squares).toBe(pinned.size);
+  const room = building.rooms[0]!;
+  const first = room.cells.slice(0, 2).map((cell) => cell.deskKey);
+  expect(new Set(first)).toEqual(new Set(pinned.keys()));
+  expect(interior(() => false).join(";")).not.toContain(TOWN_PIN_RUG.fill);
 });

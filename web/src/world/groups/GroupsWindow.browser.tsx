@@ -121,6 +121,7 @@ function Fixture({ world }: { world: WorldObject }) {
           onMinimize() {},
           onMaximize() {},
           onSnap() {},
+          onFit() {},
           onFloat() {},
         }}
       />
@@ -167,6 +168,8 @@ function Fixture({ world }: { world: WorldObject }) {
                   onClose: panel.onClose,
                   onSnap: (target) =>
                     dispatch({ type: "snap", id: entry.id, target }),
+                  onFit: (side) =>
+                    dispatch({ type: "fit", id: entry.id, side }),
                   onFloat: () => dispatch({ type: "float", id: entry.id }),
                   back: { label: "Back to Town" },
                 }}

@@ -1,0 +1,117 @@
+/* A watched herdr-core terminal fills its World window's body. The drawing
+   keeps core's grid and is only scaled. */
+.core-watch {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.core-watch-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.core-watch-grid {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.core-watch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.core-watch-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--terminal-bg);
+  padding: 8px;
+}
+
+.core-watch-frame {
+  position: relative;
+  overflow: hidden;
+  /* Core's grid, edge to edge: the box is the terminal's real size. */
+  outline: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.core-watch-host {
+  transform-origin: 0 0;
+  width: max-content;
+}
+
+.core-watch-notice {
+  margin: 0;
+  padding: 6px 12px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.core-watch[data-typing] .core-watch-frame {
+  outline-style: solid;
+  outline-color: var(--accent);
+}
+
+.core-watch-composer {
+  flex: none;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+/* A phone keyboard can shrink only the visual viewport: the World shell then
+   ends where the keyboard begins, so the window and its composer do too. */
+:where(html[data-layout="mobile"]) .core-watch-composer {
+  margin-bottom: var(--keyboard-inset-composer-gap, 0px);
+}
+
+.core-watch-ended {
+  position: absolute;
+  inset: auto 12px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.core-watch-ended p {
+  margin: 0;
+  min-width: 0;
+}
+
+.core-watch-ended button {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}

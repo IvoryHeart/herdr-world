@@ -64,8 +64,10 @@ export type BoardLayoutDocument = {
   /** Card key to the colour the user chose for it. */
   colors: Record<string, CardColor>;
   /**
-   * Town desks the user pinned, by their tab's card key: a pinned desk keeps
-   * its cell (null until Town first places it), and its agents stay at it.
+   * Town desks pinned, by their tab's card key: a pinned desk takes its
+   * room's first seats and its agents stay at it. `rank` is its place among
+   * the room's pinned seats when the user reordered them; `cell` is no longer
+   * read. A herdr-core tab's pin is its label: its record only holds a rank.
    */
   desk_pins: Record<string, DeskPin>;
   /**
@@ -80,7 +82,7 @@ export type BoardLayoutDocument = {
 };
 /** A desk's cell in its Town room: column and row, from the top left. */
 export type DeskCell = { col: number; row: number };
-export type DeskPin = { cell: DeskCell | null };
+export type DeskPin = { cell: DeskCell | null; rank?: number };
 /** A room's top-left in its Town building: tiles from the building's corner. */
 export type RoomSpot = { x: number; y: number };
 export type BoardDocument = {
@@ -147,6 +149,11 @@ export type BoardOp =
   | { op: "desk.unpin"; key: string }
   /** Record where Town put a pinned desk; only a desk still pinned, unplaced. */
   | { op: "desk.place"; key: string; cell: DeskCell }
+  /**
+   * A pinned desk's place among its room's pinned seats. Sets it only on a
+   * saved pin unless `create` (a herdr-core tab, pinned by its label).
+   */
+  | { op: "desk.rank"; key: string; rank: number; create?: boolean }
   /**
    * Where a host's Town rooms stand: replaces every room spot saved for that
    * connection (keys are its workspaces' card keys).

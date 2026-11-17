@@ -76,8 +76,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     numbers (over 3 h, or past a reset) read **stale** with no level; with several hosts the board shows the one with the least left.
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
-    World, and the agent's status line looks as before. When Claude refused
+    World, and the agent's status line looks as before. World shows Claude Code's
+    own figure, which can trail claude.ai by about a point. When Claude refused
     work at its limit, the gauge reads **reached, resets …** instead of a level.
+    Chat and quests refresh usage stops after local transcript rewrites, including
+    same-size writes whose file timestamps stay unchanged.
     On a phone the compact chip adds the lowest percent left (or **reached**), with the same age when that reading is over 15 minutes old. Its **Summary** button, or on a phone the compact chip under
     the search bar, opens the **Town summary** window: blocked agents and
     questions you can answer in place,
@@ -115,10 +118,20 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens over an open window or sheet such as Chat or **Needs you**: on a
     phone it waits until they close; on a wide screen it waits only while one
     lies over the figure or the card's place, so an intent window or Chat
-    docked on the other side does not hold it back. **✕**, Escape, Back or a press outside closes it; tap
+    docked on the other side does not hold it back. It also waits while
+    Town's setup card (**Start Herdr** or **Set up herdr-core**) is up, and
+    opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
     or switch **Menu → Town Master greeting**, to stop it on this browser.
     Your very first visit is greeted too, without a last time.
+  - **Tab and app icon count**: in every view, while anything needs you, the
+    browser tab reads `(N) Herdr World`, its icon carries a small yellow
+    badge (the number up to 9, then `9+`), and an installed World shows the
+    number on its dock, taskbar or home-screen icon where the system supports
+    app badges. N is the **Needs you** count. It keeps updating while the tab
+    is in the background and follows answers made on another device; with
+    nothing waiting the title and icon are plain again. Switch off
+    **Menu → Count on tab and app icon** to stop it on this browser.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
     A queued agent without a Herdr name is labelled with its room rather than
@@ -245,7 +258,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
-    **New room** (disabled with the reason when no room can be created). Arrow
+    **New room** (disabled with the reason when no room can be created). With
+    no room open, New room asks for the **Destination host**, herdr-core hosts
+    included (`· herdr-core`); a core room takes a name only, since its agents
+    start in core's own folder, and an empty name becomes "Room". Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -271,8 +287,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     hear each place's reading in its name. A lens changes only how Town is
     drawn: taps open what they always do, nothing moves, Escape or **✕**
     returns Town exactly as it was, and Town always opens in **Attention**
-    (Town as usual). The browser remembers the last lens for `L` and
-    **Lenses**. With `?scene=town-scale` every lens has synthetic data.
+    (Town as usual). A search with a lens on outlines its matches over the
+    lens's colours, and ending it returns to the lens. The browser remembers
+    the last lens for `L` and **Lenses**. With `?scene=town-scale` every lens
+    has synthetic data.
     Board offers the same lenses over its cards (see Board below).
   - **Select several agents and give them one order**, as a strategy game
     selects units. On a desktop, **Shift+drag** on the map (also over a room
@@ -511,8 +529,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tabs open: wide screens show three columns of rooms up to eight tables
     wide, portrait and half-width screens two columns up to six, and phones
     one column up to four, growing downward. A folded room normally shows up to
-    24 tables: the first tabs in the same order as Spaces, without promoting
-    later working, pinned or recent tabs into that prefix. The bottom-right
+    24 tables: pinned desks first, then the first tabs in the same order as
+    Spaces, without promoting later working or recent tabs into that prefix. The bottom-right
     **» +N** tile sits beside the dashed **+** seat and counts hidden tables.
     Each click appends the next 20 tables until all are shown; **Fold** is
     available after the first expansion and returns to the first 24 in one click.
@@ -541,14 +559,32 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     to leave its group; a spawn link stays, since Herdr's stamp records it.
     **M** on a focused table offers the same as **Group with…** and **Leave
     the team**, and the table's accessible name lists its teammates. A
-    pinned table joins a team only in its own room, and keeps its place.
+    pinned table joins a team only in its own room, and keeps its pinned seat.
   - **Pin a desk** from the first item in its mobile agent window's **⋯** menu
-    (**Pin desk in Town**), or from the desktop window’s **⋯** menu. A
-    pinned table wears a pin and keeps its place: tab reorders, a room growing
-    or Town's own placement leave it, and it cannot be dragged until you unpin
-    it (other tables fill the free places in tab order). A saved pin applies
-    only while its tab is in the room's visible native-order prefix. A pinned
-    desk beyond the fold stays hidden until you expand to reveal it. Its agents stay at it:
+    (**Pin desk in Town**), or from the desktop window’s **⋯** menu. Pinned
+    goes first, as in Herdr's apps: a room's pinned desks take its first
+    seats, in tab order among themselves until you reorder them, and the
+    other tables follow in tab order; unpinning returns a desk to its
+    tab-order seat. Pinned desks reorder on the rug, as pinned browser tabs
+    do: drag a pinned desk (mouse or touch) onto another pinned desk of its
+    room and it takes that desk's place, or press **M** on a focused pinned
+    table and choose a pinned desk's place. Dropped anywhere else (off the
+    rug, on an unpinned desk, in another room) it glides back to its seat;
+    while you drag, the hint says **Unpin to move it out of the front row**.
+    A drag never unpins it, and an unpinned desk cannot take a pinned seat.
+    The order is a World view setting saved with the pin (for a core agent,
+    beside its shared pin, since Herdr's apps have no order for pins), so
+    every device and a reload keep it; Herdr's tab order is unchanged. A desk
+    pinned later, here or in a Herdr app, joins the end of the rug; unpinned
+    and pinned again, it starts at the end. A folded room always shows its
+    pinned desks. The room's pinned seats share one floor rug, a pale woven
+    carpet with fringed ends drawn under them as one piece, so the group
+    reads at a glance (a room with no pins has none); like the floor, it
+    shows wherever the room's interior does. Each pinned desk also carries a
+    small quiet pin on its front-left corner, a corner the goal pennant,
+    status marks and name never use; neither the pin nor the rug wears an
+    attention colour. A desk holds a tab, so a desk with several agents is
+    pinned while any of them is. Its agents stay at it:
     they never go to the bar, leave only to wait at reception (blocked, or
     finished and not yet seen) and walk straight back once you have seen them.
     The pin is a World view setting, saved on the World service beside
@@ -619,9 +655,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
     reception and Board's host label. When the local connection is failing and
-    no host is ready, Town's stage also offers **Set up Herdr** if Herdr is
-    missing or installed but stopped; it installs or starts Herdr only after you
-    confirm, and never appears during a normal start or after you disconnect.
+    no host is ready, Town's stage also offers to set up a runtime. With no
+    runtime installed it offers **Set up herdr-core** first and **Use the Herdr
+    TUI instead** second; with Herdr installed but stopped it offers to start
+    Herdr. **Set up herdr-core** shows the version, where core goes
+    (`~/.local/bin/herdr-core`; on Windows
+    `%LOCALAPPDATA%\Programs\herdr-core`), that it is checksum-verified and starts at
+    login, then **Install and start** runs it on this computer only, with
+    progress and plain errors (**Try again**). Nothing installs or starts
+    before you confirm, and the card never appears during a normal start or
+    after you disconnect. Once core connects, the card goes away.
     Transient local socket failures and SSH outages keep retrying with
     capped backoff; explicit disconnect/removal and permanent failures stop
     recovery. Cached work never becomes current until a fresh runtime snapshot
@@ -651,10 +694,41 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     another text field; the browser's own find stays closed. Change the keys
     under **Search the current view** in Settings → Shortcuts.
   See the [Town exercise](./docs/TUTORIAL.md#town).
-- **Reuse existing Herdr.** The standalone installer and Homebrew launcher keep
-  the runtime's existing version and owner. Only a missing Herdr is installed;
-  Homebrew does this on first normal local World launch, without a forced Herdr
-  formula or Intel source build. Explicit runtime upgrades remain available.
+- **herdr-core first on a fresh install.** A fresh standalone install and the
+  Homebrew launcher keep any installed runtime (`hc`/`herdr-core` or `herdr`)
+  with its existing version and owner, and install nothing. When neither is
+  found they install herdr-core: its release list over HTTPS, the archive for
+  this computer checked against its SHA-256 (nothing downloaded runs as a
+  script; on macOS a release without the signed Herdr Core.app is refused
+  before anything in it runs), `~/.local/bin/herdr-core` plus an `hc` link if
+  free, then core starts now and at login (a systemd user unit or a launchd
+  LaunchAgent) and World
+  gets a `core-local` connection as its default. Homebrew does this on first normal local World
+  launch. A World too old to add the connection, or one already serving, says
+  to add it under **Hosts → Manage connections**. With npm,
+  `herdr-world herdr upgrade --install` does the same when no runtime exists
+  (`--json` prints `{"runtime":"herdr-core",...}`), and `herdr-world herdr
+  setup` with no Herdr keeps an installed herdr-core (starting it now and at
+  login) or installs one; neither ever installs Herdr beside a core. Windows x64
+  works the same way with core's own PowerShell steps (System32 `curl.exe` and
+  `tar.exe`, the zip checked against its SHA-256, nothing downloaded run as a
+  script): `%LOCALAPPDATA%\Programs\herdr-core\herdr-core.exe` plus an `hc.exe`
+  link if free, added to your user PATH, then core starts now and at login (a
+  shortcut in your Startup folder that World rewrites only if it wrote it).
+  World connects to a core on the same Windows computer over its named pipe,
+  read from `core.lock` and opened existing-only, as for Windows SSH hosts.
+  Windows on Arm has no core build, so there setup stops with "herdr-core has
+  no build for this computer". `HERDR_WORLD_SKIP_HERDR=1` skips all of this.
+  Explicit runtime upgrades remain available.
+- **Finish installer upgrades.** Replacing an existing standalone World executable
+  upgrades Herdr and refreshes detected harness integrations and the installed
+  World plugin through the same path as `herdr-world update`, then restarts the
+  matching running systemd or launchd World service. Output reports the Herdr
+  and integration results (updated or current) and whether the service restarted
+  or why it did not.
+  `HERDR_WORLD_SKIP_HERDR=1` skips Herdr and its integration/plugin changes while
+  keeping the World restart. `herdr-world rollback` restores the previous World
+  binary, leaving Herdr and integrations as they are.
 - **Per-host Herdr identity.** **Manage connections → Check version again**
   reads the selected card's running server version and protocol. Compatibility
   expires after one minute; failed or disconnected checks remain unknown.
@@ -794,8 +868,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the finished work not yet reviewed (each with its room, host and last
     activity; tap one to show it on the board) and each host's counts,
     expenses and limits. Escape or the chip closes it. Each host zone's label
-    carries that host's counts, expenses today and over 7 days, and limits;
-    each workspace card shows its usage today and over 7 days, as Town's room
+    is a heading with the host's name and agent counts, then short lines
+    under it: expenses today and over 7 days, and each harness's limits on
+    its own line; each workspace card shows its usage today and over 7 days, as Town's room
     card does. A single agent's tab card ends its line with what the agent is
     doing now, and a pane row shows it as its state: the running step and its
     time (amber once it has run long, as Town's thought bubbles), **Not
@@ -846,11 +921,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town, by **Agents open**), and a plain shell, or an agent without Chat, on
     its terminal. Without a conversation yet, an agent starts on Terminal and
     switches to Chat when its session arrives unless you choose another view.
-  - **Pin** in a selected card's bar keeps the card where it is: it shows a
-    pin, and placement, Tidy and settling leave it until **Unpin** (a drag
-    still moves it). On a phone, where the card's terminal covers Board, the
-    pin in the terminal's header pins its card. Pins are saved with the board
-    on the World service.
+  - **Pin** in a selected card's bar puts the card first: a workspace's
+    pinned tab cards sit directly above it, in tab order, in rows of up to
+    three, on one tinted band, and follow it when it moves. Tidy and
+    placement keep them there and clear other cards off the band; a pinned
+    card dragged away glides back. **Unpin** returns the card to free space
+    beside its workspace. A pinned workspace card keeps its place on the
+    board. Bands hide in the zoomed-out overview. On a phone, where the
+    card's terminal covers Board, the pin in the terminal's header pins its
+    card. Pins are saved with the board on the World service.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
   - An agent with a quest shows a ⚑ chip with its progress (such as 2/5, or
@@ -890,7 +969,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Mark reviewed** (done, or idle after a turn World saw end, as Town
     counts it). The `?scene=town-scale` preview's synthetic hosts take all of
     these actions in the page, so they can be tried without real hosts.
-  - Drag a tab onto another workspace of its host to move it (asks first).
+  - Drag a tab onto another workspace of its host to move it (asks first,
+    with **Don't ask again**; moving a workspace's last tab always asks,
+    because that workspace closes). Strings follow the move.
     On phones, hold a card still before dragging; adding a second finger switches
     to pinch zoom without committing a move. Settling pauses while you type in
     an open terminal.
@@ -959,7 +1040,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
   **Hosts** defaults to All hosts and persists an explicit host set independently
-  of **Manage connections**. Filtering preserves open resources and terminals;
+  of **Manage connections**. It lists every connection of either runtime,
+  Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
+  and is counted, selected and remembered like a Herdr host (profiles of one
+  runtime endpoint count once). Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
 - **Needs you** in the top bar (in the view picker in Zen, including on a phone;
@@ -1047,7 +1131,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   named `<name>-<harness>` (for example `otter-claude`), shortened in the middle
   past 14 characters, and its state is a badge on its icon: a tick when done, a
   spinner while working, **!** when it needs you and a grey dot when idle. **⋯** holds
-  a minimize shortcut, the snap choices and float. Tapping the location line under the name
+  a minimize shortcut, the snap choices and float. **Fit right** and **Fit left**
+  come first: they put the window against that edge, full height, at its normal
+  docked width (520 px, at most half the screen, or the width you last dragged a
+  docked window's inner edge to) and leave the rest of the view usable; the half
+  and quarter snaps still fill their region. A fitted window keeps its inner-edge
+  resize handle. The same two placements are in **Actions** for the active window
+  and can be given keyboard shortcuts; none are assigned. Phones have no fit
+  choices because windows fill the screen there. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
   Town the window takes the Town look (portrait, pixel name, chunky buttons,
   **‹ Back**), and so does its Chat: Town's colours, framed messages with
@@ -1098,11 +1189,20 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   complete host list within 20 seconds, marks unfinished host views stale, and
   refreshes them when their observations complete.
 - The **Actions** command menu stays at the right of the top bar in every view
-  (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). Use it for workspace/tab creation,
+  (`Cmd+K` on macOS, `Ctrl+K` elsewhere). Use it for workspace/tab creation,
   window arrangements and the selected target's available resource actions.
   Check the selected host and target before acting. A host, generation or
   observation change invalidates an open target; Actions does not send input
   or assign tasks to an agent.
+- In Town, Board and Desk the command menu is also World's command box. Type
+  and it finds buildings, rooms, tables, agents and terminals as the views'
+  search does, each with its status mark and place (`host › room › table`);
+  **Enter** or a click selects it as clicking it in the view does. It also
+  goes to another view. In Zen it opens from the **⌘** button beside the
+  view buttons; on a phone, from **Find or act** in the corner view menu. In
+  a terminal, the Chat composer or a text field `Ctrl+K` and `Cmd+K` stay
+  shell and editor keys; `Ctrl+Alt+K` (`Cmd+Option+K` on a Mac) opens the box
+  from there.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
@@ -1234,6 +1334,41 @@ belongs to Herdr and uses Town's move gestures or guarded CLI moves.
 
 ### Agent CLI (`herdr-world --skill`)
 
+Every standalone installer run and `herdr-world update` discovers supported
+harnesses by their existing config folders and installs or refreshes the release's
+World guide (plus Claude's limits tap). This also runs when World is already
+current; `update --check` is read-only. Per-harness output says whether World's
+integration was installed (new), updated (changed), already current (unchanged),
+skipped or failed, and gives `herdr-world integration uninstall <harness>`.
+`HERDR_WORLD_SKIP_INTEGRATIONS=1` keeps these manual, independently of
+`HERDR_WORLD_SKIP_HERDR=1`. A conflict or failure is reported and other harnesses
+continue; an installed World update and its service restart still complete.
+Use `herdr-world integration sync` to retry discovery, or install manually with
+`herdr-world integration install claude` (or `codex`, `pi`, or another
+[Herdr harness](./docs/harness-integrations.md)).
+Start a new harness session to discover the `herdr-world` skill.
+Installation is local to the host and needs no running World service.
+It never overwrites an unmarked or wrong-ID user skill, nor creates a missing
+harness config folder. Unreadable or unsafe files fail without replacement.
+`integration status [harness]` lists the state, version and path;
+`integration uninstall <harness>` removes it and records a persistent preference,
+even if already absent. Later installs and updates keep it removed until explicit
+CLI or Settings install reenables it. Codex, Pi and Kimi share
+`~/.agents/skills/herdr-world/SKILL.md`; removing one also removes it for
+the other two, which the command names; their removal preference is also shared.
+OMP, Letta and MastraCode report
+unsupported. See [paths and overrides](./docs/harness-integrations.md).
+**Menu → Configuration → Integrations** shows the same state and path as a
+**World skill** line under each Herdr harness on World's own host, with
+Install, Update and Uninstall buttons that run the CLI's installer; uninstalling
+a shared file confirms which harnesses lose it first.
+
+The Claude install also chains the existing status line through World's limits
+tap. Sessions started outside World update the host's Claude Fuel gauge; the
+previous command keeps its input and output. Reinstall never chains World twice.
+Uninstall restores the original settings bytes when unchanged and preserves later
+user edits. See [settings safety and preview](./docs/harness-integrations.md#claude-limits-tap).
+
 Agents change World objects themselves from their pane, through the running
 World service. `herdr-world --skill` prints the guide; commands answer in JSON
 when piped, with stable exit codes:
@@ -1277,6 +1412,9 @@ when piped, with stable exit codes:
   reports permanent withdrawal refusals once for the owner to answer.
 - `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
   `result ls`: task results kept by World, instead of terminal scraping.
+- `task-summary "…" [--ttl-ms MS]`: a short label for the current Herdr agent
+  session, expiring after 15 minutes by default. `stamp CHILD_PANE PARENT_PANE`
+  records parentage directly in Herdr; both accept `--session NAME`.
 - `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It
   is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
   it names is the child's claim.
@@ -1289,7 +1427,8 @@ when piped, with stable exit codes:
   `group show` includes recent sender attribution (128 changes retained globally).
   Room/Desk groups are projected from Herdr. Adding with `--herdr` reuses Town's
   move: Room moves the whole desk and prints every affected agent first; Desk
-  moves one pane. Results report confirmed Done/Partly done/Not done/Unknown
+  moves one pane; `--allow-close-room` also consents to closing the source room
+  when its last desk leaves. Results report confirmed Done/Partly done/Not done/Unknown
   outcomes and locations, with no automatic retry on Unknown.
   `group import FILE --yes` migrates one Pod table atomically and never overwrites
   existing Pods; explicit address mappings handle away or annotated names.
@@ -1319,7 +1458,14 @@ use the same choices in a bottom sheet. Pick a
 radio choice to apply it to Files and Changes together. Repository-listed
 alternatives are viewing choices, never branch ownership claims. Equal-rank
 matches need a choice; stale or replaced-session evidence stops resource access
-until refreshed. Files never silently falls back to the workspace checkout.
+until refreshed. When the agent's binding changes while it works, Files, Changes
+and Commits keep their last view, marked **Worktree changed · Showing last
+observation**, and stay non-actionable until the worktree is read again
+(opening one of them reads it). Chat and Terminal are never held by the
+worktree: Chat's message box and controls keep working. For testing only,
+`?worktreeChanged` makes the first agent window opened see its worktree
+evidence as stale; opening Files reads it again. Files never silently
+falls back to the workspace checkout.
 Detached HEAD is supported. An outside-Git or inaccessible cwd is shown as
 unconfirmed evidence, without scanning neighboring repositories.
 
@@ -1329,6 +1475,10 @@ to that exact session, expires with replacement/restart, and its link is labelle
 **Reported PR**. It is evidence rather than a claim of ownership; viewing another
 candidate does not rewrite it. Existing file and Git actions use the selected
 root and revalidate its qualified binding before acting.
+
+If a previewed file becomes unavailable, its preview shows a notice instead of
+closing the window: choose a current worktree or another file, then **Retry
+preview**. Chat and its draft stay open.
 
 ## Workspace, Tab, and Pane Navigation
 
@@ -1351,7 +1501,8 @@ root and revalidate its qualified binding before acting.
   in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
   panes before dropping. Overflowing desktop tab strips offer scroll controls.
 - Search workspace, worktree, file, tab, pane, and agent actions in the command
-  menu (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A workspace-relative or
+  menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Cmd+Option+K`/`Ctrl+Alt+K`
+  from a terminal or text field). A workspace-relative or
   absolute path opens the file.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
@@ -1454,6 +1605,13 @@ to search.
   a modal interaction. A plugin popup first focuses Herdr on the Space it was
   opened for, so it shows where you are looking even when Herdr's own focus
   was elsewhere.
+- **Shell** in an agent's Town or Board peek (on a phone: Board → tap a card →
+  **Preview**) opens its room's floating shell, on either runtime. On Herdr it
+  toggles the [Herdr Float](https://github.com/meerzulee/herdr-float) plugin
+  in the agent's Space and folder, exactly as `Ctrl+Alt+F` does; without that
+  plugin installed in Herdr, World shows Herdr's refusal. On herdr-core, which
+  has no plugins or popups, World runs its own float shell instead (see
+  herdr-core connections below).
 - Switch back to a recently viewed pane without waiting: the service keeps up
   to 20 recently viewed terminal streams open for 10 minutes without viewers.
   They belong to their connection's runtime and close with it.
@@ -1879,6 +2037,515 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   forwarding. See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
+- **herdr-core connections.** **Hosts → Manage connections → Add herdr-core**
+  watches a herdr-core that is already running, on this computer, on a Unix
+  host over SSH or on a Windows host over SSH (an OpenSSH alias or
+  `user@host`). Set the core session
+  (`default` unless core was started with `HC_SESSION`) and, only if core uses
+  a non-default `XDG_STATE_HOME`, its state directory. On every connect World
+  reads `<state>/core.lock` and opens exactly that socket (over SSH: a plain
+  remote `cat`, then a stream-local forward). It never runs `hc connect` or
+  `hc server status`, which would start a core: a stopped core stays **Not
+  running · retrying** and nothing starts. The core's socket directory must be
+  yours and private (mode 0700), otherwise World refuses it.
+  Herdr (TUI) and core coexist with full read-write support. Use the latest
+  core; World neither pins versions nor withholds writes pending certification.
+  The manual and daily [release smoke](docs/development.md#herdr-core-release-smoke)
+  downloads the newest official release and flags failures for investigation;
+  it never changes the installed runtime or its permissions. World’s installers
+  set up core only when no runtime is installed.
+  `herdr-world connections add <id> --core [--ssh <destination> [--windows]]
+  [--session <name>] [--default]` adds the same connection from a terminal.
+- **A computer with only herdr-core.** When the Herdr TUI is not installed,
+  the first herdr-core connection (from the installer, **Set up herdr-core**
+  in Town or **Install herdr-core…** in Manage connections) is saved alone
+  and becomes the default: no Local profile is saved, and Town shows only the
+  herdr-core building. With the Herdr TUI installed, its Local connection is
+  kept as the default and core is added beside it. **Add Local** in Manage
+  connections still works later, and `herdr-world connections set-default
+  <id>` moves the default either way. A default herdr-core connection cannot
+  be removed until another is the default, like any default. World's own
+  unqualified Herdr requests have no Herdr connection to use then and fail
+  plainly rather than reach another connection.
+- **Install herdr-core from Manage connections.** **Hosts → Manage connections**
+  lists this computer and each Unix SSH host it knows, unless a core there is
+  already connected, each with **Install herdr-core…**. A core connection that
+  found nothing running offers the same button under its error. World first
+  checks the host (nothing changes), then asks: **Install herdr-core X on
+  <host>?** with the version, where it goes, that it is downloaded over HTTPS
+  and checked against its SHA-256, whether it starts at login there, and that
+  an installed Herdr stays as it is. An installed but stopped core instead asks
+  **Start and connect**: it is used as it is, never replaced or updated.
+  **Install and start** runs only on that host (over the connection's own
+  OpenSSH destination), one install per host at a time; progress lines show
+  as it goes, and you can close the step while it keeps going. When it
+  finishes, World adds or connects that host's core connection, and reports
+  success only once that connection is ready; otherwise it says World could not
+  connect, and why. Under a saved core connection it starts that connection's
+  session (the step names a session other than `default`) and connects that
+  same connection; a connection with its own state directory is refused,
+  because World only starts core in a session's usual place: start that core
+  yourself, then **Connect**. A failure says what went wrong in plain words with
+  **Try again**. A host without a core
+  build (anything but Linux or macOS on x86_64 or arm64, or Windows x64 on
+  this computer) says so; Windows SSH hosts are not offered. Automatic connects and reconnects never install or
+  start core. Testing switch: open World with `?coreInstall=fake` (or
+  `?coreInstall=error`); the parameter disappears at once and installs on
+  every host, real SSH hosts included, are simulated until a reload:
+  progress, then the preview's fixture core (or a checksum error). Nothing is
+  installed. While it is on, each install step says "Test mode: nothing is
+  installed, and this result is simulated", its button reads **Simulate
+  install and start (test)**, and every progress line and the failure start
+  with "Simulated:". A reload without the parameter ends test mode; nothing
+  keeps it.
+  **A Windows host over SSH** needs Windows PowerShell (`powershell.exe`,
+  built into Windows) and SSH key login. World runs two fixed PowerShell
+  scripts there and nothing else: one reads
+  `%LOCALAPPDATA%\herdr-core\<session>\core.lock` (or `XDG_STATE_HOME`, or
+  the state directory you set as `C:\...`) and checks the named pipe it
+  names; the other opens exactly that existing pipe and copies bytes between
+  it and SSH, unchanged (including win32-input-mode keys). Neither runs `hc`
+  or any program, so a stopped core stays **Not running · retrying**. World
+  refuses a pipe owned by, or open to, another account (only you, SYSTEM and
+  Administrators may own or open it), and a core this SSH login cannot open,
+  as when core was started elevated; stop it with `hc server stop` in an
+  elevated terminal there, then start Herdr normally.
+  A connected core shows its version, live-terminal count and up to eight
+  terminals by address (`t1 agent · working`). Native IDs use core's digit and
+  consonant alphabet: terminal 20 is `t1b`, following `t19`. These IDs work in
+  Terminal, Files, placement, shared labels and verified caller claims.
+  Linked-machine addresses remain observations; direct actions require a local
+  ID on the exact connection and generation, with the same occupant checks.
+  **Stops at logout.** When core (0.1.21 or later, Linux with systemd) reports
+  that its programs end when your last login on that host closes (lingering
+  is off), the status line adds **stops at logout** and the card says so,
+  with the one fix to run there once:
+  `sudo loginctl enable-linger -- <user>`, naming the account core reports
+  (shell-quoted as core quotes it; `<user>` when core names none or a name
+  that could hide what the command does). This applies to this computer and
+  to Unix hosts over SSH. World reads it on connect and on each 10-second
+  liveness check, so the warning clears by itself once lingering is on. Core
+  checks in the background: until it knows, and on hosts that keep programs
+  running, nothing is shown.
+  If core stops or is killed, the
+  card turns **Stale**: the last facts stay, marked stale, and World keeps
+  retrying. When core is back (holders keep programs through a core crash),
+  the same terminals return at the same addresses. Lost ordering (a gap in
+  core's event sequence, or a heartbeat above the last applied event, as when
+  core silently drops an oversized update) also turns the card stale and
+  reacquires afresh. A host may have a Herdr connection and a herdr-core
+  connection; each keeps its own generation and identity. A connection's
+  runtime cannot be changed (add another); a herdr-core connection is the
+  default only on a computer without the Herdr TUI (above) or when you set
+  it. Limits: 4,096 terminals, 64 KiB of labels and 256 KiB per
+  terminal, 32 MiB per core; beyond them the card is stale, never partly
+  shown. A screen read keeps the connection generation, core process and
+  occupant it started with; if the agent at that address is replaced before
+  the reply arrives, the read is refused rather than shown as the new
+  occupant's screen. A core connection answers World's own files, Git and
+  worktree requests, and Chat's conversation, history and input (below);
+  the page and the service both refuse any other Herdr-only request
+  (quests, raw pane reads, terminal input) for it with "… is not available
+  on a herdr-core connection", so Town's step lines and quest badges simply
+  skip core agents.
+- **Core agents in Town, Desk, Board and Needs you.** Agents running in a
+  connected herdr-core, including ones started in Herdr's desktop app, sit at
+  desks in Town, appear as Board cards, in Desk and, when waiting for you, in
+  Needs you, like Herdr agents. A host with both runtimes shows both side by
+  side, each under its own connection, never twice.
+  - **Rooms.** Terminals the desktop app placed share its spaces and tabs,
+    named from its `space / tab` caption; sub-agents join their parent's room;
+    every other core terminal is in one room named after the core.
+    No room is unnamed: an app space World starts agents in keeps the app's
+    name (else "Herdr space"), a core with no name reads `herdr-core`, and any
+    other unlabelled room reads "Room".
+    Linked-machine terminals (`mac/t7`) and finished terminals are not shown.
+  - **Agents and status.** A terminal is an agent when it reports status
+    (OSC 7501) or runs a harness Herdr or its desktop app knows (Claude Code,
+    Codex, Gemini, OpenCode, Pi, Copilot, Cursor and the rest); the harness
+    comes from its report, else from what runs in it now, looking through the
+    app's shell wrapper. Status is core's, never guessed: blocked or error
+    needs you, working is working, and a harness that reports nothing is
+    unknown. Done versus idle follows Herdr's shared `herdr.seen` label (done
+    while the turn is above it); with no label yet, turns that ended before
+    World first saw the terminal count as seen, so done means a turn that
+    ended while World watched. Marking a turn seen or unread in a Herdr app
+    changes World within moments.
+  - **Starting agents in core.** When a host has a connected herdr-core, it
+    is the primary runtime: **New agent** with no room chosen picks a core
+    room, and each core room offers New agent (Town's seats, Board's **+**).
+    The launcher says where it starts: "Starts in herdr-core. Herdr's apps
+    show the agent and keep it running; closing its pane in an app ends it.
+    World and the apps arrange it separately."
+    Pick a Herdr (TUI) room in the launcher to start one there instead; core
+    rooms are marked `· herdr-core`. An agent starts with its harness's
+    absolute path on that host (never a core template of the same name), no
+    parent or notes, kept by core, and placed in the apps: its space and tab
+    labels plus a `where` caption (`Room / Tab`) the desktop app shows, and
+    unseen. Claude Code and Codex get the task as a launch argument. Other
+    harnesses get their profile role and brief through core's native send after
+    its foreground is verified (up to ten seconds), with core's `if: "idle"`
+    condition checked after its startup, draft and quiet waits. Unknown,
+    blocked or other non-idle status leaves the brief unsent, so an unreported
+    folder-trust dialog receives no automatic paste or Enter. World says it
+    started without the brief; open Chat to send it after reviewing the terminal.
+    A lost send reply says the agent started but brief delivery is uncertain,
+    retains its terminal identity and is never retried. The full [harness inventory](./docs/core-harnesses.md)
+    includes the TUI detection list and desktop app programs; every listed kind
+    can be used in a profile, with its actual executable resolved on the host.
+    **Terminal** starts a plain shell in the room, not placed in the apps and
+    not kept. The quick-start list offers every harness Herdr integrates that
+    the host has installed (no login tab for core yet). A lost reply says the
+    agent may have started and is never retried; a name taken meanwhile moves
+    to the next free one. On a Windows core host World finds the harness with
+    one fixed PowerShell script (on the PATH, else `~\.local\bin` or
+    `%APPDATA%\npm`) and starts its `.exe`, or its npm `.cmd` through
+    `cmd.exe`; core refuses a multi-line first message to a `.cmd`.
+  - **Core Chat transcripts.** Chat reuses the TUI readers for Claude, Codex,
+    Kimi, Pi, OMP, Muse, Grok and Antigravity. Without a link it reads, in
+    order: Claude's own record of the session its process runs now (following
+    `/clear` and `/resume`, for Claude started from World, `hc run`, the apps
+    or a shell); the session named by launch or resume arguments or a Codex
+    title; or the reader's existing directory discovery (marked as a possible
+    guess). World starts Claude and Pi with a new `--session-id`, unless the
+    profile's arguments choose a session, so their Chat reads from the first
+    message; before the agent saves one, Chat says it has no saved messages
+    yet. Claude's record counts only for the terminal's foreground Claude
+    process with the start time the record names, read on the agent's host
+    (local or Unix SSH), and its transcript is found under the same Claude
+    directory as the record (`CLAUDE_CONFIG_DIR` in the service's or the SSH
+    login's environment, else `~/.claude`); a missing, stale or unreadable
+    record falls back to the link. A Pi that started a new session with `/new` still shows its
+    launch conversation until linked. Codex, Kimi, OMP, Muse, Grok and
+    Antigravity keep no per-process record; they use the other paths.
+    **Link a conversation
+    for reading** accepts a session ID or an absolute transcript path on that
+    host and forgets the link when Chat closes. The browser can select any
+    absolute path the service account can read through these transcript readers;
+    links never authorize input.
+    **Refresh conversation** rereads the latest 200 entries; status and turn
+    changes refresh too. Entries are limited to 16,000 characters each and
+    256,000 characters in total, with shortening disclosed. A changed host,
+    occupant, foreground or title during the read discards it. Windows history
+    is unavailable, as on the TUI; SSH reader limits are in the inventory.
+    Every harness still sends messages, answers and keys through core, even
+    without a readable transcript. World never infers or writes core status.
+  - **World's rooms of a core.** Rooms, their order and the tabs World
+    started live in World's database under the core's ID, never in the apps'
+    layout. **Add room**, **Rename** and **Close** work on World's rooms and
+    on the core's main room (named after the core); a room the desktop app
+    made stays the app's to rename or close, and says so. Ended terminals
+    leave their tab the next time the layout changes.
+  - **Ending core agents.** Core ends a program's children with it, so the
+    bin, **Close room** and every other native kill first name every terminal
+    that will end (its name or tab and room; children on a linked machine
+    are marked), to the end of every chain, including children of those
+    children on the linked machine. Putting an agent with children in the
+    bin asks first; one without children goes straight in. World ends
+    nothing beyond what you confirmed: if a child started since, or a
+    confirmed program was replaced (even by a shell that reused its pid, on
+    a linked machine too), nothing ends and World shows the new list. A
+    child started under a dying agent while core carries out the kill (by
+    the agent itself or another app, up to a few seconds while the program
+    exits) can still end with it, since core has no conditional kill; World
+    then names it: **Close room** shows "More ended than you confirmed" and
+    the bin's Recent line reads "Closed: herdr-core also ended …, started
+    after you confirmed."
+    Closing an agent's pane in the desktop app ends it, and World shows it
+    gone.
+  - **Summaries and stamps.** `herdr-world task-summary` inside a core
+    terminal writes its summary to that terminal on its own core, with no
+    World service: bound to the program running there and to an absolute
+    expiry. `herdr-world stamp CHILD PARENT` with core addresses (`t7`)
+    records a display relation; it never makes a native parent, so a kill
+    never follows it. Both check that the command really runs inside that
+    core terminal. Core's own parent and the stamp both group an agent with
+    its spawner. An agent's folder is shown from core's cwd as evidence only.
+  - **Seen, shared with Herdr's apps.** Looking at a core agent in World
+    clears its Done in Herdr's phone and desktop apps too: open its peek in
+    Town (tap or hover the agent) or Board (rest the mouse on its row, or
+    **Preview** on a phone), or its window (Chat, Terminal, Files or Changes,
+    however you opened it), on a page that is in front of you (visible and
+    focused) for about half a second. World shares each
+    finished turn once per look: if someone marks it unread in an app while
+    the peek or window stays open, it stays unread until the agent finishes
+    another turn or you look again (close and reopen it, or come back to the
+    page). Needs you, Desk and hover cards are lists and glances, not looks,
+    until they open the agent's window; a minimized window, a page in the
+    background or a host that is offline or reconnecting shares nothing. Sharing is best effort: World writes only Herdr's shared
+    `herdr.seen` label, only to raise it, and only while it still holds what
+    World saw when you looked, so an app's newer look or unread wins; a write
+    that fails is not retried and the next look shares it.
+  - **Pin, shared with Herdr's apps.** A core agent has one pin, the same
+    one Herdr's phone and desktop apps show (`herdr.pinned`). Pin it in World
+    (**Pin** in its Town or Board peek, **Pin desk in Town** or **Pin card on
+    Board** in its window's menu or a phone terminal's header, Board's card
+    **Pin**) and the apps pin it; pin or unpin it in an app and, within
+    seconds, its Town desk and Board card wear World's pin or lose it, and
+    go first or return to tab order. A desk holds a tab, so it is pinned
+    while any of its terminals is
+    pinned: World's pin pins the tab's agents (its terminals, when it has no
+    agent), and its unpin clears every terminal's pin in the tab. Pinned
+    agents come first where World lists agents in no order of its own: a
+    phone's ⋯ switch list within the same need (Needs you first, then
+    finished ones, then the rest), Desk's quiet agents and its other hosts'
+    agents, the Town master picker in Sounds, a group's member choices and
+    a Work lens card's agents. Lists with their own order (Desk's lanes by
+    time, its Agents directory by recent activity, the desktop window
+    switcher by open windows, search by match, the @-mention picker by
+    workspace) keep it. The pin is quiet
+    (no colour), so it never competes with Needs you. A host that is offline
+    or reconnecting shows its last pins and refuses changes ("This agent's
+    host is reconnecting: its pin can change once World sees it again"); a
+    failed change says "Couldn't change the pin in Herdr's apps". Herdr's
+    own (TUI) agents keep World's pin only: the TUI has no pin to share.
+    Mark reviewed stays World's own.
+  - **Push.** Core agents send the same Web Push notifications as Herdr
+    agents (Menu → Behavior & automation → Task notifications): one when an
+    agent that was working finishes, one when it starts needing you
+    (blocked or error), from core's own status events under the same rule as
+    Herdr's apps. Sub-agents, linked-machine terminals, agents World sees for
+    the first time and a program that replaced another at the same address
+    are quiet. A turn that ends while World is disconnected from core pushes
+    once when it reconnects, unless someone already saw it in a Herdr app.
+    The `--notification-source herdr` setting does not apply to core: core
+    has no notifications of its own, so its pushes always follow status.
+    When World has more than one connection, Herdr or herdr-core, every push
+    names the connection it came from.
+  - **Chat and answers.** Open a core agent from Town, Board or Desk, its
+    peek or menu (tap its desk, **Open chat**; Board's peek has **Open**), a
+    phone's ⋯ switch list, or **Needs you → Chat**: it opens in the same
+    Inspector window as a Herdr agent, with **Chat**, **Terminal**, **Files**
+    and **Changes** tabs. **Open chat** opens it on **Chat**; opening it from
+    Town, Board, Desk or **Needs you** follows the Agents open setting, as for
+    a Herdr agent: set to Chat, the window shows **Terminal** only until World
+    can read the agent's conversation, then turns to **Chat** by itself. A
+    plain shell opens on **Terminal**. The window moves by its title bar,
+    resizes, docks, minimizes and switches like a Herdr agent's. Chat is
+    Herdr's Chat: the transcript, **Details**, question cards with their
+    answer buttons, the composer with attachments and its ⋮ keys, and
+    **Open Terminal**, which switches to the **Terminal** tab. World finds
+    the conversation from the agent's own session record or its launch
+    command, so agents started before World was connected read too. When it
+    finds none, Chat says so ("World has not found where this agent saves
+    its conversation yet…") and still takes messages; it never offers
+    Herdr's integration install for a core agent. **Stop** sends Esc and
+    the composer's ⋮ keys work while the agent works, as for a Herdr agent;
+    both are off, with the reason, until World knows which program the
+    window is for. An answer is tied to the question's turn: the same
+    question asked again on a later turn needs a new answer. A core Codex
+    agent World cannot match to a session offers **Link session**, as a
+    Herdr one does; the link reads that program's conversation only and is
+    dropped when another program takes the terminal. The trust question is
+    answered in the Terminal tab. Messages, answers and keys go through
+    core's own send and keys for every harness. World
+    checks the original core, terminal, program and foreground before every
+    send. Missing evidence or a replacement shell refuses it with a reason
+    ("Reopen this agent's Chat; nothing was sent."). A timeout or lost reply
+    says **Uncertain** and never retries; a message to a harness whose
+    conversation Chat cannot read is marked unverified. Core may hold input
+    for a person's draft or quiet period; World requests cancellation if
+    the occupant changes, but a replacement between the check and core's
+    actual typing remains core's window to close (Q3).
+  - **Saved ask answers.** A local Linux core agent using `herdr-world ask`
+    can receive the saved answer through the same core send. Its CLI claim
+    needs verified process ancestry, with the original foreground binding;
+    labels grant no authority. Replaced programs, reconnected runtime
+    generations and World restarts refuse old delivery. Uncertain delivery
+    never auto-replays; `herdr-world ask get ID` keeps the stored answer.
+    Unverified and remote claims remain retrieval-only, as with TUI asks.
+  - **Files and Changes.** A core agent's **Files** and **Changes** open in
+    its agent window, as for a Herdr agent: they follow the folder its
+    program runs in (core's live foreground cwd, matched to its Git
+    worktree), and a core room's follow its worktree or its terminals'
+    folder. Preview, search, download, upload, delete, Git actions and
+    commits use World's own tools on the core's host (this computer or the
+    core's SSH host), never core's file calls. The selection belongs to the
+    program at that address: if core replaces it, even with one that reuses
+    its pid, Files asks to refresh before reading again. Each request names
+    the core connection and the runtime generation it saw; after a
+    reconnect it is refused, never answered from another connection. Not on
+    a Windows core host.
+  - **Worktrees.** A core room's **Worktrees…** menu offers **Create**, **Open**
+    and, for a worktree room, **Remove this worktree…**. A new
+    worktree branches from origin's freshly fetched default branch (or the
+    checked-out commit without an origin) at the repository's **Worktree
+    location** (Herdr's `~/.herdr/worktrees/<repo>/<branch>` otherwise),
+    with the **New worktree command** when one is set and installed, and
+    becomes one of World's rooms of that core, named after its branch.
+    Agents and shells started there run in it. **Open worktree…** lists
+    what Git lists for the room's repository and opens one as a room (an
+    open one is shown, not opened twice). Paseo hooks run as for Herdr
+    worktrees: `setup` after creation, `opened` after opening, `teardown`
+    before removal (a failure ends and removes nothing) and `removed` after.
+    Removing first names every terminal that ends with the room, as
+    **Close room** does; then the hook runs, those terminals end, Git (or
+    the **Remove worktree command**) removes the checkout and the room
+    closes. If Git cannot remove it, the room stays so you can retry. The
+    repository's own checkout opened as a room is closed, not removed.
+  - **Questions from core agents.** `herdr-world ask` and the other agent
+    commands run inside a herdr-core terminal on this computer are verified
+    like a Herdr pane's: World checks that the command runs under that
+    terminal's program, so the question is that agent's own and waits on its
+    desk with **?**. CLI claims accept core's letter-bearing addresses such
+    as `t1b`; a claim without a matching local program stays unverified.
+    A program that replaced it at the same address, even
+    one reusing its pid, is a different asker. The agent reads your answer
+    with `ask get` or `--wait`. Without a CLI acknowledgement, World sends
+    the saved answer through core's own send after three seconds, under the
+    original program and foreground. A replaced program or foreground is
+    refused; a lost reply stays uncertain in Summary's Outbox and is never
+    replayed automatically. A restart event, even with identical PID and
+    command line, or a core reconnect retires that asking binding; `ask get`
+    still reads the answer. On a core reached over
+    SSH, or when a Herdr pane and a core terminal claim the command equally,
+    the caller stays unverified.
+  - **Ranger.** Ranger lists core rooms beside Herdr workspaces and reads
+    them like any workspace: status (marked `herdr-core`), Git changes and
+    diffs, and an agent's terminal. On core it reads only the visible
+    screen, never history, because a history read scrolls a full-screen
+    program; agent history is not available there yet. Mentions bind the
+    program running in the terminal, so an agent replaced at the same
+    address, even with the same pid, has to be selected again. Ranger can
+    create a worktree from a core room: the preview shows the branch, source
+    repository and setup hook, and confirming opens the checkout as a new
+    World room. It can send a previewed prompt through core's native send, checked against
+    the original program and foreground immediately before submission. An
+    uncertain send is never retried automatically. Starting or ending
+    agents, adding rooms and splitting terminals use World's dedicated
+    controls; Ranger explains these limits.
+    Scheduled tasks resume against the same core (by its ID) and refuse a
+    wiped or replaced one.
+  - **Disposable preview.** Open `?coreFixture`, then **Manage connections
+    → Fixture core → Start**. The fixture's agents work in a disposable Git
+    repository with a README and Paseo hooks. Open **builder → Files** or
+    the **web** room's **Worktrees…** menu. Worktrees stay inside that
+    fixture's directory and are removed with it. Ranger can read this room
+    when you allow it in Ranger settings. No real harness or checkout is
+    needed; the fixture runs no agents.
+  - **Its terminal.** Town's terminal button and opening a plain core
+    terminal open the **Terminal** tab of its Inspector window, which shows
+    the live terminal. While that tab is open and no Herdr app pane holds the
+    terminal, core gives it the size that fits the window (World joins as a
+    viewer that ranks below every app pane), so the text is readable; it
+    keeps that size when focus moves away or you stop typing. Resizing the
+    window resizes the terminal, without a step through core's headless
+    size. Closing the window, or switching it to another node, gives the size
+    back: core returns it to an app's pane, or to its headless size (200×120
+    by default) when none has it open. While a Herdr app pane holds the size,
+    World never resizes it: rotating a phone, opening its keyboard or
+    resizing the window only scales the drawing, never below 85% of its
+    normal size, and the rest scrolls. When the app resizes or closes its
+    pane, World follows before the next paint. The line under the name says
+    whose size it is. The tab mounts when first shown and keeps its watch
+    while you switch to another tab. Several core terminals may be open, each
+    in its own window. Minimizing the window ends its watch and gives back
+    the size; restored, it watches again when its Terminal tab is shown.
+  - **Type into its terminal.** Click the terminal, or just press a key
+    while its tab is shown (outside any text field): the terminal takes
+    focus, shows its cursor, and that first key arrives once. With two core
+    terminals open, page keys go to the one shown or clicked last. A key
+    typed in World makes World's size lead even over an app pane, by core's
+    own rule; typing in the Herdr app's pane, or clicking it, takes the size
+    back there. Keys typed while World's watch or viewer is still opening
+    arrive once, in order. Terminal replies (cursor reports) go only after
+    you have typed in World, and xterm's own focus reports are not sent.
+    A key World could not send says "Not sent" and drops the keys queued
+    behind it, so nothing lands out of order; typed bytes are never replayed.
+    A replaced program, a lost core connection or a watch that ends refuses
+    further keys. Requests carry at most 64 KiB (longer pastes go in pieces,
+    in order) and at most 256 KiB waits for the keyboard to open. A browser
+    whose terminal cannot tell typing from replies stays watch-only and says
+    so. On a phone the Terminal's composer, key rows, drafts and image or file
+    uploads work as on a Herdr terminal: uploads go to the core connection's
+    host and come back as paths. On a Windows SSH host they are staged in
+    the account's temp folder (a private `herdr-world-uploads-<SID>` folder
+    only that account, SYSTEM and Administrators may open) through Windows
+    PowerShell, and the path comes back with forward slashes. An unsent
+    composer message stays while the core connection does: Back, reopening
+    the terminal or a watch that ends keep it; a new core connection
+    generation (core restarted or reconnected) drops it. The view ends where
+    a phone's keyboard begins, so the composer stays above it. The watch
+    itself never sizes a terminal (it is an observer); only the open tab's
+    viewer does, as described above. **Exception on cores before 0.1.21:**
+    there the watch alone may move a terminal to its headless size; World says
+    "herdr-core moved it from C×R to its headless size" while that grid lasts;
+    once an app's pane opens and sets its own size, the line names that size
+    and drops the move. The window's close or a phone's Back closes it;
+    Escape is the program's key. The watch ends, with the
+    reason and **Watch again**, when the program exits, another program takes
+    the address, or the core connection is lost; when core is back the open
+    view watches again by itself. A hidden page holds no watch and resumes
+    when shown. Limits: four watched terminals per page and 32
+    per World service. A page that falls behind stops taking core's output
+    until it catches up; core then repaints the latest screen instead of
+    replaying the backlog. A core that cannot announce its grid
+    (`resize_notifications`) is refused rather than shown at a guessed size.
+  - **Room shell.** **Shell** in a core agent's peek opens World's float
+    shell, the equivalent of Herdr Float: that machine's own shell, started
+    by core in the agent's current folder, one per room. It shows over any
+    view; **×**, a click outside it or `Ctrl+Alt+F` hides it and leaves it
+    running, so opening it again (from any browser, which share it) shows the
+    same shell; **End shell** or `exit` ends it. When something started in the
+    shell would end with it, **End shell** first names it and ends nothing
+    until you confirm, and refuses if more would end by then; anything started
+    while the shell was ending that core ends with it is named afterwards.
+    Core lists it
+    in Herdr's apps as an unplaced terminal named `world-float-…` with the label
+    `world.float`; World never shows it as a desk. Typing or resizing in a
+    browser makes that browser's size count; once every view is hidden, core
+    returns it to its headless size. World attaches only to a live terminal
+    with its own label for that room, and ends only that occupant; a core that
+    restarts or loses ordering, or a lost connection to World (a phone
+    resuming), closes the view with the reason and **Open again**, which uses
+    the host's current connection and refuses if the agent has moved to
+    another room. A paste of any size reaches the shell whole and in order. A
+    slow browser holds core's stream rather than buffering it.
+  - **Stale.** When core stops, its agents stay where they were, marked
+    offline with their last state, and return at the same addresses when it
+    is back. Lost ordering shows them stale until World has a fresh snapshot.
+  Testing switch: open World with `?coreFixture`, then **Hosts → Manage
+  connections** shows **Fixture core (testing)**: **Start fixture core** adds a
+  "Fixture core" connection to a stand-in core with five synthetic agents and
+  a shell: in the desktop app's "web" space, *reviewer* (Claude Code) is
+  waiting for an answer and *builder* (Codex) is working, with its own
+  sub-agent *tests* (ends with it) and *preview-server* (outlives it); *scout* (Gemini)
+  finishes its turn about three seconds after the start (done); *helper*
+  (OpenCode, no status reporting) and a shell are unplaced. The placed agents
+  have a desktop-app pane at 96×28 and the builder keeps printing, so a watch
+  is live; *helper* has no pane and shows the headless size. **Resize
+  reviewer's app pane** steps the reviewer's pane through 132×40, 72×24,
+  closed (headless) and back to 96×28, as a person resizing or closing it in
+  the desktop app would. **Shell** in a fixture agent's peek opens a stand-in
+  float shell that echoes what you type (`exit` ends it). **Kill fixture
+  core** stops it like `kill -9`, and **Remove fixture** deletes both. Three
+  more buttons stand in for a person using Herdr's apps on *scout*: **Scout:
+  finish another turn** (working, then done about three seconds later),
+  **Another app: mark scout unread** (`herdr.seen` = turn − 1; refused until
+  scout has finished a turn) and **Another app: pin or unpin scout**.
+  **Toggle stops at logout** makes the stand-in core report that its programs
+  stop at logout (and, pressed again, that they keep running); the card shows
+  or clears the warning and its `loginctl` command within 10 seconds. The
+  stand-in runs inside the World service and starts no program: agents you
+  start there appear as terminals but run nothing. The fixture
+  only touches its own connection: if a connection you made already uses the
+  ID `core-fixture`, **Start fixture core** and **Remove fixture** refuse and
+  leave it in place.
+  For the native-address boundary, open `?coreFixture=alphabet` (the parameter
+  disappears immediately), choose **Manage connections → Fixture core → Start
+  fixture core**, close the manager and open **reviewer** (`t1b`), then its
+  **Terminal** and **Files**. Terminal shows the synthetic review and Files
+  shows the disposable repository, including `README.md`. A shell at `t19`
+  sits beside the reviewer. This scenario replaces an earlier owned fixture
+  when started; it installs nothing and runs no core programs.
+
+  For input trials, open *reviewer*'s Chat before returning to **Fixture core
+  (testing) → Replace reviewer with shell**. Sending from that still-open Chat
+  must refuse without typing. **Lose next input reply** makes the next send
+  uncertain; no automatic retry occurs. **Remove fixture core** then **Start
+  fixture core** resets the synthetic agents. Answering the reviewer's question
+  moves it to working. These switches never touch a real core.
+
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
   **Open agent** follows **Agents open** (Chat by default when supported,
@@ -1918,7 +2585,7 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 - Manage a user service from the CLI; check releases and run checksum-verified
   one-click standalone updates under a supported supervisor. Probe `/health` or
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
-- Keep Herdr on the version this World release verified: installs and updates
+- Keep Herdr on the version this World release verified: installer replacements and updates
   bring Herdr, the Codex/Claude/Pi harness integrations and the Herdr World plugin up to
   date, and **Menu → Runtime → Upgrade Herdr** (or **Update Herdr integrations**)
   appears when something is behind. A running server keeps its panes through a
@@ -1957,7 +2624,7 @@ Common defaults (Linux/Android overrides follow the table):
 
 | Action | macOS / iOS | Windows / Linux / Android |
 | --- | --- | --- |
-| Command menu | `Cmd+K` | `Ctrl+Alt+K` |
+| Command menu | `Cmd+K`; `Cmd+Option+K` in a terminal or text field | `Ctrl+K`; `Ctrl+Alt+K` in a terminal or text field |
 | Sidebar | `Cmd+B` | `Ctrl+Alt+B` |
 | Workspace Inspector | `Cmd+Shift+B` | `Ctrl+Alt+Shift+B` |
 | Expand / restore Inspector (desktop) | `Cmd+Option+Enter` | `Ctrl+Alt+Shift+Enter` |

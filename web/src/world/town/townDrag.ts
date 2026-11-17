@@ -92,9 +92,8 @@ export function townDragFor(
   const deskKey =
     hit.kind === "desk" ? hit.key : hit.kind === "pane" ? hit.deskKey : null;
   const desk = deskKey ? model.desks.get(deskKey) : undefined;
-  // A pinned desk stays where it is until it is unpinned.
-  if (!desk || !desk.canOpenInSpaces || model.deskPins.has(desk.key))
-    return null;
+  // A pinned desk moves too, among its room's pinned seats (townDropTarget).
+  if (!desk || !desk.canOpenInSpaces) return null;
   return {
     kind: "desk",
     key: desk.key,
@@ -102,6 +101,28 @@ export function townDragFor(
     from: desk.roomKey,
     label: `Move ${desk.displayLabel}`,
   };
+}
+
+/**
+ * What a carried pinned desk says anywhere but another pinned seat of its
+ * room: it goes back to its seat. It is never unpinned by a drag, as its pin
+ * is shared with Herdr's apps.
+ */
+export const TOWN_PINNED_HINT = "Unpin to move it out of the front row";
+
+/** The desk whose slot the pointer marks: a desk, its pane or seated agent. */
+function slotDesk(hit: TownHit | null, model: TownModel) {
+  const key =
+    hit?.kind === "desk"
+      ? hit.key
+      : hit?.kind === "pane"
+        ? hit.deskKey
+        : // Only a seated agent marks its desk's slot; one in the lounge,
+          // the queue or walking is not where its desk is drawn.
+          hit?.kind === "agent" && !hit.standing
+          ? model.agentSeats.get(hit.key)?.deskKey
+          : undefined;
+  return key ? model.desks.get(key) : undefined;
 }
 
 /** How long a dragged desk rests on another desk before it snaps to it. */
@@ -130,7 +151,9 @@ export function townMagnetDesk(
  * at once on another desk reorders (same room) or moves (another room); held
  * still on it for TOWN_MAGNET_MS (`magnet`), it snaps to that desk and groups
  * with it, so moving, reordering and grouping stay separate gestures. A
- * carried room is aimed by townRoomDropTarget.
+ * pinned desk moves as a pinned browser tab does: only onto another pinned
+ * seat of its room (or into a team there); unpinned desks cannot take a
+ * pinned seat. A carried room is aimed by townRoomDropTarget.
  */
 export function townDropTarget(
   drag: TownDrag,
@@ -146,8 +169,11 @@ export function townDropTarget(
   // A carried room is aimed by where it is, not what it is over.
   if (drag.kind === "room") return { key: null, label: drag.label };
   if (drag.kind === "desk") {
+    const pinned = model.deskPins.has(drag.key);
     const mate = magnet ? model.desks.get(magnet) : undefined;
     if (mate && magnet === townMagnetDesk(drag, hit, model)) {
+      if (pinned && mate.roomKey !== drag.from)
+        return { key: null, label: TOWN_PINNED_HINT };
       if (mate.hostKey !== drag.hostKey)
         return { key: null, label: "Desks group only within one host" };
       const team = deskTeams.get(mate.key);
@@ -172,22 +198,25 @@ export function townDropTarget(
                 ? model.agents.get(hit.key)?.roomKey
                 : undefined;
     const room = roomKey ? model.rooms.get(roomKey) : undefined;
+    const name = model.desks.get(drag.key)?.displayLabel ?? "desk";
+    if (pinned) {
+      const onto = room?.key === drag.from ? slotDesk(hit, model) : undefined;
+      if (onto && onto.key !== drag.key && model.deskPins.has(onto.key))
+        return {
+          key: onto.key,
+          label: `Put ${name} in ${onto.displayLabel}’s place`,
+          action: "reorder",
+        };
+      if (room?.key === drag.from && hit?.kind === "room")
+        if (groupedDesks.has(drag.key))
+          return { key: room.key, label: "Leave the team", action: "ungroup" };
+      return { key: null, label: TOWN_PINNED_HINT };
+    }
     if (!room) return { key: null, label: `${drag.label}: drop on a room` };
     if (room.hostKey !== drag.hostKey)
       return { key: null, label: "Desks move only within one host" };
     if (room.key === drag.from) {
-      const name = model.desks.get(drag.key)?.displayLabel ?? "desk";
-      const ontoKey =
-        hit?.kind === "desk"
-          ? hit.key
-          : hit?.kind === "pane"
-            ? hit.deskKey
-            : // Only a seated agent marks its desk's slot; one in the lounge,
-              // the queue or walking is not where its desk is drawn.
-              hit?.kind === "agent" && !hit.standing
-              ? model.agentSeats.get(hit.key)?.deskKey
-              : undefined;
-      const onto = ontoKey ? model.desks.get(ontoKey) : undefined;
+      const onto = slotDesk(hit, model);
       if (onto && onto.key !== drag.key && model.deskPins.has(onto.key))
         return {
           key: null,

@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { COMMAND_BOX_OPEN_EVENT, commandBoxKey } from "../commandBoxKey";
 import { luckyWorktreeBranchName } from "../luckyName";
 import { normalizeSearchText } from "../searchText";
 import { SHORTCUT_NUMBERS, type ShortcutNumber } from "../shortcutBindings";
@@ -65,7 +66,7 @@ import {
 } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
-  WINDOW_ARRANGEMENT_CHOICES,
+  offeredArrangementChoices,
   type WindowArrangementControl,
 } from "./WindowArrangementMenu";
 import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
@@ -88,6 +89,8 @@ export type ActionDefinition = {
   keywords?: string[];
   danger?: boolean;
   disabledReason?: string | null;
+  /** How well it matches the search, where something else matched it. */
+  score?: number;
   run: () => void;
 };
 
@@ -100,18 +103,15 @@ export type CommandExtension = {
   context?: OwnerContext;
   captureKey: string | null;
   groups: readonly ActionGroupDefinition[];
+  /** What a search finds besides actions, such as World's agents. */
+  find?: (search: string) => ActionGroupDefinition | null;
+  placeholder?: string;
 };
 
 const EMPTY_COMMAND_EXTENSION: CommandExtension = {
   captureKey: null,
   groups: [],
 };
-
-function isTypingTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  return ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
-}
 
 function tabName(tab?: Tab) {
   if (!tab) return "";
@@ -176,7 +176,10 @@ function actionCommandValue(action: ActionDefinition) {
 }
 
 function rankAction(action: ActionDefinition, search: string) {
-  return commandFilter(actionSearchValue(action), search, action.keywords);
+  return (
+    action.score ??
+    commandFilter(actionSearchValue(action), search, action.keywords)
+  );
 }
 
 function pathLeaf(path: string) {
@@ -415,12 +418,7 @@ function OwnedCommandCombobox({
         document.querySelector(".modal-backdrop, .pane-jump-backdrop")
       )
         return;
-      if (!shortcutMatches(e, "command.menu") || e.repeat) return;
-      if (
-        isTypingTarget(e.target) &&
-        !(e.target as HTMLElement).closest(".command-popover, .xterm")
-      )
-        return;
+      if (!commandBoxKey(e)) return;
       e.preventDefault();
       e.stopPropagation();
       if (open) {
@@ -431,8 +429,16 @@ function OwnedCommandCombobox({
         setOpen(true);
       }
     };
+    const onOpen = () => {
+      setCapturedExtension(extension);
+      setOpen(true);
+    };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    window.addEventListener(COMMAND_BOX_OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener(COMMAND_BOX_OPEN_EVENT, onOpen);
+    };
   }, [extension, open, operationalShortcutsEnabled]);
 
   const run = (fn: () => void) => {
@@ -985,7 +991,7 @@ function OwnedCommandCombobox({
     : [];
 
   const arrangementActions: ActionDefinition[] = arrangementControl
-    ? WINDOW_ARRANGEMENT_CHOICES.map(
+    ? offeredArrangementChoices(arrangementControl).map(
         ({ command, label, description, shortcutId }) => {
           const shortcut = shortcutId
             ? shortcutLabel(shortcutId)
@@ -994,13 +1000,15 @@ function OwnedCommandCombobox({
             key: `arrangement-${command}`,
             icon: <LayoutGrid size={15} />,
             title:
-              command === "close-all"
-                ? "Close all terminal windows"
-                : command === "open-all"
-                  ? "Open all terminal windows"
-                  : command === "restore"
-                    ? "Restore window positions"
-                    : `Arrange windows: ${label}`,
+              command === "fit-right" || command === "fit-left"
+                ? label
+                : command === "close-all"
+                  ? "Close all terminal windows"
+                  : command === "open-all"
+                    ? "Open all terminal windows"
+                    : command === "restore"
+                      ? "Restore window positions"
+                      : `Arrange windows: ${label}`,
             detail: description,
             shortcut: shortcut === "Unassigned" ? undefined : shortcut,
             keywords: ["layout", "tile", "windows", label],
@@ -1045,6 +1053,9 @@ function OwnedCommandCombobox({
           },
         ]),
     { heading: "Arrange windows", actions: arrangementActions },
+    ...(search.trim() ? [extension.find?.(search)] : []).filter(
+      (group): group is ActionGroupDefinition => Boolean(group),
+    ),
     ...(open && capturedExtension ? capturedExtension : extension).groups.map(
       (group) => ({
         ...group,
@@ -1203,7 +1214,9 @@ function OwnedCommandCombobox({
             <CommandInput
               value={search}
               onValueChange={setSearch}
-              placeholder="Search actions or enter file path..."
+              placeholder={
+                extension.placeholder ?? "Search actions or enter file path..."
+              }
             />
             <CommandList>
               <CommandEmpty>No actions found.</CommandEmpty>

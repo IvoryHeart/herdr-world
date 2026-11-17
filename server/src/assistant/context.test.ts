@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { describe, expect, mock, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
@@ -145,7 +146,7 @@ function fixture(recovery = false) {
     }),
   );
   const runtime = {
-    herdr: { call },
+    ...herdrRuntimeFixture({ call }),
     agentSessions: { readHistory },
     files: { readGitDiffSummary, readGitDiffFile },
   } as unknown as LegacyConnectionRuntime;

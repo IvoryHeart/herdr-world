@@ -22,6 +22,7 @@ async function dispatchConnectionsRpc(
         result: {
           default_connection_id: connectionManager.defaultId(),
           connections: connectionProfiles.list(),
+          core_connections: connectionProfiles.coreList(),
         },
       },
       "connections-list",
@@ -48,6 +49,52 @@ async function dispatchConnectionsRpc(
         result = await connectionProfiles.disconnect(params?.id);
       } else if (method === "connections.test") {
         result = await connectionProfiles.test(params?.profile ?? params);
+      } else if (method === "connections.core_install") {
+        // Confirmed in World's UI: probe, install (then connect) or status.
+        const install = rpc.services.coreInstall;
+        if (!install)
+          throw new Error("herdr-core installation is not available");
+        const action = params?.action;
+        result =
+          action === "probe"
+            ? await install.probe(
+                params?.host,
+                params?.fake === "ok" || params?.fake === "error",
+                params?.connection,
+              )
+            : action === "install"
+              ? install.install(
+                  params?.host,
+                  params?.version,
+                  params?.fake,
+                  params?.connection,
+                )
+              : install.status(params?.host);
+      } else if (method === "connections.core_fixture") {
+        // Testing switch: an in-process herdr-core double, never a real core.
+        const fixture = rpc.services.core?.fixture;
+        if (!fixture) throw new Error("the core fixture is not available");
+        const action = params?.action;
+        result =
+          action === "start"
+            ? await fixture.start(params?.scenario)
+            : action === "replace"
+              ? fixture.replaceReviewer()
+              : action === "lose-reply"
+                ? fixture.loseReply()
+                : action === "logout"
+                  ? fixture.logout()
+                  : action === "kill"
+                    ? fixture.kill()
+                    : action === "remove"
+                      ? await fixture.remove()
+                      : action === "pane"
+                        ? fixture.pane()
+                        : action === "turn"
+                          ? fixture.turn()
+                          : action === "unread" || action === "pin"
+                            ? fixture.otherApp(action)
+                            : fixture.status();
       } else {
         throw new Error(`unknown bridge-global method: ${method}`);
       }

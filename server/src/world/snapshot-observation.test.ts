@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { WorldSnapshotService } from "./snapshot";
 import type { ConnectionStatus } from "../connections/types";
@@ -16,7 +17,9 @@ function fixture() {
     "agent.list": { agents: [] },
   };
   const runtime = {
-    herdr: { call: async (method: string) => raw[method as keyof typeof raw] },
+    ...herdrRuntimeFixture({
+      call: async (method: string) => raw[method as keyof typeof raw],
+    }),
   };
   const service = new WorldSnapshotService({
     list: (): ConnectionStatus[] => [

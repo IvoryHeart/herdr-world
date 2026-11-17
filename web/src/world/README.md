@@ -395,8 +395,15 @@ collects acceptance counters without allocating debug node snapshots.
 The `ProductionContexts*.test.ts` cases drive a synthetic desktop and mobile
 transport workload through each view, and `ConcurrentContexts.test.ts` drives
 two mounted runtimes through dense projection, rendering, refresh and noisy
-output. Keep native key scheduling, cold initialization and aggregate refresh in
-them. They assert only what does not depend on the runner's speed: every input
+output. Production transport acceptance negotiates observation v1 with the real
+service incarnation and reply adapter: cold reads transfer complete topology,
+while refreshes confirm retained peer topology against the browser's base. It
+keeps the real 20-second stalled-host deadline, stale non-actionable peers and
+concurrent native input. The 30-second RPC deadline covers collection, framing
+and worker admission; resending every peer after the forced stall needlessly
+spends its remaining budget. With `WORLD_TRACE_PREFIX` set, input and transport
+traces are saved before assertions so a failed case retains its diagnostics.
+Keep native key scheduling, cold initialization and aggregate refresh in them. They assert only what does not depend on the runner's speed: every input
 reaches the qualified host and generation and is acknowledged once, frames are
 coalesced, and the work per phase stays within the ceilings in
 [testing/workCeilings.ts](testing/workCeilings.ts): no terminal mount, card

@@ -69,6 +69,9 @@ for (const compiled of [false, true]) {
     );
   for (const phase of ["import-before-commit", "import-after-commit"])
     harness.test(`${label}: runtime status ${phase} restarts import once`, {
+      // Two full ledger opens (worker start, migration, import) plus inspect
+      // and close: the same reopen budget as the other ledger-reopen suites.
+      recoveryTimeout: 30000,
       prepare: () => {
         const directory = mkdtempSync(join(root, "import-"));
         writeFileSync(

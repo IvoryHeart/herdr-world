@@ -31,6 +31,8 @@ const unavailableObservability = {
   totalUsage: 0,
 };
 
+const LARGE_TOWN_FIXTURE_MS = 120_000;
+
 export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
   test.skipIf(!chrome).each(
     // Bun's typed `each` takes no optional tuple element; spell it out.
@@ -116,10 +118,12 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             );
           }),
           "Office town browser check",
-          // Extended and max towns at large windows paint far more pixels in
-          // software, and each topology change glides over drawn frames.
+          // A hang guard, not a speed budget. Extended and max towns at large
+          // windows paint far more pixels in software, and each topology
+          // change glides over drawn frames; CI runners differ by about 1.5x
+          // (the 1080x1920 slow-frame case took 54 s to 80 s on main).
           scale === "extended" || scale === "protected" || scale === "max"
-            ? 80_000
+            ? LARGE_TOWN_FIXTURE_MS
             : 40_000,
         );
         expect(failures).toEqual([]);
@@ -133,7 +137,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         await rm(dir, { recursive: true, force: true });
       }
     },
-    95_000 + BROWSER_STARTUP_TIMEOUT_MS,
+    LARGE_TOWN_FIXTURE_MS + 15_000 + BROWSER_STARTUP_TIMEOUT_MS,
   );
 }
 

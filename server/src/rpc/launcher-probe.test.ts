@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import {
   createConnectionReplyPublisher,
@@ -35,12 +36,12 @@ function fixture() {
         return host;
       },
       remotePlatform: "linux",
-      herdr: {
+      ...herdrRuntimeFixture({
         call: async (method: string) => {
           calls.push(method);
           return { manifests: [{ agent: "codex" }] };
         },
-      },
+      }),
     },
     sendReply: publisher.send,
     sendError: (context: string, error: Error) =>

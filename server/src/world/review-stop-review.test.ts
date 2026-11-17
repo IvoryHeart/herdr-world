@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import {
   DESK_METADATA_MAX_BYTES,
@@ -184,7 +185,7 @@ test("malformed snapshot native identity refuses the complete observation withou
   f.setPanes(panes);
   let observed: Promise<unknown> | undefined;
   const runtime = {
-    herdr: {
+    ...herdrRuntimeFixture({
       async call(method: string) {
         if (method === "workspace.list")
           return { workspaces: [{ workspace_id: "synthetic-workspace" }] };
@@ -196,7 +197,7 @@ test("malformed snapshot native identity refuses the complete observation withou
           };
         return method === "pane.list" ? { panes } : { agents: [] };
       },
-    },
+    }),
   };
   const snapshots = new WorldSnapshotService(
     {

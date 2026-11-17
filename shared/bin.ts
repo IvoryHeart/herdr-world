@@ -31,6 +31,24 @@ export type BinTarget = {
   tab_id: string;
   pane_id: string;
   terminal_id: string;
+  /** A herdr-core terminal: closing it is a native kill (M7). */
+  runtime?: "herdr-core";
+  /**
+   * Every terminal that ends with it, as the person confirmed them (core
+   * ends a program's children with it). The close refuses if more would.
+   */
+  confirmation?: BinCoreConfirmation;
+};
+
+export type BinCoreConfirmation = {
+  core_id: string;
+  terminals: Array<{
+    address: string;
+    pid: number | null;
+    /** The program's print: a kept replacement is not what was confirmed. */
+    occupant?: string | null;
+    remote?: boolean;
+  }>;
 };
 
 export type BinEntry = BinTarget & {

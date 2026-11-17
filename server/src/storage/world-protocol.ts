@@ -121,6 +121,12 @@ export type StorageRequest =
       status: import("./runtime-status").AutoSyncRunStatus;
     }
   | { type: "issue-id"; kind: string }
+  | {
+      type: "core-topology";
+      /** The revision the change was made from (compare-and-set). */
+      expected: number;
+      document: import("./core-topology").CoreTopologyDocument;
+    }
   | { type: "profiles"; operation: import("./world-profiles").ProfileOperation }
   | { type: "binding"; operation: import("./world-bindings").BindingOperation }
   | { type: "write"; write: LedgerWrite }
@@ -226,6 +232,7 @@ export type WorldLedgerStorage = {
   terminalMarks: import("./terminal-marks").TerminalMarksPort;
   board: import("../world/board-store").BoardStorePort;
   runtimeStatus: import("./runtime-status").RuntimeStatusPort;
+  coreTopology: import("./core-topology").CoreTopologyPort;
   profiles: import("../agent/profile-store").ProfileStorePort;
   bindings: import("./world-bindings").WorldBindings;
   ids: import("./world-ids").WorldIds;
@@ -264,6 +271,7 @@ export type StorageSnapshot = {
   legacyReviewArchive?: import("./legacy-review-archive").LegacyReviewArchiveState;
   board?: import("../world/board-store").BoardDocument;
   runtimeStatus?: Record<string, import("./runtime-status").AutoSyncRunStatus>;
+  coreTopology?: import("./core-topology").CoreTopologyDocument[];
   profiles?: import("../agent/profile-store").ProfilesDocument;
   document: LedgerDocument;
   attention: AttentionEntry[];

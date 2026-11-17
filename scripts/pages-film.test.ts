@@ -28,6 +28,10 @@ frame.onload = async () => {
   try {
     await film.FILM.ready;
     if (!film.HerdrTownArt) failures.push("town-art.js did not load");
+    // The page's seek bar and clock are written for the film's length.
+    const doc = frame.contentDocument, len = Math.floor(film.FILM.DUR / 60) + ":" + String(Math.floor(film.FILM.DUR % 60)).padStart(2, "0");
+    if (Number(doc.getElementById("scrub").max) !== Math.round(film.FILM.DUR * 10)) failures.push("seek bar is not the film's length");
+    if (!doc.getElementById("clock").textContent.includes(len)) failures.push("clock is not the film's length");
     // The video's captions track is written from this list.
     film.FILM.captions.forEach(([a, b, line], i, all) => {
       if (!(a < b && b <= film.FILM.DUR && (!i || a >= all[i - 1][0]))) failures.push("caption out of place: " + line);

@@ -13,6 +13,7 @@ import type {
 } from "../../shared/agentWorktree";
 import { bridge, type ConnectionClient } from "./api";
 import { agentWorktreeClient } from "./agentWorktreeClient";
+import { worktreeChangeTrial } from "./agentWorktreeTrial";
 
 export type AgentWorktreeView = {
   observation: AgentWorktreeObservation | null;
@@ -86,16 +87,17 @@ export function useAgentWorktree(
       try {
         if (!client.isCurrent() || subject.generation < 0)
           throw new Error("Host unavailable");
-        const next = (await client.call("agent_worktree.get", {
+        const read = (await client.call("agent_worktree.get", {
           subject,
           refresh: force,
         })) as AgentWorktreeObservation;
         if (
-          !next ||
-          JSON.stringify(next.subject) !== owner ||
-          !Array.isArray(next.candidates)
+          !read ||
+          JSON.stringify(read.subject) !== owner ||
+          !Array.isArray(read.candidates)
         )
           throw new Error("Worktree observation unavailable");
+        const next = worktreeChangeTrial(read);
         if (alive && client.isCurrent())
           setRead((previous) => ({
             owner,

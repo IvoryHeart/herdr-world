@@ -1,5 +1,5 @@
 import type { ServerConfig } from "../config/server-config";
-import type { ConnectionProfile } from "../connections/profiles";
+import type { TuiConnectionProfile } from "../connections/profiles";
 import {
   resolveHerdrReleaseTarget,
   VERIFIED_HERDR_VERSION,
@@ -39,7 +39,7 @@ export function herdrSetupGuardForProfile(
     | "hasExplicitSocketPath"
     | "hasExplicitClientSocketPath"
   >,
-  profile: ConnectionProfile | undefined,
+  profile: TuiConnectionProfile | undefined,
 ): HerdrSetupGuard {
   if (!profile) throw new Error("Default connection profile is unavailable.");
   return {

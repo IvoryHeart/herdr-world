@@ -20,6 +20,11 @@ export type TownSearchLight = {
   hosts: ReadonlySet<string>;
   /** The chosen match, which pulses once per `seq` (unless calm). */
   pulse: { key: string; seq: number } | null;
+  /**
+   * A lens is on: its layer, over the canvas, draws the outlines and pulse
+   * (TownLensSearch.tsx), so they read above the lens. The canvas dims.
+   */
+  overLens?: boolean;
 };
 
 /** A world-pixel rectangle. */

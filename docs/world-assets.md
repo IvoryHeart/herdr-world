@@ -69,12 +69,14 @@ paths) is generated from a fixed seed by `townLandscape.ts` and drawn by
 
 The website film draws its Town scenes, characters and finale parade with the
 same code: `site/film/town-art.ts` re-exports `townLayout.ts`, `townPaint.ts`,
-`townSprites.ts`, the town center's painting, the agents' indoor routes and
-lobby crowd spots (`townActors.ts`), arrival walks (`townArrivals.ts`), bus
-stops (`townBus.ts`) and the terminal colour palette, and `bun run build:site`
-bundles them into `film/town-art.js`. The film's other pictures (terminals,
-Board cards, Chat, Town's boards and signs, the bus and the phone) are canvas
-drawing in `site/film/index.html`, and the Herdr
+`townSprites.ts`, the town center's painting, the post office's house and yard
+(`townPost.ts`, `townPostPaint.ts`), the thought bubbles' step glyphs
+(`townStepArt.ts`), the agents' indoor routes and lobby crowd spots
+(`townActors.ts`), arrival walks (`townArrivals.ts`), bus stops (`townBus.ts`)
+and the terminal colour palette, and `bun run build:site` bundles them into
+`film/town-art.js`. The film's other pictures (terminals, Board cards, Chat,
+Town's boards and signs, lenses, parcels, the command box, the bus and the
+phone) are canvas drawing in `site/film/index.html`, and the Herdr
 logo is the project's own. The film therefore carries no third-party art; its
 fonts are listed in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). The film's
 video (`bun run film:render`) is recorded from this same canvas and score, so it adds

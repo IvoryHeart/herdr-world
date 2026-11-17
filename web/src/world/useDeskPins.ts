@@ -1,67 +1,163 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import type { TabPinControl } from "../components/MobileControls";
 import { useBoardCardPins, type BoardCardPins } from "./board/boardCardPins";
 import {
   sharedBoardStore,
   type BoardDocumentStore,
-  type DeskCell,
   type DeskPin,
 } from "./board/boardDocument";
 import { terminalColorKey, type TerminalColorTarget } from "./terminalColor";
+import {
+  currentCorePins,
+  setCoreTabPinned,
+  withCorePins,
+  type CorePins,
+} from "./corePins";
+import { worldRuntimeStore } from "./runtimeStore";
+import type { WorldLeafObject, WorldSpaceObject } from "./worldObject";
 
 /**
  * Town desk pins, a view setting World's service keeps beside the terminal
  * colours (board-store.ts `desk_pins`), keyed like them by the tab's card key.
- * A pinned desk keeps its cell, and its agents stay at it except to wait at
- * reception. Spaces' tab pins (close protection, in the browser) are separate.
+ * Pinned goes first, as in Herdr's apps: a pinned desk takes its room's first
+ * seats (townLayout.ts), and its agents stay at it except to wait at
+ * reception. The saved `cell` is no longer read; `rank` is the desk's place
+ * among the pinned seats once the user reorders them on the rug. Spaces' tab
+ * pins (close protection, in the browser) are separate. A herdr-core tab's pin
+ * is its agents' pin in Herdr's apps (corePins.ts); World saves only its rank,
+ * as Herdr's apps have no order for pins.
  */
 
 export type DeskPins = Readonly<Record<string, DeskPin>>;
 
 const NONE: DeskPins = Object.freeze({});
 
-/** The previous pins while none changed, so their identity is stable. */
+/**
+ * The previous pins while the same desks are pinned in the same saved order,
+ * so identity is stable.
+ */
 export function keepDeskPins(last: DeskPins, next: DeskPins): DeskPins {
   const keys = Object.keys(next);
-  const same = (a: DeskPin | undefined, b: DeskPin) =>
-    a !== undefined &&
-    a.cell?.col === b.cell?.col &&
-    a.cell?.row === b.cell?.row;
   return keys.length === Object.keys(last).length &&
-    keys.every((key) => same(last[key], next[key]!))
+    keys.every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(last, key) &&
+        last[key]!.rank === next[key]!.rank,
+    )
     ? last
     : next;
 }
 
-/** The saved desk pins, kept current from the World service. */
+/**
+ * The desk pins Town shows, kept current from the World service: saved pins,
+ * with each herdr-core tab pinned exactly when its agents' label says so.
+ */
 export function useDeskPins(
   store: BoardDocumentStore = sharedBoardStore(),
+  corePins: () => CorePins = currentCorePins,
 ): DeskPins {
   useEffect(() => {
     store.start();
     return () => store.stop();
   }, [store]);
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const board = store.subscribe(listener);
+      const runtime = worldRuntimeStore.subscribe(listener);
+      return () => {
+        board();
+        runtime();
+      };
+    },
+    [store],
+  );
   const last = useRef<DeskPins>(NONE);
   const snapshot = () => {
     last.current = keepDeskPins(
       last.current,
-      store.get().document?.layout.desk_pins ?? NONE,
+      withCorePins(store.get().document?.layout.desk_pins ?? NONE, corePins()),
     );
     return last.current;
   };
-  return useSyncExternalStore(store.subscribe, snapshot, snapshot);
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
-/** Pin a tab's desk where it is (Town fills in the cell), or unpin it. */
+/**
+ * Whether a leaf is pinned, for lists World shows in no order of its own,
+ * which put pinned ones first as Herdr's apps do: a herdr-core leaf by its own
+ * label, a Herdr leaf by its tab's desk.
+ */
+export function leafPinnedBy(
+  deskPins: DeskPins,
+  spaces: readonly WorldSpaceObject[],
+) {
+  return (node: WorldLeafObject) =>
+    node.runtime === "herdr-core"
+      ? node.pane.favourite === true
+      : Boolean(
+          deskPins[
+            terminalColorKey({
+              connectionId: node.connectionId,
+              workspaceId: node.workspaceId,
+              tabId: node.tabId,
+              workspaceIds: new Set(
+                spaces
+                  .filter((space) => space.connectionId === node.connectionId)
+                  .map((space) => space.nativeId),
+              ),
+            })
+          ],
+        );
+}
+
+/**
+ * Pin a tab's desk (it goes first in its room), or unpin it. A herdr-core
+ * tab's pin is written to its agents' label in Herdr's apps.
+ */
 export function setDeskPinned(
   target: TerminalColorTarget,
   pinned: boolean,
   store: BoardDocumentStore = sharedBoardStore(),
+  corePins: CorePins = currentCorePins(),
 ) {
   const key = terminalColorKey(target);
+  const core = corePins.get(key);
+  if (core) {
+    // Unpinned here, its place on the rug goes too: pinned again, it joins
+    // the end, as a Herdr desk does.
+    if (!pinned && core.live && store.get().document?.layout.desk_pins?.[key])
+      void store.patch([{ op: "desk.unpin", key }]);
+    return setCoreTabPinned(core, pinned);
+  }
   return store.patch([
     pinned ? { op: "desk.pin", key, cell: null } : { op: "desk.unpin", key },
   ]);
+}
+
+/**
+ * Save the order of a room's pinned desks (their tab card keys, front first)
+ * as World's own Town layout; Herdr's apps have no order for pins. A
+ * herdr-core tab gets a record for its place; a Herdr desk unpinned meanwhile
+ * is not pinned again. Resolves with a conflict message, or null.
+ */
+export function saveDeskPinOrder(
+  keys: readonly string[],
+  store: BoardDocumentStore = sharedBoardStore(),
+  corePins: CorePins = currentCorePins(),
+) {
+  return store.patch(
+    keys.map((key, rank) =>
+      corePins.has(key)
+        ? { op: "desk.rank", key, rank, create: true }
+        : { op: "desk.rank", key, rank },
+    ),
+  );
 }
 
 /**
@@ -95,7 +191,7 @@ export function worldTabPin(
       label: {
         pin: "Pin card on Board",
         unpin: "Unpin card on Board",
-        title: "A pinned card keeps its place on Board until you drag it",
+        title: "A pinned card goes first: it sits above its workspace on Board",
       },
       pinnedOf: (owner, tab) => board.pinned.has(keyOf(owner, tab)),
       onPin: (owner, tab) => toggleCard(keyOf(owner, tab)),
@@ -104,18 +200,9 @@ export function worldTabPin(
     label: {
       pin: "Pin desk in Town",
       unpin: "Unpin desk in Town",
-      title: "A pinned desk keeps its place in Town, and its agents stay at it",
+      title: "A pinned desk goes first in its room, and its agents stay at it",
     },
     pinnedOf: (owner, tab) => Boolean(deskPins[keyOf(owner, tab)]),
     onPin: (owner, tab, pinned) => void pinDesk(targetOf(owner, tab), pinned),
   };
-}
-
-/** Record the cell Town gave a pinned desk that had none yet. */
-export function placeDeskPin(
-  key: string,
-  cell: DeskCell,
-  store: BoardDocumentStore = sharedBoardStore(),
-) {
-  return store.patch([{ op: "desk.place", key, cell }]);
 }

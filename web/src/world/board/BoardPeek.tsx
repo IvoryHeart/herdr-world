@@ -7,6 +7,7 @@
  * action too.
  */
 
+import { viewOnlyMessage } from "../viewOnly";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AgentLatestMessage } from "../AgentHoverCard";
 import { agentStateWord } from "../agentMarks";
@@ -21,7 +22,13 @@ import {
   useTownScreen,
 } from "../town/townChat";
 import type { WorldLeafObject } from "../worldObject";
+import { useCoreSeen } from "../coreSeen";
+import { coreSharedOf } from "../coreShared";
+import { CorePinButton } from "../CorePin";
 import "./boardPeek.css";
+import { Terminal as ShellIcon } from "lucide-react";
+import { store } from "../../store";
+import { canOpenRoomShell, openRoomShell } from "../floatShell";
 
 /** The agent being peeked at and where its card sits on screen. */
 export type BoardPeekTarget = {
@@ -41,19 +48,30 @@ export function BoardPeek({
   notify,
   deskStore = sharedDeskStore(),
   onOpen,
+  onFiles,
   onClose,
   onHold,
 }: {
   target: BoardPeekTarget;
   notify(kind: "ok" | "error", text: string): void;
   deskStore?: WorldDeskStore;
-  /** Open the agent as the user opens agents: its Chat or its terminal. */
+  /**
+   * Open the agent as the user opens agents: its Chat or its terminal watch.
+   */
   onOpen(): void;
+  onFiles?: () => void;
   onClose(): void;
   /** The pointer is over the peek: keep it while it is. */
   onHold(hold: boolean): void;
 }) {
   const { leaf, name, where, canReply, anchor } = target;
+  // A herdr-core agent drawn here is seen in Herdr's apps too.
+  const coreShared = coreSharedOf(
+    leaf.connectionId,
+    leaf.generation,
+    leaf.pane,
+  );
+  useCoreSeen(coreShared ? { ...coreShared, stale: leaf.stale } : null);
   const status = leaf.stale ? "unknown" : leaf.status;
   const blocked = status === "blocked";
   // Finished work waiting for review, as Town and Needs you count it: done,
@@ -143,6 +161,35 @@ export function BoardPeek({
             {where}
           </small>
         </div>
+        {coreShared ? (
+          <CorePinButton
+            className="board-peek-icon board-peek-pin"
+            target={coreShared}
+            disabled={leaf.stale}
+            notify={(message) => notify("error", message)}
+          />
+        ) : null}
+        {canOpenRoomShell(leaf) ? (
+          <button
+            type="button"
+            className="board-peek-icon"
+            aria-label={`Open a shell in ${name}'s room`}
+            title="Shell: a shell in this room's folder that keeps running when hidden"
+            onClick={() => {
+              onClose();
+              openRoomShell(leaf).catch((cause: unknown) =>
+                store.notify({
+                  kind: "error",
+                  message: `No shell for ${name}`,
+                  detail:
+                    cause instanceof Error ? cause.message : String(cause),
+                }),
+              );
+            }}
+          >
+            <ShellIcon size={15} aria-hidden="true" />
+          </button>
+        ) : null}
         <button
           type="button"
           className="board-peek-icon"
@@ -167,6 +214,14 @@ export function BoardPeek({
           conversation={report.conversation}
           taskSummary={leaf.taskSummary}
           question={question}
+          {...(leaf.viewOnly
+            ? {
+                viewOnly: {
+                  message: viewOnlyMessage(leaf),
+                  reason: leaf.viewOnly,
+                },
+              }
+            : {})}
         />
       </div>
       {choices.length && canReply ? (
@@ -188,13 +243,14 @@ export function BoardPeek({
         {done ? (
           <button
             type="button"
-            disabled={!report.review.ready}
+            disabled={!report.review.ready || Boolean(leaf.viewOnly)}
             title={
-              report.review.ready
+              leaf.viewOnly ??
+              (report.review.ready
                 ? undefined
                 : report.review.failed
                   ? "The latest report could not be read"
-                  : "Reading the latest report…"
+                  : "Reading the latest report…")
             }
             onClick={() =>
               void report
@@ -211,12 +267,26 @@ export function BoardPeek({
             <span>Mark reviewed</span>
           </button>
         ) : null}
-        {done && report.review.failed ? (
+        {done && report.review.failed && !leaf.viewOnly ? (
           <button type="button" onClick={report.review.onRetry}>
             <span>Retry</span>
           </button>
         ) : null}
-        {canReply ? (
+        {onFiles && leaf.viewOnly && leaf.capabilities.files && !leaf.stale ? (
+          <button
+            type="button"
+            title="Files and Changes"
+            aria-label={`Open ${name}'s files`}
+            onClick={onFiles}
+          >
+            <span>Files</span>
+          </button>
+        ) : null}
+        {leaf.viewOnly && !leaf.watch ? (
+          <button type="button" disabled title={leaf.viewOnly}>
+            <span>{done ? "Follow up" : "Open"}</span>
+          </button>
+        ) : canReply || leaf.watch ? (
           <button type="button" onClick={onOpen}>
             <span>{done ? "Follow up" : "Open"}</span>
           </button>

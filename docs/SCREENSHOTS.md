@@ -167,7 +167,48 @@ on a laptop and a phone, and measures frame time while panning. It starts no
 World or Herdr and compares no pixels. A running World shows the same scene at
 `?scene=town-scale`. See [Town at scale](design/town-at-scale.md).
 
-## Prepare a reproducible scene
+## Capture the shared release set
+
+Use a consistent appearance, interface scale, and terminal font size. Capture
+PNG originals without adding fictional UI or agent conversations.
+
+### Town, Board and the sharing images
+
+The Town and Board images and both sharing images are drawn from a synthetic
+scene rather than a live runtime, so they can show a busy day reproducibly: two
+hosts, four project rooms, agents working, asking, blocked, finished and idle,
+their current steps, usage costs, context readings, both subscription gauges and
+the post office's synthetic parcels. The
+[scene](../web/src/world/testing/site-shots/scene.ts) holds only synthetic names
+and numbers; its [page](../web/src/world/testing/site-shots/SiteShots.browser.tsx)
+mounts the production `TownCanvas` and `BoardView` and answers their reads from
+the scene. It starts no World or Herdr and contacts no service. Run it through
+the browser queue:
+
+```bash
+SITE_SCREENSHOTS=1 CHROME_BIN=/path/to/chrome \
+  bun run test scripts/site-screenshots.browser.test.ts
+```
+
+It rewrites the four files below in `docs/images/`, then draws
+`site/herdr-world-og.png` (1200 × 630) and `site/github-social-preview.png`
+(1280 × 640) from the [sharing card](../scripts/site-social-card.ts) with the new
+Town capture. `SITE_SCREENSHOTS_OUTPUT` and `SITE_SOCIAL_OUTPUT` redirect them
+for a trial run. Motion is real and the camera settles before each capture, so
+walking agents can differ slightly between runs; inspect every image before
+committing.
+
+| View | Shared file under `docs/images/` | Scene |
+| --- | --- | --- |
+| Desktop Town | `herdr-world-desktop-town.png` | Whole town at 1680 × 1050: receptions, rooms, expenses, fuel board, post office |
+| Desktop Town desks | `herdr-world-desktop-town-steps.png` | Two zoom steps in: thought bubbles naming each working agent's step |
+| Desktop Board | `herdr-world-desktop-board.png` | One host at 1120 × 700 CSS pixels, drawn at 1.5× |
+| Mobile Town | `herdr-world-mobile-town.png` | Town at 390 × 844 with a touch screen |
+
+### Chat, Spaces, Files and Changes
+
+These need a real Herdr runtime and real agents: Chat shows an agent's own
+transcript.
 
 1. Use the World release or branch being documented and a compatible Herdr runtime (current captures use 0.9.3 / protocol 22).
    Record their exact versions and source revisions with the untracked capture
@@ -198,39 +239,34 @@ World or Herdr and compares no pixels. A running World shows the same scene at
    [remote-access guidance](DEPLOYMENT.md#private-remote-access). Do not photograph
    login tokens, URLs containing credentials, or certificate/private-key content.
 
-## Capture the shared release set
-
-Use a consistent appearance, interface scale, and terminal font size. Existing
-README screenshots use 1440 × 900 desktop and 390 × 844 mobile viewports. Capture
-PNG originals without adding fictional UI or agent conversations.
+Existing captures use 1440 × 900 desktop and 390 × 844 mobile viewports.
 
 | View | Shared file under `docs/images/` | Scene |
 | --- | --- | --- |
-| Desktop Town | `herdr-world-desktop-town.png` | Four rooms; one agent waiting at reception, one finished, one in the lounge |
-| Desktop Board | `herdr-world-desktop-board.png` | The same workspaces as cards, with a synthetic note strung to an agent |
 | Desktop Spaces | `herdr-world-desktop-spaces.png` | Workspace list with agent states, Zen off, and a shell running `bun test` |
 | Desktop Chat | `herdr-world-desktop-chat.png` | Town with the agent window docked on Chat: request, tool rows and the agent's report |
 | Desktop Files | `herdr-world-desktop-files.png` | Board Inspector previewing `docs/guide.md` with its Mermaid diagram |
 | Desktop Changes | `herdr-world-desktop-changes.png` | Board Inspector with the README section the agent added (unified diff) |
-| Mobile Town | `herdr-world-mobile-town.png` | Town at phone width with the Needs you tray |
 | Mobile Chat | `herdr-world-mobile-chat.png` | An agent's Chat with its answer and the composer |
 | Mobile Board | `herdr-world-mobile-board.png` | Close-up of a note strung to an agent and its workspace |
 | Mobile Spaces | `herdr-world-mobile-spaces.png` | Focused terminal with the Composer/Direct controls |
 
-The current set was captured for 0.2.7 from `main` at `2bd28f2f`, after the
-v0.2.7 release (only documentation commits sit above it, so the Spaces version
-badge reads `v0.2.7-11-g54bb8ac8`), with Herdr 0.9.3 / protocol 22, in the
-default Zen layout except desktop Spaces. Three real Claude Code agents ran in
-the demo workspaces: lantern-notes added a first-run section to its README (the
-Chat, Changes and Files captures), orbit-api suggested a unit test (mobile Chat)
-and tide-charts waited on a permission prompt (Town). The note on Board is
-synthetic. One Chat path the agent ran (`/tmp/…/try`) is elided because its
-original contained a session identifier; nothing else in the captures is edited.
+The Town, Board and sharing images were redrawn for 0.3.0 with the synthetic
+scene. The runtime captures above are from 0.2.7, taken from `main` at
+`2bd28f2f` after the v0.2.7 release (only documentation commits sit above it, so
+the Spaces version badge reads `v0.2.7-11-g54bb8ac8`), with Herdr 0.9.3 /
+protocol 22, in the default Zen layout except desktop Spaces. Three real Claude
+Code agents ran in the demo workspaces: lantern-notes added a first-run section
+to its README (the Chat, Changes and Files captures), orbit-api suggested a unit
+test (mobile Chat) and tide-charts waited on a permission prompt. The note on
+mobile Board is synthetic. One Chat path the agent ran (`/tmp/…/try`) is elided
+because its original contained a session identifier; nothing else in the
+captures is edited. The desktop Chat capture still shows the 0.2.7 Town behind
+its window, so the website presents Chat with the phone capture instead.
 Office, Tree and Graph images, and the earlier History capture, remain
 historical assets outside the shared site set; old `/office` addresses open
 Town, and `/graph` and `/tree` open Board. The Pages release badge follows
-GitHub's latest stable release rather than a hardcoded version. The website's
-phone row shows three of the four mobile captures.
+GitHub's latest stable release rather than a hardcoded version.
 
 Inspect every image for private data, clipped controls, stale host indicators,
 and misleading agent status before adding it to Git. Preserve raw capture

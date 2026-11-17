@@ -5,7 +5,7 @@ import type {
   GroupView,
 } from "../../../../shared/groupViews";
 import type { GroupOp } from "../../../../shared/groupOps";
-import type { WorldObject } from "../worldObject";
+import type { WorldLeafObject, WorldObject } from "../worldObject";
 import { WorldPanel } from "../windows/WorldPanel";
 import { worldRuntimeStore } from "../runtimeStore";
 import { groupRuntimeObservations } from "../groupObservations";
@@ -27,6 +27,8 @@ const KINDS = ["all", "pod", "team", "room", "desk"];
 export function GroupsWindow(props: {
   world: WorldObject;
   onOpenTerminal(id: string): void;
+  /** Whether an agent is pinned: member choices list pinned ones first. */
+  pinned?: (leaf: WorldLeafObject) => boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [requested, setRequested] = useState<string | undefined>();
@@ -57,12 +59,14 @@ export function GroupsWindow(props: {
 function GroupsBody({
   world,
   onOpenTerminal,
+  pinned = () => false,
   requested,
   request,
   onClose,
 }: {
   world: WorldObject;
   onOpenTerminal(id: string): void;
+  pinned?: (leaf: WorldLeafObject) => boolean;
   requested?: string;
   request: number;
   onClose(): void;
@@ -100,6 +104,18 @@ function GroupsBody({
     };
   }, []);
   const group = groups.find((group) => group.key === selected);
+  const leafOf = (terminal: { connectionId: string; terminalId: string }) =>
+    world.leaves.find(
+      (leaf) =>
+        leaf.connectionId === terminal.connectionId &&
+        leaf.terminalId === terminal.terminalId,
+    );
+  // Member choices have no order of their own: pinned agents first (a
+  // stable sort keeps the rest in observed order).
+  const isPinned = (terminal: { connectionId: string; terminalId: string }) => {
+    const leaf = leafOf(terminal);
+    return leaf && pinned(leaf) ? 1 : 0;
+  };
   const terminals = observations
     .filter((connection) => connection.current)
     .flatMap((connection) =>
@@ -108,13 +124,10 @@ function GroupsBody({
         connectionId: connection.connectionId,
         generation: connection.generation,
       })),
-    );
+    )
+    .sort((a, b) => isPinned(b) - isPinned(a));
   const harness = (terminal: GroupTerminalObservation) =>
-    world.leaves.find(
-      (leaf) =>
-        leaf.connectionId === terminal.connectionId &&
-        leaf.terminalId === terminal.terminalId,
-    )?.pane.agent;
+    leafOf(terminal)?.pane.agent;
   const write = async (
     ops: GroupOp[],
     revision: number,

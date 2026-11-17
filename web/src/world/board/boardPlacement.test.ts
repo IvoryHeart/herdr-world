@@ -5,6 +5,8 @@ import {
   DEFAULT_SIZE,
   emptyLayout,
   overlaps,
+  cloneLayout,
+  makeShelfRoom,
   placeNew,
   positions,
   rectAt,
@@ -13,6 +15,12 @@ import {
   type SizeOf,
   type BoardLayout,
 } from "./boardPlacement";
+import {
+  SHELF_BAND_PAD,
+  shelfBand,
+  shelfKeys,
+  shelfOffsets,
+} from "./boardPinFirst";
 
 const spaces = (tabCounts: number[]): FixtureSpace[] =>
   tabCounts.map((count, s) => ({
@@ -98,19 +106,82 @@ describe("Board placement", () => {
     for (const [key, point] of now) expect(point).toEqual(was.get(key)!);
   });
 
-  test("a pinned card keeps its board position when its workspace moves", () => {
+  test("a pinned tab sits on its workspace's shelf, above it, and moves with it", () => {
     const model = projectBoard(
       fixtureWorld([fixtureHost("alpha", spaces([2]))]),
     );
     const layout = placeNew(model, emptyLayout());
-    layout.pinned.set("alpha:w1:t1", { x: 900, y: 900 });
+    layout.pinned.set("alpha:w1:t2", { x: 900, y: 900 });
     layout.offsets.set("alpha:w1", { x: 300, y: 0 });
     const at = positions(model, layout);
-    expect(at.get("alpha:w1:t1")).toEqual({ x: 900, y: 900 });
-    expect(at.get("alpha:w1")).toEqual({ x: 300, y: 0 });
+    const ws = at.get("alpha:w1")!;
+    const pin = at.get("alpha:w1:t2")!;
+    expect(ws).toEqual({ x: 300, y: 0 });
+    expect(pin.x).toBe(ws.x);
+    expect(pin.y).toBeLessThan(ws.y);
+    // The saved point is not its place: it follows its workspace.
+    layout.offsets.set("alpha:w1", { x: -400, y: 200 });
+    const moved = positions(model, layout);
+    expect(moved.get("alpha:w1:t2")).toEqual({
+      x: pin.x - 700,
+      y: pin.y + 200,
+    });
   });
 
-  test("tidying a workspace rearranges only its unpinned tabs", () => {
+  test("pinned tabs fill the shelf in tab order, in rows of three, the last row nearest", () => {
+    const keys = ["t1", "t2", "t3", "t4"];
+    const shelf = shelfOffsets(keys, { w: 200, h: 80 }, () => ({
+      w: 100,
+      h: 60,
+    }));
+    const [t1, t2, t3, t4] = keys.map((key) => shelf.get(key)!);
+    // The first row reads left to right, above the second.
+    expect(t1!.y).toBe(t2!.y);
+    expect(t2!.y).toBe(t3!.y);
+    expect(t1!.x).toBeLessThan(t2!.x);
+    expect(t2!.x).toBeLessThan(t3!.x);
+    expect(t4!.y).toBeGreaterThan(t1!.y);
+    expect(t4!.x).toBe(0);
+    // The last row sits clear of the workspace card.
+    expect(t4!.y + 30).toBeLessThan(-40);
+    expect(shelfKeys(["a", "b", "c"], new Set(["c", "a"]))).toEqual(["a", "c"]);
+  });
+
+  test("the pinned band wraps a shelf's cards with a margin", () => {
+    expect(shelfBand([])).toBeNull();
+    const band = shelfBand([
+      { at: { x: 0, y: 0 }, size: { w: 100, h: 60 } },
+      { at: { x: 132, y: 0 }, size: { w: 100, h: 60 } },
+    ])!;
+    expect(band.x0).toBe(-50 - SHELF_BAND_PAD);
+    expect(band.x1).toBe(182 + SHELF_BAND_PAD);
+    expect(band.y0).toBe(-30 - SHELF_BAND_PAD);
+  });
+
+  test("pinning moves an unpinned card off the shelf; unpinning gives the card free space", () => {
+    const model = projectBoard(
+      fixtureWorld([fixtureHost("alpha", spaces([3]))]),
+    );
+    const layout = placeNew(model, emptyLayout());
+    const ws = positions(model, layout).get("alpha:w1")!;
+    // An unpinned card stands just where the shelf will be.
+    layout.offsets.set("alpha:w1:t1", { x: 0, y: -120 });
+    layout.pinned.set("alpha:w1:t3", { x: 0, y: 0 });
+    const shelved = makeShelfRoom(model, layout, "alpha:w1");
+    expect(overlapping(model, shelved)).toBe(0);
+    const pin = positions(model, shelved).get("alpha:w1:t3")!;
+    expect(pin.x).toBe(ws.x);
+    expect(pin.y).toBeLessThan(ws.y);
+    // Unpinned with no saved offset, it takes free space like a new card.
+    const unpinned = cloneLayout(shelved);
+    unpinned.pinned.delete("alpha:w1:t3");
+    unpinned.offsets.delete("alpha:w1:t3");
+    const after = makeShelfRoom(model, unpinned, "alpha:w1");
+    expect(after.offsets.has("alpha:w1:t3")).toBe(true);
+    expect(overlapping(model, after)).toBe(0);
+  });
+
+  test("tidying a workspace rearranges only its unpinned tabs, around its shelf", () => {
     const model = projectBoard(
       fixtureWorld([fixtureHost("alpha", spaces([3, 3]))]),
     );
@@ -121,7 +192,7 @@ describe("Board placement", () => {
     const tidied = tidy(model, layout, { workspaceKey: "alpha:w1" });
     const after = positions(model, tidied);
     expect(after.get("alpha:w1:t1")).not.toEqual(before.get("alpha:w1:t1"));
-    expect(after.get("alpha:w1:t2")).toEqual({ x: -800, y: -800 });
+    expect(after.get("alpha:w1:t2")).toEqual(before.get("alpha:w1:t2"));
     for (const key of ["alpha:w2", "alpha:w2:t1", "alpha:w2:t2", "alpha:w2:t3"])
       expect(after.get(key)).toEqual(before.get(key));
     expect(overlapping(model, tidied)).toBe(0);
@@ -131,7 +202,7 @@ describe("Board placement", () => {
     );
   });
 
-  test("tidying the whole board keeps pinned cards and removes overlaps", () => {
+  test("tidying the whole board keeps pinned cards on their shelves and removes overlaps", () => {
     const model = projectBoard(
       fixtureWorld([fixtureHost("alpha", spaces([3, 3]))]),
     );
@@ -140,10 +211,10 @@ describe("Board placement", () => {
       messy.offsets.set(key, { x: 0, y: 0 });
     messy.pinned.set("alpha:w2:t3", { x: 5000, y: 0 });
     const tidied = tidy(model, messy);
-    expect(positions(model, tidied).get("alpha:w2:t3")).toEqual({
-      x: 5000,
-      y: 0,
-    });
+    const at = positions(model, tidied);
+    const ws = at.get("alpha:w2")!;
+    expect(at.get("alpha:w2:t3")!.x).toBe(ws.x);
+    expect(at.get("alpha:w2:t3")!.y).toBeLessThan(ws.y);
     expect(overlapping(model, tidied)).toBe(0);
   });
 

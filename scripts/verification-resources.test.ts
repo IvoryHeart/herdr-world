@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   parseCgroupResources,
+  runResourceRegressions,
   verificationIdentityEnvironment,
 } from "./verification-resources";
 
@@ -73,3 +77,39 @@ test("identity forwarding leaves local runs unchanged and rejects malformed meta
     ).toThrow("Invalid GITHUB_RUN_ATTEMPT");
   }
 });
+
+// A synthetic live file exercises the gate's actual subprocess route without
+// contacting systemd or consuming the real-cgroup regression's resource budget.
+test.each([false, true])(
+  "resource controls use isolated live startup (system=%s)",
+  async (system) => {
+    const root = await mkdtemp(join(tmpdir(), "resource-runner-"));
+    try {
+      await mkdir(join(root, "scripts"));
+      await writeFile(
+        join(root, "scripts/verification-resources.live.test.ts"),
+        `
+import {expect, test} from "bun:test";
+import {homedir} from "node:os";
+test("selected resource manager reaches a fresh live fixture", () => {
+  expect(process.env.HERDR_WORLD_TEST_LIVE).toBe("1");
+  expect(process.env.HERDR_RESOURCE_MANAGER).toBe(${JSON.stringify(system ? "system" : "user")});
+  expect(homedir()).toBe(process.env.HOME);
+  expect(process.env.HOME).not.toBe(${JSON.stringify(process.env.HOME)});
+});
+`,
+      );
+      const result = runResourceRegressions(root, system);
+      if (process.platform === "win32") {
+        await expect(result).rejects.toThrow("requires a POSIX runner");
+        return;
+      }
+      const completed = await result;
+      expect(completed.stderr).toContain("1 pass");
+      expect(completed.stderr).not.toContain("skip");
+      expect(completed.code).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);

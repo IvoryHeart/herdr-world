@@ -7,37 +7,32 @@
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
 hosts, see their agents together in Town, Board or Desk, and chat with them,
 start them from profiles, and use independently qualified terminals, files and
-changes on desktop or mobile. **Requires a running Herdr server.**
+changes on desktop or mobile. **Requires a running Herdr (TUI) or herdr-core
+runtime.** Both can run side by side.
 
-## What's new in 0.2.7
+## What's new in 0.3.0
 
-- **Chat with each agent.** Opening an agent opens its one window on **Chat**:
-  the conversation from its transcript, tool calls with their diffs and test
-  results, its current task and quest, and a composer with attachments and
-  slash commands. Answer supported permission prompts and Claude Code
-  questions, or **Stop** the agent. See the [Chat guide](./docs/CHAT.md).
-- **Start agents from profiles.** **Actions → New agent** launches Claude Code,
-  Codex or another supported harness from a profile (role, model, permissions,
-  starting brief and Town look) after checking it is installed and logged in.
-- **Hear who needs you.** Chimes say who needs you and why; set each agent to
-  **Watching**, **Muted** or **Focused**.
-- **Teams and agent tools.** Agents started by other agents are grouped with
-  them. The `herdr-world` CLI lets agents pin and colour their cards, report
-  results and ask you questions.
-- **Work beside agents.** Your GitHub pull requests and Jira tickets appear in
-  Board's **Work** lens and on Town desks, with confirmed merge, close and mark
-  ready actions.
-- **A clearer Town.** Rooms follow Spaces' tab order and resize as tabs open or close;
-  expanded rooms stay expanded as they shrink when tabs close, until folded;
-  pin desks, colour hosts, workspaces and terminals, and open **Summary** for
-  everything needing you. Every view opens in Zen.
-- **Herdr setup.** The published 0.2.7 standalone installer installs or upgrades
-  Herdr to the verified release; set `HERDR_WORLD_SKIP_HERDR=1` to leave yours
-  untouched. Homebrew reuses existing Herdr and installs it on first launch only
-  if missing. World updates refresh Herdr's harness integrations and plugin. See
-  [Herdr installation and upgrades](./docs/DEPLOYMENT.md#herdr-installation-and-upgrades).
+- **Find or act.** One command box finds agents, terminals, rooms and buildings,
+  switches views and runs actions. Use **Ctrl+K** (**Cmd+K** on Mac), or
+  **Find or act** in the phone's corner view menu.
+- **See who needs you.** The shared **Needs you** tab gathers questions, blocked
+  agents and finished work. Answer with attachments or mark work reviewed;
+  review marks follow you across views and browsers.
+- **Follow progress and capacity.** Town bubbles and Board cards show current
+  steps. Subscription fuel gauges, expense boards and context indicators help
+  you decide what to delegate next.
+- **Organize busy work.** Search across views, use lenses for spending, idle time,
+  pull requests and quests, move and tidy Town rooms, and keep open pull requests
+  visible at the post office after their agents leave.
+- **Continue across devices.** Saved questions, answers, results and more settings
+  survive restarts and follow the World service across browsers. Minimize windows
+  on phones or dock Chat beside your work on desktop.
+- **Upgrade in one run.** `herdr-world update` restarts the matching running managed
+  World service on Linux/macOS and sets up World skills and Claude usage readings
+  for configured agent tools. Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` to keep that
+  integration setup manual.
 
-Read the [0.2.7 release notes](./docs/releases/v0.2.7.md) for upgrade steps and
+Read the [0.3.0 release notes](./docs/releases/v0.3.0.md) for backup and upgrade steps and
 known limits.
 
 ## Choose your layout
@@ -61,17 +56,21 @@ Office, Tree and Graph have been retired: old `/office` addresses open Town, and
 
 ## Screenshots
 
-These captures show 0.2.7 with four disposable workspaces on a throwaway Herdr
-session. Three real Claude Code agents ran small tasks there: one added a
-first-run section to the demo README, one is waiting on you and one has
-finished. The notes and terminal commands are synthetic. Click a screenshot to
-open it at full resolution.
+The Town and Board captures show 0.3.0 with a synthetic crew on two hosts:
+agents working, asking, blocked and finished, with their current steps,
+expenses and subscription gauges. The Chat, Files, Changes and Spaces captures
+show 0.2.7 with four disposable workspaces on a throwaway Herdr session, where
+three real Claude Code agents ran small tasks: one added a first-run section to
+the demo README, one waited on you and one finished. The notes and terminal
+commands are synthetic. Click a screenshot to open it at full resolution.
 
 ### Desktop
 
-| Town: buildings, rooms and reception | Board: workspace cards, tabs and a strung note |
+| Town: buildings, receptions, expenses and fuel | Town desks: each agent's current step |
 | --- | --- |
-| [![Town with four workspace rooms, one agent waiting at reception and one finished](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Board with four workspace cards, terminal tabs and a note strung to an agent](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png) |
+| [![Town with two host buildings, receptions holding waiting and finished agents, the expenses billboard, the fuel board and the post office](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Town zoomed in to the desks, with thought bubbles naming each working agent's step](./docs/images/herdr-world-desktop-town-steps.png)](./docs/images/herdr-world-desktop-town-steps.png) |
+
+[![Board with one host zone: room cards linked to agent and terminal cards, with steps, a question, finished work, expenses and subscription gauges](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png)
 
 [![Spaces with the workspace list and a live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
 
@@ -90,19 +89,26 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
 
 | Town | Chat | Board | Spaces |
 | --- | --- | --- | --- |
-| [![Town at phone width with the Needs you tray](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![An agent's Chat on a phone](./docs/images/herdr-world-mobile-chat.png)](./docs/images/herdr-world-mobile-chat.png) | [![Board close-up of a note strung to an agent](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
+| [![Town at phone width: a reception with a waiting agent and room cards](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![An agent's Chat on a phone](./docs/images/herdr-world-mobile-chat.png)](./docs/images/herdr-world-mobile-chat.png) | [![Board close-up of a note strung to an agent](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
 
 ## Quick start
 
-1. Herdr World runs on [Herdr](https://herdr.dev). Homebrew reuses existing Herdr
-   and installs it on first World launch only if missing. The published 0.2.7
-   standalone installer installs or upgrades Herdr to the verified release; set
-   `HERDR_WORLD_SKIP_HERDR=1` to leave yours untouched. With npm or a Windows
-   archive, run `herdr-world herdr upgrade --install` once if needed.
-   `herdr-world herdr setup` configures future startup as a user service and starts
-   Herdr if down; an already-running server keeps running without a restart. If
-   you open World before Herdr is installed or running, Town offers **Set up
-   Herdr**, which installs or starts it only after you confirm.
+1. Herdr World supports [Herdr](https://herdr.dev) and
+   [herdr-core](https://github.com/herdrdev/herdr-core) (see [Runtimes](#runtimes)).
+   A fresh standalone install uses whichever runtime is installed and changes
+   nothing about it. When neither `hc` (herdr-core) nor `herdr` is found, it
+   installs herdr-core with core's official checksum-verified steps, starts it
+   now and at login, and connects World to it; Homebrew does the same on first
+   World launch. Set `HERDR_WORLD_SKIP_HERDR=1` to skip this setup.
+   With npm, run `herdr-world herdr upgrade --install` once if needed; it also
+   installs herdr-core first when no runtime exists, on Windows x64 too (core's
+   own PowerShell steps, started now and from your Startup folder at login).
+   `herdr-world herdr setup` configures future Herdr TUI startup as a user
+   service and starts it if down. If you open World with no runtime running,
+   Town offers **Set up herdr-core** first (or **Use the Herdr TUI instead**),
+   and **Hosts → Manage connections** offers **Install herdr-core…** for this
+   computer and each Unix SSH host; each one installs or starts only after you
+   confirm.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash
@@ -117,6 +123,19 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
    npm requires Node.js 22.14.0 or newer and downloads only the binary for the
    current platform. On Windows, use npm or download the matching x64 or ARM64
    archive from the [latest release](https://github.com/IvoryHeart/herdr-world/releases/latest).
+   Rerun the installer to upgrade: it upgrades Herdr, refreshes its harness
+   integrations and installed World plugin, then restarts the running World
+   service using that executable (systemd on Linux, launchd on macOS). Output
+   reports updated or current components and whether World restarted.
+   Put `HERDR_WORLD_SKIP_HERDR=1` before `sh` to skip Herdr and its integration/plugin
+   changes while still restarting World. `herdr-world rollback` restores the
+   previous World binary; it leaves Herdr and integrations as they are.
+   Every installer run and
+   `herdr-world update` also discovers configured harnesses and installs or
+   refreshes [World's skills and Claude limits tap](./docs/harness-integrations.md).
+   Set `HERDR_WORLD_SKIP_INTEGRATIONS=1` to keep these manual, independently of
+   the Herdr opt-out. `herdr-world integration uninstall <harness>` keeps that
+   integration removed on later installs and updates; explicit install reenables it.
 3. On Linux/macOS standalone installs, add `~/.local/bin` to `PATH`. Run
    `herdr-world` (or `herdr-world.exe` from an extracted Windows archive) and open
    the printed URL.
@@ -133,6 +152,36 @@ login` is done for the user running World; add Jira in **Settings → Sources**.
 
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.
+
+## Runtimes
+
+**herdr-core** is the primary runtime for new agents when a core connection is
+ready. The installers set it up when no runtime is installed. Otherwise start
+core with `hc server start` (or use **Install herdr-core…** in **Hosts → Manage
+connections**, which installs or starts it after you confirm), then choose
+**Add herdr-core** there. Choose this computer, a Unix SSH host or a Windows SSH host; use
+the core session name (`default` unless you changed `HC_SESSION`). World connects
+to an existing core and never starts or installs it during connection or retry.
+
+Open **New agent** and choose an installed harness. The launcher says **Starts
+in herdr-core**; agents are kept and placed in Herdr’s apps. Plain shells start
+unplaced. To use the **Herdr TUI** for a launch, choose one of its rooms instead.
+Each runtime has its own connection; Town, Board, Desk and Needs you show both.
+World’s core rooms and Herdr’s app layout are arranged separately.
+
+Core agents support Chat, answers, Terminal, Files, Changes, worktrees and the
+room’s floating shell. World reads core’s status and uses its send/keys for every
+supported harness. Looking at an agent’s foreground Town or Board peek clears
+Done in Herdr’s apps too; pins are shared. An open Terminal tab keeps the agent
+at a readable size while no Herdr app pane holds it, and never takes the size
+from one; typing takes the size by core’s rule, and closing the tab gives it back.
+
+Use the latest core: World applies no version pin or certification gate and
+retains full read-write support after updates. A daily and manually dispatched
+[release smoke](./docs/development.md#herdr-core-release-smoke) flags drift.
+If a send times out, its result is **uncertain**; check the agent before sending
+again. See [Features](./FEATURES.md#remote-multi-client-and-operations) for limits,
+replacement checks, SSH requirements and recovery.
 
 ## Install as a PWA
 
@@ -168,7 +217,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Development
 
-Use Bun 1.4.4 or newer and a running Herdr server:
+Use Bun 1.4.4 or newer and a running Herdr or herdr-core runtime:
 
 ```bash
 bun install --frozen-lockfile

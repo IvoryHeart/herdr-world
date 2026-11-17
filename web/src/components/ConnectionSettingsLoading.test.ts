@@ -89,7 +89,14 @@ if (process.env.HERDR_CONNECTION_SETTINGS_DOM_TEST !== "1") {
         }, false),
       );
       expect(host.textContent).not.toContain("Loading");
-      expect(host.textContent).toContain("no longer available");
+      // A stale Integrations client waits for World to reconnect; it never
+      // tells the owner to reconnect a host or update Herdr.
+      expect(host.textContent).toContain(
+        kind === "integrations"
+          ? "Reconnecting to World"
+          : "no longer available",
+      );
+      expect(host.textContent).not.toContain("update Herdr");
       expect(host.textContent).not.toContain("No saved repositories");
     },
   );
@@ -105,6 +112,8 @@ if (process.env.HERDR_CONNECTION_SETTINGS_DOM_TEST !== "1") {
       );
       expect(host.textContent).not.toContain("Loading");
       expect(host.textContent).toContain("method not found");
+      if (kind === "integrations")
+        expect(host.textContent).toContain("update Herdr");
       expect(host.textContent).not.toContain("No saved repositories");
     },
   );

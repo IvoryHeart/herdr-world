@@ -41,10 +41,15 @@ export type TownRoomActions = {
   };
   /** New room on this building's host, from its + Add room doorway. */
   onAddRoom(hostKey: string, selectedRoomKey: string | null): void;
+  /** Why a room's actions are disabled: World only watches herdr-core. */
+  roomViewOnly?(roomKey: string): string | undefined;
   canRenameRoom(roomKey: string): boolean;
   onRenameRoom(roomKey: string): void;
   canCloseRoom(roomKey: string): boolean;
   onCloseRoom(roomKey: string): void;
+  /** A herdr-core room's worktrees (new, open, remove): shown when offered. */
+  canManageWorktrees?(roomKey: string): boolean;
+  onWorktrees?(roomKey: string): void;
   /** List every pane of a desk with more panes than drawn seats. */
   onChoosePanes(deskKey: string): void;
   /** Keyboard move: choose another room for a desk (key M on its target). */

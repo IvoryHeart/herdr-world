@@ -294,15 +294,72 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Calm motion: no fades. */
+/* A search over a lens (#784): each match outlined in Town's text cream
+   between dark rims, so it reads on every lens colour, light or dark, and
+   keeps its own lens colour inside; the chosen match pulses in Town's
+   accent. Sizes stay the same on screen (--s: world pixels per screen
+   pixel, as the canvas's marks are). */
+.town-lens-search-mark,
+.town-lens-search-pulse {
+  --s: min(var(--iz, 1), 2.857);
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: calc(4px * var(--s));
+}
+
+.town-lens-search-mark {
+  box-shadow:
+    inset 0 0 0 calc(1.5px * var(--s)) rgba(8, 10, 16, 0.9),
+    0 0 0 calc(3px * var(--s)) var(--town-text, #f1efe6),
+    0 0 0 calc(4.5px * var(--s)) rgba(8, 10, 16, 0.9),
+    0 0 calc(14px * var(--s)) calc(5px * var(--s)) rgba(241, 239, 230, 0.4);
+}
+
+/* Two rings swell outward and fade for two seconds, as on the canvas. */
+.town-lens-search-pulse::before,
+.town-lens-search-pulse::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  border: calc(3px * var(--s)) solid var(--town-accent, #ffd166);
+  border-radius: calc(6px * var(--s));
+  box-shadow: 0 0 0 calc(1.5px * var(--s)) rgba(8, 10, 16, 0.75);
+  opacity: 0;
+  animation: town-lens-search-pulse 0.8s linear 2.5;
+}
+
+.town-lens-search-pulse::after {
+  animation-delay: -0.4s;
+  animation-iteration-count: 3;
+}
+
+@keyframes town-lens-search-pulse {
+  from {
+    inset: calc(-6px * var(--s));
+    opacity: 1;
+  }
+  to {
+    inset: calc(-28px * var(--s));
+    opacity: 0;
+  }
+}
+
+/* Calm motion: no fades, and no pulse. */
 .town-shell[data-calm="true"] .town-lens,
 .town-shell[data-calm="true"] .town-lens * {
   transition: none;
 }
 
+.town-shell[data-calm="true"] .town-lens-search-pulse {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .town-lens {
     transition: none;
+  }
+  .town-lens-search-pulse {
+    display: none;
   }
 }
 

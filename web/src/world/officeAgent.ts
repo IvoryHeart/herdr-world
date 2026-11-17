@@ -1,3 +1,6 @@
+import { viewOnlyMessage } from "./viewOnly";
+import { coreSharedOf } from "./coreShared";
+import { isCoreResourceNode } from "./worldObject";
 import type {
   OfficeAgent,
   OfficeAgentDestination,
@@ -46,8 +49,30 @@ export function projectAgent(
           : "bar",
     stale: leaf.stale,
     canOpenInSpaces: leaf.capabilities.openSpaces,
+    ...(leaf.pane.runtime === "herdr-core" && isCoreResourceNode(leaf)
+      ? { coreChat: true }
+      : {}),
+    ...(leaf.viewOnly
+      ? {
+          viewOnly: {
+            reason: leaf.viewOnly,
+            message: viewOnlyMessage(leaf),
+            watch: Boolean(leaf.watch),
+          },
+        }
+      : {}),
+    ...coreSharedField(leaf),
     characterIndex: stableNumber(leaf.id) % 12,
   };
+}
+
+function coreSharedField(leaf: WorldLeafObject) {
+  const coreShared = coreSharedOf(
+    leaf.connectionId,
+    leaf.generation,
+    leaf.pane,
+  );
+  return coreShared ? { coreShared } : {};
 }
 
 export function singleNamedAgentLabelInTab(

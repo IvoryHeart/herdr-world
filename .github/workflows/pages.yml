@@ -38,6 +38,8 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
             - name: Verify live Herdr World installer
               run: |
                   set -eu
@@ -53,7 +55,7 @@ jobs:
               with:
                   enablement: true
             - name: Test tutorial rendering, site references and the film
-              run: bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts
+              run: bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts
             - name: Build landing page and tutorial
               run: bun run build:site
             # The film's video is generated, not committed: render it from the

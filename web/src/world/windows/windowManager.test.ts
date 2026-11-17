@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   createWindowManager,
+  DOCKED_WINDOW_WIDTH,
+  fitDock,
   reconcileWindows,
   reduceWindowManager,
   windowGeometry,
@@ -221,6 +223,99 @@ describe("edge docks", () => {
   test("the Right half snap still takes half", () => {
     const state = reduceWindowManager(
       docked({ width: 520, upToHalf: true }),
+      { type: "snap", id: "a", target: "right" },
+      stage,
+    );
+    expect(windowGeometry(state, "a", stage)?.width).toBe(596);
+  });
+});
+
+describe("fit snaps", () => {
+  const fit = (
+    side: "left" | "right",
+    size: { width: number; height: number },
+    remembered: number | null = null,
+  ) =>
+    windowGeometry(
+      reduceWindowManager(
+        reconcileWindows(createWindowManager(), inputs, size),
+        { type: "fit", id: "a", side, dock: fitDock(remembered) },
+        size,
+      ),
+      "a",
+      size,
+    );
+
+  test("Fit right and Fit left sit on an edge at the docked width, full height", () => {
+    expect(DOCKED_WINDOW_WIDTH).toBe(520);
+    expect(fit("right", stage)).toEqual({
+      left: 680,
+      top: 0,
+      width: 520,
+      height: 800,
+    });
+    expect(fit("left", stage)).toEqual({
+      left: 0,
+      top: 0,
+      width: 520,
+      height: 800,
+    });
+  });
+
+  test("a default fit takes at most half, and never less than a window's minimum", () => {
+    expect(fit("right", { width: 800, height: 600 })?.width).toBe(396);
+    expect(fit("left", { width: 300, height: 600 })).toEqual({
+      left: 0,
+      top: 0,
+      width: 220,
+      height: 600,
+    });
+    expect(fit("right", { width: 180, height: 600 })).toEqual({
+      left: 0,
+      top: 0,
+      width: 180,
+      height: 600,
+    });
+  });
+
+  test("a fit uses the width a dock was dragged to, on either side", () => {
+    expect(fit("left", stage, 700)).toEqual({
+      left: 0,
+      top: 0,
+      width: 700,
+      height: 800,
+    });
+    expect(fit("right", { width: 600, height: 400 }, 700)?.width).toBe(600);
+  });
+
+  test("a fitted window keeps its inner-edge resize, and Right half stays half", () => {
+    let state = reduceWindowManager(
+      initial(),
+      { type: "fit", id: "a", side: "right" },
+      stage,
+    );
+    expect(state.windows.a?.placement).toEqual({
+      kind: "snap",
+      target: "right",
+      dock: { width: 520, upToHalf: true },
+    });
+    state = reduceWindowManager(
+      state,
+      {
+        type: "place",
+        id: "a",
+        rect: { left: 560, top: 0, width: 640, height: 800 },
+      },
+      stage,
+    );
+    expect(windowGeometry(state, "a", stage)).toEqual({
+      left: 560,
+      top: 0,
+      width: 640,
+      height: 800,
+    });
+    state = reduceWindowManager(
+      state,
       { type: "snap", id: "a", target: "right" },
       stage,
     );

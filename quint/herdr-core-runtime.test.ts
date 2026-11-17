@@ -1,0 +1,600 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mutateImplementation } from "./implementationMutation";
+import type { CoreSubjects } from "./herdr-core-runtime";
+import { validateTrace } from "./traces";
+import { describe, expect, test } from "bun:test";
+import {
+  CoreProtocolFake,
+  coreFaults,
+  replayCore,
+  validateCoreTrace,
+} from "./herdr-core-runtime";
+import { expectObservationMismatch } from "./observations";
+
+function trace(actions: (string | [string, number])[], child = false) {
+  const fake = new CoreProtocolFake();
+  fake.state.child = child;
+  const states = [{ c: structuredClone(fake.state), op: "init", target: 0 }];
+  for (const action of actions) {
+    const [op, target] = typeof action === "string" ? [action, 0] : action;
+    fake.apply(op, target);
+    states.push({ c: structuredClone(fake.state), op, target });
+  }
+  return states;
+}
+
+test("relative deltas and creation survive missed and old callbacks", () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    ["x", 0],
+    ["create", 1],
+    "missed",
+    "receive",
+    "receive",
+  ]);
+  expect(states.at(-1)!.c.mirror.map((t) => [t.x, t.y])).toEqual([
+    [1, 0],
+    [0, 0],
+  ]);
+  expect(replayCore(states).has("missedCut")).toBe(true);
+  const lost = structuredClone(states);
+  lost.at(-1)!.c.mirror[0]!.x = 0;
+  return expectObservationMismatch(() => replayCore(lost), ["core.state"]);
+});
+
+test("stale-after-missed counterexamples may double a bounded source delta", () => {
+  const states = trace([
+    "restart",
+    "connect",
+    "disconnect",
+    "x",
+    "connect",
+    "x",
+    "missed",
+    "receive",
+  ]);
+  // The composed model's seed-42 mutant reapplied the delta after the cut.
+  states.at(-1)!.c.mirror[0]!.x = 3;
+  validateCoreTrace(states);
+  const malformed = structuredClone(states);
+  malformed.at(-1)!.c.source[0]!.x = 3;
+  expect(() => validateCoreTrace(malformed)).toThrow();
+  return expectObservationMismatch(() => replayCore(states), ["core.state"]);
+});
+
+test("queued session delivery is refused after kept replacement", async () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    "capture",
+    "dispatch",
+    "disconnect",
+    "replace",
+    "deliver",
+  ]);
+  expect(replayCore(states).has("queueFenced")).toBe(true);
+  await expectObservationMismatch(
+    () => replayCore(states, true),
+    ["core.state"],
+  );
+});
+
+test("missing foreground refuses dispatch through the production recipient gate", () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    "capture",
+    "loseForeground",
+    "dispatch",
+  ]);
+  replayCore(states);
+  expect(states.at(-1)!.c.attempts).toBe(0);
+});
+
+test("automatic briefs require core idle at execution, including after a queue wait", async () => {
+  for (const idle of [0, 1]) {
+    const states = trace([
+      "connect",
+      "baseline",
+      "capture",
+      "dispatch",
+      ["launchBrief", idle],
+    ]);
+    replayCore(states);
+    expect(states.at(-1)!.c.delivered).toBe(idle);
+    if (!idle) {
+      const broken = structuredClone(states);
+      broken.at(-1)!.c.delivered = 1;
+      await expectObservationMismatch(() => replayCore(broken), ["core.state"]);
+    }
+  }
+});
+
+test("history publication refuses a foreground lost during the read", async () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    "capture",
+    "dispatch",
+    "loseForeground",
+    "complete",
+  ]);
+  expect(states.at(-1)!.c.published).toBe(false);
+  expect(states.at(-1)!.c.uncertain).toBe(true);
+  const broken = structuredClone(states);
+  broken.at(-1)!.c.published = true;
+  await expectObservationMismatch(() => replayCore(broken), ["core.state"]);
+});
+
+test("original leases cannot be replaced by another profile on the same core", () => {
+  for (const retire of [
+    ["switchProfile"],
+    ["restart", "connect", "baseline"],
+  ]) {
+    const states = trace([
+      "connect",
+      "baseline",
+      "capture",
+      ...retire,
+      "dispatch",
+    ]);
+    replayCore(states);
+    expect(states.at(-1)!.c.attempts).toBe(0);
+  }
+});
+
+test("restart accepts a smaller baseline and never replays an uncertain write", () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    "x",
+    "receive",
+    "capture",
+    "dispatch",
+    "restart",
+    "connect",
+    "baseline",
+    "recover",
+  ]);
+  replayCore(states);
+  expect(states.at(-1)!.c).toMatchObject({
+    cursor: 0,
+    attempts: 1,
+    uncertain: true,
+    ready: true,
+  });
+});
+
+test("heartbeat gaps and absent endpoints cannot become actionable", () => {
+  const gap = trace(["connect", "baseline", "x", "drop", "heartbeat"]);
+  expect(replayCore(gap).has("gapRetired")).toBe(true);
+  expect(replayCore(trace(["absent", "connect"])).has("existingOnly")).toBe(
+    true,
+  );
+});
+
+test("all ordering, authority, foreground, worktree, observe, launch-brief and typing faults are registered; malformed traces are errors", () => {
+  expect(new Set(coreFaults).size).toBe(30);
+  expect(() => validateCoreTrace([{ op: "init", c: {}, target: 0 }])).toThrow();
+  const states = trace(["connect", "baseline"]);
+  states[1]!.target = 7;
+  expect(() => replayCore(states)).toThrow();
+});
+
+test("canonical trace admission accepts the registered core design case", () => {
+  const states = trace(["connect", "baseline", "capture", "dispatch"]);
+  expect(() => validateTrace("herdr-core-runtime", states)).not.toThrow();
+});
+
+test("removed terminal addresses cannot be created again", () => {
+  const fake = new CoreProtocolFake(false, 3);
+  fake.apply("connect");
+  fake.apply("baseline");
+  fake.apply("create", 1);
+  fake.apply("remove", 1);
+  expect(() => fake.apply("create", 1)).toThrow();
+});
+
+describe("a kill ends only what was confirmed (M7)", () => {
+  // The authority family: one creation event is allowed.
+  const authority = (states: ReturnType<typeof trace>) =>
+    states.map((state) => ({ ...state, family: "authority" }));
+
+  test("a confirmed child dies with its parent", () => {
+    const states = authority(
+      trace(
+        ["connect", "baseline", ["create", 1], "receive", "plan", "kill"],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      confirmedChild: true,
+      killed: true,
+      ready: false,
+    });
+    expect(states.at(-1)!.c.source.map((t) => t.alive)).toEqual([false, false]);
+    expect(replayCore(states).has("cascadeConfirmed")).toBe(true);
+  });
+
+  test("a child seen after the plan refuses the kill; nothing ends", () => {
+    const states = authority(
+      trace(
+        ["connect", "baseline", "plan", ["create", 1], "receive", "kill"],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      confirmedChild: false,
+      killed: false,
+    });
+    expect(states.at(-1)!.c.source.map((t) => t.alive)).toEqual([true, true]);
+    expect(replayCore(states).has("unconfirmedCascadeRefused")).toBe(true);
+  });
+
+  test("a kept replacement with the same pid is not the confirmed program", async () => {
+    const states = authority(
+      trace(["connect", "baseline", "plan", "replace", "baseline", "kill"]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({ killed: false, ready: true });
+    replayCore(states);
+    const output = await mkdtemp(join(tmpdir(), "core-kill-control-"));
+    try {
+      const mutant = await mutateImplementation(
+        "herdr-core-runtime",
+        "core-kill-pid-only",
+        { root: process.cwd(), output },
+      );
+      const subjects = (await import(mutant)) as CoreSubjects;
+      await expectObservationMismatch(
+        () => replayCore(states, false, 2, subjects),
+        ["core.state"],
+      );
+    } finally {
+      await rm(output, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("a worktree's checkout goes only after its confirmed terminals (P4)", () => {
+  const authority = (states: ReturnType<typeof trace>) =>
+    states.map((state) => ({ ...state, family: "authority" }));
+
+  test("teardown, the confirmed kill, then the checkout", () => {
+    const states = authority(
+      trace(
+        [
+          "connect",
+          "baseline",
+          ["create", 1],
+          "receive",
+          "plan",
+          "teardown",
+          "kill",
+          "baseline",
+          "removeCheckout",
+        ],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      tornDown: true,
+      killed: true,
+      removed: true,
+    });
+    expect(replayCore(states).has("worktreeRemoved")).toBe(true);
+  });
+
+  test("a child seen after the confirmation runs no teardown and removes nothing", () => {
+    const states = authority(
+      trace(
+        ["connect", "baseline", "plan", ["create", 1], "receive", "teardown"],
+        true,
+      ),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      tornDown: false,
+      killed: false,
+      removed: false,
+    });
+    expect(replayCore(states).has("teardownFenced")).toBe(true);
+  });
+
+  test("a reconnect after the kill stops the removal; the checkout stays", () => {
+    const states = authority(
+      trace([
+        "connect",
+        "baseline",
+        "plan",
+        "teardown",
+        "kill",
+        "disconnect",
+        "connect",
+        "baseline",
+        "removeCheckout",
+      ]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({ killed: true, removed: false });
+    replayCore(states);
+    // The model's own mutant would remove it: the replay rejects that.
+    const broken = structuredClone(states);
+    broken.at(-1)!.c.removed = true;
+    return expectObservationMismatch(() => replayCore(broken), ["core.state"]);
+  });
+});
+
+test("a gap on an already observed terminal kills the production gap mutant", async () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    ["x", 0],
+    "drop",
+    ["y", 0],
+    "receive",
+  ]);
+  expect(states.at(-1)!.c.ready).toBe(false);
+  replayCore(states);
+  const output = await mkdtemp(join(tmpdir(), "core-gap-control-"));
+  try {
+    const mutant = await mutateImplementation(
+      "herdr-core-runtime",
+      "core-gap",
+      { root: process.cwd(), output },
+    );
+    const subjects = (await import(mutant)) as CoreSubjects;
+    await expectObservationMismatch(
+      () => replayCore(states, false, 2, subjects),
+      ["core.state"],
+    );
+  } finally {
+    await rm(output, { recursive: true, force: true });
+  }
+});
+
+test("worktree steps retain the planning profile and core epoch", () => {
+  for (const retire of ["switchProfile", "restart"] as const) {
+    const beforeHook = trace([
+      "connect",
+      "baseline",
+      "plan",
+      retire,
+      ...(retire === "restart" ? ["connect", "baseline"] : []),
+      "teardown",
+    ]);
+    expect(beforeHook.at(-1)!.c.tornDown).toBe(false);
+    replayCore(beforeHook.map((state) => ({ ...state, family: "authority" })));
+    const beforeRemove = trace([
+      "connect",
+      "baseline",
+      "plan",
+      "teardown",
+      "kill",
+      retire,
+      "removeCheckout",
+    ]);
+    expect(beforeRemove.at(-1)!.c.removed).toBe(false);
+    replayCore(
+      beforeRemove.map((state) => ({ ...state, family: "authority" })),
+    );
+  }
+});
+
+test("a watch adopts the pane's grid before each paint and follows it to headless", () => {
+  const states = trace([
+    "connect",
+    "baseline",
+    ["pane", 0],
+    ["watch", 1],
+    "frame",
+    "frame",
+    "stall",
+    ["pane", 1],
+    "output",
+    "drain",
+    "frame",
+    "frame",
+    ["pane", 2],
+    "frame",
+    "frame",
+    "viewport",
+  ]);
+  const last = states.at(-1)!.c;
+  expect(last).toMatchObject({
+    grid: 2,
+    shown: 2,
+    misdrawn: false,
+    typed: false,
+  });
+  const witnesses = replayCore(states);
+  for (const name of ["watchAdopted", "stallReleased", "headlessFollowed"])
+    expect(witnesses.has(name)).toBe(true);
+  // Recorded drawing on the wrong grid is caught by the replay.
+  const wrong = structuredClone(states);
+  wrong.at(-3)!.c.shown = 1;
+  return expectObservationMismatch(() => replayCore(wrong), ["core.state"]);
+});
+
+test("an unconfirmed path is refused; an observer alone goes headless", () => {
+  const refused = trace(["connect", "baseline", ["watch", 0]]);
+  expect(refused.at(-1)!.c.watching).toBe(false);
+  expect(replayCore(refused).has("unconfirmedRefused")).toBe(true);
+  const alone = trace(["connect", "baseline", ["watch", 1], "frame", "frame"]);
+  expect(alone.at(-1)!.c).toMatchObject({ grid: 2, shown: 2, misdrawn: false });
+  expect(replayCore(alone).has("observerAlone")).toBe(true);
+});
+
+describe("typing into a watched terminal (typing family)", () => {
+  const typing = (states: ReturnType<typeof trace>) =>
+    states.map((state) => ({ ...state, family: "typing" }));
+  const drain = (n: number) => Array<string>(n).fill("frame");
+
+  test("World's open view holds its size alone without typing; a pane takes it; close gives it back", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["watch", 1],
+        ["hold", 3],
+        "attached",
+        ...drain(3),
+        ["pane", 0],
+        ...drain(2),
+      ]),
+    );
+    const held = states.find((state) => state.op === "attached")!.c;
+    expect(held).toMatchObject({
+      seat: 3,
+      grid: 3,
+      worldLeads: false,
+      sent: 0,
+    });
+    expect(states.at(-1)!.c).toMatchObject({ seat: 3, grid: 0, shown: 0 });
+    const witnesses = replayCore(states);
+    for (const name of ["seatHeld"]) expect(witnesses.has(name)).toBe(true);
+    // A seat recorded as leading the pane is caught by the replay.
+    const wrong = structuredClone(states);
+    wrong.at(-1)!.c.grid = 3;
+    return expectObservationMismatch(() => replayCore(wrong), ["core.state"]);
+  });
+
+  test("a new size swaps the seat with no headless step and no stolen size", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["watch", 1],
+        ["hold", 3],
+        "attached",
+        ["hold", 4],
+        "attached",
+        ...drain(6),
+      ]),
+    );
+    for (const state of states.slice(
+      states.findIndex((x) => x.op === "attached"),
+    ))
+      expect(state.c.grid).not.toBe(2);
+    expect(states.at(-1)!.c).toMatchObject({ seat: 4, grid: 4, shown: 4 });
+    expect(replayCore(states).has("swapped")).toBe(true);
+  });
+
+  test("the first key waits for the seat and goes once; World leads; the pane retakes", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["pane", 0],
+        ["watch", 1],
+        ...drain(2),
+        "key",
+        "key",
+        "reply",
+        "attached",
+        ...drain(2),
+        "paneTouch",
+        ...drain(2),
+      ]),
+    );
+    const sent = states.find((state) => state.op === "attached")!.c;
+    expect(sent).toMatchObject({ seat: 3, sent: 2, waiting: 0, grid: 3 });
+    expect(states.at(-1)!.c).toMatchObject({
+      pressed: 2,
+      sent: 2,
+      refused: 0,
+      grid: 0,
+      shown: 0,
+      stray: false,
+      echo: false,
+    });
+    const witnesses = replayCore(states);
+    for (const name of ["typingLed", "paneRetook"])
+      expect(witnesses.has(name)).toBe(true);
+    // A key recorded as sent twice is caught by the replay.
+    const twice = structuredClone(states);
+    for (const state of twice.slice(
+      twice.findIndex((x) => x.op === "attached"),
+    ))
+      state.c.sent++;
+    return expectObservationMismatch(() => replayCore(twice), ["core.state"]);
+  });
+
+  test("a reply alone never opens a seat", () => {
+    const states = typing(
+      trace(["connect", "baseline", ["watch", 1], ...drain(2), "reply"]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      seat: -1,
+      opening: -1,
+      sent: 0,
+      grid: 2,
+    });
+    const opened = structuredClone(states);
+    opened.at(-1)!.c.opening = 3;
+    return expectObservationMismatch(() => replayCore(opened), ["core.state"]);
+  });
+
+  test("the desktop pane takes its size back; the next key retakes it", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["pane", 0],
+        ["watch", 1],
+        "key",
+        "attached",
+        "paneTouch",
+        "key",
+      ]),
+    );
+    expect(states.at(-2)!.c).toMatchObject({ grid: 0, worldLeads: false });
+    expect(states.at(-1)!.c).toMatchObject({ grid: 3, sent: 2 });
+    replayCore(states);
+  });
+
+  test("a key for a replaced program is refused and ends the watch", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["watch", 1],
+        "key",
+        "attached",
+        "reoccupy",
+        "key",
+      ]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      watching: false,
+      sent: 1,
+      refused: 1,
+      seat: -1,
+      stray: false,
+    });
+    expect(replayCore(states).has("replacementRefused")).toBe(true);
+  });
+
+  test("a refused attach or a lost seat sends nothing more; the next key reopens", () => {
+    const states = typing(
+      trace([
+        "connect",
+        "baseline",
+        ["watch", 1],
+        "key",
+        "attachRefused",
+        "key",
+        "attached",
+        "seatLost",
+      ]),
+    );
+    expect(states.at(-1)!.c).toMatchObject({
+      seat: -1,
+      pressed: 2,
+      sent: 1,
+      refused: 1,
+      grid: 2,
+    });
+    replayCore(states);
+  });
+});

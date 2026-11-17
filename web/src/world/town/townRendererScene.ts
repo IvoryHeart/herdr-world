@@ -201,6 +201,8 @@ export type TownBuildingBake = {
   sprites: TownStaticSprites;
   colorFor: (deskKey: string) => TerminalColor;
   carpetFor: (roomKey: string) => string | undefined;
+  /** Pinned desks: their seats share a rug (townPaint.ts). */
+  pinned: (deskKey: string) => boolean;
   /** Wrap a painted canvas as a texture this building owns. */
   own: (canvas: TownCanvas) => Texture;
   /** The textures `own` made, destroyed with the building. */
@@ -227,6 +229,7 @@ export function bakeTownBuilding(
         chairBack: sprites.chairBack,
         colorFor: bake.colorFor,
         carpetFor: bake.carpetFor,
+        pinned: bake.pinned,
       }),
     ),
   );
@@ -308,6 +311,9 @@ export function bakeTownBuilding(
     pendingCells,
   };
 }
+
+/** The desk pin's head: the pinned rug's cream, never a status colour. */
+const TOWN_PIN_HEAD = 0xe7dcc0;
 
 /** What baking a desk's pod reads besides its cell. */
 export type TownPodBake = {
@@ -412,18 +418,21 @@ export function bakeTownPod(
     );
     for (const slot of slots)
       if (!slot.top) make(sprites.chairBack, X + slot.chairX, Y + 45);
-    // A pinned desk wears a pin on its table's corner.
+    // A pinned desk wears a quiet pin on its table's front-left corner: the
+    // one corner the goal pennant, status marks, nameplate, devices and
+    // papers never use, at any seat count. Never an attention colour; the
+    // rug under the room's pinned seats is the group cue.
     if (bake.pinned) {
-      const px = X + place.x + place.w - 3;
-      const py = Y + 18;
+      const px = X + place.x + 5;
+      const py = Y + 36;
       container.addChild(
         new Graphics()
           .moveTo(px, py)
-          .lineTo(px - 3, py + 6)
-          .stroke({ color: 0x3a3a3a, width: 1 })
-          .circle(px, py, 3)
-          .fill(0xe5534b)
-          .stroke({ color: 0xffffff, width: 1 }),
+          .lineTo(px - 2, py + 5)
+          .stroke({ color: 0x4a4038, width: 1 })
+          .circle(px, py, 2.5)
+          .fill(TOWN_PIN_HEAD)
+          .stroke({ color: 0x5a4c3e, width: 1 }),
       );
     }
     parent.addChild(container);

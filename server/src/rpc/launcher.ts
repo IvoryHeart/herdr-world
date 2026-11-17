@@ -47,7 +47,7 @@ async function dispatchLauncherRpc(
     publishBoardChanged,
     publishWorldInvalidation,
   } = rpc.services;
-  const { herdr, sshHost } = connection;
+  const { tui, sshHost } = connection;
   // The launcher: kinds and skills on this host, and a new agent in a new
   // tab, from a profile or a quick pick of a kind (agent/launch.ts).
   // Installed and logged in, per supported harness, from each harness's own
@@ -69,7 +69,7 @@ async function dispatchLauncherRpc(
     try {
       const p = (params ?? {}) as Record<string, unknown>;
       const result = await openHarnessLogin(
-        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
+        (rpc, rpcParams) => tui.call(rpc, rpcParams, 10_000),
         {
           workspace_id: String(p.workspace_id ?? ""),
           kind: String(p.kind ?? ""),
@@ -109,7 +109,7 @@ async function dispatchLauncherRpc(
       if (profileId && !profile)
         throw new Error("That profile no longer exists.");
       const call = (rpc: string, rpcParams: Record<string, unknown>) =>
-        herdr.call(rpc, rpcParams, 70_000);
+        tui.call(rpc, rpcParams, 70_000);
       const launch = profileLaunch(profile ?? null, {
         kind: String(p.kind ?? ""),
         label: String(p.label ?? "")
@@ -211,7 +211,7 @@ async function dispatchLauncherRpc(
       // A Board note's agent spawned this one: stamp it so World groups them.
       if (result.pane_id && requestIsCurrent())
         await stampLaunchParent(
-          (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
+          (rpc, rpcParams) => tui.call(rpc, rpcParams, 10_000),
           p,
           result.pane_id,
           logger,

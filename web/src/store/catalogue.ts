@@ -9,7 +9,8 @@ import {
   catalogReadyForConnection,
 } from "../store";
 import { jsonDeepEqual } from "./sessions";
-import type { BridgeStatus } from "./types";
+import type { BridgeStatus, State } from "./types";
+import { parseCoreConnections } from "../coreConnections";
 import { scheduleRefresh } from "./refresh";
 import { sharedAcquisitionEnabled } from "./focusedInterest";
 
@@ -98,4 +99,25 @@ export function installCatalogueRefresh(): void {
   bridge.onStatus(reconcile);
   if (typeof document !== "undefined")
     document.addEventListener("visibilitychange", reconcile);
+}
+
+/**
+ * The catalogue's herdr-core profiles without their observation (which changes
+ * on every look and belongs to the Connections page), or undefined when they
+ * are unchanged, so host lists keep their reference and do not re-render.
+ */
+export function changedCoreHosts(
+  previous: State["coreConnections"],
+  catalogue: unknown,
+): State["coreConnections"] {
+  const value = (catalogue as { core_connections?: unknown } | null)
+    ?.core_connections;
+  // A reply without the field (an older service) says nothing about core hosts.
+  if (value === undefined) return undefined;
+  const next = parseCoreConnections(value).map((connection) => {
+    const profile: Partial<typeof connection> = { ...connection };
+    delete profile.observation;
+    return profile as NonNullable<State["coreConnections"]>[number];
+  });
+  return previous && jsonDeepEqual(previous, next) ? undefined : next;
 }

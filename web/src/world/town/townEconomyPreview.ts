@@ -41,6 +41,30 @@ export async function townEconomyPreview(
   ];
   const first = owners[0];
   if (!first) return snapshot;
+  if (mode === "claude-tap")
+    return {
+      ...snapshot,
+      limits: [
+        ...snapshot.limits.filter((limit) => limit.harness !== "claude"),
+        ...owners.map((owner) => ({
+          connection_id: owner.connection_id,
+          connection_generation: owner.connection_generation,
+          harness: "claude" as const,
+          state: "available" as const,
+          reason: null,
+          source: "claude-status-line" as const,
+          observed_at: snapshot.observed_at,
+          reached: null,
+          windows: [
+            {
+              window_minutes: 300,
+              used_percent: 42,
+              resets_at: snapshot.observed_at + 3_600_000,
+            },
+          ],
+        })),
+      ],
+    };
   const second = owners[1] ?? first;
   const observedAt =
     mode === "midnight"

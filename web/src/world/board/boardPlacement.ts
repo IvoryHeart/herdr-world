@@ -1,10 +1,13 @@
 import type { BoardModel } from "./boardModel";
+import { shelfKeys, shelfOffsets } from "./boardPinFirst";
 
 /**
  * Where Board's cards sit. A workspace keeps an offset from its host's anchor
  * and a tab an offset from its workspace, so moving a workspace carries its
- * tabs. A pinned card holds an absolute board position instead. Placement is
- * pure and never depends on zoom: it uses each card's normal size.
+ * tabs. A pinned tab card takes its workspace's first places, on a shelf
+ * above it (boardPinFirst.ts); a pinned workspace card holds an absolute
+ * board position. Placement is pure and never depends on zoom: it uses each
+ * card's normal size.
  */
 
 export type Point = { x: number; y: number };
@@ -165,8 +168,27 @@ export function freeSpots(
 export type SizeOf = (key: string, kind: "workspace" | "tab") => Size;
 const defaultSizeOf: SizeOf = (_key, kind) => DEFAULT_SIZE[kind];
 
-/** Absolute positions of every card the model admits. */
-export function positions(model: BoardModel, layout: BoardLayout) {
+/** A workspace's pinned tabs' offsets from its card (boardPinFirst.ts). */
+export const shelfOf = (
+  space: { key: string; tabKeys: readonly string[] },
+  layout: BoardLayout,
+  sizeOf: SizeOf = defaultSizeOf,
+) =>
+  shelfOffsets(
+    shelfKeys(space.tabKeys, layout.pinned),
+    sizeOf(space.key, "workspace"),
+    (key) => sizeOf(key, "tab"),
+  );
+
+/**
+ * Absolute positions of every card the model admits; `sizeOf` sizes the
+ * pinned shelves (normal sizes by default).
+ */
+export function positions(
+  model: BoardModel,
+  layout: BoardLayout,
+  sizeOf: SizeOf = defaultSizeOf,
+) {
   const out = new Map<string, Point>();
   for (const host of model.hosts) {
     const anchor = layout.anchors.get(host.key) ?? { x: 0, y: 0 };
@@ -179,15 +201,11 @@ export function positions(model: BoardModel, layout: BoardLayout) {
         y: anchor.y + offset.y,
       };
       out.set(workspaceKey, at);
+      const shelf = shelfOf(space, layout, sizeOf);
       for (const tabKey of space.tabKeys) {
-        const tabOffset = layout.offsets.get(tabKey) ?? { x: 0, y: 0 };
-        out.set(
-          tabKey,
-          layout.pinned.get(tabKey) ?? {
-            x: at.x + tabOffset.x,
-            y: at.y + tabOffset.y,
-          },
-        );
+        const tabOffset = shelf.get(tabKey) ??
+          layout.offsets.get(tabKey) ?? { x: 0, y: 0 };
+        out.set(tabKey, { x: at.x + tabOffset.x, y: at.y + tabOffset.y });
       }
     }
   }
@@ -257,7 +275,7 @@ export function placeNew(
     }
   }
   if (options.skipTabs) return layout;
-  const at = positions(model, layout);
+  const at = positions(model, layout, sizeOf);
   const taken = new RectIndex();
   for (const [key, point] of at) {
     const placed = layout.offsets.has(key) || layout.pinned.has(key);
@@ -294,7 +312,7 @@ function hostExtent(
 ) {
   let extent = 0;
   let placedAny = false;
-  const at = positions(model, layout);
+  const at = positions(model, layout, sizeOf);
   for (const host of model.hosts) {
     if (!layout.anchors.has(host.key)) continue;
     placedAny = true;
@@ -316,7 +334,7 @@ function hostExtent(
 
 /**
  * Tidy one workspace's tabs (when `workspaceKey` is given) or the whole board.
- * Pinned cards stay where they are and are avoided. Returns a new layout; the
+ * Pinned cards keep their places (shelves included) and are avoided. Returns a new layout; the
  * caller keeps the previous one for Undo.
  */
 export function tidy(
@@ -332,7 +350,7 @@ export function tidy(
   const layout = cloneLayout(previous);
   for (const key of space.tabKeys)
     if (!layout.pinned.has(key)) layout.offsets.delete(key);
-  const at = positions(model, layout);
+  const at = positions(model, layout, sizeOf);
   const center = at.get(space.key)!;
   const own = new Set(space.tabKeys.filter((key) => !layout.pinned.has(key)));
   const taken: Rect[] = [];
@@ -358,7 +376,8 @@ export function tidy(
  * The whole board, rebuilt from measured sizes: each workspace's tabs are
  * laid out around it, the clusters are packed into columns and rows by their
  * real bounds, and each host starts past the previous host's real extent, so
- * no two cards overlap. Pinned cards keep their places and are avoided.
+ * no two cards overlap. Pinned workspace cards keep their places
+ * and are avoided; pinned tab cards sit on their workspace's shelf.
  */
 function tidyBoard(
   model: BoardModel,
@@ -368,12 +387,22 @@ function tidyBoard(
 ): BoardLayout {
   const layout = emptyLayout();
   for (const [key, point] of previous.pinned) layout.pinned.set(key, point);
-  const pinnedRects = [...layout.pinned].map(([key, point]) =>
-    rectAt(
-      sizeOf(key, model.workspaceByKey.has(key) ? "workspace" : "tab"),
-      point,
-    ),
-  );
+  // Pinned workspace cards stay, with their shelves; pinned tab cards of a
+  // workspace that moves go with it.
+  const pinnedRects = [...layout.pinned].flatMap(([key, point]) => {
+    const space = model.workspaceByKey.get(key);
+    if (!space)
+      return model.tabByKey.has(key) ? [] : [rectAt(sizeOf(key, "tab"), point)];
+    return [
+      rectAt(sizeOf(key, "workspace"), point),
+      ...[...shelfOf(space, layout, sizeOf)].map(([tabKey, offset]) =>
+        rectAt(sizeOf(tabKey, "tab"), {
+          x: point.x + offset.x,
+          y: point.y + offset.y,
+        }),
+      ),
+    ];
+  });
   let cursor = 0;
   for (const host of model.hosts) {
     // Each workspace's cluster, around its own origin.
@@ -381,11 +410,20 @@ function tidyBoard(
       const space = model.workspaceByKey.get(key);
       if (!space || layout.pinned.has(key)) return [];
       const own = rectAt(sizeOf(key, "workspace"), { x: 0, y: 0 });
+      const shelf = [...shelfOf(space, layout, sizeOf)].map(([tabKey, at]) =>
+        rectAt(sizeOf(tabKey, "tab"), at),
+      );
       const items = space.tabKeys
         .filter((tabKey) => !layout.pinned.has(tabKey))
         .map((tabKey) => ({ key: tabKey, size: sizeOf(tabKey, "tab") }));
-      const spots = freeSpots({ x: 0, y: 0 }, items, [own]);
+      const spots = freeSpots({ x: 0, y: 0 }, items, [own, ...shelf]);
       const box = { ...own };
+      for (const r of shelf) {
+        box.x0 = Math.min(box.x0, r.x0);
+        box.y0 = Math.min(box.y0, r.y0);
+        box.x1 = Math.max(box.x1, r.x1);
+        box.y1 = Math.max(box.y1, r.y1);
+      }
       for (const item of items) {
         const r = rectAt(item.size, spots.get(item.key)!);
         box.x0 = Math.min(box.x0, r.x0);
@@ -431,13 +469,10 @@ function tidyBoard(
   }
   // Clusters that landed on a pinned card move clear of it, as one piece.
   if (pinnedRects.length) {
-    const at = positions(model, layout);
+    const at = positions(model, layout, sizeOf);
     for (const space of model.workspaces) {
       if (layout.pinned.has(space.key)) continue;
-      const keys = [
-        space.key,
-        ...space.tabKeys.filter((k) => !layout.pinned.has(k)),
-      ];
+      const keys = [space.key, ...space.tabKeys];
       const hits = () =>
         keys.some((key) => {
           const point = at.get(key);
@@ -477,4 +512,50 @@ export function clearSpots(
     occupied.push(rectAt(item.size, spot));
   }
   return out;
+}
+
+/**
+ * Give a workspace's pinned cards its first places: after its pins change,
+ * an unpinned tab card on its shelf moves to the nearest free spot, and a
+ * just-unpinned card (no offset) takes free space around its workspace.
+ */
+export function makeShelfRoom(
+  model: BoardModel,
+  previous: BoardLayout,
+  workspaceKey: string,
+  options: { phone?: boolean; sizeOf?: SizeOf } = {},
+): BoardLayout {
+  const sizeOf = options.sizeOf ?? defaultSizeOf;
+  const space = model.workspaceByKey.get(workspaceKey);
+  if (!space) return previous;
+  let layout = placeNew(model, previous, options);
+  const at = positions(model, layout, sizeOf);
+  const shelf = [...shelfOf(space, layout, sizeOf).keys()].map((key) =>
+    rectAt(sizeOf(key, "tab"), at.get(key)!),
+  );
+  if (!shelf.length) return layout;
+  const items: { key: string; size: Size; at: Point }[] = [];
+  const taken: Rect[] = [];
+  for (const [key, point] of at) {
+    const tab = model.tabByKey.has(key);
+    const size = sizeOf(key, tab ? "tab" : "workspace");
+    const rect = rectAt(size, point);
+    if (
+      tab &&
+      !layout.pinned.has(key) &&
+      shelf.some((other) => overlaps(rect, other))
+    )
+      items.push({ key, size, at: point });
+    else taken.push(rect);
+  }
+  if (!items.length) return layout;
+  layout = cloneLayout(layout);
+  const spots = clearSpots(items, taken);
+  for (const { key } of items) {
+    const owner = at.get(model.tabByKey.get(key)!.workspaceKey);
+    const spot = spots.get(key)!;
+    if (owner)
+      layout.offsets.set(key, { x: spot.x - owner.x, y: spot.y - owner.y });
+  }
+  return layout;
 }

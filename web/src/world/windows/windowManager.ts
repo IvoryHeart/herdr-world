@@ -28,6 +28,19 @@ export type WindowInput = {
  * of a narrow work area; a width the user dragged to is kept as it is.
  */
 export type SnapDock = { width: number; upToHalf?: boolean };
+/** The side a window fits to at its normal docked width ("Fit right"). */
+export type FitSide = "left" | "right";
+/** A window's normal docked width: Town's Chat dock, and every "Fit" snap. */
+export const DOCKED_WINDOW_WIDTH = 520;
+/**
+ * The dock a fitted window uses: the width a docked window was last dragged
+ * to, or {@link DOCKED_WINDOW_WIDTH} at most half the work area.
+ */
+export function fitDock(rememberedWidth: number | null): SnapDock {
+  return rememberedWidth
+    ? { width: rememberedWidth }
+    : { width: DOCKED_WINDOW_WIDTH, upToHalf: true };
+}
 type Placement =
   | { kind: "floating"; rect: Rect; canvas?: Size }
   | { kind: "snap"; target: SnapTarget; dock?: SnapDock }
@@ -75,6 +88,7 @@ export type WindowCommand =
     }
   | { type: "place"; id: string; rect: Rect }
   | { type: "snap"; id: string; target: SnapTarget }
+  | { type: "fit"; id: string; side: FitSide; dock?: SnapDock }
   | {
       type: "arrange";
       preset: TerminalWindowArrangementPreset;
@@ -545,11 +559,18 @@ export function reduceWindowManager(
       true,
     );
   }
-  if (action.type === "snap")
+  if (action.type === "snap" || action.type === "fit")
     return focus(
       {
         ...update(state, action.id, {
-          placement: { kind: "snap", target: action.target },
+          placement:
+            action.type === "fit"
+              ? {
+                  kind: "snap",
+                  target: action.side,
+                  dock: action.dock ?? fitDock(null),
+                }
+              : { kind: "snap", target: action.target },
           maximized: false,
         }),
         focusMode: false,

@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { createRpcDispatcher } from "../service/rpc-dispatch";
@@ -17,7 +18,7 @@ function setup() {
   const runtime = {
     remotePlatform: "linux",
     sshHost: () => undefined,
-    herdr: {
+    ...herdrRuntimeFixture({
       call: async (
         method: string,
         _params: unknown,
@@ -30,7 +31,7 @@ function setup() {
         if (rejectAfterSend) throw new Error("acknowledgement lost");
         return { ok: true };
       },
-    },
+    }),
   };
   const services = {
     clients,

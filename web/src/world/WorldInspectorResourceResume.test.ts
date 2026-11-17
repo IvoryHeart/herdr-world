@@ -258,6 +258,10 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
     };
     const rows = () =>
       [...target.querySelectorAll(".file-row")].map((row) => row.textContent);
+    const worktreeViewsHeld = () =>
+      [".inspector-files-resource", ".inspector-changes-resource"].map(
+        (selector) => target.querySelector(selector)?.hasAttribute("inert"),
+      );
     const renderState = async () => {
       await act(async () => root.render(createElement(View, { ...props })));
       await settle();
@@ -301,11 +305,14 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
       expect(rows()).toEqual(originalRows);
       expect(target.querySelector(".diff-tree-file")).toBe(diffRow);
       expect(target.querySelector(".file-explorer-side")).toBe(explorer);
+      // Files and Changes are held until the worktree is read again; the
+      // rest of the Inspector (Chat, Terminal) is not (#837).
+      expect(worktreeViewsHeld()).toEqual([true, true]);
       expect(
         target
           .querySelector(".workspace-inspector-body")
           ?.hasAttribute("inert"),
-      ).toBe(true);
+      ).toBe(false);
       expect(listCalls).toBe(callsBefore);
       returningList = Promise.withResolvers<unknown>();
       await act(async () => {
@@ -314,11 +321,7 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
       });
       await settle();
       expect(rows()).toEqual(originalRows);
-      expect(
-        target
-          .querySelector(".workspace-inspector-body")
-          ?.hasAttribute("inert"),
-      ).toBe(false);
+      expect(worktreeViewsHeld()).toEqual([false, false]);
       candidate = "replacement";
       revision = "r2";
       await act(async () => {

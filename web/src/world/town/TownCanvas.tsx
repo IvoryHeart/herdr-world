@@ -68,7 +68,7 @@ import type { TownTarget } from "./townTargets";
 import type { TerminalColors } from "../terminalColor";
 import type { Relation } from "../../../../shared/relations";
 import type { TerminalPlace } from "../relations";
-import { placeDeskPin, type DeskPins } from "../useDeskPins";
+import type { DeskPins } from "../useDeskPins";
 import { useWorldSources } from "../worldSources";
 import {
   NO_FOLDED_ACTIVITY,
@@ -279,8 +279,7 @@ export function TownCanvas({
   useLayoutEffect(() => {
     captureHolding.current = semantics.holding;
   });
-  const { model, placed, layout, teams, targets, deskBadges, blockedSince } =
-    semantics;
+  const { model, layout, teams, targets, deskBadges, blockedSince } = semantics;
   const townBin = useTownBin(model, layout);
   const awayKeys = townBin.away;
   const group = useTownGroupCanvas(rendererRef, hostRef, view, model, awayKeys);
@@ -293,8 +292,6 @@ export function TownCanvas({
       welcoming.size ? new Set([...summonedKeys, ...welcoming]) : summonedKeys,
     [summonedKeys, welcoming],
   );
-  // A desk just pinned keeps the cell it has; save it so it stays there.
-  const deskPinned = model.deskPins;
   const fallbackSummary = useMemo(
     () =>
       givenSummary
@@ -307,14 +304,6 @@ export function TownCanvas({
     [givenSummary, projection, observability],
   );
   const summary = givenSummary ?? fallbackSummary!;
-  useEffect(() => {
-    for (const { pinKey, cell } of scene.pinPlacements(
-      deskPinned,
-      layout,
-      placed,
-    ))
-      void placeDeskPin(pinKey, cell).finally(() => scene.pinPlaced(pinKey));
-  }, [scene, layout, placed, deskPinned]);
   const [hover, setHover] = useState<string | null>(null);
   const ring = useTownCenterRing(
     rendererRef,
@@ -331,13 +320,13 @@ export function TownCanvas({
     targets,
     centerActions,
     shell: shellRef,
-    ringOpen: ring.open,
+    escapeTaken: ring.open || !!search?.search,
   });
   /** A table whose card a touch tap opened; touch has no hover to open it. */
   const [tappedDesk, setTappedDesk] = useState<string | null>(null);
   /** The board a lobby tap brought back at desk level (townInteraction). */
   const [openReception, setOpenReception] = useState<string | null>(null);
-  const searchScene = { model, layout, view, ready, failure, calm };
+  const searchScene = { model, layout, view, ready, failure, calm, lens };
   const searching = useTownCanvasSearch(search, rendererRef, searchScene);
   const stepWants = useTownStepWants(steps, () => latest.current, rendererRef);
   const current = {
@@ -455,7 +444,7 @@ export function TownCanvas({
     // A camera that moved under a still carry (an edge pan, an arrow key)
     // puts something else under it: the target follows what is now drawn.
     if (moved) reaimCarry.current?.();
-    if (moved) searching.countOffscreen();
+    searching.drew(moved);
     const layer = worldRef.current;
     hud.drew(camera, level, latest.current.layout);
     stepWants.want(camera, level);
@@ -841,7 +830,6 @@ export function TownCanvas({
     lens.focus(target.key);
     view.focusTarget(target);
   };
-
   const zoomToRoomKey = (roomKey: string) =>
     view.zoomToRoom(latest.current.layout, roomKey);
   // A request waits for renderer setup and its admitted layout, then runs once.
@@ -880,6 +868,7 @@ export function TownCanvas({
             model={model}
             layout={layout}
             shownRooms={visible.tagRooms}
+            search={searching}
           />
         ) : null}
         <TownCenterSign

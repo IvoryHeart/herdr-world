@@ -140,7 +140,8 @@ export class AgentQuestReads {
     const refused = new Set<string>();
     let asked = 0;
     for (const leaf of leaves) {
-      if (leaf.kind !== "agent") continue;
+      // Quests are read from Herdr agents; herdr-core has none to read.
+      if (leaf.kind !== "agent" || leaf.pane.runtime === "herdr-core") continue;
       if (asked++ >= QUEST_PANE_LIMIT) break;
       if (leaf.status === "working") working = true;
       const key = `${leaf.connectionId}\0${leaf.generation}`;

@@ -8,7 +8,7 @@ import { bridge, type HerdrEventMsg } from "./api";
 import { ConfigMenu } from "./components/ConfigMenu";
 import type { AgentIntegration } from "./components/AgentIntegrationsSettings";
 import { GlobalTooltip } from "./components/GlobalTooltip";
-import { __storeTesting, store } from "./store";
+import { __storeTesting, OperationalContext, store } from "./store";
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -197,6 +197,18 @@ window.confirm = (message) => {
   confirmations.push(String(message));
   return confirmChange;
 };
+// World's own skill rows (world.integration.*) have focused DOM tests.
+let worldIntegrationLists = 0;
+const bridgeCall = bridge.call.bind(bridge);
+bridge.call = ((method: string, ...rest: unknown[]) => {
+  if (method === "world.integration.list") worldIntegrationLists++;
+  return method.startsWith("world.integration.")
+    ? Promise.resolve({ integrations: [] })
+    : bridgeCall(method, ...(rest as []));
+}) as typeof bridge.call;
+// Like the real bridge, a client captures the runtime lease when created; a
+// reconnect drops the lease until World's catalog restores it.
+let runtimeLeaseReady = true;
 bridge.onEvent = (listener) => {
   listeners.add(listener);
   return () => {
@@ -206,11 +218,12 @@ bridge.onEvent = (listener) => {
 bridge.connection = (id) => {
   const connectionId = id ?? active;
   const lease = generation;
+  const leased = runtimeLeaseReady;
   return {
     connectionId,
     generation: lease,
     serverRuntimeGeneration: lease,
-    isCurrent: () => active === connectionId && lease === generation,
+    isCurrent: () => leased && active === connectionId && lease === generation,
     acceptsServerGeneration: (value) => value === lease,
     call: async (method, params) => {
       calls.push({ id: connectionId, method, params });
@@ -265,6 +278,9 @@ bridge.connection = (id) => {
     },
   };
 };
+// A World view wraps the menu in its selection's context, or in an empty one
+// when nothing is selected.
+let worldViewContext: OperationalContext | null = null;
 function Harness() {
   const [theme, setTheme] = useState<"light" | "dark" | "system">("dark");
   const [scale, setScale] = useState(
@@ -282,31 +298,33 @@ function Harness() {
     `calc(90dvh / ${scale / 100})`,
   );
   return (
-    <ConfigMenu
-      onShowShortcuts={() => {}}
-      theme={theme}
-      accentColor="blue"
-      blackBackground={false}
-      onBlackBackgroundChange={() => {}}
-      uiScale={scale}
-      terminalFontName=""
-      onTerminalFontNameChange={() => {}}
-      terminalFontScale={100}
-      onTerminalFontScaleChange={() => {}}
-      zenMode={false}
-      mobileTerminalShortcuts={[[], []]}
-      mobileTerminalSideShortcuts={[]}
-      terminalThemeSelection={{ dark: "default", light: "default" }}
-      customTerminalThemes={[]}
-      onThemeChange={setTheme}
-      onAccentColorChange={() => {}}
-      onUiScaleChange={setScale}
-      onZenModeChange={() => {}}
-      onMobileTerminalShortcutsChange={() => {}}
-      onMobileTerminalSideShortcutsChange={() => {}}
-      onTerminalThemeSelectionChange={() => {}}
-      onCustomTerminalThemesChange={() => {}}
-    />
+    <OperationalContext.Provider value={worldViewContext}>
+      <ConfigMenu
+        onShowShortcuts={() => {}}
+        theme={theme}
+        accentColor="blue"
+        blackBackground={false}
+        onBlackBackgroundChange={() => {}}
+        uiScale={scale}
+        terminalFontName=""
+        onTerminalFontNameChange={() => {}}
+        terminalFontScale={100}
+        onTerminalFontScaleChange={() => {}}
+        zenMode={false}
+        mobileTerminalShortcuts={[[], []]}
+        mobileTerminalSideShortcuts={[]}
+        terminalThemeSelection={{ dark: "default", light: "default" }}
+        customTerminalThemes={[]}
+        onThemeChange={setTheme}
+        onAccentColorChange={() => {}}
+        onUiScaleChange={setScale}
+        onZenModeChange={() => {}}
+        onMobileTerminalShortcutsChange={() => {}}
+        onMobileTerminalSideShortcutsChange={() => {}}
+        onTerminalThemeSelectionChange={() => {}}
+        onCustomTerminalThemesChange={() => {}}
+      />
+    </OperationalContext.Provider>
   );
 }
 let render = () => {};
@@ -1128,8 +1146,11 @@ async function run() {
   check(
     document
       .querySelector('[role="alert"]')!
-      .textContent!.includes("Configuration is not writable"),
-    "integration mutation error was hidden",
+      .textContent!.includes("Configuration is not writable") &&
+      !document
+        .querySelector('[role="alert"]')!
+        .textContent!.includes("update Herdr"),
+    "integration mutation error was hidden or blamed Herdr's version",
   );
   integrationSaveFailure = false;
   const failedMutationCount = mutationCount();
@@ -1446,6 +1467,65 @@ async function run() {
     dialog.scrollWidth <= dialog.clientWidth + 1,
     "integration messages overflow the viewport",
   );
+
+  // Restart World with Integrations open: the socket drops and returns before
+  // World's catalog restores the runtime lease, then the catalog arrives.
+  selectConnection("alpha");
+  await waitFor(
+    () => document.querySelectorAll(".agent-integrations-list li").length === 4,
+  );
+  const restartLists = integrationLists("alpha");
+  const restartWorldLists = worldIntegrationLists;
+  const restart = (status: "disconnected" | "connected", ready: boolean) =>
+    flushSync(() =>
+      __storeTesting.replaceState({
+        ...store.get(),
+        status,
+        catalogueReady: ready,
+      }),
+    );
+  runtimeLeaseReady = false;
+  restart("disconnected", false);
+  restart("connected", false);
+  await settle();
+  check(
+    !document.querySelector('[role="alert"]') &&
+      !!document
+        .querySelector('[role="status"].agent-integrations-status')
+        ?.textContent?.includes("Reconnecting to World"),
+    "a World restart showed an error instead of reconnecting",
+  );
+  runtimeLeaseReady = true;
+  restart("connected", true);
+  await waitFor(
+    () =>
+      document.querySelectorAll(".agent-integrations-list li").length === 4 &&
+      button("Refresh integrations").getAttribute("aria-disabled") === "false",
+  );
+  check(
+    !document.querySelector('[role="alert"]') &&
+      integrationLists("alpha") > restartLists &&
+      worldIntegrationLists > restartWorldLists,
+    "integrations did not reload by themselves after a World restart",
+  );
+  // A lease that never returns offers a plain Reload, never a host or Herdr fix.
+  runtimeLeaseReady = false;
+  restart("disconnected", false);
+  restart("connected", true);
+  await waitFor(() => !!document.querySelector('[role="alert"]'));
+  const stale = document.querySelector('[role="alert"]')!;
+  check(
+    !!stale.querySelector("button")?.textContent?.includes("Reload") &&
+      !/Reconnect it|update Herdr/.test(stale.textContent!),
+    "a stale client did not offer a plain Reload",
+  );
+  runtimeLeaseReady = true;
+  selectConnection("alpha");
+  await waitFor(
+    () =>
+      document.querySelectorAll(".agent-integrations-list li").length === 4 &&
+      !document.querySelector('[role="alert"]'),
+  );
   await key(button("Refresh integrations"), "Escape");
   await settle();
   check(
@@ -1453,6 +1533,46 @@ async function run() {
       document.activeElement === button("Menu"),
     "Escape did not close and restore focus",
   );
+  // Open Configuration from a World view: with nothing selected, and with a
+  // selection on another host at a runtime generation that is not current.
+  // Integrations still loads the active connection it names.
+  for (const context of [
+    { connectionId: "", runtimeGeneration: -1 },
+    { connectionId: "beta", runtimeGeneration: 99 },
+  ]) {
+    worldViewContext = context;
+    flushSync(render);
+    const before = integrationLists("alpha");
+    click("Menu");
+    click("Configuration");
+    await waitFor(() => !!document.querySelector(".configuration-modal"));
+    click("Integrations");
+    await waitFor(
+      () =>
+        document.querySelectorAll(".agent-integrations-list li").length === 4 &&
+        button("Refresh integrations").getAttribute("aria-disabled") ===
+          "false",
+    );
+    check(
+      !document.querySelector('[role="alert"]') &&
+        !/Waiting for Herdr|Reconnecting/.test(
+          document.querySelector(".agent-integrations-settings")!.textContent!,
+        ) &&
+        integrationLists("alpha") === before + 1 &&
+        document
+          .querySelector(".agent-integrations-settings")!
+          .textContent!.includes("Local test"),
+      `Integrations opened from a World view (${JSON.stringify(context)}) did not load the active connection`,
+    );
+    click(
+      document.documentElement.dataset.layout === "mobile"
+        ? "Close Configuration"
+        : "Done",
+    );
+    await waitFor(() => !document.querySelector(".configuration-modal"));
+  }
+  worldViewContext = null;
+  flushSync(render);
   if (mobile) {
     for (const tab of [
       "Appearance",

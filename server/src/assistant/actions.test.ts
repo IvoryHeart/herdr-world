@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterAll, describe, expect, jest, mock, spyOn, test } from "bun:test";
 import {
   mkdirSync,
@@ -256,7 +257,7 @@ function fixture(paneId = "w1:p1") {
     runProcessWithCodeTimeout: (
       ...args: Parameters<typeof processUtils.runProcessWithCodeTimeout>
     ) => processUtils.runProcessWithCodeTimeout(...args),
-    herdr: { call },
+    ...herdrRuntimeFixture({ call }),
     files: { resolveWorkspaceGitRoot },
     worktreeHooks: { readWorktreeHooks, hooksEnabled: async () => true },
     readSettings: async () => settings,

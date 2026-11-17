@@ -51,7 +51,7 @@ export function ReceptionEntry({
       data-agent-key={agent.key}
       data-grouped={grouped || undefined}
       data-owner-question={asking || undefined}
-      disabled={agent.stale || !agent.canOpenInSpaces}
+      disabled={agent.stale || !(agent.canOpenInSpaces || agent.coreChat)}
       aria-label={`${
         asking
           ? `${title}, owner question`

@@ -3,8 +3,14 @@ import type {
   InspectorView,
   WorkspaceInspectorContext,
 } from "../workspaceResource";
-import type { WorldObject, WorldObjectNode } from "./worldObject";
+import {
+  inspectorAdmits,
+  type WorldObject,
+  type WorldObjectNode,
+} from "./worldObject";
 import type { ChatFocusIntent } from "../chatFocus";
+import type { Pane } from "../types";
+import type { WorldRuntimeConnection } from "./runtimeStore";
 
 /** One independently navigable Inspector backed by the shared app runtime. */
 export type WorldInspectorConversation = {
@@ -228,7 +234,7 @@ export function worldInspectorForNode(
 ): WorldInspectorConversation | null {
   if (
     node.kind === "host" ||
-    !node.actionable ||
+    !inspectorAdmits(node) ||
     !availableViews.includes(view)
   ) {
     return null;
@@ -271,6 +277,48 @@ export function worldInspectorForNode(
     ...(awaiting ? { awaitChatSession: true } : {}),
     ...preferences,
   };
+}
+
+/**
+ * The pane a window waiting to open on Chat watches. A herdr-core agent has
+ * no Herdr session, so it is read from World's observation of its core, and
+ * only while that observation is current for the window's generation; any
+ * other agent is read from its Herdr session.
+ */
+export function chatOpeningPane(
+  conversation: Pick<
+    WorldInspectorConversation,
+    | "connectionId"
+    | "runtimeGeneration"
+    | "workspaceId"
+    | "tabId"
+    | "paneId"
+    | "terminalId"
+    | "context"
+  >,
+  herdrPanes: readonly Pane[],
+  connections: readonly WorldRuntimeConnection[],
+): Pane | undefined {
+  const core = connections.find(
+    (connection) =>
+      connection.connectionId === conversation.connectionId &&
+      connection.runtime === "herdr-core",
+  );
+  const panes = core
+    ? core.state === "ready" &&
+      !core.stale &&
+      core.generation === conversation.runtimeGeneration
+      ? (core.snapshot?.panes ?? [])
+      : []
+    : herdrPanes;
+  return panes.find(
+    (pane) =>
+      pane.workspace_id === conversation.workspaceId &&
+      pane.tab_id === conversation.tabId &&
+      pane.pane_id === conversation.paneId &&
+      pane.terminal_id === conversation.terminalId &&
+      pane.agent === conversation.context.agent,
+  );
 }
 
 export function upsertWorldFloatingTerminal(

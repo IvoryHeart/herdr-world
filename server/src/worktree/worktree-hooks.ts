@@ -1,3 +1,4 @@
+import type { HostResources } from "../adapters/runtime-ports";
 import { lstat, readFile } from "node:fs/promises";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import { workspaceRepoSettingsKey } from "../config/gui-settings";
@@ -65,9 +66,7 @@ export class WorktreeHookConfigError extends Error {
 
 export function createWorktreeHookRunner(args: {
   connectionId?: string;
-  herdr: {
-    call(method: string, params?: Record<string, unknown>): Promise<any>;
-  };
+  resources: HostResources;
   sshHost: () => string | undefined;
   runProcess: RunProcess;
   runProcessWithCode: RunProcessWithCode;
@@ -275,7 +274,7 @@ export function createWorktreeHookRunner(args: {
   } | null> {
     const workspaceId = String(params.workspace_id ?? "");
     if (!workspaceId) return null;
-    const workspaceResult = await args.herdr.call("workspace.get", {
+    const workspaceResult = await args.resources.getWorkspace({
       workspace_id: workspaceId,
     });
     const workspace = workspaceResult?.workspace;
@@ -328,8 +327,8 @@ export function createWorktreeHookRunner(args: {
   ): Promise<any | null> {
     const workspaceId = String(params.workspace_id ?? "");
     if (!workspaceId) return null;
-    const result = await args.herdr
-      .call("workspace.get", { workspace_id: workspaceId })
+    const result = await args.resources
+      .getWorkspace({ workspace_id: workspaceId })
       .catch(() => null);
     return result?.workspace ?? null;
   }
@@ -344,8 +343,8 @@ export function createWorktreeHookRunner(args: {
       result?.worktree?.workspace_id ??
       result?.workspace?.workspace_id;
     if (workspaceId) {
-      const workspaceResult = await args.herdr
-        .call("workspace.get", { workspace_id: workspaceId })
+      const workspaceResult = await args.resources
+        .getWorkspace({ workspace_id: workspaceId })
         .catch(() => null);
       if (workspaceResult?.workspace) return workspaceResult.workspace;
     }
@@ -355,9 +354,7 @@ export function createWorktreeHookRunner(args: {
       result?.checkout_path ??
       result?.path;
     if (typeof checkoutPath === "string" && checkoutPath) {
-      const list = await args.herdr
-        .call("workspace.list", {})
-        .catch(() => null);
+      const list = await args.resources.listWorkspaces({}).catch(() => null);
       return (
         (list?.workspaces ?? []).find(
           (workspace: any) => workspaceCheckoutPath(workspace) === checkoutPath,

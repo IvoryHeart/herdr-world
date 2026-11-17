@@ -5,7 +5,11 @@ export type ShortcutDescription = {
   group: string;
 };
 const descriptions: [ShortcutId, string, string][] = [
-  ["command.menu", "Open or close the command menu", "Global"],
+  [
+    "command.menu",
+    "Open or close the command menu: find anything in World and act on it",
+    "Global",
+  ],
   ["shortcuts.show", "Show the shortcut cheat sheet on desktop", "Global"],
   ["sidebar.toggle", "Toggle the desktop sidebar", "Global"],
   ["inspector.toggle", "Toggle the Workspace Inspector", "Global"],
@@ -41,6 +45,16 @@ const descriptions: [ShortcutId, string, string][] = [
   ["arrangement.rows", "Arrange windows: Rows", "Window arrangements"],
   ["arrangement.grid", "Arrange windows: Grid", "Window arrangements"],
   ["arrangement.restore", "Restore window positions", "Window arrangements"],
+  [
+    "window.fitRight",
+    "Fit the active window to the right edge",
+    "Window arrangements",
+  ],
+  [
+    "window.fitLeft",
+    "Fit the active window to the left edge",
+    "Window arrangements",
+  ],
   ...SHORTCUT_NUMBERS.map((n): [ShortcutId, string, string] => [
     `tab.${n}`,
     `Switch to tab ${n}`,

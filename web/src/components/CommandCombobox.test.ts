@@ -10,6 +10,10 @@ import {
   normalizeSearchText,
   runCommandNumberShortcut,
 } from "./CommandCombobox";
+import {
+  offeredArrangementChoices,
+  type WindowArrangementControl,
+} from "./WindowArrangementMenu";
 
 describe("command combobox search helpers", () => {
   test("normalizes punctuation and spacing", () => {
@@ -158,5 +162,26 @@ describe("command combobox search helpers", () => {
     expect(runs).toEqual(["second"]);
     expect(preventDefaultCalls).toBe(1);
     expect(stopPropagationCalls).toBe(1);
+  });
+});
+
+describe("arrangement actions", () => {
+  const control = (hidden?: WindowArrangementControl["hidden"]) => ({
+    activePreset: null,
+    disabledReasons: {},
+    hidden,
+    onSelect: () => {},
+  });
+
+  test("phone layouts leave Fit right and Fit left out of Actions", () => {
+    const desktop = offeredArrangementChoices(control()).map((c) => c.label);
+    expect(desktop).toContain("Fit right");
+    expect(desktop).toContain("Fit left");
+    const phone = offeredArrangementChoices(
+      control(["fit-right", "fit-left"]),
+    ).map((c) => c.label);
+    expect(phone).not.toContain("Fit right");
+    expect(phone).not.toContain("Fit left");
+    expect(phone).toContain("Single");
   });
 });

@@ -287,7 +287,22 @@ function BoardHostLines({ host }: { host: TownSummaryHost }) {
   );
 }
 
-/** A host zone's facts beside its name: counts, expenses and limits. */
+/** A host zone's agent counts, beside its name in the heading. */
+export const BoardZoneCounts = memo(function BoardZoneCounts({
+  host,
+}: {
+  host: TownSummaryHost | undefined;
+}) {
+  if (!host) return null;
+  return (
+    <span className="board-zone-counts">{boardCountsText(host.counts)}</span>
+  );
+});
+
+/**
+ * A host zone's summary under its heading: usage on one line, then each
+ * harness's limits on its own short line (#854).
+ */
 export const BoardZoneFacts = memo(function BoardZoneFacts({
   host,
 }: {
@@ -301,7 +316,6 @@ export const BoardZoneFacts = memo(function BoardZoneFacts({
   const gauges = boardHostGauges(limits, host.connectionId, now);
   return (
     <span className="board-zone-facts">
-      <span>{boardCountsText(host.counts)}</span>
       <span>
         today {boardTotalText(townHostExpenses(today, host.connectionId))} · 7
         days {boardTotalText(townHostExpenses(week, host.connectionId))}

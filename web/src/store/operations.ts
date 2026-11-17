@@ -200,11 +200,13 @@ function movePaneTo(
 }
 
 /** Commands captured by a component's owning runtime, never by sibling focus. */
-export function operationalStore(context: OperationalContext) {
-  const client = bridge.connection(
-    context.connectionId,
-    context.runtimeGeneration,
-  );
+export function operationalStore(
+  context: OperationalContext,
+  resourceClient?: ConnectionClient,
+) {
+  const client =
+    resourceClient ??
+    bridge.connection(context.connectionId, context.runtimeGeneration);
   const lease = {
     connectionId: context.connectionId,
     generation: context.runtimeGeneration,

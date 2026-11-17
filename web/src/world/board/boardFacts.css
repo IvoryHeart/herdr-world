@@ -145,20 +145,31 @@
   font-size: 12px;
 }
 
-/* A host zone's facts, beside its name. */
+/* A host zone's heading and summary: counts beside the name, then usage
+   and each harness's limits on short lines under it (#854). */
+.board-zone-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.board-zone-counts,
 .board-zone-facts {
-  display: inline-flex;
-  gap: 10px;
   color: var(--board-soft);
   font-size: 12px;
   font-weight: 400;
 }
+.board-zone-facts {
+  display: flex;
+  flex-direction: column;
+  padding-left: 30px;
+  line-height: 1.35;
+}
 .board-zone-facts [data-stale] {
   opacity: 0.7;
 }
+.board-far .board-zone-counts,
 .board-far .board-zone-facts {
-  font-size: 30px;
-  gap: 24px;
+  font-size: 24px;
 }
 
 /* A workspace card's usage. */

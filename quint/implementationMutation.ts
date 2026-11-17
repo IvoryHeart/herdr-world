@@ -22,13 +22,53 @@ export type ImplementationFault =
   | "incarnation-reset"
   | "effect-authorization"
   | "effect-generation"
-  | "effect-not-sent";
+  | "effect-not-sent"
+  | "core-gap"
+  | "core-heartbeat"
+  | "core-stale"
+  | "core-missed-cut"
+  | "core-view-retired"
+  | "core-kill-pid-only"
+  | "core-kill-plan-once"
+  | "core-watch-interactive"
+  | "core-watch-unconfirmed"
+  | "core-watch-order"
+  | "core-typing-replay"
+  | "core-seat-resize"
+  | "core-seat-gap"
+  | "seen-forget-look"
+  | "seen-hidden-look"
+  | "seen-stale-look"
+  | "seen-blind-write"
+  | "core-missing-foreground";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
   { root, output }: { root: string; output: string },
 ) {
   const allowed: Partial<Record<Model, readonly ImplementationFault[]>> = {
+    "herdr-core-runtime": [
+      "core-gap",
+      "core-heartbeat",
+      "core-stale",
+      "core-missed-cut",
+      "core-view-retired",
+      "core-kill-pid-only",
+      "core-kill-plan-once",
+      "core-watch-interactive",
+      "core-watch-unconfirmed",
+      "core-watch-order",
+      "core-typing-replay",
+      "core-seat-resize",
+      "core-seat-gap",
+      "core-missing-foreground",
+    ],
+    "herdr-core-seen": [
+      "seen-forget-look",
+      "seen-hidden-look",
+      "seen-stale-look",
+      "seen-blind-write",
+    ],
     "effect-recovery": [
       "primary",
       "effect-authorization",
@@ -61,6 +101,8 @@ export async function mutateImplementation(
     "Unsupported model/fault combination",
   );
   const owners: Record<Model, string> = {
+    "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
+    "herdr-core-seen": "web/src/world/coreShared.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
     "runtime-leases": "server/src/connections/manager.ts",
@@ -79,14 +121,120 @@ export async function mutateImplementation(
   const owner =
     name === "effect-recovery" && fault === "effect-not-sent"
       ? "server/src/storage/effect-transitions.ts"
-      : name === "observation-base" && fault === "incarnation-reset"
-        ? "web/src/world/observationBase.ts"
-        : name === "creation-flow" && fault === "admission-fence"
-          ? "web/src/world/createdTerminalAdmission.ts"
-          : owners[name];
+      : name === "herdr-core-runtime" && fault === "core-view-retired"
+        ? "server/src/herdr-core/topology.ts"
+        : name === "herdr-core-runtime" && fault === "core-missing-foreground"
+          ? "server/src/herdr-core/recipient.ts"
+          : name === "herdr-core-runtime" && fault.startsWith("core-kill-")
+            ? "server/src/herdr-core/kill-plan.ts"
+            : name === "herdr-core-runtime" &&
+                (fault === "core-watch-interactive" ||
+                  fault === "core-watch-unconfirmed")
+              ? "server/src/herdr-core/client.ts"
+              : name === "herdr-core-runtime" && fault === "core-watch-order"
+                ? "web/src/coreWatch.ts"
+                : name === "herdr-core-runtime" &&
+                    (fault.startsWith("core-typing-") ||
+                      fault.startsWith("core-seat-"))
+                  ? "server/src/herdr-core/typing.ts"
+                  : name === "herdr-core-seen" && fault === "seen-blind-write"
+                    ? "server/src/herdr-core/shared-state.ts"
+                    : name === "observation-base" &&
+                        fault === "incarnation-reset"
+                      ? "web/src/world/observationBase.ts"
+                      : name === "creation-flow" && fault === "admission-fence"
+                        ? "web/src/world/createdTerminalAdmission.ts"
+                        : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "effect-recovery") {
+  if (name === "herdr-core-runtime") {
+    const guards: Record<string, [string, string]> = {
+      "core-gap": ["if (seq !== this.cursorValue + 1) {", "if (false) {"],
+      "core-heartbeat": [
+        'if (seq === this.cursorValue) return "alive";',
+        'return "alive";',
+      ],
+      "core-stale": [
+        'if (seq <= this.cursorValue) return "stale";',
+        'if (false) return "stale";',
+      ],
+      "core-missed-cut": [
+        'if (line.method === "missed") {\n      if (seq < this.cursorValue) {',
+        "if (false) {\n      if (seq < this.cursorValue) {",
+      ],
+      // The read model shows a retired mirror as current.
+      "core-view-retired": ["if (!source.actionable)", "if (false)"],
+      // A kept replacement that reuses the pid passes as the confirmed program.
+      "core-kill-pid-only": [
+        "if (was.pid !== ending.pid || (was.occupant ?? null) !== ending.occupant)",
+        "if (was.pid !== ending.pid)",
+      ],
+      "core-missing-foreground": [
+        'return known && foreground === nowForeground ? null : "changed";',
+        'return !known || foreground === nowForeground ? null : "changed";',
+      ],
+      // A child started after the confirmation passes unnamed.
+      "core-kill-plan-once": [
+        "if (!was)\n      return `${ending.name ?? ending.address} would end too, and you did not confirm it.`;",
+        "if (!was) continue;",
+      ],
+      // World attaches as a typing viewer: it would lead core's size.
+      "core-watch-interactive": [
+        "    observe: true,\n    resize_notifications: true,",
+        "    observe: false,\n    resize_notifications: true,",
+      ],
+      // An unconfirmed path is watched anyway: paints at an unknown grid.
+      "core-watch-unconfirmed": [
+        "if (reply.resize_notifications !== true)",
+        "if (false)",
+      ],
+      // The page draws without adopting core's grid first.
+      "core-watch-order": [
+        "        this.surface.resize(cols, rows);",
+        "        void cols;",
+      ],
+      // The key that opened the seat is sent again after the attach.
+      "core-typing-replay": [
+        "    for (const waiting of queue) this.input(waiting);",
+        "    for (const waiting of [...queue.slice(0, 1), ...queue]) this.input(waiting);",
+      ],
+      // A new size goes to the open seat as a RESIZE: core counts it as a
+      // touch, so World takes the size from the app's pane.
+      "core-seat-resize": [
+        "    if (this.opening || sameSize(this.seatSize, size)) return;",
+        "    if (this.opening || sameSize(this.seatSize, size)) return;\n    if (this.seat) {\n      this.seat.resize(size);\n      this.seatSize = { ...size };\n      return;\n    }",
+      ],
+      // The old seat leaves before the new one is answered: core goes
+      // headless (or to the pane) between them.
+      "core-seat-gap": [
+        "    this.opening = { ...size };\n    this.deps.open(size);",
+        "    if (this.seat) {\n      this.leave(this.seat, this.touched);\n      this.seat = null;\n      this.seatSize = null;\n      this.touched = false;\n    }\n    this.opening = { ...size };\n    this.deps.open(size);",
+      ],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "herdr-core-seen") {
+    const guards: Record<string, [string, string]> = {
+      // The browser shares a turn on every update, not once per look.
+      "seen-forget-look": [
+        "if (target.stale || this.looked.get(key) === target.turn) continue;",
+        "if (target.stale) continue;",
+      ],
+      // A hidden or unfocused page still decides.
+      "seen-hidden-look": ["    if (foreground)\n", "    if (true)\n"],
+      // A host that is not current still decides.
+      "seen-stale-look": [
+        "if (target.stale || this.looked.get(key) === target.turn) continue;",
+        "if (this.looked.get(key) === target.turn) continue;",
+      ],
+      // The service writes over a label another client changed meanwhile.
+      "seen-blind-write": ["  if (shared !== expected) return null;\n", ""],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "effect-recovery") {
     if (fault === "effect-authorization") {
       const guard = /await driver\.authorize\((claimed|current)\)/g;
       assert.equal(
@@ -333,9 +481,13 @@ export async function mutateImplementation(
           ? "quint/effect-subjects.ts"
           : name === "creation-flow"
             ? "quint/creation-subjects.ts"
-            : name === "observation-base"
-              ? "quint/observation-subjects.ts"
-              : owner,
+            : name === "herdr-core-runtime"
+              ? "quint/herdr-core-subjects.ts"
+              : name === "herdr-core-seen"
+                ? "quint/herdr-core-seen-subjects.ts"
+                : name === "observation-base"
+                  ? "quint/observation-subjects.ts"
+                  : owner,
       ),
     ],
     target: "bun",

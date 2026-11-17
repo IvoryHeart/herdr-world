@@ -129,6 +129,7 @@ export async function checkTownCenter(
     () => host.querySelector(".town-lens-room") !== null,
     "the lens tinted no room",
   );
+  await checkSearchOverLens(host, check, waitFor);
   legend()!
     .querySelector<HTMLButtonElement>('[aria-label="Leave the lens"]')!
     .click();
@@ -137,5 +138,83 @@ export async function checkTownCenter(
   check(
     host.querySelector(".town-board") !== null,
     "the Town board did not come back",
+  );
+}
+
+/**
+ * A search while a lens is on (#784): its matches are outlined in the lens
+ * layer, over the lens's tints, every room keeps its lens colour, and
+ * Escape on the map ends the search but leaves the lens on.
+ */
+async function checkSearchOverLens(
+  host: HTMLElement,
+  check: (condition: boolean, message: string) => void,
+  waitFor: (condition: () => boolean, message: string) => Promise<void>,
+) {
+  const tints = () =>
+    [...host.querySelectorAll<HTMLElement>(".town-lens-room")].map(
+      (room) => `${room.dataset.mark} ${room.style.cssText}`,
+    );
+  const before = tints();
+  const name = host.querySelector(".town-lens-room-label b")!.textContent!;
+  // Phones keep the search behind its toggle.
+  document
+    .querySelector<HTMLButtonElement>(".world-view-search-toggle")
+    ?.click();
+  await waitFor(
+    () => document.querySelector('input[type="search"]') !== null,
+    "Town has no search box",
+  );
+  const input = document.querySelector<HTMLInputElement>(
+    'input[type="search"]',
+  )!;
+  const type = (value: string) => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  type(name.toLowerCase());
+  const marks = () => [
+    ...host.querySelectorAll<HTMLElement>(
+      ".town-lens > .town-lens-search > .town-lens-search-mark",
+    ),
+  ];
+  await waitFor(
+    () => marks().some((mark) => mark.style.width !== ""),
+    "a search over a lens drew no marks in the lens layer",
+  );
+  check(
+    host.querySelector(".town-lens")!.lastElementChild!.className ===
+      "town-lens-search",
+    "the search's marks are not over the lens's tints",
+  );
+  check(
+    getComputedStyle(marks()[0]!).boxShadow !== "none",
+    "a match over a lens has no outline",
+  );
+  check(
+    JSON.stringify(tints()) === JSON.stringify(before),
+    "a search changed the lens's colours",
+  );
+  // Escape on the map ends the search; the lens stays as it was.
+  host
+    .querySelector<HTMLElement>(".town-canvas-host")!
+    .dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+  await waitFor(
+    () => host.querySelector(".town-lens-search") === null,
+    "Escape on the map did not end the search",
+  );
+  check(input.value === "", "Escape on the map left the query");
+  check(
+    host.querySelector(".town-lens-legend") !== null,
+    "ending the search left the lens",
+  );
+  check(
+    JSON.stringify(tints()) === JSON.stringify(before),
+    "the lens did not come back as it was",
   );
 }

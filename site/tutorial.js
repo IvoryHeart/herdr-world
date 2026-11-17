@@ -86,17 +86,24 @@ checks.forEach((check, index) => {
 });
 updateCheckStatus();
 
-const chapters = [...(article?.querySelectorAll("h2[id]") ?? [])];
+// Mark the chapter and section being read; CSS opens only that chapter's sections.
+const headings = [...(article?.querySelectorAll("h2[id], h3[id]") ?? [])];
 const links = [...document.querySelectorAll(".tutorial-toc a")];
 let scheduled = false;
 const updateChapter = () => {
   scheduled = false;
-  let current = chapters[0];
-  for (const chapter of chapters) {
-    if (chapter.getBoundingClientRect().top <= 100) current = chapter;
+  let chapter;
+  let section;
+  for (const heading of headings) {
+    if (heading.getBoundingClientRect().top > 100) break;
+    if (heading.tagName === "H2") {
+      chapter = heading;
+      section = undefined;
+    } else section = heading;
   }
+  chapter ??= headings.find((heading) => heading.tagName === "H2");
   for (const link of links) {
-    if (link.hash === `#${current?.id}`) {
+    if (link.hash === `#${chapter?.id}` || link.hash === `#${section?.id}`) {
       link.setAttribute("aria-current", "location");
     } else {
       link.removeAttribute("aria-current");

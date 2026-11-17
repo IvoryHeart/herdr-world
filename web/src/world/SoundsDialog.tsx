@@ -51,9 +51,12 @@ const sameKey = (a: TerminalKey | null, leaf: WorldLeafObject) =>
 export function SoundsDialog({
   world,
   onClose,
+  pinned = () => false,
 }: {
   world: WorldObject;
   onClose(): void;
+  /** Whether an agent is pinned: the picker lists pinned ones first. */
+  pinned?: (leaf: WorldLeafObject) => boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayer(true, () => onClose(), { element: () => ref.current });
@@ -64,9 +67,14 @@ export function SoundsDialog({
   const [moving, setMoving] = useState<WorldLeafObject | null>(null);
   const [chosen, setChosen] = useState("");
 
+  // The picker and suggestions have no order of their own: pinned first
+  // (a stable sort keeps the rest in World's order).
   const agents = useMemo(
-    () => world.leaves.filter((leaf) => leaf.kind === "agent"),
-    [world.leaves],
+    () =>
+      world.leaves
+        .filter((leaf) => leaf.kind === "agent")
+        .sort((a, b) => Number(pinned(b)) - Number(pinned(a))),
+    [world.leaves, pinned],
   );
   const holder = document?.town_master ?? null;
   const holderLeaf = agents.find((leaf) => sameKey(holder, leaf)) ?? null;

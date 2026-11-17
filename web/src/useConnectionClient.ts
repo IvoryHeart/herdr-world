@@ -24,15 +24,24 @@ export function useConnectionClient(): ConnectionClient {
   const connectionGeneration = useStoreSelector((s) => s.connectionGeneration);
   const transportStatus = useStoreSelector((s) => s.status);
   const attachEpoch = useStoreSelector((s) => s.terminalAttachEpoch);
+  // A reconnect captures the client at "connected", before the catalog
+  // restores the runtime lease; capture again once the catalog is ready.
+  const catalogueReady = useStoreSelector((s) => s.catalogueReady);
   const connections = useStoreSelector((s) => s.connections);
-  const runtimeGeneration =
-    connections.find((connection) => connection.id === activeConnectionId)
-      ?.generation ?? null;
+  const activeConnection = connections.find(
+    (connection) => connection.id === activeConnectionId,
+  );
+  const runtimeGeneration = activeConnection?.generation ?? null;
+  // The bridge grants a fresh lease when a connection becomes ready again,
+  // possibly with the same generation number.
+  const runtimeState = activeConnection?.state;
   return useMemo(() => {
     // A same-ID runtime replacement must capture a fresh Bridge generation.
     void connectionGeneration;
     void transportStatus;
     void attachEpoch;
+    void catalogueReady;
+    void runtimeState;
     return (
       resourceClient ??
       bridge.connection(
@@ -49,6 +58,8 @@ export function useConnectionClient(): ConnectionClient {
     runtimeGeneration,
     transportStatus,
     attachEpoch,
+    catalogueReady,
+    runtimeState,
   ]);
 }
 

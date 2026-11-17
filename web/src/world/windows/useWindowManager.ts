@@ -1,6 +1,13 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { worldLocalStorage } from "../../browserStorage";
+import {
+  readWindowFitWidth,
+  writeWindowFitWidth,
+} from "../floatingTerminalPreferences";
 import {
   createWindowManager,
+  dockedWidthAfterPlace,
+  fitDock,
   reconcileWindows,
   reduceWindowManager,
   type Size,
@@ -28,8 +35,24 @@ export function useWindowManager(
   // layout effect can race commands issued by those children's layout effects.
   if (state !== scopes[scope] && size.width > 0 && size.height > 0)
     setScopes({ ...scopes, [scope]: state });
-  const dispatch = useCallback((command: WindowCommand) => {
+  const latest = useRef(state);
+  latest.current = state;
+  const dispatch = useCallback((input: WindowCommand) => {
     const { inputs, size, scope, initiallySingle } = current.current;
+    // "Fit right" and "Fit left" use the width a dock was last dragged to,
+    // in any view; resizing a left or right dock from its inner edge
+    // updates it.
+    const command =
+      input.type === "fit" && !input.dock
+        ? { ...input, dock: fitDock(readWindowFitWidth(worldLocalStorage)) }
+        : input;
+    const entry =
+      command.type === "place" ? latest.current.windows[command.id] : null;
+    const docked =
+      entry && command.type === "place"
+        ? dockedWidthAfterPlace(entry, command.rect, size)
+        : null;
+    if (docked !== null) writeWindowFitWidth(worldLocalStorage, docked);
     setScopes((previous) => {
       const before = reconcileWindows(
         previous[scope] ?? {

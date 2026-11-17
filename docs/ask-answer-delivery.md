@@ -1,13 +1,23 @@
 # Delivering saved ask answers
 
 A new `herdr-world ask` from a verified local Linux caller can receive its saved
-answer in the original supported Chat session even without `--wait`. The binding
+answer in the original supported Chat session or herdr-core terminal even
+without `--wait`. The binding
 is captured when the ask is created; legacy and unverified records are never
 backfilled. `herdr-world ask get ID` remains the retrieval path on every platform.
 
 Recording an answer commits its immutable occurrence and one reference-only
 `world.ask.deliver-answer` intent together. The dispatcher waits three seconds,
-then uses Chat's existing guarded input path. An offline original host stays
+then uses Chat's existing guarded input path for TUI agents. For a verified
+core caller, it uses core's own `terminal.send`: no forced input, caller
+parameter or harness side channel. A fresh native terminal read checks the
+original program and foreground immediately before sending. Foreground
+changes refuse delivery; a lost reply remains uncertain and never replays.
+Core's queued-send window after World's check remains upstream Q3.
+Core asker bindings include the mirror's program occupancy: even identical
+PID/argv fields cannot make a restarted program the original asker. A core
+connection reconnect also retires automatic input and CLI-ack authority;
+`ask get` still reads the saved answer without rebinding the replacement. An offline original host stays
 pending; a changed or ended session records not sent. A definite refusal before
 input may wait and retry. Once a send might have happened, recovery is opaque:
 uncertain remains visible and is never automatically repeated.

@@ -38,3 +38,12 @@ export function parseAgentIntegrations(result: unknown): AgentIntegration[] {
     throw new Error("Invalid integration list received from Herdr.");
   return items;
 }
+
+/**
+ * True only when Herdr refused an integration method it does not know, so
+ * updating Herdr is the remedy. Every other failure keeps its own message.
+ */
+export const lacksIntegrationManagement = (message: string) =>
+  /\b(unknown_method|unsupported_method|not_implemented)\b|method[ _]not[ _]found|unknown method|unknown variant `integration\./i.test(
+    message,
+  );

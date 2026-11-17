@@ -69,7 +69,8 @@ export function useConversationRead(
     setConversation(next);
   };
   useEffect(() => {
-    const client = leaf && leafOwner(leaf);
+    // A herdr-core agent's conversation reads through the same handlers.
+    const client = leaf ? leafOwner(leaf) : null;
     if (!leaf || !client || !active || !identity) return;
     let cancelled = false;
     // Only the newest read may answer; an older one can finish later.
