@@ -103,28 +103,35 @@ export async function checkTownIdleDraws(
       renderer.level === "town",
       "Static case must cover animated interiors with roofs",
     );
-    for (let second = 0; second < 3; second += 1) {
-      const before = town().frames;
+    // Drifting atmosphere (clouds by day, fireflies at night) is counted
+    // apart: every other draw is held to zero, and it to its own cap.
+    const drawn = () => town().frames - town().atmosphereFrames;
+    const idle = async (label: string) => {
+      const before = drawn();
+      const drifted = town().atmosphereFrames;
       await clock.advance(1000);
+      const work = {
+        draws: drawn() - before,
+        "atmosphere-draws": town().atmosphereFrames - drifted,
+      };
       failures.push(
-        ...workViolations(
-          { idle: { draws: town().frames - before } },
-          TOWN_STATIC_WORK_CEILINGS,
-          `Town second ${second + 1}`,
-        ),
+        ...workViolations({ idle: work }, TOWN_STATIC_WORK_CEILINGS, label),
       );
-    }
-    await checkTownContextRecovery(canvas, clock, () => town().frames, check);
+      return work;
+    };
+    for (let second = 0; second < 3; second += 1)
+      await idle(`Town second ${second + 1}`);
+    await checkTownContextRecovery(canvas, clock, drawn, check);
     check(
       town().lastError === null,
       `Context recovery draw failed: ${town().lastError}`,
     );
-    const stateBefore = town().frames;
+    const stateBefore = drawn();
     renderer.invalidate("test-state");
     renderer.invalidate("test-state-coalesced");
     await clock.advance(100);
     check(
-      town().frames === stateBefore + 1,
+      drawn() === stateBefore + 1,
       "A sleeping Town must coalesce one state paint",
     );
     // A state change must wake a sleeping scene and retain visible motion.
@@ -164,15 +171,15 @@ export async function checkTownIdleDraws(
     );
     renderer.invalidate("test-cover-again");
     await settle();
-    const covered = town().frames;
-    await clock.advance(1000);
-    failures.push(
-      ...workViolations(
-        { idle: { draws: town().frames - covered } },
-        TOWN_STATIC_WORK_CEILINGS,
-        "Town covered again",
-      ),
+    await idle("Town covered again");
+    // Calm motion stills the atmosphere: nothing at all is drawn.
+    trace = null;
+    renderer.apply(
+      new TownSceneDiff().next(model, layout, { ...state, calm: true }),
     );
+    await settle();
+    const calm = await idle("Town calm");
+    check(calm["atmosphere-draws"] === 0, "Calm Town kept drifting");
   } finally {
     renderer.destroy();
     const frames = window.__HERDR_TOWN_RENDERER__!.frames;
