@@ -21,7 +21,10 @@ for (const fixture of [
   "ShellStyles",
   "StatusBadges",
   "InspectorPaneMap",
+  "../world/town/TownBoard",
 ]) {
+  // A fixture may live beside its component; the page loads its bundle by name.
+  const name = basename(fixture);
   test.skipIf(!chrome)(
     `${fixture} browser layout and interaction regressions`,
     async () => {
@@ -46,7 +49,7 @@ for (const fixture of [
                 ? '<script>Object.defineProperty(crypto,"randomUUID",{value:undefined});Object.defineProperty(crypto,"subtle",{value:undefined});Object.defineProperty(navigator,"clipboard",{value:undefined});</script>'
                 : "";
             return new Response(
-              `<head><link rel="stylesheet" href="/${fixture}.browser.css"></head><body>${limitedApis}<script src="/${fixture}.browser.js"></script></body>`,
+              `<head><link rel="stylesheet" href="/${name}.browser.css"></head><body>${limitedApis}<script src="/${name}.browser.js"></script></body>`,
               { headers: { "Content-Type": "text/html" } },
             );
           }
