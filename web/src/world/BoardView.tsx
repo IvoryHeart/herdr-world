@@ -132,7 +132,10 @@ import {
   useBoardLenses,
 } from "./board/BoardLenses";
 import { BoardControls } from "./board/BoardControls";
-import { boardAppearanceStyle } from "./board/boardAppearance";
+import {
+  boardAppearanceStyle,
+  boardGroundLayers,
+} from "./board/boardAppearance";
 import { useBoardAppearance } from "./board/useBoardAppearance";
 import { nextBoardAttention } from "./board/boardAttention";
 import { BoardStatusSummary } from "./board/BoardStatusSummary";
@@ -1535,9 +1538,7 @@ export default function BoardView({
       board = boardRef.current;
     if (!worldEl || !board) return;
     worldEl.style.transform = `translate(${c.x}px, ${c.y}px) scale(${c.s})`;
-    const grid = 28 * c.s;
-    board.style.backgroundSize = `${grid}px ${grid}px`;
-    board.style.backgroundPosition = `${c.x}px ${c.y}px`;
+    Object.assign(board.style, boardGroundLayers(c.x, c.y, c.s));
     const nowFar = farRef.current ? c.s < OVERVIEW_OUT : c.s < OVERVIEW_IN;
     if (nowFar !== farRef.current) {
       farRef.current = nowFar;

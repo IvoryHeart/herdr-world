@@ -46,6 +46,19 @@ export function boardAppearanceStyle(
   );
 }
 
+/**
+ * The ground's background layers for a camera, in boardAppearance.css's
+ * order: the night glow fills the view once (it does not repeat or follow the
+ * camera); the grid dots tile at the camera's scale and offset.
+ */
+export function boardGroundLayers(x: number, y: number, scale: number) {
+  const grid = 28 * scale;
+  return {
+    backgroundSize: `100% 100%, ${grid}px ${grid}px`,
+    backgroundPosition: `0 0, ${x}px ${y}px`,
+  };
+}
+
 /** The chalk palette an explicit Blackboard keeps. */
 const BLACKBOARD_STATUS: Record<WorldAgentStatus, string> = {
   working: "#7fa7ff",

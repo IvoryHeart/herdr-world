@@ -61,6 +61,8 @@
   background-image:
     var(--board-glow, none),
     radial-gradient(circle, var(--board-grid) 1.2px, transparent 1.4px);
+  /* Sizes and positions per layer come from boardGroundLayers. */
+  background-repeat: no-repeat, repeat;
 }
 :root[data-theme="light"]
   :is(.board:not([data-surface="blackboard"]), .town-work),
