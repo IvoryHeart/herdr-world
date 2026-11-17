@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { TOWN_STATE_COLORS } from "../town/townStateColors";
 import type { WorldAgentStatus } from "../worldObject";
 
 export const BOARD_APPEARANCE_KEY = "herdr-world.board.appearance";
@@ -45,29 +46,38 @@ export function boardAppearanceStyle(
   );
 }
 
+/** The chalk palette an explicit Blackboard keeps. */
+const BLACKBOARD_STATUS: Record<WorldAgentStatus, string> = {
+  working: "#7fa7ff",
+  blocked: "#ffc25a",
+  done: "#6dd29a",
+  idle: "#8e978e",
+  unknown: "#c3a2ff",
+};
+const WHITEBOARD_STATUS: Record<WorldAgentStatus, string> = {
+  working: "#2a6bd4",
+  blocked: "#c47f08",
+  done: "#2a8753",
+  idle: "#8a9189",
+  unknown: "#8656c4",
+};
+
+/**
+ * A status colour before any choice: Whiteboard (or the light theme) has its
+ * own, Blackboard its chalk, and a dark theme Town's night (#906). The same
+ * palettes are in boardAppearance.css.
+ */
 export function defaultBoardStatusColor(
   status: WorldAgentStatus,
   settings: BoardAppearance,
   theme: string | undefined,
 ) {
-  const light =
+  const palette =
     settings.surface === "whiteboard" ||
-    (settings.surface === "theme" && theme === "light");
-  return (
-    light
-      ? {
-          working: "#2a6bd4",
-          blocked: "#c47f08",
-          done: "#2a8753",
-          idle: "#8a9189",
-          unknown: "#8656c4",
-        }
-      : {
-          working: "#7fa7ff",
-          blocked: "#ffc25a",
-          done: "#6dd29a",
-          idle: "#8e978e",
-          unknown: "#c3a2ff",
-        }
-  )[status];
+    (settings.surface === "theme" && theme === "light")
+      ? WHITEBOARD_STATUS
+      : settings.surface === "blackboard"
+        ? BLACKBOARD_STATUS
+        : TOWN_STATE_COLORS;
+  return palette[status];
 }
