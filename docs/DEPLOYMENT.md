@@ -505,7 +505,8 @@ When it runs:
 - **Fresh standalone install**: checks for herdr-core (`hc`/`herdr-core`) and
   Herdr. If either is installed it changes nothing. If neither is, it installs
   herdr-core as above, starts it now and at login, and saves a `core-local`
-  connection so World connects when it starts (an older World says to add it
+  connection as World's default (no Local Herdr profile is saved, so Town
+  shows only the herdr-core building) so World connects when it starts (an older World says to add it
   under **Hosts → Manage connections** instead). Run `herdr-world herdr upgrade`
   later to set up Herdr's harness integrations and plugin, or choose
   **Runtime → Update Herdr integrations**.

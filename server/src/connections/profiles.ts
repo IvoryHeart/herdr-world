@@ -517,12 +517,8 @@ export function validateConnectionRegistry(
   if (!ids.has(defaultConnectionId)) {
     throw new Error("default connection profile does not exist");
   }
-  if (
-    profiles.some(
-      (profile) => profile.id === defaultConnectionId && isCoreProfile(profile),
-    )
-  )
-    throw new Error("the default connection must be a Herdr connection");
+  // A herdr-core default is valid: a computer with only herdr-core has no
+  // Herdr connection to be its default (#935).
   return {
     version: value.version,
     default_connection_id: defaultConnectionId,

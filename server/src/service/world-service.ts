@@ -1,3 +1,4 @@
+import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
 import { createCoreInstall } from "../herdr-core/install";
 import { createSharedTerminalMarks } from "./terminal-mark-service";
@@ -685,6 +686,14 @@ async function compose(
     changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
     createRuntime: runtimeFactoryForProfile,
+    // The setup card's lookup; a ready implicit local server is Herdr (#935).
+    noHerdrTui: () =>
+      findHerdrBinary() === null &&
+      !(
+        connectionManager.has(STARTUP_DEFAULT_CONNECTION_ID) &&
+        connectionManager.status(STARTUP_DEFAULT_CONNECTION_ID).state ===
+          "ready"
+      ),
     retry: {
       schedule: (callback, delayMs) => scheduler.schedule(callback, delayMs),
     },

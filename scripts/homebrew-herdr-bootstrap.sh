@@ -26,10 +26,12 @@ EOF
 }
 
 # Save the core just installed as a World connection, so World connects to it
-# when it starts. World reads core.lock and never starts core itself. An older
-# World, or one already serving, refuses; the person adds it in the UI instead.
+# when it starts. World reads core.lock and never starts core itself. This runs
+# only without the Herdr TUI, so core is the default and World saves no Local
+# Herdr profile. An older World, or one already serving, refuses; the person
+# adds it in the UI instead.
 herdr_core_register() {
-  if "$world" connections add core-local --core --auto-connect --label 'herdr-core on this computer' >/dev/null 2>&1; then
+  if "$world" connections add core-local --core --default --auto-connect --label 'herdr-core on this computer' >/dev/null 2>&1; then
     printf 'World will connect to herdr-core when it starts.\n'
   else
     printf 'If World does not list herdr-core, add it under Hosts > Manage connections.\n'
