@@ -56,7 +56,7 @@ const startup: StartupLocalProfile = {
   auto_connect: false,
 };
 
-function world() {
+function world({ herdrTuiInstalled }: { herdrTuiInstalled?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), "hcw-t-"));
   roots.push(root);
   const tuiManager = new ConnectionManager<ConnectionRuntime>(
@@ -95,8 +95,11 @@ function world() {
       }),
       createRuntime: tuiRuntime,
       retry: { baseDelayMs: 5, maxDelayMs: 20, random: () => 0 },
+      ...(herdrTuiInstalled === undefined
+        ? {}
+        : { noHerdrTui: () => !herdrTuiInstalled }),
     });
-  return { root, service, core, tuiManager };
+  return { root, service, core, tuiManager, store };
 }
 
 async function servedCore(root: string, name = "core") {
@@ -309,9 +312,6 @@ describe("herdr-core connections", () => {
     const w = world();
     const { stateDir } = await servedCore(w.root);
     await w.service.create(coreProfile("c", stateDir));
-    await expect(w.service.setDefault("c")).rejects.toThrow(
-      "must be a Herdr connection",
-    );
     await expect(
       w.service.update("c", {
         id: "c",
@@ -336,6 +336,64 @@ describe("herdr-core connections", () => {
       protocol: 1,
     });
     expect(readdirSync(join(w.root, "core", "run"))).toEqual(["default.sock"]);
+  });
+
+  test("without the Herdr TUI, a first core connection is saved alone and is the default", async () => {
+    const w = world({ herdrTuiInstalled: false });
+    const { stateDir } = await servedCore(w.root);
+    const created = await w.service.create(coreProfile("core-local", stateDir));
+    expect(created.state).toBe("ready");
+    const saved = JSON.parse(
+      readFileSync(join(w.root, "data", "connections.json"), "utf8"),
+    );
+    expect(saved.default_connection_id).toBe("core-local");
+    expect(saved.profiles.map((p: { id: string }) => p.id)).toEqual([
+      "core-local",
+    ]);
+    // No Herdr TUI connection is left behind for Town to show disconnected.
+    expect(w.service.list()).toEqual([]);
+    expect(w.tuiManager.defaultId()).toBe("core-local");
+    // Global status and the startup ping ask for the default runtime: none.
+    expect(w.tuiManager.defaultReadyRuntime()).toBeNull();
+    expect(w.service.coreList().map((item) => item.id)).toEqual(["core-local"]);
+    // A restarted World loads the same registry.
+    expect(
+      loadConnectionProfileBootstrap({
+        store: w.store,
+        startupProfile: startup,
+        explicitStartupOverride: false,
+      }).defaultConnectionId,
+    ).toBe("core-local");
+    // The default is never removed; a Herdr TUI added later sits beside it.
+    await expect(w.service.remove("core-local")).rejects.toThrow(
+      "cannot remove the default connection",
+    );
+    await w.service.create({
+      id: "local",
+      label: "Local",
+      type: "local",
+      control_socket_path: "/synthetic/herdr.sock",
+      client_socket_path: "/synthetic/herdr-client.sock",
+      auto_connect: false,
+    });
+    await w.service.setDefault("local");
+    expect(w.tuiManager.defaultId()).toBe("local");
+    await w.service.setDefault("core-local");
+    expect(w.tuiManager.defaultId()).toBe("core-local");
+  });
+
+  test("with the Herdr TUI, a first core connection keeps the local Herdr default", async () => {
+    const w = world({ herdrTuiInstalled: true });
+    const { stateDir } = await servedCore(w.root);
+    await w.service.create(coreProfile("core-local", stateDir));
+    const saved = JSON.parse(
+      readFileSync(join(w.root, "data", "connections.json"), "utf8"),
+    );
+    expect(saved.default_connection_id).toBe("local");
+    expect(saved.profiles.map((p: { id: string }) => p.id)).toEqual([
+      "local",
+      "core-local",
+    ]);
   });
 
   test("the preview fixture: start, kill, start again, remove", async () => {

@@ -5,6 +5,8 @@ import { HerdrSetupCard } from "./HerdrSetupCard";
 import { CoreConnectionCards } from "./CoreConnections";
 import { parseCoreConnections } from "../coreConnections";
 import { TownHerdrSetupOffer } from "../world/WorldStatus";
+import { TownMasterFigure } from "../world/TownMasterCard";
+import { TownMasterGreetingHost } from "../world/TownMasterGreetingHost";
 import { buildWorldObject, type WorldObject } from "../world/worldObject";
 import { worldObjectForHosts } from "../world/worldFilters";
 import type { WorldRuntimeConnection } from "../world/runtimeStore";
@@ -91,11 +93,13 @@ bridge.call = (async (method: string, params: Record<string, unknown> = {}) => {
   const lines = ["Reading the herdr-core release list..."];
   if (coreStatusReads < 2)
     return { phase: "installing", version: "0.1.21", lines };
+  // Enough steps for two-digit line numbers.
+  const steps = Array.from({ length: 9 }, (_, n) => `Synthetic step ${n + 2}`);
   return coreOutcome === "done"
     ? {
         phase: "done",
         version: "0.1.21",
-        lines: [...lines, "herdr-core is running."],
+        lines: [...lines, ...steps, "herdr-core is running."],
         connection_id: "core-local",
       }
     : {
@@ -144,6 +148,39 @@ function click(button: HTMLButtonElement) {
 const failures: string[] = [];
 function check(value: unknown, message: string) {
   if (!value) failures.push(message);
+}
+
+/**
+ * Every install log number is whole (#935): the log scrolls, so it clips
+ * its outside markers at its padding edge. Checked on desktop and phones.
+ */
+async function checkLogNumbers(where: string) {
+  for (const width of ["", "390px", "296px"]) {
+    host.style.width = width;
+    await settle();
+    const log = document.querySelector<HTMLElement>("ol.core-install-lines");
+    if (!log) {
+      failures.push(`${where}: no install log`);
+      continue;
+    }
+    const inner = log.getBoundingClientRect().left + log.clientLeft;
+    const probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;white-space:pre;visibility:hidden";
+    document.body.append(probe);
+    [...log.children].forEach((item, index) => {
+      // The marker reads "N. " in the item's own font, ending at its edge.
+      probe.style.font = getComputedStyle(item).font;
+      probe.textContent = `${index + 1}. `;
+      const marker = probe.getBoundingClientRect().width;
+      check(
+        item.getBoundingClientRect().left - marker >= inner - 0.5,
+        `${where} ${width || "desktop"}: log number ${index + 1} is clipped`,
+      );
+    });
+    probe.remove();
+    check(log.children.length >= 10, `${where}: two-digit numbers checked`);
+  }
+  host.style.width = "";
 }
 
 async function run() {
@@ -426,6 +463,82 @@ async function townPlacement() {
         `${size}: scrolls inside itself`,
       );
   }
+
+  // The Town Master's greeting and either setup card never cover each other
+  // (#935): the greeting waits while a card is up and opens once it is gone.
+  stage.style.width = "1280px";
+  stage.style.height = "800px";
+  const figure = document.createElement("div");
+  stage.append(figure);
+  const figureRoot = createRoot(figure);
+  flushSync(() => figureRoot.render(<TownMasterFigure />));
+  const host = document.createElement("div");
+  document.body.append(host);
+  const hostRoot = createRoot(host);
+  const greet = (world: WorldObject) =>
+    flushSync(() =>
+      hostRoot.render(
+        <TownMasterGreetingHost
+          world={world}
+          held={false}
+          windowsOpen={false}
+        />,
+      ),
+    );
+  const greeting = () =>
+    document.querySelector<HTMLElement>(".town-master-greeting");
+  const apart = (a: Element, b: Element) => {
+    const x = a.getBoundingClientRect();
+    const y = b.getBoundingClientRect();
+    return (
+      x.right <= y.left ||
+      y.right <= x.left ||
+      x.bottom <= y.top ||
+      y.bottom <= x.top
+    );
+  };
+  const ready = townWorld({ state: "ready", error: undefined });
+  for (const [cardState, title] of [
+    ["installed", "Bring your workspace online"],
+    ["missing", "Your workspace starts here"],
+  ] as const) {
+    state = cardState;
+    const world = townWorld(failing);
+    key++;
+    show(world);
+    greet(world);
+    await waitFor(
+      () => card()?.querySelector("h2")?.textContent === title,
+      `greeting: the ${cardState} card`,
+    );
+    await settle();
+    const over = greeting();
+    check(
+      !over || apart(over, card()!),
+      `greeting: ${cardState} card and greeting overlap`,
+    );
+    check(!over, `greeting: waits while the ${cardState} card is up`);
+    show(ready);
+    greet(ready);
+    await settle();
+    check(!card(), `greeting: ${cardState} card gone once ready`);
+    check(greeting(), `greeting: opens once the ${cardState} card is gone`);
+  }
+  // A failed default that cannot be set up here (an SSH default, say) shows
+  // no card, so nothing holds the greeting back.
+  allowed = false;
+  const unavailable = townWorld(failing);
+  key++;
+  show(unavailable);
+  greet(unavailable);
+  await settle();
+  await settle();
+  check(!card(), "greeting: no card when setup is unavailable");
+  check(greeting(), "greeting: not held when setup is unavailable");
+  allowed = true;
+  hostRoot.unmount();
+  host.remove();
+  figureRoot.unmount();
   town.unmount();
 }
 
@@ -483,6 +596,7 @@ async function coreFirst() {
       ),
     "core done",
   );
+  await checkLogNumbers("core this computer");
   check(posts === postsBefore, "core: the TUI setup is not used");
   // A failure says what went wrong in plain words and can be retried.
   coreCalls.length = 0;
@@ -577,6 +691,7 @@ async function manageConnections() {
       ),
     "the SSH install finishing",
   );
+  await checkLogNumbers("core SSH host");
   check(
     coreCalls.every(
       (call) =>

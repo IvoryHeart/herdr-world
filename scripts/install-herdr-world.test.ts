@@ -510,7 +510,7 @@ process.exit(await runCli(process.argv.slice(2), context));
   });
 
   const REGISTER =
-    "connections add core-local --core --auto-connect --label herdr-core on this computer";
+    "connections add core-local --core --default --auto-connect --label herdr-core on this computer";
   const coreStarted = (fixture: ReturnType<typeof createInstallerFixture>) =>
     existsSync(fixture.coreLog) &&
     readFileSync(fixture.coreLog, "utf8").includes("core server start");

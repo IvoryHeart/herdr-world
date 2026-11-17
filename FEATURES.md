@@ -118,7 +118,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens over an open window or sheet such as Chat or **Needs you**: on a
     phone it waits until they close; on a wide screen it waits only while one
     lies over the figure or the card's place, so an intent window or Chat
-    docked on the other side does not hold it back. **✕**, Escape, Back or a press outside closes it; tap
+    docked on the other side does not hold it back. It also waits while
+    Town's setup card (**Start Herdr** or **Set up herdr-core**) is up, and
+    opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
     or switch **Menu → Town Master greeting**, to stop it on this browser.
     Your very first visit is greeted too, without a last time.
@@ -664,7 +666,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   before anything in it runs), `~/.local/bin/herdr-core` plus an `hc` link if
   free, then core starts now and at login (a systemd user unit or a launchd
   LaunchAgent) and World
-  gets a `core-local` connection. Homebrew does this on first normal local World
+  gets a `core-local` connection as its default. Homebrew does this on first normal local World
   launch. A World too old to add the connection, or one already serving, says
   to add it under **Hosts → Manage connections**. With npm,
   `herdr-world herdr upgrade --install` does the same when no runtime exists
@@ -2016,8 +2018,18 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   it never changes the installed runtime or its permissions. World’s installers
   set up core only when no runtime is installed.
   `herdr-world connections add <id> --core [--ssh <destination> [--windows]]
-  [--session <name>]` adds the same connection from a terminal; the default
-  connection stays a Herdr one.
+  [--session <name>] [--default]` adds the same connection from a terminal.
+- **A computer with only herdr-core.** When the Herdr TUI is not installed,
+  the first herdr-core connection (from the installer, **Set up herdr-core**
+  in Town or **Install herdr-core…** in Manage connections) is saved alone
+  and becomes the default: no Local profile is saved, and Town shows only the
+  herdr-core building. With the Herdr TUI installed, its Local connection is
+  kept as the default and core is added beside it. **Add Local** in Manage
+  connections still works later, and `herdr-world connections set-default
+  <id>` moves the default either way. A default herdr-core connection cannot
+  be removed until another is the default, like any default. World's own
+  unqualified Herdr requests have no Herdr connection to use then and fail
+  plainly rather than reach another connection.
 - **Install herdr-core from Manage connections.** **Hosts → Manage connections**
   lists this computer and each Unix SSH host it knows, unless a core there is
   already connected, each with **Install herdr-core…**. A core connection that
@@ -2086,8 +2098,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   core silently drops an oversized update) also turns the card stale and
   reacquires afresh. A host may have a Herdr connection and a herdr-core
   connection; each keeps its own generation and identity. A connection's
-  runtime cannot be changed (add another), and the default connection stays a
-  Herdr one. Limits: 4,096 terminals, 64 KiB of labels and 256 KiB per
+  runtime cannot be changed (add another); a herdr-core connection is the
+  default only on a computer without the Herdr TUI (above) or when you set
+  it. Limits: 4,096 terminals, 64 KiB of labels and 256 KiB per
   terminal, 32 MiB per core; beyond them the card is stale, never partly
   shown. A screen read keeps the connection generation, core process and
   occupant it started with; if the agent at that address is replaced before

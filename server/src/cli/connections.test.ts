@@ -12,7 +12,10 @@ import { createTestCli, type TestCli } from "./test-context";
 let cli: TestCli;
 afterEach(() => cli?.cleanup());
 
-const idle: ConnectionsDependencies = { probe: async () => false };
+const idle: ConnectionsDependencies = {
+  probe: async () => false,
+  herdrInstalled: async () => true,
+};
 
 function registry(testCli: TestCli) {
   return JSON.parse(
@@ -128,10 +131,61 @@ describe("herdr-world connections", () => {
         auto_connect: false,
       },
     ]);
-    for (const extra of [["--default"], ["--windows"], ["--herdr-path", "/x"]])
+    for (const extra of [["--windows"], ["--herdr-path", "/x"]])
       expect(await connections(["add", "c", "--core", ...extra])).toBe(
         EXIT_USAGE,
       );
+  });
+
+  test("the installers' core registration on a computer without the Herdr TUI saves core alone, as the default", async () => {
+    // The exact arguments the standalone installer and Homebrew run (#935).
+    const bootstrap = readFileSync(
+      join(import.meta.dir, "../../../scripts/homebrew-herdr-bootstrap.sh"),
+      "utf8",
+    );
+    const line = bootstrap.match(
+      /"\$world" connections add (core-local [^>]*?) >\/dev\/null/,
+    )?.[1];
+    expect(line).toBeDefined();
+    const args = line!
+      .match(/'[^']*'|\S+/g)!
+      .map((word) => word.replace(/^'|'$/g, ""));
+    for (const installed of [false, true]) {
+      cli = createTestCli();
+      cli.writeConfig("");
+      const asked: string[] = [];
+      expect(
+        await connections(["add", ...args], {
+          ...idle,
+          herdrInstalled: async (implicit) => {
+            asked.push(implicit.control_socket_path);
+            return installed;
+          },
+        }),
+      ).toBe(EXIT_OK);
+      expect(asked).toEqual([join(cli.home, ".config", "herdr", "herdr.sock")]);
+      const saved = registry(cli);
+      expect(saved.default_connection_id).toBe("core-local");
+      // A Herdr TUI, should one be present after all, stays listed.
+      expect(
+        saved.profiles.map((profile: { id: string }) => profile.id),
+      ).toEqual(installed ? ["local", "core-local"] : ["core-local"]);
+      cli.cleanup();
+    }
+    // Without --default and without the Herdr TUI, core is still the default:
+    // there is no Herdr connection to be one.
+    cli = createTestCli();
+    cli.writeConfig("");
+    expect(
+      await connections(["add", "core-local", "--core"], {
+        ...idle,
+        herdrInstalled: async () => false,
+      }),
+    ).toBe(EXIT_OK);
+    expect(registry(cli)).toMatchObject({
+      default_connection_id: "core-local",
+      profiles: [{ id: "core-local", runtime: "herdr-core" }],
+    });
   });
 
   test("enforces the same removal and default rules as the server", async () => {

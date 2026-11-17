@@ -111,16 +111,29 @@ export class ConnectionManager<
     return this.defaultConnectionId;
   }
 
-  setDefault(connectionId: ConnectionId): void {
+  /**
+   * `external`: the default is a connection another manager owns (a
+   * herdr-core default). Unqualified routes then find no connection here and
+   * fail explicitly; they never fall back to one of this manager's.
+   */
+  setDefault(
+    connectionId: ConnectionId,
+    { external = false }: { external?: boolean } = {},
+  ): void {
     if (this.stopAllTask) throw new Error("connection manager is stopping");
-    if (!this.entries.has(connectionId) || this.removing.has(connectionId)) {
+    if (
+      external
+        ? this.entries.has(connectionId)
+        : !this.entries.has(connectionId) || this.removing.has(connectionId)
+    ) {
       throw new Error(`unknown connection: ${connectionId}`);
     }
     if (this.defaultConnectionId === connectionId) return;
     const previous = this.entries.get(this.defaultConnectionId);
     this.defaultConnectionId = connectionId;
     if (previous) this.publish(previous);
-    this.publish(this.requireEntry(connectionId));
+    const next = this.entries.get(connectionId);
+    if (next) this.publish(next);
   }
 
   async unregister(connectionId: ConnectionId): Promise<void> {
@@ -241,7 +254,13 @@ export class ConnectionManager<
     return this.requireEntry(connectionId).runtime;
   }
 
+  /**
+   * Global and optional consumers (status, startup ping, setup) ask for the
+   * default without naming a connection. An external default (herdr-core)
+   * has no runtime here, so they get none; qualified accessors still throw.
+   */
   defaultRuntime(): Runtime | null {
+    if (!this.entries.has(this.defaultConnectionId)) return null;
     return this.currentRuntime(this.defaultConnectionId);
   }
 
@@ -266,6 +285,7 @@ export class ConnectionManager<
   }
 
   defaultReadyRuntime(): Runtime | null {
+    if (!this.entries.has(this.defaultConnectionId)) return null;
     return this.readyRuntime(this.defaultConnectionId);
   }
 

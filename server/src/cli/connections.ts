@@ -12,6 +12,8 @@ import {
   validateConnectionProfile,
 } from "../connections/profiles";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
+import { HerdrClient } from "../bridge/herdr-client";
+import { detectHerdrSetup } from "../herdr/bootstrap";
 import {
   type CliCommand,
   type CliContext,
@@ -38,6 +40,8 @@ import {
 export interface ConnectionsDependencies {
   probe?: ListenerProbe;
   test?: typeof testConnectionProfile;
+  /** Whether this computer has the Herdr TUI; `herdr status`'s detection. */
+  herdrInstalled?: (implicit: StartupLocalProfile) => Promise<boolean>;
 }
 
 function connectionsHelp(): string {
@@ -71,7 +75,9 @@ herdr-core add options:
   --core             watch a herdr-core already running on this computer, or
                      on the --ssh host; World reads core.lock and never starts
                      core. --session names the core session (default: default).
-                     The default connection stays a Herdr one.
+                     The first saved connection keeps the local Herdr server
+                     as the default; without the Herdr TUI, core is the
+                     default and no Local profile is saved.
 
 The profiles are the same ones the connection selector edits. A running
 Herdr World keeps its own copy and would overwrite a change made here, so edits
@@ -189,7 +195,6 @@ function profileFromFlags(
       "remote-control-socket",
       "remote-client-socket",
       "herdr-path",
-      "default",
     ].find((key) => values[key] !== undefined);
     if (used) throw new UsageError(`--${used} cannot be combined with --core`);
     if (values.windows && ssh === undefined)
@@ -255,6 +260,14 @@ export function createConnectionsCommand(
 ): CliCommand {
   const probe = dependencies.probe ?? probeListener;
   const test = dependencies.test ?? testConnectionProfile;
+  const herdrInstalled =
+    dependencies.herdrInstalled ??
+    (async (implicit: StartupLocalProfile) =>
+      (
+        await detectHerdrSetup({
+          ping: () => new HerdrClient(implicit.control_socket_path).ping(),
+        })
+      ).state !== "missing");
   return {
     name: "connections",
     summary: "list, test and edit Herdr connection profiles",
@@ -417,6 +430,17 @@ export function createConnectionsCommand(
               throw new UsageError(
                 "add a Herdr connection before a herdr-core one",
               );
+            next = {
+              version: CONNECTION_PROFILE_FILE_VERSION,
+              default_connection_id: profile.id,
+              profiles: [profile],
+            };
+          } else if (
+            isCoreProfile(profile) &&
+            !(await herdrInstalled(implicitDefault(context, setup)))
+          ) {
+            // Like the web UI: no Herdr TUI, so no Local profile; core is
+            // the default (#935).
             next = {
               version: CONNECTION_PROFILE_FILE_VERSION,
               default_connection_id: profile.id,

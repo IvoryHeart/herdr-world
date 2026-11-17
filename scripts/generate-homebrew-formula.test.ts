@@ -198,7 +198,7 @@ cp "$FIXTURE_ASSETS/\${url##*/}" "$out"
     expect(fresh.exitCode).toBe(0);
     expect(fresh.commands).toEqual([
       "herdr status",
-      "connections add core-local --core --auto-connect --label herdr-core on this computer",
+      "connections add core-local --core --default --auto-connect --label herdr-core on this computer",
       "",
     ]);
     expect(existsSync(core)).toBe(true);

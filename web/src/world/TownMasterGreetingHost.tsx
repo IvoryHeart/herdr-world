@@ -17,7 +17,8 @@ import type { WorldObject } from "./worldObject";
  * The Town Master's greeting in Town, Board and Desk. On wide screens it
  * opens at the view's anchor (Town's figure beside the board, Board's hub,
  * Desk's summary); on phones it is a sheet with Back. `held` holds every
- * greeting back (the welcome that asks for a first connection);
+ * greeting back (the welcome that asks for a first connection), as does
+ * Town's setup card while it is on screen (`useGreetingHold`);
  * `windowsOpen` is any open window or sheet. On a phone those cover the
  * whole screen; on a wide screen only one over the anchor or the card's
  * place covers it. The card never opens over one, and steps aside (to open
@@ -41,7 +42,8 @@ export function TownMasterGreetingHost({
   const overlapped = useWindowOverWide(
     !mobile && windowsOpen ? state.anchor : null,
   );
-  const covered = held || (mobile ? windowsOpen : overlapped);
+  const covered =
+    held || state.holds > 0 || (mobile ? windowsOpen : overlapped);
   const step = greetingStep(state, { covered, placed });
   useEffect(() => {
     if (step === "show") greeting.show();

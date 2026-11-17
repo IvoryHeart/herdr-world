@@ -28,6 +28,9 @@
   max-height: 12em;
   overflow: auto;
   font-family: var(--font-mono, monospace);
+  /* The scroll box clips outside markers at its padding edge: room for
+     "40. " (the service keeps at most 40 lines) in the list's own font. */
+  padding-left: 4.5ch;
 }
 
 .core-install-facts code {

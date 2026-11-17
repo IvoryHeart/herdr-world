@@ -269,6 +269,8 @@ export class ConnectionProfileService<
       testProfile?: typeof testConnectionProfile;
       retry?: ConnectionRetryOptions;
       changed?(): void;
+      /** This computer has no Herdr TUI; absent assumes it has (#935). */
+      noHerdrTui?(): boolean;
     },
   ) {
     this.registry = args.bootstrap.persistedRegistry;
@@ -434,15 +436,15 @@ export class ConnectionProfileService<
       const migration =
         !previousRegistry && !this.args.bootstrap.explicitStartupOverride;
       // The first persisted profile retires the synthetic legacy default.
-      // Keep the local server in the list by persisting it as a writable
-      // Local profile with the same socket paths instead of dropping it.
-      const migrationSeed = migration
-        ? this.localMigrationSeed(profile.id)
-        : null;
-      // The default stays a Herdr connection: a first herdr-core profile
-      // keeps the local Herdr server as the default it already was.
-      const defaultId =
-        isCoreProfile(profile) && migration ? migrationSeed?.id : profile.id;
+      // Keep the local server as a writable Local profile with the same
+      // socket paths, and as the default over a first herdr-core profile,
+      // unless this computer has no Herdr TUI: then core is alone (#935).
+      const coreOnly =
+        migration && isCoreProfile(profile) && this.args.noHerdrTui?.();
+      const migrationSeed =
+        migration && !coreOnly ? this.localMigrationSeed(profile.id) : null;
+      const keepDefault = isCoreProfile(profile) && migration && !coreOnly;
+      const defaultId = keepDefault ? migrationSeed?.id : profile.id;
       if (!defaultId)
         throw new Error("add a Herdr connection before a herdr-core one");
       const nextRegistry: PersistedConnectionRegistry = previousRegistry
@@ -488,7 +490,7 @@ export class ConnectionProfileService<
       this.profiles.set(profile.id, { profile, readOnly: false });
       this.registry = nextRegistry;
       if (migration) {
-        this.args.manager.setDefault(defaultId);
+        this.args.manager.setDefault(defaultId, { external: coreOnly });
         this.disableRetry(STARTUP_DEFAULT_CONNECTION_ID);
         await this.args.manager.unregister(STARTUP_DEFAULT_CONNECTION_ID);
         this.profiles.delete(STARTUP_DEFAULT_CONNECTION_ID);
@@ -709,8 +711,7 @@ export class ConnectionProfileService<
           "explicit CLI/environment connection remains the process default",
         );
       }
-      if (isCoreProfile(this.requireWritableProfile(connectionId)))
-        throw new Error("the default connection must be a Herdr connection");
+      const core = isCoreProfile(this.requireWritableProfile(connectionId));
       const registry = this.requireRegistry();
       const nextRegistry: PersistedConnectionRegistry = {
         ...registry,
@@ -719,7 +720,7 @@ export class ConnectionProfileService<
       };
       await this.args.store.save(nextRegistry);
       try {
-        this.args.manager.setDefault(connectionId);
+        this.args.manager.setDefault(connectionId, { external: core });
       } catch (error) {
         try {
           await this.args.store.save(registry);
