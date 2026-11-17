@@ -269,34 +269,50 @@ function carpet(
   color: string,
   stripes: boolean,
 ) {
-  g.fillStyle = "rgba(0,0,0,.18)";
-  g.fillRect(x + 1, y + 2, w, h);
+  // A woven rug: a soft shadow under it, a fine weave, a darker bound edge
+  // with an inlaid line inside it, and tassels on its short ends.
+  g.fillStyle = "rgba(12,8,20,.16)";
+  g.fillRect(x + 1, y + 2, w + 1, h + 1);
   g.fillStyle = color;
   g.fillRect(x, y, w, h);
-  const dots = preparedCanvas(`carpet:${color}`, 4, 8, (p) => {
-    p.fillStyle = townShade(color, -0.09);
+  const weave = preparedCanvas(`weave:${color}`, 4, 4, (p) => {
+    p.fillStyle = townShade(color, 0.06);
     p.fillRect(0, 0, 1, 1);
-    p.fillRect(2, 4, 1, 1);
+    p.fillRect(2, 2, 1, 1);
+    p.fillStyle = townShade(color, -0.08);
+    p.fillRect(1, 3, 1, 1);
+    p.fillRect(3, 1, 1, 1);
   });
   g.save();
-  g.translate(x + 6, y + 6);
-  g.fillStyle = g.createPattern(dots, "repeat")!;
-  g.fillRect(0, 0, Math.max(0, w - 12), Math.max(0, h - 12));
+  g.translate(x, y);
+  g.fillStyle = g.createPattern(weave, "repeat")!;
+  g.fillRect(0, 0, w, h);
   g.restore();
-  g.fillStyle = townShade(color, 0.2);
-  g.fillRect(x + 2, y + 2, w - 4, 1);
-  g.fillRect(x + 2, y + h - 3, w - 4, 1);
-  g.fillRect(x + 2, y + 2, 1, h - 4);
-  g.fillRect(x + w - 3, y + 2, 1, h - 4);
+  const frame = (inset: number, width: number) => {
+    g.fillRect(x + inset, y + inset, w - inset * 2, width);
+    g.fillRect(x + inset, y + h - inset - width, w - inset * 2, width);
+    g.fillRect(x + inset, y + inset, width, h - inset * 2);
+    g.fillRect(x + w - inset - width, y + inset, width, h - inset * 2);
+  };
   g.fillStyle = townShade(color, -0.3);
+  frame(0, 3);
+  g.fillStyle = townShade(color, 0.26);
+  frame(5, 1);
+  g.fillStyle = townShade(color, -0.42);
   g.fillRect(x, y + h - 1, w, 1);
+  g.fillStyle = townShade(color, 0.42);
+  for (let xx = x + 2; xx < x + w - 2; xx += 3) {
+    g.fillRect(xx, y - 1, 1, 1);
+    g.fillRect(xx, y + h, 1, 1);
+  }
   g.clearRect(x, y, 1, 1);
   g.clearRect(x + w - 1, y, 1, 1);
   g.clearRect(x, y + h - 1, 1, 1);
   g.clearRect(x + w - 1, y + h - 1, 1, 1);
   if (stripes) {
-    g.fillStyle = townShade(color, 0.12);
-    for (let yy = 10; yy < h - 8; yy += 8) g.fillRect(x + 6, y + yy, w - 12, 2);
+    g.fillStyle = townShade(color, 0.1);
+    for (let yy = 12; yy < h - 10; yy += 8)
+      g.fillRect(x + 8, y + yy, w - 16, 2);
   }
 }
 
@@ -511,6 +527,22 @@ export function paintTownInterior(
   g.fillStyle = "#e3aa3a";
   for (let x = queueX + 6; x < queueX + 12 * T - 6; x += 8)
     g.fillRect(x, queueY + 8, 4, 2);
+  // The back wall and both side walls shade the floor beneath them.
+  const shade = (x0: number, y0: number, x1: number, y1: number) => {
+    const gradient = g.createLinearGradient(x0, y0, x1, y1);
+    gradient.addColorStop(0, "rgba(18,10,34,.32)");
+    gradient.addColorStop(1, "rgba(18,10,34,0)");
+    g.fillStyle = gradient;
+    g.fillRect(
+      Math.min(x0, x1),
+      Math.min(y0, y1),
+      Math.abs(x1 - x0) || Wp,
+      Math.abs(y1 - y0) || Hp - 32,
+    );
+  };
+  shade(0, 32, 0, 52);
+  shade(6, 32, 20, 32);
+  shade(Wp - 6, 32, Wp - 20, 32);
   if (furniture)
     for (const room of building.rooms)
       for (const cell of room.cells) {

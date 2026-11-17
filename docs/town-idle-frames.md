@@ -72,7 +72,10 @@ observation; attributing every one to a particular backend poll is an inference.
 
 `town-idle-draws` runs the production Pixi renderer and shared frame scheduler
 with synthetic observations and the test clock at both widths. The work ceiling
-allows zero draws in each measured test second. Renderer readiness and a positive
+allows zero draws in each measured test second. Drifting atmosphere (cloud
+shadows by day, fireflies at night; `townAtmosphere.ts`) is the one exception:
+a frame woken only for it counts as an `atmosphere-draws`, capped at
+`TOWN_ATMOSPHERE_MAX_RATE` (12) a second, and a calm Town must draw none. Renderer readiness and a positive
 initial frame are required before measurement; later assertions require an
 actual coalesced state paint, a smooth flight, continuous visible pulses, sleep
 after covering the scene again, and no frame after destruction. There are no

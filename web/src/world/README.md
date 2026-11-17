@@ -256,7 +256,10 @@ on disposal. A restore while hidden remains pending until visibility returns.
 
 `town-idle-draws` in the Hosts filter suite uses the test clock and
 `TOWN_STATIC_WORK_CEILINGS` to require zero draws per second in a settled,
-roof-covered scene at 1440 and 390 px. It first proves renderer readiness, then
+roof-covered scene at 1440 and 390 px. Frames woken only for drifting
+atmosphere (`townAtmosphere.ts`: clouds by day, fireflies at night) are counted
+apart as `atmosphereFrames` and held to their own ceiling,
+`TOWN_ATMOSPHERE_MAX_RATE` per second; a calm Town draws none of them. It first proves renderer readiness, then
 checks a coalesced state paint, smooth camera flight and visible pulses, return
 to sleep, native GPU context loss/restoration while sleeping and hidden, and
 destruction. This renderer-only case bypasses shell mounting, waits for the

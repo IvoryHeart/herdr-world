@@ -9,6 +9,8 @@
  * re-measured on 2026-10-31, at both widths also with single-core contention.
  */
 
+import { TOWN_ATMOSPHERE_MAX_RATE } from "../town/townAtmosphere";
+
 export type WorkByPhase = Record<string, Record<string, number>>;
 
 /** Each count above its phase's ceiling, as a readable violation. */
@@ -77,9 +79,13 @@ export const TOWN_IDLE_WORK_CEILINGS: WorkByPhase = {
   idle: { "commit-frames": 2 },
 };
 
-/** A settled, roof-covered Town has no visible animated pixels. Per test second. */
+/**
+ * A settled, roof-covered Town draws nothing but its drifting atmosphere
+ * (clouds by day, fireflies at night; townAtmosphere.ts), which is counted
+ * apart and capped at TOWN_ATMOSPHERE_MAX_RATE. Per test second.
+ */
 export const TOWN_STATIC_WORK_CEILINGS: WorkByPhase = {
-  idle: { draws: 0 },
+  idle: { draws: 0, "atmosphere-draws": TOWN_ATMOSPHERE_MAX_RATE },
 };
 
 export type ConcurrentWork = {
