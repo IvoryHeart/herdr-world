@@ -456,8 +456,10 @@ herdr-world herdr upgrade --install # no runtime found: install herdr-core
 
 With no Herdr and no herdr-core on this computer, `upgrade --install` installs
 herdr-core instead of Herdr (Linux and macOS): core's official release list over
-HTTPS, its archive checked against the published SHA-256, `~/.local/bin/herdr-core`
-plus an `hc` link if free, then core starts now and at login (a systemd user unit
+HTTPS, its archive checked against the published SHA-256 (on macOS the archive
+must carry the signed `Herdr Core.app`, and `codesign` verifies the executable
+before anything downloaded runs), `~/.local/bin/herdr-core` plus an `hc` link
+if free, then core starts now and at login (a systemd user unit
 or a launchd LaunchAgent). An installed core is left as it is, and no Herdr is
 installed beside it; `herdr setup` makes the same choice and also starts an
 installed core now and at login. Windows x64 makes the same choice with core's

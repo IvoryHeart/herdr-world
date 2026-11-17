@@ -25,7 +25,8 @@
   rooms, create worktrees and send previewed prompts. Verified core callers can
   ask questions, publish task summaries and stamp display-only spawn relations.
 - Open a core room’s shared floating shell from its agent’s peek. Hiding keeps
-  it running; End shell ends it. Windows SSH uses fixed PowerShell named-pipe
+  it running; End shell ends it, confirming first anything started in it
+  that ends too. Windows SSH uses fixed PowerShell named-pipe
   scripts and refuses a core pipe exposed to another account.
 - Check the newest official core with a daily or manual release smoke that
   verifies its checksum and exercises live traffic without installing or pinning

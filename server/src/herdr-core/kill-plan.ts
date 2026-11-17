@@ -1,4 +1,4 @@
-import { coreOccupantFingerprint } from "./labels";
+import { coreOccupantFingerprint } from "./occupant";
 import type { CoreMirrorTerminal } from "./mirror";
 
 /**
@@ -24,8 +24,9 @@ export type CoreKillEntry = {
   /** The program occupying it when planned, for the person to read. */
   pid: number | null;
   /**
-   * The program's print (core, address, pid, argv): a kept replacement may
-   * reuse the pid but runs a shell, so it is not what was confirmed.
+   * The program's print (core, the mirror's occupancy token, address, pid,
+   * argv): a kept replacement may reuse the pid and even the argv, but the
+   * mirror counts it as a new occupant, so it is not what was confirmed.
    */
   occupant: string | null;
   /** Which terminal's death ends it; absent for the terminals asked for. */
@@ -43,17 +44,25 @@ export type CoreKillPlan = {
   descendants: CoreKillEntry[];
 };
 
+/** The mirror's occupancy token for an address (`CoreMirror.occupancy`). */
+export type CoreOccupancyOf = (address: string) => number | null;
+
 function entry(
   coreId: string,
+  occupancyOf: CoreOccupancyOf,
   record: CoreMirrorTerminal,
   parent?: string,
 ): CoreKillEntry {
   const name =
     typeof record.name === "string" && record.name ? record.name : null;
+  const occupancy = occupancyOf(record.address);
   return {
     address: record.address,
     pid: typeof record.pid === "number" ? record.pid : null,
-    occupant: coreOccupantFingerprint(coreId, record),
+    occupant:
+      occupancy === null
+        ? null
+        : coreOccupantFingerprint(coreId, record, occupancy),
     ...(parent ? { parent } : {}),
     name,
     remote: record.remote,
@@ -88,6 +97,7 @@ export function coreKillPlan(
   coreId: string,
   terminals: readonly CoreMirrorTerminal[],
   addresses: readonly string[],
+  occupancyOf: CoreOccupancyOf,
 ): CoreKillPlan {
   const live = terminals.filter((record) => record.state === "live");
   const byAddress = new Map(
@@ -109,7 +119,7 @@ export function coreKillPlan(
     const record = byAddress.get(address);
     if (!record || ending.has(address)) continue;
     ending.add(address);
-    roots.push(entry(coreId, record));
+    roots.push(entry(coreId, occupancyOf, record));
   }
   // Depth first, as core ends them, with no depth limit: every record is
   // listed at most once, so the walk ends within the mirror's bound.
@@ -130,7 +140,7 @@ export function coreKillPlan(
     // A root that is also another root's child stays a root, listed once.
     if (ending.has(keyOf(child))) continue;
     ending.add(keyOf(child));
-    descendants.push(entry(coreId, child, frame.address));
+    descendants.push(entry(coreId, occupancyOf, child, frame.address));
     stack.push({
       address: child.address,
       next: children.get(child.address) ?? [],
@@ -194,6 +204,7 @@ export function coreKillUnconfirmed(
   roots: readonly string[],
   confirmed: CoreKillConfirmation,
   endedBefore: ReadonlySet<string>,
+  occupancyOf: CoreOccupancyOf,
 ): CoreKillEntry[] {
   // Killed since the kill began counts as part of the chain again.
   const chain = terminals.flatMap((record) =>
@@ -204,7 +215,7 @@ export function coreKillUnconfirmed(
         : [],
   );
   const seen = new Set(confirmed.terminals.map(confirmedKey));
-  return coreKillPlan(coreId, chain, roots).descendants.filter(
+  return coreKillPlan(coreId, chain, roots, occupancyOf).descendants.filter(
     (entry) => !seen.has(confirmedKey(entry)),
   );
 }

@@ -23,6 +23,7 @@ import {
   FloatShellService,
   floatShellName,
 } from "./float-shell";
+import { parseCoreKillConfirmation, planCoreKill } from "./operations";
 import type { CoreConnectionRuntime } from "./runtime";
 import { FakeCore, type FakeCoreOptions } from "./testing/fake-core";
 import { CORE_FLOAT_LABEL, CORE_UNPLACED_WORKSPACE } from "./topology";
@@ -364,6 +365,54 @@ describe("World float shell on herdr-core", () => {
       ended: true,
     });
     expect(w.fake.terminal(agent)?.state).toBe("live");
+    expect(w.fake.calls.filter((c) => c.method === "terminal.kill")).toEqual([
+      { method: "terminal.kill", params: { terminal: address } },
+    ]);
+  });
+
+  test("stop names what dies with the shell: nothing ends until it is confirmed", async () => {
+    const w = await world();
+    const agent = w.fake.create(agentFields);
+    const lease = await w.connect();
+    const tab = browser();
+    const { stream, address } = await w.floats.open(tab, {
+      connectionId: "box",
+      generation: lease.generation,
+      terminal: agent,
+      size: { cols: 80, rows: 24 },
+    });
+    w.floats.start(tab, stream);
+    await until(() => Boolean(lease.runtime.core.terminal(address)));
+    // An agent started from the shell (`hc run`): core ends it with the shell.
+    const child = w.fake.create({
+      ...agentFields,
+      parent: address,
+      die_with_parent: true,
+      name: "helper",
+    });
+    await until(() => Boolean(lease.runtime.core.terminal(child)));
+    await expect(w.floats.stop(tab, stream)).rejects.toThrow(
+      "helper would end too, and you did not confirm it. Nothing was ended.",
+    );
+    const plan = await planCoreKill(lease, [address]);
+    expect(plan.descendants.map((d) => d.address)).toEqual([child]);
+    const confirmation = parseCoreKillConfirmation({
+      core_id: plan.core_id,
+      terminals: [...plan.roots, ...plan.descendants],
+    });
+    // A confirmation that leaves the child out is refused.
+    const shortened = {
+      ...confirmation,
+      terminals: confirmation.terminals.filter((t) => t.address !== child),
+    };
+    await expect(w.floats.stop(tab, stream, shortened)).rejects.toThrow(
+      "Nothing was ended",
+    );
+    expect(w.fake.calls.map((c) => c.method)).not.toContain("terminal.kill");
+    expect(w.fake.terminal(child)?.state).toBe("live");
+    expect(await w.floats.stop(tab, stream, confirmation)).toEqual({
+      alsoEnded: [],
+    });
     expect(w.fake.calls.filter((c) => c.method === "terminal.kill")).toEqual([
       { method: "terminal.kill", params: { terminal: address } },
     ]);

@@ -171,7 +171,10 @@ from the pin and tab order and saves none; a Town room's pinned desks keep
 the order the person gave them on its rug as World's own view layout (Herdr's
 apps have no order for pins), else tab order. World SHALL read
 agent status from core and SHALL NOT write it, including for integrations World
-installed. Native destructive actions SHALL confirm all dying descendants.
+installed. Native destructive actions SHALL confirm all dying descendants,
+including ending a room shell, and a confirmation SHALL name each terminal's
+occupant incarnation (the mirror's occupancy token), so a replacement that
+reuses the pid and argv is refused.
 
 #### Scenario: Review a finished turn
 

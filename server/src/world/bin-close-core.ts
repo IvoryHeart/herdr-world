@@ -3,7 +3,7 @@ import type { EffectDriver } from "../effects/runner";
 import type { EffectEntry } from "../effects/types";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import { coreKillPlan, coreKillRefusal } from "../herdr-core/kill-plan";
-import { coreOccupantFingerprint } from "../herdr-core/labels";
+import { coreOccupantFingerprint } from "../herdr-core/occupant";
 import { killCore, CoreOperationRefused } from "../herdr-core/operations";
 import { coreAlsoEndedText } from "../../../shared/coreKill";
 import type { CoreConnectionRuntime } from "../herdr-core/runtime";
@@ -148,12 +148,20 @@ export function coreBinCloseDriver(deps: {
   ) => {
     const record = lease.runtime.core.mirror.terminal(target.address);
     if (!record || record.state !== "live") return "ended" as const;
-    // The print, not the pid: a kept replacement may reuse the pid.
-    const print = coreOccupantFingerprint(
-      lease.runtime.core.epoch?.coreId ?? "",
-      record,
-    );
-    return record.pid === target.pid && print === target.occupant
+    // The print, not the pid: a kept replacement may reuse the pid and argv,
+    // but the mirror's occupancy token names it a new occupant.
+    const occupancy = lease.runtime.core.mirror.occupancy(target.address);
+    const print =
+      occupancy === null
+        ? null
+        : coreOccupantFingerprint(
+            lease.runtime.core.epoch?.coreId ?? "",
+            record,
+            occupancy,
+          );
+    return record.pid === target.pid &&
+      print !== null &&
+      print === target.occupant
       ? ("same" as const)
       : ("other" as const);
   };
@@ -230,6 +238,7 @@ export function coreBinCloseDriver(deps: {
           lease.runtime.core.epoch?.coreId ?? "",
           lease.runtime.core.mirror.terminals(),
           [target.address],
+          (address) => lease.runtime.core.mirror.occupancy(address),
         ),
         target.confirmation,
       );

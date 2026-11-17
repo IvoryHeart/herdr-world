@@ -10,6 +10,7 @@ import { projectAgent } from "./officeAgent";
 import { WorldRuntimeStore } from "./runtimeStore";
 import { TownPeek } from "./town/TownPeek";
 import { FloatShellOverlay } from "../components/FloatShellOverlay";
+import { CoreKillConfirmHost } from "./CoreKillConfirm";
 import { buildWorldObject, type WorldLeafObject } from "./worldObject";
 import type { WorldAsksStore } from "./worldAsks";
 import "../styles/tokens.css";
@@ -102,6 +103,10 @@ const float = {
   typed: [] as string[],
   hidden: [] as string[],
   stopped: [] as string[],
+  /** What each stop confirmed, by address. */
+  confirmed: [] as string[][],
+  /** Started in the shell with die_with_parent: ends with it. */
+  children: [] as Array<{ address: string; name: string }>,
   resized: 0,
   running: false,
   stream: 0,
@@ -159,6 +164,18 @@ async function floatCall(method: string, params: Record<string, unknown>) {
   } else if (method === "world.float.resize") float.resized += 1;
   else if (method === "world.float.hide") float.hidden.push(stream);
   else if (method === "world.float.stop") {
+    const confirmed = (
+      (params.confirmation as { terminals?: { address: string }[] })
+        ?.terminals ?? []
+    ).map((t) => t.address);
+    // The service's refusal (`FloatShellService.stop`).
+    const missing = float.children.find((c) => !confirmed.includes(c.address));
+    if (missing)
+      throw new Error(
+        `${missing.name} would end too, and you did not confirm it.`,
+      );
+    float.confirmed.push(confirmed);
+    float.children = [];
     float.stopped.push(stream);
     float.running = false;
     setTimeout(() =>
@@ -172,10 +189,33 @@ async function floatCall(method: string, params: Record<string, unknown>) {
   }
   return { ok: true };
 }
+/** `world.core.kill_plan` for the shell: it and what dies with it. */
+function floatKillPlan(params: Record<string, unknown>) {
+  const [address] = (params.terminals as string[] | undefined) ?? [];
+  const entry = (at: string, name: string, parent?: string) => ({
+    address: at,
+    pid: 9,
+    occupant: `occupant-${at}`,
+    name,
+    remote: false,
+    label: name,
+    ...(parent ? { parent } : {}),
+  });
+  return {
+    core_id: "core-fixture",
+    roots:
+      float.running && address ? [entry(address, "world-float-fixture")] : [],
+    descendants: float.children.map((c) => entry(c.address, c.name, address)),
+  };
+}
 Object.assign(bridge, {
   // World-wide reads (asks, usage) are not about any agent.
   call: async (method: string, params: Record<string, unknown> = {}) =>
-    method.startsWith("world.float.") ? floatCall(method, params) : null,
+    method.startsWith("world.float.")
+      ? floatCall(method, params)
+      : method === "world.core.kill_plan"
+        ? floatKillPlan(params)
+        : null,
   onControl: (handler: (control: unknown) => void) => {
     float.handlers.add(handler);
     return () => float.handlers.delete(handler);
@@ -310,6 +350,7 @@ async function run() {
           terminalFontScale={100}
           authority={(id) => (id === "core-fixture" ? float.generation : null)}
         />
+        <CoreKillConfirmHost />
       </>,
     ),
   );
@@ -514,14 +555,32 @@ async function floatShell(scout: WorldLeafObject) {
     ...document.querySelectorAll<HTMLButtonElement>(".float-shell-action"),
   ].find((button) => button.textContent?.includes("End shell"));
   await until(() => end?.disabled === false, "End shell is offered once open");
+  // Something started in it ends with it: named and confirmed first.
+  float.children = [{ address: "t10", name: "helper" }];
   end?.click();
+  const confirmEnd = () =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(".modal-backdrop button"),
+    ].find((button) => button.textContent === "End shell");
+  await until(
+    () =>
+      Boolean(confirmEnd()) &&
+      document
+        .querySelector(".core-kill-list")
+        ?.textContent?.includes("helper") === true,
+    "End shell names what ends with the shell",
+  );
+  check(float.stopped.length === 0, "nothing ends before it is confirmed");
+  confirmEnd()?.click();
   await until(
     () => !document.querySelector(".float-shell-window"),
     "an ended shell closes its window",
   );
   check(
-    float.stopped.join() === "float-2" && !float.running,
-    "End shell ends exactly the open stream",
+    float.stopped.join() === "float-2" &&
+      !float.running &&
+      float.confirmed[float.confirmed.length - 1]?.join() === "t9,t10",
+    `End shell ends exactly the open stream, as confirmed: ${JSON.stringify(float.confirmed)}`,
   );
   // Core reconnects: the stream closes without the shell ending, says why,
   // and Open again takes the connection's new generation, never the old one.

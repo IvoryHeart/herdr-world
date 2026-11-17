@@ -165,7 +165,8 @@ The replay adapter decides `plan` and `kill` with the production
 `coreKillPlan` and `coreKillRefusal` (`server/src/herdr-core/kill-plan.ts`) over
 the production mirror, whose child record carries core's `parent` and
 `die_with_parent`. A kept replacement keeps pid 100 and changes only argv, so a
-pid-only confirmation diverges. Witnesses `cascadeConfirmed` and
+pid-only confirmation diverges. The print also carries the mirror's occupancy
+token, so a replacement that reuses both pid and argv is still refused. Witnesses `cascadeConfirmed` and
 `unconfirmedCascadeRefused` are required per seed. Two production negative controls
 must be rejected through `core.state`: a refusal that compares pids only and one
 that lets an unconfirmed terminal pass.
@@ -174,7 +175,8 @@ World's float shell (the room shell that replaces Herdr Float on core) adds no
 model action. Its run, attach and end go through the same `CoreOperationFence`
 (lease, generation and core process at dispatch and publication; the program
 occupant for end, deliberately not its foreground), so it inherits this seam
-and its tests. One shell per room is core's own live-name uniqueness, observed
+and its tests. End shell plans and refuses with the same `coreKillPlan` and
+`coreKillRefusal`, so what the shell started is confirmed before it ends. One shell per room is core's own live-name uniqueness, observed
 by World rather than decided by it; the first paint waiting for the open reply
 and credit returned only as a browser drains are one socket's framing and flow,
 outside this model's claims, as is a view cancelled while it opens (its late

@@ -246,9 +246,10 @@ fi
 # core's official installer (https://releases.herdr.dev/core/install.sh):
 # read the release manifest over HTTPS, download the archive, compare its
 # SHA-256 with the manifest, unpack, run `--version`, and place herdr-core in
-# ~/.local/bin with `hc` beside it only when no `hc` exists. On macOS the
-# signed Herdr Core.app is verified with codesign and installed by core itself.
-# Nothing downloaded is ever run as a script.
+# ~/.local/bin with `hc` beside it only when no `hc` exists. On macOS a
+# release must carry the signed Herdr Core.app: codesign verifies the
+# executable that will run before anything downloaded runs, and core itself
+# installs the bundle. Nothing downloaded is ever run as a script.
 #
 # These are functions only, so the standalone installer and Homebrew's first
 # launch can embed them; World's server runs them with `sh -s -- <action>`
@@ -412,10 +413,29 @@ herdr_core_install() (
   core="$tmp/release/herdr-core"
   [ -f "$core" ] && [ ! -L "$core" ] ||
     herdr_core_fail "the download holds no herdr-core" || exit 1
-  # On macOS the signed bundle is checked before anything downloaded runs.
-  if [ "$(uname -s)" = Darwin ] && [ -d "$tmp/release/Herdr Core.app" ]; then
-    /usr/bin/codesign --verify --strict -R '=identifier "dev.herdr.core" and anchor apple generic and certificate leaf[subject.OU] = "2W9652Q7QR"' "$tmp/release/Herdr Core.app" ||
+  bundled="$tmp/release/Herdr Core.app/Contents/MacOS/herdr-core"
+  bundle=0
+  # On macOS nothing downloaded runs until Apple's codesign has verified the
+  # executable that will run: a release without the signed Herdr Core.app is
+  # refused, never installed unchecked. A user install under HOME runs and
+  # installs the verified bundle (core's own installer does the same); any
+  # other install runs the top-level herdr-core only once it is verified as
+  # signed by the same Herdr team.
+  if [ "$(uname -s)" = Darwin ]; then
+    team='anchor apple generic and certificate leaf[subject.OU] = "2W9652Q7QR"'
+    [ -d "$tmp/release/Herdr Core.app" ] && [ ! -L "$tmp/release/Herdr Core.app" ] &&
+      [ -f "$bundled" ] && [ ! -L "$bundled" ] &&
+      /usr/bin/codesign --verify --strict -R "=identifier \"dev.herdr.core\" and $team" "$tmp/release/Herdr Core.app" ||
       herdr_core_fail "the download is not a signed Herdr release" || exit 1
+    if [ "$(id -u)" != 0 ]; then
+      case "$bin" in "$HOME"/*) bundle=1 ;; esac
+    fi
+    if [ "$bundle" = 1 ]; then
+      core="$bundled"
+    else
+      /usr/bin/codesign --verify --strict -R "=$team" "$core" ||
+        herdr_core_fail "the download is not a signed Herdr release" || exit 1
+    fi
   fi
   mkdir -p "$bin" || herdr_core_fail "cannot create $bin" || exit 1
   if ! "$core" --version >/dev/null 2>&1; then
@@ -428,11 +448,6 @@ herdr_core_install() (
   fi
   [ "$("$core" --version 2>/dev/null)" = "hc $version" ] ||
     herdr_core_fail "the downloaded herdr-core does not run on this machine" || exit 1
-  bundled="$tmp/release/Herdr Core.app/Contents/MacOS/herdr-core"
-  bundle=0
-  if [ "$(uname -s)" = Darwin ] && [ "$(id -u)" != 0 ] && [ -x "$bundled" ]; then
-    case "$bin" in "$HOME"/*) bundle=1 ;; esac
-  fi
   # Another installer may have finished meanwhile: never replace its core.
   if existing="$(herdr_core_find)"; then
     printf 'herdr-core appeared at %s during the download; leaving it unchanged.\n' "$existing"

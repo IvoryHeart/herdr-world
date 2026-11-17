@@ -176,6 +176,27 @@ describe("the bin closes core agents by a confirmed native kill", () => {
     expect(effect?.state).toBe("refused");
   });
 
+  test("a child replaced with the same pid and argv refuses the close", async () => {
+    const { w, closer, outcomes, entry, lead } = await setup();
+    const shell = w.fake.create({
+      parent: lead,
+      die_with_parent: true,
+      name: "shell",
+      argv: ["/bin/sh"],
+    });
+    await w.settle();
+    const one = entry(await planCoreKill(w.lease(), [lead]));
+    // Its kept replacement is a shell with the same pid: a new occupant.
+    w.fake.replaceWithShell(shell, { reusePid: true });
+    await w.settle();
+    await closer.commit([one]);
+    await until(() => outcomes.length === 1);
+    expect(outcomes[0]).toMatchObject({ id: one.id, result: "refused" });
+    expect(outcomes[0]!.detail).toContain("running a different program");
+    expect(w.fake.calls.some((c) => c.method === "terminal.kill")).toBe(false);
+    expect(w.fake.terminal(shell)!.state).toBe("live");
+  });
+
   test("an agent that ended before the bus left is gone, not killed", async () => {
     const { w, closer, outcomes, entry, lead } = await setup();
     const one = entry();

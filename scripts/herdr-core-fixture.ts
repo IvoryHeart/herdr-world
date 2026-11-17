@@ -26,18 +26,32 @@ esac
 export function writeCoreRelease(
   assets: string,
   fakeBin: string,
-  options: { version?: string; sha256?: string; url?: string } = {},
+  options: {
+    version?: string;
+    sha256?: string;
+    url?: string;
+    /** The packed herdr-core's script instead of the fake core. */
+    core?: string;
+    /** Also pack an (unsigned) `Herdr Core.app`, as macOS releases carry. */
+    app?: boolean;
+  } = {},
 ) {
   const version = options.version ?? FIXTURE_CORE_VERSION;
   const stage = join(assets, "core-stage");
   mkdirSync(stage, { recursive: true });
   mkdirSync(fakeBin, { recursive: true });
-  writeFileSync(join(stage, "herdr-core"), fakeCoreScript(version), {
-    mode: 0o755,
-  });
+  const core = options.core ?? fakeCoreScript(version);
+  writeFileSync(join(stage, "herdr-core"), core, { mode: 0o755 });
+  const members = ["herdr-core"];
+  if (options.app) {
+    const macos = join(stage, "Herdr Core.app", "Contents", "MacOS");
+    mkdirSync(macos, { recursive: true });
+    writeFileSync(join(macos, "herdr-core"), core, { mode: 0o755 });
+    members.push("Herdr Core.app");
+  }
   const archive = join(assets, "herdr-core.tar.gz");
   const packed = Bun.spawnSync(
-    ["tar", "-czf", archive, "-C", stage, "herdr-core"],
+    ["tar", "-czf", archive, "-C", stage, ...members],
     { env: { ...process.env, COPYFILE_DISABLE: "1" }, stderr: "pipe" },
   );
   if (packed.exitCode !== 0) throw new Error(packed.stderr.toString());

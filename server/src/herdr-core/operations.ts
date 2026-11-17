@@ -77,6 +77,12 @@ function coreIdOf(lease: Lease): string {
   return coreId;
 }
 
+/** The mirror's occupancy token: a kill confirmation names this incarnation. */
+function occupancyOf(lease: Lease) {
+  const mirror = lease.runtime.core.mirror;
+  return (address: string) => mirror.occupancy(address);
+}
+
 /** A short ID World gives its rooms and tabs (also their app-space IDs). */
 export function newCoreLayoutId(prefix: "r" | "b"): string {
   return `${prefix}${randomBytes(6).toString("hex")}`;
@@ -509,7 +515,7 @@ export async function planCoreKill(
   const coreId = coreIdOf(lease);
   const terminals = lease.runtime.core.mirror.terminals();
   return describe(
-    coreKillPlan(coreId, terminals, addresses),
+    coreKillPlan(coreId, terminals, addresses, occupancyOf(lease)),
     terminals,
     await placesOf(lease),
   );
@@ -570,7 +576,7 @@ export async function assertCoreKillConfirmed(
 ): Promise<void> {
   const coreId = coreIdOf(lease);
   const terminals = lease.runtime.core.mirror.terminals();
-  const plan = coreKillPlan(coreId, terminals, addresses);
+  const plan = coreKillPlan(coreId, terminals, addresses, occupancyOf(lease));
   const refusal = coreKillRefusal(plan, confirmation);
   if (refusal)
     throw new CoreOperationRefused(
@@ -589,7 +595,7 @@ export async function killCore(
   const refuseIfChanged = async () => {
     const coreId = coreIdOf(lease);
     const terminals = lease.runtime.core.mirror.terminals();
-    const plan = coreKillPlan(coreId, terminals, addresses);
+    const plan = coreKillPlan(coreId, terminals, addresses, occupancyOf(lease));
     const refusal = coreKillRefusal(plan, confirmation);
     if (refusal)
       throw new CoreOperationRefused(
@@ -641,6 +647,7 @@ export async function killCore(
       outcome.killed,
       confirmation,
       endedBefore,
+      occupancyOf(lease),
     ).map(({ address, name, remote }) => ({ address, name, remote }));
   return outcome;
 }

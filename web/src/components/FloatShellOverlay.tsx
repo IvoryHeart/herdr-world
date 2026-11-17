@@ -8,6 +8,12 @@ import { isMobileLayout } from "../layoutPreferences";
 import { pluginActionShortcut } from "../pluginActionShortcuts";
 import { store } from "../store";
 import {
+  coreAlsoEndedText,
+  type CoreAlsoEnded,
+} from "../../../shared/coreKill";
+import { confirmCoreKill } from "../world/CoreKillConfirm";
+import { coreKillConfirmation, coreKillPlan } from "../world/coreControl";
+import {
   type FloatShellAuthority,
   floatShellAuthority,
   type FloatShellTarget,
@@ -93,6 +99,8 @@ function FloatShellWindow({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const streamRef = useRef<string | null>(null);
+  /** The shell's core address, for the plan of what ends with it. */
+  const addressRef = useRef<string | null>(null);
   // The first open uses the generation the person clicked; Open again takes
   // the connection's current one, and the service rechecks the room.
   const generationRef = useRef(target.generation);
@@ -204,7 +212,7 @@ function FloatShellWindow({
         cols: dims?.cols ?? term.cols,
         rows: dims?.rows ?? term.rows,
       })
-      .then((opened: { stream: string; created: boolean }) => {
+      .then((opened: { stream: string; address: string; created: boolean }) => {
         if (disposed || view === "closed") {
           void bridge
             .call("world.float.hide", { stream: opened.stream })
@@ -213,6 +221,7 @@ function FloatShellWindow({
         }
         stream = opened.stream;
         streamRef.current = opened.stream;
+        addressRef.current = opened.address;
         view = "open";
         setPhase({ kind: "open", created: opened.created });
         fit.fit();
@@ -281,16 +290,51 @@ function FloatShellWindow({
     setAttempt((value) => value + 1);
   };
 
-  const endShell = () => {
+  /**
+   * Core ends whatever was started in the shell with it (M7), so, as for
+   * any core kill, everything that would end is named and confirmed first;
+   * the service refuses if more would end now.
+   */
+  const endShell = async () => {
     const stream = streamRef.current;
-    if (!stream) return hideFloatShell();
-    bridge.call("world.float.stop", { stream }).catch((error: unknown) =>
+    const address = addressRef.current;
+    if (!stream || !address) return hideFloatShell();
+    try {
+      const plan = await coreKillPlan(
+        {
+          connectionId: target.connectionId,
+          generation: generationRef.current,
+        },
+        { terminals: [address] },
+      );
+      if (
+        plan.descendants.length &&
+        !(await confirmCoreKill({
+          title: "End shell",
+          message: `End the shell of ${target.label}? What was started in it ends too.`,
+          confirmLabel: "End shell",
+          plan,
+        }))
+      )
+        return;
+      const result = (await bridge.call("world.float.stop", {
+        stream,
+        confirmation: coreKillConfirmation(plan),
+      })) as { alsoEnded?: CoreAlsoEnded[] } | null;
+      const alsoEnded = coreAlsoEndedText(result?.alsoEnded);
+      if (alsoEnded)
+        store.notify({
+          kind: "error",
+          message: "More ended than you confirmed",
+          detail: alsoEnded,
+        });
+    } catch (error) {
       store.notify({
         kind: "error",
         message: "The float shell was not ended",
         detail: messageOf(error),
-      }),
-    );
+      });
+    }
   };
 
   const title = `Shell · ${target.label}`;
@@ -327,7 +371,7 @@ function FloatShellWindow({
             className="float-shell-action"
             disabled={phase.kind !== "open"}
             title="End this room's shell and whatever runs in it"
-            onClick={endShell}
+            onClick={() => void endShell()}
           >
             <Power size={13} aria-hidden="true" />
             <span>End shell</span>

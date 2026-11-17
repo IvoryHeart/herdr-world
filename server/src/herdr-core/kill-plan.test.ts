@@ -35,6 +35,9 @@ const child = (
   fields: Partial<CoreMirrorTerminal> = {},
 ) => record(address, { parent, die_with_parent: true, ...fields });
 
+/** One occupant per address, as a mirror that saw no replacement says. */
+const one = () => 1;
+
 const confirmAll = (plan: CoreKillPlan): CoreKillConfirmation => ({
   coreId: plan.coreId,
   terminals: [...plan.roots, ...plan.descendants].map((e) => ({
@@ -53,7 +56,7 @@ describe("the planned cascade", () => {
       child("remote/t3", "remote/t2"),
       child("remote/t4", "remote/t3", { die_with_parent: false }),
     ];
-    const plan = coreKillPlan("core-a", terminals, ["t1"]);
+    const plan = coreKillPlan("core-a", terminals, ["t1"], one);
     expect(plan.descendants.map((d) => [d.address, d.parent])).toEqual([
       ["remote/t2", "t1"],
       ["remote/t3", "remote/t2"],
@@ -73,14 +76,14 @@ describe("the planned cascade", () => {
       child("remote/t2", "home-alias/t1"),
       child("remote/t3", "remote/t1"),
     ];
-    const plan = coreKillPlan("core-a", terminals, ["t1"]);
+    const plan = coreKillPlan("core-a", terminals, ["t1"], one);
     expect(plan.descendants.map((d) => d.address)).toEqual(["remote/t2"]);
   });
 
   test("a local chain longer than any fixed depth is listed to its end", () => {
     const terminals = [record("t1")];
     for (let n = 2; n <= 68; n++) terminals.push(child(`t${n}`, `t${n - 1}`));
-    const plan = coreKillPlan("core-a", terminals, ["t1"]);
+    const plan = coreKillPlan("core-a", terminals, ["t1"], one);
     expect(plan.descendants).toHaveLength(67);
     expect(plan.descendants.at(-1)).toMatchObject({
       address: "t68",
@@ -96,7 +99,7 @@ describe("the planned cascade", () => {
       child("t4", "t2"),
       child("remote/t5", "t4"),
     ];
-    const plan = coreKillPlan("core-a", terminals, ["t1"]);
+    const plan = coreKillPlan("core-a", terminals, ["t1"], one);
     expect(plan.descendants.map((d) => d.address)).toEqual([
       "t2",
       "t4",
@@ -109,26 +112,47 @@ describe("the planned cascade", () => {
 describe("a confirmation holds only for the programs confirmed", () => {
   test("a replaced program on a linked machine refuses the kill", () => {
     const before = [record("t1"), child("remote/t2", "t1")];
-    const confirmed = confirmAll(coreKillPlan("core-a", before, ["t1"]));
+    const confirmed = confirmAll(coreKillPlan("core-a", before, ["t1"], one));
     // Kept: the sub-agent there was lost and its machine put a shell in.
     const after = [
       before[0]!,
       child("remote/t2", "t1", { argv: ["/bin/sh"], pid: 61_000 }),
     ];
     expect(
-      coreKillRefusal(coreKillPlan("core-a", after, ["t1"]), confirmed),
+      coreKillRefusal(coreKillPlan("core-a", after, ["t1"], one), confirmed),
     ).toContain("running a different program");
   });
 
   test("a replacement there that reuses the pid still refuses", () => {
     const before = [record("t1"), child("remote/t2", "t1")];
-    const confirmed = confirmAll(coreKillPlan("core-a", before, ["t1"]));
+    const confirmed = confirmAll(coreKillPlan("core-a", before, ["t1"], one));
     const after = [
       before[0]!,
       child("remote/t2", "t1", { argv: ["/bin/sh"], pid: before[1]!.pid }),
     ];
     expect(
-      coreKillRefusal(coreKillPlan("core-a", after, ["t1"]), confirmed),
+      coreKillRefusal(coreKillPlan("core-a", after, ["t1"], one), confirmed),
+    ).toContain("running a different program");
+  });
+
+  test("a replacement that reuses both pid and argv still refuses", () => {
+    // Same pid, same argv: only the mirror's occupancy token tells them apart.
+    const terminals = [record("t1"), child("t2", "t1")];
+    const confirmed = confirmAll(
+      coreKillPlan("core-a", terminals, ["t1"], one),
+    );
+    const replaced = (address: string) => (address === "t2" ? 2 : 1);
+    expect(
+      coreKillRefusal(
+        coreKillPlan("core-a", terminals, ["t1"], replaced),
+        confirmed,
+      ),
+    ).toContain("running a different program");
+    expect(
+      coreKillRefusal(
+        coreKillPlan("core-a", terminals, ["t1"], (a) => (a === "t1" ? 3 : 1)),
+        confirmed,
+      ),
     ).toContain("running a different program");
   });
 });

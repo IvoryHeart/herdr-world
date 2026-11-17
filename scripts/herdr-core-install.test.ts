@@ -181,6 +181,31 @@ test.each([
   expect(result.log).not.toContain("core server");
 });
 
+test.each([
+  ["without Herdr Core.app", false],
+  ["with an unsigned Herdr Core.app", true],
+])(
+  "on macOS a release %s is refused before anything downloaded runs",
+  (_name, app) => {
+    // Runs only if the installer executes it: it must never.
+    const f = fixture({
+      app,
+      core: `#!/bin/sh\necho "downloaded core ran $*" >> "$HC_FIXTURE_LOG"\necho 'hc ${FIXTURE_CORE_VERSION}'\n`,
+    });
+    writeFileSync(
+      join(f.fakeBin, "uname"),
+      `#!/bin/sh\ncase "$1" in -m) echo arm64 ;; *) echo Darwin ;; esac\n`,
+      { mode: 0o755 },
+    );
+    const result = f.run("herdr_core_setup");
+    expect(result.code).not.toBe(0);
+    expect(result.err).toContain("not a signed Herdr release");
+    expect(result.log).not.toContain("downloaded core ran");
+    expect(existsSync(join(f.bin, "herdr-core"))).toBe(false);
+    expect(existsSync(loginEntry(f.home))).toBe(false);
+  },
+);
+
 test("a pinned version must match the release list", () => {
   const f = fixture();
   expect(f.run(`herdr_core_install ${FIXTURE_CORE_VERSION}`).code).toBe(0);

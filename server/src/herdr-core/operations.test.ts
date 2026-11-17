@@ -566,6 +566,29 @@ describe("kills name every native descendant (M7)", () => {
     expect(w.fake.calls.some((c) => c.method === "terminal.kill")).toBe(false);
   });
 
+  test("a replacement with the same pid and argv is still not the one confirmed", async () => {
+    const { w } = await family();
+    // A kept shell: its replacement is a shell too, with the same pid.
+    const shell = w.fake.create({
+      parent: "t1",
+      die_with_parent: true,
+      name: "shell",
+      argv: ["/bin/sh"],
+    });
+    await w.settle();
+    const plan = await planCoreKill(w.lease(), ["t1"]);
+    const before = w.fake.terminal(shell)!;
+    const [pid, argv] = [before.pid, [...before.argv]];
+    w.fake.replaceWithShell(shell, { reusePid: true });
+    await w.settle();
+    expect(w.fake.terminal(shell)!.pid).toBe(pid);
+    expect(w.fake.terminal(shell)!.argv).toEqual(argv);
+    await expect(killCore(w.lease(), ["t1"], confirmAll(plan))).rejects.toThrow(
+      "shell is running a different program",
+    );
+    expect(w.fake.calls.some((c) => c.method === "terminal.kill")).toBe(false);
+  });
+
   test("a confirmation from another core is refused", async () => {
     const { w } = await family();
     const plan = await planCoreKill(w.lease(), ["t1"]);

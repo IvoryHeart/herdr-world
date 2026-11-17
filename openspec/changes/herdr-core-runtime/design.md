@@ -33,7 +33,8 @@ core is a separate confirmed action that describes environment/startup effects.
 Installing core (owner ruling 2026-11-16) is the one such action. One reviewed
 POSIX script, `scripts/herdr-core-install.sh`, carries core's official steps:
 read the release list over HTTPS, download the archive for this target, check
-its SHA-256, unpack, confirm `--version`, then install to `~/.local/bin` and
+its SHA-256, unpack, on macOS require the signed `Herdr Core.app` and verify
+with `codesign` the executable that will run, confirm `--version`, then install to `~/.local/bin` and
 start core now and at login (a systemd user unit or a launchd LaunchAgent).
 Nothing downloaded runs as a script. The installers embed it and use it only
 when neither `hc` nor `herdr` exists; World's service sends it over `sh -s`

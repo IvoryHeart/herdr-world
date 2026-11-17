@@ -532,6 +532,7 @@ export class CoreProtocolFake {
           "core",
           this.latest!.terminals(),
           ["t1"],
+          (address) => this.latest!.occupancy(address),
         );
         this.confirmation = {
           coreId: plan.coreId,
@@ -559,6 +560,7 @@ export class CoreProtocolFake {
           "core",
           s.ready ? this.latest!.terminals() : [],
           ["t1"],
+          (address) => this.latest?.occupancy(address) ?? null,
         );
         const allowed =
           s.ready &&
@@ -590,6 +592,7 @@ export class CoreProtocolFake {
           "core",
           this.latest!.terminals(),
           ["t1"],
+          (address) => this.latest!.occupancy(address),
         );
         s.tornDown =
           plan.roots.length > 0 &&

@@ -5,6 +5,7 @@ import {
   type FloatShellService,
   MAX_FLOAT_INPUT_BYTES,
 } from "../herdr-core/float-shell";
+import { parseCoreKillConfirmation } from "../herdr-core/operations";
 import type { BridgeRpcContext } from "./context";
 
 type Socket = ServerWebSocket<unknown>;
@@ -68,8 +69,17 @@ export async function handleFloatRpc(rpc: BridgeRpcContext): Promise<void> {
         rows: Number(p.rows),
       });
     else if (method === "world.float.hide") service.hide(owner, stream);
-    else if (method === "world.float.stop") await service.stop(owner, stream);
-    else throw new Error(`unknown float shell operation: ${method}`);
+    else if (method === "world.float.stop") {
+      const { alsoEnded } = await service.stop(
+        owner,
+        stream,
+        p.confirmation === undefined || p.confirmation === null
+          ? null
+          : parseCoreKillConfirmation(p.confirmation),
+      );
+      sendReply({ id, result: { ok: true, alsoEnded } }, method);
+      return;
+    } else throw new Error(`unknown float shell operation: ${method}`);
     sendReply({ id, result: { ok: true } }, method);
   } catch (error) {
     sendError(`${method}-error`, error);

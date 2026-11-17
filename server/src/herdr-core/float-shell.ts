@@ -7,6 +7,13 @@ import {
   type CoreTerminalRecord,
 } from "./client";
 import { CoreFenceError, CoreOperationFence } from "./fence";
+import {
+  type CoreKillConfirmation,
+  coreEndedKeys,
+  coreKillPlan,
+  coreKillRefusal,
+  coreKillUnconfirmed,
+} from "./kill-plan";
 import type { CoreMirrorTerminal } from "./mirror";
 import type { CoreConnectionRuntime } from "./runtime";
 import { CORE_FLOAT_LABEL, coreRoomOf } from "./topology";
@@ -346,12 +353,40 @@ export class FloatShellService {
     this.drop(session);
   }
 
-  /** Ends the room's shell, exactly the one this stream shows. */
-  async stop(owner: FloatShellOwner, stream: string): Promise<void> {
+  /**
+   * Ends the room's shell, exactly the one this stream shows. Whatever was
+   * started in it with `die_with_parent` ends with it (core's cascade, M7),
+   * so, as for any core kill, `confirmation` (from `world.core.kill_plan`
+   * for the shell's address) must name every terminal that would end now,
+   * each still the program confirmed. A shell with nothing under it ends
+   * without one. Returns what core's cascade ended beyond the confirmation.
+   */
+  async stop(
+    owner: FloatShellOwner,
+    stream: string,
+    confirmation: CoreKillConfirmation | null = null,
+  ): Promise<{ alsoEnded: Array<{ address: string; name: string | null }> }> {
     const session = this.session(owner, stream);
     const lease = this.leaseFor(session.connectionId, session.generation);
     const record = lease.runtime.core.terminal(session.address);
-    if (!record || !isOurs(record, session.room)) return;
+    if (!record || !isOurs(record, session.room)) return { alsoEnded: [] };
+    const core = lease.runtime.core;
+    const coreId = core.epoch?.coreId ?? "";
+    const occupancyOf = (address: string) => core.occupancy(address);
+    const terminals = core.mirror.terminals();
+    const endedBefore = coreEndedKeys(terminals);
+    const plan = coreKillPlan(
+      coreId,
+      terminals,
+      [session.address],
+      occupancyOf,
+    );
+    const refusal = confirmation
+      ? coreKillRefusal(plan, confirmation)
+      : plan.descendants.length
+        ? `${plan.descendants.map((d) => d.name ?? d.address).join(", ")} would end too, and you did not confirm it.`
+        : null;
+    if (refusal) throw new FloatShellRefusal(`${refusal} Nothing was ended.`);
     try {
       await lease.runtime.shells.kill(
         CoreOperationFence.admit(lease, session.address, null, {
@@ -360,11 +395,32 @@ export class FloatShellService {
       );
     } catch (error) {
       // `rm` removes it as it ends: core can answer the kill `not_found`.
-      if (error instanceof CoreRpcError && error.kind === "not_found") return;
+      if (error instanceof CoreRpcError && error.kind === "not_found")
+        return { alsoEnded: [] };
       if (error instanceof CoreFenceError && error.reason === "occupant-gone")
-        return;
+        return { alsoEnded: [] };
       throw refusalFor(error);
     }
+    // Core's cascade is its own (Q11): name what it ended beyond the
+    // confirmation rather than report a clean end.
+    const confirmed = confirmation ?? {
+      coreId,
+      terminals: plan.roots.map(({ address, pid, occupant }) => ({
+        address,
+        pid,
+        occupant,
+      })),
+    };
+    return {
+      alsoEnded: coreKillUnconfirmed(
+        coreId,
+        core.mirror.terminals(),
+        [session.address],
+        confirmed,
+        endedBefore,
+        occupancyOf,
+      ).map(({ address, name }) => ({ address, name })),
+    };
   }
 
   /** The browser went away: every view it had is left, shells keep running. */

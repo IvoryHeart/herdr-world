@@ -1,7 +1,8 @@
 ### Added
 
 - With no runtime installed, the standalone installer and Homebrew's first
-  launch install herdr-core (checksum-verified), start it now and at login, and
+  launch install herdr-core (checksum-verified; on macOS only a release whose
+  Herdr signature checks out), start it now and at login, and
   connect World to it. An installed Herdr or herdr-core is kept as it is.
 - **Hosts → Manage connections** offers **Install herdr-core…** for this
   computer and each Unix SSH host, and on a core connection that found nothing

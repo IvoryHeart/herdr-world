@@ -660,8 +660,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   with its existing version and owner, and install nothing. When neither is
   found they install herdr-core: its release list over HTTPS, the archive for
   this computer checked against its SHA-256 (nothing downloaded runs as a
-  script), `~/.local/bin/herdr-core` plus an `hc` link if free, then core starts
-  now and at login (a systemd user unit or a launchd LaunchAgent) and World
+  script; on macOS a release without the signed Herdr Core.app is refused
+  before anything in it runs), `~/.local/bin/herdr-core` plus an `hc` link if
+  free, then core starts now and at login (a systemd user unit or a launchd
+  LaunchAgent) and World
   gets a `core-local` connection. Homebrew does this on first normal local World
   launch. A World too old to add the connection, or one already serving, says
   to add it under **Hosts → Manage connections**. With npm,
@@ -2434,8 +2436,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     by core in the agent's current folder, one per room. It shows over any
     view; **×**, a click outside it or `Ctrl+Alt+F` hides it and leaves it
     running, so opening it again (from any browser, which share it) shows the
-    same shell; **End shell** or `exit` ends it. Core lists it in Herdr's apps
-    as an unplaced terminal named `world-float-…` with the label
+    same shell; **End shell** or `exit` ends it. When something started in the
+    shell would end with it, **End shell** first names it and ends nothing
+    until you confirm, and refuses if more would end by then. Core lists it
+    in Herdr's apps as an unplaced terminal named `world-float-…` with the label
     `world.float`; World never shows it as a desk. Typing or resizing in a
     browser makes that browser's size count; once every view is hidden, core
     returns it to its headless size. World attaches only to a live terminal
