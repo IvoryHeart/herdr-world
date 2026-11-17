@@ -500,7 +500,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     last of the tables shown (**M** lists the same places). Rooms extend as
     tabs open: wide screens show three columns of rooms up to eight tables
     wide, portrait and half-width screens two columns up to six, and phones
-    one column up to four, growing downward. A folded room normally shows up to
+    three columns up to four, growing downward, so a phone opens on compact
+    room cards spread across each building rather than one long column. A folded room normally shows up to
     24 tables: pinned desks first, then the first tabs in the same order as
     Spaces, without promoting later working or recent tabs into that prefix. The bottom-right
     **» +N** tile sits beside the dashed **+** seat and counts hidden tables.
@@ -602,7 +603,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     those waiting at a stop queue along its pavement in joining order, in
     two rows when long, with a **+N** board at the end for any more; one put
     back walks home from the queue and those behind step up;
-    there is a stop at every road crossing, the leftmost included; its sign
+    there is a stop at every road crossing, the leftmost included (crossings a
+    step or two apart on one street share one); its sign
     is street furniture like the lamps, drawn behind buildings and agents and
     under labels and panels, and shrinking with the town as it zooms out (on
     a phone zoomed far out, the floating bin is the easier target). A

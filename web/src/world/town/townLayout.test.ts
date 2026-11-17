@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { townLandscape } from "./townLandscape";
+import { townLevel, townZoomLimits } from "./townCamera";
+import { townPhoneShape } from "./townLots";
 import {
   layoutTown,
   townPinnedOrder,
@@ -593,18 +595,47 @@ const columnsOf = (layout: TownLayout) => {
   return [...columns.values()];
 };
 
-test("a phone stacks rooms in one column and grows big rooms downward", () => {
+test("a phone spreads compact rooms across the floor, three per row (#889)", () => {
+  // The spread phone layout of 0.3.0, not one long column of rooms.
+  const input = town({ a: [2, 2, 2, 2, 2, 2] });
+  const { layout } = layoutTown(input, TOWN_SHAPES.phone);
+  const columns = columnsOf(layout);
+  expect(columns).toHaveLength(3);
+  for (const column of columns) expect(column).toHaveLength(2);
+  const rooms = layout.buildings[0]!.rooms;
+  const rows = [...new Set(rooms.map((room) => room.y))];
+  expect(rows).toHaveLength(2);
+  for (const y of rows)
+    expect(rooms.filter((room) => room.y === y)).toHaveLength(3);
+  // Far shorter than the same rooms in one column: less to scroll.
+  const column = layoutTown(input, { ...TOWN_SHAPES.phone, roomColumns: 1 });
+  expect(layout.buildings[0]!.h).toBeLessThan(
+    column.layout.buildings[0]!.h * 0.6,
+  );
+  // The first view fits the building's width at the overview level, where
+  // each room shows its card.
+  const phone = {
+    width: 390,
+    height: 844,
+    inset: { top: 70, right: 0, bottom: 90, left: 0 },
+  };
+  const limits = townZoomLimits(layout, phone);
+  expect(townLevel(limits.home, limits)).toBe("overview");
+});
+
+test("a phone keeps rooms four desks wide and grows big rooms downward", () => {
   const { layout } = layoutTown(
-    town({ a: [100, 50, 24], b: [3] }),
+    town({ a: [100, 50, 24, 3, 2, 1], b: [3] }),
     TOWN_SHAPES.phone,
   );
   expect(layout.formFactor).toBe("narrow");
-  expect(columnsOf(layout)).toHaveLength(1);
+  expect(columnsOf(layout)).toHaveLength(3);
   const rooms = layout.buildings[0]!.rooms;
   for (const room of rooms) expect(room.cols).toBeLessThanOrEqual(4);
-  for (let i = 1; i < rooms.length; i += 1)
-    expect(rooms[i]!.y).toBeGreaterThan(rooms[i - 1]!.y + rooms[i - 1]!.h);
-  // Buildings stack too.
+  expect(rooms[0]!.rows).toBeGreaterThan(4);
+  // The first row of rooms stands level, under the reception lobby.
+  expect(new Set(rooms.slice(0, 3).map((room) => room.y)).size).toBe(1);
+  // Buildings stack.
   expect(layout.buildings[1]!.y).toBeGreaterThan(
     layout.buildings[0]!.y + layout.buildings[0]!.h,
   );
@@ -828,8 +859,8 @@ test("the town center stands at the top, just across the first street", () => {
           2;
         expect(Math.abs(center.x + center.w / 2 - axis)).toBeLessThanOrEqual(1);
       }
-      // A phone's center fits its one-column building's view.
-      if (shape.roomColumns === 1)
+      // A phone's center fits its narrowest building's view.
+      if (townPhoneShape(shape))
         for (const building of buildings)
           expect(center.w).toBeLessThanOrEqual(building.w);
       // Its steps stand on a paved apron at the pavement; no tree on it.
