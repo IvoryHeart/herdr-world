@@ -50,6 +50,7 @@ import {
 } from "./boardLens";
 import type { BoardModel, BoardTab } from "./boardModel";
 import "../town/townBoard.css";
+import "../town/townOverlay.css";
 import "./boardLens.css";
 
 /** The card or pane row under the pointer or focus, for the legend. */

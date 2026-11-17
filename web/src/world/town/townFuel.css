@@ -4,16 +4,6 @@
   gap: 4px;
 }
 
-.town-fuel-title {
-  font:
-    700 11px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  letter-spacing: 0.04em;
-  color: #e7c48a;
-}
-
 .town-fuel-gauge {
   position: relative;
 }
@@ -26,18 +16,8 @@
   align-items: center;
   width: 100%;
   padding: 4px 6px;
-  color: inherit;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid transparent;
-  border-radius: 6px;
   font: inherit;
   text-align: left;
-  cursor: pointer;
-}
-
-.town-fuel-gauge > button:focus-visible {
-  outline: 2px solid #e7c48a;
-  outline-offset: 1px;
 }
 
 .town-fuel-name {
@@ -45,7 +25,6 @@
   overflow-wrap: anywhere;
   font-size: 11px;
   font-weight: 600;
-  color: #c9b79a;
 }
 
 /* Label, bar, value. Rows line up at their usual widths; a longer label or
@@ -62,7 +41,6 @@
 }
 
 .town-fuel-label {
-  color: #c9b79a;
   white-space: nowrap;
 }
 
@@ -70,14 +48,14 @@
   height: 6px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.45);
-  border: 1px solid #7a5536;
+  border: 1px solid var(--town-glass-line);
   border-radius: 2px;
 }
 
 .town-fuel-bar > span {
   display: block;
   height: 100%;
-  background: #c9b79a;
+  background: var(--town-glass-muted);
   transition: width 400ms ease-out;
 }
 
@@ -86,13 +64,13 @@
   white-space: nowrap;
 }
 
-/* Low fuel: Town's warning colour, always with the word "low". */
+/* Low fuel needs you: the attention colour, always with the word "low". */
 .town-fuel-window[data-low="true"] .town-fuel-bar > span {
-  background: var(--town-wait, #ffb547);
+  background: var(--town-attention, #ffb547);
 }
 
 .town-fuel-window[data-low="true"] .town-fuel-value {
-  color: var(--town-wait, #ffb547);
+  color: var(--town-attention, #ffb547);
   font-weight: 600;
 }
 
@@ -100,14 +78,13 @@
 .town-fuel-reached {
   grid-column: 2 / -1;
   min-width: 0;
-  color: var(--town-wait, #ffb547);
+  color: var(--town-attention, #ffb547);
   font-weight: 600;
 }
 
 /* A reading more than 15 minutes old: its age, muted, under the bars. */
 .town-fuel-age {
   grid-column: 2;
-  color: #c9b79a;
   font-size: 10px;
   font-style: italic;
   white-space: nowrap;
@@ -117,14 +94,9 @@
   border-style: dashed;
 }
 
-.town-fuel-gauge > button[data-stale="true"] .town-fuel-value {
-  color: #c9b79a;
-}
-
 /* A harness that keeps no readable limits: words, no bar. */
 .town-fuel-unavailable {
   grid-column: 1 / -1;
-  color: #c9b79a;
   font-style: italic;
 }
 
@@ -136,11 +108,6 @@
   top: calc(100% + 4px);
   display: none;
   padding: 6px 8px;
-  color: #f1efe6;
-  background: rgba(30, 22, 14, 0.98);
-  border: 1px solid #7a5536;
-  border-radius: 6px;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -159,7 +126,7 @@
 }
 
 .town-board-chip [data-status="fuel"][data-low="true"] {
-  color: var(--town-wait, #ffb547);
+  color: var(--town-attention, #ffb547);
 }
 
 .town-board-chip [data-status="fuel"] .town-fuel-age {

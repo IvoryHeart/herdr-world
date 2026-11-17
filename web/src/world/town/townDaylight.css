@@ -1,14 +1,8 @@
-/* The time-of-day button under Town's zoom controls (TownZoomControls). */
+/* The time-of-day button under Town's zoom controls (TownZoomControls). Its
+   icon says the mode; the colour stays neutral, as amber is for what needs
+   you (townOverlay.css). */
 .town-zoom-daylight {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.town-zoom-daylight[data-mode="dusk"] {
-  color: #ffc08a;
-}
-
-.town-zoom-daylight[data-mode="night"] {
-  color: #b9c6ff;
 }

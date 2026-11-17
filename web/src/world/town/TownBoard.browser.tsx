@@ -10,6 +10,7 @@ import "../../styles/base.css";
 import "../worldFonts.css";
 import "./town.css";
 import "./townBoard.css";
+import "./townOverlay.css";
 
 /*
  * The Town board's rows stay inside its border (#886). Synthetic usage: the

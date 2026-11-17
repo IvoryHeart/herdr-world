@@ -473,6 +473,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     question for you counts as waiting on you whatever its runtime status.
     A failed host's cached building stays dark. Day leaves the town as
     painted.
+  - Town's overlays share one style: the Town board (and its phone chips),
+    the zoom and time-of-day buttons, an agent's peek, toasts, and the hover
+    cards of rooms, tables and fuel gauges are the same translucent dark
+    panel, with one border, corner, shadow, type and spacing in World's light
+    and dark themes, readable over a white roof or the night. Their titles,
+    borders, buttons and focus rings are neutral. Amber in them marks only
+    what needs you: a **Waiting** count above zero, a waiting agent's peek,
+    the first answer to an agent's question and a **low** fuel gauge. The
+    time-of-day button keeps one neutral colour at dusk and night.
   - Zoomed into a room or desk, every agent that needs you outside the view
     gets an arrow on the view's edge pointing at it, with its mark (**!**,
     **?** or **✓**); arrows pointing the same way or at one building merge

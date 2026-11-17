@@ -613,7 +613,8 @@
   outline-offset: calc(2px * var(--iz));
 }
 
-/* Camera controls sit centred on the right edge on every layout. */
+/* Camera controls sit centred on the right edge on every layout; their
+   surface and buttons are Town's overlay style (townOverlay.css). */
 .town-zoom {
   position: absolute;
   z-index: 6;
@@ -622,12 +623,8 @@
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px;
-  background: rgba(17, 21, 29, 0.9);
-  border: 2px solid #090c11;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  gap: var(--town-glass-gap, 6px);
+  padding: var(--town-glass-gap, 6px);
 }
 
 .town-zoom button {
@@ -638,22 +635,11 @@
     700 18px "Pixelify Sans",
     ui-monospace,
     monospace;
-  color: #f1efe6;
-  background: #273141;
-  border: 2px solid #090c11;
-  border-radius: 9px;
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35);
-  cursor: pointer;
-}
-
-.town-zoom button:focus-visible {
-  outline: 2px solid #ffd166;
-  outline-offset: 2px;
 }
 
 .town-zoom .town-zoom-all {
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font: var(--town-glass-label);
+  letter-spacing: 0.08em;
 }
 
 .town-zoom .town-zoom-more {
@@ -730,54 +716,15 @@
 
 /* ---------- Town HUD: peek, chat dock, toasts ---------- */
 
-.town-peek,
-.town-toast {
-  color: var(--town-text);
-  background: var(--town-panel);
-  border: 2px solid var(--town-edge);
-  border-radius: 12px;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
-    0 10px 30px rgba(0, 0, 0, 0.35);
-  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
-}
+/* Surfaces, buttons and focus rings: Town's overlay style (townOverlay.css). */
 
 .town-view-shell button {
   font: inherit;
 }
 
-.town-peek button {
-  color: var(--town-text);
-  background: var(--town-btn);
-  border: 2px solid var(--town-edge);
-  border-radius: 9px;
-  box-shadow:
-    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
-    inset 0 2px 0 rgba(255, 255, 255, 0.07);
-  cursor: pointer;
-  transition:
-    transform 0.08s ease,
-    filter 0.15s ease;
-}
-
-.town-peek button:hover {
-  filter: brightness(1.12);
-}
-
-.town-peek button:active {
-  transform: translateY(1px);
-}
-
 .town-peek button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  filter: none;
-}
-
-.town-peek button:focus-visible,
-.town-peek input:focus-visible {
-  outline: 2px solid var(--town-accent);
-  outline-offset: 2px;
 }
 
 .town-view-shell .town-hot {
@@ -815,13 +762,8 @@
   position: absolute;
   z-index: 8;
   width: min(340px, calc(100% - 24px));
-  padding: 10px;
   box-sizing: border-box;
   animation: town-peek-in 0.16s ease-out;
-}
-
-.town-peek-blocked {
-  border-color: #5a4410;
 }
 
 @keyframes town-peek-in {
@@ -873,7 +815,6 @@
   display: block;
   margin-top: 3px;
   font-size: 12px;
-  color: var(--town-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -924,7 +865,6 @@
   display: block;
   margin-top: 4px;
   font-size: 11px;
-  color: var(--town-muted);
 }
 
 .town-peek-message.is-error {
@@ -954,7 +894,7 @@
 }
 
 .town-peek .town-peek-markdown code {
-  color: #ffe0a8;
+  color: #e6edf3;
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -982,7 +922,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: var(--town-muted);
 }
 
 .town-peek-unavailable strong {
@@ -991,12 +930,11 @@
 
 .town-peek-unavailable code {
   overflow-wrap: anywhere;
-  color: #ffe0a8;
+  color: #e6edf3;
 }
 
 .town-peek-empty {
   margin: 0;
-  color: var(--town-muted);
 }
 
 .town-answers {
@@ -1015,11 +953,6 @@
   min-height: 36px;
   padding: 5px 8px;
   font-size: 13px;
-}
-
-.town-answers button:first-child {
-  color: #1f1606;
-  background: #e3aa3a;
 }
 
 .town-answers button span {
@@ -1073,8 +1006,6 @@
   gap: 10px;
   width: 100%;
   box-sizing: border-box;
-  padding: 9px 12px;
-  font-size: 13px;
   animation: town-toast-in 0.35s cubic-bezier(0.2, 0.95, 0.25, 1.15);
 }
 

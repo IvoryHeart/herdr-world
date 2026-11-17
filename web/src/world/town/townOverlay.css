@@ -1,0 +1,165 @@
+/*
+ * Town's overlays share one style: the Town board (and its phone chips), the
+ * zoom controls, an agent's peek, toasts and the hover cards of rooms, tables
+ * and fuel gauges. One translucent dark surface, one hairline border, one
+ * radius, shadow, type and spacing, the same in World's light and dark
+ * themes. The world under them carries the state; overlays stay quiet.
+ *
+ * Amber is reserved for what needs you: a waiting count, an agent's
+ * question and its answer, a waiting agent's peek and low fuel. Titles,
+ * borders, focus rings and actions are neutral (townOverlay.test.ts guards
+ * this and the contrast of these tokens).
+ */
+
+.town-shell,
+.town-view-shell,
+.town-summary,
+.board-lens-dock {
+  /* Board view docks the Town lens legend and recap (BoardLenses.tsx). */
+  /* 88 % opaque: text keeps WCAG AA over a white or a black town. */
+  --town-glass: rgba(14, 17, 28, 0.88);
+  --town-glass-line: rgba(255, 255, 255, 0.14);
+  /* Insets inside a surface: count cells, buttons, gauges. */
+  --town-glass-fill: rgba(255, 255, 255, 0.06);
+  --town-glass-fill-hover: rgba(255, 255, 255, 0.12);
+  --town-glass-text: #f1efe6;
+  --town-glass-muted: #b6bec9;
+  --town-glass-focus: #f1efe6;
+  --town-glass-radius: 12px;
+  --town-glass-inset-radius: 8px;
+  --town-glass-pad: 10px 12px;
+  --town-glass-gap: 6px;
+  --town-glass-shadow: 0 10px 30px rgba(4, 6, 14, 0.42);
+  --town-glass-blur: blur(10px) saturate(1.2);
+  --town-glass-label:
+    700 10px "Silkscreen", "Pixelify Sans", ui-monospace, monospace;
+  /* The one colour for what needs you (Town's wait colour). */
+  --town-attention: #ffb547;
+  --town-attention-ink: #2a1a04;
+}
+
+.town-board,
+.town-board-chip,
+.town-recap-chip,
+.town-zoom,
+.town-peek,
+.town-toast,
+.town-place-card,
+.town-fuel-details {
+  color: var(--town-glass-text);
+  background: var(--town-glass);
+  border: 1px solid var(--town-glass-line);
+  border-radius: var(--town-glass-radius);
+  box-shadow: var(--town-glass-shadow);
+  -webkit-backdrop-filter: var(--town-glass-blur);
+  backdrop-filter: var(--town-glass-blur);
+  font-family: var(
+    --town-ui-font,
+    "Rubik",
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif
+  );
+}
+
+/* The panels' one text size and padding; the chips and the camera group
+   keep their compact sizes. */
+.town-board,
+.town-peek,
+.town-toast,
+.town-place-card {
+  padding: var(--town-glass-pad);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+/* Small capital labels: a panel's title and its section names. */
+.town-board-title,
+.town-board-economy span,
+.town-fuel-title {
+  font: var(--town-glass-label);
+  letter-spacing: 0.08em;
+  color: var(--town-glass-muted);
+}
+
+/* Secondary words inside any overlay. */
+.town-board-counts dt,
+.town-board-population,
+.town-board-economy small,
+.town-fuel-name,
+.town-fuel-label,
+.town-fuel-age,
+.town-fuel-unavailable,
+.town-fuel-gauge > button[data-stale="true"] .town-fuel-value,
+.town-peek-head small,
+.town-peek-message time,
+.town-peek-unavailable,
+.town-peek-empty {
+  color: var(--town-glass-muted);
+}
+
+/* Buttons inside an overlay: a quiet inset that brightens on hover. */
+.town-board-open,
+.town-peek button,
+.town-zoom button,
+.town-fuel-gauge > button {
+  color: var(--town-glass-text);
+  background: var(--town-glass-fill);
+  border: 1px solid var(--town-glass-line);
+  border-radius: var(--town-glass-inset-radius);
+  box-shadow: none;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.town-board-open:hover,
+.town-peek button:hover,
+.town-zoom button:hover,
+.town-fuel-gauge > button:hover {
+  background: var(--town-glass-fill-hover);
+}
+
+.town-board-open:focus-visible,
+.town-board-chip:focus-visible,
+.town-recap-chip:focus-visible,
+.town-peek button:focus-visible,
+.town-peek input:focus-visible,
+.town-zoom button:focus-visible,
+.town-fuel-gauge > button:focus-visible,
+.town-toast-action:focus-visible,
+.town-board .town-expenses-caveats:focus-visible,
+.town-place-card .town-expenses-caveats:focus-visible {
+  outline: 2px solid var(--town-glass-focus);
+  outline-offset: 2px;
+}
+
+/* What needs you: a waiting count, a waiting agent's peek and the first
+   answer to its question. */
+.town-board-counts [data-status="blocked"][data-attention="true"] dd,
+.town-board-chip [data-status="blocked"][data-attention="true"] {
+  color: var(--town-attention);
+}
+
+.town-peek-blocked {
+  border-color: color-mix(in srgb, var(--town-attention) 60%, transparent);
+}
+
+.town-peek .town-answers-question button:first-child {
+  color: var(--town-attention-ink);
+  background: var(--town-attention);
+  border-color: var(--town-attention);
+}
+
+.town-peek .town-answers-question button:first-child:hover {
+  background: color-mix(in srgb, var(--town-attention) 88%, white);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-board-open,
+  .town-peek button,
+  .town-zoom button,
+  .town-fuel-gauge > button {
+    transition: none;
+  }
+}

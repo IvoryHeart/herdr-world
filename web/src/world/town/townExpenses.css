@@ -223,7 +223,7 @@
 
 .town-expenses-caveats.town-board-economy-caveats {
   font-size: 11px;
-  color: #c9b79a;
+  color: var(--town-glass-muted, #c9b79a);
 }
 
 .town-expenses-explain {

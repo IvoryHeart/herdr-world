@@ -1,4 +1,5 @@
-/* The Town board in the square, and its compact chip on phones. */
+/* The Town board in the square, and its compact chip on phones. Surfaces,
+   labels, buttons and the waiting colour: townOverlay.css. */
 .town-board {
   position: absolute;
   left: 16px;
@@ -9,26 +10,10 @@
      value) shrinks, wraps or ellipsizes inside it rather than widening the
      column and pushing every row past the border (#886). */
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
+  gap: var(--town-glass-gap, 6px);
   width: 236px;
-  padding: 8px 10px 10px;
-  color: #f1efe6;
-  background: rgba(30, 22, 14, 0.94);
-  border: 2px solid #7a5536;
-  border-radius: 10px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
   pointer-events: auto;
-}
-
-.town-board-title,
-.town-board-economy span {
-  font:
-    700 11px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  letter-spacing: 0.04em;
-  color: #e7c48a;
 }
 
 .town-board-counts {
@@ -40,8 +25,8 @@
 
 .town-board-counts div {
   padding: 4px 6px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 6px;
+  background: var(--town-glass-fill);
+  border-radius: var(--town-glass-inset-radius);
 }
 
 .town-board-counts dt {
@@ -49,11 +34,11 @@
   font-size: 10px;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: #c9b79a;
 }
 
 .town-board-counts dd {
   margin: 0;
+  font-size: 16px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -61,7 +46,6 @@
 .town-board-population {
   margin: 0;
   font-size: 11px;
-  color: #c9b79a;
   font-variant-numeric: tabular-nums;
 }
 
@@ -79,7 +63,6 @@
 
 .town-board-economy small {
   font-size: 11px;
-  color: #c9b79a;
 }
 
 /* Share the expense boards' readable digits, including room/table cards. */
@@ -102,12 +85,7 @@
 
 .town-board-open {
   padding: 2px 8px;
-  border: 1px solid #7a5536;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.25);
-  color: #e7c48a;
   font: inherit;
-  cursor: pointer;
 }
 
 .town-board-chip {
@@ -125,25 +103,11 @@
     align-items: center;
     min-height: 32px;
     padding: 0 10px;
-    color: #f1efe6;
-    background: rgba(30, 22, 14, 0.94);
-    border: 2px solid #7a5536;
-    border-radius: 999px;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
-    font:
-      700 12px "Silkscreen",
-      "Pixelify Sans",
-      ui-monospace,
-      monospace;
+    font-size: 12px;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
     pointer-events: auto;
     cursor: pointer;
-  }
-  .town-board-chip [data-status="blocked"] {
-    color: #f6b54a;
-  }
-  .town-board-chip [data-status="done"] {
-    color: #8fd18f;
   }
   .town-board {
     top: 92px;
@@ -160,9 +124,9 @@
   display: grid;
   gap: 4px;
   padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid #e7c48a;
-  border-radius: 6px;
+  background: var(--town-glass-fill);
+  border: 1px solid var(--town-glass-line);
+  border-radius: var(--town-glass-inset-radius);
   animation: town-recap-in 0.3s ease-out;
 }
 
@@ -172,7 +136,7 @@
   justify-content: space-between;
   gap: 6px;
   font-size: 11px;
-  color: #e7c48a;
+  color: var(--town-glass-muted);
 }
 
 .town-recap ul {
@@ -236,11 +200,6 @@
     max-width: calc(100vw - 24px);
     min-height: 30px;
     padding: 0 10px;
-    color: #f1efe6;
-    background: rgba(30, 22, 14, 0.94);
-    border: 2px solid #e7c48a;
-    border-radius: 999px;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
     font-size: 12px;
     pointer-events: auto;
     cursor: pointer;

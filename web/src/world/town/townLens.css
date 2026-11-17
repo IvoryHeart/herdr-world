@@ -192,7 +192,7 @@
   pointer-events: none;
 }
 
-/* The legend: the Town board's box, the board's look. */
+/* The legend: the Town board's box in Town's overlay style (townOverlay.css). */
 .town-board.town-lens-legend {
   gap: 6px;
   width: 260px;
@@ -208,17 +208,17 @@
 .town-lens-legend button {
   min-height: 28px;
   padding: 2px 8px;
-  color: #f1efe6;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid #7a5536;
-  border-radius: 6px;
+  color: var(--town-glass-text);
+  background: var(--town-glass-fill);
+  border: 1px solid var(--town-glass-line);
+  border-radius: var(--town-glass-inset-radius);
   font: inherit;
   cursor: pointer;
 }
 
 .town-lens-name {
   overflow: hidden;
-  color: #e7c48a !important;
+  color: var(--town-glass-muted) !important;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -249,8 +249,8 @@
 }
 
 .town-lens-choices button[aria-checked="true"] {
-  color: #2a1a04;
-  background: #e7c48a;
+  color: #11151c;
+  background: var(--town-glass-text);
 }
 
 .town-lens-scale {
@@ -261,7 +261,7 @@
   padding: 0;
   list-style: none;
   font-size: 11px;
-  color: #d9cdb6;
+  color: var(--town-glass-text);
 }
 
 .town-lens-scale li {
@@ -286,7 +286,7 @@
 .town-lens-readout {
   margin: 0;
   font-size: 11px;
-  color: #c9b79a;
+  color: var(--town-glass-muted);
 }
 
 .town-lens-readout {

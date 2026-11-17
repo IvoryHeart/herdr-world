@@ -1,17 +1,20 @@
-/* A toast's one action (Tidy rooms' Undo), as Board's toast offers it. */
+/* A toast's one action (Tidy rooms' Undo), as Board's toast offers it. The
+   toast's surface and focus ring are Town's overlay style (townOverlay.css). */
 .town-toast-action {
   margin-left: auto;
   padding: 2px 6px;
   border: 0;
   border-radius: 6px;
-  color: var(--town-accent, #ffd166);
+  color: var(--town-glass-text, #f1efe6);
   background: transparent;
   font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
   pointer-events: auto;
 }
 
 .town-toast-action:hover,
 .town-toast-action:focus-visible {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--town-glass-fill-hover, rgba(255, 255, 255, 0.12));
 }
