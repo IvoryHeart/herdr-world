@@ -4,6 +4,17 @@
   width: 100%;
 }
 
+.core-install-test {
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--warning-text);
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--yellow) 48%, var(--border));
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
 .core-install-facts,
 .core-install-lines {
   margin: 0;

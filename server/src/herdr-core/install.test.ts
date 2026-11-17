@@ -226,9 +226,14 @@ describe("herdr-core install from World", () => {
     h.install.install({ type: "local" }, "0.1.21", "ok");
     const ok = await settle(h.install, { type: "local" });
     expect(ok).toMatchObject({ phase: "done", connection_id: "core-fixture" });
+    // Every simulated line and failure says so (#931).
+    expect(ok.lines.length).toBeGreaterThan(0);
+    for (const line of ok.lines) expect(line).toStartWith("Simulated: ");
     h.install.install({ type: "local" }, "0.1.21", "error");
     const failed = await settle(h.install, { type: "local" });
+    expect(failed.error).toStartWith("Simulated: ");
     expect(failed.error).toContain("checksum mismatch");
+    for (const line of failed.lines) expect(line).toStartWith("Simulated: ");
     expect(h.calls).toHaveLength(0);
   });
 

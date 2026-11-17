@@ -368,27 +368,30 @@ export function createCoreInstall(deps: CoreInstallDeps) {
     try {
       if (fake) {
         // The testing switch: progress a person can watch, then the preview
-        // fixture core stands in for the installed one. Nothing is installed.
+        // fixture core stands in for the installed one. Nothing is installed,
+        // and every line and the failure say "Simulated:" so a person never
+        // mistakes them for a real host's result (#931).
+        const simulate = (line: string) => say(`Simulated: ${line}`);
         for (const line of [
           "Reading the herdr-core release list...",
           `Downloading herdr-core ${job.version} for linux-x86_64...`,
           ...(fake === "error" ? [] : ["Checksum verified. Unpacking..."]),
         ]) {
-          say(line);
+          simulate(line);
           await sleep(700);
         }
         if (fake === "error")
           throw new Error(
-            "the download is damaged (checksum mismatch); try again",
+            "Simulated: the download is damaged (checksum mismatch). This is the test switch; nothing was downloaded.",
           );
-        say(
+        simulate(
           `Installed herdr-core ${job.version} into ~/.local/bin/herdr-core.`,
         );
-        say("herdr-core will start at login (systemd user unit).");
-        say("Starting herdr-core...");
+        simulate("herdr-core will start at login (systemd user unit).");
+        simulate("Starting the preview's fixture core instead...");
         if (!deps.fixture) throw new Error("the preview core is not available");
         await deps.fixture.start();
-        say("herdr-core is running.");
+        simulate("the fixture core is running.");
         job.connection_id = CORE_FIXTURE_CONNECTION_ID;
       } else {
         const result = await run(

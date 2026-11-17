@@ -47,6 +47,7 @@ export function CoreInstallPanel({
   const chosen = connection ? { connection: connection.id } : {};
   const mounted = useRef(true);
   const where = hostLabel(host);
+  const simulated = !!coreInstallFake();
 
   useEffect(() => {
     mounted.current = true;
@@ -136,6 +137,7 @@ export function CoreInstallPanel({
       data-core-install={hostKey(host)}
       aria-busy={step.kind === "checking" || step.kind === "installing"}
     >
+      {simulated ? <TestModeNote /> : null}
       {step.kind === "checking" ? (
         <p role="status" className="core-install-working">
           <LoaderCircle size={14} className="core-install-spinner" /> Checking{" "}
@@ -148,6 +150,7 @@ export function CoreInstallPanel({
           probe={step.probe}
           version={step.version}
           session={connection?.session ?? "default"}
+          simulated={simulated}
           onConfirm={() => void install(step.version)}
           onCancel={onClose}
         />
@@ -199,11 +202,25 @@ export function CoreInstallPanel({
   );
 }
 
-function Confirm({
+/**
+ * The `?coreInstall` testing switch applies to every host, real SSH hosts
+ * included, so each panel says so before and during the run (#931).
+ */
+export function TestModeNote() {
+  return (
+    <p className="core-install-test" data-core-install-test>
+      Test mode: nothing is installed, and this result is simulated. Reload
+      World without <code>?coreInstall</code> to install for real.
+    </p>
+  );
+}
+
+export function Confirm({
   where,
   probe,
   version,
   session,
+  simulated = false,
   onConfirm,
   onCancel,
 }: {
@@ -211,6 +228,8 @@ function Confirm({
   probe: CoreHostProbe;
   version: string | null;
   session: string;
+  /** The testing switch is on: the button says it simulates. */
+  simulated?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -273,7 +292,13 @@ function Confirm({
       <div className="connection-profile-actions">
         <button type="button" data-initial-focus onClick={onConfirm}>
           <Download size={14} />{" "}
-          {installed ? "Start and connect" : "Install and start"}
+          {simulated
+            ? installed
+              ? "Simulate start and connect (test)"
+              : "Simulate install and start (test)"
+            : installed
+              ? "Start and connect"
+              : "Install and start"}
         </button>
         <button type="button" onClick={onCancel}>
           Cancel

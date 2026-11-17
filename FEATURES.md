@@ -2034,9 +2034,14 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   build (anything but Linux or macOS on x86_64 or arm64) says so; Windows SSH
   hosts are not offered. Automatic connects and reconnects never install or
   start core. Testing switch: open World with `?coreInstall=fake` (or
-  `?coreInstall=error`); the parameter disappears at once and installs are
-  simulated until a reload: progress, then the preview's fixture core (or a
-  checksum error). Nothing is installed.
+  `?coreInstall=error`); the parameter disappears at once and installs on
+  every host, real SSH hosts included, are simulated until a reload:
+  progress, then the preview's fixture core (or a checksum error). Nothing is
+  installed. While it is on, each install step says "Test mode: nothing is
+  installed, and this result is simulated", its button reads **Simulate
+  install and start (test)**, and every progress line and the failure start
+  with "Simulated:". A reload without the parameter ends test mode; nothing
+  keeps it.
   **A Windows host over SSH** needs Windows PowerShell (`powershell.exe`,
   built into Windows) and SSH key login. World runs two fixed PowerShell
   scripts there and nothing else: one reads
