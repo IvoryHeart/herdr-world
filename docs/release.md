@@ -81,8 +81,10 @@ published RC on the owner's existing installation before promoting a stable rele
 Before publishing, the Release workflow's Linux x64 package job runs
 `bun run test:install-linux --reuse --version <release-version> --require-docker`
 against the exact package it will upload. A failed case blocks the package job and
-therefore GitHub, npm and Homebrew publication. To reproduce before a release, run
-`bun run test:install-linux` locally; see the [runbook](development.md#linux-installation-acceptance)
+therefore GitHub, npm and Homebrew publication. The release job authenticates its
+latest-stable baseline lookup with the workflow token; the native CI matrix reuses
+its already frozen baseline tag without another API lookup. To reproduce before a
+release, run `bun run test:install-linux` locally; see the [runbook](development.md#linux-installation-acceptance)
 for requirements, pins, failure diagnostics and case maintenance.
 
 The same suite runs in the Linux x64 job of `installer-upgrade.yml`, which feeds

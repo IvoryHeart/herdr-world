@@ -7,6 +7,7 @@ import {
   dockerArguments,
   withInstallResources,
   installOptions,
+  installBaselineTag,
 } from "./install-linux";
 import { latestStableRelease } from "./installer-upgrade";
 
@@ -157,6 +158,32 @@ test("container and native upgrades share the published stable baseline policy",
   }
 });
 
+test("container installs reuse the frozen native baseline without a second lookup", async () => {
+  const unavailable = (async () => {
+    throw new Error("GitHub baseline lookup failed: 403");
+  }) as unknown as typeof fetch;
+  expect(await installBaselineTag("v1.2.3", unavailable)).toBe("v1.2.3");
+  for (const tag of ["v1.2.3-rc.1", "../bad", "v01.2.3"]) {
+    await expect(installBaselineTag(tag, unavailable)).rejects.toThrow(
+      "stable version tag",
+    );
+  }
+});
+
+test("without a frozen baseline, container installs resolve the latest stable release", async () => {
+  let calls = 0;
+  const download = (async () => {
+    calls++;
+    return Response.json({
+      tag_name: "v1.2.4",
+      draft: false,
+      prerelease: false,
+    });
+  }) as unknown as typeof fetch;
+  expect(await installBaselineTag("", download)).toBe("v1.2.4");
+  expect(calls).toBe(1);
+});
+
 test("systemd acceptance blocks the existing native gate and release publication", async () => {
   const native = Bun.YAML.parse(
     await Bun.file(".github/workflows/installer-upgrade.yml").text(),
@@ -183,4 +210,8 @@ test("systemd acceptance blocks the existing native gate and release publication
   expect(ci.jobs.delivery.name).toBe("Delivery checks");
   expect(ci.jobs.delivery.needs).toContain("installer-upgrade");
   expect(release.jobs.publish.needs).toBe("package");
+  const releaseInstall = release.jobs.package.steps.find((item: any) =>
+    item.run?.includes("test:install-linux"),
+  );
+  expect(releaseInstall.env.GH_TOKEN).toBe("${{ github.token }}");
 });

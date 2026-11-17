@@ -85,7 +85,12 @@ Every default run uses four fresh containers:
 
 The upgrade uses the same stable-release resolver and current-shell-installer
 policy as `scripts/installer-upgrade.ts`; it supplements that native matrix's
-plugin, auth and migration coverage. Only the upgrade baseline opts out of runtime
+plugin, auth and migration coverage. In CI it reuses the validated
+`INSTALLER_BASELINE_TAG` frozen by the native matrix, without another GitHub API
+lookup. Otherwise it resolves the latest stable release; set `GH_TOKEN` locally
+to authenticate that lookup if shared-IP rate limits apply. The release workflow
+supplies its read-capable token for this lookup. Tokens stay outside the containers.
+Only the upgrade baseline opts out of runtime
 bootstrap while its pre-existing state is prepared. Other installations run real
 runtime setup. The TUI executable comes from the official release URL and must
 match the repository's reviewed SHA-256 before execution. Core comes from its

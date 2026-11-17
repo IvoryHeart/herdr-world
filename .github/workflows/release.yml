@@ -112,6 +112,8 @@ jobs:
         run: scripts/verify-release-package.sh "${GITHUB_REF_NAME#v}" "${{ matrix.platform }}"
       - name: Verify real Linux installations and reboot before publication
         if: matrix.platform == 'linux-x64'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bun run test:install-linux --reuse --version "${GITHUB_REF_NAME#v}" --require-docker
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:

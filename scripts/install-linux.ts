@@ -22,6 +22,21 @@ const cases = ["fresh", "tui", "stopped", "upgrade"] as const;
 type Run = (args: string[], env?: Record<string, string>) => Promise<string>;
 type Resources = { containers: Set<string>; image?: string };
 
+/** CI already froze the native baseline; avoid rate limits and release races. */
+export async function installBaselineTag(
+  frozenTag = process.env.INSTALLER_BASELINE_TAG,
+  download: typeof fetch = fetch,
+) {
+  if (frozenTag) {
+    assert(
+      /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(frozenTag),
+      "Baseline must have a stable version tag",
+    );
+    return frozenTag;
+  }
+  return (await latestStableRelease(download)).tag;
+}
+
 export function installOptions(args: string[]) {
   const options = {
     reuse: false,
@@ -263,7 +278,7 @@ async function main() {
           "Injected skip-register into the disposable installer copy; expect fresh to fail.",
         );
       }
-      const { tag } = await latestStableRelease();
+      const tag = await installBaselineTag();
       writeFileSync(
         join(assets, "config.json"),
         JSON.stringify({
