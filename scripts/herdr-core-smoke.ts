@@ -20,11 +20,14 @@ const suiteDir = join(import.meta.dir, "../server/src/herdr-core");
 
 function runLiveTests(binary: string, suites: string[]): number {
   return (
-    Bun.spawnSync([process.execPath, "test", ...suites], {
-      env: { ...process.env, HERDR_CORE_BIN: binary },
-      stdout: "inherit",
-      stderr: "inherit",
-    }).exitCode ?? 1
+    Bun.spawnSync(
+      [process.execPath, "scripts/run-tests.ts", "--live", ...suites],
+      {
+        env: { ...process.env, HERDR_CORE_BIN: binary },
+        stdout: "inherit",
+        stderr: "inherit",
+      },
+    ).exitCode ?? 1
   );
 }
 

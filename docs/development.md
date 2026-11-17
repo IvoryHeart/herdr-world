@@ -173,7 +173,7 @@ in [the handover](../openspec/changes/herdr-core-runtime/delivery.md#owner-devic
 
 ```bash
 bun run typecheck:quick       # source types without regenerating embedded assets
-bun test <path>               # focused Bun test
+bun run test <path>           # focused Bun test
 bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
@@ -183,6 +183,52 @@ bun run build:site            # landing page/tutorial
 bun run check                 # repository checks and tests
 bun run check:delivery        # full local gate, including behavioral verification
 ```
+
+Use `bun run test <path>` for every ordinary test, including focused cases.
+The runner creates HOME and every XDG directory before launching Bun (a preload
+cannot change Bun's cached home), removes inherited runtime/account settings and
+builds a PATH from system tools plus the selected toolchain. Installed Herdr,
+core and World, real harness records and SSH configuration are unavailable.
+Tests that need configuration must write synthetic fixtures under scratch.
+Runner-owned browser diagnostics retain `HERDR_DIAGNOSTIC_CHROME`,
+`HERDR_BROWSER_DIAGNOSTICS_DIR` and `HERDR_BROWSER_DIAGNOSTICS_MODE`, including
+through nested runners, so CI's Chrome adapter can launch and write its artifacts.
+
+The preload guards Bun and Node process calls, fetch, WebSocket and socket
+connections. Shell children also receive guarded service, SSH and download
+commands; source Bun children carry the preload. A tripwire names the refused
+call and leaves a run-owned failure record, so catching the exception cannot
+hide it. Use injected `detect`, `run`, `download` and transport doubles, or
+scratch executables. Installer fixtures pass an explicit scratch HOME and PATH
+with fake curl/service/runtime commands. Use dynamic loopback ports and scratch
+sockets; never use the running services on 8787/8788. The guard prevents accidental
+host operations; it is not a sandbox for deliberately adversarial test code.
+Executable checks compare resolved filesystem identities for both the fixture
+and its scratch root, so macOS `/var` and `/tmp` aliases work without permitting
+fixture symlinks to host executables.
+
+Run a live test explicitly, for example
+`HERDR_CORE_BIN=/path/to/disposable/core bun run test --live server/src/herdr-core/core.live.test.ts`.
+Only named live files may use `--live`; ordinary inventory ignores inherited
+live flags. Live suites still get a scratch home and keep their existing isolated
+runtime setup and teardown. They bypass both preload and shell-command guards,
+and retain a supplied `XDG_RUNTIME_DIR` for user-manager access; config, cache,
+data and state remain in scratch. `bun scripts/herdr-core-smoke.ts` is the separate,
+explicit download-and-live release check. Direct `bun test` explains which
+wrapper to use and exits before loading tests. The resource-verification gate uses
+this explicit live route for its real-cgroup controls, retaining
+`HERDR_RESOURCE_MANAGER=user|system` only in live runs; ordinary test inventory
+cannot inherit that selection.
+
+The portability lint in `bun run lint` catches renamed coreutils process fixtures:
+uutils dispatches on the executable name and may reject a symlinked `sleep` that
+GNU accepts. Preserve command basenames when constructing a fixture PATH; use a
+shell blocked on stdin or a compiled probe when a process needs an unusual name.
+This covers the known CI tool gap without container startup in the pre-push gate.
+
+Ranger recovery fixtures use a saved synthetic custom model with a loopback
+endpoint. They exercise the real SDK in source and standalone processes without
+relying on fetch-preload ordering to redirect a production provider address.
 
 Process fixtures run fake behavior in the test process where practical. The
 [diagnostics adapter](../scripts/browser-diagnostics.ts) and
@@ -293,8 +339,8 @@ Use the World runner, or isolate files even when running one at a time:
 
 ```bash
 bun run test:world
-bun test ./web/src/world/ProductionContexts*.test.ts --parallel=1
-bun test ./web/src/world/HostsFilter*.test.ts --parallel=1
+bun run test ./web/src/world/ProductionContexts*.test.ts --parallel=1
+bun run test ./web/src/world/HostsFilter*.test.ts --parallel=1
 ```
 
 `--parallel=1` runs one file at a time with isolated modules, avoiding the shared

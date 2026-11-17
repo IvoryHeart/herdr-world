@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import {
-  copyFileSync,
-  existsSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CoreClient } from "./client";
 import { deliverCore } from "./delivery";
@@ -130,10 +124,14 @@ describe("World's session input to a real herdr-core", () => {
     "a silent harness trust dialog receives no automatic brief or Enter",
     async () => {
       const s = await scratchWorld();
-      // cat reports no OSC status and records/echoes every byte it receives.
+      // A shell echo loop reports no OSC status and echoes every byte it receives.
       // Its executable has a supported generic harness name, without credentials.
       const executable = join(s.core.root, "copilot");
-      copyFileSync("/bin/cat", executable);
+      writeFileSync(
+        executable,
+        '#!/bin/sh\nwhile IFS= read -r line; do printf "%s\\n" "$line"; done\n',
+        { mode: 0o755 },
+      );
       const run = JSON.parse(
         await s.core.hc(
           "run",

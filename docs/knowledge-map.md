@@ -30,6 +30,16 @@ React version evidence and the development diagnostic patch are maintained in
 [the installed-renderer regression](../web/src/testing/reactPerformanceTracks.test.ts).
 Notification wiring is described in the [World startup guide](../web/src/world/README.md#application-startup-and-owner-questions).
 
+Test isolation and tool portability are maintained in the
+[test runner](../scripts/run-tests.ts), [startup environment](../scripts/test-isolation.ts),
+[process preload](../scripts/test-process-preload.ts), [tripwire](../scripts/test-tripwire.ts)
+and [portability lint](../scripts/test-portability.ts). See the
+[subprocess, aliased scratch-root, live shell and browser-diagnostics controls](../scripts/test-isolation.test.ts),
+[resource-gate live startup](../scripts/verification-resources.test.ts),
+[coreutils regressions](../scripts/test-portability.test.ts),
+[contributor guide](../CONTRIBUTING.md#validation) and
+[development guide](development.md) for isolation, fakes and explicit live opt-out.
+
 | When changing | Current contract | Start in source | Focused evidence or runbook |
 | --- | --- | --- | --- |
 | Linux installer/runtime setup and release acceptance | [Release gate](release.md#linux-systemd-installation-gate), [runbook](development.md#linux-installation-acceptance) | [Container harness](../scripts/install-linux.ts), [systemd cases](../scripts/install-linux/scenarios.py), [suite selection](../scripts/validation-scope.ts) | [Harness regressions](../scripts/install-linux.test.ts), [selection regressions](../scripts/validation-scope.test.ts) |

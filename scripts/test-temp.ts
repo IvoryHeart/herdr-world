@@ -51,6 +51,8 @@ function alive(pid: number): boolean {
 
 /** PIDs of this user's processes whose command line mentions the path. */
 export function processesUsing(path: string): number[] {
+  // Windows native lanes have no required ps; their fixtures own child cleanup.
+  if (process.platform === "win32") return [];
   const listing = Bun.spawnSync(["ps", "-x", "-o", "pid=,args="], {
     stdout: "pipe",
     stderr: "ignore",
