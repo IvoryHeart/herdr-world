@@ -104,6 +104,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @inquirer/search | 4.3.3 | MIT |
 | @inquirer/select | 5.2.5 | MIT |
 | @inquirer/type | 4.1.1 | MIT |
+| @isaacs/nonrecursive-glob-match | 1.1.0 | BlueOak-1.0.0 |
 | @lezer/common | 1.5.2 | MIT |
 | @lezer/cpp | 1.1.6 | MIT |
 | @lezer/css | 1.3.3 | MIT |
@@ -351,7 +352,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | micromatch | 4.0.8 | MIT |
 | mimic-function | 5.0.1 | MIT |
 | minimalistic-assert | 1.0.1 | ISC |
-| minimatch | 10.2.6 | BlueOak-1.0.0 |
+| minimatch | 11.0.1 | BlueOak-1.0.0 |
 | minimist | 1.2.8 | MIT |
 | ms | 2.1.3 | MIT |
 | mute-stream | 3.0.0 | ISC |
@@ -409,7 +410,6 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | shiki | 4.5.0 | MIT |
 | signal-exit | 3.0.7 | ISC |
 | signal-exit | 4.1.0 | ISC |
-| source-map-js | 1.2.1 | BSD-3-Clause |
 | source-map-js | 1.2.2 | BSD-3-Clause |
 | space-separated-tokens | 2.0.2 | MIT |
 | standardwebhooks | 1.1.1 | MIT |
@@ -460,5 +460,5 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | yaml | 2.9.0 | ISC |
 | yaml | 2.9.1 | ISC |
 | yoctocolors | 2.2.0 | MIT |
-| zod | 4.6.5 | MIT |
+| zod | 4.6.7 | MIT |
 | zwitch | 2.0.4 | MIT |
