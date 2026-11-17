@@ -6,23 +6,19 @@
 }
 
 /*
- * A London bus stop: a tall dark pole topped by a white flag with the red
- * roundel (a red ring crossed by a red bar). The flag turns red while
- * agents wait. The button is also the stop's drop area: the sign and the
- * queue on the pavement beside it. It is placed at its waiting point
- * (where the first agent stands); the pole stands just to its right.
+ * A bus stop's tap and drop area: its sign, which the canvas draws as street
+ * furniture in the scene's depth order, and the queue on the pavement beside
+ * it. It is placed at its waiting point (where the first agent stands); the
+ * pole stands just to its right. It scales with the scene, like the sign, so
+ * zoomed out it covers no more than the sign does.
  */
 .town-bus-stop {
   position: absolute;
-  z-index: 1;
   display: block;
   width: 96px;
   height: 70px;
   padding: 0;
   translate: calc(28px - 100%) calc(4px - 100%);
-  /* Never smaller on screen than at room zoom, so a phone can tap it. */
-  scale: max(1, var(--iz));
-  transform-origin: calc(100% - 14px) calc(100% - 4px);
   background: transparent;
   border: 0;
   border-radius: 6px;
@@ -36,58 +32,6 @@
 }
 .town-bus-stop[data-bin-over] {
   background: rgb(255 213 74 / 0.18);
-}
-.town-bus-pole {
-  position: absolute;
-  right: 13px;
-  bottom: 3px;
-  width: 3px;
-  height: 44px;
-  background: #3b3b3b;
-  border-radius: 1px 1px 0 0;
-  box-shadow: 0 1px 0 1px rgb(0 0 0 / 0.25);
-}
-.town-bus-flag {
-  position: absolute;
-  right: 2px;
-  bottom: 45px;
-  width: 24px;
-  height: 20px;
-  background: #f6f2e6;
-  border: 1px solid #3b3b3b;
-  border-radius: 2px;
-  box-shadow: 0 2px 0 -1px rgb(0 0 0 / 0.35);
-}
-.town-bus-roundel {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 14px;
-  height: 14px;
-  box-sizing: border-box;
-  translate: -50% -50%;
-  border: 3px solid #d4252b;
-  border-radius: 50%;
-}
-.town-bus-roundel::after {
-  content: "";
-  position: absolute;
-  left: -6px;
-  right: -6px;
-  top: 50%;
-  height: 3px;
-  margin-top: -1.5px;
-  background: #d4252b;
-}
-/* Someone waits: the flag shows red with a white roundel. */
-.town-bus-stop[data-waiting] .town-bus-flag {
-  background: #d4252b;
-}
-.town-bus-stop[data-waiting] .town-bus-roundel {
-  border-color: #fff;
-}
-.town-bus-stop[data-waiting] .town-bus-roundel::after {
-  background: #fff;
 }
 
 /*

@@ -47,7 +47,7 @@ const FRONT_YARD = 12;
  * A side road from the street above a row of lots (y0, the row under that
  * street) to the street below (y1, that street's row), `x` its left
  * pavement. Every lot has one on its right; the town's `edge` roads run down
- * the left of each row's first lot and have no bus stop.
+ * the left of each row's first lot. Every crossing has a bus stop.
  */
 export type TownVerticalRoad = {
   x: number;
