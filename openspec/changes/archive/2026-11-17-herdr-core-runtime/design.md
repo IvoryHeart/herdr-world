@@ -116,7 +116,7 @@ helpers retain file/Git/upload authority and symlink policy.
 Background, peek, witness and Ranger reads use `terminal.read {lines:0}` without
 caller. Terminal history comes from attach history or browser scrollback. Chat transcripts
 reuse the TUI session resolver/projections, with native title/resume evidence or
-an explicit read-only session link; see [the harness inventory](../../../docs/core-harnesses.md).
+an explicit read-only session link; see [the harness inventory](../../../../docs/core-harnesses.md).
 Links never grant input authority. Both sides of the host file read check the
 original lease, occupant and foreground; a title/session switch discards it. Stitched reads
 inject input and therefore require current control authority.
@@ -241,7 +241,7 @@ release identity/result and the live log survive failure as Actions artifacts.
 The workflow is separate from required offline Delivery checks and never gates
 runtime writes or selects a fallback version. New workflows can be manually
 dispatched once present on GitHub's default branch; the same runner works locally
-before merge. See the [runbook](../../../docs/development.md#herdr-core-release-smoke).
+before merge. See the [runbook](../../../../docs/development.md#herdr-core-release-smoke).
 
 Release selection, checksum rejection, suite discovery and cleanup have direct
 offline regression tests using a synthetic release archive. They add no World

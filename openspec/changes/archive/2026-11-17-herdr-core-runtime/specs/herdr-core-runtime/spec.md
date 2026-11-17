@@ -1,3 +1,8 @@
+## Purpose
+
+Support herdr-core beside the Herdr TUI with qualified observation, control,
+shared app state and recovery while preserving each runtime's authority.
+
 ## ADDED Requirements
 
 ### Requirement: Full coexisting runtime support
@@ -289,7 +294,7 @@ Observe streams SHALL be independent per browser, negotiate resize notifications
 and apply authoritative RESIZE before DATA/paint without emitting human input,
 FOCUS or RESIZE. Interactive control SHALL begin with the first genuine key,
 delivered exactly once after attach. World SHALL provide equivalents for TUI-only
-popups and verify Windows named-pipe/key behavior on a real owner test host.
+popups and use the fixed PowerShell named-pipe/key transport for Windows connections.
 
 #### Scenario: Observer alone
 
