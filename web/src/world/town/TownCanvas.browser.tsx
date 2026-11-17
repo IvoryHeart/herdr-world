@@ -71,7 +71,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-// An exact case measures at the CSS viewport it names, not a wider one (#643).
+// Each case measures at the exact CSS viewport it names, not a wider one (#643).
 const exactViewport = params.get("viewport");
 if (exactViewport)
   check(

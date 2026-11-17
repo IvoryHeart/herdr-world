@@ -129,6 +129,9 @@ ordinary docs receive `check:docs`. Non-browser tests and web suites are partiti
 into two disjoint inventories. Six World shards use longest-first assignment
 from `scripts/world-browser-timings.json`; only relevant shards/suites run.
 TownCanvas retains all 22 parameter cases across five files sharing one harness.
+Each case pins its exact CSS viewport through Chrome device metrics, with focus
+emulation, and fails when the page measures another size (`--window-size` alone
+gives a 390px case a wider viewport).
 A browser shard-table edit runs the browser inventory tests and all registered
 World/web suites, without escalating to native or model work. Executable gate
 policy still selects the full matrix. Browser jobs use the pinned test Chrome

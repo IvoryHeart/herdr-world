@@ -2,6 +2,10 @@ import { store } from "../../store";
 import type { LaunchTarget } from "../agentProfiles";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
 
+// A card hangs 3px into its plate's 2px border by design. Fractional layout at
+// a true 390px viewport rounds that to 3.00006px, so allow float error (#643).
+const CARD_OVERLAP = 3 + 0.01;
+
 /** Geometry and input checks against the real Town scene's synthetic dense rooms. */
 export async function checkTownRoomPlates(
   host: HTMLElement,
@@ -155,7 +159,7 @@ export async function checkTownRoomPlates(
         card.getBoundingClientRect().left - plate.getBoundingClientRect().left,
       ) < 3 &&
       card.getBoundingClientRect().top >=
-        plate.getBoundingClientRect().bottom - 3,
+        plate.getBoundingClientRect().bottom - CARD_OVERLAP,
     "the room's card must show its summary with the actions, under the plate",
   );
   // A table's nameplate takes its own pointer and opens the table's card.
@@ -188,7 +192,7 @@ export async function checkTownRoomPlates(
     check(
       getComputedStyle(deskCard).visibility === "visible" &&
         !!deskCard.querySelector(".town-place-summary .town-board-counts") &&
-        deskCard.getBoundingClientRect().top >= tagBox.bottom - 3,
+        deskCard.getBoundingClientRect().top >= tagBox.bottom - CARD_OVERLAP,
       "focusing a table's nameplate must show the table's summary under it",
     );
     title.blur();
