@@ -369,9 +369,20 @@ herdr_core_install() (
   staged=""
   trap 'rm -rf "$tmp"; if [ -n "$staged" ]; then rm -f "$staged"; fi' EXIT
   trap 'exit 1' HUP INT TERM
+  # curl's --retry skips a dropped connection (exit 56, "Connection reset by
+  # peer"), and --retry-all-errors is missing from older curl, so retry here.
+  # An HTTP error (22) is an answer, not a network fault: it fails at once.
   fetch() {
-    curl --proto '=https' --proto-redir '=https' -fsSL --retry 2 \
-      --connect-timeout 10 --max-time "$1" "$2" -o "$3"
+    hc_fetch_attempt=1
+    while :; do
+      hc_fetch_status=0
+      curl --proto '=https' --proto-redir '=https' -fsSL --retry 2 \
+        --connect-timeout 10 --max-time "$1" "$2" -o "$3" || hc_fetch_status=$?
+      [ "$hc_fetch_status" -ne 0 ] || return 0
+      [ "$hc_fetch_status" -ne 22 ] && [ "$hc_fetch_attempt" -lt 3 ] || return "$hc_fetch_status"
+      hc_fetch_attempt=$((hc_fetch_attempt + 1))
+      sleep 1
+    done
   }
   printf 'Reading the herdr-core release list...\n'
   fetch 60 "$manifest" "$tmp/manifest.json" ||
