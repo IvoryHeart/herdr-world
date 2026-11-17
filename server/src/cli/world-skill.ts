@@ -20,6 +20,13 @@ this recent attribution is not a complete audit and has no CLI undo.
 - Report a finished or blocked task: herdr-world result --task TASK-42
   "What changed and what was verified" --status done --pr 12. Use blocked
   or failed honestly. Results are durable reports; result ls lists them.
+- Show progress on a piece of work in Town's Summary Work strip:
+  herdr-world status crew-42 "Building the login fix" --state working
+  --phase review --progress 40 --group Crew --url https://example.invalid/42.
+  One row per caller and KEY, changed in place; each call states the whole
+  row. Rows interrupt nobody; --needs-you raises one owner question until
+  you drop the flag or clear the row. Any program may call it, no agent
+  needed. A row turns stale after --ttl (default 1h) and drops off a day later.
 - Say what you are doing now: herdr-world task-summary "Checking the login fix".
   This sets an expiring label for your exact current Herdr agent session,
   shown on your desk/card. Keep it under 80 characters and omit secrets.
@@ -31,7 +38,7 @@ this recent attribution is not a complete audit and has no CLI undo.
   display-only parentage so World groups the team; it grants no authority.
   Stamp and task-summary accept --session NAME for a separate Herdr session.
 
-ask and result use the running local World service. task-summary and stamp
+ask, result and status use the running local World service. task-summary and stamp
 write pane metadata through Herdr; they do not require the World service.
 
 ## Examples
@@ -53,6 +60,8 @@ write pane metadata through Herdr; they do not require the World service.
     herdr-world ask withdraw q-example
     herdr-world ask withdraw --key task:7:stuck
     herdr-world result --task FM-42 "Fixed the login race" --pr 12 --status done
+    herdr-world status crew-42 "Waiting for review" --state blocked --needs-you
+    herdr-world status clear crew-42
     herdr-world task-summary "Verifying the login fix"
     herdr-world stamp w1:p4 w1:p3
     herdr-world history --actor w1:p2
@@ -120,6 +129,15 @@ Targets are on your own host; add --connection ID for another one.
          uncertain pane sends must never auto-replay.
   result --task ID "SUMMARY" [--pr N] [--status done|blocked|failed]
   result ls [--task ID]
+  status KEY "LINE" [--state working|blocked|done|idle|failed] [--phase TEXT]
+         [--progress 0..100] [--url URL] [--needs-you] [--ttl 90s|10m|2h]
+         [--group NAME]
+  status clear KEY | status ls [--json]
+         progress rows in Town's Summary, keyed by you and KEY ("clear" and
+         "ls" are not keys); --state defaults to working, --group to your
+         Herdr agent name ("Other" outside Herdr). Only --needs-you alerts the
+         owner, once per cause; status for "where it is", result for the
+         final report, ask for a decision, task-summary for your desk label
   task-summary "TEXT" [--pane ID] [--ttl-ms MS] [--session NAME]
          short, expiring current-task label for the exact Herdr agent session
   spawned-by PARENT_PANE   stamp your pane as spawned by PARENT_PANE

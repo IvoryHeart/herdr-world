@@ -9,6 +9,7 @@ import type {
   LedgerChange,
   LedgerDocument,
   LedgerResult,
+  LedgerStatus,
   LedgerStore,
 } from "../world/world-ledger";
 import type { Clock, Scheduler } from "../service/ports";
@@ -89,6 +90,8 @@ export type LedgerWrite = {
   asks: Rows<LedgerAsk>;
   changes: Rows<LedgerChange>;
   results: Rows<LedgerResult>;
+  /** Absent in writes made before status rows existed. */
+  statuses?: Rows<LedgerStatus>;
   effects: readonly OutboxEffect[];
 };
 export type LedgerCommit = {

@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { WORLD_SKILL_VERSION } from "../server/src/cli/integration";
 import { shQuote } from "../server/src/utils/process-utils";
 import { renderStandaloneBootstrap } from "./herdr-bootstrap";
 import {
@@ -290,7 +291,10 @@ process.exit(await runCli(process.argv.slice(2), context));
     for (const file of [shared, claude])
       writeFileSync(
         file,
-        readFileSync(file, "utf8").replace("VERSION=2", "VERSION=1"),
+        readFileSync(file, "utf8").replace(
+          `VERSION=${WORLD_SKILL_VERSION}`,
+          "VERSION=1",
+        ),
       );
     const upgraded = runInstaller(fixture, undefined, environment);
     expect(upgraded.exitCode).toBe(0);

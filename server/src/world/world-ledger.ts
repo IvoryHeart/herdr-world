@@ -108,17 +108,55 @@ export type LedgerResult = {
   pr?: number;
 };
 
+/** Herdr's words for how a piece of work is going (`herdr-world status`). */
+export type StatusState = "working" | "blocked" | "done" | "idle" | "failed";
+export const STATUS_STATES: readonly StatusState[] = [
+  "working",
+  "blocked",
+  "done",
+  "idle",
+  "failed",
+];
+
+/**
+ * One in-progress status row, upserted by (caller, key) through
+ * `herdr-world status` (world-cli-status.ts). Unlike a result it is not
+ * final: it changes in place, turns stale `ttl_ms` after its last update
+ * and drops off a day after that.
+ */
+export type LedgerStatus = {
+  id: string;
+  /** When the row was first reported. */
+  at: number;
+  updated_at: number;
+  actor: CliActor;
+  /** Whose key space the row belongs to (see `statusOwner`). */
+  owner: string;
+  key: string;
+  line: string;
+  state: StatusState;
+  group: string;
+  phase?: string;
+  progress?: number;
+  url?: string;
+  needs_you?: boolean;
+  /** The one Needs you question this row raised while `needs_you` holds. */
+  ask_id?: string;
+  ttl_ms: number;
+};
+
 export type LedgerDocument = {
   version: 1;
   revision: number;
   changes: LedgerChange[];
   asks: LedgerAsk[];
   results: LedgerResult[];
+  statuses: LedgerStatus[];
 };
 
 /** Committed reads; writes may cross the asynchronous persistence boundary. */
 export interface LedgerStore {
-  nextId(kind: "c" | "q" | "r" | "a"): string | Promise<string>;
+  nextId(kind: "c" | "q" | "r" | "a" | "s"): string | Promise<string>;
   get(): LedgerDocument;
   ask(id: string): LedgerAsk | undefined;
   change(id: string): LedgerChange | undefined;
@@ -135,6 +173,8 @@ export const LEDGER_LIMITS = {
   /** Open questions one caller may have at once. */
   asksPerActor: 20,
   results: 1000,
+  /** Status rows kept at once, stale ones included. */
+  statuses: 500,
   text: 4000,
   options: 12,
   option: 200,
@@ -147,6 +187,7 @@ const empty = (): LedgerDocument => ({
   changes: [],
   asks: [],
   results: [],
+  statuses: [],
 });
 
 export class WorldLedger {
@@ -178,6 +219,7 @@ export class WorldLedger {
         !Array.isArray(parsed.results)
       )
         throw new Error("not a World ledger");
+      parsed.statuses = Array.isArray(parsed.statuses) ? parsed.statuses : [];
       return parsed as LedgerDocument;
     } catch (error) {
       const aside = `${this.path}.unreadable-${this.now()}`;
@@ -198,7 +240,7 @@ export class WorldLedger {
   }
 
   /** Legacy JSON/fixture allocator; production reserves through WorldStorage. */
-  nextId(kind: "c" | "q" | "r" | "a") {
+  nextId(kind: "c" | "q" | "r" | "a" | "s") {
     const id = newWorldId(
       kind,
       (candidate) =>
@@ -207,6 +249,7 @@ export class WorldLedger {
           ...this.document.asks,
           ...this.document.changes,
           ...this.document.results,
+          ...this.document.statuses,
         ].some((row) => row.id === candidate) ||
         this.document.asks.some((ask) => ask.answer?.occurrence === candidate),
     );
@@ -253,6 +296,7 @@ export class WorldLedger {
     next.revision = this.document.revision + 1;
     trim(next.changes, LEDGER_LIMITS.changes);
     trim(next.results, LEDGER_LIMITS.results);
+    trim(next.statuses, LEDGER_LIMITS.statuses);
     // Keep open questions: only closed ones are dropped, oldest first
     // (`ask` refuses a new question when the open ones fill the list).
     while (next.asks.length > LEDGER_LIMITS.asks) {

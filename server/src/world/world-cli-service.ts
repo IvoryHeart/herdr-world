@@ -15,6 +15,7 @@ import { randomBytes } from "node:crypto";
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
 import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
 import { type LedgerStore } from "./world-ledger";
+import { visibleStatuses } from "./world-cli-status";
 import { createAttentionDispatcher } from "./attention-dispatch";
 import type {
   StoragePorts,
@@ -134,7 +135,12 @@ export function createWorldCliService(deps: {
   let queryRevision = ledger().get().revision;
   const openAsks = () => ({ ...ledger().openAsks(), revision: queryRevision });
   /** Pages fetch the open questions only when `asks` says they changed. */
-  const publishLedger = (revision: number, asks = false, wake = true) => {
+  const publishLedger = (
+    revision: number,
+    asks = false,
+    wake = true,
+    statuses = false,
+  ) => {
     queryRevision = Math.max(queryRevision + 1, revision);
     deps.broadcast(
       JSON.stringify({
@@ -142,6 +148,7 @@ export function createWorldCliService(deps: {
           type: "world_ledger_changed",
           revision: queryRevision,
           ...(asks ? { asks: true } : {}),
+          ...(statuses ? { statuses: true } : {}),
         },
       }),
     );
@@ -251,6 +258,7 @@ export function createWorldCliService(deps: {
             ...committed.asks,
             ...committed.changes,
             ...committed.results,
+            ...committed.statuses,
           ].some((record) => record.id === recordId)
             ? `world-ledger:${committed.revision}:${recordId}`
             : undefined;
@@ -347,7 +355,8 @@ export function createWorldCliService(deps: {
       );
     },
     publishBoard: deps.publishBoard,
-    publishLedger,
+    publishLedger: (revision, asks, statuses) =>
+      publishLedger(revision, asks, true, statuses),
     now,
     signal: stopped.signal,
     incarnation,
@@ -356,6 +365,11 @@ export function createWorldCliService(deps: {
     /** A page's question method; undefined when `method` is not one. */
     async rpc(method: string, params: unknown): Promise<unknown> {
       if (method === "world.asks.get") return openAsks();
+      if (method === "world.statuses.get")
+        return {
+          revision: queryRevision,
+          statuses: visibleStatuses(ledger().get().statuses, now()),
+        };
       if (method === "world.ask.delivery.get") {
         const p = (params ?? {}) as Record<string, unknown>;
         if (

@@ -3084,6 +3084,46 @@
         ],
         "review": "New design contract pending PR review."
       }
+    },
+    {
+      "id": "Q54",
+      "area": "Work status rows",
+      "owner": "server/src/world/world-cli-status.ts",
+      "requirement": "openspec/specs/world-storage/spec.md",
+      "properties": "One row per (verified terminal or shared unverified space, key), changed in place by its caller only; a state change publishes no question, alert or effect; --needs-you records at most one live owner-only question per cause with its ask.created intent in the same ledger update, withdrawn when the flag or row goes and never re-raised after the owner closes it; rows turn stale at their ttl and drop a day later, pruning withdraws an open question; rows persist through the SQLite ledger",
+      "existingTests": [
+        "server/src/world/world-cli-status.test.ts",
+        "server/src/cli/world.test.ts",
+        "server/src/verbs/compatibility.test.ts",
+        "server/src/verbs/policy.test.ts",
+        "web/src/world/town/TownWorkStrip.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
+      "technique": "direct-unit-and-sqlite",
+      "assessment": "No ordering beyond the existing serialized ledger update: the row, its question and the owner-alert intent change in one update, so the existing storage and effect evidence applies. Direct tests drive the service command through verified and unverified callers over the clock (upsert, isolation, refusals, one question per cause, owner dismissal, stale and drop with pruning), reopen real SQLite, replay the P4 actor baseline, and render the Work strip's grouping, stale and empty cases.",
+      "status": "alternative-evidence",
+      "remaining": "Independent review. Staleness is read-time only; a dropped row's question is withdrawn on the next status write, not by a timer.",
+      "requiredChecks": [
+        "bun run check",
+        "bun run test server/src/world/world-cli-status.test.ts"
+      ],
+      "partialEvidence": {
+        "models": [],
+        "contracts": [
+          "verification/contracts/world-storage.md",
+          "verification/contracts/effect-recovery.md"
+        ],
+        "tests": [
+          "server/src/world/world-cli-status.test.ts",
+          "server/src/verbs/compatibility.test.ts",
+          "web/src/world/town/TownWorkStrip.test.ts"
+        ],
+        "checks": [
+          "bun run test server/src/world/world-cli-status.test.ts web/src/world/town/TownWorkStrip.test.ts"
+        ],
+        "review": "New model-free consumer mapping pending PR review."
+      },
+      "evidenceDecision": "Model-free: the verb adds no new ordering, ownership or recovery protocol; it reuses the serialized ledger update and the existing ask.created effect."
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

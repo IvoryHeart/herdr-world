@@ -12,6 +12,7 @@ import {
   parseAppearanceTarget,
 } from "../../../shared/appearance";
 import { handleWorldAsk } from "./world-cli-asks";
+import { handleWorldStatus } from "./world-cli-status";
 export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
 import { teamMembers } from "../../../shared/groups";
 import {
@@ -108,8 +109,11 @@ export type WorldCliDeps = {
   sources?(): Promise<GroupWorkSources>;
   groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
-  /** Tell World's pages; `asks` when a question was asked or answered. */
-  publishLedger(revision: number, asks?: boolean): void;
+  /**
+   * Tell World's pages; `asks` when a question was asked or answered,
+   * `statuses` when a status row changed.
+   */
+  publishLedger(revision: number, asks?: boolean, statuses?: boolean): void;
   now?: () => number;
   /** Aborted when the service stops: calls that wait return early. */
   signal?: AbortSignal;
@@ -137,6 +141,9 @@ export const WORLD_CLI_COMMANDS = [
   "ask withdraw",
   "result",
   "result ls",
+  "status",
+  "status clear",
+  "status ls",
   "spawned-by",
 ] as const;
 export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];
@@ -845,6 +852,10 @@ export function createWorldCli(deps: WorldCliDeps) {
           .get()
           .results.filter((entry) => !task || entry.task === task);
       }
+      case "status":
+      case "status clear":
+      case "status ls":
+        return handleWorldStatus(deps, command, params, actor, now);
       case "spawned-by": {
         if (!actor.verified || !host || !actor.pane_id)
           refused(

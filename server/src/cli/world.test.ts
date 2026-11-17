@@ -50,6 +50,58 @@ describe("parsing", () => {
     });
   });
 
+  test("status rows: report, clear and list", () => {
+    expect(
+      parseWorldArgs("status", [
+        "crew-42",
+        "Building the login fix",
+        "--state",
+        "blocked",
+        "--phase",
+        "review",
+        "--progress",
+        "40",
+        "--url",
+        "https://example.invalid/42",
+        "--needs-you",
+        "--ttl",
+        "2m",
+        "--group",
+        "Crew",
+      ]),
+    ).toEqual({
+      command: "status",
+      params: {
+        key: "crew-42",
+        line: "Building the login fix",
+        state: "blocked",
+        phase: "review",
+        progress: 40,
+        url: "https://example.invalid/42",
+        ttl_s: 120,
+        group: "Crew",
+        needs_you: true,
+      },
+      json: undefined,
+    });
+    // Leaving --needs-you out says the flag is off, which withdraws it.
+    expect(
+      parseWorldArgs("status", ["k", "line", "--ttl", "90"]).params,
+    ).toEqual({ key: "k", line: "line", ttl_s: 90, needs_you: false });
+    expect(parseWorldArgs("status", ["clear", "crew-42"])).toMatchObject({
+      command: "status clear",
+      params: { key: "crew-42" },
+    });
+    expect(parseWorldArgs("status", ["ls", "--json"])).toMatchObject({
+      command: "status ls",
+      json: true,
+    });
+    expect(() =>
+      parseWorldArgs("status", ["k", "line", "--ttl", "soon"]),
+    ).toThrow("--ttl takes a duration");
+    expect(() => parseWorldArgs("status", ["only-key"])).toThrow();
+  });
+
   test("each verb becomes one service command", () => {
     expect(
       parseWorldArgs("board", ["card", "pin", "me", "10,20"]),
@@ -533,7 +585,7 @@ describe("endpoint diagnostics", () => {
         const gone = `http://127.0.0.1:${address.port}`;
         const unreachable = await transport(gone)("whoami", {});
         expect(unreachable.error).toStartWith(
-          `World service not reachable at ${gone} (token from ${secret}): `,
+          `World isn't running or not reachable at ${gone} (token from ${secret}): `,
         );
       } finally {
         await new Promise((resolve) => refusing.close(resolve));

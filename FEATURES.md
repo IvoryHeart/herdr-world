@@ -1284,6 +1284,17 @@ Town's open **Summary** shows a **Pods** section after Hosts and rooms, with
 the same status, first Now item and source-qualified PR warning. Tap a Pod to
 open or raise its Groups detail. Pod roll-ups do not add to reception counts.
 
+Town's open **Summary**, on desktop and phone, shows a **Work** strip after
+Needs you and the Outbox when any `herdr-world status` row exists, grouped by
+`--group` in first-reported order. Each row shows its state mark (working •,
+blocked !, done ✓, idle –, failed ×), its line, key, phase, progress and
+"updated N m ago"; the line opens `--url` in a new tab. A row past its `--ttl`
+fades and says "stale · last update N m ago"; a day after turning stale it
+drops off. With no rows there is no strip. The Board does not show rows. For a
+look without a reporting program, open World with `?work-status-demo=1`: the
+page drops the parameter at once and adds four synthetic Demo rows, one stale
+and one failed, for that page load only; nothing is written.
+
 Create Teams/Pods, add/remove members, edit roles, name/Now/limit, delete with
 confirmation or explicitly promote a Team with a complete current address mapping.
 Exclusive-role transfers ask first. An edit or confirmation based on an older
@@ -1375,6 +1386,26 @@ when piped, with stable exit codes:
   reports permanent withdrawal refusals once for the owner to answer.
 - `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
   `result ls`: task results kept by World, instead of terminal scraping.
+- `status KEY "LINE" [--state working|blocked|done|idle|failed] [--phase TEXT]
+  [--progress 0..100] [--url URL] [--needs-you] [--ttl DURATION] [--group NAME]`,
+  `status clear KEY` and `status ls [--json]`: a progress row any program
+  reports without an LLM, an agent, a crew, CI or a cron. World keeps one row
+  per caller and key and changes it in place; each call states the whole row,
+  so a flag left out is gone. A verified caller's keys belong to its terminal;
+  every unverified caller (a program outside Herdr) shares one key space, so
+  pick distinct keys. `clear` and `ls` are subcommands, not keys.
+  `--state` defaults to working and `--group` to Herdr's name for the calling
+  agent, or Other. `--ttl` takes `90s`, `10m`, `2h` or seconds, from 1 second
+  to 24 hours (default 1 hour). Limits: key 120 characters, line 300, phase and
+  group 80, URL 2,000 and only `http`/`https`, progress a whole number 0–100,
+  500 rows. Anything else is refused with a usage error, and a 501st row is
+  refused until you clear one. A state change alerts nobody. `--needs-you`
+  raises one owner-only Needs you question (line and phase), with its alert
+  and chime once; repeating the report keeps the same question. Dropping the
+  flag or clearing the row withdraws it; once you answer or dismiss it, the
+  same report does not ask again until the flag is dropped and raised anew.
+  Without a running World the command says World isn't running and exits
+  non-zero.
 - `task-summary "…" [--ttl-ms MS]`: a short label for the current Herdr agent
   session, expiring after 15 minutes by default. `stamp CHILD_PANE PARENT_PANE`
   records parentage directly in Herdr; both accept `--session NAME`.

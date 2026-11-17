@@ -197,6 +197,7 @@ export function openWorldWriter(
       asks: rows("asks"),
       changes: rows("ledger_changes"),
       results: rows("results"),
+      statuses: rows("statuses"),
     };
     const profiles = readProfiles(db);
     const board = readBoard(db);
@@ -228,6 +229,7 @@ export function openWorldWriter(
       ["asks", write.asks],
       ["ledger_changes", write.changes],
       ["results", write.results],
+      ["statuses", write.statuses ?? { put: [], remove: [] }],
     ] as const) {
       for (const id of patch.remove) {
         if (

@@ -163,3 +163,40 @@
   color: var(--warning-text, #ffb547);
   font-weight: 600;
 }
+
+/* Work strip: `herdr-world status` rows, grouped. */
+.town-work-group + .town-work-group {
+  margin-top: 10px;
+}
+
+.town-work-group h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.town-work-row {
+  justify-content: flex-start;
+}
+
+.town-work-row > div {
+  flex: 1;
+}
+
+.town-work-row strong {
+  overflow-wrap: anywhere;
+}
+
+.town-work-row a {
+  color: inherit;
+}
+
+.town-work-row progress {
+  width: 100%;
+  height: 4px;
+  margin-top: 4px;
+}
+
+.town-work-row[data-stale] {
+  opacity: 0.6;
+}

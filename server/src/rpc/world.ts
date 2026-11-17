@@ -186,6 +186,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (
     method === "world.asks.get" ||
+    method === "world.statuses.get" ||
     method === "world.ask.answer" ||
     method === "world.ask.dismiss" ||
     method === "world.ask.deliveries.get" ||

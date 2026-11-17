@@ -25,6 +25,7 @@ const outputs = {
   ls: Type.Array(object()),
   history: Type.Array(object()),
   "result ls": Type.Array(object()),
+  "status ls": Type.Array(object()),
   "group list": Type.Array(object()),
   result: object({ id: text, task: text, summary: text, status: text }),
 };
@@ -77,6 +78,9 @@ export const cliVerbs = [
   cli("ask withdraw", {}, "reconcilable", [], true),
   cli("result", { task: text, summary: text }),
   cli("result ls", {}, "read"),
+  cli("status", { key: text, line: text }),
+  cli("status clear", { key: text }),
+  cli("status ls", {}, "read"),
   cli("spawned-by", { parent: text }, "reconcilable", [], true),
   cli("group create", { kind: text, name: text }),
   cli("group add", { group: text, agent: text }, "reconcilable", [

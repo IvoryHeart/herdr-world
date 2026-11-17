@@ -37,6 +37,8 @@ export interface BridgeControlMsg {
   revision?: number;
   /** world_ledger_changed: a question was asked or answered. */
   asks?: boolean;
+  /** world_ledger_changed: a `herdr-world status` row changed. */
+  statuses?: boolean;
   /** float_*: the float shell stream; its output is base64 `data`. */
   stream?: string;
   data?: string;

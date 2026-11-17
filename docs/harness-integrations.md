@@ -17,8 +17,8 @@ without automatic integration support print that limitation.
 
 `herdr-world integration install <harness>` manually installs the release's
 `herdr-world --skill` guide as `herdr-world/SKILL.md` in that harness's user
-skill folder. It teaches `ask`, `result`, `task-summary` and `stamp` to an agent
-that has never used World. Start a new harness session after installing.
+skill folder. It teaches `ask`, `result`, `status`, `task-summary` and `stamp`
+to an agent that has never used World. Start a new harness session after installing.
 Installation needs no running World or Herdr service. Nothing installs at startup.
 `herdr-world integration sync` reruns the automatic discovery and refresh step.
 
@@ -39,7 +39,7 @@ explicitly installing any one reenables the group. Preferences live in
 there is no need to edit these files. Uninstalling an already absent integration
 also records the preference.
 
-Status prints `<harness>: <state> (<path or reason>)`: `current (v2)`,
+Status prints `<harness>: <state> (<path or reason>)`: `current (v3)`,
 `outdated (v1)`, `not installed` or `unsupported`. A missing or invalid marker
 is `outdated` without a version. A valid marker at or above this release's
 version is current. Install and uninstall refuse an existing skill without a
@@ -57,6 +57,21 @@ as the prerequisite, and create `~/.agents/skills/` if necessary.
 Codex, Pi and Kimi share one file whose marker ID is `shared`: status for all
 three agrees even if only one harness is configured. Uninstalling any one
 names the other two that also lose the file.
+
+## Which verb to use
+
+| You want to | Use | The owner sees |
+| --- | --- | --- |
+| Show how a piece of work is going, from an agent or any program (a crew, CI, a cron) | `herdr-world status KEY "line" --state …` | A row in Town Summary's Work strip; no alert |
+| Label what this agent session is doing right now | `herdr-world task-summary "…"` | The agent's desk and card label, expiring |
+| Get a decision | `herdr-world ask "…" --owner-only` | A Needs you question, with an alert |
+| Record the final outcome of a task | `herdr-world result --task ID "…" --status …` | A durable result record |
+
+`status` rows change in place, one per caller and key, and interrupt nobody.
+Add `--needs-you` only when the work cannot continue without the owner: it
+raises one Needs you question for that row and withdraws it when the flag is
+dropped or the row is cleared. Use `result` when the work ends, then
+`status clear KEY` or a `--state done` row that ages out.
 
 ## Herdr integration upgrades
 

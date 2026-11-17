@@ -775,7 +775,9 @@ Origin, and a bearer token derived from the session signing secret
 browser in. Wrong tokens get the login throttle, counted apart from logins so
 they never lock the owner out. One call holds at most 20 s for `ask --wait`.
 World's pages fetch only the open questions (`world.asks.get`), and only when
-a ledger notice says a question changed. `ask --key CAUSE` deduplicates a cause
+a ledger notice says a question changed; Town's Work strip likewise fetches
+`herdr-world status` rows (`world.statuses.get`) only on a notice with
+`statuses`. `ask --key CAUSE` deduplicates a cause
 for the verified asking occupant, even after an answer; `ask withdraw ID`
 closes that cause and allows recurrence. Only the verified original connection,
 runtime, terminal and session may withdraw it. The owner may dismiss any open

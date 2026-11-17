@@ -236,7 +236,7 @@ export function httpTransport(context: CliContext): WorldCliTransport {
       return {
         ok: false,
         code: "unavailable",
-        error: `World service not reachable at ${where}: ${(error as Error).message}`,
+        error: `World isn't running or not reachable at ${where}: ${(error as Error).message}`,
       };
     }
     try {
@@ -266,6 +266,14 @@ const pair = (value: string | undefined, what: string) => {
     throw new UsageError(`${what} takes X,Y numbers`);
   return { x: x!, y: y! };
 };
+
+/** `90s`, `10m`, `2h` or bare seconds, for `status --ttl`. */
+function durationSeconds(value: string): number {
+  const match = /^(\d+)\s*([smh]?)$/.exec(value.trim());
+  if (!match)
+    throw new UsageError("--ttl takes a duration such as 90s, 10m or 2h");
+  return Number(match[1]) * ({ s: 1, m: 60, h: 3600 }[match[2]!] ?? 1);
+}
 
 /** Parse argv into the service's command name and parameters. */
 export function parseWorldArgs(
@@ -542,6 +550,56 @@ export function parseWorldArgs(
         json: values.json as boolean,
       };
     }
+    case "status": {
+      if (sub === "ls") {
+        const { values } = parsed(rest, {}, 0);
+        return {
+          command: "status ls",
+          params: {},
+          json: values.json as boolean,
+        };
+      }
+      if (sub === "clear") {
+        const { values, positionals } = parsed(rest, {}, 1);
+        return {
+          command: "status clear",
+          params: { key: need(positionals[0], "status KEY") },
+          json: values.json as boolean,
+        };
+      }
+      const { values, positionals } = parsed(
+        args,
+        {
+          state: { type: "string" },
+          phase: { type: "string" },
+          progress: { type: "string" },
+          url: { type: "string" },
+          "needs-you": { type: "boolean" },
+          ttl: { type: "string" },
+          group: { type: "string" },
+        },
+        2,
+      );
+      return {
+        command: "status",
+        params: {
+          key: need(positionals[0], "status KEY"),
+          line: need(positionals[1], "status line"),
+          ...(values.state !== undefined ? { state: values.state } : {}),
+          ...(values.phase !== undefined ? { phase: values.phase } : {}),
+          ...(values.progress !== undefined
+            ? { progress: Number(values.progress) }
+            : {}),
+          ...(values.url !== undefined ? { url: values.url } : {}),
+          ...(values.ttl !== undefined
+            ? { ttl_s: durationSeconds(String(values.ttl)) }
+            : {}),
+          ...(values.group !== undefined ? { group: values.group } : {}),
+          needs_you: values["needs-you"] === true,
+        },
+        json: values.json as boolean,
+      };
+    }
     case "spawned-by": {
       const { values, positionals } = parsed(args, {}, 1);
       return {
@@ -554,6 +612,17 @@ export function parseWorldArgs(
   throw new UsageError(`unknown command ${word}`);
 }
 
+/** `KEY state · phase: line`, one per row; programs should prefer --json. */
+function statusHuman(command: string, result: unknown): string {
+  if (command === "status clear")
+    return `${String((result as { key?: unknown }).key)} cleared`;
+  const row = (entry: Record<string, unknown>) =>
+    `${String(entry.key)} ${String(entry.state)}${entry.phase ? ` · ${String(entry.phase)}` : ""}: ${String(entry.line)}${entry.stale ? " (stale)" : ""}${entry.raised ? " (Needs you raised)" : ""}`;
+  if (Array.isArray(result))
+    return result.map((entry) => row(entry)).join("\n") || "(none)";
+  return row(result as Record<string, unknown>);
+}
+
 /** One line per result for people; agents should prefer --json. */
 function human(command: string, reply: Reply): string {
   if (command.startsWith("group ")) return groupHuman(reply.result);
@@ -562,6 +631,7 @@ function human(command: string, reply: Reply): string {
     ? `${reply.actor.label}${reply.actor.verified ? "" : " (unverified)"}`
     : "";
   if (command === "whoami") return who;
+  if (command.startsWith("status")) return statusHuman(command, result);
   if (Array.isArray(result))
     return result.map((entry) => JSON.stringify(entry)).join("\n") || "(none)";
   const entry = (result ?? {}) as Record<string, unknown>;
@@ -778,6 +848,11 @@ const WORDS: { name: string; summary: string; actions?: string[] }[] = [
     actions: ["get", "answer"],
   },
   { name: "result", summary: "agents: report a task result", actions: ["ls"] },
+  {
+    name: "status",
+    summary: "any program: show how a piece of work is going",
+    actions: ["clear", "ls"],
+  },
   {
     name: "spawned-by",
     summary: "agents: record the pane that spawned this one",

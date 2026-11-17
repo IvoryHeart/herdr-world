@@ -168,6 +168,7 @@ export async function openWorldLedger(
     for (const [rows, max] of [
       [next.changes, LEDGER_LIMITS.changes],
       [next.results, LEDGER_LIMITS.results],
+      [next.statuses, LEDGER_LIMITS.statuses],
       [next.asks, LEDGER_LIMITS.asks],
     ] as const) {
       let excess = rows.length - max;
@@ -240,9 +241,10 @@ export async function openWorldLedger(
         const asks = diff(document.asks, next.asks);
         const changes = diff(document.changes, next.changes);
         const results = diff(document.results, next.results);
+        const statuses = diff(document.statuses, next.statuses);
         if (
           !declaredEffects.length &&
-          ![asks, changes, results].some(
+          ![asks, changes, results, statuses].some(
             (patch) => patch.put.length || patch.remove.length,
           )
         )
@@ -255,6 +257,7 @@ export async function openWorldLedger(
             asks,
             changes,
             results,
+            statuses,
             effects: declaredEffects,
           },
         });

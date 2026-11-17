@@ -236,6 +236,7 @@ export const rpcVerbs = [
   rpc("world.ask.delivery.resend", "reconcilable", "world"),
   rpc("world.ask.dismiss", "reconcilable", "world"),
   rpc("world.asks.get", "read", "world"),
+  rpc("world.statuses.get", "read", "world"),
   // The handler qualifies the named host's current runtime itself: world.*
   // requests are bridge-global and never carry the runtime capability.
   rpc(

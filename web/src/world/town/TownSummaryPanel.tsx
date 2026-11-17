@@ -33,6 +33,7 @@ import {
   type TownSummaryItem,
 } from "./townSummary";
 import { TownSinceYouLeft } from "./TownSinceYouLeft";
+import { ConnectedTownWorkStrip } from "./TownWorkStrip";
 import {
   townFuelGauge,
   townHarnessName,
@@ -50,8 +51,8 @@ import type { UsageLimit } from "../../../../shared/usage";
 import "./townSummaryPanel.css";
 
 /**
- * The Town summary's body, in attention order: who needs you, recent
- * finishes, hosts and their rooms, Pods, and spend. It renders the shared read
+ * The Town summary's body, in attention order: who needs you, reported
+ * work, recent finishes, hosts and their rooms, Pods, and spend. It renders the shared read
  * model (townSummary.ts); the window around it is the shared panel frame.
  */
 export function TownSummaryPanel({
@@ -62,6 +63,7 @@ export function TownSummaryPanel({
   askActions,
   groups,
   deliveries,
+  work,
   usage,
 }: {
   summary: TownSummaryModel;
@@ -75,6 +77,8 @@ export function TownSummaryPanel({
   askActions: TownAskActions;
   groups?: ReactNode;
   deliveries?: ReactNode;
+  /** The Work strip of `herdr-world status` rows; absent when none. */
+  work?: ReactNode;
 }) {
   return (
     <div className="town-summary">
@@ -110,6 +114,7 @@ export function TownSummaryPanel({
         )}
       </section>
       {deliveries}
+      {work}
       <section aria-labelledby="town-summary-finished">
         <h3 id="town-summary-finished">
           Done, not reviewed <span>{summary.counts.finished}</span>
@@ -464,6 +469,7 @@ export function useTownSummary({
         <TownSummaryPanel
           summary={summary}
           deliveries={deliveries}
+          work={<ConnectedTownWorkStrip now={now} />}
           groups={<GroupsSummary />}
           now={now}
           usage={usage}

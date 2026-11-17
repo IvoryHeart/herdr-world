@@ -181,6 +181,25 @@
     "effects": []
   },
   {
+    "command": "status",
+    "verified": true,
+    "ok": true,
+    "effects": ["agent.get"]
+  },
+  {
+    "command": "status clear",
+    "verified": true,
+    "ok": false,
+    "code": "not_found",
+    "effects": []
+  },
+  {
+    "command": "status ls",
+    "verified": true,
+    "ok": true,
+    "effects": []
+  },
+  {
     "command": "spawned-by",
     "verified": true,
     "ok": true,
@@ -365,6 +384,25 @@
   },
   {
     "command": "result ls",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "status",
+    "verified": false,
+    "ok": true,
+    "effects": []
+  },
+  {
+    "command": "status clear",
+    "verified": false,
+    "ok": false,
+    "code": "not_found",
+    "effects": []
+  },
+  {
+    "command": "status ls",
     "verified": false,
     "ok": true,
     "effects": []

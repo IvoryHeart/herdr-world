@@ -86,6 +86,10 @@ CREATE TABLE effect_decisions (
 CREATE INDEX effect_decisions_intent ON effect_decisions(intent_id,seq);
 CREATE INDEX effect_ready ON outbox(needs_migration,claimed,state,due_at);
 `;
+/** `herdr-world status` rows: in-progress work, upserted in place (world-cli-status.ts). */
+const statusesMigration = `
+CREATE TABLE statuses (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, body TEXT NOT NULL CHECK(json_valid(body)));
+`;
 export const worldMigrations = [
   migration1,
   migration2,
@@ -99,6 +103,7 @@ export const worldMigrations = [
   migrateLegacyCompletionReviews,
   worldRoomPinsMigration,
   coreTopologyMigration,
+  statusesMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

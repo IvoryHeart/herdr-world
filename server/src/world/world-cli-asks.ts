@@ -51,7 +51,7 @@ function sameAsker(left: CliActor, right: CliActor) {
  * unverified caller's claimed pane where exactly one local Herdr has it,
  * still marked unverified. Either way, Herdr's name for the agent there.
  */
-async function placeAsker(
+export async function placeAsker(
   hosts: readonly CliHost[],
   actor: CliActor,
 ): Promise<CliActor> {

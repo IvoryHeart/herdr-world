@@ -38,6 +38,8 @@ const parameters: Partial<Record<WorldCliCommand, Record<string, unknown>>> = {
   "ask answer": { id: "missing", answer: "Example" },
   "ask withdraw": { id: "missing" },
   result: { task: "example", summary: "Example result" },
+  status: { key: "example", line: "Example status" },
+  "status clear": { key: "example" },
   "spawned-by": { parent: "w1:p2" },
   "group create": { kind: "pod", name: "New pod" },
   "group add": { group: "pod", agent: address },

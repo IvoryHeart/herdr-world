@@ -26,6 +26,7 @@ exposed by this migration.
 | --- | --- |
 | Browser RPC | Allow after listener authentication and origin admission |
 | CLI reads and ordinary World edits | Allow for both CLI actors, with existing target/ownership checks |
+| CLI `status`, `status clear`, `status ls` | Allow for both CLI actors; a caller changes only its own rows, and unverified callers share one key space |
 | CLI ask answer/withdraw and spawn claim | Verified pane required; existing asker/session checks still apply |
 | CLI desk move | Acknowledge with `--herdr` |
 | CLI add to a projected Room/Desk | Resolve its owner, then acknowledge with `--herdr` |
@@ -93,7 +94,8 @@ its underlying effect stayed in memory.
 The P4 [policy table](../server/src/verbs/policy-baseline.json) enumerates every
 migrated verb × actor. The [CLI characterization](../server/src/verbs/compatibility.test.ts)
 replays all 31 existing commands for verified and unverified callers against
-outcomes recorded from the implementation before this migration. Existing command,
+outcomes recorded from the implementation before this migration, and the later
+`status` commands against their recorded outcomes. Existing command,
 group, source, terminal and service suites retain the deeper semantic checks.
 The [browser call inventory](../server/src/verbs/policy.test.ts) parses production
 call expressions and refuses a missing registration. Dynamic Ranger RPC names are
