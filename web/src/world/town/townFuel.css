@@ -20,7 +20,7 @@
 
 .town-fuel-gauge > button {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   column-gap: 8px;
   row-gap: 2px;
   align-items: center;
@@ -42,14 +42,19 @@
 
 .town-fuel-name {
   grid-row: span 2;
+  overflow-wrap: anywhere;
   font-size: 11px;
   font-weight: 600;
   color: #c9b79a;
 }
 
+/* Label, bar, value. Rows line up at their usual widths; a longer label or
+   value takes its room from the bar, never from the board's border (#886). */
 .town-fuel-window {
   display: grid;
-  grid-template-columns: 34px 1fr 52px;
+  grid-template-columns:
+    minmax(34px, max-content) minmax(12px, 1fr)
+    minmax(52px, max-content);
   gap: 6px;
   align-items: center;
   font-size: 11px;
@@ -94,9 +99,9 @@
 /* A refusal: the limit is used up; words and a reset time, no bar. */
 .town-fuel-reached {
   grid-column: 2 / -1;
+  min-width: 0;
   color: var(--town-wait, #ffb547);
   font-weight: 600;
-  white-space: nowrap;
 }
 
 /* A reading more than 15 minutes old: its age, muted, under the bars. */
