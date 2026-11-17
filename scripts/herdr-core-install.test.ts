@@ -48,6 +48,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ "\${FIXTURE_OFFLINE:-}" != 1 ] || exit 6
+if [ -n "\${FIXTURE_RESET_ONCE:-}" ] && [ ! -e "$FIXTURE_RESET_ONCE" ]; then : > "$FIXTURE_RESET_ONCE"; exit 56; fi
+if [ -n "\${FIXTURE_HTTP_ERROR:-}" ]; then exit 22; fi
 name="\${url##*/}"
 [ "$name" != herdr-core.tar.gz ] || [ -z "\${FIXTURE_LATE_CORE:-}" ] || cp "$FIXTURE_LATE_CORE" "$HOME/.local/bin/herdr-core"
 cp "$FIXTURE_ASSETS/$name" "$out"
@@ -237,6 +239,23 @@ test("errors are plain: offline, and a core that will not start", () => {
   const stuck = f.run("herdr_core_setup", { HC_FIXTURE_START_EXIT: "3" });
   expect(stuck.code).not.toBe(0);
   expect(stuck.err).toContain("herdr-core did not start; run `");
+});
+
+test("a dropped connection is retried; an HTTP error is not", () => {
+  const f = fixture();
+  const reset = f.run("herdr_core_setup", {
+    FIXTURE_RESET_ONCE: join(f.home, "reset-marker"),
+  });
+  expect(reset.code).toBe(0);
+  // The first manifest read is reset, the retry and the download succeed.
+  expect(
+    reset.log.split("\n").filter((l) => l.startsWith("curl")),
+  ).toHaveLength(3);
+  const http = fixture().run("herdr_core_setup", { FIXTURE_HTTP_ERROR: "1" });
+  expect(http.code).not.toBe(0);
+  expect(http.log.split("\n").filter((l) => l.startsWith("curl"))).toHaveLength(
+    1,
+  );
 });
 
 test("a login entry World did not write is left unchanged", () => {

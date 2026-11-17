@@ -677,7 +677,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **herdr-core first on a fresh install.** A fresh standalone install and the
   Homebrew launcher keep any installed runtime (`hc`/`herdr-core` or `herdr`)
   with its existing version and owner, and install nothing. When neither is
-  found they install herdr-core: its release list over HTTPS, the archive for
+  found they install herdr-core: its release list over HTTPS (a dropped connection is
+  retried up to three times; an HTTP error fails at once), the archive for
   this computer checked against its SHA-256 (nothing downloaded runs as a
   script; on macOS a release without the signed Herdr Core.app is refused
   before anything in it runs), `~/.local/bin/herdr-core` plus an `hc` link if
