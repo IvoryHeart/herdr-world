@@ -51,6 +51,93 @@ Nothing is sent anywhere. Release and package builds never set the flag, and the
 web asset check fails a release build that carries any of it. See the
 [World component routes](../web/src/world/README.md#development-tools).
 
+## Linux installation acceptance
+
+Run the real standalone installer in disposable Ubuntu 24.04 containers with
+systemd as PID 1 and a normal user with a lingering user manager:
+
+```bash
+bun run test:install-linux
+# Reuse an already packaged candidate instead of rebuilding it:
+bun run test:install-linux --reuse --version 0.0.0-rc.1
+# Pin the real core release; the default is latest:
+bun run test:install-linux --core-version 0.1.21
+# Diagnose one scenario:
+bun run test:install-linux --reuse --version 0.0.0-rc.1 --case stopped
+```
+
+Requirements: Bun/dependencies, Docker with cgroup v2 and permission to run
+containers with `SYS_ADMIN` and unconfined AppArmor/seccomp, and internet access
+to Ubuntu, GitHub releases and releases.herdr.dev. No root shell or
+`--privileged` is used. Missing Docker prints `SKIP` and succeeds locally;
+`--require-docker` makes it an error in CI. An unavailable daemon, unsupported
+cgroups or a failed download fails the run. `--version` selects the candidate
+build version (or exact package in `dist/` with `--reuse`).
+
+Every default run uses four fresh containers:
+
+| Case | Checks |
+| --- | --- |
+| `fresh` | Neither runtime installed; installer downloads and verifies core, enables its login unit and starts it. A container restart exercises reboot and the lingering user unit. Saved profiles contain only core, `core-local` is default, CLI lists it, and Town's snapshot has no dead Local building. |
+| `tui` | Official checksum-pinned Herdr TUI is present; installer preserves it without adding core or a unit. Manage connections' `connections.core_install` probe/install RPC installs, enables, starts and connects core, preserving the TUI binary and default. |
+| `stopped` | A real core is installed but stopped; installer preserves it without a unit. Town's setup card's probe/install RPC starts and connects it, enables login and checks core-only profiles/default/topology. |
+| `upgrade` | Installs the latest published stable World first, seeds synthetic connections/default and a real enabled core unit, then installs the candidate. Connections, default, unit contents/enabled state and live core connectivity survive. |
+
+The upgrade uses the same stable-release resolver and current-shell-installer
+policy as `scripts/installer-upgrade.ts`; it supplements that native matrix's
+plugin, auth and migration coverage. In CI it reuses the validated
+`INSTALLER_BASELINE_TAG` frozen by the native matrix, without another GitHub API
+lookup. Otherwise it resolves the latest stable release; set `GH_TOKEN` locally
+to authenticate that lookup if shared-IP rate limits apply. The release workflow
+supplies its read-capable token for this lookup. Tokens stay outside the containers.
+Only the upgrade baseline opts out of runtime
+bootstrap while its pre-existing state is prepared. Other installations run real
+runtime setup. The TUI executable comes from the official release URL and must
+match the repository's reviewed SHA-256 before execution. Core comes from its
+official HTTPS release manifest and archive, verified by the production installer.
+To pin automatic bootstrap, a test-only curl wrapper substitutes only the official
+latest manifest URL with the official pinned manifest URL; downloads and checksums
+are never fabricated. A read-only mount serves World archives from an HTTP mirror
+bound to loopback **inside** each container. No host ports are published, no host
+runtime state is mounted, and the harness never operates host services.
+
+Output names `[case] CHECK`, `PASS` and the failing check. A failure retains only
+bounded synthetic-container journal diagnostics in command output, then tries the
+remaining cases and exits nonzero. Containers, the image built by the run and
+scratch files are removed on success, failure, SIGINT and SIGTERM; generated
+candidate packages in `dist/` remain available for reuse. Docker's pre-existing
+images and build cache are left alone. A forced kill or machine failure cannot
+run cleanup. The resources carry the `herdr-world.install-test=true` container
+label and unique `world-install-` names for identifying an interrupted run.
+
+To prove a check catches an installer regression, run
+`bun run test:install-linux --reuse --version 0.0.0-rc.1 --case fresh --fault skip-register`.
+This skips `herdr_core_register` only in the disposable installer copy. The
+core-only profile/default check must fail and cleanup must still complete;
+tracked scripts are untouched. The focused harness tests exercise
+cleanup on failure/interrupt, option validation and installation suite selection:
+
+```bash
+bun run test ./scripts/install-linux.test.ts ./scripts/validation-scope.test.ts
+```
+
+To add a case, add its name to `cases` in `scripts/install-linux.ts` and its
+preconditions and named checks to `scripts/install-linux/scenarios.py`. Keep setup
+and observations inside the container and drive user actions through the real RPC
+or CLI. Await socket/systemd/World events with deadlines; do not add fixed sleeps.
+Add the case to this table. macOS can later use a disposable macOS VM/runner with
+a real launchd user session and the same case contract; this Linux suite does not
+claim macOS or Windows service coverage.
+
+Optional UI review: open `/town?coreInstall=ok` on a disposable preview (the
+testing parameter removes itself), then open
+**Town → Hosts → Manage connections → Install herdr-core… → This computer**
+and capture the completed panel after **Install and start**. The panel must say
+**Simulated**; this step must not install a runtime on your host. Keep screenshots
+separate from installation acceptance; use the [five-viewport capture recipe](SCREENSHOTS.md#pr-screenshot-viewports)
+with your own browser and the panel's `.core-install-lines` expected selector.
+The automated install/start checks require no clicks or screenshots.
+
 ## Herdr-core release smoke
 
 **Herdr-core release smoke** in GitHub Actions runs daily at 06:37 UTC and
@@ -59,7 +146,9 @@ herdr-core release**. Its summary and 14-day artifact identify the resolved
 release, target, SHA-256, live suites and exit status; the log includes failures
 and measured latency/throughput. A red run flags drift or download failure; it
 never pins core, changes runtime permissions or certifies a release. This job is
-separate from required **Delivery checks**, which need no live core.
+separate from ordinary unit/model checks, which need no live core. Installation
+CI also runs the [real container cases](#linux-installation-acceptance) under
+required **Delivery checks**.
 
 GitHub enables manual dispatch and the schedule once the workflow exists on the
 default branch. Before then, or to reproduce locally on Linux x64/ARM64:
