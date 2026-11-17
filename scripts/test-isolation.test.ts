@@ -224,11 +224,17 @@ test("only an explicit named live selection opts out; parent markers cannot", ()
     HERDR_CORE_BIN: "/example/core",
     SSH_AUTH_SOCK: "/example/agent",
     CODEX_HOME: "/example/codex",
+    PI_CODING_AGENT_DIR: "/example/pi",
+    ANTIGRAVITY_CONVERSATIONS_DIR: "/example/conversations",
+    OPENCODE_CONFIG_DIR: "/example/opencode",
   });
   expect(env.HERDR_WORLD_TEST_LIVE).toBeUndefined();
   expect(env.HERDR_CORE_BIN).toBeUndefined();
   expect(env.SSH_AUTH_SOCK).toBeUndefined();
   expect(env.CODEX_HOME).toBeUndefined();
+  expect(env.PI_CODING_AGENT_DIR).toBeUndefined();
+  expect(env.ANTIGRAVITY_CONVERSATIONS_DIR).toBeUndefined();
+  expect(env.OPENCODE_CONFIG_DIR).toBeUndefined();
   expect(env[ISOLATION]).not.toBe("/example/old");
 });
 
