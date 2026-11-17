@@ -15,7 +15,8 @@ import { useWorldSources } from "../worldSources";
  * ready parcel is merged, to show it leave. `?townPostFixture=many` adds a
  * pile beyond the yard; `?townPostFixture=off` shows a signed-out source.
  *
- * Only the post office reads it; every other view keeps the real source.
+ * Only the post office and the Work lens it opens read it; Board's Work
+ * lens and every other view keep the real source.
  * Its pull requests are on example.com repositories World never has, so the
  * service refuses any action on them.
  */
@@ -24,6 +25,8 @@ export type TownPostFixtureMode = "pile" | "many" | "off";
 
 const PARAM = "townPostFixture";
 let mode: TownPostFixtureMode | null | undefined;
+/** When the page first read the fixture; every reader shares it. */
+let fixtureStart: number | null = null;
 
 /** The switch, read once per page load; the parameter is removed. */
 export function townPostFixtureMode(): TownPostFixtureMode | null {
@@ -42,6 +45,7 @@ export function townPostFixtureMode(): TownPostFixtureMode | null {
 /** For tests: forget the switch so the next read sees the URL again. */
 export function resetTownPostFixture() {
   mode = undefined;
+  fixtureStart = null;
 }
 
 const REPO = "example-org/web-app";
@@ -241,20 +245,34 @@ export function townPostFixtureMerged(
 export const TOWN_POST_FIXTURE_MERGE_MS = 10_000;
 
 /**
- * The snapshot the post office reads: the GitHub source's, or with the
- * testing switch on, the synthetic one.
+ * The page's one synthetic snapshot at `now`: the post office and the Work
+ * lens it opens (#887) agree on it, merged or not.
+ */
+function townPostFixtureAt(fixture: TownPostFixtureMode, now: number) {
+  fixtureStart ??= now;
+  const snapshot = townPostFixtureSnapshot(fixture, fixtureStart);
+  return fixture !== "off" && now - fixtureStart >= TOWN_POST_FIXTURE_MERGE_MS
+    ? townPostFixtureMerged(snapshot)
+    : snapshot;
+}
+
+/**
+ * The snapshot the post office and its Work lens read: the GitHub source's,
+ * or with the testing switch on, the synthetic one.
  */
 export function useTownPostSources(): WorldSourcesSnapshot {
   const live = useWorldSources();
   const [fixture] = useState(townPostFixtureMode);
   const [synthetic, setSynthetic] = useState(() =>
-    fixture ? townPostFixtureSnapshot(fixture, Date.now()) : null,
+    fixture ? townPostFixtureAt(fixture, Date.now()) : null,
   );
   useEffect(() => {
-    if (!fixture || fixture === "off") return;
+    if (!fixture || fixture === "off" || fixtureStart === null) return;
+    const left = fixtureStart + TOWN_POST_FIXTURE_MERGE_MS - Date.now();
+    if (left <= 0) return;
     const timer = window.setTimeout(
-      () => setSynthetic((value) => value && townPostFixtureMerged(value)),
-      TOWN_POST_FIXTURE_MERGE_MS,
+      () => setSynthetic(townPostFixtureAt(fixture, Date.now())),
+      left + 20,
     );
     return () => window.clearTimeout(timer);
   }, [fixture]);

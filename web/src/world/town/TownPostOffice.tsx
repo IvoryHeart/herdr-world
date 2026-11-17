@@ -27,6 +27,7 @@ import {
 } from "./townPost";
 import { useTownPostSources } from "./townPostFixture";
 import type { TownRendererHandle } from "./townRenderer";
+import { useOpenTownWork } from "./TownWorkLens";
 import "./townPost.css";
 
 /** How long a parcel takes to leave the yard (townPost.css). */
@@ -142,7 +143,9 @@ const FOLDED_WAITING = {
  * sorting yard beside the town center, ready to merge first, each opening the pull
  * request card the desk badge opens. Its sign counts them without hovering.
  * On a narrow (stacked) town it folds to a sign on the town center that
- * opens the same parcels as a list, as the city billboard folds.
+ * opens the same parcels as a list, as the city billboard folds. Its sign,
+ * and "All pull requests" in its lists, open Board's Work lens over Town
+ * (#887): every pull request as the same kanban.
  */
 export const TownPostOffice = memo(function TownPostOffice({
   layout,
@@ -156,6 +159,7 @@ export const TownPostOffice = memo(function TownPostOffice({
   // Read at every render: an expiring detail re-renders it (useExpiry).
   useExpiry(snapshot);
   const office = townPostOffice(snapshot, Date.now());
+  const openWork = useOpenTownWork();
   const leaving = useLeaving(office, snapshot);
   const [cardKey, setCardKey] = useState<string | null>(null);
   const cardAnchor = useRef<HTMLElement | null>(null);
@@ -214,6 +218,7 @@ export const TownPostOffice = memo(function TownPostOffice({
           center={layout.center}
           office={office}
           onOpen={openCard}
+          onOpenWork={openWork}
           onFocus={reveal}
         />
         {card}
@@ -223,6 +228,9 @@ export const TownPostOffice = memo(function TownPostOffice({
   const shown = parcels.slice(0, yardSlots(parcels.length));
   const pile = parcels.slice(shown.length);
   const quiet = office.status !== "open";
+  const connect = office.status === "off" || office.status === "closed";
+  // Work opens only once GitHub has answered; loading keeps the old sign.
+  const work = office.status === "open" ? openWork : undefined;
   return (
     <>
       <button
@@ -230,14 +238,14 @@ export const TownPostOffice = memo(function TownPostOffice({
         className="town-post-sign"
         data-quiet={quiet || undefined}
         style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 34 }}
-        aria-label={`Post office: ${spoken(office)}`}
+        aria-label={`Post office: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
         title={quiet && office.status === "closed" ? office.detail : undefined}
         onPointerDown={(event) => event.stopPropagation()}
         onFocus={reveal}
         onClick={(event) => {
           event.stopPropagation();
-          if (office.status === "off" || office.status === "closed")
-            openSourcesSettings();
+          if (connect) openSourcesSettings();
+          else if (work) work();
           else
             yardRef.current
               ?.querySelector<HTMLElement>(".town-post-parcel")
@@ -292,6 +300,7 @@ export const TownPostOffice = memo(function TownPostOffice({
             parcels={pile}
             at={townPostSlot(shown.length)}
             onOpen={openCard}
+            onOpenWork={openWork}
             onFocus={reveal}
           />
         ) : null}
@@ -357,11 +366,13 @@ function Pile({
   parcels,
   at,
   onOpen,
+  onOpenWork,
   onFocus,
 }: {
   parcels: readonly TownPostParcel[];
   at: { x: number; y: number };
   onOpen(key: string, anchor: HTMLElement | null): void;
+  onOpenWork: (() => void) | null;
   onFocus(event: FocusEvent<HTMLElement>): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -386,6 +397,10 @@ function Pile({
         collisionPadding={8}
         aria-label="More pull requests"
       >
+        <AllPullRequests
+          onOpenWork={onOpenWork}
+          onClose={() => setOpen(false)}
+        />
         <ParcelList
           parcels={parcels}
           onOpen={(key) => {
@@ -395,6 +410,29 @@ function Pile({
         />
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Opens every pull request in the Work lens, closing the list first. */
+function AllPullRequests({
+  onOpenWork,
+  onClose,
+}: {
+  onOpenWork: (() => void) | null;
+  onClose(): void;
+}) {
+  if (!onOpenWork) return null;
+  return (
+    <button
+      type="button"
+      className="town-post-all"
+      onClick={() => {
+        onClose();
+        onOpenWork();
+      }}
+    >
+      All pull requests
+    </button>
   );
 }
 
@@ -446,11 +484,13 @@ function FoldedSign({
   center,
   office,
   onOpen,
+  onOpenWork,
   onFocus,
 }: {
   center: TownCenterLot;
   office: Office;
   onOpen(key: string, anchor: HTMLElement | null): void;
+  onOpenWork: (() => void) | null;
   onFocus(event: FocusEvent<HTMLElement>): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -495,6 +535,12 @@ function FoldedSign({
           <span>POST OFFICE</span>
         </header>
         <p className="town-post-popover-counts">{townPostSignText(office)}</p>
+        {office.status === "open" ? (
+          <AllPullRequests
+            onOpenWork={onOpenWork}
+            onClose={() => setOpen(false)}
+          />
+        ) : null}
         {office.status === "open" ? (
           office.parcels.length ? (
             <ParcelList
