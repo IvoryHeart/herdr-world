@@ -64,6 +64,9 @@ const CLOUD_MARGIN = 600;
 /** A cloud fades in and out over this many pixels at the span's edges. */
 const CLOUD_FADE = 300;
 const CLOUD_WIDTH = 256;
+/** One cloud per this many square world pixels of span, and at most CLOUDS. */
+const CLOUD_SPACING = 2_000_000;
+const CLOUDS = 8;
 /** One firefly per this many grass tiles at most, and never more than FLIES. */
 const FLY_SPACING = 53;
 const FLIES = 160;
@@ -121,14 +124,16 @@ export function townAtmospherePlan(layout: TownLayout): TownAtmospherePlan {
     w: layout.width * T + CLOUD_MARGIN * 2,
     h: layout.height * T + CLOUD_MARGIN * 2,
   };
+  // A few clouds, sparse enough that most of the land lies in sun: each
+  // one is blended over the ground on every frame.
   const count = Math.round(
-    Math.min(30, Math.max(4, (span.w * span.h) / 360_000)),
+    Math.min(CLOUDS, Math.max(2, (span.w * span.h) / CLOUD_SPACING)),
   );
   const clouds = Array.from({ length: count }, (_, i) => ({
     x: fraction(i * 7 + 1) * span.w,
     y: span.y + ((i + fraction(i * 7 + 2)) / count) * span.h,
-    sx: 2.2 + fraction(i * 7 + 3) * 1.4,
-    sy: 2 + fraction(i * 7 + 4) * 0.8,
+    sx: 1.6 + fraction(i * 7 + 3) * 0.6,
+    sy: 1.4 + fraction(i * 7 + 4) * 0.4,
     speed: 5 + fraction(i * 7 + 5) * 4,
   }));
   return { shadows, lampHeads, flies, clouds, span };
@@ -137,6 +142,41 @@ export function townAtmospherePlan(layout: TownLayout): TownAtmospherePlan {
 /** How strongly fireflies show: none until the sky is nearly dark. */
 export const townFireflyNight = (sky: TownSky) =>
   Math.min(1, Math.max(0, (sky.lights - 0.7) / 0.3));
+
+/**
+ * The part of a building's sun shadow that shows: its footprint `b` moved by
+ * (`dx`, `dy`), less the building, which hides the rest. At most two strips,
+ * one above or below it and one beside it. A strip's soft edge is centred on
+ * its border, so a border against the building is pushed `inset` into it
+ * (half the feather) and the fade falls under the walls; where the two strips
+ * meet, their fades share one line and add up to an even shadow.
+ *
+ * Drawing only these strips, not the whole footprint, keeps the sun's cost to
+ * a thin band round each building: software GL pays for every pixel blended.
+ */
+export function townShadowStrips(
+  b: TownRect,
+  dx: number,
+  dy: number,
+  inset: number,
+): TownRect[] {
+  const right = b.x + b.w;
+  const bottom = b.y + b.h;
+  const strips: TownRect[] = [];
+  const add = (x0: number, y0: number, x1: number, y1: number) => {
+    if (x1 > x0 && y1 > y0)
+      strips.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+  };
+  // Above or below, across the shadow's whole width.
+  if (dy < 0) add(b.x + dx, b.y + dy, right + dx, b.y + inset);
+  if (dy > 0) add(b.x + dx, bottom - inset, right + dx, bottom + dy);
+  // Beside, between that strip and the shadow's far edge.
+  const top = dy < 0 ? b.y + inset : b.y + dy;
+  const end = dy > 0 ? bottom - inset : bottom + dy;
+  if (dx > 0) add(right - inset, top, right + dx, end);
+  if (dx < 0) add(b.x + dx, top, b.x + inset, end);
+  return strips;
+}
 
 /** A cloud's shadow `drift` seconds on: where it is and how much it shows. */
 export function townCloudAt(cloud: TownCloud, drift: number, span: TownRect) {
@@ -179,7 +219,11 @@ export function townAtmosphereRate(sky: TownSky, z: number, animated: boolean) {
 
 /* ---------- drawing ---------- */
 
-/** A puffy cloud, white so it can be tinted as a shadow. */
+/**
+ * A puffy cloud, white so it can be tinted as a shadow. Sampled nearest, like
+ * the rest of Town: linear filtering of a large blended sprite costs several
+ * times as much on software GL, and at this faint alpha nothing steps.
+ */
 function cloudTexture() {
   const [canvas, g] = townCanvas(CLOUD_WIDTH, 160);
   for (const [x, y, r] of [
@@ -196,7 +240,7 @@ function cloudTexture() {
     g.fillRect(x - r, y - r, r * 2, r * 2);
   }
   return new Texture({
-    source: new CanvasSource({ resource: canvas, scaleMode: "linear" }),
+    source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }),
   });
 }
 
@@ -225,6 +269,8 @@ export function createTownAtmosphere(options: {
   /** Seconds the atmosphere has drifted: it holds still without motion. */
   let drift = 0;
   let lastClock: number | null = null;
+  /** The shadow offset the strips were last laid out for. */
+  let shadowAt = "";
 
   const glowAt = (x: number, y: number, radius: number, tint: number) => {
     const sprite = glow.addChild(new Sprite(radial));
@@ -246,8 +292,9 @@ export function createTownAtmosphere(options: {
     sync(next: TownAtmospherePlan) {
       clear();
       plan = next;
-      const k = SHADOW_FEATHER / TOWN_LIGHT_FEATHER;
-      for (const rect of next.shadows) {
+      shadowAt = "";
+      // Two strips at most for each building (townShadowStrips).
+      for (let i = 0; i < next.shadows.length * 2; i += 1) {
         const sprite = new NineSliceSprite({
           texture: soft,
           leftWidth: TOWN_LIGHT_FEATHER,
@@ -255,9 +302,7 @@ export function createTownAtmosphere(options: {
           topHeight: TOWN_LIGHT_FEATHER,
           bottomHeight: TOWN_LIGHT_FEATHER,
         });
-        sprite.scale.set(k);
-        sprite.width = (rect.w + SHADOW_FEATHER) / k;
-        sprite.height = (rect.h + SHADOW_FEATHER) / k;
+        sprite.scale.set(SHADOW_FEATHER / TOWN_LIGHT_FEATHER);
         sprite.tint = SHADOW;
         shadows.push(shadowLayer.addChild(sprite));
       }
@@ -283,15 +328,30 @@ export function createTownAtmosphere(options: {
       glow.scale.copyFrom(world.scale);
       glow.position.copyFrom(world.position);
       if (!plan) return 0;
-      plan.shadows.forEach((rect, i) => {
-        const sprite = shadows[i]!;
-        sprite.visible = sky.sun > 0.01;
-        sprite.alpha = 0.3 * sky.sun;
-        sprite.position.set(
-          rect.x - SHADOW_FEATHER / 2 + sky.shadowX,
-          rect.y - SHADOW_FEATHER / 2 + sky.shadowY,
-        );
-      });
+      shadowLayer.visible = sky.sun > 0.01;
+      shadowLayer.alpha = 0.3 * sky.sun;
+      // Whole world pixels, so the strips move only when the sun does.
+      const dx = Math.round(sky.shadowX);
+      const dy = Math.round(sky.shadowY);
+      if (shadowLayer.visible && shadowAt !== `${dx},${dy}`) {
+        shadowAt = `${dx},${dy}`;
+        const k = SHADOW_FEATHER / TOWN_LIGHT_FEATHER;
+        plan.shadows.forEach((rect, i) => {
+          const strips = townShadowStrips(rect, dx, dy, SHADOW_FEATHER / 2);
+          for (let j = 0; j < 2; j += 1) {
+            const sprite = shadows[i * 2 + j]!;
+            const strip = strips[j];
+            sprite.visible = !!strip;
+            if (!strip) continue;
+            sprite.position.set(
+              strip.x - SHADOW_FEATHER / 2,
+              strip.y - SHADOW_FEATHER / 2,
+            );
+            sprite.width = (strip.w + SHADOW_FEATHER) / k;
+            sprite.height = (strip.h + SHADOW_FEATHER) / k;
+          }
+        });
+      }
       cloudLayer.visible = sky.sun > 0.02;
       if (cloudLayer.visible)
         plan.clouds.forEach((shape, i) => {

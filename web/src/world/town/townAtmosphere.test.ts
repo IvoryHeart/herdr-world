@@ -6,6 +6,7 @@ import {
   townCloudAt,
   townFireflyAt,
   townFireflyNight,
+  townShadowStrips,
 } from "./townAtmosphere";
 import { townDaylightHour, townSky } from "./townDaylight";
 import { TownLand, townLandscape } from "./townLandscape";
@@ -53,6 +54,39 @@ test("sun shadows swing with the hour and lengthen toward dawn and dusk", () => 
   expect(dusk.sun).toBeGreaterThan(0.2);
   expect(dusk.sun).toBeLessThan(0.7);
   expect(night.sun).toBe(0);
+});
+
+test("a sun shadow is drawn only where it shows beside its building", () => {
+  const b = { x: 100, y: 200, w: 96, h: 64 };
+  const inside = (
+    r: { x: number; y: number; w: number; h: number },
+    x: number,
+    y: number,
+  ) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  for (const [dx, dy] of [
+    [-39, 19],
+    [24, 12],
+    [0, 8],
+    [12, -6],
+    [-5, -9],
+  ] as const) {
+    const strips = townShadowStrips(b, dx, dy, 0);
+    const shadow = { ...b, x: b.x + dx, y: b.y + dy };
+    // Without an inset the strips tile the visible shadow exactly once.
+    for (let y = 150; y < 300; y += 1)
+      for (let x = 40; x < 260; x += 1) {
+        const covered = strips.filter((r) => inside(r, x, y)).length;
+        const shows = inside(shadow, x, y) && !inside(b, x, y);
+        expect(covered).toBe(shows ? 1 : 0);
+      }
+    // A noon shadow straight down is one strip; otherwise at most two.
+    expect(strips.length).toBe(dx === 0 ? 1 : 2);
+  }
+  expect(townShadowStrips(b, 0, 0, 7)).toEqual([]);
+  // Borders against the building reach the inset under its walls.
+  const [below, beside] = townShadowStrips(b, 24, 12, 7);
+  expect(below).toEqual({ x: 124, y: 257, w: 96, h: 19 });
+  expect(beside).toEqual({ x: 189, y: 212, w: 31, h: 45 });
 });
 
 test("fireflies keep to open grass, away from every building", () => {
