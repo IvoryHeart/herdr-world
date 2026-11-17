@@ -40,6 +40,14 @@ maintenance](react-19.md).
 
 ## Development tools
 
+To check harness title spinners without running agents, open
+`/?titleSpinnerFixture` on a development or preview World. The testing-only page
+removes the parameter immediately and shows a synthetic `π`-prefixed title.
+Click **Next spinner frame**: the raw title changes while **Displayed task**
+stays `π Running tests`. Click **Change task**: it becomes `π Review results`.
+Reload to leave the preview. This checks title display; the snapshot activity
+and conversation-identity regressions check service admission and refresh.
+
 World's event traces and renderer counters exist only in development builds:
 `bun run dev:web`, or a production-style build with
 `HERDR_WORLD_BUILD_DEVTOOLS=1 bun run build:web`. In such a build, Board's
@@ -165,9 +173,10 @@ the archive against its SHA-256, and runs every `server/src/herdr-core/*.live.te
 suite. It installs nothing. Live cores use isolated scratch HOME/XDG directories;
 the harness stops their processes and the runner removes the download. Without
 `HERDR_CORE_BIN`, ordinary test runs skip live-core cases. PowerShell-on-Linux
-checks exercise framing and pipe relay behavior; Windows ACLs, a real Windows
-SSH host, official-app visibility and phone behavior still require owner checks
-in [the handover](../openspec/changes/herdr-core-runtime/delivery.md#owner-device-acceptance).
+checks exercise framing and pipe relay behavior; real Windows ACLs, local core
+and SSH behavior remain [known limits](../openspec/specs/herdr-core-runtime/spec.md#known-limits).
+Recorded official-app and phone results remain historical evidence
+in [the handover](../openspec/changes/archive/2026-11-17-herdr-core-runtime/delivery.md#owner-device-acceptance).
 
 ## Verification
 

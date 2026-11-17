@@ -24,7 +24,7 @@ suite. It does not prove a vendor's status reports truthful or close Q3. Unit
 tests cover unknown/blocked/working/error and readiness lost while queued;
 live tests use a silent supported executable and native OSC status stand-ins.
 
-[The composed model](../../../quint/herdr-core-runtime.qnt) imports
+[The composed model](../../../../quint/herdr-core-runtime.qnt) imports
 `capturedLeaseCurrent` from `runtime-leases` and `opaqueReplayBlocked` from
 `effect-recovery`. Those predicates also participate in the maintained foundation
 models' capture/recovery transitions. Composition here shares those producer
@@ -56,7 +56,7 @@ absent endpoint. This is safety exploration without temporal fairness/liveness.
 
 ## Replay, witnesses and fault controls
 
-[The replay adapter](../../../quint/herdr-core-runtime.ts) drives an in-process
+[The replay adapter](../../../../quint/herdr-core-runtime.ts) drives an in-process
 protocol fake with real delta commands and immutable recipient capture. It uses
 a keyed terminal map to apply changes, not the model's source-cut oracle. It checks
 every observable state after each action. Decode, malformed state/action, process
@@ -288,7 +288,7 @@ by unit, relay and browser tests, not by this model.
 
 ## Shared seen (issue #868)
 
-[`quint/herdr-core-seen.qnt`](../../../quint/herdr-core-seen.qnt) is a separate
+[`quint/herdr-core-seen.qnt`](../../../../quint/herdr-core-seen.qnt) is a separate
 bounded case for the app label contract (`herdr.seen`, plan M9): one core
 agent, one World look and one other Herdr client, turns 0–2. World's browser
 decides when a person looks (`refresh`): only a looking, foreground page on a
@@ -399,7 +399,7 @@ Each fault is checked exhaustively with TLC; a simulator search of up to
 missing counterexamples fail. Increasing source changes to three adds 100 replayed sensitivity traces.
 
 Run `bun quint/run.ts --case herdr-core-runtime` for development and
-`bun run verification:gate` for complete canonical evidence. The [verification runner](../../../quint/herdr-core-verification.ts)
+`bun run verification:gate` for complete canonical evidence. The [verification runner](../../../../quint/herdr-core-verification.ts)
 retains source/model/adapter/tool hashes, command logs, traces and counterexamples
 in ignored verification artifacts with existing deadlines and process cleanup.
 Unit tests exercise fake transition/rejection and trace validation independently.

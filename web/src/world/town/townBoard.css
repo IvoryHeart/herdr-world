@@ -5,6 +5,10 @@
   top: 16px;
   transform: none;
   display: grid;
+  /* One column exactly as wide as the board: a long line (a caveat, a fuel
+     value) shrinks, wraps or ellipsizes inside it rather than widening the
+     column and pushing every row past the border (#886). */
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   width: 236px;
   padding: 8px 10px 10px;
@@ -29,7 +33,7 @@
 
 .town-board-counts {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   margin: 0;
 }
@@ -41,8 +45,10 @@
 }
 
 .town-board-counts dt {
+  overflow: hidden;
   font-size: 10px;
   white-space: nowrap;
+  text-overflow: ellipsis;
   color: #c9b79a;
 }
 
@@ -61,6 +67,8 @@
 
 .town-board-economy {
   display: grid;
+  /* A definite column, so the caveat line ellipsizes at the board's edge. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
 }
 
@@ -89,6 +97,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
 }
 
 .town-board-open {

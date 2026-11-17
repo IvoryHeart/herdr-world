@@ -520,7 +520,8 @@
   color: #a9b2a4;
 }
 
-.town-post-setup {
+.town-post-setup,
+.town-post-all {
   justify-self: start;
   min-height: 28px;
   padding: 2px 10px;
@@ -531,4 +532,9 @@
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* Opens the Work lens (#887); a full touch target, as the rows are. */
+.town-post-all {
+  min-height: 36px;
 }

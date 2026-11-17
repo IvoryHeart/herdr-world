@@ -3,9 +3,6 @@ export type TownCanvasCase = [
   height: number,
   scale: string,
   flightFrameDelay: number,
-  /** Pin the CSS viewport over CDP: `--window-size` alone gives headless
-   * Chrome a wider viewport than a 390px phone (#643). */
-  viewport?: "exact",
 ];
 
 // The original 22 parameter tuples, partitioned without changing fixture
@@ -38,7 +35,7 @@ export const townCanvasCases = {
     [390, 844, "fold-protected", 0],
   ],
   navigation: [
-    [390, 844, "incremental", 0, "exact"],
+    [390, 844, "incremental", 0],
     [1440, 900, "plates", 0],
     [390, 844, "plates", 0],
     [390, 844, "protected", 0],

@@ -33,6 +33,14 @@ const QUEUE_ROW_DY = 7;
 const SIGN_RIGHT = 28;
 /** Half a standing agent's width, so none overhangs what it must not cover. */
 const HALF_AGENT = 10;
+/**
+ * The fewest tiles between two stops on one street: a stop's queue, turned
+ * back once, still clears the sign of the stop to its left. Crossings nearer
+ * than this (stacked buildings of slightly different widths) share one stop.
+ */
+export const TOWN_STOP_SPACING = Math.ceil(
+  (SIGN_RIGHT + HALF_AGENT + TOWN_QUEUE_GAP / 2) / T,
+);
 
 export type TownBusStop = {
   key: string;
@@ -64,10 +72,11 @@ const lane = (road: number) => (road + STREET / 2) * T;
 const OFF_MAP = 6;
 
 /**
- * Every crossing of a street and a side road right of a lot has a stop (the
- * town's left edge road has none). The bus drives every street from one edge
- * of the map to the other, alternating direction, so it passes every
- * crossing whatever the rows' widths; between streets it is off the map.
+ * Every crossing of a street and a side road has a stop, the town's left
+ * edge roads included, shared with any crossing on that street fewer than
+ * TOWN_STOP_SPACING tiles away. The bus drives every street from one edge of
+ * the map to the other, alternating direction, so it passes every crossing
+ * whatever the rows' widths; between streets it is off the map.
  */
 export function townBusRoute(layout: TownLayout): TownBusRoute {
   const roads = [...new Set(layout.roads)].sort((a, b) => a - b);
@@ -83,10 +92,17 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
   roads.forEach((road, index) => {
     const leg = legs[index]!;
     for (const side of layout.verticalRoads)
-      if (!side.edge && (side.y0 === road + STREET || side.y1 === road)) {
-        const key = `${side.x}:${road}`;
-        if (stops.some((stop) => stop.key === key)) continue;
+      if (side.y0 === road + STREET || side.y1 === road) {
         const wait = { x: (side.x - 0.5) * T, y: (road + STREET - 0.5) * T };
+        if (
+          stops.some(
+            (stop) =>
+              stop.wait.y === wait.y &&
+              Math.abs(stop.wait.x - wait.x) < TOWN_STOP_SPACING * T,
+          )
+        )
+          continue;
+        const key = `${side.x}:${road}`;
         stops.push({
           key,
           wait,

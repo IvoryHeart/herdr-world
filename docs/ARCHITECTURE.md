@@ -115,8 +115,8 @@ Ownership:
   herdr-core…** (`connections.core_install`, `herdr-core/install.ts`), install
   and start core, on the chosen host.
 
-The [herdr-core design](../openspec/changes/herdr-core-runtime/design.md) and
-[requirements](../openspec/changes/herdr-core-runtime/specs/herdr-core-runtime/spec.md)
+The [archived herdr-core design](../openspec/changes/archive/2026-11-17-herdr-core-runtime/design.md) and
+[requirements](../openspec/specs/herdr-core-runtime/spec.md)
 hold the details: mirror recovery, admission limits, native parameters,
 session input and terminal streams. [Connection isolation](#connection-isolation),
 [Terminal endpoints](#terminal-endpoints) and [SSH transport](#ssh-transport)

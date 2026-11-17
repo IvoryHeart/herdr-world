@@ -251,7 +251,7 @@ finalization; they do not claim a fresh checker exploration.
 
 ## Herdr-core design contract (Q52)
 
-[herdr-core-runtime](../openspec/changes/herdr-core-runtime/model.md) adds a composed
+[herdr-core-runtime](../openspec/changes/archive/2026-11-17-herdr-core-runtime/model.md) adds a composed
 delta/lease/opaque-recovery design case to the canonical inventory. Run
 `bun quint/run.ts --case herdr-core-runtime` during development; the complete
 `bun run verification:gate` retains every foundation case. The new case exhaustively
@@ -259,12 +259,13 @@ checks its finite graph, replays three seeds against an in-process protocol fake
 and requires all eleven ordering/recovery mutants to violate safety and diverge
 on correct replay. A separate fake mutation checks the adapter. This is design
 evidence with independent review pending; it is not production core conformance.
-Coverage remains pending until the provider and its consumers exist and pass the
-separate acceptance in the active OpenSpec change.
+Independent model/mapping promotion remains recorded separately in Q52 of
+`coverage.json`; archiving the delivered feature does not grant that promotion.
+The archived contract retains the evidence boundaries and excluded claims.
 
 ## Herdr-core shared seen (Q53)
 
-[herdr-core-seen](../openspec/changes/herdr-core-runtime/model.md#shared-seen-issue-868)
+[herdr-core-seen](../openspec/changes/archive/2026-11-17-herdr-core-runtime/model.md#shared-seen-issue-868)
 models World's share of Herdr's `herdr.seen` label with another client. Run
 `bun quint/run.ts --case herdr-core-seen` during development. TLC explores the
 whole bounded graph; three seeds replay through the production browser

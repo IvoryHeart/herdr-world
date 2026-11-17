@@ -79,6 +79,8 @@ export type TownRendererHandle = {
   /** Ask for a redraw after camera input; the reason is traced. */
   invalidate(reason?: string): void;
   actorPosition(key: string): { x: number; y: number; seated: boolean } | null;
+  /** The bus stops where agents wait: their signs show a red flag. */
+  setWaitingStops(keys: ReadonlySet<string>): void;
   roofAlpha(hostKey: string): number;
   /**
    * A building gliding or fading in after a topology change: its drawn
@@ -865,6 +867,9 @@ export async function createTownRenderer(
       return actor && actor.mode !== "out"
         ? { x: actor.x, y: actor.y, seated: actor.mode === "seat" }
         : null;
+    },
+    setWaitingStops(keys) {
+      if (topology.setWaitingStops(keys)) request("bus-stop");
     },
     roofAlpha(hostKey) {
       return topology.byHost.get(hostKey)?.roofAlpha ?? 0;

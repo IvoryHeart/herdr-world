@@ -79,6 +79,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     World, and the agent's status line looks as before. World shows Claude Code's
     own figure, which can trail claude.ai by about a point. When Claude refused
     work at its limit, the gauge reads **reached, resets …** instead of a level.
+    Every row stays inside the board at its desktop, phone and Board widths: a
+    longer value takes room from its bar, **reached, resets …** wraps, and a
+    long caveat line under the economy figures ends in an ellipsis (hover or tap
+    it for the full text).
     Chat and quests refresh usage stops after local transcript rewrites, including
     same-size writes whose file timestamps stay unchanged.
     On a phone the compact chip adds the lowest percent left (or **reached**), with the same age when that reading is over 15 minutes old. Its **Summary** button, or on a phone the compact chip under
@@ -196,7 +200,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens (**Details**, **Merge…** and the rest). A merged parcel is carried
     off the yard (with calm or reduced motion it just goes); a closed one
     fades. More than the yard holds make a "+N" pile that opens the rest as a
-    list. With the GitHub source off, signed out or not yet answered, the
+    list. Click the post office's sign, or **All pull requests** at the top of
+    the pile's list or the phone sign's list, to open Board's **Work** lens
+    over Town: every pull request in the same columns, with the Tickets tab,
+    each card's actions and the same Escape, Back or press-outside close. An
+    agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
     post office is closed and says to connect GitHub in **Sources**, with no
     parcels and no counts; when a refresh fails it keeps the last list as
     unknown and says GitHub is out of date. On a phone it folds to a sign on
@@ -205,7 +213,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     requests, open World with `?townPostFixture` (synthetic pull requests in
     every state; ten seconds later the first ready one merges),
     `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
-    the page drops the parameter at once and only the post office uses it.
+    the page drops the parameter at once and only the post office and the
+    Work lens it opens use it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -232,7 +241,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Every building has roads on at least three sides: a street above and below
     each row and a side road to its right. A matching road runs down the left
     of each row's first building, so the town is bounded by roads on both
-    sides; it has no bus stop.
+    sides; its crossings have bus stops like every other.
   - The land around the town is generated: woods with pines, meadows, hedged
     flower gardens and orchards, ponds with reeds, winding footpaths, and each
     street running on beyond the town as a country lane. It fills the whole
@@ -491,7 +500,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     last of the tables shown (**M** lists the same places). Rooms extend as
     tabs open: wide screens show three columns of rooms up to eight tables
     wide, portrait and half-width screens two columns up to six, and phones
-    one column up to four, growing downward. A folded room normally shows up to
+    three columns up to four, growing downward, so a phone opens on compact
+    room cards spread across each building rather than one long column. A folded room normally shows up to
     24 tables: pinned desks first, then the first tabs in the same order as
     Spaces, without promoting later working or recent tabs into that prefix. The bottom-right
     **» +N** tile sits beside the dashed **+** seat and counts hidden tables.
@@ -593,7 +603,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     those waiting at a stop queue along its pavement in joining order, in
     two rows when long, with a **+N** board at the end for any more; one put
     back walks home from the queue and those behind step up;
-    there is a stop at every road crossing, and a countdown board over those
+    there is a stop at every road crossing, the leftmost included (crossings a
+    step or two apart on one street share one); its sign
+    is street furniture like the lamps, drawn behind buildings and agents and
+    under labels and panels, and shrinking with the town as it zooms out (on
+    a phone zoomed far out, the floating bin is the easier target). A
+    countdown board over those
     waiting counts down to the bus reaching that stop (**due** a few seconds
     before it pulls in). The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
@@ -634,6 +649,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is admitted. Search and Hosts
     use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
+    Terminal title-spinner and scroll repaints keep healthy hosts actionable;
+    topology or agent-state changes still require a fresh observation.
   - **Search shows where things are.** Town's search hangs from the top
     edge beside the view buttons in Zen, World's default, and sits in the top
     bar when the bars are shown; on a phone in Zen it is the search button in
@@ -660,7 +677,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **herdr-core first on a fresh install.** A fresh standalone install and the
   Homebrew launcher keep any installed runtime (`hc`/`herdr-core` or `herdr`)
   with its existing version and owner, and install nothing. When neither is
-  found they install herdr-core: its release list over HTTPS, the archive for
+  found they install herdr-core: its release list over HTTPS (a dropped connection is
+  retried up to three times; an HTTP error fails at once), the archive for
   this computer checked against its SHA-256 (nothing downloaded runs as a
   script; on macOS a release without the signed Herdr Core.app is refused
   before anything in it runs), `~/.local/bin/herdr-core` plus an `hc` link if
@@ -770,8 +788,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   their system colours and meanings.
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
   the card in Board and its table in Town (tabs beyond a room's drawn tables
-  show it in Spaces and Board). A tab starts with a stable default colour, or
-  its workspace's Board colour; choose another from the terminal's icon in its
+  show it in Spaces and Board). Colour is quiet identity, never attention: the
+  palette's eight tones are muted and equally light, so only status (the agent
+  marks, each with its own glyph) uses loud colour. A tab without a colour of
+  its own shows its room's: the workspace's chosen colour, or else the room's
+  stable default, so a room reads as one colour and only rooms differ by
+  default. Choose another from the terminal's icon in its
   window header or the appearance button in the phone terminal's app bar, the
   terminal window's menu (**Colour**), the tab's menu in Spaces, the swatch in
   an agent's peek in Town, or the selected card in Board, and reset a tab's own
@@ -788,9 +810,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     its reception board), its Board zone (swatch on the zone label) and its
     Spaces header; it is not passed on to tabs. **Default colour** returns a
     place to its own default.
-  - A desk moved to another room keeps the colour it showed, even a default or
-    its old room's, saved as its own colour: it no longer follows its room's
-    colour, and **Default colour** resets it to its new tab's default.
+  - A desk moved to another room keeps a colour picked for it. Without one it
+    takes its new room's colour, like every desk there.
   - A spawned agent's tab without a colour of its own takes the colour of the
     tab that spawned it (before its workspace's colour), and keeps following it
     when moved. A chosen colour always wins.
@@ -1665,6 +1686,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   A Now bar shows the agent's status, its current task from the terminal title
   and how long it has been at it, with Stop (or Esc twice) for Claude Code,
   Codex and Pi; the step running now shows with its command and timer.
+  Harness task titles omit animated spinner glyphs even after a letter or name
+  prefix. On Herdr TUI connections those frames alone do not refresh Chat;
+  changes to the task text, status or conversation still do.
   When the agent waits on a permission prompt, a question (one or several,
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after

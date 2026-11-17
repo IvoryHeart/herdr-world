@@ -1417,8 +1417,9 @@ desks MAY reflow to the step's columns. Ordinary and explicitly expanded rooms
 SHALL resize to their current desk count; expanded rooms SHALL retain their
 expanded state until Fold. Room placement SHALL be re-derived from native order when the scene is
 rebuilt. Town SHALL take its shape from its container's size rather than one
-breakpoint: on a phone, rooms SHALL stack in one column and buildings in one
-vertical column; on a portrait screen or a half-width window, rooms SHALL form
+breakpoint: on a phone, rooms up to four desks wide SHALL form three columns,
+spread across the building rather than one long column, and buildings SHALL
+stack in one vertical column; on a portrait screen or a half-width window, rooms SHALL form
 two columns and buildings SHALL stack (or share a street when the window is
 landscape); on a wide screen, rooms SHALL form three columns and buildings
 SHALL share one street. Rooms SHALL fill their building's columns in workspace
@@ -2957,8 +2958,10 @@ its tab in Spaces, its card in Board and, when Town draws a table for it, that
 table; a tab beyond a room's drawn tables keeps its colour in Spaces and Board.
 Without a choice of its own a tab SHALL take the colour of the tab whose agent
 spawned it (a spawn relation, never a manual group), then its workspace's Board
-colour, if any, or else a default derived only from its connection and Herdr
-tab ID, so it is the same on every device and after reloads. A colour chosen in any view
+colour, if any, or else its workspace's default, derived only from its
+connection and Herdr workspace ID, so every tab of a room without colours shows
+one colour, the same on every device and after reloads. No tab SHALL have a
+default of its own. A colour chosen in any view
 SHALL be saved by the World service, keyed by connection and Herdr tab ID (as
 Board keys a tab card, qualified when the tab ID is also a workspace ID),
 SHALL appear in every view and on every device, and MAY be reset; reset is
@@ -2966,12 +2969,19 @@ offered only for a tab's own colour, not one inherited from its workspace. The s
 A conflicting current occupant of a reused tab ID SHALL NOT inherit it. Legacy
 choices without evidence SHALL be adopted only from a complete current
 observation; migration cannot reconstruct their earlier identity. A tab World moves to another workspace SHALL keep
-the colour it showed, whether chosen, inherited or default, saved as its own
-colour, except a colour inherited from its spawning tab, which follows its
-terminals and is not saved. When World observes
+its own chosen colour, saved under its new tab ID; without one it SHALL take
+its new workspace's colour, and a colour inherited from its spawning tab
+follows its terminals; neither is saved. When World observes
 Herdr close a tab on the connection's current runtime, it SHALL drop that tab's
 saved colour. Terminal colour SHALL never stand for or hide a status. World
 SHALL NOT write a colour to Herdr.
+
+Colour SHALL be quiet identity and status the only loud colour. Every palette
+tone SHALL share one lightness and a low chroma, so that every status colour of
+the agent marks, in the dark and light themes, is at least 1.75 times as
+chromatic as any palette tone, and each tone SHALL keep 3:1 contrast against
+the dark, light and white surfaces. Each status SHALL also be shown by its own
+glyph and word (the agent marks), never by colour alone.
 
 A terminal's colour SHALL be shown, and offered for change, beside its name in
 the terminal's header (the window header on desktop, the app bar on a phone)
@@ -2988,9 +2998,8 @@ its name, the palette in its menu). A host's colour SHALL be offered and shown
 on its Town building (roof, with the picker on its reception board), its Board
 zone and its Spaces sidebar header. Without one, a workspace SHALL show its
 default (Town's carpet, no Board tint) and a host its theme. A tab without a
-colour of its own SHALL take its workspace's chosen colour, then its own
-default; a host's colour SHALL NOT be inherited, so tabs keep their varied
-defaults. No inherited colour SHALL overwrite a chosen one, and each place's
+colour of its own SHALL take its workspace's chosen colour, then its
+workspace's default; a host's colour SHALL NOT be inherited. No inherited colour SHALL overwrite a chosen one, and each place's
 own colour MAY be reset.
 
 #### Scenario: Colour a workspace and a host
@@ -3013,12 +3022,20 @@ own colour MAY be reset.
 #### Scenario: Reset a tab's colour
 
 - **WHEN** the user chooses Default colour for a tab with a chosen colour
-- **THEN** every view shows the tab's default colour again
+- **THEN** every view shows the tab's room's colour again
 
 #### Scenario: Move a desk without a chosen colour
 
-- **WHEN** the user moves a desk whose tab shows its default colour to another room
-- **THEN** the tab, under its new Herdr tab ID, shows the same colour in every view
+- **WHEN** the user moves a desk whose tab has no colour of its own to another room
+- **THEN** the tab, under its new Herdr tab ID, shows its new room's colour in
+  every view, like the room's other tabs without a colour
+
+#### Scenario: A room without colours reads as one place
+
+- **WHEN** a room has several tabs and nobody has chosen a colour for the room
+  or its tabs
+- **THEN** every one of its tabs shows the same muted colour in Spaces, Town and
+  Board, and only an agent's status mark is drawn in a saturated colour
 
 ### Requirement: Agent interest
 

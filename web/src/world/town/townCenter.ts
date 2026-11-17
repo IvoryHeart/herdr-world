@@ -59,7 +59,7 @@ export const townCenterTop = (wide: boolean) =>
       )
     : 0);
 
-/** A phone's center fits its one-column building; wider towns get wings. */
+/** A phone's center fits its narrowest building; wider towns get wings. */
 export const townCenterWidth = (narrowPhone: boolean) =>
   narrowPhone ? 24 : 34;
 

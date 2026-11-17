@@ -23,6 +23,7 @@ import { paintTownGroundPlan, type TownHostTheme } from "./townPaint";
 import {
   bakeTownBuilding,
   bakeTownPod,
+  textureOf,
   townOutdoor,
   type BuildingView,
   type PodView,
@@ -93,8 +94,12 @@ export function createTownTopology(ctx: TownTopologyContext) {
     outdoor: Container;
     chunks: Map<string, GroundChunk>;
     items: TownOutdoorItem[];
+    /** Its bus stop signs placed so far, by stop key. */
+    signs: Map<string, Sprite>;
   };
   let ground: GroundView | null = null;
+  /** The bus stops where agents wait: their signs' flags show red. */
+  let waitingStops: ReadonlySet<string> = new Set();
   /**
    * Chunks painted for an earlier layout, set aside off screen: when the
    * camera reaches one whose plan is unchanged it is drawn again as it is.
@@ -247,12 +252,17 @@ export function createTownTopology(ctx: TownTopologyContext) {
     outdoor.zIndex = -1;
     groundLayer.addChildAt(layer, 0);
     sceneLayer.addChild(outdoor);
-    // Lamps, bushes and benches join the scene with the ground chunk under them.
+    // Lamps, bus stops, bushes and benches join the scene with the ground
+    // chunk under them.
+    const signs = new Map<string, Sprite>();
     ground = {
       layer,
       outdoor,
       chunks: new Map(),
-      items: townOutdoor(layout, sprites, outdoor),
+      items: townOutdoor(layout, sprites, outdoor, signs, (key) =>
+        waitingStops.has(key),
+      ),
+      signs,
     };
     if (!old) return;
     const near = viewRect(200);
@@ -658,5 +668,27 @@ export function createTownTopology(ctx: TownTopologyContext) {
       return motion ? townMotionPose({ t: 0, ...motion }) : null;
     },
     clear: clearScene,
+    /**
+     * Agents wait at these stops (TownBusLayer): their signs' flags turn
+     * red. Returns whether a drawn sign changed.
+     */
+    setWaitingStops(keys: ReadonlySet<string>) {
+      if (
+        keys.size === waitingStops.size &&
+        [...keys].every((key) => waitingStops.has(key))
+      )
+        return false;
+      waitingStops = new Set(keys);
+      let changed = false;
+      for (const [key, sign] of ground?.signs ?? []) {
+        const texture = textureOf(
+          waitingStops.has(key) ? sprites.busStopWaiting : sprites.busStop,
+        );
+        if (sign.texture === texture) continue;
+        sign.texture = texture;
+        changed = true;
+      }
+      return changed;
+    },
   };
 }

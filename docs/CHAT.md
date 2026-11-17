@@ -38,6 +38,10 @@ The Inspector's **Chat** tab shows an agent's conversation as messages and lets
 you reply. Chat replaces the History tab. The **Terminal** tab remains a separate
 view that you open on purpose.
 
+Harness task titles omit animated spinner glyphs, including after a text prefix
+such as `π`. On Herdr TUI connections spinner frames alone do not refresh Chat;
+real task, status and conversation changes still do.
+
 Set **Menu → Configuration → Appearance → Chat text** to resize both your
 messages and agent replies. Chat can follow the terminal text size or use its
 own size.

@@ -18,6 +18,7 @@ import {
   ROOM_TOP,
   SOFA_CORNER,
   TOWN_FACADE,
+  TOWN_PHONE_DESK_COLUMNS,
   townFloor,
   townPlaceLots,
   type TownVerticalRoad,
@@ -82,8 +83,16 @@ export type TownShape = {
 };
 
 export const TOWN_SHAPES = {
-  /** Phones: one column of rooms, four desks wide, buildings stacked. */
-  phone: { formFactor: "narrow", roomColumns: 1, deskColumns: 4 },
+  /**
+   * Phones: three columns of compact rooms, four desks wide, buildings
+   * stacked. The first view fits a building's width, so its rooms show as
+   * cards spread across the floor rather than one long column (#889).
+   */
+  phone: {
+    formFactor: "narrow",
+    roomColumns: 3,
+    deskColumns: TOWN_PHONE_DESK_COLUMNS,
+  },
   /** Portrait monitors and half-width windows: two columns, stacked. */
   portrait: { formFactor: "narrow", roomColumns: 2, deskColumns: 6 },
   /** Mid-width landscape windows: buildings on one street, two columns. */
