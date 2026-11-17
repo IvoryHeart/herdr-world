@@ -549,6 +549,29 @@ export function townFuelPaint(R: Rect) {
   R(11, 4, 1, 1, clock);
 }
 
+/** A bus stop sign's size in world pixels, without its outline. */
+export const TOWN_BUS_STOP_SIGN = { width: 24, height: 62 } as const;
+
+/**
+ * A London bus stop sign: a dark pole under a flag with the red roundel (a
+ * ring crossed by a bar). While agents wait the flag is red and the roundel
+ * white. The pole's foot is at the sign's bottom, 11 px from its left.
+ */
+function townBusStopSign(waiting: boolean) {
+  const { width, height } = TOWN_BUS_STOP_SIGN;
+  const pole = "#3b3b3b";
+  const flag = waiting ? "#d4252b" : "#f6f2e6";
+  const mark = waiting ? "#ffffff" : "#d4252b";
+  return townSprite(width, height, (R, D) => {
+    R(10, 20, 3, height - 20, pole);
+    R(0, 0, width, 20, pole);
+    R(1, 1, width - 2, 18, flag);
+    D(12, 10, 7, mark);
+    D(12, 10, 4, flag);
+    R(1, 9, width - 2, 3, mark);
+  });
+}
+
 export function buildTownSprites() {
   const tableOf = (W: number, w: string) =>
     townSprite(W, 32, (R) => {
@@ -699,6 +722,8 @@ export function buildTownSprites() {
       R(1, 1, 4, 4, "#ffe7a3");
       R(1, 28, 4, 2, "#2d333d");
     }),
+    busStop: townBusStopSign(false),
+    busStopWaiting: townBusStopSign(true),
     bench: townSprite(24, 12, (R) => {
       R(0, 0, 24, 3, "#8a5a3c");
       R(0, 4, 24, 3, "#a06a45");
