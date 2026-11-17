@@ -1,14 +1,14 @@
 /* The time-of-day button under Town's zoom controls (TownZoomControls). */
-.town-zoom .town-zoom-daylight {
+.town-zoom-daylight {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.town-zoom .town-zoom-daylight[data-mode="dusk"] {
+.town-zoom-daylight[data-mode="dusk"] {
   color: #ffc08a;
 }
 
-.town-zoom .town-zoom-daylight[data-mode="night"] {
+.town-zoom-daylight[data-mode="night"] {
   color: #b9c6ff;
 }

@@ -9,13 +9,8 @@ import {
 } from "./townDaylight";
 import "./townDaylight.css";
 
-/** The time-of-day button's face for each mode (townDaylight.ts). */
-const DAYLIGHT = {
-  clock: { icon: Clock, label: "Time of day: follows your clock" },
-  day: { icon: Sun, label: "Time of day: day" },
-  dusk: { icon: Sunset, label: "Time of day: dusk" },
-  night: { icon: Moon, label: "Time of day: night" },
-} as const;
+/** The time-of-day button's icon for each mode (townDaylight.ts). */
+const DAYLIGHT_ICON = { clock: Clock, day: Sun, dusk: Sunset, night: Moon };
 
 /**
  * Town's camera buttons. The zoom buttons step between whole town, one
@@ -45,7 +40,8 @@ export function TownZoomControls({
     subscribeTownDaylight,
     townDaylightMode,
   );
-  const Daylight = DAYLIGHT[daylight];
+  const DaylightIcon = DAYLIGHT_ICON[daylight];
+  const daylightLabel = `Time of day: ${daylight === "clock" ? "follows your clock" : daylight}`;
   return (
     <div className="town-zoom" role="group" aria-label="Camera">
       <button type="button" aria-label="Zoom in" onClick={() => onStep(1)}>
@@ -66,11 +62,11 @@ export function TownZoomControls({
         type="button"
         className="town-zoom-daylight"
         data-mode={daylight}
-        aria-label={Daylight.label}
-        title={Daylight.label}
+        aria-label={daylightLabel}
+        title={daylightLabel}
         onClick={() => setTownDaylightMode(townNextDaylightMode(daylight))}
       >
-        <Daylight.icon size={17} aria-hidden="true" />
+        <DaylightIcon size={17} aria-hidden="true" />
       </button>
       {shellControls ? (
         // The shell's More menu joins the camera group on the phone, so
