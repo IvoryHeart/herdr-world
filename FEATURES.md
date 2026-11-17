@@ -2438,7 +2438,9 @@ load asynchronously; editing the name takes precedence over a late suggestion.
     running, so opening it again (from any browser, which share it) shows the
     same shell; **End shell** or `exit` ends it. When something started in the
     shell would end with it, **End shell** first names it and ends nothing
-    until you confirm, and refuses if more would end by then. Core lists it
+    until you confirm, and refuses if more would end by then; anything started
+    while the shell was ending that core ends with it is named afterwards.
+    Core lists it
     in Herdr's apps as an unplaced terminal named `world-float-…` with the label
     `world.float`; World never shows it as a desk. Typing or resizing in a
     browser makes that browser's size count; once every view is hidden, core

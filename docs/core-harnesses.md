@@ -97,9 +97,12 @@ says to open Chat to send the brief after reviewing the terminal. Lost delivery
 replies retain the started agent's identity and remain uncertain, never replayed.
 Claude/Codex retain their existing launch-argument first prompt.
 
-## Browser captures
+## Browser captures (historical)
 
-Synthetic core Chat, with readable conversation and an uncertain native send.
+These captures show the superseded standalone core Chat. A core agent now opens
+the same Chat as a Herdr agent (#920), so they record the earlier screen, not
+the current one. Synthetic core Chat, with readable conversation and an
+uncertain native send.
 The [light receipts](images/core-chat-harnesses/uncertain-light.json) and
 [dark receipts](images/core-chat-harnesses/uncertain-dark.json) retain revision,
 dimensions and sanity checks for all five standard viewports.
@@ -119,10 +122,11 @@ dimensions and sanity checks for all five standard viewports.
   executable receives no bytes and checks native blocked/working/idle reports.
   `testing/recorded/delivery-0.1.20.json` retains the real conditional-send
   refusals; `delivery-replay.test.ts` replays them with one-byte reads too.
-- `server/src/herdr-core/history.test.ts` runs all eight shared native transcript
-  fixtures and compares their entries with the TUI projection. It also covers
-  remote lookup refusal, disconnect, missing foreground, title change and kept
-  replacement during a read.
+- `server/src/herdr-core/agent-sessions.test.ts` reads the shared native
+  transcript fixtures through core's Chat and compares their entries with the
+  TUI's. It also covers sends and keys through core, conversation lookup on a
+  remote host, linked sessions, and a killed or kept replacement (even one that
+  reuses the pid) never showing the old conversation.
 - `server/src/herdr-core/delivery.test.ts` exercises every inventory name through
   native send/keys; `delivery-replay.test.ts` replays release-captured bytes at
   one-byte, seven-byte and whole-frame boundaries. The inherited replay/watch

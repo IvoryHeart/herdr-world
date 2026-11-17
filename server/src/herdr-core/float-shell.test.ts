@@ -418,6 +418,47 @@ describe("World float shell on herdr-core", () => {
     ]);
   });
 
+  test("a child started while core handles the kill is named, though rm removed the shell", async () => {
+    // The checker's repro: the shell is `rm`, so core answers the kill
+    // `not_found`, and a die-with-parent child started during the kill
+    // dispatch ends with it. World names it rather than report a clean end.
+    const w = await world();
+    const agent = w.fake.create(agentFields);
+    const lease = await w.connect();
+    const tab = browser();
+    const { stream, address } = await w.floats.open(tab, {
+      connectionId: "box",
+      generation: lease.generation,
+      terminal: agent,
+      size: { cols: 80, rows: 24 },
+    });
+    w.floats.start(tab, stream);
+    await until(() => Boolean(lease.runtime.core.terminal(address)));
+    const plan = await planCoreKill(lease, [address]);
+    expect(plan.descendants).toEqual([]);
+    const confirmation = parseCoreKillConfirmation({
+      core_id: plan.core_id,
+      terminals: plan.roots,
+    });
+    let late = "";
+    w.fake.onCall = (method) => {
+      if (method !== "terminal.kill" || late) return;
+      late = w.fake.create({
+        ...agentFields,
+        parent: address,
+        die_with_parent: true,
+        name: "late-helper",
+      });
+    };
+    const outcome = await w.floats.stop(tab, stream, confirmation);
+    w.fake.onCall = null;
+    expect(w.fake.terminal(address)).toBeUndefined();
+    expect(w.fake.terminal(late)?.state).toBe("finished");
+    expect(outcome).toEqual({
+      alsoEnded: [{ address: late, name: "late-helper" }],
+    });
+  });
+
   test("a replaced occupant is never ended: the kill fence refuses before dispatch", async () => {
     const w = await world();
     const agent = w.fake.create(agentFields);

@@ -375,6 +375,9 @@ export class FloatShellService {
     const occupancyOf = (address: string) => core.occupancy(address);
     const terminals = core.mirror.terminals();
     const endedBefore = coreEndedKeys(terminals);
+    const rootRecord = terminals.find(
+      (t) => !t.remote && t.address === session.address,
+    );
     const plan = coreKillPlan(
       coreId,
       terminals,
@@ -394,15 +397,16 @@ export class FloatShellService {
         }),
       );
     } catch (error) {
-      // `rm` removes it as it ends: core can answer the kill `not_found`.
-      if (error instanceof CoreRpcError && error.kind === "not_found")
-        return { alsoEnded: [] };
       if (error instanceof CoreFenceError && error.reason === "occupant-gone")
         return { alsoEnded: [] };
-      throw refusalFor(error);
+      // `rm` removes it as it ends: core answers the kill `not_found`, and
+      // the shell ended, its cascade with it, so account for that below.
+      if (!(error instanceof CoreRpcError && error.kind === "not_found"))
+        throw refusalFor(error);
     }
     // Core's cascade is its own (Q11): name what it ended beyond the
-    // confirmation rather than report a clean end.
+    // confirmation rather than report a clean end. The shell's record may be
+    // gone (`rm`), so the walk starts from the record seen before the kill.
     const confirmed = confirmation ?? {
       coreId,
       terminals: plan.roots.map(({ address, pid, occupant }) => ({
@@ -419,6 +423,7 @@ export class FloatShellService {
         confirmed,
         endedBefore,
         occupancyOf,
+        rootRecord ? [rootRecord] : [],
       ).map(({ address, name }) => ({ address, name })),
     };
   }

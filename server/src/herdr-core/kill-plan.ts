@@ -197,6 +197,8 @@ export function coreKillRefusal(
  * agent itself, or another client) ends unconfirmed. World cannot refuse
  * that; it names each such terminal afterwards instead of staying silent.
  * `endedBefore` holds the keys already ended when the kill began.
+ * `rootRecords` are the roots' records when the kill began: an `rm` root
+ * (a Room shell) is removed as it ends, so the walk starts from that record.
  */
 export function coreKillUnconfirmed(
   coreId: string,
@@ -205,6 +207,7 @@ export function coreKillUnconfirmed(
   confirmed: CoreKillConfirmation,
   endedBefore: ReadonlySet<string>,
   occupancyOf: CoreOccupancyOf,
+  rootRecords: readonly CoreMirrorTerminal[] = [],
 ): CoreKillEntry[] {
   // Killed since the kill began counts as part of the chain again.
   const chain = terminals.flatMap((record) =>
@@ -214,6 +217,9 @@ export function coreKillUnconfirmed(
         ? [{ ...record, state: "live" }]
         : [],
   );
+  const present = new Set(terminals.map(keyOf));
+  for (const record of rootRecords)
+    if (!present.has(keyOf(record))) chain.push({ ...record, state: "live" });
   const seen = new Set(confirmed.terminals.map(confirmedKey));
   return coreKillPlan(coreId, chain, roots, occupancyOf).descendants.filter(
     (entry) => !seen.has(confirmedKey(entry)),
